@@ -12,11 +12,14 @@ export function detectRuntime(): Runtime {
   }
   if (typeof process !== 'undefined' && process.versions?.node) {
     try {
-      require.resolve('dns')
-      return 'node'
+      if (typeof require !== 'undefined') {
+        require.resolve('dns')
+        return 'node'
+      }
     } catch {
-      return 'edge'
+      // dns module not available
     }
+    return 'edge'
   }
   if (typeof globalThis !== 'undefined' && 'document' in globalThis) {
     return 'browser'
