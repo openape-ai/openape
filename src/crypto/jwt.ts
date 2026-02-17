@@ -5,7 +5,7 @@ import { ALGORITHM } from '../constants.js'
  * Generate an ES256 key pair for signing/verifying.
  */
 export async function generateKeyPair(): Promise<jose.GenerateKeyPairResult<jose.KeyLike>> {
-  return jose.generateKeyPair(ALGORITHM)
+  return jose.generateKeyPair(ALGORITHM, { extractable: true })
 }
 
 /**
