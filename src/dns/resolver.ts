@@ -29,24 +29,45 @@ async function resolveTXTRecords(domain: string, options?: ResolverOptions): Pro
   }
 }
 
+/** DDISA DNS subdomain prefix per spec */
+const DDISA_PREFIX = '_ddisa.'
+
 /**
  * Resolve DDISA record for a domain.
- * Supports mock records for testing.
+ * Queries `_ddisa.{domain}` TXT records per the DDISA specification.
+ * Supports mock records for testing (keyed by bare domain).
  */
 export async function resolveDDISA(
   domain: string,
   options?: ResolverOptions,
 ): Promise<DDISARecord | null> {
-  // Mock mode for testing
+  // Env-based mock mode for E2E testing (no options passthrough needed)
+  if (typeof process !== 'undefined' && process.env.DDISA_MOCK_RECORDS) {
+    try {
+      const envMocks = JSON.parse(process.env.DDISA_MOCK_RECORDS)
+      if (envMocks[domain]) {
+        const mock = envMocks[domain]
+        return {
+          version: 'ddisa1',
+          idp: mock.idp,
+          mode: mock.mode,
+          raw: `v=ddisa1 idp=${mock.idp}${mock.mode ? `; mode=${mock.mode}` : ''}`,
+        }
+      }
+    } catch { /* invalid JSON — fall through */ }
+  }
+
+  // Mock mode for testing (keyed by bare domain for convenience)
   if (options?.mockRecords?.[domain]) {
     const mock = options.mockRecords[domain]
     return {
       ...mock,
-      raw: `idp=${mock.idp}${mock.mode ? `; mode=${mock.mode}` : ''}`,
+      version: mock.version ?? 'ddisa1',
+      raw: `v=ddisa1 idp=${mock.idp}${mock.mode ? `; mode=${mock.mode}` : ''}`,
     }
   }
 
-  // Check cache
+  // Check cache (keyed by bare domain)
   if (!options?.noCache) {
     const cached = cache.get(domain)
     if (cached && cached.expires > Date.now()) {
@@ -54,23 +75,33 @@ export async function resolveDDISA(
     }
   }
 
-  const records = await resolveTXTRecords(domain, options)
+  // Query _ddisa.{domain} per spec
+  const ddisaDomain = `${DDISA_PREFIX}${domain}`
+  const records = await resolveTXTRecords(ddisaDomain, options)
 
+  // Parse all valid DDISA records and pick the one with lowest priority
+  const parsed: DDISARecord[] = []
   for (const record of records) {
-    if (record.includes('idp=')) {
-      const parsed = parseDDISARecord(record)
-      if (parsed) {
-        const ttl = options?.cacheTTL ?? DEFAULT_DNS_CACHE_TTL
-        cache.set(domain, {
-          record: parsed,
-          expires: Date.now() + ttl * 1000,
-        })
-        return parsed
+    if (record.includes('v=ddisa1')) {
+      const result = parseDDISARecord(record)
+      if (result) {
+        parsed.push(result)
       }
     }
   }
 
-  return null
+  if (parsed.length === 0) return null
+
+  // Sort by priority (lowest = highest priority, like MX). Default priority = 10.
+  parsed.sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10))
+  const best = parsed[0]
+
+  const ttl = options?.cacheTTL ?? DEFAULT_DNS_CACHE_TTL
+  cache.set(domain, {
+    record: best,
+    expires: Date.now() + ttl * 1000,
+  })
+  return best
 }
 
 /**

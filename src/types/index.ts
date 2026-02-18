@@ -3,6 +3,8 @@ export type PolicyMode = 'open' | 'allowlist-admin' | 'allowlist-user' | 'deny'
 
 /** Parsed DDISA DNS TXT record */
 export interface DDISARecord {
+  /** Version tag (e.g. 'ddisa1') */
+  version: string
   /** IdP URL from DNS */
   idp: string
   /** Policy mode */

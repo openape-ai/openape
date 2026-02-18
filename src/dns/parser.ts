@@ -1,14 +1,28 @@
 import type { DDISARecord, PolicyMode } from '../types/index.js'
 
 const VALID_MODES: PolicyMode[] = ['open', 'allowlist-admin', 'allowlist-user', 'deny']
+const DDISA_VERSION = 'ddisa1'
 
 /**
  * Parse a DDISA DNS TXT record string.
- * Format: "idp=https://idp.example.com; mode=open; priority=10"
+ * Format: "v=ddisa1 idp=https://idp.example.com; mode=open; priority=10"
+ *
+ * The version tag `v=ddisa1` must be present as the first token (space-delimited).
+ * Remaining fields are semicolon-delimited key=value pairs.
  */
 export function parseDDISARecord(txt: string): DDISARecord | null {
-  const parts = txt.split(';').map(p => p.trim())
-  const record: Partial<DDISARecord> = { raw: txt }
+  const trimmed = txt.trim()
+
+  // Version tag must be the first space-delimited token
+  const spaceIdx = trimmed.indexOf(' ')
+  if (spaceIdx === -1) return null
+
+  const versionToken = trimmed.slice(0, spaceIdx).trim()
+  if (versionToken !== `v=${DDISA_VERSION}`) return null
+
+  const rest = trimmed.slice(spaceIdx + 1)
+  const parts = rest.split(';').map(p => p.trim())
+  const record: Partial<DDISARecord> = { raw: txt, version: DDISA_VERSION }
 
   for (const part of parts) {
     const eqIndex = part.indexOf('=')

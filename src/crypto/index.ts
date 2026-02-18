@@ -13,3 +13,9 @@ export {
   exportPublicKeyJWK,
   importJWK,
 } from './jwt.js'
+
+export {
+  hashPassword,
+  verifyPassword,
+  generateSalt,
+} from './password.js'
