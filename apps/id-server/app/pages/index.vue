@@ -13,24 +13,27 @@ async function handleLogout() {
 
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-    <div class="bg-white shadow rounded-lg p-8 w-full max-w-md">
-      <h1 class="text-2xl font-bold text-center mb-2">
-        id.delta-mind.at
-      </h1>
-      <p class="text-center text-sm text-gray-500 mb-6">
-        DDISA Identity Provider + ClawGate
-      </p>
+    <UCard class="w-full max-w-md">
+      <template #header>
+        <h1 class="text-2xl font-bold text-center">
+          id.delta-mind.at
+        </h1>
+        <p class="text-center text-sm text-gray-500 mt-2">
+          DDISA Identity Provider + ClawGate
+        </p>
+      </template>
 
       <div v-if="loading" class="text-center text-gray-500">
         Loading...
       </div>
 
       <div v-else-if="user" class="space-y-4">
-        <div class="bg-green-50 border border-green-200 rounded p-4">
-          <p class="text-sm text-green-800">Logged in as</p>
-          <p class="font-semibold text-green-900">{{ user.name }}</p>
-          <p class="text-sm text-green-700">{{ user.email }}</p>
-        </div>
+        <UAlert color="success" title="Logged in as">
+          <template #description>
+            <p class="font-semibold">{{ user.name }}</p>
+            <p class="text-sm">{{ user.email }}</p>
+          </template>
+        </UAlert>
 
         <div class="text-sm text-gray-600 space-y-2">
           <p>Endpoints:</p>
@@ -42,40 +45,40 @@ async function handleLogout() {
           </ul>
         </div>
 
-        <NuxtLink
+        <UButton
           to="/grants"
-          class="block w-full bg-blue-600 text-white text-center py-2 px-4 rounded hover:bg-blue-700 transition"
-        >
-          Manage Grants
-        </NuxtLink>
+          color="primary"
+          block
+          label="Manage Grants"
+        />
 
-        <NuxtLink
+        <UButton
           v-if="user.isAdmin"
           to="/admin"
-          class="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700 transition"
-        >
-          Admin Dashboard
-        </NuxtLink>
+          color="secondary"
+          block
+          label="Admin Dashboard"
+        />
 
-        <button
-          class="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition"
+        <UButton
+          color="error"
+          block
+          label="Logout"
           @click="handleLogout"
-        >
-          Logout
-        </button>
+        />
       </div>
 
       <div v-else class="space-y-4">
         <p class="text-gray-600 text-center text-sm">
           Production Identity Provider for @delta-mind.at users.
         </p>
-        <NuxtLink
+        <UButton
           to="/login"
-          class="block w-full bg-blue-600 text-white text-center py-2 px-4 rounded hover:bg-blue-700 transition"
-        >
-          Login
-        </NuxtLink>
+          color="primary"
+          block
+          label="Login"
+        />
       </div>
-    </div>
+    </UCard>
   </div>
 </template>

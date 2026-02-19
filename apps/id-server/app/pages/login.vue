@@ -29,50 +29,58 @@ async function handleSubmit() {
 
 <template>
   <div class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-    <div class="bg-white shadow rounded-lg p-8 w-full max-w-md">
-      <h1 class="text-2xl font-bold text-center mb-6">Login</h1>
+    <UCard class="w-full max-w-md">
+      <template #header>
+        <h1 class="text-2xl font-bold text-center">Login</h1>
+      </template>
 
-      <div v-if="error" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-        {{ error }}
-      </div>
+      <UAlert
+        v-if="error"
+        color="error"
+        :title="error"
+        class="mb-4"
+      />
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
-        <div>
-          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input
+        <UFormField label="Email" required>
+          <UInput
             id="email"
             v-model="email"
             type="email"
             required
-            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="phofmann@delta-mind.at"
-          >
-        </div>
+          />
+        </UFormField>
 
-        <div>
-          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-          <input
+        <UFormField label="Password" required>
+          <UInput
             id="password"
             v-model="password"
             type="password"
             required
-            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Password"
-          >
-        </div>
+          />
+        </UFormField>
 
-        <button
+        <UButton
           type="submit"
+          color="primary"
+          block
+          :loading="submitting"
           :disabled="submitting"
-          class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition disabled:opacity-50"
-        >
-          {{ submitting ? 'Logging in...' : 'Login' }}
-        </button>
+          :label="submitting ? 'Logging in...' : 'Login'"
+        />
       </form>
 
-      <p class="text-center text-sm text-gray-500 mt-4">
-        <NuxtLink to="/" class="text-blue-600 hover:underline">Back to Home</NuxtLink>
-      </p>
-    </div>
+      <template #footer>
+        <div class="text-center">
+          <UButton
+            to="/"
+            variant="link"
+            label="Back to Home"
+          />
+        </div>
+      </template>
+    </UCard>
   </div>
 </template>

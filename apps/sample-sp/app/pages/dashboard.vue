@@ -77,19 +77,17 @@ function formatTimestamp(ts: number): string {
       <template v-else-if="user">
         <div class="flex items-center justify-between mb-8">
           <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <button
-            class="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100"
-            @click="logout"
-          >
+          <UButton color="error" variant="soft" size="sm" @click="logout">
             Logout
-          </button>
+          </UButton>
         </div>
 
         <!-- DDISA Assertion Claims -->
-        <div class="bg-white shadow rounded-lg overflow-hidden mb-6">
-          <div class="px-6 py-4 bg-green-50 border-b border-green-200">
+        <UCard class="mb-6">
+          <template #header>
             <p class="text-green-800 font-medium">Authenticated via DDISA</p>
-          </div>
+          </template>
+
           <div class="divide-y divide-gray-100">
             <div class="px-6 py-3 flex justify-between">
               <span class="text-sm text-gray-500">Subject (sub)</span>
@@ -108,54 +106,68 @@ function formatTimestamp(ts: number): string {
               <span class="text-sm text-gray-900">{{ formatTimestamp(user.iat) }}</span>
             </div>
           </div>
-        </div>
+        </UCard>
 
         <!-- Grant Status Notification -->
-        <div v-if="grantStatus === 'approved'" class="bg-green-50 border border-green-200 text-green-800 rounded p-3 mb-4 text-sm">
-          Permission granted! You can now execute the protected action.
-        </div>
-        <div v-if="grantStatus === 'denied'" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-          Permission denied by the user.
-        </div>
+        <UAlert
+          v-if="grantStatus === 'approved'"
+          color="success"
+          title="Permission granted! You can now execute the protected action."
+          class="mb-4"
+        />
+        <UAlert
+          v-if="grantStatus === 'denied'"
+          color="error"
+          title="Permission denied by the user."
+          class="mb-4"
+        />
 
         <!-- Error -->
-        <div v-if="error" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-          {{ error }}
-        </div>
+        <UAlert
+          v-if="error"
+          color="error"
+          :title="error"
+          class="mb-4"
+        />
 
         <!-- ClawGate Protected Action -->
-        <div class="bg-white shadow rounded-lg p-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">ClawGate Protected Action</h2>
+        <UCard>
+          <template #header>
+            <h2 class="text-lg font-semibold text-gray-900">ClawGate Protected Action</h2>
+          </template>
+
           <p class="text-sm text-gray-600 mb-4">
             This action requires ClawGate authorization. Click "Request Permission" to be redirected to the IdP for approval.
           </p>
 
           <div class="flex gap-3">
-            <button
+            <UButton
               v-if="!hasPermission"
+              color="warning"
+              :loading="requesting"
               :disabled="requesting"
-              class="flex-1 bg-yellow-600 text-white py-2 px-4 rounded hover:bg-yellow-700 transition disabled:opacity-50"
+              block
+              label="Request Permission"
               @click="requestPermission"
-            >
-              {{ requesting ? 'Redirecting...' : 'Request Permission' }}
-            </button>
+            />
 
-            <button
+            <UButton
               v-if="hasPermission"
+              color="success"
+              :loading="executing"
               :disabled="executing"
-              class="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition disabled:opacity-50"
+              block
+              label="Execute Protected Action"
               @click="executeProtectedAction"
-            >
-              {{ executing ? 'Executing...' : 'Execute Protected Action' }}
-            </button>
+            />
           </div>
 
           <!-- Action Result -->
-          <div v-if="actionResult" class="mt-4 bg-gray-50 rounded p-4">
+          <UCard v-if="actionResult" variant="soft" class="mt-4">
             <p class="text-sm font-medium text-gray-700 mb-2">Result:</p>
             <pre class="text-xs text-gray-800 overflow-auto">{{ JSON.stringify(actionResult, null, 2) }}</pre>
-          </div>
-        </div>
+          </UCard>
+        </UCard>
       </template>
     </div>
   </div>

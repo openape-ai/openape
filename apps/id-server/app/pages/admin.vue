@@ -162,207 +162,190 @@ function formatDate(ts: number): string {
           <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
           <p class="text-sm text-gray-500">Manage users and agents</p>
         </div>
-        <NuxtLink
-          to="/"
-          class="px-4 py-2 text-sm bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100"
-        >
-          Back
-        </NuxtLink>
+        <UButton to="/" color="neutral" variant="soft" size="sm">Back</UButton>
       </div>
 
       <div v-if="authLoading" class="text-center text-gray-500 mt-10">Loading...</div>
 
       <template v-else>
         <!-- Tabs -->
-        <div class="flex gap-1 mb-6 bg-gray-200 rounded-lg p-1 w-fit">
-          <button
-            class="px-4 py-2 text-sm font-medium rounded-md transition"
-            :class="activeTab === 'users' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'"
-            @click="activeTab = 'users'"
-          >
-            Users ({{ users.length }})
-          </button>
-          <button
-            class="px-4 py-2 text-sm font-medium rounded-md transition"
-            :class="activeTab === 'agents' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'"
-            @click="activeTab = 'agents'"
-          >
-            Agents ({{ agents.length }})
-          </button>
-        </div>
+        <UTabs
+          v-model="activeTab"
+          :items="[
+            { label: `Users (${users.length})`, value: 'users', slot: 'users' },
+            { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' }
+          ]"
+        >
+          <!-- Users Tab -->
+          <template #users>
+            <div class="space-y-6 mt-6">
+              <!-- Add User Form -->
+              <UCard>
+                <template #header>
+                  <h2 class="text-lg font-semibold">Add User</h2>
+                </template>
 
-        <!-- Users Tab -->
-        <div v-if="activeTab === 'users'" class="space-y-6">
-          <!-- Add User Form -->
-          <div class="bg-white shadow rounded-lg p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Add User</h2>
+                <UAlert v-if="userError" color="error" :title="userError" class="mb-4" />
+                <UAlert v-if="userSuccess" color="success" :title="userSuccess" class="mb-4" />
 
-            <div v-if="userError" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-              {{ userError }}
+                <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createUser">
+                  <div class="flex-1 min-w-[150px]">
+                    <UFormField label="Name" required>
+                      <UInput v-model="newUser.name" required placeholder="Name" />
+                    </UFormField>
+                  </div>
+                  <div class="flex-1 min-w-[200px]">
+                    <UFormField label="Email" required>
+                      <UInput v-model="newUser.email" type="email" required placeholder="user@domain.com" />
+                    </UFormField>
+                  </div>
+                  <div class="flex-1 min-w-[150px]">
+                    <UFormField label="Password" required>
+                      <UInput v-model="newUser.password" type="password" required placeholder="Password" />
+                    </UFormField>
+                  </div>
+                  <UButton color="primary" type="submit">Add User</UButton>
+                </form>
+              </UCard>
+
+              <!-- Users Table -->
+              <UCard :ui="{ body: 'p-0' }">
+                <div v-if="usersLoading" class="p-6 text-center text-gray-500">Loading...</div>
+                <div v-else-if="users.length === 0" class="p-6 text-center text-gray-500">No users found.</div>
+                <table v-else class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Email</th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="u in users" :key="u.email" class="hover:bg-gray-50">
+                      <td class="px-4 py-3 text-sm text-gray-900">{{ u.name }}</td>
+                      <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ u.email }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <UButton
+                          v-if="u.email !== user?.email"
+                          variant="ghost"
+                          size="xs"
+                          color="error"
+                          @click="deleteUser(u.email)"
+                        >
+                          Delete
+                        </UButton>
+                        <span v-else class="text-xs text-gray-400">You</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </UCard>
             </div>
-            <div v-if="userSuccess" class="bg-green-50 border border-green-200 text-green-700 rounded p-3 mb-4 text-sm">
-              {{ userSuccess }}
+          </template>
+
+          <!-- Agents Tab -->
+          <template #agents>
+            <div class="space-y-6 mt-6">
+              <!-- Edit Agent Modal -->
+              <div v-if="editingAgent">
+                <UModal :open="true" title="Edit Agent" @update:open="editingAgent = null">
+                  <template #body>
+                    <form class="space-y-3" @submit.prevent="saveEditAgent">
+                      <UFormField label="Name" required>
+                        <UInput v-model="editingAgent.name" required />
+                      </UFormField>
+                      <UFormField label="Owner Email" required>
+                        <UInput v-model="editingAgent.owner" type="email" required />
+                      </UFormField>
+                      <UFormField label="Approver Email" required>
+                        <UInput v-model="editingAgent.approver" type="email" required />
+                      </UFormField>
+                      <UFormField label="Public Key (ssh-ed25519)" required>
+                        <UTextarea v-model="editingAgent.publicKey" required :rows="2" />
+                      </UFormField>
+                      <div class="flex gap-3 justify-end pt-2">
+                        <UButton variant="ghost" @click="editingAgent = null">Cancel</UButton>
+                        <UButton color="primary" type="submit">Save</UButton>
+                      </div>
+                    </form>
+                  </template>
+                </UModal>
+              </div>
+
+              <!-- Add Agent Form -->
+              <UCard>
+                <template #header>
+                  <h2 class="text-lg font-semibold">Add Agent</h2>
+                </template>
+
+                <UAlert v-if="agentError" color="error" :title="agentError" class="mb-4" />
+                <UAlert v-if="agentSuccess" color="success" :title="agentSuccess" class="mb-4" />
+
+                <form class="space-y-3" @submit.prevent="createAgent">
+                  <div class="flex flex-wrap gap-3">
+                    <div class="flex-1 min-w-[200px]">
+                      <UFormField label="Agent Name" required>
+                        <UInput v-model="newAgent.name" required placeholder="My Agent" />
+                      </UFormField>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                      <UFormField label="Owner Email" required>
+                        <UInput v-model="newAgent.owner" type="email" required placeholder="owner@domain.com" />
+                      </UFormField>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                      <UFormField label="Approver Email" required>
+                        <UInput v-model="newAgent.approver" type="email" required placeholder="approver@domain.com" />
+                      </UFormField>
+                    </div>
+                  </div>
+                  <UFormField label="Public Key (ssh-ed25519)" required>
+                    <UTextarea v-model="newAgent.publicKey" required :rows="2" placeholder="ssh-ed25519 AAAA..." />
+                  </UFormField>
+                  <UButton color="primary" type="submit">Add Agent</UButton>
+                </form>
+              </UCard>
+
+              <!-- Agents Table -->
+              <UCard :ui="{ body: 'p-0' }">
+                <div v-if="agentsLoading" class="p-6 text-center text-gray-500">Loading...</div>
+                <div v-else-if="agents.length === 0" class="p-6 text-center text-gray-500">No agents found.</div>
+                <table v-else class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Owner</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Approver</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Created</th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="a in agents" :key="a.id" class="hover:bg-gray-50">
+                      <td class="px-4 py-3 text-sm text-gray-900">{{ a.name }}</td>
+                      <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.owner }}</td>
+                      <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.approver }}</td>
+                      <td class="px-4 py-3">
+                        <UBadge :color="a.isActive ? 'success' : 'error'" variant="subtle">
+                          {{ a.isActive ? 'Active' : 'Inactive' }}
+                        </UBadge>
+                      </td>
+                      <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(a.createdAt) }}</td>
+                      <td class="px-4 py-3 text-right space-x-1">
+                        <UButton variant="ghost" size="xs" color="primary" @click="startEditAgent(a)">Edit</UButton>
+                        <UButton variant="ghost" size="xs" color="warning" @click="toggleAgent(a)">
+                          {{ a.isActive ? 'Deactivate' : 'Activate' }}
+                        </UButton>
+                        <UButton variant="ghost" size="xs" color="error" @click="deleteAgent(a.id)">Delete</UButton>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </UCard>
             </div>
-
-            <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createUser">
-              <div class="flex-1 min-w-[150px]">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Name</label>
-                <input v-model="newUser.name" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Name">
-              </div>
-              <div class="flex-1 min-w-[200px]">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                <input v-model="newUser.email" type="email" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="user@domain.com">
-              </div>
-              <div class="flex-1 min-w-[150px]">
-                <label class="block text-xs font-medium text-gray-600 mb-1">Password</label>
-                <input v-model="newUser.password" type="password" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Password">
-              </div>
-              <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition">
-                Add User
-              </button>
-            </form>
-          </div>
-
-          <!-- Users Table -->
-          <div class="bg-white shadow rounded-lg overflow-hidden">
-            <div v-if="usersLoading" class="p-6 text-center text-gray-500">Loading...</div>
-            <div v-else-if="users.length === 0" class="p-6 text-center text-gray-500">No users found.</div>
-            <table v-else class="w-full">
-              <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Email</th>
-                  <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="u in users" :key="u.email" class="hover:bg-gray-50">
-                  <td class="px-4 py-3 text-sm text-gray-900">{{ u.name }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ u.email }}</td>
-                  <td class="px-4 py-3 text-right">
-                    <button
-                      v-if="u.email !== user?.email"
-                      class="text-xs text-red-600 hover:text-red-800"
-                      @click="deleteUser(u.email)"
-                    >
-                      Delete
-                    </button>
-                    <span v-else class="text-xs text-gray-400">You</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Agents Tab -->
-        <div v-if="activeTab === 'agents'" class="space-y-6">
-          <!-- Edit Agent Modal -->
-          <div v-if="editingAgent" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
-              <h2 class="text-lg font-semibold text-gray-900 mb-4">Edit Agent</h2>
-              <form class="space-y-3" @submit.prevent="saveEditAgent">
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Name</label>
-                  <input v-model="editingAgent.name" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Owner Email</label>
-                  <input v-model="editingAgent.owner" type="email" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Approver Email</label>
-                  <input v-model="editingAgent.approver" type="email" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Public Key (ssh-ed25519)</label>
-                  <textarea v-model="editingAgent.publicKey" required rows="2" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                </div>
-                <div class="flex gap-3 justify-end pt-2">
-                  <button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="editingAgent = null">Cancel</button>
-                  <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition">Save</button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          <!-- Add Agent Form -->
-          <div class="bg-white shadow rounded-lg p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Add Agent</h2>
-
-            <div v-if="agentError" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-              {{ agentError }}
-            </div>
-            <div v-if="agentSuccess" class="bg-green-50 border border-green-200 text-green-700 rounded p-3 mb-4 text-sm">
-              {{ agentSuccess }}
-            </div>
-
-            <form class="space-y-3" @submit.prevent="createAgent">
-              <div class="flex flex-wrap gap-3">
-                <div class="flex-1 min-w-[200px]">
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Agent Name</label>
-                  <input v-model="newAgent.name" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="My Agent">
-                </div>
-                <div class="flex-1 min-w-[200px]">
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Owner Email</label>
-                  <input v-model="newAgent.owner" type="email" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="owner@domain.com">
-                </div>
-                <div class="flex-1 min-w-[200px]">
-                  <label class="block text-xs font-medium text-gray-600 mb-1">Approver Email</label>
-                  <input v-model="newAgent.approver" type="email" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="approver@domain.com">
-                </div>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Public Key (ssh-ed25519)</label>
-                <textarea v-model="newAgent.publicKey" required rows="2" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="ssh-ed25519 AAAA..." />
-              </div>
-              <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 transition">
-                Add Agent
-              </button>
-            </form>
-          </div>
-
-          <!-- Agents Table -->
-          <div class="bg-white shadow rounded-lg overflow-hidden">
-            <div v-if="agentsLoading" class="p-6 text-center text-gray-500">Loading...</div>
-            <div v-else-if="agents.length === 0" class="p-6 text-center text-gray-500">No agents found.</div>
-            <table v-else class="w-full">
-              <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Owner</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Approver</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Created</th>
-                  <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="a in agents" :key="a.id" class="hover:bg-gray-50">
-                  <td class="px-4 py-3 text-sm text-gray-900">{{ a.name }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.owner }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.approver }}</td>
-                  <td class="px-4 py-3">
-                    <span
-                      class="px-2 py-0.5 rounded text-xs font-medium"
-                      :class="a.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
-                    >
-                      {{ a.isActive ? 'Active' : 'Inactive' }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(a.createdAt) }}</td>
-                  <td class="px-4 py-3 text-right space-x-2">
-                    <button class="text-xs text-blue-600 hover:text-blue-800" @click="startEditAgent(a)">Edit</button>
-                    <button class="text-xs text-yellow-600 hover:text-yellow-800" @click="toggleAgent(a)">
-                      {{ a.isActive ? 'Deactivate' : 'Activate' }}
-                    </button>
-                    <button class="text-xs text-red-600 hover:text-red-800" @click="deleteAgent(a.id)">Delete</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+          </template>
+        </UTabs>
       </template>
     </div>
   </div>

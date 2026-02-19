@@ -107,24 +107,16 @@ function formatTime(ts: number): string {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">Grant Management</h1>
         <div class="flex gap-3">
-          <button
-            class="px-4 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
-            @click="loadGrants"
-          >
+          <UButton color="primary" variant="soft" size="sm" @click="loadGrants">
             Refresh
-          </button>
-          <NuxtLink
-            to="/"
-            class="px-4 py-2 text-sm bg-gray-50 text-gray-700 border border-gray-200 rounded hover:bg-gray-100"
-          >
+          </UButton>
+          <UButton to="/" color="neutral" variant="soft" size="sm">
             Back
-          </NuxtLink>
+          </UButton>
         </div>
       </div>
 
-      <div v-if="actionError" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
-        {{ actionError }}
-      </div>
+      <UAlert v-if="actionError" color="error" :title="actionError" class="mb-4" />
 
       <div v-if="loading || authLoading" class="text-center text-gray-500 mt-10">Loading...</div>
 
@@ -135,18 +127,20 @@ function formatTime(ts: number): string {
             Pending Requests
             <span class="text-sm font-normal text-gray-500">({{ pendingGrants.length }})</span>
           </h2>
-          <div v-if="pendingGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
-            No pending requests.
-          </div>
+          <UCard v-if="pendingGrants.length === 0">
+            <p class="text-sm text-gray-500 text-center">No pending requests.</p>
+          </UCard>
           <div v-else class="space-y-3">
-            <div v-for="grant in pendingGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4">
+            <UCard v-for="grant in pendingGrants" :key="grant.id">
               <div class="flex items-start justify-between gap-4">
                 <div class="flex-1 text-sm space-y-1">
                   <div class="flex items-center gap-2">
                     <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
-                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
-                      {{ grant.status }}
-                    </span>
+                    <UBadge
+                      :color="({ pending: 'warning', approved: 'success', denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' } as Record<string, string>)[grant.status] || 'neutral'"
+                      :variant="grant.status === 'expired' ? 'outline' : 'soft'"
+                      :label="grant.status"
+                    />
                   </div>
                   <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                   <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
@@ -155,21 +149,15 @@ function formatTime(ts: number): string {
                   <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
                 </div>
                 <div class="flex gap-2 flex-shrink-0">
-                  <button
-                    class="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition"
-                    @click="approveGrant(grant.id)"
-                  >
+                  <UButton color="success" size="xs" @click="approveGrant(grant.id)">
                     Approve
-                  </button>
-                  <button
-                    class="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition"
-                    @click="denyGrant(grant.id)"
-                  >
+                  </UButton>
+                  <UButton color="error" size="xs" @click="denyGrant(grant.id)">
                     Deny
-                  </button>
+                  </UButton>
                 </div>
               </div>
-            </div>
+            </UCard>
           </div>
         </section>
 
@@ -179,34 +167,36 @@ function formatTime(ts: number): string {
             Active Permissions
             <span class="text-sm font-normal text-gray-500">({{ activeGrants.length }})</span>
           </h2>
-          <div v-if="activeGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
-            No active permissions.
-          </div>
+          <UCard v-if="activeGrants.length === 0">
+            <p class="text-sm text-gray-500 text-center">No active permissions.</p>
+          </UCard>
           <div v-else class="space-y-3">
-            <div v-for="grant in activeGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4">
+            <UCard v-for="grant in activeGrants" :key="grant.id">
               <div class="flex items-start justify-between gap-4">
                 <div class="flex-1 text-sm space-y-1">
                   <div class="flex items-center gap-2">
                     <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
-                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
-                      {{ grant.status }}
-                    </span>
-                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                      {{ grant.request.grant_type }}
-                    </span>
+                    <UBadge
+                      :color="({ pending: 'warning', approved: 'success', denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' } as Record<string, string>)[grant.status] || 'neutral'"
+                      :variant="grant.status === 'expired' ? 'outline' : 'soft'"
+                      :label="grant.status"
+                    />
+                    <UBadge color="secondary" :label="grant.request.grant_type" />
                   </div>
                   <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                   <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
                   <p v-if="grant.expires_at" class="text-xs text-gray-400">Expires: {{ formatTime(grant.expires_at) }}</p>
                 </div>
-                <button
-                  class="px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition flex-shrink-0"
+                <UButton
+                  color="neutral"
+                  size="xs"
+                  class="flex-shrink-0"
                   @click="revokeGrant(grant.id)"
                 >
                   Revoke
-                </button>
+                </UButton>
               </div>
-            </div>
+            </UCard>
           </div>
         </section>
 
@@ -216,24 +206,26 @@ function formatTime(ts: number): string {
             History
             <span class="text-sm font-normal text-gray-500">({{ historyGrants.length }})</span>
           </h2>
-          <div v-if="historyGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
-            No history.
-          </div>
+          <UCard v-if="historyGrants.length === 0">
+            <p class="text-sm text-gray-500 text-center">No history.</p>
+          </UCard>
           <div v-else class="space-y-3">
-            <div v-for="grant in historyGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4 opacity-75">
+            <UCard v-for="grant in historyGrants" :key="grant.id" class="opacity-75">
               <div class="text-sm space-y-1">
                 <div class="flex items-center gap-2">
                   <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
-                  <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
-                    {{ grant.status }}
-                  </span>
+                  <UBadge
+                    :color="({ pending: 'warning', approved: 'success', denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' } as Record<string, string>)[grant.status] || 'neutral'"
+                    :variant="grant.status === 'expired' ? 'outline' : 'soft'"
+                    :label="grant.status"
+                  />
                 </div>
                 <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                 <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
                 <p v-if="grant.decided_by" class="text-xs text-gray-400">Decided by: {{ grant.decided_by }}</p>
                 <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
               </div>
-            </div>
+            </UCard>
           </div>
         </section>
       </template>
