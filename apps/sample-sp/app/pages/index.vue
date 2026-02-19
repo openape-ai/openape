@@ -62,7 +62,7 @@ async function handleLogin() {
               id="email"
               v-model="email"
               type="email"
-              placeholder="phofmann@delta-mind.at"
+              placeholder="user@example.com"
               required
             />
           </UFormField>

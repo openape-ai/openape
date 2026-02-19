@@ -29,4 +29,4 @@ function getStores() {
 
 export const useStores = getStores
 
-export const IDP_ISSUER = process.env.NUXT_PUBLIC_SITE_URL || 'https://id.example.org'
+export const IDP_ISSUER = process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'

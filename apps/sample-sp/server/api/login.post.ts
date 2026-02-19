@@ -2,8 +2,10 @@ import { discoverIdP, createAuthorizationURL } from '@ddisa/sp-server'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email: string }>(event)
-  const { spId, spRedirectUri } = getSpConfig()
+  const { spId } = getSpConfig()
   const flowStateStore = useFlowStateStore()
+  const origin = getRequestURL(event).origin
+  const redirectUri = `${origin}/api/callback`
 
   if (!body?.email || !body.email.includes('@')) {
     throw createError({ statusCode: 400, statusMessage: 'Valid email required' })
@@ -25,7 +27,7 @@ export default defineEventHandler(async (event) => {
   // Create authorization URL
   const { url, flowState } = await createAuthorizationURL(idpConfig, {
     spId,
-    redirectUri: spRedirectUri,
+    redirectUri,
   })
 
   // Persist flow state in Turso

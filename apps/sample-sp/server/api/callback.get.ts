@@ -3,8 +3,10 @@ import { handleCallback } from '@ddisa/sp-server'
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const { code, state, error, error_description } = query as Record<string, string>
-  const { spId, spRedirectUri } = getSpConfig()
+  const { spId } = getSpConfig()
   const flowStateStore = useFlowStateStore()
+  const origin = getRequestURL(event).origin
+  const redirectUri = `${origin}/api/callback`
 
   if (error) {
     const msg = error_description || error
@@ -27,7 +29,7 @@ export default defineEventHandler(async (event) => {
       state,
       flowState,
       spId,
-      redirectUri: spRedirectUri,
+      redirectUri,
     })
 
     // Clean up flow state

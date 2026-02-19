@@ -53,8 +53,7 @@ export function getSpConfig() {
   const config = useRuntimeConfig()
   return {
     spId: config.spId || 'sp.example.org',
-    spRedirectUri: config.spRedirectUri || 'https://sp.example.org/api/callback',
-    clawgateUrl: config.clawgateUrl || 'https://id.example.org',
+    clawgateUrl: config.clawgateUrl || 'http://localhost:3000',
     spName: 'DDISA Sample SP',
   }
 }

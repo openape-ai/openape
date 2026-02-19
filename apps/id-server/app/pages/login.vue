@@ -48,7 +48,7 @@ async function handleSubmit() {
             v-model="email"
             type="email"
             required
-            placeholder="phofmann@delta-mind.at"
+            placeholder="phofmann@example.org"
           />
         </UFormField>
 
