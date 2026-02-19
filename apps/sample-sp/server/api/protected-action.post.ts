@@ -30,14 +30,22 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: `Authorization failed: ${result.error}` })
   }
 
-  // Mark grant as used on the ClawGate (prevents replay for 'once' grants)
+  // Mark grant as used on the IdP (prevents replay for 'once' grants)
   if (result.claims?.grant_id) {
     try {
       await $fetch(`${clawgateUrl}/api/grants/${result.claims.grant_id}/use`, {
         method: 'POST',
       })
-    } catch {
-      // Grant may already be used or expired — the JWT verification above is the primary check
+    } catch (err: unknown) {
+      // For 'once' grants: if the IdP rejects (already used/revoked), deny the action
+      if (result.claims.grant_type === 'once') {
+        throw createError({
+          statusCode: 403,
+          statusMessage: 'Grant has already been used',
+        })
+      }
+      // For 'timed'/'always' grants: log but don't block (IdP might be temporarily unavailable)
+      console.warn(`[protected-action] Grant use call failed for ${result.claims.grant_id}:`, err)
     }
   }
 
