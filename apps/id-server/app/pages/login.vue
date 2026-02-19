@@ -2,7 +2,7 @@
 const { login } = useAuth()
 const route = useRoute()
 
-const email = ref('')
+const email = ref((route.query.login_hint as string) ?? '')
 const password = ref('')
 const error = ref('')
 const submitting = ref(false)
