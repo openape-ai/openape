@@ -1,9 +1,9 @@
 export default defineNitroPlugin(async () => {
   const { userStore } = useStores()
 
-  const existing = await userStore.findByEmail('phofmann@delta-mind.at')
+  const existing = await userStore.findByEmail('phofmann@example.org')
   if (!existing) {
-    await userStore.register('phofmann@delta-mind.at', 'q1w2e3r4', 'Patrick Hofmann')
+    await userStore.register('phofmann@example.org', 'q1w2e3r4', 'Patrick Hofmann')
     console.log('[id-server] Seeded user: phofmann@delta-mind.at')
   }
 })

@@ -8,6 +8,8 @@ export default defineNuxtConfig({
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
     clawgateAdminEmails: '',
   },
+  // Storage 'db' mount is handled by server/plugins/storage.ts at runtime
+  // to support dynamic driver switching (fs vs s3) via STORAGE_DRIVER env var
   routeRules: {
     '/api/grants/**': { cors: true },
     '/api/agent/**': { cors: true },

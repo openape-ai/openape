@@ -1,6 +1,4 @@
 import type { AuthFlowState } from '@ddisa/core'
-import { createStorage } from 'unstorage'
-import fsDriver from 'unstorage/drivers/fs-lite'
 
 export interface FlowStateStore {
   save(state: string, flow: AuthFlowState): Promise<void>
@@ -12,7 +10,9 @@ interface StoredFlowState extends AuthFlowState {
   expiresAt: number
 }
 
-const storage = createStorage({ driver: fsDriver({ base: './.data/sample-sp-db' }) })
+// Storage configured via nitro.storage in nuxt.config.ts
+// Access with useStorage('db')
+const getStorage = () => useStorage('db')
 
 let _flowStateStore: FlowStateStore | null = null
 
@@ -20,15 +20,15 @@ function createFlowStateStore(): FlowStateStore {
   return {
     async save(state, flow) {
       const expiresAt = flow.createdAt + 10 * 60 * 1000 // 10 min TTL
-      await storage.setItem<StoredFlowState>(`flows:${state}`, { ...flow, expiresAt })
+      await getStorage().setItem<StoredFlowState>(`flows:${state}`, { ...flow, expiresAt })
     },
 
     async find(state) {
-      const stored = await storage.getItem<StoredFlowState>(`flows:${state}`)
+      const stored = await getStorage().getItem<StoredFlowState>(`flows:${state}`)
       if (!stored) return null
 
       if (stored.expiresAt < Date.now()) {
-        await storage.removeItem(`flows:${state}`)
+        await getStorage().removeItem(`flows:${state}`)
         return null
       }
 
@@ -37,7 +37,7 @@ function createFlowStateStore(): FlowStateStore {
     },
 
     async delete(state) {
-      await storage.removeItem(`flows:${state}`)
+      await getStorage().removeItem(`flows:${state}`)
     },
   }
 }
@@ -52,9 +52,9 @@ function getFlowStateStore() {
 export function getSpConfig() {
   const config = useRuntimeConfig()
   return {
-    spId: config.spId || 'localhost:3001',
-    spRedirectUri: config.spRedirectUri || 'http://localhost:3001/api/callback',
-    clawgateUrl: config.clawgateUrl || 'https://id.delta-mind.at',
+    spId: config.spId || 'sp.example.org',
+    spRedirectUri: config.spRedirectUri || 'https://sp.example.org/api/callback',
+    clawgateUrl: config.clawgateUrl || 'https://id.example.org',
     spName: 'DDISA Sample SP',
   }
 }

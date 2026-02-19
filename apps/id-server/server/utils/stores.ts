@@ -29,4 +29,4 @@ function getStores() {
 
 export const useStores = getStores
 
-export const IDP_ISSUER = process.env.NUXT_PUBLIC_SITE_URL || 'https://id.delta-mind.at'
+export const IDP_ISSUER = process.env.NUXT_PUBLIC_SITE_URL || 'https://id.example.org'

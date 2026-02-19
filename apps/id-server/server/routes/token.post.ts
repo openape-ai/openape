@@ -2,7 +2,13 @@ import { handleTokenExchange } from '@ddisa/idp-server'
 import type { TokenExchangeParams } from '@ddisa/idp-server'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<TokenExchangeParams>(event)
+  const rawBody = await readRawBody(event, 'utf-8')
+  let body: TokenExchangeParams
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid JSON body' })
+  }
   const { codeStore, keyStore } = useStores()
 
   if (!body.grant_type || !body.code || !body.code_verifier || !body.redirect_uri || !body.sp_id) {
