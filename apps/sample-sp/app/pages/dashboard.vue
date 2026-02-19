@@ -56,9 +56,15 @@ async function executeProtectedAction() {
       method: 'POST',
     })
     actionResult.value = result
+    if (result.grantConsumed) {
+      hasPermission.value = false
+    }
   } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+    const e = err as { statusCode?: number; data?: { statusMessage?: string }; message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Action failed'
+    if (e.statusCode === 403) {
+      hasPermission.value = false
+    }
   } finally {
     executing.value = false
   }
@@ -142,23 +148,20 @@ function formatTimestamp(ts: number): string {
 
           <div class="flex gap-3">
             <UButton
-              v-if="!hasPermission"
-              color="warning"
-              :loading="requesting"
-              :disabled="requesting"
-              block
-              label="Request Permission"
-              @click="requestPermission"
-            />
-
-            <UButton
               v-if="hasPermission"
               color="success"
               :loading="executing"
               :disabled="executing"
-              block
               label="Execute Protected Action"
               @click="executeProtectedAction"
+            />
+
+            <UButton
+              color="warning"
+              :loading="requesting"
+              :disabled="requesting"
+              :label="hasPermission ? 'Request New Permission' : 'Request Permission'"
+              @click="requestPermission"
             />
           </div>
 

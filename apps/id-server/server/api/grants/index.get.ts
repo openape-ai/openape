@@ -35,6 +35,8 @@ export default defineEventHandler(async (event) => {
   return allGrants.filter((grant: ClawGateGrant) => {
     // Show grants targeting this user
     if (grant.request.target === email) return true
+    // Show grants this user requested
+    if (grant.request.requester === email) return true
     // Show grants from agents they own or approve
     if (grant.request.requester.startsWith('agent:')) {
       const agentId = grant.request.requester.slice(6)

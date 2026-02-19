@@ -2,6 +2,7 @@ import { execa, type ResultPromise } from 'execa'
 
 const DDISA_MOCK_RECORDS = JSON.stringify({
   'delta-mind.at': { idp: 'http://localhost:3000', mode: 'open' },
+  'example.org': { idp: 'http://localhost:3000', mode: 'open' },
 })
 
 interface ManagedServer {

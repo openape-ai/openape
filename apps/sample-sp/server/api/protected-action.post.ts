@@ -1,5 +1,3 @@
-import { verifyAuthzJWT } from '@clawgate/server'
-
 export default defineEventHandler(async (event) => {
   const session = await getSession(event)
   const data = session.data as Record<string, unknown>
@@ -21,32 +19,22 @@ export default defineEventHandler(async (event) => {
 
   const { clawgateUrl } = getSpConfig()
 
-  // Verify the AuthZ-JWT
-  const result = await verifyAuthzJWT(token, {
-    jwksUri: `${clawgateUrl}/.well-known/jwks.json`,
+  // Verify the AuthZ-JWT and consume once-grants via the IdP verify endpoint
+  const result = await $fetch<{ valid: boolean; claims?: Record<string, unknown>; grant?: { status: string; request: { grant_type: string } }; error?: string }>(`${clawgateUrl}/api/grants/verify`, {
+    method: 'POST',
+    body: { token },
   })
 
   if (!result.valid) {
+    // Clear stale session data so user can request a new grant
+    await session.update({ authzJWT: undefined, grantId: undefined })
     throw createError({ statusCode: 403, statusMessage: `Authorization failed: ${result.error}` })
   }
 
-  // Mark grant as used on the IdP (prevents replay for 'once' grants)
-  if (result.claims?.grant_id) {
-    try {
-      await $fetch(`${clawgateUrl}/api/grants/${result.claims.grant_id}/use`, {
-        method: 'POST',
-      })
-    } catch (err: unknown) {
-      // For 'once' grants: if the IdP rejects (already used/revoked), deny the action
-      if (result.claims.grant_type === 'once') {
-        throw createError({
-          statusCode: 403,
-          statusMessage: 'Grant has already been used',
-        })
-      }
-      // For 'timed'/'always' grants: log but don't block (IdP might be temporarily unavailable)
-      console.warn(`[protected-action] Grant use call failed for ${result.claims.grant_id}:`, err)
-    }
+  // Once-grant consumed — clear session so user can request a new one
+  const grantConsumed = result.grant?.request?.grant_type === 'once'
+  if (grantConsumed) {
+    await session.update({ authzJWT: undefined, grantId: undefined })
   }
 
   return {
@@ -54,6 +42,7 @@ export default defineEventHandler(async (event) => {
     message: 'Protected action executed successfully',
     user: claims.sub,
     grant: result.claims,
+    grantConsumed,
     timestamp: new Date().toISOString(),
   }
 })

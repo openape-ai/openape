@@ -20,7 +20,7 @@ describe('DDISA OIDC Login Flow', () => {
     // Step 1: SP login — discover IdP and get authorization URL
     const { status: loginStatus, data: loginData } = await client.postJSON<{
       redirectUrl: string
-    }>(`${SP}/api/login`, { email: 'user@example.com' })
+    }>(`${SP}/api/login`, { email: 'phofmann@example.org' })
 
     expect(loginStatus).toBe(200)
     expect(loginData.redirectUrl).toContain(`${IDP}/authorize`)
@@ -38,7 +38,7 @@ describe('DDISA OIDC Login Flow', () => {
     const { status: idpLoginStatus, data: idpLoginData } = await client.postJSON<{
       ok: boolean
     }>(`${IDP}/api/login`, {
-      email: 'user@example.com',
+      email: 'phofmann@example.org',
       password: 'q1w2e3r4',
     })
 
@@ -68,9 +68,9 @@ describe('DDISA OIDC Login Flow', () => {
     }>(`${SP}/api/me`)
 
     expect(meStatus).toBe(200)
-    expect(claims.sub).toBe('user@example.com')
+    expect(claims.sub).toBe('phofmann@example.org')
     expect(claims.iss).toBe('http://localhost:3000')
-    expect(claims.aud).toBe('localhost:3001')
+    expect(claims.aud).toBe('sp.example.org')
     expect(claims.nonce).toBeTruthy()
   })
 })
