@@ -9,7 +9,6 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
-    "@clawgate/server": "workspace:*",
     "@ddisa/core": "workspace:*",
     "@ddisa/sp-server": "workspace:*",
     "unstorage": "^1.14.4",
