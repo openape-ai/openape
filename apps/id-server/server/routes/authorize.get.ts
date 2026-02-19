@@ -26,7 +26,13 @@ export default defineEventHandler(async (event) => {
   if (!session.data.userId) {
     const returnTo = `/authorize?${new URLSearchParams(query as Record<string, string>).toString()}`
     await session.update({ pendingAuthorize: params, returnTo })
-    return sendRedirect(event, `/login?returnTo=${encodeURIComponent(returnTo)}`)
+    const loginUrl = new URL('/login', getRequestURL(event).origin)
+    loginUrl.searchParams.set('returnTo', returnTo)
+    const loginHint = String(query.login_hint ?? '')
+    if (loginHint) {
+      loginUrl.searchParams.set('login_hint', loginHint)
+    }
+    return sendRedirect(event, loginUrl.pathname + loginUrl.search)
   }
 
   // User is logged in — resolve policy mode from the user's domain DNS record

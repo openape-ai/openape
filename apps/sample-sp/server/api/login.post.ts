@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
   const { url, flowState } = await createAuthorizationURL(idpConfig, {
     spId,
     redirectUri,
+    email,
   })
 
   // Persist flow state in Turso
