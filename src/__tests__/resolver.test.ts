@@ -36,13 +36,13 @@ describe('resolveDDISA with mock records', () => {
 
 describe('resolveDDISA with env-based mock records', () => {
   const envValue = JSON.stringify({
-    'delta-mind.at': { idp: 'http://localhost:3000', mode: 'open' },
+    'example.org': { idp: 'http://localhost:3000', mode: 'open' },
   })
 
   it('resolves from DDISA_MOCK_RECORDS env var', async () => {
     process.env.DDISA_MOCK_RECORDS = envValue
     try {
-      const record = await resolveDDISA('delta-mind.at')
+      const record = await resolveDDISA('example.org')
       expect(record).toMatchObject({
         version: 'ddisa1',
         idp: 'http://localhost:3000',
@@ -70,8 +70,8 @@ describe('resolveDDISA with env-based mock records', () => {
   it('ignores invalid JSON in env var', async () => {
     process.env.DDISA_MOCK_RECORDS = 'not-json'
     try {
-      const record = await resolveDDISA('delta-mind.at', {
-        mockRecords: { 'delta-mind.at': { idp: 'https://option-mock.com', mode: 'open' as const } },
+      const record = await resolveDDISA('example.org', {
+        mockRecords: { 'example.org': { idp: 'https://option-mock.com', mode: 'open' as const } },
       })
       expect(record?.idp).toBe('https://option-mock.com')
     } finally {
