@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
 
   // Test 1: DNS resolution
   try {
-    const record = await resolveDDISA('example.org')
+    const record = await resolveDDISA('example.com')
     results.dns = { ok: true, record }
   } catch (e: any) {
     results.dns = { ok: false, error: e.message }

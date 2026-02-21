@@ -7,12 +7,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await userStore.authenticate(body.email, body.password)
-  if (!user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid email or password' })
+
+  if (user) {
+    const session = await getAppSession(event)
+    await session.update({ userId: user.email, userName: user.name })
+    return { ok: true, email: user.email, name: user.name }
   }
 
-  const session = await getAppSession(event)
-  await session.update({ userId: user.email, userName: user.name })
+  // Super-admin fallback: allow login with NUXT_SUPER_ADMIN_PASSWORD
+  const config = useRuntimeConfig()
+  if (config.superAdminPassword && body.password === config.superAdminPassword) {
+    const session = await getAppSession(event)
+    await session.update({ userId: body.email, userName: 'Super Admin', isSuperAdmin: true })
+    return { ok: true, email: body.email, name: 'Super Admin' }
+  }
 
-  return { ok: true, email: user.email, name: user.name }
+  throw createError({ statusCode: 401, statusMessage: 'Invalid email or password' })
 })

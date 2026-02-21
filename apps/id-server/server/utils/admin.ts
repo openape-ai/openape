@@ -20,9 +20,13 @@ export async function requireAuth(event: H3Event): Promise<string> {
 }
 
 export async function requireAdmin(event: H3Event): Promise<string> {
-  const email = await requireAuth(event)
-  if (!isAdmin(email)) {
-    throw createError({ statusCode: 403, statusMessage: 'Admin access required' })
+  const session = await getAppSession(event)
+  if (!session.data.userId) {
+    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
-  return email
+  const email = session.data.userId as string
+  if (session.data.isSuperAdmin === true || isAdmin(email)) {
+    return email
+  }
+  throw createError({ statusCode: 403, statusMessage: 'Admin access required' })
 }

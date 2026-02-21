@@ -1,16 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
+import { bootstrapTestUser } from '../helpers/bootstrap.js'
 
 const SP = 'http://localhost:3001'
 const IDP = 'http://localhost:3000'
 
-const TEST_EMAIL = 'phofmann@example.org'
+const TEST_EMAIL = 'admin@example.com'
 const TEST_PASSWORD = 'q1w2e3r4'
 
 describe('Once-Grant Re-request Flow', () => {
   beforeAll(async () => {
     await startServers()
+    await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })
   })
 
   afterAll(async () => {

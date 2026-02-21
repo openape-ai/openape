@@ -9,6 +9,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
+    superAdminPassword: '',
     clawgateAdminEmails: '',
   },
   // Storage 'db' mount is handled by server/plugins/storage.ts at runtime

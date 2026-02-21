@@ -11,10 +11,10 @@
   "dependencies": {
     "@ddisa/core": "workspace:*",
     "@ddisa/sp-server": "workspace:*",
-    "unstorage": "^1.14.4",
-    "nuxt": "^4.0.0",
     "@nuxt/ui": "4.4.0",
-    "tailwindcss": "^4.0.0"
+    "nuxt": "^4.3.1",
+    "tailwindcss": "^4.0.0",
+    "unstorage": "^1.14.4"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

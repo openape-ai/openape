@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
+import { bootstrapTestUser } from '../helpers/bootstrap.js'
 
 const IDP = 'http://localhost:3000'
 
 describe('Grant Lifecycle & Dashboard Visibility', () => {
   beforeAll(async () => {
     await startServers()
+    await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })
   })
 
   afterAll(async () => {
@@ -16,7 +18,7 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
   async function loginAsSeededUser(client: HttpClient) {
     const { status, data } = await client.postJSON<{ ok: boolean }>(
       `${IDP}/api/login`,
-      { email: 'phofmann@example.org', password: 'q1w2e3r4' },
+      { email: 'admin@example.com', password: 'q1w2e3r4' },
     )
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
@@ -26,7 +28,7 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
     const { status, data } = await client.postJSON<{ id: string; status: string }>(
       `${IDP}/api/grants`,
       {
-        requester: 'phofmann@example.org',
+        requester: 'admin@example.com',
         target: 'test-sp',
         grant_type: grantType,
         permissions: ['read'],

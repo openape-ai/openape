@@ -16,7 +16,7 @@ async function handleLogout() {
     <UCard class="w-full max-w-md">
       <template #header>
         <h1 class="text-2xl font-bold text-center">
-          id.delta-mind.at
+          DDISA Identity Server
         </h1>
         <p class="text-center text-sm text-muted mt-2">
           DDISA Identity Provider + ClawGate
@@ -70,7 +70,7 @@ async function handleLogout() {
 
       <div v-else class="space-y-4">
         <p class="text-muted text-center text-sm">
-          Production Identity Provider for @delta-mind.at users.
+          Production Identity Provider for registered users.
         </p>
         <UButton
           to="/login"

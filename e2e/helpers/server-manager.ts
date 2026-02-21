@@ -1,8 +1,8 @@
 import { execa, type ResultPromise } from 'execa'
 
 const DDISA_MOCK_RECORDS = JSON.stringify({
-  'delta-mind.at': { idp: 'http://localhost:3000', mode: 'open' },
   'example.org': { idp: 'http://localhost:3000', mode: 'open' },
+  'example.com': { idp: 'http://localhost:3000', mode: 'open' },
 })
 
 interface ManagedServer {
@@ -36,6 +36,7 @@ export async function startServers(): Promise<void> {
   const commonEnv = {
     ...process.env,
     DDISA_MOCK_RECORDS,
+    NUXT_SUPER_ADMIN_PASSWORD: 'test-super-admin',
   }
 
   const idServer = execa('pnpm', ['dev'], {
@@ -43,6 +44,7 @@ export async function startServers(): Promise<void> {
     env: {
       ...commonEnv,
       NUXT_PUBLIC_SITE_URL: 'http://localhost:3000',
+      NUXT_CLAWGATE_ADMIN_EMAILS: 'admin@example.com',
     },
     stdio: 'pipe',
   })
