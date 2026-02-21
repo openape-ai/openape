@@ -253,15 +253,9 @@ function formatDate(ts: number): string {
                 v-if="enrolledAgentId"
                 color="success"
                 title="Agent enrolled successfully"
+                description="The agent is now active and ready to use."
                 :close-button="{ onClick: () => enrolledAgentId = '' }"
-              >
-                <template #description>
-                  <p class="mb-2">Run this command on the agent machine to complete setup:</p>
-                  <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm break-all select-all">
-                    clawgate-sudo enroll --set-agent-id {{ enrolledAgentId }}
-                  </div>
-                </template>
-              </UAlert>
+              />
 
               <!-- Edit Agent Modal -->
               <div v-if="editingAgent">

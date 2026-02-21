@@ -2,6 +2,7 @@
 const { user, loading: authLoading, fetchUser } = useAuth()
 const route = useRoute()
 
+const agentId = computed(() => route.query.id as string || '')
 const agentName = computed(() => route.query.name as string || '')
 const agentKey = computed(() => route.query.key as string || '')
 const validParams = computed(() => agentName.value && agentKey.value.startsWith('ssh-ed25519 '))
@@ -28,6 +29,7 @@ async function handleEnroll() {
     const data = await $fetch<{ agent_id: string; name: string }>('/api/agent/enroll', {
       method: 'POST',
       body: {
+        id: agentId.value || undefined,
         name: agentName.value,
         publicKey: agentKey.value,
         owner: owner.value,

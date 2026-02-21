@@ -2,6 +2,7 @@ export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
 
   const body = await readBody<{
+    id?: string
     name: string
     publicKey: string
     owner?: string
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const agent = await agentStore.create({
-    id: crypto.randomUUID(),
+    id: body.id || crypto.randomUUID(),
     name: body.name,
     owner: body.owner || adminEmail,
     approver: body.approver || adminEmail,
