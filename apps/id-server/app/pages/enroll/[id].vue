@@ -1,7 +1,9 @@
 <script setup lang="ts">
-const { user, loading: authLoading } = useAuth()
+const { user, loading: authLoading, fetchUser } = useAuth()
 const route = useRoute()
 const agentId = route.params.id as string
+
+await fetchUser()
 
 interface Agent {
   id: string
@@ -25,16 +27,19 @@ onMounted(async () => {
   try {
     const data = await $fetch<Agent>(`/api/admin/agents/${agentId}`)
     agent.value = data
-    if (user.value?.email) {
-      owner.value = user.value.email
-      approver.value = user.value.email
-    }
   } catch (e: any) {
     error.value = e?.data?.statusMessage || 'Agent not found'
   } finally {
     loading.value = false
   }
 })
+
+watch(user, (u) => {
+  if (u?.email) {
+    owner.value = u.email
+    approver.value = u.email
+  }
+}, { immediate: true })
 
 async function approveAgent() {
   approving.value = true
@@ -69,7 +74,7 @@ async function approveAgent() {
       <!-- Not logged in -->
       <div v-else-if="!user" class="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center">
         <p class="text-gray-400 mb-4">You need to be logged in as admin to approve agents.</p>
-        <NuxtLink to="/login" class="inline-block px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg font-medium transition">
+        <NuxtLink :to="`/login?returnTo=/enroll/${agentId}`" class="inline-block px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg font-medium transition">
           Log in
         </NuxtLink>
       </div>
