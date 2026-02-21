@@ -13,7 +13,9 @@ async function handleSubmit() {
   try {
     await login(email.value, password.value)
     const returnTo = route.query.returnTo as string | undefined
-    if (returnTo) {
+    if (returnTo?.startsWith('/')) {
+      await navigateTo(returnTo)
+    } else if (returnTo) {
       await navigateTo(returnTo, { external: true })
     } else {
       await navigateTo('/')
