@@ -1,7 +1,9 @@
 <script setup lang="ts">
 const { user, loading: authLoading, fetchUser } = useAuth()
+const route = useRoute()
 
-const activeTab = ref<'users' | 'agents'>('users')
+const activeTab = ref<'users' | 'agents'>(route.query.tab === 'agents' ? 'agents' : 'users')
+const enrolledAgentId = ref(route.query.enrolled as string || '')
 
 // Users
 const users = ref<{ email: string; name: string }[]>([])
@@ -246,6 +248,21 @@ function formatDate(ts: number): string {
           <!-- Agents Tab -->
           <template #agents>
             <div class="space-y-6 mt-6">
+              <!-- Enrollment success banner -->
+              <UAlert
+                v-if="enrolledAgentId"
+                color="success"
+                title="Agent enrolled successfully"
+                :close-button="{ onClick: () => enrolledAgentId = '' }"
+              >
+                <template #description>
+                  <p class="mb-2">Run this command on the agent machine to complete setup:</p>
+                  <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm break-all select-all">
+                    clawgate-sudo enroll --set-agent-id {{ enrolledAgentId }}
+                  </div>
+                </template>
+              </UAlert>
+
               <!-- Edit Agent Modal -->
               <div v-if="editingAgent">
                 <UModal :open="true" title="Edit Agent" @update:open="editingAgent = null">

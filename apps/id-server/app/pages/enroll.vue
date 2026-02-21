@@ -11,7 +11,6 @@ const approver = ref('')
 const enrolling = ref(false)
 const declined = ref(false)
 const error = ref('')
-const result = ref<{ agent_id: string; name: string } | null>(null)
 
 await fetchUser()
 
@@ -35,7 +34,7 @@ async function handleEnroll() {
         approver: approver.value,
       },
     })
-    result.value = data
+    await navigateTo(`/admin?tab=agents&enrolled=${data.agent_id}`)
   } catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string }; message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Enrollment failed'
@@ -83,29 +82,6 @@ async function handleEnroll() {
         title="Declined"
         description="No action taken. You can close this page."
       />
-
-      <!-- Success -->
-      <template v-else-if="result">
-        <UAlert color="success" title="Agent enrolled successfully" class="mb-4">
-          <template #description>
-            <strong>{{ result.name }}</strong> is now active.
-          </template>
-        </UAlert>
-
-        <div class="space-y-3">
-          <UFormField label="Agent ID">
-            <UInput :model-value="result.agent_id" readonly class="font-mono" />
-          </UFormField>
-
-          <div class="bg-gray-900 rounded-lg p-3 font-mono text-sm break-all select-all">
-            clawgate-sudo enroll --set-agent-id {{ result.agent_id }}
-          </div>
-
-          <p class="text-sm text-muted text-center">
-            Run this command on the agent machine to complete setup.
-          </p>
-        </div>
-      </template>
 
       <!-- Enrollment form -->
       <template v-else>
