@@ -12,18 +12,18 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+  <div class="min-h-screen flex flex-col items-center justify-center p-4">
     <UCard class="w-full max-w-md">
       <template #header>
         <h1 class="text-2xl font-bold text-center">
           id.delta-mind.at
         </h1>
-        <p class="text-center text-sm text-gray-500 mt-2">
+        <p class="text-center text-sm text-muted mt-2">
           DDISA Identity Provider + ClawGate
         </p>
       </template>
 
-      <div v-if="loading" class="text-center text-gray-500">
+      <div v-if="loading" class="text-center text-muted">
         Loading...
       </div>
 
@@ -35,7 +35,7 @@ async function handleLogout() {
           </template>
         </UAlert>
 
-        <div class="text-sm text-gray-600 space-y-2">
+        <div class="text-sm text-muted space-y-2">
           <p>Endpoints:</p>
           <ul class="list-disc list-inside space-y-1 text-xs font-mono">
             <li>GET /authorize</li>
@@ -69,7 +69,7 @@ async function handleLogout() {
       </div>
 
       <div v-else class="space-y-4">
-        <p class="text-gray-600 text-center text-sm">
+        <p class="text-muted text-center text-sm">
           Production Identity Provider for @delta-mind.at users.
         </p>
         <UButton

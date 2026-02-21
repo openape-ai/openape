@@ -76,13 +76,13 @@ function formatTimestamp(ts: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 px-4">
+  <div class="min-h-screen py-8 px-4">
     <div class="max-w-2xl mx-auto">
-      <div v-if="loading" class="text-center text-gray-500 mt-20">Loading...</div>
+      <div v-if="loading" class="text-center text-muted mt-20">Loading...</div>
 
       <template v-else-if="user">
         <div class="flex items-center justify-between mb-8">
-          <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 class="text-2xl font-bold">Dashboard</h1>
           <UButton color="error" variant="soft" size="sm" @click="logout">
             Logout
           </UButton>
@@ -91,25 +91,25 @@ function formatTimestamp(ts: number): string {
         <!-- DDISA Assertion Claims -->
         <UCard class="mb-6">
           <template #header>
-            <p class="text-green-800 font-medium">Authenticated via DDISA</p>
+            <p class="text-green-400 font-medium">Authenticated via DDISA</p>
           </template>
 
-          <div class="divide-y divide-gray-100">
+          <div class="divide-y divide-(--ui-border)">
             <div class="px-6 py-3 flex justify-between">
-              <span class="text-sm text-gray-500">Subject (sub)</span>
-              <span class="text-sm text-gray-900 font-mono">{{ user.sub }}</span>
+              <span class="text-sm text-muted">Subject (sub)</span>
+              <span class="text-sm font-mono">{{ user.sub }}</span>
             </div>
             <div class="px-6 py-3 flex justify-between">
-              <span class="text-sm text-gray-500">Issuer (iss)</span>
-              <span class="text-sm text-gray-900 font-mono">{{ user.iss }}</span>
+              <span class="text-sm text-muted">Issuer (iss)</span>
+              <span class="text-sm font-mono">{{ user.iss }}</span>
             </div>
             <div class="px-6 py-3 flex justify-between">
-              <span class="text-sm text-gray-500">Audience (aud)</span>
-              <span class="text-sm text-gray-900 font-mono">{{ user.aud }}</span>
+              <span class="text-sm text-muted">Audience (aud)</span>
+              <span class="text-sm font-mono">{{ user.aud }}</span>
             </div>
             <div class="px-6 py-3 flex justify-between">
-              <span class="text-sm text-gray-500">Issued At</span>
-              <span class="text-sm text-gray-900">{{ formatTimestamp(user.iat) }}</span>
+              <span class="text-sm text-muted">Issued At</span>
+              <span class="text-sm">{{ formatTimestamp(user.iat) }}</span>
             </div>
           </div>
         </UCard>
@@ -139,10 +139,10 @@ function formatTimestamp(ts: number): string {
         <!-- ClawGate Protected Action -->
         <UCard>
           <template #header>
-            <h2 class="text-lg font-semibold text-gray-900">ClawGate Protected Action</h2>
+            <h2 class="text-lg font-semibold">ClawGate Protected Action</h2>
           </template>
 
-          <p class="text-sm text-gray-600 mb-4">
+          <p class="text-sm text-muted mb-4">
             This action requires ClawGate authorization. Click "Request Permission" to be redirected to the IdP for approval.
           </p>
 
@@ -167,8 +167,8 @@ function formatTimestamp(ts: number): string {
 
           <!-- Action Result -->
           <UCard v-if="actionResult" variant="soft" class="mt-4">
-            <p class="text-sm font-medium text-gray-700 mb-2">Result:</p>
-            <pre class="text-xs text-gray-800 overflow-auto">{{ JSON.stringify(actionResult, null, 2) }}</pre>
+            <p class="text-sm font-medium text-muted mb-2">Result:</p>
+            <pre class="text-xs overflow-auto">{{ JSON.stringify(actionResult, null, 2) }}</pre>
           </UCard>
         </UCard>
       </template>

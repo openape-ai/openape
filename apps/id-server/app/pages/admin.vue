@@ -155,17 +155,17 @@ function formatDate(ts: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 px-4">
+  <div class="min-h-screen py-8 px-4">
     <div class="max-w-5xl mx-auto">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p class="text-sm text-gray-500">Manage users and agents</p>
+          <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+          <p class="text-sm text-muted">Manage users and agents</p>
         </div>
         <UButton to="/" color="neutral" variant="soft" size="sm">Back</UButton>
       </div>
 
-      <div v-if="authLoading" class="text-center text-gray-500 mt-10">Loading...</div>
+      <div v-if="authLoading" class="text-center text-muted mt-10">Loading...</div>
 
       <template v-else>
         <!-- Tabs -->
@@ -210,20 +210,20 @@ function formatDate(ts: number): string {
 
               <!-- Users Table -->
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="usersLoading" class="p-6 text-center text-gray-500">Loading...</div>
-                <div v-else-if="users.length === 0" class="p-6 text-center text-gray-500">No users found.</div>
+                <div v-if="usersLoading" class="p-6 text-center text-muted">Loading...</div>
+                <div v-else-if="users.length === 0" class="p-6 text-center text-muted">No users found.</div>
                 <table v-else class="w-full">
-                  <thead class="bg-gray-50 border-b border-gray-200">
+                  <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Email</th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Name</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Email</th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">Actions</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <tr v-for="u in users" :key="u.email" class="hover:bg-gray-50">
-                      <td class="px-4 py-3 text-sm text-gray-900">{{ u.name }}</td>
-                      <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ u.email }}</td>
+                  <tbody class="divide-y divide-(--ui-border)">
+                    <tr v-for="u in users" :key="u.email" class="hover:bg-(--ui-bg-elevated)">
+                      <td class="px-4 py-3 text-sm">{{ u.name }}</td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono">{{ u.email }}</td>
                       <td class="px-4 py-3 text-right">
                         <UButton
                           v-if="u.email !== user?.email"
@@ -234,7 +234,7 @@ function formatDate(ts: number): string {
                         >
                           Delete
                         </UButton>
-                        <span v-else class="text-xs text-gray-400">You</span>
+                        <span v-else class="text-xs text-muted">You</span>
                       </td>
                     </tr>
                   </tbody>
@@ -308,30 +308,30 @@ function formatDate(ts: number): string {
 
               <!-- Agents Table -->
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="agentsLoading" class="p-6 text-center text-gray-500">Loading...</div>
-                <div v-else-if="agents.length === 0" class="p-6 text-center text-gray-500">No agents found.</div>
+                <div v-if="agentsLoading" class="p-6 text-center text-muted">Loading...</div>
+                <div v-else-if="agents.length === 0" class="p-6 text-center text-muted">No agents found.</div>
                 <table v-else class="w-full">
-                  <thead class="bg-gray-50 border-b border-gray-200">
+                  <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Owner</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Approver</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Created</th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Name</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Owner</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Approver</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Status</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Created</th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">Actions</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <tr v-for="a in agents" :key="a.id" class="hover:bg-gray-50">
-                      <td class="px-4 py-3 text-sm text-gray-900">{{ a.name }}</td>
-                      <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.owner }}</td>
-                      <td class="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{{ a.approver }}</td>
+                  <tbody class="divide-y divide-(--ui-border)">
+                    <tr v-for="a in agents" :key="a.id" class="hover:bg-(--ui-bg-elevated)">
+                      <td class="px-4 py-3 text-sm">{{ a.name }}</td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">{{ a.owner }}</td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">{{ a.approver }}</td>
                       <td class="px-4 py-3">
                         <UBadge :color="a.isActive ? 'success' : 'error'" variant="subtle">
                           {{ a.isActive ? 'Active' : 'Inactive' }}
                         </UBadge>
                       </td>
-                      <td class="px-4 py-3 text-xs text-gray-500">{{ formatDate(a.createdAt) }}</td>
+                      <td class="px-4 py-3 text-xs text-muted">{{ formatDate(a.createdAt) }}</td>
                       <td class="px-4 py-3 text-right space-x-1">
                         <UButton variant="ghost" size="xs" color="primary" @click="startEditAgent(a)">Edit</UButton>
                         <UButton variant="ghost" size="xs" color="warning" @click="toggleAgent(a)">
