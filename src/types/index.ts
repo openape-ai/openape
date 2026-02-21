@@ -69,6 +69,8 @@ export interface ClawGateGrantRequest {
   grant_type: GrantType
   /** Requested permissions */
   permissions?: string[]
+  /** Plaintext command (for display in approval UI) */
+  command?: string[]
   /** Command hash for direct/local mode */
   cmd_hash?: string
   /** Duration in seconds (for 'timed' grants) */
