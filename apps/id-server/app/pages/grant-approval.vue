@@ -84,13 +84,13 @@ async function handleDeny() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+  <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg">
       <template #header>
         <h1 class="text-2xl font-bold text-center">Permission Request</h1>
       </template>
 
-      <div v-if="loading || authLoading" class="text-center text-gray-500">
+      <div v-if="loading || authLoading" class="text-center text-muted">
         Loading...
       </div>
 
@@ -102,32 +102,32 @@ async function handleDeny() {
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div class="flex justify-between">
-                  <dt class="text-gray-600">Requester</dt>
-                  <dd class="font-mono text-gray-900">{{ (grant as any).request?.requester }}</dd>
+                  <dt class="text-muted">Requester</dt>
+                  <dd class="font-mono">{{ (grant as any).request?.requester }}</dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-gray-600">Target</dt>
-                  <dd class="font-mono text-gray-900">{{ (grant as any).request?.target }}</dd>
+                  <dt class="text-muted">Target</dt>
+                  <dd class="font-mono">{{ (grant as any).request?.target }}</dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-gray-600">Type</dt>
-                  <dd class="font-mono text-gray-900">{{ (grant as any).request?.grant_type }}</dd>
+                  <dt class="text-muted">Type</dt>
+                  <dd class="font-mono">{{ (grant as any).request?.grant_type }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.command?.length">
-                  <dt class="text-gray-600 mb-1">Command</dt>
+                  <dt class="text-muted mb-1">Command</dt>
                   <dd class="font-mono text-sm bg-gray-900 text-green-400 rounded px-3 py-2 break-all">{{ (grant as any).request.command.join(' ') }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.cmd_hash" class="flex justify-between">
-                  <dt class="text-gray-600">Hash</dt>
-                  <dd class="font-mono text-xs text-gray-400 truncate ml-2">{{ (grant as any).request.cmd_hash }}</dd>
+                  <dt class="text-muted">Hash</dt>
+                  <dd class="font-mono text-xs text-dimmed truncate ml-2">{{ (grant as any).request.cmd_hash }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.reason" class="flex justify-between">
-                  <dt class="text-gray-600">Reason</dt>
-                  <dd class="text-gray-900">{{ (grant as any).request?.reason }}</dd>
+                  <dt class="text-muted">Reason</dt>
+                  <dd class="">{{ (grant as any).request?.reason }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.permissions?.length" class="flex justify-between">
-                  <dt class="text-gray-600">Permissions</dt>
-                  <dd class="font-mono text-gray-900">{{ (grant as any).request?.permissions?.join(', ') }}</dd>
+                  <dt class="text-muted">Permissions</dt>
+                  <dd class="font-mono">{{ (grant as any).request?.permissions?.join(', ') }}</dd>
                 </div>
               </dl>
             </template>

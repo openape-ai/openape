@@ -34,19 +34,19 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+  <div class="min-h-screen flex items-center justify-center px-4">
     <div class="max-w-md w-full space-y-8">
       <UCard>
         <template #header>
           <div class="text-center">
-            <h1 class="text-3xl font-bold text-gray-900">Sample SP</h1>
-            <p class="mt-2 text-gray-600">
+            <h1 class="text-3xl font-bold">Sample SP</h1>
+            <p class="mt-2 text-muted">
               Sign in with your email using DNS-Delegated Identity.
             </p>
           </div>
         </template>
 
-        <div v-if="loading" class="text-center text-gray-500">
+        <div v-if="loading" class="text-center text-muted">
           Loading...
         </div>
 
@@ -66,7 +66,7 @@ async function handleLogin() {
               required
             />
           </UFormField>
-          <p class="mt-1 text-xs text-gray-500">
+          <p class="mt-1 text-xs text-muted">
             Uses real DNS resolution to discover the IdP for your domain.
           </p>
 
@@ -80,9 +80,9 @@ async function handleLogin() {
         </form>
 
         <template #footer>
-          <div class="text-center text-xs text-gray-400">
+          <div class="text-center text-xs text-dimmed">
             <p>SP manifest:</p>
-            <a href="/.well-known/sp-manifest.json" target="_blank" class="text-blue-500 underline">
+            <a href="/.well-known/sp-manifest.json" target="_blank" class="text-(--ui-primary) underline">
               /.well-known/sp-manifest.json
             </a>
           </div>
