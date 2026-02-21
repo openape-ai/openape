@@ -8,6 +8,8 @@ interface Grant {
     requester: string
     target: string
     grant_type: string
+    command?: string[]
+    cmd_hash?: string
     reason?: string
     permissions?: string[]
   }
@@ -145,6 +147,11 @@ function formatTime(ts: number): string {
                   <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                   <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
                   <p><span class="text-gray-500">Type:</span> {{ grant.request.grant_type }}</p>
+                  <div v-if="grant.request.command?.length" class="mt-1">
+                    <span class="text-gray-500">Command:</span>
+                    <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 break-all">{{ grant.request.command.join(' ') }}</code>
+                  </div>
+                  <p v-if="grant.request.cmd_hash" class="text-xs text-gray-400 font-mono truncate">Hash: {{ grant.request.cmd_hash }}</p>
                   <p v-if="grant.request.reason"><span class="text-gray-500">Reason:</span> {{ grant.request.reason }}</p>
                   <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
                 </div>
@@ -222,6 +229,10 @@ function formatTime(ts: number): string {
                 </div>
                 <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                 <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
+                <div v-if="grant.request.command?.length" class="mt-1">
+                  <span class="text-gray-500">Command:</span>
+                  <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 break-all">{{ grant.request.command.join(' ') }}</code>
+                </div>
                 <p v-if="grant.decided_by" class="text-xs text-gray-400">Decided by: {{ grant.decided_by }}</p>
                 <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
               </div>

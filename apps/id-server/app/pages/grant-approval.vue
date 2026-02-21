@@ -113,6 +113,14 @@ async function handleDeny() {
                   <dt class="text-gray-600">Type</dt>
                   <dd class="font-mono text-gray-900">{{ (grant as any).request?.grant_type }}</dd>
                 </div>
+                <div v-if="(grant as any).request?.command?.length">
+                  <dt class="text-gray-600 mb-1">Command</dt>
+                  <dd class="font-mono text-sm bg-gray-900 text-green-400 rounded px-3 py-2 break-all">{{ (grant as any).request.command.join(' ') }}</dd>
+                </div>
+                <div v-if="(grant as any).request?.cmd_hash" class="flex justify-between">
+                  <dt class="text-gray-600">Hash</dt>
+                  <dd class="font-mono text-xs text-gray-400 truncate ml-2">{{ (grant as any).request.cmd_hash }}</dd>
+                </div>
                 <div v-if="(grant as any).request?.reason" class="flex justify-between">
                   <dt class="text-gray-600">Reason</dt>
                   <dd class="text-gray-900">{{ (grant as any).request?.reason }}</dd>
