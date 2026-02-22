@@ -53,14 +53,14 @@ export interface DDISAAssertionClaims {
   jti?: string
 }
 
-/** ClawGate grant types */
+/** OpenAPE grant types */
 export type GrantType = 'once' | 'timed' | 'always'
 
-/** ClawGate grant status */
+/** OpenAPE grant status */
 export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'
 
-/** ClawGate grant request */
-export interface ClawGateGrantRequest {
+/** OpenAPE grant request */
+export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
   requester: string
   /** Target system/resource */
@@ -79,12 +79,12 @@ export interface ClawGateGrantRequest {
   reason?: string
 }
 
-/** ClawGate grant */
-export interface ClawGateGrant {
+/** OpenAPE grant */
+export interface OpenApeGrant {
   /** Unique grant ID */
   id: string
   /** Grant request details */
-  request: ClawGateGrantRequest
+  request: OpenApeGrantRequest
   /** Current status */
   status: GrantStatus
   /** Who approved/denied */
@@ -99,9 +99,9 @@ export interface ClawGateGrant {
   used_at?: number
 }
 
-/** ClawGate AuthZ-JWT claims */
-export interface ClawGateAuthZClaims {
-  /** Issuer — ClawGate server */
+/** OpenAPE AuthZ-JWT claims */
+export interface OpenApeAuthZClaims {
+  /** Issuer — OpenAPE server */
   iss: string
   /** Subject — the requester */
   sub: string

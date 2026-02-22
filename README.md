@@ -1,6 +1,6 @@
 # @ddisa/core
 
-Shared foundation for DDISA and ClawGate — types, DNS resolution, JWT/PKCE cryptography, and validation.
+Shared foundation for DDISA and OpenAPE — types, DNS resolution, JWT/PKCE cryptography, and validation.
 
 ## Installation
 
@@ -58,7 +58,7 @@ const hash = await computeCmdHash('rm -rf /tmp/test')
 
 ### Types
 
-All protocol types are exported: `DDISARecord`, `PolicyMode`, `SPManifest`, `DDISAAssertionClaims`, `ClawGateGrant`, `ClawGateGrantRequest`, `ClawGateAuthZClaims`, `GrantType`, `GrantStatus`, and more.
+All protocol types are exported: `DDISARecord`, `PolicyMode`, `SPManifest`, `DDISAAssertionClaims`, `OpenApeGrant`, `OpenApeGrantRequest`, `OpenApeAuthZClaims`, `GrantType`, `GrantStatus`, and more.
 
 ## License
 

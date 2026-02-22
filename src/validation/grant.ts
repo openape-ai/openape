@@ -1,13 +1,13 @@
-import type { ClawGateAuthZClaims } from '../types/index.js'
+import type { OpenApeAuthZClaims } from '../types/index.js'
 import { verifyJWT, createRemoteJWKS } from '../crypto/jwt.js'
 import type { KeyLike } from 'jose'
 
 export interface GrantValidationOptions {
-  /** Expected issuer (ClawGate server) */
+  /** Expected issuer (OpenAPE server) */
   expectedIss: string
   /** Expected audience (target system) */
   expectedAud: string
-  /** JWKS URI for the ClawGate server */
+  /** JWKS URI for the OpenAPE server */
   jwksUri?: string
   /** Public key for verification */
   publicKey?: KeyLike | Uint8Array
@@ -19,12 +19,12 @@ export interface GrantValidationOptions {
 
 export interface GrantValidationResult {
   valid: boolean
-  claims?: ClawGateAuthZClaims
+  claims?: OpenApeAuthZClaims
   error?: string
 }
 
 /**
- * Validate a ClawGate AuthZ-JWT.
+ * Validate a OpenAPE AuthZ-JWT.
  */
 export async function validateAuthzJWT(
   token: string,
@@ -38,7 +38,7 @@ export async function validateAuthzJWT(
       return { valid: false, error: 'No verification key or JWKS URI provided' }
     }
 
-    const { payload } = await verifyJWT<ClawGateAuthZClaims>(token, verifyKey, {
+    const { payload } = await verifyJWT<OpenApeAuthZClaims>(token, verifyKey, {
       issuer: options.expectedIss,
       audience: options.expectedAud,
     })
