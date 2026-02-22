@@ -1,4 +1,4 @@
-import type { ClawGateGrant } from '@ddisa/core'
+import type { OpenApeGrant } from '@ddisa/core'
 
 export default defineEventHandler(async (event) => {
   const { grantStore, agentStore } = useStores()
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   const allGrants = await grantStore.findAll()
-  return allGrants.filter((grant: ClawGateGrant) => {
+  return allGrants.filter((grant: OpenApeGrant) => {
     // Show grants targeting this user
     if (grant.request.target === email) return true
     // Show grants this user requested

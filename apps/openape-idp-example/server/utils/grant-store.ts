@@ -1,9 +1,9 @@
-import type { GrantStore } from '@clawgate/server'
-import type { ClawGateGrant, GrantStatus } from '@ddisa/core'
+import type { GrantStore } from '@openape/grants'
+import type { OpenApeGrant } from '@ddisa/core'
 import { useAppStorage } from './storage'
 
 export interface ExtendedGrantStore extends GrantStore {
-  findAll(): Promise<ClawGateGrant[]>
+  findAll(): Promise<OpenApeGrant[]>
 }
 
 export function createGrantStore(): ExtendedGrantStore {
@@ -15,20 +15,20 @@ export function createGrantStore(): ExtendedGrantStore {
     },
 
     async findById(id) {
-      return await storage.getItem<ClawGateGrant>(`grants:${id}`) ?? null
+      return await storage.getItem<OpenApeGrant>(`grants:${id}`) ?? null
     },
 
     async updateStatus(id, status, extra?) {
-      const grant = await storage.getItem<ClawGateGrant>(`grants:${id}`)
+      const grant = await storage.getItem<OpenApeGrant>(`grants:${id}`)
       if (!grant) throw new Error(`Grant not found: ${id}`)
       await storage.setItem(`grants:${id}`, { ...grant, status, ...extra })
     },
 
     async findPending() {
       const keys = await storage.getKeys('grants:')
-      const results: ClawGateGrant[] = []
+      const results: OpenApeGrant[] = []
       for (const key of keys) {
-        const grant = await storage.getItem<ClawGateGrant>(key)
+        const grant = await storage.getItem<OpenApeGrant>(key)
         if (grant?.status === 'pending') results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
@@ -36,9 +36,9 @@ export function createGrantStore(): ExtendedGrantStore {
 
     async findByRequester(requester) {
       const keys = await storage.getKeys('grants:')
-      const results: ClawGateGrant[] = []
+      const results: OpenApeGrant[] = []
       for (const key of keys) {
-        const grant = await storage.getItem<ClawGateGrant>(key)
+        const grant = await storage.getItem<OpenApeGrant>(key)
         if (grant?.request.requester === requester) results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
@@ -46,9 +46,9 @@ export function createGrantStore(): ExtendedGrantStore {
 
     async findAll() {
       const keys = await storage.getKeys('grants:')
-      const results: ClawGateGrant[] = []
+      const results: OpenApeGrant[] = []
       for (const key of keys) {
-        const grant = await storage.getItem<ClawGateGrant>(key)
+        const grant = await storage.getItem<OpenApeGrant>(key)
         if (grant) results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)

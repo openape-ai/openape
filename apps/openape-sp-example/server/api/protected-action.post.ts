@@ -17,10 +17,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Authorization JWT required. Please request permission first.' })
   }
 
-  const { clawgateUrl } = getSpConfig()
+  const { openapeUrl } = getSpConfig()
 
   // Verify the AuthZ-JWT and consume once-grants via the IdP verify endpoint
-  const result = await $fetch<{ valid: boolean; claims?: Record<string, unknown>; grant?: { status: string; request: { grant_type: string } }; error?: string }>(`${clawgateUrl}/api/grants/verify`, {
+  const result = await $fetch<{ valid: boolean; claims?: Record<string, unknown>; grant?: { status: string; request: { grant_type: string } }; error?: string }>(`${openapeUrl}/api/grants/verify`, {
     method: 'POST',
     body: { token },
   })

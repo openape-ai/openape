@@ -1,4 +1,4 @@
-import { approveGrant, issueAuthzJWT } from '@clawgate/server'
+import { approveGrant, issueAuthzJWT } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

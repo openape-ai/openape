@@ -8,11 +8,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<{ action?: string; reason?: string }>(event)
-  const { spId, clawgateUrl } = getSpConfig()
+  const { spId, openapeUrl } = getSpConfig()
   const origin = getRequestURL(event).origin
 
   // Create grant request on the IdP
-  const grant = await $fetch<{ id: string }>(`${clawgateUrl}/api/grants`, {
+  const grant = await $fetch<{ id: string }>(`${openapeUrl}/api/grants`, {
     method: 'POST',
     body: {
       requester: claims.sub,
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const callbackBase = `${origin}/api/grant-callback`
 
   // Build redirect URL to grant-approval page on IdP
-  const approvalUrl = new URL(`${clawgateUrl}/grant-approval`)
+  const approvalUrl = new URL(`${openapeUrl}/grant-approval`)
   approvalUrl.searchParams.set('grant_id', grant.id)
   approvalUrl.searchParams.set('callback', callbackBase)
 

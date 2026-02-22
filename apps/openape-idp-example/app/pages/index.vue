@@ -19,7 +19,7 @@ async function handleLogout() {
           DDISA Identity Server
         </h1>
         <p class="text-center text-sm text-muted mt-2">
-          DDISA Identity Provider + ClawGate
+          DDISA Identity Provider + OpenAPE
         </p>
       </template>
 

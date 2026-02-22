@@ -86,18 +86,6 @@ function formatRequester(requester: string): string {
   return requester
 }
 
-function statusColor(status: string): string {
-  const colors: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    approved: 'bg-green-100 text-green-800',
-    denied: 'bg-red-100 text-red-800',
-    revoked: 'bg-gray-100 text-gray-800',
-    expired: 'bg-orange-100 text-orange-800',
-    used: 'bg-blue-100 text-blue-800',
-  }
-  return colors[status] || 'bg-gray-100 text-gray-800'
-}
-
 function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleString()
 }

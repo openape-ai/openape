@@ -11,7 +11,7 @@
   "dependencies": {
     "@ddisa/core": "workspace:*",
     "@ddisa/idp-server": "workspace:*",
-    "@clawgate/server": "workspace:*",
+    "@openape/grants": "workspace:*",
     "jose": "^5.9.0",
     "unstorage": "^1.14.4",
     "nuxt": "^4.0.0",

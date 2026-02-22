@@ -1,4 +1,4 @@
-import { denyGrant } from '@clawgate/server'
+import { denyGrant } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

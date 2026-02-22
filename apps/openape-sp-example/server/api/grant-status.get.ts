@@ -3,6 +3,5 @@ export default defineEventHandler(async (event) => {
   const data = session.data as Record<string, unknown>
   return {
     hasAuthzJWT: !!data.authzJWT,
-    grantId: (data.grantId as string) || null,
   }
 })
