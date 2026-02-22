@@ -1,6 +1,6 @@
 import type { ResultPromise } from 'execa'
 import { execa } from 'execa'
-import { IDP_PORT, IDP_URL, SP_PORT } from './constants.js'
+import { IDP_PORT, IDP_URL, IS_PROD, SP_PORT } from './constants.js'
 
 const DDISA_MOCK_RECORDS = JSON.stringify({
   'example.com': { idp: IDP_URL, mode: 'open' },
@@ -32,8 +32,12 @@ async function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
   throw new Error(`Server on port ${port} did not start within ${timeoutMs}ms`)
 }
 
-/** Start both Nuxt dev servers with DDISA_MOCK_RECORDS. */
+/**
+ * Start local dev servers (skipped in prod mode).
+ */
 export async function startServers(): Promise<void> {
+  if (IS_PROD) return // prod targets are already running
+
   const baseDir = new URL('../../', import.meta.url).pathname
 
   const commonEnv = {
@@ -63,21 +67,21 @@ export async function startServers(): Promise<void> {
     { process: sampleSp, port: SP_PORT, name: 'openape-sp' },
   )
 
-  // Log server output for debugging
   idServer.stdout?.on('data', (d: Buffer) => process.stdout.write(`[idp] ${d}`))
   idServer.stderr?.on('data', (d: Buffer) => process.stderr.write(`[idp] ${d}`))
   sampleSp.stdout?.on('data', (d: Buffer) => process.stdout.write(`[sp]  ${d}`))
   sampleSp.stderr?.on('data', (d: Buffer) => process.stderr.write(`[sp]  ${d}`))
 
-  // Wait for both servers to be ready
   await Promise.all([
     waitForServer(IDP_PORT),
     waitForServer(SP_PORT),
   ])
 }
 
-/** Stop all managed servers. */
+/** Stop all managed servers (no-op in prod mode). */
 export async function stopServers(): Promise<void> {
+  if (IS_PROD) return
+
   for (const server of servers) {
     try {
       server.process.kill('SIGTERM')

@@ -1,6 +1,4 @@
-import { IDP_URL } from './constants.js'
-
-const MANAGEMENT_TOKEN = process.env.NUXT_MANAGEMENT_TOKEN || 'test-mgmt-token'
+import { IDP_URL, MANAGEMENT_TOKEN } from './constants.js'
 
 /**
  * Bootstrap a test user via management API token.
@@ -19,6 +17,7 @@ export async function bootstrapTestUser(
   })
 
   if (res.status !== 200 && res.status !== 409) {
-    throw new Error(`User creation failed with status ${res.status}`)
+    const body = await res.text().catch(() => '')
+    throw new Error(`User creation failed (${res.status}): ${body}`)
   }
 }

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
-import { IDP_URL, SP_URL } from '../helpers/constants.js'
+import { IDP_URL, SP_ID, SP_URL, TEST_USER } from '../helpers/constants.js'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 
 describe('dDISA OIDC Login Flow', () => {
   beforeAll(async () => {
     await startServers()
-    await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })
+    await bootstrapTestUser(TEST_USER)
   })
 
   afterAll(async () => {
@@ -20,7 +20,7 @@ describe('dDISA OIDC Login Flow', () => {
     // Step 1: SP login — discover IdP and get authorization URL
     const { status: loginStatus, data: loginData } = await client.postJSON<{
       redirectUrl: string
-    }>(`${SP_URL}/api/login`, { email: 'admin@example.com' })
+    }>(`${SP_URL}/api/login`, { email: TEST_USER.email })
 
     expect(loginStatus).toBe(200)
     expect(loginData.redirectUrl).toContain(`${IDP_URL}/authorize`)
@@ -38,8 +38,8 @@ describe('dDISA OIDC Login Flow', () => {
     const { status: idpLoginStatus, data: idpLoginData } = await client.postJSON<{
       ok: boolean
     }>(`${IDP_URL}/api/login`, {
-      email: 'admin@example.com',
-      password: 'q1w2e3r4',
+      email: TEST_USER.email,
+      password: TEST_USER.password,
     })
 
     expect(idpLoginStatus).toBe(200)
@@ -68,9 +68,9 @@ describe('dDISA OIDC Login Flow', () => {
     }>(`${SP_URL}/api/me`)
 
     expect(meStatus).toBe(200)
-    expect(claims.sub).toBe('admin@example.com')
+    expect(claims.sub).toBe(TEST_USER.email)
     expect(claims.iss).toBe(IDP_URL)
-    expect(claims.aud).toBe('sp.example.com')
+    expect(claims.aud).toBe(SP_ID)
     expect(claims.nonce).toBeTruthy()
   })
 })

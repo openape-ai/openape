@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
-import { IDP_URL } from '../helpers/constants.js'
+import { IDP_URL, IS_PROD, TEST_USER } from '../helpers/constants.js'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 
 describe('grant Lifecycle & Dashboard Visibility', () => {
   beforeAll(async () => {
     await startServers()
-    await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })
+    await bootstrapTestUser(TEST_USER)
   })
 
   afterAll(async () => {
@@ -17,7 +17,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
   async function loginAsSeededUser(client: HttpClient) {
     const { status, data } = await client.postJSON<{ ok: boolean }>(
       `${IDP_URL}/api/login`,
-      { email: 'admin@example.com', password: 'q1w2e3r4' },
+      { email: TEST_USER.email, password: TEST_USER.password },
     )
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
@@ -27,7 +27,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     const { status, data } = await client.postJSON<{ id: string, status: string }>(
       `${IDP_URL}/api/grants`,
       {
-        requester: 'admin@example.com',
+        requester: TEST_USER.email,
         target: 'test-sp',
         grant_type: grantType,
         permissions: ['read'],
@@ -59,6 +59,9 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     }>(`${IDP_URL}/api/grants/${grant1.id}/approve`, {})
     expect(approveStatus).toBe(200)
     expect(approveData.grant.status).toBe('approved')
+
+    // Allow S3 eventual consistency in prod
+    if (IS_PROD) await new Promise(r => setTimeout(r, 1000))
 
     // Dashboard should show the approved grant
     const { data: grants2 } = await client.getJSON<{ id: string, status: string }[]>(
