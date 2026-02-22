@@ -39,7 +39,7 @@ export async function startServers(): Promise<void> {
   const commonEnv = {
     ...process.env,
     DDISA_MOCK_RECORDS,
-    NUXT_SUPER_ADMIN_PASSWORD: 'test-super-admin',
+    NUXT_MANAGEMENT_TOKEN: 'test-mgmt-token',
   }
 
   const idServer = execa('pnpm', ['dev'], {
