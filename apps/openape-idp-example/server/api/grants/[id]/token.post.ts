@@ -1,4 +1,4 @@
-import { issueAuthzJWT } from '@clawgate/server'
+import { issueAuthzJWT } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const agentPayload = await requireAgent(event)

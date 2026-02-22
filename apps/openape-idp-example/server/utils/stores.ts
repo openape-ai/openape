@@ -1,6 +1,5 @@
 import { createUserStore } from './user-store'
 import { createCodeStore } from './code-store'
-import { createConsentStore } from './consent-store'
 import { createKeyStore } from './key-store'
 import { createGrantStore } from './grant-store'
 import { createAgentStore } from './agent-store'
@@ -12,7 +11,6 @@ function initStores() {
   return {
     userStore: createUserStore(),
     codeStore: createCodeStore(),
-    consentStore: createConsentStore(),
     keyStore: createKeyStore(),
     grantStore: createGrantStore(),
     agentStore: createAgentStore(),

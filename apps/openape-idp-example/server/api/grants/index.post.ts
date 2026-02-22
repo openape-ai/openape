@@ -1,10 +1,10 @@
-import { createGrant } from '@clawgate/server'
-import type { ClawGateGrantRequest, GrantType } from '@ddisa/core'
+import { createGrant } from '@openape/grants'
+import type { OpenApeGrantRequest, GrantType } from '@ddisa/core'
 
 const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<ClawGateGrantRequest>(event)
+  const body = await readBody<OpenApeGrantRequest>(event)
   const { grantStore } = useStores()
 
   // If agent token present, override requester with agent identity

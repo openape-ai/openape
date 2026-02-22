@@ -53,7 +53,7 @@ export function getSpConfig() {
   const config = useRuntimeConfig()
   return {
     spId: config.spId || 'sp.example.com',
-    clawgateUrl: config.clawgateUrl || 'http://localhost:3000',
+    openapeUrl: config.openapeUrl || 'http://localhost:3000',
     spName: 'DDISA Sample SP',
   }
 }

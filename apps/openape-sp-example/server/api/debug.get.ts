@@ -1,4 +1,4 @@
-import { resolveDDISA, extractDomain } from '@ddisa/core'
+import { resolveDDISA } from '@ddisa/core'
 
 export default defineEventHandler(async (event) => {
   const results: Record<string, unknown> = {}

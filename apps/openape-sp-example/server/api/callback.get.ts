@@ -39,7 +39,6 @@ export default defineEventHandler(async (event) => {
     const session = await getSession(event)
     await session.update({
       claims: result.claims,
-      rawAssertion: result.rawAssertion,
     })
 
     return sendRedirect(event, '/dashboard')

@@ -34,18 +34,5 @@ export default defineEventHandler(async (event) => {
   // Persist flow state in Turso
   await flowStateStore.save(flowState.state, flowState)
 
-  // Save trace info in session
-  const session = await getSession(event)
-  await session.update({
-    trace: {
-      email,
-      domain,
-      idpUrl: idpConfig.idpUrl,
-      mode: idpConfig.mode,
-      authorizationUrl: url,
-      state: flowState.state,
-    },
-  })
-
   return { redirectUrl: url }
 })

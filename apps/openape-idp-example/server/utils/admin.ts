@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3'
 
-export function getAdminEmails(): string[] {
+function getAdminEmails(): string[] {
   const config = useRuntimeConfig()
-  const raw = config.clawgateAdminEmails as string
+  const raw = config.openapeAdminEmails as string
   if (!raw) return []
   return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
 }

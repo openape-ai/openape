@@ -44,7 +44,7 @@ export async function startServers(): Promise<void> {
     env: {
       ...commonEnv,
       NUXT_PUBLIC_SITE_URL: 'http://localhost:3000',
-      NUXT_CLAWGATE_ADMIN_EMAILS: 'admin@example.com',
+      NUXT_OPENAPE_ADMIN_EMAILS: 'admin@example.com',
     },
     stdio: 'pipe',
   })

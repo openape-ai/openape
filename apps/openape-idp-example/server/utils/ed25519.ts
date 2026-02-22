@@ -7,7 +7,7 @@ const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
  * Parse an SSH ed25519 public key string into a Node.js KeyObject.
  * Input format: "ssh-ed25519 AAAA... comment"
  */
-export function parseSSHEd25519PublicKey(sshKey: string): KeyObject {
+function parseSSHEd25519PublicKey(sshKey: string): KeyObject {
   const parts = sshKey.trim().split(/\s+/)
   if (parts[0] !== 'ssh-ed25519' || !parts[1]) {
     throw new Error('Not an ssh-ed25519 key')

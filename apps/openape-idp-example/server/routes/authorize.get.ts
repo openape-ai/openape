@@ -5,7 +5,7 @@ import { resolveDDISA, extractDomain } from '@ddisa/core'
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const session = await getAppSession(event)
-  const { codeStore, consentStore } = useStores()
+  const { codeStore } = useStores()
 
   const params: AuthorizeParams = {
     sp_id: String(query.sp_id ?? ''),
@@ -39,21 +39,17 @@ export default defineEventHandler(async (event) => {
   const userDomain = extractDomain(session.data.userId)
   const ddisaRecord = await resolveDDISA(userDomain)
   const policyMode = ddisaRecord?.mode ?? 'open'
-  const decision = await evaluatePolicy(policyMode, params.sp_id, session.data.userId, consentStore)
+  const noopConsentStore = { hasConsent: async () => false, save: async () => {} }
+  const decision = await evaluatePolicy(policyMode, params.sp_id, session.data.userId, noopConsentStore)
 
-  if (decision === 'deny') {
+  if (decision !== 'allow') {
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('error', 'access_denied')
     redirectUrl.searchParams.set('state', params.state)
     return sendRedirect(event, redirectUrl.toString())
   }
 
-  if (decision === 'consent') {
-    await session.update({ pendingAuthorize: params })
-    return sendRedirect(event, '/consent')
-  }
-
-  // decision === 'allow' — generate code and redirect
+  // Generate code and redirect
   const code = crypto.randomUUID()
   await codeStore.save({
     code,

@@ -1,4 +1,4 @@
-import { verifyAuthzJWT, introspectGrant, useGrant } from '@clawgate/server'
+import { verifyAuthzJWT, introspectGrant, useGrant } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const { token } = await readBody<{ token: string }>(event)

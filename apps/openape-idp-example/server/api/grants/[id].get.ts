@@ -1,4 +1,4 @@
-import { introspectGrant } from '@clawgate/server'
+import { introspectGrant } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

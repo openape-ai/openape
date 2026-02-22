@@ -10,7 +10,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     sessionSecret: 'change-me-sp-secret-at-least-32-chars-long',
     spId: '',
-    clawgateUrl: 'http://localhost:3000',
+    openapeUrl: 'http://localhost:3000',
   },
   // Storage 'db' mount is handled by server/plugins/storage.ts at runtime
   // to support dynamic driver switching (fs vs s3) via STORAGE_DRIVER env var

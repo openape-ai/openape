@@ -7,6 +7,6 @@ export default defineEventHandler((event) => {
     sp_id: spId,
     name: spName,
     redirect_uris: [`${origin}/api/callback`],
-    description: 'DDISA Sample Service Provider with ClawGate integration',
+    description: 'DDISA Sample Service Provider with OpenAPE integration',
   })
 })
