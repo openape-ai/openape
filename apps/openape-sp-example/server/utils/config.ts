@@ -1,54 +1,7 @@
+import type { H3Event } from 'h3'
 import type { AuthFlowState } from '@ddisa/core'
 
-export interface FlowStateStore {
-  save: (state: string, flow: AuthFlowState) => Promise<void>
-  find: (state: string) => Promise<AuthFlowState | null>
-  delete: (state: string) => Promise<void>
-}
-
-interface StoredFlowState extends AuthFlowState {
-  expiresAt: number
-}
-
-// Storage configured via nitro.storage in nuxt.config.ts
-// Access with useStorage('db')
-const getStorage = () => useStorage('db')
-
-let _flowStateStore: FlowStateStore | null = null
-
-function createFlowStateStore(): FlowStateStore {
-  return {
-    async save(state, flow) {
-      const expiresAt = flow.createdAt + 10 * 60 * 1000 // 10 min TTL
-      await getStorage().setItem<StoredFlowState>(`flows:${state}`, { ...flow, expiresAt })
-    },
-
-    async find(state) {
-      const stored = await getStorage().getItem<StoredFlowState>(`flows:${state}`)
-      if (!stored)
-        return null
-
-      if (stored.expiresAt < Date.now()) {
-        await getStorage().removeItem(`flows:${state}`)
-        return null
-      }
-
-      const { expiresAt: _, ...flow } = stored
-      return flow
-    },
-
-    async delete(state) {
-      await getStorage().removeItem(`flows:${state}`)
-    },
-  }
-}
-
-function getFlowStateStore() {
-  if (!_flowStateStore) {
-    _flowStateStore = createFlowStateStore()
-  }
-  return _flowStateStore
-}
+const FLOW_COOKIE = 'openape-flow'
 
 export function getSpConfig() {
   const config = useRuntimeConfig()
@@ -59,4 +12,50 @@ export function getSpConfig() {
   }
 }
 
-export const useFlowStateStore = getFlowStateStore
+/**
+ * Save OAuth flow state as a signed, httpOnly cookie.
+ * Uses h3's useSession which encrypts + signs automatically.
+ * No server-side storage needed — fully stateless.
+ */
+export async function saveFlowState(event: H3Event, state: string, flow: AuthFlowState) {
+  const config = useRuntimeConfig()
+  const session = await useSession(event, {
+    name: FLOW_COOKIE,
+    password: config.sessionSecret,
+    maxAge: 600, // 10 min
+  })
+  await session.update({
+    state,
+    flow,
+    exp: Date.now() + 10 * 60 * 1000,
+  })
+}
+
+/**
+ * Retrieve and validate OAuth flow state from cookie.
+ * Returns null if missing, expired, or state mismatch.
+ */
+export async function getFlowState(event: H3Event, expectedState: string): Promise<AuthFlowState | null> {
+  const config = useRuntimeConfig()
+  const session = await useSession(event, {
+    name: FLOW_COOKIE,
+    password: config.sessionSecret,
+  })
+  const data = session.data
+  if (!data?.state) return null
+  if (data.state !== expectedState) return null
+  if ((data.exp as number) < Date.now()) return null
+  return data.flow as AuthFlowState
+}
+
+/**
+ * Clear the flow state cookie after use.
+ */
+export async function clearFlowState(event: H3Event) {
+  const config = useRuntimeConfig()
+  const session = await useSession(event, {
+    name: FLOW_COOKIE,
+    password: config.sessionSecret,
+  })
+  await session.clear()
+}

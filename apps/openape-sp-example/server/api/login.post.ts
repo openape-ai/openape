@@ -3,7 +3,6 @@ import { createAuthorizationURL, discoverIdP } from '@ddisa/sp-server'
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email: string }>(event)
   const { spId } = getSpConfig()
-  const flowStateStore = useFlowStateStore()
   const origin = getRequestURL(event).origin
   const redirectUri = `${origin}/api/callback`
 
@@ -31,8 +30,8 @@ export default defineEventHandler(async (event) => {
     email,
   })
 
-  // Persist flow state in Turso
-  await flowStateStore.save(flowState.state, flowState)
+  // Save flow state in signed cookie (stateless — no server storage needed)
+  await saveFlowState(event, flowState.state, flowState)
 
   return { redirectUrl: url }
 })
