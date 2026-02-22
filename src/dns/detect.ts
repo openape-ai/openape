@@ -16,7 +16,8 @@ export function detectRuntime(): Runtime {
         require.resolve('dns')
         return 'node'
       }
-    } catch {
+    }
+    catch {
       // dns module not available
     }
     return 'edge'

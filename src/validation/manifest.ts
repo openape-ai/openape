@@ -28,7 +28,8 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
 
   if (!Array.isArray(obj.redirect_uris) || obj.redirect_uris.length === 0) {
     errors.push('redirect_uris is required and must be a non-empty array')
-  } else {
+  }
+  else {
     for (const uri of obj.redirect_uris) {
       if (typeof uri !== 'string') {
         errors.push('Each redirect_uri must be a string')
@@ -36,7 +37,8 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
       }
       try {
         new URL(uri)
-      } catch {
+      }
+      catch {
         errors.push(`Invalid redirect_uri: ${uri}`)
       }
     }
@@ -70,7 +72,8 @@ export async function fetchAndValidateSPManifest(
     }
     const data = await response.json()
     return validateSPManifest(data)
-  } catch (err) {
+  }
+  catch (err) {
     return {
       valid: false,
       errors: [err instanceof Error ? err.message : 'Failed to fetch manifest'],

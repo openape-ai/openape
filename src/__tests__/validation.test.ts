@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { validateAssertion } from '../validation/assertion.js'
-import { validateSPManifest } from '../validation/manifest.js'
-import { computeCmdHash } from '../validation/grant.js'
+import { describe, expect, it } from 'vitest'
 import { generateKeyPair, signJWT } from '../crypto/jwt.js'
+import { validateAssertion } from '../validation/assertion.js'
+import { computeCmdHash } from '../validation/grant.js'
+import { validateSPManifest } from '../validation/manifest.js'
 
 describe('validateAssertion', () => {
   it('validates a correct assertion', async () => {

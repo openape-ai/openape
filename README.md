@@ -13,7 +13,7 @@ npm install @ddisa/core
 ### DNS Resolution
 
 ```typescript
-import { resolveDDISA, parseDDISATXT } from '@ddisa/core'
+import { parseDDISATXT, resolveDDISA } from '@ddisa/core'
 
 // Resolve DDISA record for a domain (auto-detects runtime: Node DNS, DoH, or mock)
 const record = await resolveDDISA('example.com')
@@ -26,7 +26,7 @@ const parsed = parseDDISATXT('v=ddisa1 idp=https://idp.example.com mode=open')
 ### JWT & Cryptography
 
 ```typescript
-import { signJWT, verifyJWT, generateKeyPair, exportPublicKeyJWK, createRemoteJWKS } from '@ddisa/core'
+import { createRemoteJWKS, exportPublicKeyJWK, generateKeyPair, signJWT, verifyJWT } from '@ddisa/core'
 
 // Generate ES256 key pair
 const { publicKey, privateKey } = await generateKeyPair()
@@ -39,7 +39,7 @@ const { payload } = await verifyJWT(token, publicKey)
 ### PKCE
 
 ```typescript
-import { generateCodeVerifier, generateCodeChallenge, generateState, generateNonce } from '@ddisa/core'
+import { generateCodeChallenge, generateCodeVerifier, generateNonce, generateState } from '@ddisa/core'
 
 const verifier = generateCodeVerifier()
 const challenge = await generateCodeChallenge(verifier)
@@ -50,7 +50,7 @@ const nonce = generateNonce()
 ### Validation
 
 ```typescript
-import { validateAssertion, validateSPManifest, validateGrant, computeCmdHash } from '@ddisa/core'
+import { computeCmdHash, validateAssertion, validateGrant, validateSPManifest } from '@ddisa/core'
 
 const result = validateAssertion(claims, { expectedIss: '...', expectedAud: '...', maxTTL: 300 })
 const hash = await computeCmdHash('rm -rf /tmp/test')

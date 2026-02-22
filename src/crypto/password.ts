@@ -45,13 +45,14 @@ function bytesToHex(bytes: Uint8Array): string {
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2)
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16)
+    bytes[i / 2] = Number.parseInt(hex.substring(i, i + 2), 16)
   }
   return bytes
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
+  if (a.length !== b.length)
+    return false
   let result = 0
   for (let i = 0; i < a.length; i++) {
     result |= a.charCodeAt(i) ^ b.charCodeAt(i)

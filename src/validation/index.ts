@@ -1,18 +1,18 @@
 export {
-  validateAssertion,
   type AssertionValidationOptions,
   type AssertionValidationResult,
+  validateAssertion,
 } from './assertion.js'
 
 export {
-  validateSPManifest,
-  fetchAndValidateSPManifest,
-  type ManifestValidationResult,
-} from './manifest.js'
-
-export {
-  validateAuthzJWT,
   computeCmdHash,
   type GrantValidationOptions,
   type GrantValidationResult,
+  validateAuthzJWT,
 } from './grant.js'
+
+export {
+  fetchAndValidateSPManifest,
+  type ManifestValidationResult,
+  validateSPManifest,
+} from './manifest.js'

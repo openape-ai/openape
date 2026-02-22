@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import { generateKeyPair, signJWT, verifyJWT, exportPublicKeyJWK } from '../crypto/jwt.js'
+import { describe, expect, it } from 'vitest'
+import { exportPublicKeyJWK, generateKeyPair, signJWT, verifyJWT } from '../crypto/jwt.js'
 
-describe('JWT sign and verify', () => {
+describe('jWT sign and verify', () => {
   it('signs and verifies a JWT with ES256', async () => {
     const { publicKey, privateKey } = await generateKeyPair()
 

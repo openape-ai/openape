@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { parseDDISARecord, extractDomain } from '../dns/parser.js'
+import { describe, expect, it } from 'vitest'
+import { extractDomain, parseDDISARecord } from '../dns/parser.js'
 
 describe('parseDDISARecord', () => {
   it('parses a minimal record with version tag and idp', () => {

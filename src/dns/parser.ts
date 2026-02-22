@@ -15,10 +15,12 @@ export function parseDDISARecord(txt: string): DDISARecord | null {
 
   // Version tag must be the first space-delimited token
   const spaceIdx = trimmed.indexOf(' ')
-  if (spaceIdx === -1) return null
+  if (spaceIdx === -1)
+    return null
 
   const versionToken = trimmed.slice(0, spaceIdx).trim()
-  if (versionToken !== `v=${DDISA_VERSION}`) return null
+  if (versionToken !== `v=${DDISA_VERSION}`)
+    return null
 
   const rest = trimmed.slice(spaceIdx + 1)
   const parts = rest.split(';').map(p => p.trim())
@@ -26,7 +28,8 @@ export function parseDDISARecord(txt: string): DDISARecord | null {
 
   for (const part of parts) {
     const eqIndex = part.indexOf('=')
-    if (eqIndex === -1) continue
+    if (eqIndex === -1)
+      continue
 
     const key = part.slice(0, eqIndex).trim().toLowerCase()
     const value = part.slice(eqIndex + 1).trim()
@@ -41,7 +44,7 @@ export function parseDDISARecord(txt: string): DDISARecord | null {
         }
         break
       case 'priority':
-        record.priority = parseInt(value, 10)
+        record.priority = Number.parseInt(value, 10)
         break
       case 'policy_endpoint':
       case 'policy':

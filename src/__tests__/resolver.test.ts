@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { resolveDDISA, resolveIdP, clearDNSCache } from '../dns/resolver.js'
+import { describe, expect, it } from 'vitest'
+import { clearDNSCache, resolveDDISA, resolveIdP } from '../dns/resolver.js'
 
 describe('resolveDDISA with mock records', () => {
   const mockRecords = {
@@ -50,7 +50,8 @@ describe('resolveDDISA with env-based mock records', () => {
       })
       expect(record?.raw).toContain('v=ddisa1')
       expect(record?.raw).toContain('idp=http://localhost:3000')
-    } finally {
+    }
+    finally {
       delete process.env.DDISA_MOCK_RECORDS
     }
   })
@@ -62,7 +63,8 @@ describe('resolveDDISA with env-based mock records', () => {
         mockRecords: { 'unknown.com': { idp: 'https://fallback.com', mode: 'open' as const } },
       })
       expect(record?.idp).toBe('https://fallback.com')
-    } finally {
+    }
+    finally {
       delete process.env.DDISA_MOCK_RECORDS
     }
   })
@@ -74,13 +76,14 @@ describe('resolveDDISA with env-based mock records', () => {
         mockRecords: { 'example.org': { idp: 'https://option-mock.com', mode: 'open' as const } },
       })
       expect(record?.idp).toBe('https://option-mock.com')
-    } finally {
+    }
+    finally {
       delete process.env.DDISA_MOCK_RECORDS
     }
   })
 })
 
-describe('DNS cache', () => {
+describe('dns cache', () => {
   it('clears cache without error', () => {
     expect(() => clearDNSCache()).not.toThrow()
   })

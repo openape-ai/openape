@@ -1,6 +1,6 @@
-import type { OpenApeAuthZClaims } from '../types/index.js'
-import { verifyJWT, createRemoteJWKS } from '../crypto/jwt.js'
 import type { KeyLike } from 'jose'
+import type { OpenApeAuthZClaims } from '../types/index.js'
+import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 
 export interface GrantValidationOptions {
   /** Expected issuer (OpenAPE server) */
@@ -56,7 +56,8 @@ export async function validateAuthzJWT(
     }
 
     return { valid: true, claims: payload }
-  } catch (err) {
+  }
+  catch (err) {
     return { valid: false, error: err instanceof Error ? err.message : 'Validation failed' }
   }
 }

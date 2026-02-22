@@ -1,7 +1,7 @@
+import type { KeyLike } from 'jose'
 import type { DDISAAssertionClaims } from '../types/index.js'
 import { MAX_ASSERTION_TTL } from '../constants.js'
-import { verifyJWT, createRemoteJWKS } from '../crypto/jwt.js'
-import type { KeyLike } from 'jose'
+import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 
 export interface AssertionValidationOptions {
   /** Expected issuer (must match DNS-delegated IdP) */
@@ -67,7 +67,8 @@ export async function validateAssertion(
     }
 
     return { valid: true, claims: payload }
-  } catch (err) {
+  }
+  catch (err) {
     return { valid: false, error: err instanceof Error ? err.message : 'Validation failed' }
   }
 }

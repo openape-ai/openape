@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import { generateCodeVerifier, generateCodeChallenge, generateState, generateNonce } from '../crypto/pkce.js'
+import { describe, expect, it } from 'vitest'
+import { generateCodeChallenge, generateCodeVerifier, generateNonce, generateState } from '../crypto/pkce.js'
 
-describe('PKCE', () => {
+describe('pKCE', () => {
   it('generates a code verifier of expected length', () => {
     const verifier = generateCodeVerifier()
     expect(verifier).toBeTruthy()

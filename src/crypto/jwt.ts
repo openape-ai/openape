@@ -33,7 +33,7 @@ export async function verifyJWT<T = jose.JWTPayload>(
   token: string,
   keyOrJWKS: jose.KeyLike | Uint8Array | jose.JWTVerifyGetKey,
   options?: jose.JWTVerifyOptions,
-): Promise<{ payload: T; protectedHeader: jose.JWTHeaderParameters }> {
+): Promise<{ payload: T, protectedHeader: jose.JWTHeaderParameters }> {
   const verifyOptions = { algorithms: [ALGORITHM] as string[], ...options }
 
   // jose has separate overloads for KeyLike|Uint8Array vs GetKeyFunction
@@ -41,7 +41,7 @@ export async function verifyJWT<T = jose.JWTPayload>(
     ? await jose.jwtVerify(token, keyOrJWKS as jose.JWTVerifyGetKey, verifyOptions)
     : await jose.jwtVerify(token, keyOrJWKS as jose.KeyLike | Uint8Array, verifyOptions)
 
-  return result as { payload: T; protectedHeader: jose.JWTHeaderParameters }
+  return result as { payload: T, protectedHeader: jose.JWTHeaderParameters }
 }
 
 /**

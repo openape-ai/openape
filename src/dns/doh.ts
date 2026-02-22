@@ -1,4 +1,4 @@
-import { DOH_PROVIDERS, DNS_TXT_TYPE } from '../constants.js'
+import { DNS_TXT_TYPE, DOH_PROVIDERS } from '../constants.js'
 
 interface DoHAnswer {
   type: number

@@ -1,8 +1,8 @@
 import type { DDISARecord, ResolverOptions } from '../types/index.js'
 import { DEFAULT_DNS_CACHE_TTL } from '../constants.js'
 import { detectRuntime } from './detect.js'
-import { parseDDISARecord } from './parser.js'
 import { resolveTXT as resolveDoh } from './doh.js'
+import { parseDDISARecord } from './parser.js'
 
 interface CacheEntry {
   record: DDISARecord
@@ -54,7 +54,8 @@ export async function resolveDDISA(
           raw: `v=ddisa1 idp=${mock.idp}${mock.mode ? `; mode=${mock.mode}` : ''}`,
         }
       }
-    } catch { /* invalid JSON — fall through */ }
+    }
+    catch { /* invalid JSON — fall through */ }
   }
 
   // Mock mode for testing (keyed by bare domain for convenience)
@@ -90,7 +91,8 @@ export async function resolveDDISA(
     }
   }
 
-  if (parsed.length === 0) return null
+  if (parsed.length === 0)
+    return null
 
   // Sort by priority (lowest = highest priority, like MX). Default priority = 10.
   parsed.sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10))
