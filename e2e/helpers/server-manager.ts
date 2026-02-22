@@ -1,4 +1,5 @@
-import { execa, type ResultPromise } from 'execa'
+import type { ResultPromise } from 'execa'
+import { execa } from 'execa'
 import { IDP_PORT, IDP_URL, SP_PORT } from './constants.js'
 
 const DDISA_MOCK_RECORDS = JSON.stringify({
@@ -20,8 +21,10 @@ async function waitForServer(port: number, timeoutMs = 60_000): Promise<void> {
     try {
       const res = await fetch(`http://localhost:${port}/`, { redirect: 'manual' })
       // Any response (even 404 or redirect) means the server is up
-      if (res.status > 0) return
-    } catch {
+      if (res.status > 0)
+        return
+    }
+    catch {
       // Not ready yet
     }
     await new Promise(r => setTimeout(r, 500))
@@ -79,7 +82,8 @@ export async function stopServers(): Promise<void> {
     try {
       server.process.kill('SIGTERM')
       await server.process.catch(() => {})
-    } catch {
+    }
+    catch {
       // Already dead
     }
   }

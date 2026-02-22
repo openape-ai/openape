@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const { openapeUrl } = getSpConfig()
 
   // Verify the AuthZ-JWT and consume once-grants via the IdP verify endpoint
-  const result = await $fetch<{ valid: boolean; claims?: Record<string, unknown>; grant?: { status: string; request: { grant_type: string } }; error?: string }>(`${openapeUrl}/api/grants/verify`, {
+  const result = await $fetch<{ valid: boolean, claims?: Record<string, unknown>, grant?: { status: string, request: { grant_type: string } }, error?: string }>(`${openapeUrl}/api/grants/verify`, {
     method: 'POST',
     body: { token },
   })

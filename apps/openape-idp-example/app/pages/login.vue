@@ -15,15 +15,19 @@ async function handleSubmit() {
     const returnTo = route.query.returnTo as string | undefined
     if (returnTo?.startsWith('/')) {
       await navigateTo(returnTo)
-    } else if (returnTo) {
+    }
+    else if (returnTo) {
       await navigateTo(returnTo, { external: true })
-    } else {
+    }
+    else {
       await navigateTo('/')
     }
-  } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Login failed'
-  } finally {
+  }
+  finally {
     submitting.value = false
   }
 }
@@ -33,7 +37,9 @@ async function handleSubmit() {
   <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-md">
       <template #header>
-        <h1 class="text-2xl font-bold text-center">Login</h1>
+        <h1 class="text-2xl font-bold text-center">
+          Login
+        </h1>
       </template>
 
       <UAlert

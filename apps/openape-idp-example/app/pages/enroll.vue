@@ -26,7 +26,7 @@ async function handleEnroll() {
   enrolling.value = true
   error.value = ''
   try {
-    const data = await $fetch<{ agent_id: string; name: string }>('/api/agent/enroll', {
+    const data = await $fetch<{ agent_id: string, name: string }>('/api/agent/enroll', {
       method: 'POST',
       body: {
         id: agentId.value || undefined,
@@ -37,10 +37,12 @@ async function handleEnroll() {
       },
     })
     await navigateTo(`/admin?tab=agents&enrolled=${data.agent_id}`)
-  } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Enrollment failed'
-  } finally {
+  }
+  finally {
     enrolling.value = false
   }
 }
@@ -50,7 +52,9 @@ async function handleEnroll() {
   <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg">
       <template #header>
-        <h1 class="text-2xl font-bold text-center">Agent Enrollment</h1>
+        <h1 class="text-2xl font-bold text-center">
+          Agent Enrollment
+        </h1>
       </template>
 
       <!-- Loading -->
@@ -60,7 +64,9 @@ async function handleEnroll() {
 
       <!-- Not logged in -->
       <template v-else-if="!user">
-        <p class="text-center text-muted mb-4">You need to be logged in as admin to enroll agents.</p>
+        <p class="text-center text-muted mb-4">
+          You need to be logged in as admin to enroll agents.
+        </p>
         <UButton
           :to="`/login?returnTo=${encodeURIComponent(route.fullPath)}`"
           color="primary"

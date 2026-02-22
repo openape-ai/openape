@@ -27,7 +27,8 @@ export default defineEventHandler(async (event) => {
   try {
     const denied = await denyGrant(id, email, grantStore)
     return denied
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to deny grant'
     throw createError({ statusCode: 400, statusMessage: message })
   }

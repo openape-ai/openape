@@ -3,8 +3,9 @@ import type { H3Event } from 'h3'
 function getAdminEmails(): string[] {
   const config = useRuntimeConfig()
   const raw = config.openapeAdminEmails as string
-  if (!raw) return []
-  return raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+  if (!raw)
+    return []
+  return raw.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
 }
 
 export function isAdmin(email: string): boolean {

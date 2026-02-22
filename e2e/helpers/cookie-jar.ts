@@ -9,7 +9,8 @@ export class CookieJar {
   capture(url: string, response: Response): void {
     const origin = new URL(url).origin
     const cookies = response.headers.getSetCookie()
-    if (!cookies.length) return
+    if (!cookies.length)
+      return
 
     let originJar = this.store.get(origin)
     if (!originJar) {
@@ -20,7 +21,8 @@ export class CookieJar {
     for (const cookie of cookies) {
       const [nameValue] = cookie.split(';')
       const eqIndex = nameValue.indexOf('=')
-      if (eqIndex === -1) continue
+      if (eqIndex === -1)
+        continue
       const name = nameValue.slice(0, eqIndex).trim()
       const value = nameValue.slice(eqIndex + 1).trim()
       originJar.set(name, value)
@@ -31,7 +33,8 @@ export class CookieJar {
   headerFor(url: string): string | undefined {
     const origin = new URL(url).origin
     const originJar = this.store.get(origin)
-    if (!originJar || originJar.size === 0) return undefined
+    if (!originJar || originJar.size === 0)
+      return undefined
 
     return Array.from(originJar.entries())
       .map(([name, value]) => `${name}=${value}`)

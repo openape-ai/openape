@@ -1,7 +1,7 @@
-import type { KeyStore, KeyEntry } from '@ddisa/idp-server'
+import type { KeyEntry, KeyStore } from '@ddisa/idp-server'
 import type { KeyLike } from 'jose'
-import { importJWK, exportJWK } from 'jose'
 import { generateKeyPair } from '@ddisa/core'
+import { exportJWK, importJWK } from 'jose'
 import { useAppStorage } from './storage'
 
 interface StoredKey {
@@ -16,15 +16,18 @@ export function createKeyStore(): KeyStore {
   let cachedKeys: KeyEntry[] | null = null
 
   async function loadKeys(): Promise<KeyEntry[]> {
-    if (cachedKeys) return cachedKeys
+    if (cachedKeys)
+      return cachedKeys
 
     const allKeys = await storage.getKeys('keys:')
-    if (allKeys.length === 0) return []
+    if (allKeys.length === 0)
+      return []
 
     const keys: KeyEntry[] = []
     for (const key of allKeys) {
       const stored = await storage.getItem<StoredKey>(key)
-      if (!stored || stored.isActive === false) continue
+      if (!stored || stored.isActive === false)
+        continue
 
       const privateKey = await importJWK(stored.privateKeyJwk, 'ES256') as KeyLike
       const publicKey = await importJWK(stored.publicKeyJwk, 'ES256') as KeyLike
@@ -58,7 +61,8 @@ export function createKeyStore(): KeyStore {
   return {
     async getSigningKey() {
       const keys = await loadKeys()
-      if (keys.length === 0) return createKey()
+      if (keys.length === 0)
+        return createKey()
       return keys[0]
     },
 

@@ -7,7 +7,8 @@ export function useAuth() {
   async function fetchUser() {
     try {
       user.value = await $fetch<DDISAAssertionClaims>('/api/me')
-    } catch {
+    }
+    catch {
       user.value = null
     }
     loading.value = false

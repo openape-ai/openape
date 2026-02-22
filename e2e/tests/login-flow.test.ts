@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { HttpClient } from '../helpers/http-client.js'
-import { startServers, stopServers } from '../helpers/server-manager.js'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
 import { IDP_URL, SP_URL } from '../helpers/constants.js'
+import { HttpClient } from '../helpers/http-client.js'
+import { startServers, stopServers } from '../helpers/server-manager.js'
 
-describe('DDISA OIDC Login Flow', () => {
+describe('dDISA OIDC Login Flow', () => {
   beforeAll(async () => {
     await startServers()
     await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })

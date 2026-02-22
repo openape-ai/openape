@@ -1,5 +1,5 @@
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ email: string; password: string }>(event)
+  const body = await readBody<{ email: string, password: string }>(event)
   const { userStore } = useStores()
 
   if (!body.email || !body.password) {

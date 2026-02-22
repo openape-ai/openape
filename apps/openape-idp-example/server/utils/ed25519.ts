@@ -1,4 +1,5 @@
-import { createPublicKey, verify, type KeyObject } from 'node:crypto'
+import type { KeyObject } from 'node:crypto'
+import { createPublicKey, verify } from 'node:crypto'
 
 // Ed25519 OID prefix for SPKI DER encoding: 302a300506032b6570032100
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')

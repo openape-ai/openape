@@ -1,12 +1,13 @@
 {
   "name": "openape-sp-example",
-  "private": true,
-  "version": "0.0.0",
   "type": "module",
+  "version": "0.0.0",
+  "private": true,
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev --port 3001",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@ddisa/core": "workspace:*",

@@ -1,5 +1,5 @@
-import { SignJWT, jwtVerify } from 'jose'
 import type { KeyLike } from 'jose'
+import { jwtVerify, SignJWT } from 'jose'
 
 export interface AgentTokenPayload {
   sub: string

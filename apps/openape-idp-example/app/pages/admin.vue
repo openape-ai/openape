@@ -6,7 +6,7 @@ const activeTab = ref<'users' | 'agents'>(route.query.tab === 'agents' ? 'agents
 const enrolledAgentId = ref(route.query.enrolled as string || '')
 
 // Users
-const users = ref<{ email: string; name: string }[]>([])
+const users = ref<{ email: string, name: string }[]>([])
 const usersLoading = ref(false)
 const newUser = ref({ name: '', email: '', password: '' })
 const userError = ref('')
@@ -47,7 +47,8 @@ async function loadUsers() {
   usersLoading.value = true
   try {
     users.value = await $fetch('/api/admin/users')
-  } catch { users.value = [] }
+  }
+  catch { users.value = [] }
   finally { usersLoading.value = false }
 }
 
@@ -59,19 +60,23 @@ async function createUser() {
     userSuccess.value = `User ${newUser.value.email} created`
     newUser.value = { name: '', email: '', password: '' }
     await loadUsers()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     userError.value = e.data?.statusMessage ?? 'Failed to create user'
   }
 }
 
 async function deleteUser(email: string) {
-  if (!confirm(`Delete user ${email}?`)) return
+  // eslint-disable-next-line no-alert
+  if (!confirm(`Delete user ${email}?`))
+    return
   userError.value = ''
   try {
     await $fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' })
     await loadUsers()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     userError.value = e.data?.statusMessage ?? 'Failed to delete user'
   }
@@ -82,7 +87,8 @@ async function loadAgents() {
   agentsLoading.value = true
   try {
     agents.value = await $fetch('/api/admin/agents')
-  } catch { agents.value = [] }
+  }
+  catch { agents.value = [] }
   finally { agentsLoading.value = false }
 }
 
@@ -94,19 +100,23 @@ async function createAgent() {
     agentSuccess.value = `Agent "${newAgent.value.name}" created`
     newAgent.value = { name: '', owner: '', approver: '', publicKey: '' }
     await loadAgents()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     agentError.value = e.data?.statusMessage ?? 'Failed to create agent'
   }
 }
 
 async function deleteAgent(id: string) {
-  if (!confirm('Delete this agent?')) return
+  // eslint-disable-next-line no-alert
+  if (!confirm('Delete this agent?'))
+    return
   agentError.value = ''
   try {
     await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' })
     await loadAgents()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     agentError.value = e.data?.statusMessage ?? 'Failed to delete agent'
   }
@@ -120,7 +130,8 @@ async function toggleAgent(agent: Agent) {
       body: { isActive: !agent.isActive },
     })
     await loadAgents()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
   }
@@ -131,7 +142,8 @@ async function startEditAgent(agent: Agent) {
 }
 
 async function saveEditAgent() {
-  if (!editingAgent.value) return
+  if (!editingAgent.value)
+    return
   agentError.value = ''
   try {
     await $fetch(`/api/admin/agents/${editingAgent.value.id}`, {
@@ -145,7 +157,8 @@ async function saveEditAgent() {
     })
     editingAgent.value = null
     await loadAgents()
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string } }
     agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
   }
@@ -161,13 +174,21 @@ function formatDate(ts: number): string {
     <div class="max-w-5xl mx-auto">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h1 class="text-2xl font-bold">Admin Dashboard</h1>
-          <p class="text-sm text-muted">Manage users and agents</p>
+          <h1 class="text-2xl font-bold">
+            Admin Dashboard
+          </h1>
+          <p class="text-sm text-muted">
+            Manage users and agents
+          </p>
         </div>
-        <UButton to="/" color="neutral" variant="soft" size="sm">Back</UButton>
+        <UButton to="/" color="neutral" variant="soft" size="sm">
+          Back
+        </UButton>
       </div>
 
-      <div v-if="authLoading" class="text-center text-muted mt-10">Loading...</div>
+      <div v-if="authLoading" class="text-center text-muted mt-10">
+        Loading...
+      </div>
 
       <template v-else>
         <!-- Tabs -->
@@ -175,7 +196,7 @@ function formatDate(ts: number): string {
           v-model="activeTab"
           :items="[
             { label: `Users (${users.length})`, value: 'users', slot: 'users' },
-            { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' }
+            { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' },
           ]"
         >
           <!-- Users Tab -->
@@ -184,7 +205,9 @@ function formatDate(ts: number): string {
               <!-- Add User Form -->
               <UCard>
                 <template #header>
-                  <h2 class="text-lg font-semibold">Add User</h2>
+                  <h2 class="text-lg font-semibold">
+                    Add User
+                  </h2>
                 </template>
 
                 <UAlert v-if="userError" color="error" :title="userError" class="mb-4" />
@@ -206,26 +229,42 @@ function formatDate(ts: number): string {
                       <UInput v-model="newUser.password" type="password" required placeholder="Password" />
                     </UFormField>
                   </div>
-                  <UButton color="primary" type="submit">Add User</UButton>
+                  <UButton color="primary" type="submit">
+                    Add User
+                  </UButton>
                 </form>
               </UCard>
 
               <!-- Users Table -->
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="usersLoading" class="p-6 text-center text-muted">Loading...</div>
-                <div v-else-if="users.length === 0" class="p-6 text-center text-muted">No users found.</div>
+                <div v-if="usersLoading" class="p-6 text-center text-muted">
+                  Loading...
+                </div>
+                <div v-else-if="users.length === 0" class="p-6 text-center text-muted">
+                  No users found.
+                </div>
                 <table v-else class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Name</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Email</th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">Actions</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Name
+                      </th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Email
+                      </th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-(--ui-border)">
                     <tr v-for="u in users" :key="u.email" class="hover:bg-(--ui-bg-elevated)">
-                      <td class="px-4 py-3 text-sm">{{ u.name }}</td>
-                      <td class="px-4 py-3 text-sm text-muted font-mono">{{ u.email }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        {{ u.name }}
+                      </td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono">
+                        {{ u.email }}
+                      </td>
                       <td class="px-4 py-3 text-right">
                         <UButton
                           v-if="u.email !== user?.email"
@@ -275,8 +314,12 @@ function formatDate(ts: number): string {
                         <UTextarea v-model="editingAgent.publicKey" required :rows="2" />
                       </UFormField>
                       <div class="flex gap-3 justify-end pt-2">
-                        <UButton variant="ghost" @click="editingAgent = null">Cancel</UButton>
-                        <UButton color="primary" type="submit">Save</UButton>
+                        <UButton variant="ghost" @click="editingAgent = null">
+                          Cancel
+                        </UButton>
+                        <UButton color="primary" type="submit">
+                          Save
+                        </UButton>
                       </div>
                     </form>
                   </template>
@@ -286,7 +329,9 @@ function formatDate(ts: number): string {
               <!-- Add Agent Form -->
               <UCard>
                 <template #header>
-                  <h2 class="text-lg font-semibold">Add Agent</h2>
+                  <h2 class="text-lg font-semibold">
+                    Add Agent
+                  </h2>
                 </template>
 
                 <UAlert v-if="agentError" color="error" :title="agentError" class="mb-4" />
@@ -313,42 +358,72 @@ function formatDate(ts: number): string {
                   <UFormField label="Public Key (ssh-ed25519)" required>
                     <UTextarea v-model="newAgent.publicKey" required :rows="2" placeholder="ssh-ed25519 AAAA..." />
                   </UFormField>
-                  <UButton color="primary" type="submit">Add Agent</UButton>
+                  <UButton color="primary" type="submit">
+                    Add Agent
+                  </UButton>
                 </form>
               </UCard>
 
               <!-- Agents Table -->
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="agentsLoading" class="p-6 text-center text-muted">Loading...</div>
-                <div v-else-if="agents.length === 0" class="p-6 text-center text-muted">No agents found.</div>
+                <div v-if="agentsLoading" class="p-6 text-center text-muted">
+                  Loading...
+                </div>
+                <div v-else-if="agents.length === 0" class="p-6 text-center text-muted">
+                  No agents found.
+                </div>
                 <table v-else class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Name</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Owner</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Approver</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Status</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">Created</th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">Actions</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Name
+                      </th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Owner
+                      </th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Approver
+                      </th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Status
+                      </th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Created
+                      </th>
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-(--ui-border)">
                     <tr v-for="a in agents" :key="a.id" class="hover:bg-(--ui-bg-elevated)">
-                      <td class="px-4 py-3 text-sm">{{ a.name }}</td>
-                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">{{ a.owner }}</td>
-                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">{{ a.approver }}</td>
+                      <td class="px-4 py-3 text-sm">
+                        {{ a.name }}
+                      </td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">
+                        {{ a.owner }}
+                      </td>
+                      <td class="px-4 py-3 text-sm text-muted font-mono text-xs">
+                        {{ a.approver }}
+                      </td>
                       <td class="px-4 py-3">
                         <UBadge :color="a.isActive ? 'success' : 'error'" variant="subtle">
                           {{ a.isActive ? 'Active' : 'Inactive' }}
                         </UBadge>
                       </td>
-                      <td class="px-4 py-3 text-xs text-muted">{{ formatDate(a.createdAt) }}</td>
+                      <td class="px-4 py-3 text-xs text-muted">
+                        {{ formatDate(a.createdAt) }}
+                      </td>
                       <td class="px-4 py-3 text-right space-x-1">
-                        <UButton variant="ghost" size="xs" color="primary" @click="startEditAgent(a)">Edit</UButton>
+                        <UButton variant="ghost" size="xs" color="primary" @click="startEditAgent(a)">
+                          Edit
+                        </UButton>
                         <UButton variant="ghost" size="xs" color="warning" @click="toggleAgent(a)">
                           {{ a.isActive ? 'Deactivate' : 'Activate' }}
                         </UButton>
-                        <UButton variant="ghost" size="xs" color="error" @click="deleteAgent(a.id)">Delete</UButton>
+                        <UButton variant="ghost" size="xs" color="error" @click="deleteAgent(a.id)">
+                          Delete
+                        </UButton>
                       </td>
                     </tr>
                   </tbody>

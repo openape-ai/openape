@@ -22,7 +22,8 @@ onMounted(async () => {
     if (grantStatus.value === 'approved') {
       hasPermission.value = true
     }
-  } else {
+  }
+  else {
     // Check session for existing AuthZ-JWT (persists across refresh)
     const status = await $fetch<{ hasAuthzJWT: boolean }>('/api/grant-status')
     if (status.hasAuthzJWT) {
@@ -40,8 +41,9 @@ async function requestPermission() {
       body: { action: 'protected-action', reason: 'Execute a protected action on Sample SP' },
     })
     navigateTo(redirectUrl, { external: true })
-  } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Permission request failed'
     requesting.value = false
   }
@@ -59,13 +61,15 @@ async function executeProtectedAction() {
     if (result.grantConsumed) {
       hasPermission.value = false
     }
-  } catch (err: unknown) {
-    const e = err as { statusCode?: number; data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { statusCode?: number, data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Action failed'
     if (e.statusCode === 403) {
       hasPermission.value = false
     }
-  } finally {
+  }
+  finally {
     executing.value = false
   }
 }
@@ -78,11 +82,15 @@ function formatTimestamp(ts: number): string {
 <template>
   <div class="min-h-screen py-8 px-4">
     <div class="max-w-2xl mx-auto">
-      <div v-if="loading" class="text-center text-muted mt-20">Loading...</div>
+      <div v-if="loading" class="text-center text-muted mt-20">
+        Loading...
+      </div>
 
       <template v-else-if="user">
         <div class="flex items-center justify-between mb-8">
-          <h1 class="text-2xl font-bold">Dashboard</h1>
+          <h1 class="text-2xl font-bold">
+            Dashboard
+          </h1>
           <UButton color="error" variant="soft" size="sm" @click="logout">
             Logout
           </UButton>
@@ -91,7 +99,9 @@ function formatTimestamp(ts: number): string {
         <!-- DDISA Assertion Claims -->
         <UCard class="mb-6">
           <template #header>
-            <p class="text-green-400 font-medium">Authenticated via DDISA</p>
+            <p class="text-green-400 font-medium">
+              Authenticated via DDISA
+            </p>
           </template>
 
           <div class="divide-y divide-(--ui-border)">
@@ -139,7 +149,9 @@ function formatTimestamp(ts: number): string {
         <!-- OpenAPE Protected Action -->
         <UCard>
           <template #header>
-            <h2 class="text-lg font-semibold">OpenAPE Protected Action</h2>
+            <h2 class="text-lg font-semibold">
+              OpenAPE Protected Action
+            </h2>
           </template>
 
           <p class="text-sm text-muted mb-4">
@@ -167,7 +179,9 @@ function formatTimestamp(ts: number): string {
 
           <!-- Action Result -->
           <UCard v-if="actionResult" variant="soft" class="mt-4">
-            <p class="text-sm font-medium text-muted mb-2">Result:</p>
+            <p class="text-sm font-medium text-muted mb-2">
+              Result:
+            </p>
             <pre class="text-xs overflow-auto">{{ JSON.stringify(actionResult, null, 2) }}</pre>
           </UCard>
         </UCard>

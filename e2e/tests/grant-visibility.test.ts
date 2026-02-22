@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { HttpClient } from '../helpers/http-client.js'
-import { startServers, stopServers } from '../helpers/server-manager.js'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
 import { IDP_URL } from '../helpers/constants.js'
+import { HttpClient } from '../helpers/http-client.js'
+import { startServers, stopServers } from '../helpers/server-manager.js'
 
-describe('Grant Lifecycle & Dashboard Visibility', () => {
+describe('grant Lifecycle & Dashboard Visibility', () => {
   beforeAll(async () => {
     await startServers()
     await bootstrapTestUser({ email: 'admin@example.com', password: 'q1w2e3r4', name: 'Admin User' })
@@ -24,7 +24,7 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
   }
 
   async function createGrant(client: HttpClient, grantType: 'once' | 'timed' | 'always' = 'once') {
-    const { status, data } = await client.postJSON<{ id: string; status: string }>(
+    const { status, data } = await client.postJSON<{ id: string, status: string }>(
       `${IDP_URL}/api/grants`,
       {
         requester: 'admin@example.com',
@@ -47,21 +47,21 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
     const grant1 = await createGrant(client)
 
     // Dashboard should show the pending grant
-    const { data: grants1 } = await client.getJSON<{ id: string; status: string }[]>(
+    const { data: grants1 } = await client.getJSON<{ id: string, status: string }[]>(
       `${IDP_URL}/api/grants`,
     )
     expect(grants1.some(g => g.id === grant1.id && g.status === 'pending')).toBe(true)
 
     // Approve the grant
     const { status: approveStatus, data: approveData } = await client.postJSON<{
-      grant: { id: string; status: string }
+      grant: { id: string, status: string }
       authzJWT: string
     }>(`${IDP_URL}/api/grants/${grant1.id}/approve`, {})
     expect(approveStatus).toBe(200)
     expect(approveData.grant.status).toBe('approved')
 
     // Dashboard should show the approved grant
-    const { data: grants2 } = await client.getJSON<{ id: string; status: string }[]>(
+    const { data: grants2 } = await client.getJSON<{ id: string, status: string }[]>(
       `${IDP_URL}/api/grants`,
     )
     expect(grants2.some(g => g.id === grant1.id && g.status === 'approved')).toBe(true)
@@ -75,7 +75,7 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
     expect(denyStatus).toBe(200)
 
     // Dashboard should show both grants
-    const { data: grants3 } = await client.getJSON<{ id: string; status: string }[]>(
+    const { data: grants3 } = await client.getJSON<{ id: string, status: string }[]>(
       `${IDP_URL}/api/grants`,
     )
     expect(grants3.some(g => g.id === grant1.id)).toBe(true)
@@ -89,7 +89,7 @@ describe('Grant Lifecycle & Dashboard Visibility', () => {
     // Create and approve a once-grant
     const grant = await createGrant(client, 'once')
     const { data: approveData } = await client.postJSON<{
-      grant: { id: string; status: string }
+      grant: { id: string, status: string }
       authzJWT: string
     }>(`${IDP_URL}/api/grants/${grant.id}/approve`, {})
     expect(approveData.authzJWT).toBeTruthy()

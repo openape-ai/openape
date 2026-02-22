@@ -8,8 +8,8 @@ interface StoredChallenge {
 }
 
 export interface ChallengeStore {
-  createChallenge(agentId: string): Promise<string>
-  consumeChallenge(challenge: string, agentId: string): Promise<boolean>
+  createChallenge: (agentId: string) => Promise<string>
+  consumeChallenge: (challenge: string, agentId: string) => Promise<boolean>
 }
 
 export function createChallengeStore(): ChallengeStore {
@@ -28,13 +28,16 @@ export function createChallengeStore(): ChallengeStore {
 
     async consumeChallenge(challenge, agentId) {
       const stored = await storage.getItem<StoredChallenge>(`challenges:${challenge}`)
-      if (!stored) return false
+      if (!stored)
+        return false
 
       // Always remove (one-time use)
       await storage.removeItem(`challenges:${challenge}`)
 
-      if (stored.expiresAt < Date.now()) return false
-      if (stored.agentId !== agentId) return false
+      if (stored.expiresAt < Date.now())
+        return false
+      if (stored.agentId !== agentId)
+        return false
 
       return true
     },
