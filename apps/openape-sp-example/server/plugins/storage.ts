@@ -10,16 +10,16 @@ export default defineNitroPlugin(async () => {
         bucket: process.env.S3_BUCKET || 'dnsid',
         endpoint: process.env.S3_ENDPOINT || 'https://sos-at-vie-2.exo.io',
         region: process.env.S3_REGION || 'at-vie-2',
-        prefix: 'sample-sp/',
+        prefix: 'openape-sp/',
       }))
-      console.log('[sample-sp] Storage: S3 mounted')
+      console.log('[openape-sp] Storage: S3 mounted')
     } catch (e) {
-      console.error('[sample-sp] Failed to mount S3 storage:', e)
+      console.error('[openape-sp] Failed to mount S3 storage:', e)
     }
   } else {
     const { default: fsDriver } = await import('unstorage/drivers/fs-lite')
     const storage = useStorage()
-    storage.mount('db', fsDriver({ base: './.data/sample-sp-db' }))
-    console.log('[sample-sp] Storage: fsLite (default)')
+    storage.mount('db', fsDriver({ base: './.data/openape-sp-db' }))
+    console.log('[openape-sp] Storage: fsLite (default)')
   }
 })

@@ -40,7 +40,7 @@ export async function startServers(): Promise<void> {
   }
 
   const idServer = execa('pnpm', ['dev'], {
-    cwd: `${baseDir}apps/id-server`,
+    cwd: `${baseDir}apps/openape-idp-example`,
     env: {
       ...commonEnv,
       NUXT_PUBLIC_SITE_URL: 'http://localhost:3000',
@@ -50,14 +50,14 @@ export async function startServers(): Promise<void> {
   })
 
   const sampleSp = execa('pnpm', ['dev'], {
-    cwd: `${baseDir}apps/sample-sp`,
+    cwd: `${baseDir}apps/openape-sp-example`,
     env: commonEnv,
     stdio: 'pipe',
   })
 
   servers.push(
-    { process: idServer, port: 3000, name: 'id-server' },
-    { process: sampleSp, port: 3001, name: 'sample-sp' },
+    { process: idServer, port: 3000, name: 'openape-idp' },
+    { process: sampleSp, port: 3001, name: 'openape-sp' },
   )
 
   // Log server output for debugging

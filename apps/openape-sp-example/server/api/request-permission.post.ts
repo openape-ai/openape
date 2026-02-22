@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const { spId, clawgateUrl } = getSpConfig()
   const origin = getRequestURL(event).origin
 
-  // Create grant request on the ClawGate (id-server)
+  // Create grant request on the IdP
   const grant = await $fetch<{ id: string }>(`${clawgateUrl}/api/grants`, {
     method: 'POST',
     body: {
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   // Build callback URL that the IdP will redirect back to after approval
   const callbackBase = `${origin}/api/grant-callback`
 
-  // Build redirect URL to grant-approval page on id-server
+  // Build redirect URL to grant-approval page on IdP
   const approvalUrl = new URL(`${clawgateUrl}/grant-approval`)
   approvalUrl.searchParams.set('grant_id', grant.id)
   approvalUrl.searchParams.set('callback', callbackBase)
