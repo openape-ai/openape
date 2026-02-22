@@ -1,6 +1,5 @@
 import { HttpClient } from './http-client.js'
-
-const IDP = 'http://localhost:3000'
+import { IDP_URL } from './constants.js'
 const SUPER_ADMIN_PASSWORD = 'test-super-admin'
 
 /**
@@ -13,7 +12,7 @@ export async function bootstrapTestUser(
   const client = new HttpClient()
 
   // Login as super-admin
-  const { status: loginStatus } = await client.postJSON(`${IDP}/api/login`, {
+  const { status: loginStatus } = await client.postJSON(`${IDP_URL}/api/login`, {
     email: opts.email,
     password: SUPER_ADMIN_PASSWORD,
   })
@@ -22,7 +21,7 @@ export async function bootstrapTestUser(
   }
 
   // Create the test user
-  const { status: createStatus } = await client.postJSON(`${IDP}/api/admin/users`, {
+  const { status: createStatus } = await client.postJSON(`${IDP_URL}/api/admin/users`, {
     email: opts.email,
     password: opts.password,
     name: opts.name,
@@ -32,5 +31,5 @@ export async function bootstrapTestUser(
   }
 
   // Logout
-  await client.postJSON(`${IDP}/api/logout`, {})
+  await client.postJSON(`${IDP_URL}/api/logout`, {})
 }

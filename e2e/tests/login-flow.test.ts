@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
-
-const SP = 'http://localhost:3001'
-const IDP = 'http://localhost:3000'
+import { IDP_URL, SP_URL } from '../helpers/constants.js'
 
 describe('DDISA OIDC Login Flow', () => {
   beforeAll(async () => {
@@ -22,10 +20,10 @@ describe('DDISA OIDC Login Flow', () => {
     // Step 1: SP login — discover IdP and get authorization URL
     const { status: loginStatus, data: loginData } = await client.postJSON<{
       redirectUrl: string
-    }>(`${SP}/api/login`, { email: 'admin@example.com' })
+    }>(`${SP_URL}/api/login`, { email: 'admin@example.com' })
 
     expect(loginStatus).toBe(200)
-    expect(loginData.redirectUrl).toContain(`${IDP}/authorize`)
+    expect(loginData.redirectUrl).toContain(`${IDP_URL}/authorize`)
 
     const authorizeUrl = loginData.redirectUrl
 
@@ -39,7 +37,7 @@ describe('DDISA OIDC Login Flow', () => {
     // Step 3: Authenticate on the IdP
     const { status: idpLoginStatus, data: idpLoginData } = await client.postJSON<{
       ok: boolean
-    }>(`${IDP}/api/login`, {
+    }>(`${IDP_URL}/api/login`, {
       email: 'admin@example.com',
       password: 'q1w2e3r4',
     })
@@ -52,7 +50,7 @@ describe('DDISA OIDC Login Flow', () => {
     expect(step4.status).toBe(302)
 
     const callbackRedirect = step4.headers.get('Location')!
-    expect(callbackRedirect).toContain(`${SP}/api/callback`)
+    expect(callbackRedirect).toContain(`${SP_URL}/api/callback`)
     expect(callbackRedirect).toContain('code=')
     expect(callbackRedirect).toContain('state=')
 
@@ -67,11 +65,11 @@ describe('DDISA OIDC Login Flow', () => {
       iss: string
       aud: string
       nonce: string
-    }>(`${SP}/api/me`)
+    }>(`${SP_URL}/api/me`)
 
     expect(meStatus).toBe(200)
     expect(claims.sub).toBe('admin@example.com')
-    expect(claims.iss).toBe('http://localhost:3000')
+    expect(claims.iss).toBe(IDP_URL)
     expect(claims.aud).toBe('sp.example.com')
     expect(claims.nonce).toBeTruthy()
   })

@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { HttpClient } from '../helpers/http-client.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 import { bootstrapTestUser } from '../helpers/bootstrap.js'
-
-const SP = 'http://localhost:3001'
-const IDP = 'http://localhost:3000'
+import { IDP_URL, SP_URL } from '../helpers/constants.js'
 
 const TEST_EMAIL = 'admin@example.com'
 const TEST_PASSWORD = 'q1w2e3r4'
@@ -23,7 +21,7 @@ describe('Once-Grant Re-request Flow', () => {
   async function loginToSP(client: HttpClient) {
     // Step 1: SP login — get authorization URL
     const { status, data: loginData } = await client.postJSON<{ redirectUrl: string }>(
-      `${SP}/api/login`,
+      `${SP_URL}/api/login`,
       { email: TEST_EMAIL },
     )
     expect(status).toBe(200)
@@ -32,7 +30,7 @@ describe('Once-Grant Re-request Flow', () => {
     await client.fetch(loginData.redirectUrl)
 
     // Step 3: Authenticate on IdP
-    const { status: idpLoginStatus } = await client.postJSON(`${IDP}/api/login`, {
+    const { status: idpLoginStatus } = await client.postJSON(`${IDP_URL}/api/login`, {
       email: TEST_EMAIL,
       password: TEST_PASSWORD,
     })
@@ -41,7 +39,7 @@ describe('Once-Grant Re-request Flow', () => {
     // Step 4: Hit /authorize again — now authenticated, redirects to SP callback
     const step4 = await client.fetch(loginData.redirectUrl)
     const callbackUrl = step4.headers.get('Location')!
-    expect(callbackUrl).toContain(`${SP}/api/callback`)
+    expect(callbackUrl).toContain(`${SP_URL}/api/callback`)
 
     // Step 5: Follow SP callback — sets session, redirects to /dashboard
     const step5 = await client.fetch(callbackUrl)
@@ -54,7 +52,7 @@ describe('Once-Grant Re-request Flow', () => {
     const { status: permStatus, data: permData } = await client.postJSON<{
       redirectUrl: string
       grantId: string
-    }>(`${SP}/api/request-permission`, {
+    }>(`${SP_URL}/api/request-permission`, {
       action: 'protected-action',
       reason: 'Test grant',
     })
@@ -66,7 +64,7 @@ describe('Once-Grant Re-request Flow', () => {
     const { status: approveStatus, data: approveData } = await client.postJSON<{
       grant: { status: string }
       authzJWT: string
-    }>(`${IDP}/api/grants/${grantId}/approve`, {})
+    }>(`${IDP_URL}/api/grants/${grantId}/approve`, {})
     expect(approveStatus).toBe(200)
     expect(approveData.authzJWT).toBeTruthy()
 
@@ -88,7 +86,7 @@ describe('Once-Grant Re-request Flow', () => {
     await loginToSP(client)
 
     // Verify we're authenticated
-    const { status: meStatus } = await client.getJSON(`${SP}/api/me`)
+    const { status: meStatus } = await client.getJSON(`${SP_URL}/api/me`)
     expect(meStatus).toBe(200)
 
     // --- First grant cycle ---
@@ -96,7 +94,7 @@ describe('Once-Grant Re-request Flow', () => {
 
     // Verify session has authzJWT
     const { data: status1 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
-      `${SP}/api/grant-status`,
+      `${SP_URL}/api/grant-status`,
     )
     expect(status1.hasAuthzJWT).toBe(true)
 
@@ -104,14 +102,14 @@ describe('Once-Grant Re-request Flow', () => {
     const { status: execStatus1, data: execData1 } = await client.postJSON<{
       success: boolean
       grantConsumed: boolean
-    }>(`${SP}/api/protected-action`, {})
+    }>(`${SP_URL}/api/protected-action`, {})
     expect(execStatus1).toBe(200)
     expect(execData1.success).toBe(true)
     expect(execData1.grantConsumed).toBe(true)
 
     // Verify session cleared after consumption
     const { data: status2 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
-      `${SP}/api/grant-status`,
+      `${SP_URL}/api/grant-status`,
     )
     expect(status2.hasAuthzJWT).toBe(false)
 
@@ -120,7 +118,7 @@ describe('Once-Grant Re-request Flow', () => {
 
     // Verify session has new authzJWT
     const { data: status3 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
-      `${SP}/api/grant-status`,
+      `${SP_URL}/api/grant-status`,
     )
     expect(status3.hasAuthzJWT).toBe(true)
 
@@ -128,7 +126,7 @@ describe('Once-Grant Re-request Flow', () => {
     const { status: execStatus2, data: execData2 } = await client.postJSON<{
       success: boolean
       grantConsumed: boolean
-    }>(`${SP}/api/protected-action`, {})
+    }>(`${SP_URL}/api/protected-action`, {})
     expect(execStatus2).toBe(200)
     expect(execData2.success).toBe(true)
     expect(execData2.grantConsumed).toBe(true)

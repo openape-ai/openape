@@ -1,8 +1,8 @@
 import { execa, type ResultPromise } from 'execa'
+import { IDP_PORT, IDP_URL, SP_PORT } from './constants.js'
 
 const DDISA_MOCK_RECORDS = JSON.stringify({
-  'example.org': { idp: 'http://localhost:3000', mode: 'open' },
-  'example.com': { idp: 'http://localhost:3000', mode: 'open' },
+  'example.com': { idp: IDP_URL, mode: 'open' },
 })
 
 interface ManagedServer {
@@ -43,7 +43,7 @@ export async function startServers(): Promise<void> {
     cwd: `${baseDir}apps/openape-idp-example`,
     env: {
       ...commonEnv,
-      NUXT_PUBLIC_SITE_URL: 'http://localhost:3000',
+      NUXT_PUBLIC_SITE_URL: IDP_URL,
       NUXT_OPENAPE_ADMIN_EMAILS: 'admin@example.com',
     },
     stdio: 'pipe',
@@ -56,8 +56,8 @@ export async function startServers(): Promise<void> {
   })
 
   servers.push(
-    { process: idServer, port: 3000, name: 'openape-idp' },
-    { process: sampleSp, port: 3001, name: 'openape-sp' },
+    { process: idServer, port: IDP_PORT, name: 'openape-idp' },
+    { process: sampleSp, port: SP_PORT, name: 'openape-sp' },
   )
 
   // Log server output for debugging
@@ -68,8 +68,8 @@ export async function startServers(): Promise<void> {
 
   // Wait for both servers to be ready
   await Promise.all([
-    waitForServer(3000),
-    waitForServer(3001),
+    waitForServer(IDP_PORT),
+    waitForServer(SP_PORT),
   ])
 }
 
