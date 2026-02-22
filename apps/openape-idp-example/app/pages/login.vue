@@ -13,10 +13,9 @@ async function handleSubmit() {
   try {
     await login(email.value, password.value)
     const returnTo = route.query.returnTo as string | undefined
-    if (returnTo?.startsWith('/')) {
-      await navigateTo(returnTo)
-    }
-    else if (returnTo) {
+    if (returnTo) {
+      // Always use external navigation for returnTo — it may be a server route
+      // like /authorize that the client-side router doesn't know about
       await navigateTo(returnTo, { external: true })
     }
     else {
