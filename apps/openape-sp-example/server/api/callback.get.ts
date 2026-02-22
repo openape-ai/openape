@@ -4,7 +4,6 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const { code, state, error, error_description } = query as Record<string, string>
   const { spId } = getSpConfig()
-  const flowStateStore = useFlowStateStore()
   const origin = getRequestURL(event).origin
   const redirectUri = `${origin}/api/callback`
 
@@ -17,8 +16,8 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, `/?error=${encodeURIComponent('Missing code or state parameter')}`)
   }
 
-  // Retrieve stored flow state
-  const flowState = await flowStateStore.find(state)
+  // Retrieve flow state from signed cookie
+  const flowState = await getFlowState(event, state)
   if (!flowState) {
     return sendRedirect(event, `/?error=${encodeURIComponent('Invalid or expired state — please try again')}`)
   }
@@ -32,8 +31,8 @@ export default defineEventHandler(async (event) => {
       redirectUri,
     })
 
-    // Clean up flow state
-    await flowStateStore.delete(state)
+    // Clear flow state cookie
+    clearFlowState(event)
 
     // Save claims in session
     const session = await getSession(event)
@@ -44,7 +43,7 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, '/dashboard')
   }
   catch (err: unknown) {
-    await flowStateStore.delete(state)
+    clearFlowState(event)
     const message = err instanceof Error ? err.message : 'Callback processing failed'
     return sendRedirect(event, `/?error=${encodeURIComponent(message)}`)
   }
