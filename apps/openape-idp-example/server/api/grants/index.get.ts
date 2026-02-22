@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   // Check if user is authenticated
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    // Unauthenticated: backward-compat — return pending grants (for clawgate-sudo)
+    // Unauthenticated: backward-compat — return pending grants (for apes)
     return await grantStore.findPending()
   }
 
