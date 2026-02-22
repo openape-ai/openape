@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
   }
 
-  const body = await readBody<{ action?: string; reason?: string }>(event)
+  const body = await readBody<{ action?: string, reason?: string }>(event)
   const { spId, openapeUrl } = getSpConfig()
   const origin = getRequestURL(event).origin
 

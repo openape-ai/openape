@@ -42,7 +42,8 @@ export default defineEventHandler(async (event) => {
     })
 
     return sendRedirect(event, '/dashboard')
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     await flowStateStore.delete(state)
     const message = err instanceof Error ? err.message : 'Callback processing failed'
     return sendRedirect(event, `/?error=${encodeURIComponent(message)}`)

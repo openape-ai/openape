@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
-import { verifyAgentToken, type AgentTokenPayload } from './agent-token'
+import type { AgentTokenPayload } from './agent-token'
+import { verifyAgentToken } from './agent-token'
 
 export async function requireAgent(event: H3Event): Promise<AgentTokenPayload> {
   const authHeader = getHeader(event, 'authorization')
@@ -13,7 +14,8 @@ export async function requireAgent(event: H3Event): Promise<AgentTokenPayload> {
 
   try {
     return await verifyAgentToken(token, IDP_ISSUER, signingKey.publicKey)
-  } catch {
+  }
+  catch {
     throw createError({ statusCode: 401, statusMessage: 'Invalid or expired agent token' })
   }
 }
@@ -24,7 +26,8 @@ export async function requireAgent(event: H3Event): Promise<AgentTokenPayload> {
  */
 export async function tryAgentAuth(event: H3Event): Promise<AgentTokenPayload | null> {
   const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) return null
+  if (!authHeader?.startsWith('Bearer '))
+    return null
 
   const token = authHeader.slice(7)
   const { keyStore } = useStores()
@@ -32,7 +35,8 @@ export async function tryAgentAuth(event: H3Event): Promise<AgentTokenPayload | 
 
   try {
     return await verifyAgentToken(token, IDP_ISSUER, signingKey.publicKey)
-  } catch {
+  }
+  catch {
     return null
   }
 }

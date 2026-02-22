@@ -1,4 +1,4 @@
-import { hashPassword, verifyPassword, generateSalt } from '@ddisa/core'
+import { generateSalt, hashPassword, verifyPassword } from '@ddisa/core'
 import { useAppStorage } from './storage'
 
 export interface User {
@@ -7,11 +7,11 @@ export interface User {
 }
 
 export interface UserStore {
-  register(email: string, password: string, name: string): Promise<User>
-  authenticate(email: string, password: string): Promise<User | null>
-  findByEmail(email: string): Promise<User | null>
-  listUsers(): Promise<User[]>
-  deleteUser(email: string): Promise<void>
+  register: (email: string, password: string, name: string) => Promise<User>
+  authenticate: (email: string, password: string) => Promise<User | null>
+  findByEmail: (email: string) => Promise<User | null>
+  listUsers: () => Promise<User[]>
+  deleteUser: (email: string) => Promise<void>
 }
 
 interface StoredUser {
@@ -41,17 +41,20 @@ export function createUserStore(): UserStore {
 
     async authenticate(email, password) {
       const user = await storage.getItem<StoredUser>(`users:${email}`)
-      if (!user) return null
+      if (!user)
+        return null
 
       const valid = await verifyPassword(password, user.salt, user.passwordHash)
-      if (!valid) return null
+      if (!valid)
+        return null
 
       return { email: user.email, name: user.name }
     },
 
     async findByEmail(email) {
       const user = await storage.getItem<StoredUser>(`users:${email}`)
-      if (!user) return null
+      if (!user)
+        return null
       return { email: user.email, name: user.name }
     },
 
@@ -60,7 +63,8 @@ export function createUserStore(): UserStore {
       const users: User[] = []
       for (const key of keys) {
         const stored = await storage.getItem<StoredUser>(key)
-        if (stored) users.push({ email: stored.email, name: stored.name })
+        if (stored)
+          users.push({ email: stored.email, name: stored.name })
       }
       return users
     },

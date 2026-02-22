@@ -30,8 +30,12 @@ async function handleLogout() {
       <div v-else-if="user" class="space-y-4">
         <UAlert color="success" title="Logged in as">
           <template #description>
-            <p class="font-semibold">{{ user.name }}</p>
-            <p class="text-sm">{{ user.email }}</p>
+            <p class="font-semibold">
+              {{ user.name }}
+            </p>
+            <p class="text-sm">
+              {{ user.email }}
+            </p>
           </template>
         </UAlert>
 

@@ -1,13 +1,14 @@
 {
   "name": "ddisa-e2e",
-  "private": true,
   "type": "module",
+  "private": true,
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint ."
   },
   "devDependencies": {
-    "vitest": "^2.1.0",
     "execa": "^9.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   }
 }

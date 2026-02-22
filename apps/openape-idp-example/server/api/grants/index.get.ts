@@ -27,23 +27,27 @@ export default defineEventHandler(async (event) => {
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
   const agentIds = new Set([
-    ...ownedAgents.map((a) => a.id),
-    ...approvedAgents.map((a) => a.id),
+    ...ownedAgents.map(a => a.id),
+    ...approvedAgents.map(a => a.id),
   ])
 
   const allGrants = await grantStore.findAll()
   return allGrants.filter((grant: OpenApeGrant) => {
     // Show grants targeting this user
-    if (grant.request.target === email) return true
+    if (grant.request.target === email)
+      return true
     // Show grants this user requested
-    if (grant.request.requester === email) return true
+    if (grant.request.requester === email)
+      return true
     // Show grants from agents they own or approve
     if (grant.request.requester.startsWith('agent:')) {
       const agentId = grant.request.requester.slice(6)
-      if (agentIds.has(agentId)) return true
+      if (agentIds.has(agentId))
+        return true
     }
     // Show pending grants (they may need to approve)
-    if (grant.status === 'pending') return true
+    if (grant.status === 'pending')
+      return true
     return false
   })
 })

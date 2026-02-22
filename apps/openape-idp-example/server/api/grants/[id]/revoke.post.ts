@@ -27,7 +27,8 @@ export default defineEventHandler(async (event) => {
   try {
     const revoked = await revokeGrant(id, grantStore)
     return revoked
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to revoke grant'
     throw createError({ statusCode: 400, statusMessage: message })
   }

@@ -25,11 +25,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const update: Record<string, unknown> = {}
-  if (body.name !== undefined) update.name = body.name
-  if (body.owner !== undefined) update.owner = body.owner
-  if (body.approver !== undefined) update.approver = body.approver
-  if (body.publicKey !== undefined) update.publicKey = body.publicKey
-  if (body.isActive !== undefined) update.isActive = body.isActive
+  if (body.name !== undefined)
+    update.name = body.name
+  if (body.owner !== undefined)
+    update.owner = body.owner
+  if (body.approver !== undefined)
+    update.approver = body.approver
+  if (body.publicKey !== undefined)
+    update.publicKey = body.publicKey
+  if (body.isActive !== undefined)
+    update.isActive = body.isActive
 
   const agent = await agentStore.update(id, update)
   return agent

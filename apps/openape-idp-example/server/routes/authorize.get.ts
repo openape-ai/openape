@@ -1,6 +1,6 @@
-import { validateAuthorizeRequest, evaluatePolicy } from '@ddisa/idp-server'
 import type { AuthorizeParams } from '@ddisa/idp-server'
-import { resolveDDISA, extractDomain } from '@ddisa/core'
+import { extractDomain, resolveDDISA } from '@ddisa/core'
+import { evaluatePolicy, validateAuthorizeRequest } from '@ddisa/idp-server'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)

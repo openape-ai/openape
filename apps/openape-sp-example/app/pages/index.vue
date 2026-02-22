@@ -25,7 +25,8 @@ async function handleLogin() {
   submitting.value = true
   try {
     await login(email.value)
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Login failed'
     error.value = msg
     submitting.value = false
@@ -39,7 +40,9 @@ async function handleLogin() {
       <UCard>
         <template #header>
           <div class="text-center">
-            <h1 class="text-3xl font-bold">Sample SP</h1>
+            <h1 class="text-3xl font-bold">
+              Sample SP
+            </h1>
             <p class="mt-2 text-muted">
               Sign in with your email using DNS-Delegated Identity.
             </p>

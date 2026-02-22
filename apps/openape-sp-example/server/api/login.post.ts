@@ -1,4 +1,4 @@
-import { discoverIdP, createAuthorizationURL } from '@ddisa/sp-server'
+import { createAuthorizationURL, discoverIdP } from '@ddisa/sp-server'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email: string }>(event)

@@ -1,9 +1,9 @@
-import type { GrantStore } from '@openape/grants'
 import type { OpenApeGrant } from '@ddisa/core'
+import type { GrantStore } from '@openape/grants'
 import { useAppStorage } from './storage'
 
 export interface ExtendedGrantStore extends GrantStore {
-  findAll(): Promise<OpenApeGrant[]>
+  findAll: () => Promise<OpenApeGrant[]>
 }
 
 export function createGrantStore(): ExtendedGrantStore {
@@ -20,7 +20,8 @@ export function createGrantStore(): ExtendedGrantStore {
 
     async updateStatus(id, status, extra?) {
       const grant = await storage.getItem<OpenApeGrant>(`grants:${id}`)
-      if (!grant) throw new Error(`Grant not found: ${id}`)
+      if (!grant)
+        throw new Error(`Grant not found: ${id}`)
       await storage.setItem(`grants:${id}`, { ...grant, status, ...extra })
     },
 
@@ -29,7 +30,8 @@ export function createGrantStore(): ExtendedGrantStore {
       const results: OpenApeGrant[] = []
       for (const key of keys) {
         const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.status === 'pending') results.push(grant)
+        if (grant?.status === 'pending')
+          results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
     },
@@ -39,7 +41,8 @@ export function createGrantStore(): ExtendedGrantStore {
       const results: OpenApeGrant[] = []
       for (const key of keys) {
         const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.request.requester === requester) results.push(grant)
+        if (grant?.request.requester === requester)
+          results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
     },
@@ -49,7 +52,8 @@ export function createGrantStore(): ExtendedGrantStore {
       const results: OpenApeGrant[] = []
       for (const key of keys) {
         const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant) results.push(grant)
+        if (grant)
+          results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
     },

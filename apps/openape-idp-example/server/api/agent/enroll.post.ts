@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   // Check for duplicate public key
   const existingAgents = await agentStore.listAll()
-  const duplicate = existingAgents.find((a) => a.publicKey === body.publicKey)
+  const duplicate = existingAgents.find(a => a.publicKey === body.publicKey)
   if (duplicate) {
     throw createError({ statusCode: 409, statusMessage: 'An agent with this public key already exists' })
   }

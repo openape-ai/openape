@@ -1,5 +1,6 @@
-import { HttpClient } from './http-client.js'
 import { IDP_URL } from './constants.js'
+import { HttpClient } from './http-client.js'
+
 const SUPER_ADMIN_PASSWORD = 'test-super-admin'
 
 /**
@@ -7,7 +8,7 @@ const SUPER_ADMIN_PASSWORD = 'test-super-admin'
  * Logs in with the super-admin password, creates the user, then logs out.
  */
 export async function bootstrapTestUser(
-  opts: { email: string; password: string; name: string },
+  opts: { email: string, password: string, name: string },
 ): Promise<void> {
   const client = new HttpClient()
 

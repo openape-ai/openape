@@ -1,4 +1,4 @@
-import type { CodeStore, CodeEntry } from '@ddisa/idp-server'
+import type { CodeEntry, CodeStore } from '@ddisa/idp-server'
 import { useAppStorage } from './storage'
 
 export function createCodeStore(): CodeStore {
@@ -11,7 +11,8 @@ export function createCodeStore(): CodeStore {
 
     async find(code) {
       const entry = await storage.getItem<CodeEntry>(`codes:${code}`)
-      if (!entry) return null
+      if (!entry)
+        return null
 
       if (entry.expiresAt < Date.now()) {
         await storage.removeItem(`codes:${code}`)

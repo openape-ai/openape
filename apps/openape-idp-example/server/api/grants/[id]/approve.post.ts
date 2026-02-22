@@ -29,7 +29,8 @@ export default defineEventHandler(async (event) => {
     const signingKey = await keyStore.getSigningKey()
     const authzJWT = await issueAuthzJWT(approved, IDP_ISSUER, signingKey.privateKey, signingKey.kid)
     return { grant: approved, authzJWT }
-  } catch (err: unknown) {
+  }
+  catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to approve grant'
     throw createError({ statusCode: 400, statusMessage: message })
   }

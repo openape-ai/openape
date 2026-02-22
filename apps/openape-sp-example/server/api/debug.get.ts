@@ -1,13 +1,14 @@
 import { resolveDDISA } from '@ddisa/core'
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (_event) => {
   const results: Record<string, unknown> = {}
 
   // Test 1: DNS resolution
   try {
     const record = await resolveDDISA('example.com')
     results.dns = { ok: true, record }
-  } catch (e: any) {
+  }
+  catch (e: any) {
     results.dns = { ok: false, error: e.message }
   }
 
@@ -17,7 +18,8 @@ export default defineEventHandler(async (event) => {
     await storage.setItem('test:debug', { ts: Date.now() })
     const val = await storage.getItem('test:debug')
     results.storage = { ok: true, val }
-  } catch (e: any) {
+  }
+  catch (e: any) {
     results.storage = { ok: false, error: e.message, stack: e.stack?.split('\n').slice(0, 3) }
   }
 

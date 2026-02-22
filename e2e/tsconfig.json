@@ -3,10 +3,10 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["vitest/globals", "node"],
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "types": ["vitest/globals", "node"]
+    "skipLibCheck": true
   },
   "include": ["helpers/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

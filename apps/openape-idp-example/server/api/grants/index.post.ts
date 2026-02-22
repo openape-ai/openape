@@ -1,5 +1,5 @@
+import type { GrantType, OpenApeGrantRequest } from '@ddisa/core'
 import { createGrant } from '@openape/grants'
-import type { OpenApeGrantRequest, GrantType } from '@ddisa/core'
 
 const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 

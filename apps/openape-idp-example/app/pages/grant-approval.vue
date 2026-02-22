@@ -28,9 +28,11 @@ onMounted(async () => {
 
   try {
     grant.value = await $fetch(`/api/grants/${grantId.value}`)
-  } catch {
+  }
+  catch {
     error.value = 'Grant not found'
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 })
@@ -38,7 +40,7 @@ onMounted(async () => {
 async function handleApprove() {
   processing.value = true
   try {
-    const result = await $fetch<{ grant: Record<string, unknown>; authzJWT: string }>(
+    const result = await $fetch<{ grant: Record<string, unknown>, authzJWT: string }>(
       `/api/grants/${grantId.value}/approve`,
       { method: 'POST' },
     )
@@ -50,13 +52,16 @@ async function handleApprove() {
       url.searchParams.set('authz_jwt', result.authzJWT)
       url.searchParams.set('status', 'approved')
       await navigateTo(url.toString(), { external: true })
-    } else {
+    }
+    else {
       grant.value = result.grant
     }
-  } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Approval failed'
-  } finally {
+  }
+  finally {
     processing.value = false
   }
 }
@@ -71,13 +76,16 @@ async function handleDeny() {
       url.searchParams.set('grant_id', grantId.value)
       url.searchParams.set('status', 'denied')
       await navigateTo(url.toString(), { external: true })
-    } else {
+    }
+    else {
       grant.value = { ...(grant.value ?? {}), status: 'denied' }
     }
-  } catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }; message?: string }
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
     error.value = e.data?.statusMessage ?? e.message ?? 'Denial failed'
-  } finally {
+  }
+  finally {
     processing.value = false
   }
 }
@@ -87,7 +95,9 @@ async function handleDeny() {
   <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg">
       <template #header>
-        <h1 class="text-2xl font-bold text-center">Permission Request</h1>
+        <h1 class="text-2xl font-bold text-center">
+          Permission Request
+        </h1>
       </template>
 
       <div v-if="loading || authLoading" class="text-center text-muted">
@@ -102,32 +112,60 @@ async function handleDeny() {
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div class="flex justify-between">
-                  <dt class="text-muted">Requester</dt>
-                  <dd class="font-mono">{{ (grant as any).request?.requester }}</dd>
+                  <dt class="text-muted">
+                    Requester
+                  </dt>
+                  <dd class="font-mono">
+                    {{ (grant as any).request?.requester }}
+                  </dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-muted">Target</dt>
-                  <dd class="font-mono">{{ (grant as any).request?.target }}</dd>
+                  <dt class="text-muted">
+                    Target
+                  </dt>
+                  <dd class="font-mono">
+                    {{ (grant as any).request?.target }}
+                  </dd>
                 </div>
                 <div class="flex justify-between">
-                  <dt class="text-muted">Type</dt>
-                  <dd class="font-mono">{{ (grant as any).request?.grant_type }}</dd>
+                  <dt class="text-muted">
+                    Type
+                  </dt>
+                  <dd class="font-mono">
+                    {{ (grant as any).request?.grant_type }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.command?.length">
-                  <dt class="text-muted mb-1">Command</dt>
-                  <dd class="font-mono text-sm bg-gray-900 text-green-400 rounded px-3 py-2 break-all">{{ (grant as any).request.command.join(' ') }}</dd>
+                  <dt class="text-muted mb-1">
+                    Command
+                  </dt>
+                  <dd class="font-mono text-sm bg-gray-900 text-green-400 rounded px-3 py-2 break-all">
+                    {{ (grant as any).request.command.join(' ') }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.cmd_hash" class="flex justify-between">
-                  <dt class="text-muted">Hash</dt>
-                  <dd class="font-mono text-xs text-dimmed truncate ml-2">{{ (grant as any).request.cmd_hash }}</dd>
+                  <dt class="text-muted">
+                    Hash
+                  </dt>
+                  <dd class="font-mono text-xs text-dimmed truncate ml-2">
+                    {{ (grant as any).request.cmd_hash }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.reason" class="flex justify-between">
-                  <dt class="text-muted">Reason</dt>
-                  <dd class="">{{ (grant as any).request?.reason }}</dd>
+                  <dt class="text-muted">
+                    Reason
+                  </dt>
+                  <dd class="">
+                    {{ (grant as any).request?.reason }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.permissions?.length" class="flex justify-between">
-                  <dt class="text-muted">Permissions</dt>
-                  <dd class="font-mono">{{ (grant as any).request?.permissions?.join(', ') }}</dd>
+                  <dt class="text-muted">
+                    Permissions
+                  </dt>
+                  <dd class="font-mono">
+                    {{ (grant as any).request?.permissions?.join(', ') }}
+                  </dd>
                 </div>
               </dl>
             </template>

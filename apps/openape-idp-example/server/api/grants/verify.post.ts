@@ -1,4 +1,4 @@
-import { verifyAuthzJWT, introspectGrant, useGrant } from '@openape/grants'
+import { introspectGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
 
 export default defineEventHandler(async (event) => {
   const { token } = await readBody<{ token: string }>(event)

@@ -1,22 +1,23 @@
 {
   "name": "openape-idp-example",
-  "private": true,
-  "version": "0.0.0",
   "type": "module",
+  "version": "0.0.0",
+  "private": true,
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev --port 3000",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@ddisa/core": "workspace:*",
     "@ddisa/idp-server": "workspace:*",
+    "@nuxt/ui": "4.4.0",
     "@openape/grants": "workspace:*",
     "jose": "^5.9.0",
-    "unstorage": "^1.14.4",
     "nuxt": "^4.0.0",
-    "@nuxt/ui": "4.4.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.0.0",
+    "unstorage": "^1.14.4"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
