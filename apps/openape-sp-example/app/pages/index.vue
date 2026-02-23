@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, loading, fetchUser, login } = useAuth()
+const { user, loading, fetchUser, login } = useOpenApeAuth()
 const email = ref('')
 const error = ref('')
 const submitting = ref(false)

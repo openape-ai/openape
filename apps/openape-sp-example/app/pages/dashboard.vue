@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, loading, fetchUser, logout } = useAuth()
+const { user, loading, fetchUser, logout } = useOpenApeAuth()
 const route = useRoute()
 
 const grantStatus = ref('')

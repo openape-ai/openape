@@ -10,12 +10,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@openape/nuxt-auth-sp": "workspace:*",
     "@openape/core": "workspace:*",
-    "@openape/auth": "workspace:*",
+    "@openape/grants": "workspace:*",
     "@nuxt/ui": "4.4.0",
     "nuxt": "^4.3.1",
-    "tailwindcss": "^4.0.0",
-    "unstorage": "^1.14.4"
+    "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

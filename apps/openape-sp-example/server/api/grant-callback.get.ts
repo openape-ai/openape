@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Store the AuthZ-JWT in session
-  const session = await getSession(event)
+  const session = await getSpSession(event)
   await session.update({
     authzJWT: authz_jwt,
     grantId: grant_id,

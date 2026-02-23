@@ -43,7 +43,7 @@ export async function startServers(): Promise<void> {
   const commonEnv = {
     ...process.env,
     DDISA_MOCK_RECORDS,
-    NUXT_MANAGEMENT_TOKEN: 'test-mgmt-token',
+    NUXT_OPENAPE_IDP_MANAGEMENT_TOKEN: 'test-mgmt-token',
   }
 
   const idServer = execa('pnpm', ['dev'], {
@@ -51,7 +51,7 @@ export async function startServers(): Promise<void> {
     env: {
       ...commonEnv,
       NUXT_PUBLIC_SITE_URL: IDP_URL,
-      NUXT_OPENAPE_ADMIN_EMAILS: 'admin@example.com',
+      NUXT_OPENAPE_IDP_ADMIN_EMAILS: 'admin@example.com',
     },
     stdio: 'pipe',
   })
