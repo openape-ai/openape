@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "@ddisa/idp-server": "workspace:*",
+    "@openape/auth": "workspace:*",
     "@nuxt/ui": "4.4.0",
     "@openape/grants": "workspace:*",
     "jose": "^5.9.0",
