@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  modules: ['@nuxt/ui'],
+  modules: ['@nuxt/ui', '@openape/nuxt-auth-idp', '@openape/nuxt-grants'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
   devServer: { port: 3000 },
@@ -7,17 +7,12 @@ export default defineNuxtConfig({
   colorMode: {
     preference: 'dark',
   },
-  runtimeConfig: {
-    sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
-    managementToken: '',
-    openapeAdminEmails: '',
+  openapeIdp: {
+    storageDriver: process.env.STORAGE_DRIVER || '',
+    adminEmails: process.env.OPENAPE_ADMIN_EMAILS || '',
+    managementToken: process.env.OPENAPE_MANAGEMENT_TOKEN || '',
   },
-  // Storage 'db' mount is handled by server/plugins/storage.ts at runtime
-  // to support dynamic driver switching (fs vs s3) via STORAGE_DRIVER env var
-  routeRules: {
-    '/api/grants/**': { cors: true },
-    '/api/agent/**': { cors: true },
-    '/.well-known/**': { cors: true },
-    '/token': { cors: true },
+  openapeGrants: {
+    enablePages: true,
   },
 })
