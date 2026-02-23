@@ -84,11 +84,17 @@ note = "cloud metadata endpoint"
 [[deny]]
 domain = "*.internal"
 
-# Grant-gesteuert
+# Grant-gesteuert (Domain + Method + Path)
 [[grant_required]]
 domain = "api.github.com"
-methods = ["POST", "PUT", "DELETE", "PATCH"]
-grant_type = "once"           # jeder Write braucht einzelne Genehmigung
+path = "/repos/*/issues"
+methods = ["POST"]
+grant_type = "once"           # jeder neue Issue braucht Genehmigung
+
+[[grant_required]]
+domain = "api.github.com"
+methods = ["PUT", "DELETE", "PATCH"]
+grant_type = "once"           # alle anderen Writes auch
 
 [[grant_required]]
 domain = "api.openai.com"
@@ -141,46 +147,72 @@ grant_type = "once"
 - `serde` + `toml` — Config
 - `tracing` — Structured Logging
 
-### Einschränkung: HTTPS CONNECT
+### Proxy-Modus: Application-Level (nicht CONNECT-Tunnel)
 
-Bei HTTPS sieht der Proxy nur:
-- ✅ Domain (aus CONNECT)
-- ❌ HTTP Method, Path, Body (verschlüsselt im Tunnel)
+Ein klassischer HTTPS CONNECT-Tunnel sieht nur die Domain — Method, Path und Body sind verschlüsselt. Das reicht nicht für granulare Kontrolle.
 
-Für method/path-basierte Regeln bei HTTPS gibt es zwei Optionen:
-1. **Domain-only Matching** (einfach, kein TLS-Aufbrechen) — reicht für 90% der Fälle
-2. **mTLS Inspection** (komplex, eigene CA) — für strenge Umgebungen
+Stattdessen: **Application-Level Forward Proxy**. Der Agent schickt den Request unverschlüsselt an den lokalen Proxy, der Proxy macht den HTTPS-Call zum Ziel:
 
-**Empfehlung: Phase 1 nur Domain-Matching.** Method/Path-Matching als opt-in Phase 2 mit eigener CA.
+```
+Agent ──HTTP──→ openape-proxy ──HTTPS──→ api.github.com
+  (lokal, plaintext)    (sieht alles)     (TLS zum Internet)
+```
+
+**Was der Proxy sieht:**
+- ✅ Domain
+- ✅ HTTP Method (GET, POST, DELETE, ...)
+- ✅ Full Path (`/repos/x/issues`)
+- ✅ Headers
+- ✅ Body (kann `cmd_hash` darüber bilden!)
+
+**Sicherheit:** Die unverschlüsselte Strecke Agent → Proxy ist `localhost` — gleiche Maschine, kein Netzwerk. Kein Risiko.
+
+**Kompatibilität:** Standard `HTTP_PROXY` Env-Var funktioniert — jeder HTTP-Client schickt den vollen Request an den Proxy wenn die Ziel-URL HTTPS ist und `HTTP_PROXY` gesetzt ist.
+
+Damit können Rules auf **Domain + Method + Path-Pattern** matchen:
+
+```toml
+[[grant_required]]
+domain = "api.github.com"
+path = "/repos/*/issues"
+methods = ["POST"]
+grant_type = "once"           # jeder neue Issue braucht Approval
+
+[[allow]]
+domain = "api.github.com"
+path = "/repos/*/issues"
+methods = ["GET"]             # Issues lesen immer erlaubt
+```
 
 ## Phasen
 
 ### Phase 1 — MVP (2-3 Tage)
-- [x] Proxy-Server (CONNECT + plain HTTP forward)
-- [x] Agent-Auth (JWT Verification)
-- [x] Config-Datei (TOML)
-- [x] Deny/Allow-Liste (Domain-basiert)
-- [x] Grant-Check gegen IdP API
-- [x] Blocking Grant-Request (warte auf Approval)
-- [x] Audit-Log (JSONL)
-- [x] Graceful Shutdown
+- [ ] Application-Level Forward Proxy (HTTP → HTTPS upstream)
+- [ ] Agent-Auth (JWT Verification via Proxy-Authorization)
+- [ ] Config-Datei (TOML)
+- [ ] Deny/Allow/Grant-Required Regeln (Domain + Method + Path-Pattern)
+- [ ] Grant-Check gegen IdP API
+- [ ] Blocking Grant-Request (warte auf Approval)
+- [ ] Audit-Log (JSONL)
+- [ ] Graceful Shutdown
 
 ### Phase 2 — Production-Ready
 - [ ] Connection Pooling
 - [ ] Rate Limiting (pro Agent, pro Domain)
+- [ ] Grant-Caching (TTL-Grants lokal cachen)
+- [ ] Wildcard-Domains + Glob-Patterns in Rules
+- [ ] Body-Hashing (`cmd_hash` über Request-Body)
 - [ ] Metrics (Prometheus)
 - [ ] Health Endpoint
-- [ ] Wildcard-Domains in Rules
-- [ ] Grant-Caching (TTL-Grants lokal cachen)
 - [ ] Systemd Service Unit
 - [ ] Multiple Agent Support
 
 ### Phase 3 — Advanced
-- [ ] mTLS Inspection (eigene CA, Method/Path Matching für HTTPS)
 - [ ] WebSocket Support
-- [ ] Dashboard UI (welcher Agent nutzt welche Domains)
+- [ ] Dashboard UI (welcher Agent nutzt welche Domains, Traffic-Übersicht)
 - [ ] Integration mit `apes` (Proxy + sudo in einem Setup)
 - [ ] Nuxt-Modul für Proxy-Management
+- [ ] Request/Response-Logging (opt-in, für Compliance)
 
 ## CLI
 
