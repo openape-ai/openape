@@ -1,4 +1,4 @@
-import type { OpenApeGrant } from '@ddisa/core'
+import type { OpenApeGrant } from '@openape/core'
 import type { GrantStore } from '@openape/grants'
 import { useAppStorage } from './storage'
 

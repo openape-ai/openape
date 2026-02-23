@@ -10,7 +10,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ddisa/core": "workspace:*",
+    "@openape/core": "workspace:*",
     "@ddisa/idp-server": "workspace:*",
     "@nuxt/ui": "4.4.0",
     "@openape/grants": "workspace:*",

@@ -1,4 +1,4 @@
-import type { OpenApeGrant } from '@ddisa/core'
+import type { OpenApeGrant } from '@openape/core'
 
 export default defineEventHandler(async (event) => {
   const { grantStore, agentStore } = useStores()

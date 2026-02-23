@@ -1,5 +1,5 @@
 import type { AuthorizeParams } from '@ddisa/idp-server'
-import { extractDomain, resolveDDISA } from '@ddisa/core'
+import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@ddisa/idp-server'
 
 export default defineEventHandler(async (event) => {

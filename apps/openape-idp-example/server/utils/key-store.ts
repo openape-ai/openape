@@ -1,6 +1,6 @@
 import type { KeyEntry, KeyStore } from '@ddisa/idp-server'
 import type { KeyLike } from 'jose'
-import { generateKeyPair } from '@ddisa/core'
+import { generateKeyPair } from '@openape/core'
 import { exportJWK, importJWK } from 'jose'
 import { useAppStorage } from './storage'
 
