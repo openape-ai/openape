@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { AuthFlowState } from '@ddisa/core'
+import type { AuthFlowState } from '@openape/core'
 
 const FLOW_COOKIE = 'openape-flow'
 

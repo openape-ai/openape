@@ -1,4 +1,4 @@
-import { generateSalt, hashPassword, verifyPassword } from '@ddisa/core'
+import { generateSalt, hashPassword, verifyPassword } from '@openape/core'
 import { useAppStorage } from './storage'
 
 export interface User {

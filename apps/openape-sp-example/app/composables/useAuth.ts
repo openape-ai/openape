@@ -1,4 +1,4 @@
-import type { DDISAAssertionClaims } from '@ddisa/core'
+import type { DDISAAssertionClaims } from '@openape/core'
 
 export function useAuth() {
   const user = useState<DDISAAssertionClaims | null>('user', () => null)
