@@ -1,5 +1,5 @@
-import type { TokenExchangeParams } from '@ddisa/idp-server'
-import { handleTokenExchange } from '@ddisa/idp-server'
+import type { TokenExchangeParams } from '@openape/auth'
+import { handleTokenExchange } from '@openape/auth'
 
 export default defineEventHandler(async (event) => {
   const rawBody = await readRawBody(event, 'utf-8')

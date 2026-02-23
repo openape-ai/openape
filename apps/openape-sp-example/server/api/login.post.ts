@@ -1,4 +1,4 @@
-import { createAuthorizationURL, discoverIdP } from '@ddisa/sp-server'
+import { createAuthorizationURL, discoverIdP } from '@openape/auth'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email: string }>(event)

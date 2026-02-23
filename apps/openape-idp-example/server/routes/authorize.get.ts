@@ -1,6 +1,6 @@
-import type { AuthorizeParams } from '@ddisa/idp-server'
+import type { AuthorizeParams } from '@openape/auth'
 import { extractDomain, resolveDDISA } from '@openape/core'
-import { evaluatePolicy, validateAuthorizeRequest } from '@ddisa/idp-server'
+import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)

@@ -1,4 +1,4 @@
-import type { KeyEntry, KeyStore } from '@ddisa/idp-server'
+import type { KeyEntry, KeyStore } from '@openape/auth'
 import type { KeyLike } from 'jose'
 import { generateKeyPair } from '@openape/core'
 import { exportJWK, importJWK } from 'jose'

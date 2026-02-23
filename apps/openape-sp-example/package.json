@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "@ddisa/sp-server": "workspace:*",
+    "@openape/auth": "workspace:*",
     "@nuxt/ui": "4.4.0",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.0.0",

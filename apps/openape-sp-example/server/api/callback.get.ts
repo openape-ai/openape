@@ -1,4 +1,4 @@
-import { handleCallback } from '@ddisa/sp-server'
+import { handleCallback } from '@openape/auth'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)

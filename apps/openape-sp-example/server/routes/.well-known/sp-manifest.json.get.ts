@@ -1,4 +1,4 @@
-import { createSPManifest } from '@ddisa/sp-server'
+import { createSPManifest } from '@openape/auth'
 
 export default defineEventHandler((event) => {
   const { spId, spName } = getSpConfig()
