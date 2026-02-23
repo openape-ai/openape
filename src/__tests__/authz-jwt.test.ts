@@ -181,6 +181,28 @@ describe('authZ-JWT', () => {
       expect(result.error).toBe('No verification key or JWKS URI provided')
     })
 
+    it('includes decided_by in claims when set on grant', async () => {
+      const { publicKey, privateKey } = await generateKeyPair()
+      const grant = makeApprovedGrant({ decided_by: 'admin@example.com' })
+
+      const token = await issueAuthzJWT(grant, 'https://openape.example.com', privateKey)
+      const result = await verifyAuthzJWT(token, { publicKey })
+
+      expect(result.valid).toBe(true)
+      expect(result.claims!.decided_by).toBe('admin@example.com')
+    })
+
+    it('omits decided_by when not set on grant', async () => {
+      const { publicKey, privateKey } = await generateKeyPair()
+      const grant = makeApprovedGrant({ decided_by: undefined })
+
+      const token = await issueAuthzJWT(grant, 'https://openape.example.com', privateKey)
+      const result = await verifyAuthzJWT(token, { publicKey })
+
+      expect(result.valid).toBe(true)
+      expect(result.claims!.decided_by).toBeUndefined()
+    })
+
     it('includes cmd_hash in claims when present', async () => {
       const { publicKey, privateKey } = await generateKeyPair()
       const grant = makeApprovedGrant({

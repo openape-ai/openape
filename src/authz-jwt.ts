@@ -49,6 +49,7 @@ export async function issueAuthzJWT(
     grant_type: grant.request.grant_type,
     ...(grant.request.permissions ? { permissions: grant.request.permissions } : {}),
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
+    ...(grant.decided_by ? { decided_by: grant.decided_by } : {}),
   }
 
   return signJWT(claims as unknown as JWTPayload, privateKey, { kid })
