@@ -35,6 +35,9 @@ export interface SPManifest {
   contact?: string
 }
 
+/** Actor type — distinguishes human users from automated agents */
+export type ActorType = 'human' | 'agent'
+
 /** DDISA Assertion JWT claims */
 export interface DDISAAssertionClaims {
   /** Issuer — must match DNS-delegated IdP */
@@ -43,6 +46,8 @@ export interface DDISAAssertionClaims {
   sub: string
   /** Audience — must match sp_id */
   aud: string
+  /** Actor type — human or agent */
+  act: ActorType
   /** Issued at (unix timestamp) */
   iat: number
   /** Expiration (unix timestamp, max 5 min from iat) */
@@ -123,6 +128,8 @@ export interface OpenApeAuthZClaims {
   cmd_hash?: string
   /** Nonce */
   nonce?: string
+  /** Who approved/denied the grant */
+  decided_by?: string
 }
 
 /** DNS resolver options */

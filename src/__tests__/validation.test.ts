@@ -14,6 +14,7 @@ describe('validateAssertion', () => {
         iss: 'https://idp.example.com',
         sub: 'alice@example.com',
         aud: 'sp.example.com',
+        act: 'human',
         iat: now,
         exp: now + 300,
         nonce: 'test-nonce',
@@ -31,6 +32,7 @@ describe('validateAssertion', () => {
 
     expect(result.valid).toBe(true)
     expect(result.claims?.sub).toBe('alice@example.com')
+    expect(result.claims?.act).toBe('human')
   })
 
   it('rejects assertion with wrong issuer', async () => {
@@ -38,7 +40,7 @@ describe('validateAssertion', () => {
     const now = Math.floor(Date.now() / 1000)
 
     const token = await signJWT(
-      { iss: 'https://evil.com', sub: 'alice@example.com', aud: 'sp.example.com', iat: now, exp: now + 300, nonce: 'n' },
+      { iss: 'https://evil.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'human', iat: now, exp: now + 300, nonce: 'n' },
       privateKey,
     )
 
@@ -57,7 +59,7 @@ describe('validateAssertion', () => {
     const now = Math.floor(Date.now() / 1000)
 
     const token = await signJWT(
-      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', iat: now, exp: now + 600, nonce: 'n' },
+      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'human', iat: now, exp: now + 600, nonce: 'n' },
       privateKey,
     )
 
@@ -77,7 +79,7 @@ describe('validateAssertion', () => {
     const now = Math.floor(Date.now() / 1000)
 
     const token = await signJWT(
-      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', iat: now, exp: now + 300, nonce: 'wrong' },
+      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'human', iat: now, exp: now + 300, nonce: 'wrong' },
       privateKey,
     )
 
@@ -91,6 +93,46 @@ describe('validateAssertion', () => {
 
     expect(result.valid).toBe(false)
     expect(result.error).toContain('Nonce')
+  })
+
+  it('rejects assertion with missing act claim', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', iat: now, exp: now + 300, nonce: 'n' },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('act')
+  })
+
+  it('rejects assertion with invalid act claim', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'bot', iat: now, exp: now + 300, nonce: 'n' },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('act')
   })
 
   it('returns error when no key provided', async () => {

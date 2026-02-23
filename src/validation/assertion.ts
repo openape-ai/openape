@@ -61,6 +61,11 @@ export async function validateAssertion(
       return { valid: false, error: 'Nonce mismatch' }
     }
 
+    // Check act claim
+    if (!payload.act || !['human', 'agent'].includes(payload.act)) {
+      return { valid: false, error: 'Missing or invalid act claim' }
+    }
+
     // Check required fields
     if (!payload.sub) {
       return { valid: false, error: 'Missing sub claim' }
