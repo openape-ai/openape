@@ -186,33 +186,54 @@ methods = ["GET"]             # Issues lesen immer erlaubt
 
 ## Phasen
 
-### Phase 1 — MVP (2-3 Tage)
-- [ ] Application-Level Forward Proxy (HTTP → HTTPS upstream)
+### Phase 1 — MVP (1-2 Tage)
+Ziel: Ein Agent kann nur ins Internet wenn ein Mensch es erlaubt hat.
+
+- [ ] Application-Level Forward Proxy (TypeScript/Bun)
+- [ ] HTTP + HTTPS Forwarding (Proxy macht TLS zum Ziel)
+- [ ] WebSocket + SSE Support (Grant-Check beim Aufbau, dann Tunnel)
 - [ ] Agent-Auth (JWT Verification via Proxy-Authorization)
-- [ ] Config-Datei (TOML)
+- [ ] Config-Datei (TOML oder JSON)
 - [ ] Deny/Allow/Grant-Required Regeln (Domain + Method + Path-Pattern)
-- [ ] Grant-Check gegen IdP API
+- [ ] Grant-Check gegen IdP API (`@openape/grants` direkt importiert)
 - [ ] Blocking Grant-Request (warte auf Approval)
 - [ ] Audit-Log (JSONL)
-- [ ] Graceful Shutdown
 
-### Phase 2 — Production-Ready
-- [ ] Connection Pooling
-- [ ] Rate Limiting (pro Agent, pro Domain)
-- [ ] Grant-Caching (TTL-Grants lokal cachen)
-- [ ] Wildcard-Domains + Glob-Patterns in Rules
-- [ ] Body-Hashing (`cmd_hash` über Request-Body)
-- [ ] Metrics (Prometheus)
-- [ ] Health Endpoint
-- [ ] Systemd Service Unit
-- [ ] Multiple Agent Support
+### Phase 2 — Multi-Agent & Caching (1-2 Tage)
+Ziel: Produktionsreif für mehrere Agents auf einem Server.
 
-### Phase 3 — Advanced
-- [ ] WebSocket Support
-- [ ] Dashboard UI (welcher Agent nutzt welche Domains, Traffic-Übersicht)
-- [ ] Integration mit `apes` (Proxy + sudo in einem Setup)
-- [ ] Nuxt-Modul für Proxy-Management
-- [ ] Request/Response-Logging (opt-in, für Compliance)
+- [ ] Multiple Agent Support (verschiedene Keys, verschiedene Regeln)
+- [ ] Per-Agent Config Profiles
+- [ ] Grant-Caching (Standing Grants + TTL-Grants lokal cachen, kein IdP-Call pro Request)
+- [ ] Connection Pooling (Keep-Alive zu häufig genutzten Upstreams)
+- [ ] Wildcard-Domains + Glob-Patterns in Rules (`*.github.com`, `/repos/*/issues`)
+- [ ] Graceful Shutdown + Auto-Restart
+- [ ] Health Endpoint (`/healthz`)
+- [ ] Systemd / launchd Service Unit
+
+### Phase 3 — Observability & Compliance (1-2 Tage)
+Ziel: Volle Transparenz über Agent-Aktivität im Web.
+
+- [ ] Dashboard UI (Nuxt-App oder in IdP integriert)
+  - Welcher Agent nutzt welche Domains
+  - Traffic-Volumen pro Agent/Domain
+  - Grant-Nutzung (wie oft, wann, welche)
+  - Blocked Requests (was wurde verweigert)
+- [ ] Request/Response-Logging (opt-in, für Audit/Compliance)
+- [ ] Body-Hashing (`cmd_hash` über Request-Body für exakte Bindung)
+- [ ] Metrics-Export (Prometheus/OpenTelemetry)
+- [ ] Rate Limiting (pro Agent, pro Domain — Schutz vor Runaway-Agents)
+- [ ] Alerting (Webhook/Telegram wenn Agent ungewöhnlich viele Requests macht)
+
+### Phase 4 — Ecosystem-Integration
+Ziel: Nahtlose Einbindung in OpenApe und Agent-Runtimes.
+
+- [ ] `@openape/proxy` npm Package (programmatisch starten/konfigurieren)
+- [ ] Integration mit `apes` (ein Setup: Proxy + sudo gemeinsam konfiguriert)
+- [ ] OpenClaw Plugin (Proxy automatisch starten wenn Agent startet)
+- [ ] Agent-Runtime SDKs (Python, Go) — für Agents die nicht auf HTTP_PROXY setzen
+- [ ] Auto-Discovery (Agent fragt IdP: "Welche Domains darf ich?" → Config generieren)
+- [ ] Temporary Bypass Token (Admin kann zeitlich begrenzten "Proxy-Skip" geben für Debugging)
 
 ## CLI
 
