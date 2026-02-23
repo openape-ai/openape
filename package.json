@@ -1,8 +1,8 @@
 {
-  "name": "@ddisa/core",
+  "name": "@openape/core",
   "type": "module",
   "version": "0.1.0",
-  "description": "Shared types, DNS resolver, JWT, PKCE, validation for DDISA",
+  "description": "Shared types, DNS resolver, JWT, PKCE, validation for OpenApe",
   "author": "Delta Mind GmbH",
   "license": "MIT",
   "exports": {
