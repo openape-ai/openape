@@ -11,6 +11,9 @@ export default defineNuxtConfig({
     storageDriver: process.env.STORAGE_DRIVER || '',
     adminEmails: process.env.OPENAPE_ADMIN_EMAILS || '',
     managementToken: process.env.OPENAPE_MANAGEMENT_TOKEN || '',
+    rpName: 'OpenAPE Identity Server',
+    rpID: 'localhost',
+    rpOrigin: 'http://localhost:3000',
   },
   openapeGrants: {
     enablePages: true,
