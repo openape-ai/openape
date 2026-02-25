@@ -1,6 +1,6 @@
-# OpenAPE Examples
+# OpenApe Examples
 
-Example applications and end-to-end tests for the OpenAPE ecosystem.
+Example applications and end-to-end tests for the OpenApe ecosystem.
 
 - `apps/openape-idp-example/` — Identity Provider example (Nuxt)
 - `apps/openape-sp-example/` — Service Provider example (Nuxt)

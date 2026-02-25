@@ -146,16 +146,16 @@ function formatTimestamp(ts: number): string {
           class="mb-4"
         />
 
-        <!-- OpenAPE Protected Action -->
+        <!-- OpenApe Protected Action -->
         <UCard>
           <template #header>
             <h2 class="text-lg font-semibold">
-              OpenAPE Protected Action
+              OpenApe Protected Action
             </h2>
           </template>
 
           <p class="text-sm text-muted mb-4">
-            This action requires OpenAPE authorization. Click "Request Permission" to be redirected to the IdP for approval.
+            This action requires OpenApe authorization. Click "Request Permission" to be redirected to the IdP for approval.
           </p>
 
           <div class="flex gap-3">
