@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "description": "OpenAPE authorization server: grant issuance, revocation, introspection",
-  "author": "Delta Mind GmbH",
+  "author": "Patrick Hofmann",
   "license": "MIT",
   "exports": {
     ".": {
@@ -33,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@openape/core": "workspace:*",
+    "@openape/core": "^0.1.0",
     "jose": "^5.9.0"
   },
   "devDependencies": {
@@ -42,5 +42,12 @@
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/grants.git"
   }
 }
