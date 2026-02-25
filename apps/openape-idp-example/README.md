@@ -72,3 +72,8 @@ Requires `Authorization: Bearer <NUXT_OPENAPE_MANAGEMENT_TOKEN>`. Disabled when 
 | `NUXT_OPENAPE_REQUIRE_USER_VERIFICATION` | `false` | Require WebAuthn user verification |
 | `NUXT_OPENAPE_RESIDENT_KEY` | `'preferred'` | WebAuthn resident key preference |
 | `NUXT_OPENAPE_ATTESTATION_TYPE` | `'none'` | WebAuthn attestation type |
+
+## Known Pitfalls
+
+1. **Vercel env var caching:** `vercel build --prod` caches env vars in `.vercel/.env.production.local`. After deleting/changing Vercel env vars, delete this file before rebuilding — otherwise stale values get baked into the build.
+2. **Nitro env var mapping:** Nitro uses `snakeCase()` on the full config path. For `openapeIdp.sessionSecret` Nitro looks for `NUXT_OPENAPE_IDP_SESSION_SECRET` at runtime. Set env vars in `nuxt.config.ts` via `process.env` explicitly to avoid surprises.

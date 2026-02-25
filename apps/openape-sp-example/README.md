@@ -52,3 +52,10 @@ The SP is now running at **http://localhost:3001**.
 | `NUXT_OPENAPE_SP_NAME` | `'OpenApe Service Provider'` | SP display name |
 | `NUXT_OPENAPE_SP_SESSION_SECRET` | `'change-me-sp-secret-...'` | Session signing secret |
 | `NUXT_OPENAPE_URL` | `'http://localhost:3000'` | URL of the Identity Provider |
+
+## Known Pitfalls
+
+1. **Vercel env var caching:** `vercel build --prod` caches env vars in `.vercel/.env.production.local`. After deleting/changing Vercel env vars, delete this file before rebuilding — otherwise stale values get baked into the build.
+2. **Nitro env var mapping:** Nitro uses `snakeCase()` on the full config path. For `openapeSp.openapeUrl` Nitro looks for `NUXT_OPENAPE_SP_OPENAPE_URL` at runtime (not `NUXT_OPENAPE_URL`). Set env vars in `nuxt.config.ts` via `process.env` explicitly to avoid surprises.
+3. **SP DNS Discovery:** Set `openapeUrl: process.env.NUXT_OPENAPE_URL ?? ''` (not `|| 'http://localhost:3000'`). Empty string = DNS discovery active. For local dev, set `NUXT_OPENAPE_URL=http://localhost:3000` explicitly.
+4. **Custom domains:** `vercel deploy --prebuilt --prod` should auto-alias. If not, run `vercel alias set <deployment-url> <domain>`.
