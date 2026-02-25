@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@nuxt/ui": "4.4.0",
-    "@openape/nuxt-auth-idp": "^0.1.4",
+    "@openape/nuxt-auth-idp": "^0.1.5",
     "@openape/nuxt-grants": "^0.1.4",
     "nuxt": "^4.0.0",
     "tailwindcss": "^4.0.0"
