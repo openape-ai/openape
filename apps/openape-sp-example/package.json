@@ -13,7 +13,7 @@
     "@nuxt/ui": "4.4.0",
     "@openape/core": "^0.1.1",
     "@openape/grants": "^0.1.1",
-    "@openape/nuxt-auth-sp": "^0.1.1",
+    "@openape/nuxt-auth-sp": "^0.1.4",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1"
   },
