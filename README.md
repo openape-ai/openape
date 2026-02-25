@@ -8,7 +8,7 @@ Example applications and end-to-end tests for the OpenApe ecosystem.
                          │    (openape-idp-example) │
                          │       localhost:3000      │
                          │                           │
-                         │  WebAuthn · OIDC · Grants │
+                         │  WebAuthn · DDISA · Grants │
                          └────────┬──────────────────┘
                                   │
                           authorize / token
@@ -64,8 +64,23 @@ pnpm dev
 1. Open **http://localhost:3001**
 2. Enter `demo@example.com` and click "Login with DDISA"
 3. Authenticate with your passkey on the IdP
-4. You are redirected back to the SP dashboard with your OIDC claims
+4. You are redirected back to the SP dashboard with your assertion claims
+
+## End-to-End Tests
+
+The `e2e/` directory contains end-to-end tests that run against both example apps.
+
+```bash
+# Make sure both IdP and SP are running first, then:
+cd e2e
+pnpm install
+pnpm test
+```
+
+## More Information
+
+For an overview of all OpenApe packages, see the [root README](../README.md). Full documentation is available at [docs.openape.at](https://docs.openape.at).
 
 ## License
 
-MIT
+[MIT](./LICENSE)
