@@ -20,8 +20,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1(h3@1.15.5)
       '@openape/nuxt-auth-sp':
-        specifier: ^0.1.1
-        version: 0.1.1(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2))
+        specifier: ^0.1.2
+        version: 0.1.2(magicast@0.5.2)(nuxt@4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2))
       nuxt:
         specifier: ^4.3.1
         version: 4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2)
@@ -738,8 +738,8 @@ packages:
       h3:
         optional: true
 
-  '@openape/nuxt-auth-sp@0.1.1':
-    resolution: {integrity: sha512-3kHHOOqN9ZriNR+n4SYTF02sGUFRTli6rMZaWxsjWmtqy7LNBuc2H9xVp5sUbil2ZjfN+RHngPhlSR6JrqWHaA==}
+  '@openape/nuxt-auth-sp@0.1.2':
+    resolution: {integrity: sha512-Gwk9Xx1QiVAy8fn35lcQW3OjAD+jn4VBzNDR37+FcfpPN/Oijl0UmS/j6JjReCVsEmuGUP8HWbeXgHIqWrD2Uw==}
     peerDependencies:
       nuxt: ^4.0.0
 
@@ -5393,16 +5393,16 @@ snapshots:
     optionalDependencies:
       h3: 1.15.5
 
-  '@openape/nuxt-auth-sp@0.1.1(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2))':
+  '@openape/nuxt-auth-sp@0.1.2(magicast@0.5.2)(nuxt@4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2))':
     dependencies:
       '@nuxt/kit': 3.21.1(magicast@0.5.2)
       '@openape/auth': 0.1.1(h3@1.15.5)
       '@openape/core': 0.1.1
       defu: 6.1.4
+      h3: 1.15.5
       nuxt: 4.3.1(@parcel/watcher@2.5.6)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4)(ioredis@5.9.3)(lightningcss@1.31.1)(magicast@0.5.2)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(yaml@2.8.2)
     transitivePeerDependencies:
       - encoding
-      - h3
       - magicast
 
   '@oxc-minify/binding-android-arm-eabi@0.112.0':
