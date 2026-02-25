@@ -1,6 +1,6 @@
 # @openape/grants
 
-OpenAPE authorization server: grant issuance, revocation, introspection.
+OpenApe authorization server: grant issuance, revocation, introspection.
 
 ## Installation
 

@@ -2,7 +2,7 @@
   "name": "@openape/grants",
   "type": "module",
   "version": "0.1.0",
-  "description": "OpenAPE authorization server: grant issuance, revocation, introspection",
+  "description": "OpenApe authorization server: grant issuance, revocation, introspection",
   "author": "Patrick Hofmann",
   "license": "MIT",
   "exports": {
