@@ -10,9 +10,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@openape/nuxt-auth-sp": "workspace:*",
-    "@openape/core": "workspace:*",
-    "@openape/grants": "workspace:*",
+    "@openape/nuxt-auth-sp": "^0.1.0",
+    "@openape/core": "^0.1.0",
+    "@openape/grants": "^0.1.0",
     "@nuxt/ui": "4.4.0",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.0.0"

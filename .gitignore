@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.nuxt/
+.output/
+.turbo/
+.data/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
