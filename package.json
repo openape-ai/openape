@@ -2,7 +2,7 @@
   "name": "@openape/proxy",
   "type": "module",
   "version": "0.1.0",
-  "description": "OpenAPE agent HTTP gateway — forward proxy with grant-based access control",
+  "description": "OpenApe agent HTTP gateway — forward proxy with grant-based access control",
   "author": "Patrick Hofmann",
   "license": "MIT",
   "bin": {

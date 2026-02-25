@@ -1,6 +1,6 @@
 # @openape/proxy
 
-OpenAPE agent HTTP gateway — forward proxy with grant-based access control.
+OpenApe agent HTTP gateway — forward proxy with grant-based access control.
 
 ## Installation
 
