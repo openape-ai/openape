@@ -58,13 +58,13 @@ export interface DDISAAssertionClaims {
   jti?: string
 }
 
-/** OpenAPE grant types */
+/** OpenApe grant types */
 export type GrantType = 'once' | 'timed' | 'always'
 
-/** OpenAPE grant status */
+/** OpenApe grant status */
 export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'
 
-/** OpenAPE grant request */
+/** OpenApe grant request */
 export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
   requester: string
@@ -84,7 +84,7 @@ export interface OpenApeGrantRequest {
   reason?: string
 }
 
-/** OpenAPE grant */
+/** OpenApe grant */
 export interface OpenApeGrant {
   /** Unique grant ID */
   id: string
@@ -104,9 +104,9 @@ export interface OpenApeGrant {
   used_at?: number
 }
 
-/** OpenAPE AuthZ-JWT claims */
+/** OpenApe AuthZ-JWT claims */
 export interface OpenApeAuthZClaims {
-  /** Issuer — OpenAPE server */
+  /** Issuer — OpenApe server */
   iss: string
   /** Subject — the requester */
   sub: string

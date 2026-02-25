@@ -3,11 +3,11 @@ import type { OpenApeAuthZClaims } from '../types/index.js'
 import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 
 export interface GrantValidationOptions {
-  /** Expected issuer (OpenAPE server) */
+  /** Expected issuer (OpenApe server) */
   expectedIss: string
   /** Expected audience (target system) */
   expectedAud: string
-  /** JWKS URI for the OpenAPE server */
+  /** JWKS URI for the OpenApe server */
   jwksUri?: string
   /** Public key for verification */
   publicKey?: KeyLike | Uint8Array
@@ -24,7 +24,7 @@ export interface GrantValidationResult {
 }
 
 /**
- * Validate a OpenAPE AuthZ-JWT.
+ * Validate a OpenApe AuthZ-JWT.
  */
 export async function validateAuthzJWT(
   token: string,

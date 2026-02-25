@@ -1,6 +1,6 @@
 # @openape/core
 
-Shared types, DNS resolver, JWT, PKCE, and validation for OpenAPE.
+Shared types, DNS resolver, JWT, PKCE, and validation for OpenApe.
 
 ## Installation
 
