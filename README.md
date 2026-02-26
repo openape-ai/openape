@@ -152,15 +152,7 @@ For local development, set `NUXT_OPENAPE_URL=http://localhost:3000` since DNS ca
 
 ### S3 Storage (S3-compatible providers)
 
-The IdP uses unstorage with an S3 driver. For S3-compatible providers (Exoscale SOS, MinIO, etc.) that don't send an XML prolog in responses, you need to patch unstorage:
-
-```bash
-# Run after pnpm install, before nuxt build
-find node_modules/.pnpm -name "s3.mjs" -path "*/unstorage/drivers/*" -exec \
-  sed -i.bak 's/if (!xml.startsWith("<?xml")) {/if (!xml.startsWith("<?xml") \&\& !xml.startsWith("<ListBucketResult") \&\& !xml.startsWith("<Error")) {/' {} \;
-```
-
-Consider adding this as a postinstall script or using `pnpm patchedDependencies`.
+The IdP uses unstorage with an S3 driver. For S3-compatible providers (Exoscale SOS, MinIO, etc.) that don't send an XML prolog in responses, a patch is applied automatically via `pnpm patchedDependencies`. No manual steps required — `pnpm install` handles everything.
 
 ### Deploy Script
 
@@ -176,11 +168,7 @@ cd apps/openape-idp-example
 # 1. ALWAYS delete cached env (stale values get baked into build!)
 rm -f .vercel/.env.production.local
 
-# 2. Patch unstorage for S3-compatible providers
-find node_modules/.pnpm -name "s3.mjs" -path "*/unstorage/drivers/*" -exec \
-  sed -i.bak 's/if (!xml.startsWith("<?xml")) {/if (!xml.startsWith("<?xml") \&\& !xml.startsWith("<ListBucketResult") \&\& !xml.startsWith("<Error")) {/' {} \;
-
-# 3. Build with env vars
+# 2. Build with env vars
 NUXT_OPENAPE_RP_ID=id.example.com \
 NUXT_OPENAPE_RP_ORIGIN=https://id.example.com \
 NUXT_OPENAPE_ISSUER=https://id.example.com \
@@ -195,7 +183,7 @@ NUXT_OPENAPE_S3_REGION=<region> \
 NUXT_OPENAPE_S3_PREFIX=<prefix>/ \
 npx nuxt build
 
-# 4. Vercel build + deploy
+# 3. Vercel build + deploy
 vercel build --prod
 vercel deploy --prebuilt --prod --yes
 
@@ -280,7 +268,7 @@ pnpm test
 
 ## Known Issues
 
-- **unstorage S3 patch not persistent:** The S3 driver patch needs to be reapplied after every `pnpm install`. Use `pnpm patchedDependencies` or a postinstall script to automate this.
+- **unstorage S3 XML parsing:** S3-compatible providers (Exoscale SOS, MinIO) may not send an XML prolog. This is fixed via `pnpm patchedDependencies` — applied automatically on `pnpm install`.
 
 ## More Information
 
