@@ -22,7 +22,7 @@ if (!email) {
 
 const name = process.argv[3] || email.split('@')[0]
 
-const baseUrl = process.env.NUXT_OPENAPE_RP_ORIGIN || 'http://localhost:3000'
+const baseUrl = process.env.NUXT_OPENAPE_ISSUER || 'http://localhost:3000'
 
 async function main() {
   const res = await fetch(`${baseUrl}/api/admin/registration-urls`, {
@@ -31,7 +31,7 @@ async function main() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, name, expiresInHours: 24 }),
+    body: JSON.stringify({ email, name, expiresInHours: 48 }),
   })
 
   if (!res.ok) {

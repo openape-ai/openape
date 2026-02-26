@@ -23,9 +23,9 @@ export default defineNuxtConfig({
     s3: {
       accessKeyId: process.env.NUXT_OPENAPE_S3_ACCESS_KEY || '',
       secretAccessKey: process.env.NUXT_OPENAPE_S3_SECRET_KEY || '',
-      bucket: process.env.NUXT_OPENAPE_S3_BUCKET || 'dnsid',
-      endpoint: process.env.NUXT_OPENAPE_S3_ENDPOINT || 'https://sos-at-vie-2.exo.io',
-      region: process.env.NUXT_OPENAPE_S3_REGION || 'at-vie-2',
+      bucket: process.env.NUXT_OPENAPE_S3_BUCKET || '',
+      endpoint: process.env.NUXT_OPENAPE_S3_ENDPOINT || '',
+      region: process.env.NUXT_OPENAPE_S3_REGION || '',
       prefix: process.env.NUXT_OPENAPE_S3_PREFIX || 'openape-idp/',
     },
   },
