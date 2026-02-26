@@ -73,6 +73,14 @@ Requires `Authorization: Bearer <NUXT_OPENAPE_MANAGEMENT_TOKEN>`. Disabled when 
 | `NUXT_OPENAPE_RESIDENT_KEY` | `'preferred'` | WebAuthn resident key preference |
 | `NUXT_OPENAPE_ATTESTATION_TYPE` | `'none'` | WebAuthn attestation type |
 
+> **⚠️ Security: Management Token**
+>
+> `NUXT_OPENAPE_MANAGEMENT_TOKEN` grants full administrative access to the IdP — including user creation, agent enrollment, and grant management. **Never share this token with agents.**
+>
+> - Agents authenticate via Ed25519 challenge-response through the `apes` CLI — they do not need the management token
+> - If an agent has access to this token, it can bypass the entire grant system by registering itself, approving its own grants, and forging identities
+> - Store the token in a secrets manager or deployment environment, not in files accessible to agents
+
 ## Known Pitfalls
 
 1. **Vercel env var caching:** `vercel build --prod` caches env vars in `.vercel/.env.production.local`. After deleting/changing Vercel env vars, delete this file before rebuilding — otherwise stale values get baked into the build.
