@@ -87,6 +87,8 @@ export class GrantsClient {
 
   /**
    * Check if there's an existing approved grant for a domain+permissions combo.
+   * Only matches grants whose target matches the requested domain and that
+   * have matching permissions. Ignores `allow_once` grants (they're single-use).
    */
   async findExistingGrant(
     requester: string,
@@ -95,12 +97,8 @@ export class GrantsClient {
   ): Promise<OpenApeGrant | null> {
     const params = new URLSearchParams({
       requester,
-      target,
       status: 'approved',
     })
-    if (permissions?.length) {
-      params.set('permissions', permissions.join(','))
-    }
 
     const res = await fetch(`${this.idpUrl}/api/grants?${params}`, {
       headers: this.headers(),
@@ -109,10 +107,23 @@ export class GrantsClient {
     if (!res.ok) return null
 
     const grants = await res.json() as OpenApeGrant[]
-    // Return first active grant
-    return grants.find(g =>
-      g.status === 'approved' &&
-      (!g.expires_at || g.expires_at > Math.floor(Date.now() / 1000))
-    ) ?? null
+    const now = Math.floor(Date.now() / 1000)
+
+    return grants.find((g) => {
+      // Must be approved
+      if (g.status !== 'approved') return false
+      // Must not be expired
+      if (g.expires_at && g.expires_at <= now) return false
+      // allow_once grants are single-use — don't reuse them
+      if (g.request?.grant_type === 'once') return false
+      // Target must match the requested domain
+      if (g.request?.target !== target) return false
+      // If permissions specified, grant must cover them
+      if (permissions?.length && g.request?.permissions?.length) {
+        const grantedPerms = new Set(g.request.permissions)
+        if (!permissions.every(p => grantedPerms.has(p))) return false
+      }
+      return true
+    }) ?? null
   }
 }
