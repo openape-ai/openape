@@ -1,0 +1,25 @@
+{
+  "name": "@openape/unstorage-s3-driver",
+  "version": "0.1.0",
+  "description": "S3-compatible unstorage driver (works with Exoscale SOS, MinIO, etc.)",
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "files": ["dist"],
+  "license": "MIT",
+  "author": "Delta Mind GmbH",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/unstorage-s3-driver"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  },
+  "peerDependencies": {
+    "unstorage": "^1.14.0"
+  },
+  "devDependencies": {
+    "unstorage": "^1.17.4",
+    "typescript": "^5.7.0"
+  }
+}
