@@ -38,6 +38,7 @@ export interface AuditEntry {
   method: string
   path: string
   grant_id?: string | null
+  request_hash?: string
   rule: string
   waited_ms?: number
   error?: string

@@ -1,8 +1,23 @@
+import { createHash } from 'node:crypto'
 import type { ProxyConfig, AuditEntry } from './types.js'
 import { evaluateRules } from './matcher.js'
 import { verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
 import { writeAudit } from './audit.js'
+
+/**
+ * Compute a request hash that uniquely identifies the intent.
+ * hash = sha256(METHOD + " " + FULL_URL + "\n" + BODY)
+ * This binds the grant to the exact request — no bait-and-switch.
+ */
+async function computeRequestHash(method: string, targetUrl: string, body: ArrayBuffer | null): Promise<string> {
+  const hash = createHash('sha256')
+  hash.update(`${method} ${targetUrl}\n`)
+  if (body && body.byteLength > 0) {
+    hash.update(new Uint8Array(body))
+  }
+  return hash.digest('hex')
+}
 
 export function createProxy(config: ProxyConfig) {
   const grantsClient = new GrantsClient(config.proxy.idp_url)
@@ -38,6 +53,9 @@ export function createProxy(config: ProxyConfig) {
       const method = req.method
       const path = targetParsed.pathname
 
+      // Read body once (needed for hash + forwarding)
+      const bodyBuffer = req.body ? await req.arrayBuffer() : null
+
       // Verify agent identity
       const agent = await verifyAgentAuth(
         req.headers.get('proxy-authorization'),
@@ -66,12 +84,15 @@ export function createProxy(config: ProxyConfig) {
       // ALLOW (no grant needed)
       if (action.type === 'allow') {
         writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list', grant_id: null })
-        return forwardRequest(req, targetUrl)
+        return forwardRequest(req, targetUrl, bodyBuffer)
       }
 
       // GRANT REQUIRED
       const rule = action.rule
       const permissions = rule.permissions ?? [`${method.toLowerCase()}:${domain}`]
+
+      // Compute request hash — binds grant to exact method + URL + body
+      const requestHash = await computeRequestHash(method, targetUrl, bodyBuffer)
 
       // Check for existing grant
       const existing = await grantsClient.findExistingGrant(
@@ -86,8 +107,9 @@ export function createProxy(config: ProxyConfig) {
           action: 'grant_approved',
           rule: 'standing-grant',
           grant_id: existing.id,
+          request_hash: requestHash,
         })
-        return forwardRequest(req, targetUrl)
+        return forwardRequest(req, targetUrl, bodyBuffer)
       }
 
       // No existing grant — behavior depends on default_action
@@ -103,7 +125,8 @@ export function createProxy(config: ProxyConfig) {
           target: domain,
           grantType: rule.grant_type,
           permissions,
-          reason: `${method} ${targetParsed.pathname}`,
+          reason: `${method} ${targetUrl}`,
+          requestHash,
           duration: rule.duration,
         }).catch(() => null)
 
@@ -133,7 +156,8 @@ export function createProxy(config: ProxyConfig) {
           target: domain,
           grantType: rule.grant_type,
           permissions,
-          reason: `${method} ${targetParsed.pathname}`,
+          reason: `${method} ${targetUrl}`,
+          requestHash,
           duration: rule.duration,
         })
 
@@ -147,9 +171,10 @@ export function createProxy(config: ProxyConfig) {
             action: 'grant_approved',
             rule: 'grant_required',
             grant_id: approved.id,
+            request_hash: requestHash,
             waited_ms: waitedMs,
           })
-          return forwardRequest(req, targetUrl)
+          return forwardRequest(req, targetUrl, bodyBuffer)
         }
 
         writeAudit({
@@ -179,7 +204,7 @@ export function createProxy(config: ProxyConfig) {
  * Forward a request to the target URL.
  * Strips proxy-specific headers, preserves the rest.
  */
-async function forwardRequest(originalReq: Request, targetUrl: string): Promise<Response> {
+async function forwardRequest(originalReq: Request, targetUrl: string, cachedBody?: ArrayBuffer | null): Promise<Response> {
   const headers = new Headers(originalReq.headers)
   // Remove proxy-specific headers
   headers.delete('proxy-authorization')
@@ -187,11 +212,13 @@ async function forwardRequest(originalReq: Request, targetUrl: string): Promise<
   // Don't send host of the proxy
   headers.delete('host')
 
+  const body = cachedBody && cachedBody.byteLength > 0 ? cachedBody : null
+
   try {
     const res = await fetch(targetUrl, {
       method: originalReq.method,
       headers,
-      body: originalReq.body,
+      body,
       // @ts-expect-error Bun supports duplex
       duplex: 'half',
       redirect: 'manual',

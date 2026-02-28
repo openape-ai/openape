@@ -33,6 +33,7 @@ export class GrantsClient {
     grantType: GrantType
     permissions?: string[]
     reason?: string
+    requestHash?: string
     duration?: number
   }): Promise<OpenApeGrant> {
     const res = await fetch(`${this.idpUrl}/api/grants`, {
@@ -44,6 +45,7 @@ export class GrantsClient {
         grant_type: opts.grantType,
         permissions: opts.permissions,
         reason: opts.reason,
+        request_hash: opts.requestHash,
         duration: opts.duration,
       }),
     })
