@@ -2,7 +2,7 @@
   "name": "openape-examples",
   "private": true,
   "description": "Example applications for the OpenApe ecosystem",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev:idp": "cd apps/openape-idp-example && pnpm dev",
     "dev:sp": "cd apps/openape-sp-example && pnpm dev",
