@@ -4,7 +4,7 @@
   "version": "0.1.5",
   "description": "OpenAPE Service Provider Nuxt module — adds OIDC login via DNS-based IdP discovery",
   "author": "Delta Mind GmbH",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "exports": {
     ".": {
       "types": "./dist/types.d.mts",
