@@ -1,9 +1,18 @@
 import type { H3Event } from 'h3'
 import { createError, getHeader } from 'h3'
+import { useEvent } from 'nitropack/runtime'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { getAppSession } from './session'
 
 function getAdminEmails(): string[] {
+  try {
+    const event = useEvent()
+    if (event?.context?.openapeAdminEmails) {
+      const emails = event.context.openapeAdminEmails as string[]
+      return emails.map(e => e.trim().toLowerCase()).filter(Boolean)
+    }
+  }
+  catch {}
   const config = useRuntimeConfig()
   const raw = config.openapeIdp.adminEmails as string
   if (!raw)

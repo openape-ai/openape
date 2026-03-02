@@ -1,18 +1,18 @@
 import type { KeyEntry, KeyStore } from '@openape/auth'
-import type { KeyLike } from 'jose'
+import type { JWK, KeyLike } from 'jose'
 import { generateKeyPair } from '@openape/core'
 import { exportJWK, importJWK } from 'jose'
-import { useAppStorage } from './storage'
+import { useIdpStorage } from './storage'
 
 interface StoredKey {
   kid: string
-  privateKeyJwk: Record<string, unknown>
-  publicKeyJwk: Record<string, unknown>
+  privateKeyJwk: JWK
+  publicKeyJwk: JWK
   isActive: boolean
 }
 
 export function createKeyStore(): KeyStore {
-  const storage = useAppStorage()
+  const storage = useIdpStorage()
   let cachedKeys: KeyEntry[] | null = null
 
   async function loadKeys(): Promise<KeyEntry[]> {
@@ -63,7 +63,7 @@ export function createKeyStore(): KeyStore {
       const keys = await loadKeys()
       if (keys.length === 0)
         return createKey()
-      return keys[0]
+      return keys[0]!
     },
 
     async getAllPublicKeys() {

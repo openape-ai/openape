@@ -1,8 +1,8 @@
 import type { CredentialStore, WebAuthnCredential } from '@openape/auth'
-import { useAppStorage } from './storage'
+import { useIdpStorage } from './storage'
 
 export function createCredentialStore(): CredentialStore {
-  const storage = useAppStorage()
+  const storage = useIdpStorage()
 
   return {
     async save(credential) {

@@ -1,4 +1,4 @@
-import { useAppStorage } from './storage'
+import { useIdpStorage } from './storage'
 
 export interface Agent {
   id: string
@@ -23,7 +23,7 @@ export interface AgentStore {
 }
 
 export function createAgentStore(): AgentStore {
-  const storage = useAppStorage()
+  const storage = useIdpStorage()
 
   return {
     async create(agent) {

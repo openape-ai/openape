@@ -4,8 +4,10 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 
 export async function getAppSession(event: H3Event) {
   const config = useRuntimeConfig()
+  const slug = event.context?.openapeTenantSlug as string | undefined
+  const sessionName = slug ? `openape-idp-${slug}` : 'openape-idp'
   return await useSession(event, {
-    name: 'openape-idp',
+    name: sessionName,
     password: config.openapeIdp.sessionSecret,
   })
 }

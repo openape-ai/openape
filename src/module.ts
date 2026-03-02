@@ -1,13 +1,11 @@
-import { defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addServerPlugin, extendPages } from '@nuxt/kit'
+import { defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, extendPages } from '@nuxt/kit'
 import { defu } from 'defu'
 
 export interface ModuleOptions {
   sessionSecret: string
   managementToken: string
   adminEmails: string
-  storageDriver: string
-  storagePath: string
-  storagePrefix: string
+  storageKey: string
   issuer: string
   rpName: string
   rpID: string
@@ -15,14 +13,6 @@ export interface ModuleOptions {
   requireUserVerification: boolean
   residentKey: 'preferred' | 'required' | 'discouraged'
   attestationType: 'none' | 'indirect' | 'direct' | 'enterprise'
-  s3: {
-    accessKeyId: string
-    secretAccessKey: string
-    bucket: string
-    endpoint: string
-    region: string
-    prefix: string
-  }
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -34,9 +24,7 @@ export default defineNuxtModule<ModuleOptions>({
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
     managementToken: '',
     adminEmails: '',
-    storageDriver: '',
-    storagePath: './.data/openape-idp-db',
-    storagePrefix: '',
+    storageKey: 'openape-idp',
     issuer: '',
     rpName: '',
     rpID: '',
@@ -44,14 +32,6 @@ export default defineNuxtModule<ModuleOptions>({
     requireUserVerification: false,
     residentKey: 'preferred',
     attestationType: 'none',
-    s3: {
-      accessKeyId: '',
-      secretAccessKey: '',
-      bucket: '',
-      endpoint: '',
-      region: '',
-      prefix: '',
-    },
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
@@ -60,19 +40,7 @@ export default defineNuxtModule<ModuleOptions>({
     nuxt.options.runtimeConfig.openapeIdp = defu(
       nuxt.options.runtimeConfig.openapeIdp as Record<string, unknown> || {},
       options,
-    )
-
-    // Dev storage: always use local filesystem in development
-    nuxt.options.nitro = nuxt.options.nitro || {}
-    nuxt.options.nitro.devStorage = defu(nuxt.options.nitro.devStorage || {}, {
-      db: {
-        driver: 'fsLite',
-        base: options.storagePath || './.data/openape-idp-db',
-      },
-    })
-
-    // Register server plugin (storage mount)
-    addServerPlugin(resolve('./runtime/server/plugins/storage'))
+    ) as typeof options
 
     // Register server utils (auto-imported by Nitro)
     addServerImportsDir(resolve('./runtime/server/utils'))

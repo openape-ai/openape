@@ -1,30 +1,13 @@
-import { useRuntimeConfig, useStorage } from 'nitropack/runtime'
+import { useRuntimeConfig, useStorage, useEvent } from 'nitropack/runtime'
 
-export function getStoragePrefix(): string {
-  const config = useRuntimeConfig()
-  const idpConfig = config.openapeIdp as {
-    storagePrefix?: string
-    issuer?: string
-  } | undefined
-
-  if (idpConfig?.storagePrefix?.trim()) {
-    return idpConfig.storagePrefix.trim()
-  }
-
-  const issuerStr = idpConfig?.issuer?.trim()
-    || process.env.NUXT_PUBLIC_SITE_URL?.trim()
-    || ''
-
-  if (issuerStr) {
-    try {
-      return new URL(issuerStr).hostname
-    }
-    catch {
-      // malformed URL → fallback
+export const useIdpStorage = () => {
+  try {
+    const event = useEvent()
+    if (event?.context?.openapeStorageKey) {
+      return useStorage(event.context.openapeStorageKey)
     }
   }
-
-  return 'localhost'
+  catch {}
+  const config = useRuntimeConfig().openapeIdp as { storageKey: string }
+  return useStorage(config.storageKey)
 }
-
-export const useAppStorage = () => useStorage(`db:${getStoragePrefix()}`)

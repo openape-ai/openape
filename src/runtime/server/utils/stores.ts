@@ -1,4 +1,4 @@
-import { useRuntimeConfig } from 'nitropack/runtime'
+import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { createAgentStore } from './agent-store'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
@@ -28,9 +28,28 @@ function getStores() {
   return _stores
 }
 
-export const useIdpStores = getStores
+export function useIdpStores() {
+  try {
+    const event = useEvent()
+    if (event?.context?.openapeStorageKey) {
+      if (!event.context._idpStores) {
+        event.context._idpStores = initStores()
+      }
+      return event.context._idpStores as ReturnType<typeof initStores>
+    }
+  }
+  catch {}
+  return getStores()
+}
 
 export function getIdpIssuer(): string {
+  try {
+    const event = useEvent()
+    if (event?.context?.openapeIssuer) {
+      return event.context.openapeIssuer
+    }
+  }
+  catch {}
   const config = useRuntimeConfig()
   return config.openapeIdp?.issuer || process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 }

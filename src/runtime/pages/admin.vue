@@ -232,6 +232,10 @@ async function deleteRegUrl(token: string) {
   }
 }
 
+function registerUrl(token: string): string {
+  return `${window.location.origin}/register?token=${token}`
+}
+
 async function copyToClipboard(text: string, token: string) {
   await navigator.clipboard.writeText(text)
   copiedToken.value = token
@@ -613,7 +617,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                           v-if="!r.consumed && r.expiresAt > Date.now()"
                           variant="ghost"
                           size="xs"
-                          @click="copyToClipboard(`${window.location.origin}/register?token=${r.token}`, r.token)"
+                          @click="copyToClipboard(registerUrl(r.token), r.token)"
                         >
                           {{ copiedToken === r.token ? 'Copied!' : 'Copy URL' }}
                         </UButton>

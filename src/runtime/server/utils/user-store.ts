@@ -1,4 +1,4 @@
-import { useAppStorage } from './storage'
+import { useIdpStorage } from './storage'
 
 export interface User {
   email: string
@@ -19,7 +19,7 @@ interface StoredUser {
 }
 
 export function createUserStore(): UserStore {
-  const storage = useAppStorage()
+  const storage = useIdpStorage()
 
   return {
     async create(email, name) {
