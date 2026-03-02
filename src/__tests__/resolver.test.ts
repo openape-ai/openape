@@ -3,8 +3,8 @@ import { clearDNSCache, resolveDDISA, resolveIdP } from '../dns/resolver.js'
 
 describe('resolveDDISA with mock records', () => {
   const mockRecords = {
-    'example.com': { idp: 'https://idp.example.com', mode: 'allowlist-user' as const },
-    'open.com': { idp: 'https://login.open.com', mode: 'open' as const },
+    'example.com': { version: 'ddisa1', idp: 'https://idp.example.com', mode: 'allowlist-user' as const },
+    'open.com': { version: 'ddisa1', idp: 'https://login.open.com', mode: 'open' as const },
   }
 
   it('resolves a mocked domain', async () => {
@@ -60,7 +60,7 @@ describe('resolveDDISA with env-based mock records', () => {
     process.env.DDISA_MOCK_RECORDS = envValue
     try {
       const record = await resolveDDISA('unknown.com', {
-        mockRecords: { 'unknown.com': { idp: 'https://fallback.com', mode: 'open' as const } },
+        mockRecords: { 'unknown.com': { version: 'ddisa1', idp: 'https://fallback.com', mode: 'open' as const } },
       })
       expect(record?.idp).toBe('https://fallback.com')
     }
@@ -73,7 +73,7 @@ describe('resolveDDISA with env-based mock records', () => {
     process.env.DDISA_MOCK_RECORDS = 'not-json'
     try {
       const record = await resolveDDISA('example.org', {
-        mockRecords: { 'example.org': { idp: 'https://option-mock.com', mode: 'open' as const } },
+        mockRecords: { 'example.org': { version: 'ddisa1', idp: 'https://option-mock.com', mode: 'open' as const } },
       })
       expect(record?.idp).toBe('https://option-mock.com')
     }
