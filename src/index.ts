@@ -54,7 +54,12 @@ export default defineDriver((options: S3CompatDriverOptions) => {
   }
 
   const baseURL = `${options.endpoint.replace(/\/$/, '')}/${options.bucket || ''}`
-  const url = (key = '') => `${baseURL}/${normalizeKey(key, '/')}`
+  const prefix = options.prefix ? normalizeKey(options.prefix, '/') : ''
+  const url = (key = '') => {
+    const normalized = normalizeKey(key, '/')
+    const fullKey = prefix ? `${prefix}/${normalized}` : normalized
+    return `${baseURL}/${fullKey}`
+  }
 
   const awsFetch = async (url: string, opts?: RequestInit) => {
     const request = await getAwsClient().sign(url, opts)
@@ -80,10 +85,14 @@ export default defineDriver((options: S3CompatDriverOptions) => {
     return metaHeaders
   }
 
-  const listObjects = async (prefix?: string) => {
-    const res = await awsFetch(baseURL).then(r => r?.text())
+  const listObjects = async (base?: string) => {
+    const listPrefix = [prefix, base ? normalizeKey(base, '/') : ''].filter(Boolean).join('/')
+    const listUrl = listPrefix ? `${baseURL}?prefix=${encodeURIComponent(listPrefix + '/')}` : baseURL
+    const res = await awsFetch(listUrl).then(r => r?.text())
     if (!res) return null
-    return parseList(res)
+    const keys = parseList(res)
+    const stripLen = prefix ? prefix.length + 1 : 0
+    return keys.map(k => k.slice(stripLen).replace(/\//g, ':'))
   }
 
   const getObject = (key: string) => awsFetch(url(key))
