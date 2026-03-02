@@ -22,7 +22,10 @@
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm pack --dry-run && npm publish --provenance --access public"
   },
   "dependencies": {
     "jose": "^5.9.0"
@@ -31,6 +34,12 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "@antfu/eslint-config": "^7.6.1",
+    "eslint": "^9.35.0",
+    "@changesets/cli": "^2.29.7"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
