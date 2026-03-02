@@ -13,7 +13,11 @@
     "dev": "bun run --watch src/index.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm pack --dry-run && npm publish --provenance --access public"
   },
   "dependencies": {
     "@openape/core": "^0.1.0",
@@ -24,7 +28,11 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "@antfu/eslint-config": "^7.6.1",
+    "eslint": "^9.35.0",
+    "vitest": "^3.2.4",
+    "@changesets/cli": "^2.29.7"
   },
   "publishConfig": {
     "access": "public"
@@ -32,5 +40,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/openape-ai/proxy.git"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

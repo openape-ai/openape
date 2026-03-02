@@ -149,4 +149,4 @@ Possible `action` values: `allow`, `deny`, `grant_approved`, `grant_denied`, `gr
 
 ## License
 
-[MIT](./LICENSE)
+[AGPL-3.0-or-later](./LICENSE)
