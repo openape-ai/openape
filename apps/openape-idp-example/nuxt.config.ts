@@ -8,8 +8,6 @@ export default defineNuxtConfig({
     preference: 'dark',
   },
   openapeIdp: {
-    storageDriver: process.env.NUXT_OPENAPE_STORAGE_DRIVER || '',
-    storagePath: process.env.NUXT_OPENAPE_STORAGE_PATH || './.data/openape-idp-db',
     adminEmails: process.env.NUXT_OPENAPE_ADMIN_EMAILS || '',
     managementToken: process.env.NUXT_OPENAPE_MANAGEMENT_TOKEN || '',
     sessionSecret: process.env.NUXT_OPENAPE_SESSION_SECRET || 'change-me-to-a-real-secret-at-least-32-chars',
@@ -20,16 +18,40 @@ export default defineNuxtConfig({
     requireUserVerification: process.env.NUXT_OPENAPE_REQUIRE_USER_VERIFICATION === 'true',
     residentKey: (process.env.NUXT_OPENAPE_RESIDENT_KEY as 'preferred' | 'required' | 'discouraged') || 'preferred',
     attestationType: (process.env.NUXT_OPENAPE_ATTESTATION_TYPE as 'none' | 'indirect' | 'direct' | 'enterprise') || 'none',
-    s3: {
-      accessKeyId: process.env.NUXT_OPENAPE_S3_ACCESS_KEY || '',
-      secretAccessKey: process.env.NUXT_OPENAPE_S3_SECRET_KEY || '',
-      bucket: process.env.NUXT_OPENAPE_S3_BUCKET || '',
-      endpoint: process.env.NUXT_OPENAPE_S3_ENDPOINT || '',
-      region: process.env.NUXT_OPENAPE_S3_REGION || '',
-      prefix: process.env.NUXT_OPENAPE_S3_PREFIX || 'openape-idp/',
-    },
   },
   openapeGrants: {
     enablePages: true,
+  },
+  nitro: {
+    storage: {
+      'openape-idp': process.env.NUXT_OPENAPE_S3_ACCESS_KEY
+        ? {
+            driver: '@openape/unstorage-s3-driver',
+            accessKeyId: process.env.NUXT_OPENAPE_S3_ACCESS_KEY,
+            secretAccessKey: process.env.NUXT_OPENAPE_S3_SECRET_KEY,
+            bucket: process.env.NUXT_OPENAPE_S3_BUCKET,
+            endpoint: process.env.NUXT_OPENAPE_S3_ENDPOINT,
+            region: process.env.NUXT_OPENAPE_S3_REGION,
+            prefix: process.env.NUXT_OPENAPE_S3_PREFIX || 'openape-idp/',
+          }
+        : {
+            driver: 'fsLite',
+            base: './.data/openape-idp',
+          },
+      'openape-grants': process.env.NUXT_OPENAPE_S3_ACCESS_KEY
+        ? {
+            driver: '@openape/unstorage-s3-driver',
+            accessKeyId: process.env.NUXT_OPENAPE_S3_ACCESS_KEY,
+            secretAccessKey: process.env.NUXT_OPENAPE_S3_SECRET_KEY,
+            bucket: process.env.NUXT_OPENAPE_S3_BUCKET,
+            endpoint: process.env.NUXT_OPENAPE_S3_ENDPOINT,
+            region: process.env.NUXT_OPENAPE_S3_REGION,
+            prefix: process.env.NUXT_OPENAPE_S3_GRANTS_PREFIX || 'openape-grants/',
+          }
+        : {
+            driver: 'fsLite',
+            base: './.data/openape-grants',
+          },
+    },
   },
 })
