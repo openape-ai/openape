@@ -6,9 +6,16 @@
   "scripts": {
     "dev:idp": "cd apps/openape-idp-example && pnpm dev",
     "dev:sp": "cd apps/openape-sp-example && pnpm dev",
-    "test": "cd e2e && pnpm test"
+    "test": "cd e2e && pnpm test",
+    "lint": "eslint .",
+    "typecheck": "pnpm --filter openape-idp-example typecheck && pnpm --filter openape-sp-example typecheck",
+    "build": "pnpm --filter openape-idp-example build && pnpm --filter openape-sp-example build"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "eslint": "^9.35.0"
   }
 }
