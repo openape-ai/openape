@@ -3,7 +3,7 @@ import { discoverIdP } from '../sp/discovery.js'
 
 describe('discoverIdP', () => {
   const mockRecords = {
-    'example.com': { idp: 'https://idp.example.com', mode: 'allowlist-user' as const },
+    'example.com': { version: 'ddisa1', idp: 'https://idp.example.com', mode: 'allowlist-user' as const },
   }
 
   it('discovers IdP from email', async () => {

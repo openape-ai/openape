@@ -79,7 +79,7 @@ describe('verifyAuthentication', () => {
     const { verifyAuthenticationResponse } = await import('@simplewebauthn/server')
     vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
       verified: false,
-      authenticationInfo: { newCounter: 0, credentialID: new Uint8Array(), credentialBackedUp: false, credentialDeviceType: 'singleDevice', origin: '', userVerified: false },
+      authenticationInfo: { newCounter: 0, credentialID: '', credentialBackedUp: false, credentialDeviceType: 'singleDevice', origin: '', rpID: '', userVerified: false },
     })
 
     const { verifyAuthentication } = await import('../idp/webauthn/authentication.js')
