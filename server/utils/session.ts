@@ -11,6 +11,7 @@ export async function getAppSession(event: H3Event) {
       httpOnly: true,
       secure: !import.meta.dev,
       sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
     },
   })
 }
