@@ -46,10 +46,10 @@ export function getIdpIssuer(): string {
   try {
     const event = useEvent()
     if (event?.context?.openapeIssuer) {
-      return event.context.openapeIssuer
+      return event.context.openapeIssuer.trim()
     }
   }
   catch {}
   const config = useRuntimeConfig()
-  return config.openapeIdp?.issuer || process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  return (config.openapeIdp?.issuer || process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000').trim()
 }
