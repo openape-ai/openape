@@ -12,19 +12,22 @@ const verifiedDomains = computed(() =>
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-950 p-6">
-    <div class="max-w-4xl mx-auto space-y-6">
+  <div class="min-h-screen bg-gray-950 p-4">
+    <div class="max-w-4xl mx-auto space-y-4">
       <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-white">Agent Mail</h1>
-          <p class="text-sm text-gray-400">{{ user?.sub }}</p>
+        <div class="flex items-center gap-3">
+          <AppLogo />
+          <div>
+            <h1 class="text-lg font-semibold text-white">Agent Mail</h1>
+            <p class="text-sm text-gray-400">{{ user?.sub }}</p>
+          </div>
         </div>
         <UButton color="neutral" variant="ghost" icon="i-lucide-log-out" @click="logout()">
           Logout
         </UButton>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <UCard>
           <div class="text-center">
             <p class="text-3xl font-bold text-white">{{ (domainsData || []).length }}</p>
@@ -50,7 +53,7 @@ const verifiedDomains = computed(() =>
         </UCard>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">

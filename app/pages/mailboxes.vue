@@ -55,11 +55,12 @@ function formatBytes(bytes: number) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-950 p-6">
-    <div class="max-w-4xl mx-auto space-y-6">
+  <div class="min-h-screen bg-gray-950 p-4">
+    <div class="max-w-4xl mx-auto space-y-4">
       <div class="flex items-center gap-3">
         <UButton to="/dashboard" icon="i-lucide-arrow-left" variant="ghost" size="sm" />
-        <h1 class="text-2xl font-bold text-white">Mailboxes</h1>
+        <AppLogo />
+        <h1 class="text-lg font-semibold text-white">Mailboxes</h1>
       </div>
 
       <!-- API Key Alert -->
