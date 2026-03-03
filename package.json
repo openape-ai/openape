@@ -1,0 +1,43 @@
+{
+  "name": "openape-free-idp",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @openape/core build && pnpm --filter @openape/auth build && nuxt build",
+    "dev": "nuxt dev --port 3002",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.90",
+    "@libsql/client": "^0.14.0",
+    "@nuxt/ui": "^4.4.0",
+    "@openape/auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "jose": "^5.9.0",
+    "nuxt": "^4.0.0",
+    "resend": "^4.0.0",
+    "tailwindcss": "^4.0.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "@nuxt/eslint": "^1.15.1",
+    "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.30.0",
+    "eslint": "^9.35.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
