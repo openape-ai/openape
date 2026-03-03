@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useFetch } from '#imports'
 
+useSeoMeta({ title: 'Free Identity Provider' })
+
 const { data: user } = await useFetch<{ email: string } | null>('/api/me')
 </script>
 
@@ -34,14 +36,34 @@ const { data: user } = await useFetch<{ email: string } | null>('/api/me')
     </UCard>
 
     <!-- Not logged in -->
-    <div v-else class="text-center">
-      <AppLogo class="justify-center mb-6 text-2xl" />
-      <h1 class="text-2xl font-bold text-white mb-3">
-        Free Identity Provider
+    <div v-else class="w-full max-w-md flex flex-col items-center text-center">
+      <div class="text-6xl mb-6">
+        🦍
+      </div>
+
+      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        One login.<br>
+        <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
       </h1>
-      <p class="text-gray-400 max-w-md">
-        Universeller DDISA Identity Provider für Domains ohne eigenen IdP-Record.
-        Authentifizierung via Magic Link.
+
+      <p class="text-lg text-gray-400 mb-8">
+        Free identity provider for the open web. No password needed.
+      </p>
+
+      <UButton
+        to="/login"
+        color="primary"
+        size="xl"
+        block
+        icon="i-lucide-log-in"
+      >
+        Sign in
+      </UButton>
+
+      <p class="mt-8 text-sm text-gray-500">
+        Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">
+          OpenApe
+        </NuxtLink>
       </p>
     </div>
   </div>

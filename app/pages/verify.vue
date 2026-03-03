@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useRoute } from '#imports'
 
+useSeoMeta({ title: 'Verify Email' })
+
 const route = useRoute()
 const success = route.query.success === 'true'
 </script>

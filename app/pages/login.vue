@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useRoute, useState } from '#imports'
 
+useSeoMeta({ title: 'Login' })
+
 const route = useRoute()
 const loginHint = (route.query.login_hint as string) || ''
 
@@ -35,53 +37,59 @@ async function sendMagicLink() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
-    <UCard class="w-full max-w-md bg-gray-900 border border-gray-800">
-      <template #header>
-        <div class="flex flex-col items-center gap-3 pt-2">
-          <AppLogo />
-          <h1 class="text-lg font-semibold text-white">
-            Anmelden
-          </h1>
-        </div>
-      </template>
-
-      <div v-if="!sent">
-        <p class="text-sm text-gray-400 mb-4 text-center">
-          Wir senden dir einen Login-Link per Email.
-        </p>
-
-        <form class="space-y-4" @submit.prevent="sendMagicLink">
-          <UFormField label="Email">
-            <UInput
-              v-model="email"
-              type="email"
-              placeholder="du@example.com"
-              required
-              :readonly="!!loginHint"
-              icon="i-lucide-mail"
-              size="lg"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UButton
-            type="submit"
-            color="primary"
-            size="lg"
-            block
-            :loading="loading"
-            icon="i-lucide-send"
-          >
-            Verifizierungslink senden
-          </UButton>
-        </form>
-
-        <p v-if="error" class="mt-3 text-sm text-red-400 text-center">
-          {{ error }}
-        </p>
+    <!-- Login form -->
+    <div v-if="!sent" class="w-full max-w-md flex flex-col items-center text-center">
+      <div class="text-6xl mb-6">
+        🦍
       </div>
 
-      <div v-else class="text-center py-4">
+      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        One login.<br>
+        <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
+      </h1>
+
+      <p class="text-lg text-gray-400 mb-8">
+        Passwordless authentication for the open web.
+      </p>
+
+      <form class="w-full space-y-4" @submit.prevent="sendMagicLink">
+        <UInput
+          v-model="email"
+          type="email"
+          placeholder="you@example.com"
+          required
+          :readonly="!!loginHint"
+          icon="i-lucide-mail"
+          size="xl"
+          class="w-full"
+        />
+
+        <UButton
+          type="submit"
+          color="primary"
+          size="xl"
+          block
+          :loading="loading"
+          icon="i-lucide-send"
+        >
+          Send magic link
+        </UButton>
+      </form>
+
+      <p v-if="error" class="mt-3 text-sm text-red-400 text-center">
+        {{ error }}
+      </p>
+
+      <p class="mt-8 text-sm text-gray-500">
+        Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">
+          OpenApe
+        </NuxtLink>
+      </p>
+    </div>
+
+    <!-- Email sent confirmation -->
+    <UCard v-else class="w-full max-w-md bg-gray-900 border border-gray-800">
+      <div class="text-center py-4">
         <UIcon name="i-lucide-mail-check" class="text-4xl text-primary mb-3" />
         <h2 class="text-lg font-semibold text-white mb-2">
           Prüfe dein Postfach
