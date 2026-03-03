@@ -16,11 +16,7 @@ export default defineNuxtConfig({
     webhookSecret: '',
   },
 
-  nitro: {
-    externals: {
-      inline: ['@openape/core', '@openape/auth', '@openape/nuxt-auth-sp'],
-    },
-  },
+  nitro: {},
 
 
   compatibilityDate: '2025-01-01',

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter @openape/core build && pnpm --filter @openape/auth build && nuxt build && node scripts/copy-deps.mjs",
+    "build": "nuxt build",
     "dev": "nuxt dev --port 3003",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
