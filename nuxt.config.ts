@@ -15,10 +15,6 @@ export default defineNuxtConfig({
 
   nitro: {
     imports: { autoImport: false },
-    // Bundle workspace packages (not available as node_modules on Vercel)
-    externals: {
-      inline: ['@openape/core', '@openape/auth'],
-    },
   },
 
   compatibilityDate: '2025-01-01',
