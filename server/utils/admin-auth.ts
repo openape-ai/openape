@@ -1,12 +1,16 @@
 import type { H3Event } from 'h3'
-import { createError } from 'h3'
-import { getSpSession } from '#imports'
+import { createError, useSession } from 'h3'
+import { useRuntimeConfig } from 'nitropack/runtime'
 import { eq } from 'drizzle-orm'
 import { useDb } from './db'
 import { organizations } from '../database/schema'
 
 export async function requireAdmin(event: H3Event) {
-  const session = await getSpSession(event)
+  const config = useRuntimeConfig()
+  const session = await useSession(event, {
+    name: 'openape-sp',
+    password: (config as any).openapeSp.sessionSecret,
+  })
   const claims = session.data.claims
 
   if (!claims?.sub) {

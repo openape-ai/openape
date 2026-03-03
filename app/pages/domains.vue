@@ -1,6 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'openape-auth' })
 
+useSeoMeta({ title: 'Domains' })
+
 const { data: domainsData, refresh } = await useFetch('/api/v1/admin/domains')
 const newDomain = ref('')
 const adding = ref(false)

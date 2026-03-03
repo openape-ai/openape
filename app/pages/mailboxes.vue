@@ -1,6 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'openape-auth' })
 
+useSeoMeta({ title: 'Mailboxes' })
+
 const { data: mailboxesData, refresh } = await useFetch('/api/v1/admin/mailboxes')
 const { data: domainsData } = await useFetch('/api/v1/admin/domains')
 

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 const { user, loading, fetchUser, login } = useOpenApeAuth()
+
+useSeoMeta({ title: 'Agent Mail' })
+
 const email = ref('')
 
 onMounted(async () => {
@@ -15,44 +18,47 @@ async function handleLogin() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
-    <UCard class="w-full max-w-md bg-gray-900 border border-gray-800">
-      <template #header>
-        <div class="flex flex-col items-center gap-3 pt-2">
-          <AppLogo />
-          <div class="text-center">
-            <h1 class="text-lg font-semibold text-white">
-              Agent Mail
-            </h1>
-            <p class="text-sm text-gray-400 mt-1">
-              Ephemeral email for AI agents
-            </p>
-          </div>
-        </div>
-      </template>
+    <div class="w-full max-w-md flex flex-col items-center text-center">
+      <div class="text-6xl mb-6">
+        🦍
+      </div>
 
-      <form class="space-y-4" @submit.prevent="handleLogin">
-        <UFormField label="Email">
-          <UInput
-            v-model="email"
-            type="email"
-            placeholder="du@example.com"
-            size="lg"
-            :disabled="loading"
-            icon="i-lucide-mail"
-            class="w-full"
-          />
-        </UFormField>
+      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        Every agent deserves<br>
+        <span class="text-primary">a mailbox.</span>
+      </h1>
+
+      <p class="text-lg text-gray-400 mb-8">
+        Managed email addresses for your AI agents. Powered by OpenApe.
+      </p>
+
+      <form class="w-full space-y-4" @submit.prevent="handleLogin">
+        <UInput
+          v-model="email"
+          type="email"
+          placeholder="you@example.com"
+          size="xl"
+          :disabled="loading"
+          icon="i-lucide-mail"
+          class="w-full"
+        />
         <UButton
           type="submit"
           color="primary"
           block
-          size="lg"
+          size="xl"
           :loading="loading"
           icon="i-lucide-log-in"
         >
           Login with OpenApe
         </UButton>
       </form>
-    </UCard>
+
+      <p class="mt-8 text-sm text-gray-500">
+        Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">
+          OpenApe
+        </NuxtLink>
+      </p>
+    </div>
   </div>
 </template>

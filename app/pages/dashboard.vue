@@ -1,6 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ middleware: 'openape-auth' })
 
+useSeoMeta({ title: 'Dashboard' })
+
 const { user, logout } = useOpenApeAuth()
 
 const { data: domainsData } = await useFetch('/api/v1/admin/domains')
@@ -17,10 +19,7 @@ const verifiedDomains = computed(() =>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <AppLogo />
-          <div>
-            <h1 class="text-lg font-semibold text-white">Agent Mail</h1>
-            <p class="text-sm text-gray-400">{{ user?.sub }}</p>
-          </div>
+          <p class="text-sm text-gray-400">{{ user?.sub }}</p>
         </div>
         <UButton color="neutral" variant="ghost" icon="i-lucide-log-out" @click="logout()">
           Logout
