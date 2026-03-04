@@ -25,12 +25,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: error })
   }
 
-  if (!session.data.userId) {
+  const loginHint = String(query.login_hint ?? '')
+  if (!session.data.userId || (loginHint && session.data.userId !== loginHint)) {
     const returnTo = `/authorize?${new URLSearchParams(query as Record<string, string>).toString()}`
     await session.update({ pendingAuthorize: params, returnTo })
     const loginUrl = new URL('/login', getRequestURL(event).origin)
     loginUrl.searchParams.set('returnTo', returnTo)
-    const loginHint = String(query.login_hint ?? '')
     if (loginHint) {
       loginUrl.searchParams.set('login_hint', loginHint)
     }
