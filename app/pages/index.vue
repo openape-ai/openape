@@ -5,10 +5,8 @@ useSeoMeta({ title: 'Agent Mail' })
 
 const email = ref('')
 
-onMounted(async () => {
-  await fetchUser()
-  if (user.value) navigateTo('/dashboard')
-})
+await fetchUser()
+if (user.value) await navigateTo('/dashboard')
 
 async function handleLogin() {
   if (!email.value) return
@@ -18,7 +16,7 @@ async function handleLogin() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
-    <div v-if="!loading" class="w-full max-w-md flex flex-col items-center text-center">
+    <div class="w-full max-w-md flex flex-col items-center text-center">
       <div class="text-6xl mb-6">
         🦍
       </div>
