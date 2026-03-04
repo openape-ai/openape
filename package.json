@@ -1,7 +1,7 @@
 {
   "name": "@openape/proxy",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenApe agent HTTP gateway — forward proxy with grant-based access control",
   "author": "Patrick Hofmann",
   "license": "AGPL-3.0-or-later",
@@ -26,13 +26,14 @@
     "smol-toml": "^1.3.0"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "@changesets/cli": "^2.29.7",
+    "@types/bun": "^1.3.10",
     "@types/node": "^22.0.0",
+    "eslint": "^9.35.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "@antfu/eslint-config": "^7.6.1",
-    "eslint": "^9.35.0",
-    "vitest": "^3.2.4",
-    "@changesets/cli": "^2.29.7"
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "access": "public"

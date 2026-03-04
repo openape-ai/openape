@@ -219,7 +219,6 @@ async function forwardRequest(originalReq: Request, targetUrl: string, cachedBod
       method: originalReq.method,
       headers,
       body,
-      // @ts-expect-error Bun supports duplex
       duplex: 'half',
       redirect: 'manual',
     })
