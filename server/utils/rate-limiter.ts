@@ -1,7 +1,10 @@
 import { createError } from 'h3'
-import { eq } from 'drizzle-orm'
-import { useDb } from './db'
-import { rateLimits } from '../database/schema'
+import { useStorage } from 'nitropack/runtime'
+
+interface RateLimitEntry {
+  count: number
+  windowStart: number
+}
 
 interface RateLimitConfig {
   maxRequests: number
@@ -15,30 +18,22 @@ const LIMITS = {
 }
 
 async function checkLimit(key: string, config: RateLimitConfig): Promise<boolean> {
-  const db = useDb()
+  const storage = useStorage('idp')
+  const storageKey = `rate-limits:${key}`
   const now = Date.now()
 
-  const row = await db.select().from(rateLimits).where(eq(rateLimits.key, key)).get()
+  const entry = await storage.getItem<RateLimitEntry>(storageKey)
 
-  if (!row || now - row.windowStart > config.windowMs) {
-    // New window
-    await db.insert(rateLimits)
-      .values({ key, count: 1, windowStart: now })
-      .onConflictDoUpdate({
-        target: rateLimits.key,
-        set: { count: 1, windowStart: now },
-      })
+  if (!entry || now - entry.windowStart > config.windowMs) {
+    await storage.setItem(storageKey, { count: 1, windowStart: now })
     return true
   }
 
-  if (row.count >= config.maxRequests) {
+  if (entry.count >= config.maxRequests) {
     return false
   }
 
-  await db.update(rateLimits)
-    .set({ count: row.count + 1 })
-    .where(eq(rateLimits.key, key))
-
+  await storage.setItem(storageKey, { count: entry.count + 1, windowStart: entry.windowStart })
   return true
 }
 

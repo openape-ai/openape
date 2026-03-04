@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { useFetch } from '#imports'
-
 useSeoMeta({ title: 'Free Identity Provider' })
 
-const { data: user } = await useFetch<{ email: string } | null>('/api/me')
+const { user, loading, fetchUser, logout } = useIdpAuth()
+
+await fetchUser()
+
+async function handleLogout() {
+  await logout()
+  navigateTo('/login')
+}
 </script>
 
 <template>
@@ -20,18 +25,39 @@ const { data: user } = await useFetch<{ email: string } | null>('/api/me')
             {{ user.email }}
           </p>
         </div>
-        <form method="POST" action="/api/logout" class="w-full">
+        <div class="w-full space-y-2">
           <UButton
-            type="submit"
+            to="/account"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-key-round"
+          >
+            Passkeys verwalten
+          </UButton>
+          <UButton
+            to="/agent"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-bot"
+          >
+            Agent verwalten
+          </UButton>
+          <UButton
             color="neutral"
             variant="outline"
             size="lg"
             block
             icon="i-lucide-log-out"
+            :loading="loading"
+            @click="handleLogout"
           >
             Abmelden
           </UButton>
-        </form>
+        </div>
       </div>
     </UCard>
 
@@ -47,18 +73,31 @@ const { data: user } = await useFetch<{ email: string } | null>('/api/me')
       </h1>
 
       <p class="text-lg text-gray-400 mb-8">
-        Free identity provider for the open web. No password needed.
+        Free identity provider for the open web. Secured by passkeys.
       </p>
 
-      <UButton
-        to="/login"
-        color="primary"
-        size="xl"
-        block
-        icon="i-lucide-log-in"
-      >
-        Sign in
-      </UButton>
+      <div class="w-full space-y-3">
+        <UButton
+          to="/login"
+          color="primary"
+          size="xl"
+          block
+          icon="i-lucide-fingerprint"
+        >
+          Sign in with Passkey
+        </UButton>
+
+        <UButton
+          to="/register-email"
+          color="neutral"
+          variant="outline"
+          size="xl"
+          block
+          icon="i-lucide-user-plus"
+        >
+          Create account
+        </UButton>
+      </div>
 
       <p class="mt-8 text-sm text-gray-500">
         Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useState } from '#imports'
 
 useSeoMeta({ title: 'Login' })
 
@@ -8,37 +7,28 @@ const route = useRoute()
 const loginHint = (route.query.login_hint as string) || ''
 
 const email = ref(loginHint)
-const loading = ref(false)
-const sent = ref(false)
-const error = ref('')
+const { login, error: webauthnError, loading } = useWebAuthn()
 
-async function sendMagicLink() {
-  error.value = ''
-  loading.value = true
+const { fetchUser } = useIdpAuth()
 
-  try {
-    // Fetch CSRF token from session (embedded in the page via server-side)
-    const csrfToken = useState<string>('csrfToken').value
-
-    await $fetch('/api/magic-link', {
-      method: 'POST',
-      body: { email: email.value, csrfToken },
-    })
-    sent.value = true
-  }
-  catch (e: any) {
-    error.value = e?.data?.statusMessage || 'Ein Fehler ist aufgetreten'
-  }
-  finally {
-    loading.value = false
+async function handleLogin() {
+  const success = await login(email.value || undefined)
+  if (success) {
+    await fetchUser()
+    const returnTo = route.query.returnTo as string
+    if (returnTo) {
+      await navigateTo(returnTo, { external: true })
+    }
+    else {
+      await navigateTo('/')
+    }
   }
 }
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
-    <!-- Login form -->
-    <div v-if="!sent" class="w-full max-w-md flex flex-col items-center text-center">
+    <div class="w-full max-w-md flex flex-col items-center text-center">
       <div class="text-6xl mb-6">
         🦍
       </div>
@@ -52,13 +42,11 @@ async function sendMagicLink() {
         Passwordless authentication for the open web.
       </p>
 
-      <form class="w-full space-y-4" @submit.prevent="sendMagicLink">
+      <form class="w-full space-y-4" @submit.prevent="handleLogin">
         <UInput
           v-model="email"
           type="email"
-          placeholder="you@example.com"
-          required
-          :readonly="!!loginHint"
+          placeholder="you@example.com (optional)"
           icon="i-lucide-mail"
           size="xl"
           class="w-full"
@@ -70,15 +58,22 @@ async function sendMagicLink() {
           size="xl"
           block
           :loading="loading"
-          icon="i-lucide-send"
+          icon="i-lucide-fingerprint"
         >
-          Send magic link
+          Sign in with Passkey
         </UButton>
       </form>
 
-      <p v-if="error" class="mt-3 text-sm text-red-400 text-center">
-        {{ error }}
+      <p v-if="webauthnError" class="mt-3 text-sm text-red-400 text-center">
+        {{ webauthnError }}
       </p>
+
+      <div class="mt-6 text-sm text-gray-500">
+        Noch keinen Account?
+        <NuxtLink to="/register-email" class="text-primary hover:underline">
+          Jetzt registrieren
+        </NuxtLink>
+      </div>
 
       <p class="mt-8 text-sm text-gray-500">
         Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">
@@ -86,20 +81,5 @@ async function sendMagicLink() {
         </NuxtLink>
       </p>
     </div>
-
-    <!-- Email sent confirmation -->
-    <UCard v-else class="w-full max-w-md bg-gray-900 border border-gray-800">
-      <div class="text-center py-4">
-        <UIcon name="i-lucide-mail-check" class="text-4xl text-primary mb-3" />
-        <h2 class="text-lg font-semibold text-white mb-2">
-          Prüfe dein Postfach
-        </h2>
-        <p class="text-sm text-gray-400">
-          Wir haben einen Login-Link an
-          <strong class="text-white">{{ email }}</strong>
-          gesendet. Der Link ist 10 Minuten gültig.
-        </p>
-      </div>
-    </UCard>
   </div>
 </template>

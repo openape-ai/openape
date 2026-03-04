@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useState } from '#imports'
-
 useHead({
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -15,21 +12,8 @@ useHead({
 
 useSeoMeta({
   titleTemplate: '%s — OpenApe ID',
-  description: 'Free DDISA Identity Provider — passwordless authentication via magic link for domains without their own IdP.',
+  description: 'Free DDISA Identity Provider — passwordless authentication with passkeys for domains without their own IdP.',
   ogSiteName: 'OpenApe ID',
-})
-
-// Load CSRF token from session into state for use in forms
-const csrfToken = useState<string>('csrfToken', () => '')
-
-onMounted(async () => {
-  try {
-    const data = await $fetch<{ csrfToken: string }>('/api/csrf')
-    csrfToken.value = data.csrfToken
-  }
-  catch {
-    // No CSRF token available (no pending authorize)
-  }
 })
 </script>
 
