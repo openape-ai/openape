@@ -18,14 +18,14 @@ importers:
         specifier: ^4.4.0
         version: 4.5.1(@tiptap/extensions@3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))(@tiptap/pm@3.20.0))(@tiptap/y-tiptap@3.0.2(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.6)(y-protocols@1.0.7(yjs@13.6.29))(yjs@13.6.29))(change-case@5.4.4)(db0@0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0)))(embla-carousel@8.6.0)(ioredis@5.10.0)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)(typescript@5.9.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(vue-router@4.6.4(vue@3.5.29(typescript@5.9.3)))(vue@3.5.29(typescript@5.9.3))(yjs@13.6.29)
       '@openape/auth':
-        specifier: ^0.1.3
-        version: 0.1.3(h3@1.15.5)
+        specifier: ^0.1.4
+        version: 0.1.4(h3@1.15.5)
       '@openape/core':
         specifier: ^0.1.2
         version: 0.1.2
       '@openape/nuxt-auth-idp':
-        specifier: ^0.3.0
-        version: 0.3.0(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@libsql/client@0.14.0)(@parcel/watcher@2.5.6)(@types/node@22.19.13)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0)))(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0))(eslint@9.39.3(jiti@2.6.1))(ioredis@5.10.0)(lightningcss@1.31.1)(magicast@0.5.2)(optionator@0.9.4)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.2))
+        specifier: ^0.3.3
+        version: 0.3.3(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@libsql/client@0.14.0)(@parcel/watcher@2.5.6)(@types/node@22.19.13)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0)))(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0))(eslint@9.39.3(jiti@2.6.1))(ioredis@5.10.0)(lightningcss@1.31.1)(magicast@0.5.2)(optionator@0.9.4)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.2))
       db0:
         specifier: ^0.3.0
         version: 0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0))
@@ -1126,8 +1126,8 @@ packages:
   '@nuxtjs/color-mode@3.5.2':
     resolution: {integrity: sha512-cC6RfgZh3guHBMLLjrBB2Uti5eUoGM9KyauOaYS9ETmxNWBMTvpgjvSiSJp1OFljIXPIqVTJ3xtJpSNZiO3ZaA==}
 
-  '@openape/auth@0.1.3':
-    resolution: {integrity: sha512-Dl+NYo/5pjZCU2QZuOZfaYMqMw4hLrlw73VNiICq9sWEs5gH9/MhcTOEi9RcabXrr6L0yxfm7oxY2OOvr8W/qw==}
+  '@openape/auth@0.1.4':
+    resolution: {integrity: sha512-Uf0UCRFebZvNzuKBBOGg1Pu2h9DaYARMFTZuzG+8NaqFX7NtbDOENIII8aV29WYWALOA/0K+X2FT2sq5ugiX6A==}
     engines: {node: '>=22'}
     peerDependencies:
       h3: ^1.13.0
@@ -1146,8 +1146,8 @@ packages:
       h3:
         optional: true
 
-  '@openape/nuxt-auth-idp@0.3.0':
-    resolution: {integrity: sha512-ZxouFDIPYdwEgb4uFNmNlju7/OnekbvMbbrb4oiMszSIKnG73BDow0F1s6zHdAf/xAVqAE7SHw8NxpgH1t+1Pw==}
+  '@openape/nuxt-auth-idp@0.3.3':
+    resolution: {integrity: sha512-bExq7mhW3kZbC9eux7hTBKLPLbeR2U1mukDvFuK/XkkXA3nCiwpquk+Wt4JzKQlPpkKgnxxslv1aYTcVAzHE2A==}
     engines: {node: '>=22'}
     peerDependencies:
       nuxt: ^4.0.0
@@ -8026,7 +8026,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@openape/auth@0.1.3(h3@1.15.5)':
+  '@openape/auth@0.1.4(h3@1.15.5)':
     dependencies:
       '@openape/core': 0.1.2
       '@simplewebauthn/server': 11.0.0
@@ -8048,10 +8048,10 @@ snapshots:
     optionalDependencies:
       h3: 1.15.5
 
-  '@openape/nuxt-auth-idp@0.3.0(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@libsql/client@0.14.0)(@parcel/watcher@2.5.6)(@types/node@22.19.13)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0)))(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0))(eslint@9.39.3(jiti@2.6.1))(ioredis@5.10.0)(lightningcss@1.31.1)(magicast@0.5.2)(optionator@0.9.4)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.2))':
+  '@openape/nuxt-auth-idp@0.3.3(h3@1.15.5)(magicast@0.5.2)(nuxt@4.3.1(@libsql/client@0.14.0)(@parcel/watcher@2.5.6)(@types/node@22.19.13)(@vue/compiler-sfc@3.5.29)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.14.0)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0)))(drizzle-orm@0.44.7(@libsql/client@0.14.0)(gel@2.2.0))(eslint@9.39.3(jiti@2.6.1))(ioredis@5.10.0)(lightningcss@1.31.1)(magicast@0.5.2)(optionator@0.9.4)(rollup@4.59.0)(terser@5.46.0)(typescript@5.9.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.46.0)(yaml@2.8.2))(vue-tsc@2.2.12(typescript@5.9.3))(yaml@2.8.2))':
     dependencies:
       '@nuxt/kit': 3.21.1(magicast@0.5.2)
-      '@openape/auth': 0.1.3(h3@1.15.5)
+      '@openape/auth': 0.1.4(h3@1.15.5)
       '@openape/core': 0.1.2
       '@openape/grants': 0.1.2(h3@1.15.5)
       '@simplewebauthn/browser': 11.0.0
