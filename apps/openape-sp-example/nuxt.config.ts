@@ -12,5 +12,6 @@ export default defineNuxtConfig({
     spName: process.env.NUXT_OPENAPE_SP_NAME || 'OpenApe Service Provider',
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || 'change-me-sp-secret-at-least-32-chars-long',
     openapeUrl: process.env.NUXT_OPENAPE_URL ?? '',
+    fallbackIdpUrl: process.env.NUXT_OPENAPE_SP_FALLBACK_IDP_URL || 'https://id.openape.at',
   },
 })

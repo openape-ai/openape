@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  modules: ['@nuxt/ui', '@openape/nuxt-auth-idp', '@openape/nuxt-grants'],
+  modules: ['@nuxt/ui', '@openape/nuxt-auth-idp'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
   devServer: { port: 3000 },
@@ -18,9 +18,6 @@ export default defineNuxtConfig({
     requireUserVerification: process.env.NUXT_OPENAPE_REQUIRE_USER_VERIFICATION === 'true',
     residentKey: (process.env.NUXT_OPENAPE_RESIDENT_KEY as 'preferred' | 'required' | 'discouraged') || 'preferred',
     attestationType: (process.env.NUXT_OPENAPE_ATTESTATION_TYPE as 'none' | 'indirect' | 'direct' | 'enterprise') || 'none',
-  },
-  openapeGrants: {
-    enablePages: true,
   },
   nitro: {
     storage: {
