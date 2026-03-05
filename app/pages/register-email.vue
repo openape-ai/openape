@@ -29,7 +29,7 @@ async function requestRegistration() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+  <div class="min-h-screen flex items-center justify-center p-4">
     <!-- Registration form -->
     <div v-if="!sent" class="w-full max-w-md flex flex-col items-center text-center">
       <div class="text-6xl mb-6">

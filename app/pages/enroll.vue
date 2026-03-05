@@ -58,7 +58,7 @@ async function handleEnroll() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+  <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg bg-gray-900 border border-gray-800">
       <template #header>
         <h1 class="text-2xl font-bold text-center text-white">

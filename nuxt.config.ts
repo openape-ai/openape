@@ -13,7 +13,7 @@ export default defineNuxtConfig({
     rpName: 'OpenApe Free IdP',
     rpID: 'id.openape.at',
     rpOrigin: 'https://id.openape.at',
-    grants: { enablePages: false, storageKey: 'grants' },
+    grants: { enablePages: true, storageKey: 'grants' },
     routes: { admin: false },
   },
 

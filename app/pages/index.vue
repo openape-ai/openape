@@ -12,7 +12,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+  <div class="min-h-screen flex items-center justify-center p-4">
     <!-- Logged in -->
     <UCard v-if="user" class="w-full max-w-md bg-gray-900 border border-gray-800">
       <div class="flex flex-col items-center gap-4 py-4">
@@ -45,6 +45,16 @@ async function handleLogout() {
             icon="i-lucide-bot"
           >
             Agent verwalten
+          </UButton>
+          <UButton
+            to="/grants"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-shield-check"
+          >
+            Berechtigungen
           </UButton>
           <UButton
             color="neutral"

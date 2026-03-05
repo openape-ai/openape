@@ -35,16 +35,42 @@ const sudoCommand = computed(() => {
   return `sudo apes enroll \\\n  --server https://id.openape.at \\\n  --agent-name "${name}-agent" \\\n  --key /etc/apes/agent.key`
 })
 
+const authInstructions = computed(() => {
+  if (!agent.value) return ''
+  const email = agent.value.email
+  const base = 'https://id.openape.at'
+  return `You can authenticate at ${base} using Ed25519 challenge-response:
+
+Agent email: ${email}
+
+1. POST ${base}/api/agent/challenge
+   Body: { "agent_id": "${email}" }
+   Response: { "challenge": "<hex-string>" }
+
+2. Sign the challenge (UTF-8 bytes) with your Ed25519 private key.
+   Encode the signature as base64.
+
+3. POST ${base}/api/agent/authenticate
+   Body: { "agent_id": "${email}", "challenge": "<from-step-1>", "signature": "<base64>" }
+   Response: { "token": "<jwt>", "expires_in": 3600 }
+
+Use the token as: Authorization: Bearer <token>`
+})
+
 const agentInstructions = computed(() => {
   return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.at/enroll?name=<agent-name>&key=<url-encoded-public-key>&id=<agent-id>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n- id: a unique identifier (e.g. UUID or SHA-256 hash of the public key)\n\nThe agent email will be automatically derived from the logged-in user's email.`
 })
 
-const copied = ref(false)
+const copied = ref('')
+
+function copyField(field: string, text: string) {
+  navigator.clipboard.writeText(text)
+  copied.value = field
+  setTimeout(() => copied.value = '', 2000)
+}
 
 function copyText(text: string) {
-  navigator.clipboard.writeText(text)
-  copied.value = true
-  setTimeout(() => copied.value = false, 2000)
+  copyField('text', text)
 }
 
 async function handleDelete() {
@@ -65,7 +91,7 @@ async function handleDelete() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+  <div class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg bg-gray-900 border border-gray-800">
       <template #header>
         <div class="flex items-center justify-between">
@@ -107,23 +133,79 @@ async function handleDelete() {
         />
 
         <div class="space-y-4">
-          <UFormField label="Name">
-            <UInput :model-value="agent.name" readonly />
-          </UFormField>
+          <div>
+            <p class="text-sm text-gray-400 mb-1">
+              Name
+            </p>
+            <div class="flex items-center gap-2">
+              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 overflow-x-auto">{{ agent.name }}</pre>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :icon="copied === 'name' ? 'i-lucide-check' : 'i-lucide-copy'"
+                @click="copyField('name', agent.name)"
+              />
+            </div>
+          </div>
 
-          <UFormField label="Email">
-            <UInput :model-value="agent.email" readonly class="font-mono text-xs" />
-          </UFormField>
+          <div>
+            <p class="text-sm text-gray-400 mb-1">
+              Email
+            </p>
+            <div class="flex items-center gap-2">
+              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono overflow-x-auto">{{ agent.email }}</pre>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :icon="copied === 'email' ? 'i-lucide-check' : 'i-lucide-copy'"
+                @click="copyField('email', agent.email)"
+              />
+            </div>
+          </div>
 
-          <UFormField label="Public Key">
-            <UInput :model-value="agent.publicKey" readonly class="font-mono text-xs" />
-          </UFormField>
+          <div>
+            <p class="text-sm text-gray-400 mb-1">
+              Public Key
+            </p>
+            <div class="flex items-center gap-2">
+              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono overflow-x-auto break-all whitespace-pre-wrap">{{ agent.publicKey }}</pre>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :icon="copied === 'key' ? 'i-lucide-check' : 'i-lucide-copy'"
+                @click="copyField('key', agent.publicKey)"
+              />
+            </div>
+          </div>
 
-          <UFormField label="Status">
+          <div>
+            <p class="text-sm text-gray-400 mb-1">
+              Status
+            </p>
             <UBadge :color="agent.isActive ? 'success' : 'error'">
               {{ agent.isActive ? 'Aktiv' : 'Inaktiv' }}
             </UBadge>
-          </UFormField>
+          </div>
+
+          <div>
+            <p class="text-sm text-gray-400 mb-1">
+              Authentication
+            </p>
+            <div class="relative">
+              <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ authInstructions }}</pre>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :icon="copied === 'auth' ? 'i-lucide-check' : 'i-lucide-copy'"
+                class="absolute top-2 right-2"
+                @click="copyField('auth', authInstructions)"
+              />
+            </div>
+          </div>
 
           <UAlert
             v-if="deleteError"
@@ -164,7 +246,7 @@ async function handleDelete() {
                   color="neutral"
                   variant="ghost"
                   size="xs"
-                  :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+                  :icon="copied === 'text' ? 'i-lucide-check' : 'i-lucide-copy'"
                   class="absolute top-2 right-2"
                   @click="copyText(agentInstructions)"
                 />
@@ -196,7 +278,7 @@ async function handleDelete() {
                     color="neutral"
                     variant="ghost"
                     size="xs"
-                    :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
+                    :icon="copied === 'text' ? 'i-lucide-check' : 'i-lucide-copy'"
                     class="absolute top-2 right-2"
                     @click="copyText(sudoCommand.replace(/\\\n\s*/g, ''))"
                   />
