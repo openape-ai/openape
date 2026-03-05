@@ -1,3 +1,5 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Socket } from 'node:net'
 import { createHash } from 'node:crypto'
 import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig } from './types.js'
 import { evaluateRules } from './matcher.js'
@@ -5,6 +7,7 @@ import { AuthError, verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
 import { writeAudit } from './audit.js'
 import { isPrivateOrLoopback } from './ssrf.js'
+import { handleConnect } from './connect.js'
 
 /**
  * Compute a request hash that uniquely identifies the intent.
@@ -282,6 +285,73 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
         })
         return new Response(`Grant request failed: ${msg}`, { status: 504 })
       }
+    },
+  }
+}
+
+/**
+ * Create a node:http compatible handler for use with http.createServer().
+ * Returns both a request handler and a CONNECT handler.
+ */
+export function createNodeHandler(config: MultiAgentProxyConfig): {
+  handleRequest: (req: IncomingMessage, res: ServerResponse) => void
+  handleConnect: (req: IncomingMessage, socket: Socket, head: Buffer) => void
+} {
+  const proxy = createMultiAgentProxy(config)
+
+  return {
+    handleRequest(req: IncomingMessage, res: ServerResponse) {
+      // Convert IncomingMessage to Request and use existing fetch logic
+      const url = `http://${req.headers.host || 'localhost'}${req.url || '/'}`
+      const chunks: Buffer[] = []
+
+      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      req.on('end', async () => {
+        try {
+          const body = chunks.length > 0 ? Buffer.concat(chunks) : undefined
+          const headers = new Headers()
+          for (const [key, value] of Object.entries(req.headers)) {
+            if (value) {
+              headers.set(key, Array.isArray(value) ? value.join(', ') : value)
+            }
+          }
+
+          const request = new Request(url, {
+            method: req.method,
+            headers,
+            body: body && req.method !== 'GET' && req.method !== 'HEAD' ? body : undefined,
+            duplex: 'half',
+          } as RequestInit)
+
+          const response = await proxy.fetch(request)
+
+          res.writeHead(response.status, response.statusText, Object.fromEntries(response.headers))
+          if (response.body) {
+            const reader = response.body.getReader()
+            const pump = async (): Promise<void> => {
+              const { done, value } = await reader.read()
+              if (done) {
+                res.end()
+                return
+              }
+              res.write(value)
+              return pump()
+            }
+            await pump()
+          }
+          else {
+            res.end()
+          }
+        }
+        catch {
+          res.writeHead(502)
+          res.end('Proxy error')
+        }
+      })
+    },
+
+    handleConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
+      handleConnect(config, req, socket, head)
     },
   }
 }
