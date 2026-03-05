@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
+import { createServer } from 'node:http'
 import { parseArgs } from 'node:util'
 import { loadMultiAgentConfig } from './config.js'
-import { createMultiAgentProxy } from './proxy.js'
+import { createNodeHandler } from './proxy.js'
 import { initAudit } from './audit.js'
 
 const { values } = parseArgs({
@@ -38,28 +39,31 @@ if (values['dry-run']) {
   process.exit(0)
 }
 
-const proxy = createMultiAgentProxy(config)
+const handler = createNodeHandler(config)
 
-const server = Bun.serve({
-  port: proxy.port,
-  hostname: proxy.hostname,
-  fetch: proxy.fetch,
+const port = Number.parseInt(config.proxy.listen.split(':')[1] || '9090')
+const hostname = config.proxy.listen.split(':')[0] || '127.0.0.1'
+
+const server = createServer(handler.handleRequest)
+server.on('connect', handler.handleConnect)
+
+server.listen(port, hostname, () => {
+  console.log(`[openape-proxy] Listening on http://${hostname}:${port}`)
+  console.log(`[openape-proxy] CONNECT tunneling enabled`)
+  console.log(`[openape-proxy] Mandatory auth: ${config.proxy.mandatory_auth ?? false}`)
+  console.log(`[openape-proxy] Agents: ${config.agents.map(a => a.email).join(', ')}`)
+  console.log(`[openape-proxy] Default action: ${config.proxy.default_action}`)
 })
-
-console.log(`[openape-proxy] Listening on http://${server.hostname}:${server.port}`)
-console.log(`[openape-proxy] Mandatory auth: ${config.proxy.mandatory_auth ?? false}`)
-console.log(`[openape-proxy] Agents: ${config.agents.map(a => a.email).join(', ')}`)
-console.log(`[openape-proxy] Default action: ${config.proxy.default_action}`)
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n[openape-proxy] Shutting down...')
-  server.stop()
+  server.close()
   process.exit(0)
 })
 
 process.on('SIGTERM', () => {
   console.log('[openape-proxy] Shutting down...')
-  server.stop()
+  server.close()
   process.exit(0)
 })
