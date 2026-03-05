@@ -1,4 +1,4 @@
-/** Proxy configuration (parsed from TOML/JSON) */
+/** Single-agent proxy configuration (legacy format, parsed from TOML/JSON) */
 export interface ProxyConfig {
   proxy: {
     listen: string
@@ -6,10 +6,30 @@ export interface ProxyConfig {
     agent_email: string
     default_action: 'block' | 'request' | 'request-async'
     audit_log?: string
+    mandatory_auth?: boolean
   }
   allow: RuleEntry[]
   deny: RuleEntry[]
   grant_required: GrantRuleEntry[]
+}
+
+/** Multi-agent proxy configuration */
+export interface MultiAgentProxyConfig {
+  proxy: {
+    listen: string
+    default_action: 'block' | 'request' | 'request-async'
+    audit_log?: string
+    mandatory_auth?: boolean
+  }
+  agents: AgentConfig[]
+}
+
+export interface AgentConfig {
+  email: string
+  idp_url: string
+  allow?: RuleEntry[]
+  deny?: RuleEntry[]
+  grant_required?: GrantRuleEntry[]
 }
 
 export interface RuleEntry {
