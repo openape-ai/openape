@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import type { ActorType, DDISADelegateClaim } from '@openape/core'
 import type { KeyLike } from 'jose'
 
@@ -45,6 +46,37 @@ export interface KeyStore {
 export interface JtiStore {
   hasBeenUsed: (jti: string) => Promise<boolean>
   markUsed: (jti: string, ttlMs: number) => Promise<void>
+}
+
+export interface RefreshTokenFamily {
+  familyId: string
+  userId: string
+  clientId: string
+  currentTokenHash: string
+  createdAt: number
+  expiresAt: number
+  revoked: boolean
+}
+
+export interface RefreshTokenResult {
+  token: string
+  familyId: string
+}
+
+export interface RefreshConsumeResult {
+  newToken: string
+  userId: string
+  clientId: string
+  familyId: string
+}
+
+export interface RefreshTokenStore {
+  create: (userId: string, clientId: string, ttlMs?: number) => Promise<RefreshTokenResult>
+  consume: (token: string) => Promise<RefreshConsumeResult>
+  revokeByToken: (token: string) => Promise<void>
+  revokeFamily: (familyId: string) => Promise<void>
+  revokeByUser: (userId: string) => Promise<void>
+  listFamilies: (userId?: string) => Promise<RefreshTokenFamily[]>
 }
 
 // In-memory implementations
@@ -107,6 +139,134 @@ export class InMemoryJtiStore implements JtiStore {
         this.usedJtis.delete(jti)
       }
     }
+  }
+}
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function generateRefreshToken(): string {
+  return randomBytes(48).toString('base64url')
+}
+
+const DEFAULT_REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+export class InMemoryRefreshTokenStore implements RefreshTokenStore {
+  private families = new Map<string, RefreshTokenFamily>()
+  private tokens = new Map<string, { familyId: string, userId: string, clientId: string, expiresAt: number, used: boolean }>()
+
+  async create(userId: string, clientId: string, ttlMs?: number): Promise<RefreshTokenResult> {
+    const token = generateRefreshToken()
+    const tokenHash = hashToken(token)
+    const familyId = randomBytes(16).toString('hex')
+    const now = Date.now()
+    const expiresAt = now + (ttlMs ?? DEFAULT_REFRESH_TTL_MS)
+
+    this.families.set(familyId, {
+      familyId,
+      userId,
+      clientId,
+      currentTokenHash: tokenHash,
+      createdAt: now,
+      expiresAt,
+      revoked: false,
+    })
+
+    this.tokens.set(tokenHash, {
+      familyId,
+      userId,
+      clientId,
+      expiresAt,
+      used: false,
+    })
+
+    return { token, familyId }
+  }
+
+  async consume(token: string): Promise<RefreshConsumeResult> {
+    const tokenHash = hashToken(token)
+    const entry = this.tokens.get(tokenHash)
+
+    if (!entry) {
+      throw new Error('Invalid refresh token')
+    }
+
+    const family = this.families.get(entry.familyId)
+    if (!family || family.revoked) {
+      throw new Error('Token family revoked')
+    }
+
+    if (entry.expiresAt < Date.now()) {
+      throw new Error('Refresh token expired')
+    }
+
+    // Replay detection: if token was already used, revoke entire family
+    if (entry.used) {
+      family.revoked = true
+      throw new Error('Refresh token reuse detected — family revoked')
+    }
+
+    // Mark current token as used
+    entry.used = true
+
+    // Generate new token in same family
+    const newToken = generateRefreshToken()
+    const newHash = hashToken(newToken)
+
+    this.tokens.set(newHash, {
+      familyId: entry.familyId,
+      userId: entry.userId,
+      clientId: entry.clientId,
+      expiresAt: family.expiresAt,
+      used: false,
+    })
+
+    family.currentTokenHash = newHash
+
+    return {
+      newToken,
+      userId: entry.userId,
+      clientId: entry.clientId,
+      familyId: entry.familyId,
+    }
+  }
+
+  async revokeByToken(token: string): Promise<void> {
+    const tokenHash = hashToken(token)
+    const entry = this.tokens.get(tokenHash)
+    if (entry) {
+      const family = this.families.get(entry.familyId)
+      if (family) {
+        family.revoked = true
+      }
+    }
+  }
+
+  async revokeFamily(familyId: string): Promise<void> {
+    const family = this.families.get(familyId)
+    if (family) {
+      family.revoked = true
+    }
+  }
+
+  async revokeByUser(userId: string): Promise<void> {
+    for (const family of this.families.values()) {
+      if (family.userId === userId) {
+        family.revoked = true
+      }
+    }
+  }
+
+  async listFamilies(userId?: string): Promise<RefreshTokenFamily[]> {
+    const now = Date.now()
+    const result: RefreshTokenFamily[] = []
+    for (const family of this.families.values()) {
+      if (family.revoked || family.expiresAt < now) continue
+      if (userId && family.userId !== userId) continue
+      result.push({ ...family })
+    }
+    return result
   }
 }
 

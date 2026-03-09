@@ -1,6 +1,6 @@
 import type { ActorType, DDISAAssertionClaims, DDISADelegateClaim } from '@openape/core'
 import type { JWTPayload } from 'jose'
-import type { CodeStore, KeyStore } from './stores.js'
+import type { CodeStore, KeyStore, RefreshTokenStore } from './stores.js'
 import { generateCodeChallenge, signJWT } from '@openape/core'
 
 export interface TokenExchangeParams {
@@ -17,6 +17,7 @@ export interface TokenExchangeResult {
   token_type: string
   expires_in: number
   assertion: string
+  refresh_token?: string
 }
 
 export interface UserClaimsResolver {
@@ -32,6 +33,7 @@ export async function handleTokenExchange(
   keyStore: KeyStore,
   issuer: string,
   resolveUserClaims?: UserClaimsResolver,
+  refreshTokenStore?: RefreshTokenStore,
 ): Promise<TokenExchangeResult> {
   // Validate grant_type
   if (params.grant_type !== 'authorization_code') {
@@ -84,13 +86,22 @@ export async function handleTokenExchange(
     issuer,
   )
 
-  return {
+  const result: TokenExchangeResult = {
     id_token: assertion,
     access_token: assertion,
     token_type: 'Bearer',
     expires_in: 300,
     assertion,
   }
+
+  // Generate refresh token if offline_access scope requested
+  const scopes = new Set((codeEntry.scope ?? '').split(/\s+/).filter(Boolean))
+  if (scopes.has('offline_access') && refreshTokenStore) {
+    const { token } = await refreshTokenStore.create(codeEntry.userId, params.sp_id)
+    result.refresh_token = token
+  }
+
+  return result
 }
 
 /**
