@@ -181,6 +181,91 @@ export interface OpenApeAuthZClaims {
   run_as?: string
 }
 
+// --- openape.json SP Capability Manifest (Prompt 15) ---
+
+/** Risk level for a scope */
+export type ScopeRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+/** A scope (capability) that the SP offers */
+export interface OpenApeScope {
+  /** Human-readable name */
+  name: string
+  /** Description of what this scope allows */
+  description: string
+  /** Risk level */
+  risk: ScopeRiskLevel
+  /** Category key (references OpenApeManifest.categories) */
+  category?: string
+  /** Expected parameters (informational) */
+  parameters?: Record<string, { type: string, description: string }>
+}
+
+/** Category for grouping scopes in UI */
+export interface OpenApeScopeCategory {
+  /** Display name */
+  name: string
+  /** Icon (emoji or URL) */
+  icon?: string
+}
+
+/** SP policies published in the manifest */
+export interface OpenApePolicies {
+  /** Agent access policy */
+  agent_access?: PolicyMode
+  /** Whether delegation is allowed */
+  delegation?: 'allowed' | 'denied'
+  /** Max delegation duration (e.g. "30d", "1y") */
+  max_delegation_duration?: string | null
+  /** Which risk levels require a grant, and of what type */
+  require_grant_for_risk?: Partial<Record<ScopeRiskLevel, GrantType | null>>
+  /** Which risk levels require MFA */
+  require_mfa_for_risk?: Partial<Record<ScopeRiskLevel, boolean>>
+}
+
+/** Rate limit for a scope */
+export interface OpenApeRateLimit {
+  max_per_hour?: number
+  max_per_day?: number
+  max_amount_per_day?: number
+}
+
+/** openape.json — SP Capability Manifest */
+export interface OpenApeManifest {
+  /** Schema version */
+  version: string
+  /** Service info */
+  service: {
+    name: string
+    description?: string
+    url: string
+    icon?: string
+    privacy_policy?: string
+    terms?: string
+    contact?: string
+  }
+  /** Auth methods */
+  auth?: {
+    ddisa_domain?: string
+    oidc_client_id?: string
+    supported_methods: ('ddisa' | 'oidc')[]
+    login_url?: string
+  }
+  /** Scopes the SP offers */
+  scopes?: Record<string, OpenApeScope>
+  /** Scope categories for UI grouping */
+  categories?: Record<string, OpenApeScopeCategory>
+  /** SP policies */
+  policies?: OpenApePolicies
+  /** Rate limits per scope */
+  rate_limits?: Record<string, OpenApeRateLimit>
+  /** API endpoint info */
+  endpoints?: {
+    api_base?: string
+    openapi?: string
+    grant_verify?: string
+  }
+}
+
 /** DNS resolver options */
 export interface ResolverOptions {
   /** Cache TTL in seconds (default: 300) */

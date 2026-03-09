@@ -16,3 +16,9 @@ export {
   type ManifestValidationResult,
   validateSPManifest,
 } from './manifest.js'
+
+export {
+  fetchAndValidateOpenApeManifest,
+  type OpenApeManifestValidationResult,
+  validateOpenApeManifest,
+} from './openape-manifest.js'
