@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
     const session = await getSpSession(event)
     await session.update({
       claims: result.claims,
+      authorizationDetails: result.authorizationDetails,
     })
 
     return sendRedirect(event, '/dashboard')
