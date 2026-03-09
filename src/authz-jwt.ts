@@ -47,8 +47,10 @@ export async function issueAuthzJWT(
     jti: crypto.randomUUID(),
     grant_id: grant.id,
     grant_type: grant.request.grant_type,
+    approval: grant.request.grant_type,
     ...(grant.request.permissions ? { permissions: grant.request.permissions } : {}),
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
+    ...(grant.request.command ? { command: grant.request.command } : {}),
     ...(grant.decided_by ? { decided_by: grant.decided_by } : {}),
   }
 
