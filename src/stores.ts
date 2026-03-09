@@ -6,6 +6,8 @@ export interface GrantStore {
   updateStatus: (id: string, status: GrantStatus, extra?: Partial<OpenApeGrant>) => Promise<void>
   findPending: () => Promise<OpenApeGrant[]>
   findByRequester: (requester: string) => Promise<OpenApeGrant[]>
+  findByDelegate?: (delegate: string) => Promise<OpenApeGrant[]>
+  findByDelegator?: (delegator: string) => Promise<OpenApeGrant[]>
 }
 
 export class InMemoryGrantStore implements GrantStore {
@@ -46,6 +48,26 @@ export class InMemoryGrantStore implements GrantStore {
     const results: OpenApeGrant[] = []
     for (const grant of this.grants.values()) {
       if (grant.request.requester === requester) {
+        results.push({ ...grant })
+      }
+    }
+    return results
+  }
+
+  async findByDelegate(delegate: string): Promise<OpenApeGrant[]> {
+    const results: OpenApeGrant[] = []
+    for (const grant of this.grants.values()) {
+      if (grant.type === 'delegation' && grant.request.delegate === delegate) {
+        results.push({ ...grant })
+      }
+    }
+    return results
+  }
+
+  async findByDelegator(delegator: string): Promise<OpenApeGrant[]> {
+    const results: OpenApeGrant[] = []
+    for (const grant of this.grants.values()) {
+      if (grant.type === 'delegation' && grant.request.delegator === delegator) {
         results.push({ ...grant })
       }
     }

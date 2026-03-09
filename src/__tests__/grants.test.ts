@@ -2,11 +2,13 @@ import type { OpenApeGrantRequest } from '@openape/core'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   approveGrant,
+  createDelegation,
   createGrant,
   denyGrant,
   introspectGrant,
   revokeGrant,
   useGrant,
+  validateDelegation,
 } from '../grants.js'
 import { InMemoryGrantStore } from '../stores.js'
 
@@ -315,6 +317,164 @@ describe('grant lifecycle', () => {
       await expect(
         store.updateStatus('non-existent', 'approved'),
       ).rejects.toThrow('Grant not found')
+    })
+  })
+
+  describe('delegation grants', () => {
+    it('creates a delegation grant (auto-approved)', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        scopes: ['account:read', 'account:balance'],
+        grant_type: 'once',
+      }, store)
+
+      expect(grant.type).toBe('delegation')
+      expect(grant.status).toBe('approved')
+      expect(grant.request.delegator).toBe('patrick@hofmann.eco')
+      expect(grant.request.delegate).toBe('agent+patrick@id.openape.at')
+      expect(grant.request.audience).toBe('bank.example.com')
+      expect(grant.request.scopes).toEqual(['account:read', 'account:balance'])
+      expect(grant.decided_by).toBe('patrick@hofmann.eco')
+    })
+
+    it('creates timed delegation with expiry', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'lisa@firma.at',
+        audience: 'email.firma.at',
+        scopes: ['email:read', 'email:send'],
+        grant_type: 'timed',
+        duration: 86400,
+      }, store)
+
+      expect(grant.status).toBe('approved')
+      expect(grant.expires_at).toBeDefined()
+    })
+
+    it('validates delegation grant for correct delegate', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+
+      const validated = await validateDelegation(
+        grant.id,
+        'agent+patrick@id.openape.at',
+        'bank.example.com',
+        store,
+      )
+      expect(validated.id).toBe(grant.id)
+    })
+
+    it('rejects delegation for wrong delegate', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+
+      await expect(validateDelegation(
+        grant.id,
+        'other-agent@id.openape.at',
+        'bank.example.com',
+        store,
+      )).rejects.toThrow('Delegate does not match')
+    })
+
+    it('rejects delegation for wrong audience', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+
+      await expect(validateDelegation(
+        grant.id,
+        'agent+patrick@id.openape.at',
+        'other.example.com',
+        store,
+      )).rejects.toThrow('Audience does not match')
+    })
+
+    it('allows wildcard audience', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: '*',
+        grant_type: 'always',
+      }, store)
+
+      const validated = await validateDelegation(
+        grant.id,
+        'agent+patrick@id.openape.at',
+        'any-sp.example.com',
+        store,
+      )
+      expect(validated.id).toBe(grant.id)
+    })
+
+    it('rejects revoked delegation', async () => {
+      const grant = await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+
+      await revokeGrant(grant.id, store)
+
+      await expect(validateDelegation(
+        grant.id,
+        'agent+patrick@id.openape.at',
+        'bank.example.com',
+        store,
+      )).rejects.toThrow('not approved')
+    })
+
+    it('rejects non-delegation grant', async () => {
+      const grant = await createGrant(onceRequest, store)
+      await approveGrant(grant.id, 'admin@example.com', store)
+
+      await expect(validateDelegation(
+        grant.id,
+        'agent@example.com',
+        'api.example.com',
+        store,
+      )).rejects.toThrow('Not a delegation grant')
+    })
+
+    it('findByDelegate returns delegation grants', async () => {
+      await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+      await createGrant(onceRequest, store)
+
+      const grants = await store.findByDelegate('agent+patrick@id.openape.at')
+      expect(grants).toHaveLength(1)
+      expect(grants[0].type).toBe('delegation')
+    })
+
+    it('findByDelegator returns delegation grants', async () => {
+      await createDelegation({
+        delegator: 'patrick@hofmann.eco',
+        delegate: 'agent+patrick@id.openape.at',
+        audience: 'bank.example.com',
+        grant_type: 'always',
+      }, store)
+      await createGrant(onceRequest, store)
+
+      const grants = await store.findByDelegator('patrick@hofmann.eco')
+      expect(grants).toHaveLength(1)
+      expect(grants[0].request.delegate).toBe('agent+patrick@id.openape.at')
     })
   })
 })

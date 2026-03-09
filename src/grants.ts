@@ -1,4 +1,4 @@
-import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { GrantType, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { GrantStore } from './stores.js'
 
 /**
@@ -149,5 +149,75 @@ export async function useGrant(
   }
 
   // For 'timed' and 'always' grants, just return the valid grant
+  return grant
+}
+
+/**
+ * Create a delegation grant (pre-approved by the delegator).
+ */
+export async function createDelegation(
+  params: {
+    delegator: string
+    delegate: string
+    audience: string
+    scopes?: string[]
+    grant_type: GrantType
+    duration?: number
+  },
+  store: GrantStore,
+): Promise<OpenApeGrant> {
+  const grant: OpenApeGrant = {
+    id: crypto.randomUUID(),
+    type: 'delegation',
+    request: {
+      requester: params.delegator,
+      target: params.audience,
+      grant_type: params.grant_type,
+      delegator: params.delegator,
+      delegate: params.delegate,
+      audience: params.audience,
+      scopes: params.scopes,
+      duration: params.duration,
+    },
+    status: 'pending',
+    created_at: Math.floor(Date.now() / 1000),
+  }
+  await store.save(grant)
+
+  // Auto-approve since the delegator is creating it
+  return approveGrant(grant.id, params.delegator, store)
+}
+
+/**
+ * Validate a delegation grant for use by the delegate.
+ * Returns the grant if valid, throws otherwise.
+ */
+export async function validateDelegation(
+  grantId: string,
+  delegate: string,
+  audience: string,
+  store: GrantStore,
+): Promise<OpenApeGrant> {
+  const grant = await introspectGrant(grantId, store)
+  if (!grant) {
+    throw new Error(`Delegation grant not found: ${grantId}`)
+  }
+
+  if (grant.type !== 'delegation') {
+    throw new Error('Not a delegation grant')
+  }
+
+  if (grant.status !== 'approved') {
+    throw new Error(`Delegation grant is not approved: ${grant.status}`)
+  }
+
+  if (grant.request.delegate !== delegate) {
+    throw new Error('Delegate does not match')
+  }
+
+  if (grant.request.audience !== '*' && grant.request.audience !== audience) {
+    throw new Error('Audience does not match')
+  }
+
   return grant
 }
