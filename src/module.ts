@@ -2,6 +2,45 @@ import crypto from 'node:crypto'
 import { defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addComponentsDir, useLogger } from '@nuxt/kit'
 import { defu } from 'defu'
 
+export interface ManifestConfig {
+  service?: {
+    name?: string
+    description?: string
+    url?: string
+    icon?: string
+    privacy_policy?: string
+    terms?: string
+    contact?: string
+  }
+  auth?: {
+    ddisa_domain?: string
+    oidc_client_id?: string
+    supported_methods?: ('ddisa' | 'oidc')[]
+    login_url?: string
+  }
+  scopes?: Record<string, {
+    name: string
+    description: string
+    risk: 'low' | 'medium' | 'high' | 'critical'
+    category?: string
+    parameters?: Record<string, { type: string, description: string }>
+  }>
+  categories?: Record<string, { name: string, icon?: string }>
+  policies?: {
+    agent_access?: string
+    delegation?: 'allowed' | 'denied'
+    max_delegation_duration?: string | null
+    require_grant_for_risk?: Record<string, string | null>
+    require_mfa_for_risk?: Record<string, boolean>
+  }
+  rate_limits?: Record<string, Record<string, number>>
+  endpoints?: {
+    api_base?: string
+    openapi?: string
+    grant_verify?: string
+  }
+}
+
 export interface ModuleOptions {
   spId: string
   spName: string
@@ -9,6 +48,7 @@ export interface ModuleOptions {
   openapeUrl: string
   fallbackIdpUrl: string
   routes: boolean
+  manifest?: ManifestConfig
 }
 
 const logger = useLogger('@openape/nuxt-auth-sp')
@@ -83,6 +123,7 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
       addServerHandler({ route: '/.well-known/sp-manifest.json', handler: resolve('./runtime/server/routes/well-known/sp-manifest.json.get') })
       addServerHandler({ route: '/.well-known/auth.md', handler: resolve('./runtime/server/routes/well-known/auth.md.get') })
+      addServerHandler({ route: '/.well-known/openape.json', handler: resolve('./runtime/server/routes/well-known/openape.json.get') })
     }
   },
 })
