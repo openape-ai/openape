@@ -204,6 +204,7 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/grants/:id/deny', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/deny.post') })
       addServerHandler({ route: '/api/grants/:id/revoke', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/revoke.post') })
       addServerHandler({ route: '/api/grants/:id/token', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/token.post') })
+      addServerHandler({ route: '/api/grants/:id/consume', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/consume.post') })
     }
 
     // Server route handlers — Agent
