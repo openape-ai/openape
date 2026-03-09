@@ -21,7 +21,7 @@ describe('oIDC discovery', () => {
     expect(result.token_endpoint).toBe('https://id.openape.at/token')
     expect(result.jwks_uri).toBe('https://id.openape.at/.well-known/jwks.json')
     expect(result.response_types_supported).toEqual(['code'])
-    expect(result.grant_types_supported).toEqual(['authorization_code'])
+    expect(result.grant_types_supported).toEqual(['authorization_code', 'client_credentials'])
     expect(result.subject_types_supported).toEqual(['public'])
     expect(result.id_token_signing_alg_values_supported).toEqual(['ES256'])
     expect(result.code_challenge_methods_supported).toEqual(['S256'])
@@ -30,6 +30,8 @@ describe('oIDC discovery', () => {
     expect(result.claims_supported).toContain('email')
     expect(result.claims_supported).toContain('name')
     expect(result.claims_supported).toContain('act')
+    expect(result.token_endpoint_auth_methods_supported).toEqual(['none', 'private_key_jwt'])
+    expect(result.token_endpoint_auth_signing_alg_values_supported).toEqual(['EdDSA', 'ES256'])
   })
 
   it('constructs all endpoints from issuer URL', async () => {

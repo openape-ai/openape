@@ -3,6 +3,7 @@ import { createAgentStore } from './agent-store'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
 import { createCredentialStore } from './credential-store'
+import { createJtiStore } from './jti-store'
 import { createKeyStore } from './key-store'
 import { createRegistrationUrlStore } from './registration-url-store'
 import { createUserStore } from './user-store'
@@ -18,6 +19,7 @@ function initStores() {
     credentialStore: createCredentialStore(),
     challengeStore: createChallengeStore(),
     registrationUrlStore: createRegistrationUrlStore(),
+    jtiStore: createJtiStore(),
   }
 }
 
