@@ -32,7 +32,9 @@ watch(user, (u) => {
 const sudoCommand = computed(() => {
   const email = user.value?.email ?? ''
   const name = email.split('@')[0] ?? 'agent'
-  return `sudo apes enroll \\\n  --server https://id.openape.at \\\n  --agent-name "${name}-agent" \\\n  --key /etc/apes/agent.key`
+  const [local, domain] = email.split('@')
+  const agentEmail = `agent+${local}+${(domain ?? '').replace(/\./g, '_')}@id.openape.at`
+  return `sudo apes enroll \\\n  --server https://id.openape.at \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/apes/agent.key`
 })
 
 const authInstructions = computed(() => {
@@ -58,8 +60,65 @@ Use the token as: Authorization: Bearer <token>`
 })
 
 const agentInstructions = computed(() => {
-  return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.at/enroll?name=<agent-name>&key=<url-encoded-public-key>&id=<agent-id>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n- id: a unique identifier (e.g. UUID or SHA-256 hash of the public key)\n\nThe agent email will be automatically derived from the logged-in user's email.`
+  return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.at/enroll?name=<agent-name>&key=<url-encoded-public-key>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n\nThe agent email will be automatically derived from the logged-in user's email.`
 })
+
+const apesCommands = computed(() => {
+  if (!agent.value) return []
+  const email = agent.value.email
+  const name = agent.value.name
+  return [
+    {
+      label: 'Enroll (neuer Server)',
+      cmd: `sudo apes enroll --server https://id.openape.at --agent-email "${email}" --agent-name "${name}" --key /etc/apes/agent.key --existing`,
+    },
+    {
+      label: 'Server-URL ändern',
+      cmd: `sudo apes update --email "${email}" --server https://id.openape.at`,
+    },
+    {
+      label: 'Agent entfernen (nur lokal)',
+      cmd: `sudo apes remove --email "${email}"`,
+    },
+    {
+      label: 'Agent entfernen (lokal + remote)',
+      cmd: `sudo apes remove --email "${email}" --remote`,
+    },
+  ]
+})
+
+const editingKey = ref(false)
+const editKeyValue = ref('')
+const savingKey = ref(false)
+const keyError = ref('')
+
+function startEditKey() {
+  editKeyValue.value = agent.value?.publicKey ?? ''
+  keyError.value = ''
+  editingKey.value = true
+}
+
+function cancelEditKey() {
+  editingKey.value = false
+  keyError.value = ''
+}
+
+async function saveKey() {
+  savingKey.value = true
+  keyError.value = ''
+  try {
+    await $fetch('/api/my-agent', { method: 'PATCH', body: { publicKey: editKeyValue.value } })
+    await loadAgent()
+    editingKey.value = false
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
+    keyError.value = e.data?.statusMessage ?? e.message ?? 'Update failed'
+  }
+  finally {
+    savingKey.value = false
+  }
+}
 
 const copied = ref('')
 
@@ -169,8 +228,48 @@ async function handleDelete() {
             <p class="text-sm text-gray-400 mb-1">
               Public Key
             </p>
-            <div class="flex items-center gap-2">
+            <template v-if="editingKey">
+              <UTextarea
+                v-model="editKeyValue"
+                :rows="3"
+                class="font-mono text-xs"
+                placeholder="ssh-ed25519 AAAA..."
+              />
+              <UAlert
+                v-if="keyError"
+                color="error"
+                :title="keyError"
+                class="mt-2"
+              />
+              <div class="flex gap-2 mt-2">
+                <UButton
+                  color="primary"
+                  size="sm"
+                  :loading="savingKey"
+                  icon="i-lucide-check"
+                  label="Speichern"
+                  @click="saveKey"
+                />
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  icon="i-lucide-x"
+                  label="Abbrechen"
+                  :disabled="savingKey"
+                  @click="cancelEditKey"
+                />
+              </div>
+            </template>
+            <div v-else class="flex items-center gap-2">
               <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono overflow-x-auto break-all whitespace-pre-wrap">{{ agent.publicKey }}</pre>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                icon="i-lucide-pencil"
+                @click="startEditKey"
+              />
               <UButton
                 color="neutral"
                 variant="ghost"
@@ -204,6 +303,33 @@ async function handleDelete() {
                 class="absolute top-2 right-2"
                 @click="copyField('auth', authInstructions)"
               />
+            </div>
+          </div>
+
+          <div v-if="apesCommands.length">
+            <p class="text-sm text-gray-400 mb-2">
+              Server-Befehle (apes)
+            </p>
+            <div class="space-y-2">
+              <div
+                v-for="item in apesCommands"
+                :key="item.label"
+              >
+                <p class="text-xs text-gray-500 mb-1">
+                  {{ item.label }}
+                </p>
+                <div class="relative">
+                  <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ item.cmd }}</pre>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :icon="copied === item.label ? 'i-lucide-check' : 'i-lucide-copy'"
+                    class="absolute top-2 right-2"
+                    @click="copyField(item.label, item.cmd)"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

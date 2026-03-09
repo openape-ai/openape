@@ -32,12 +32,6 @@ export default defineEventHandler(async (event) => {
 
   const agentEmail = deriveAgentEmail(email)
 
-  const allAgents = await agentStore.listAll()
-  const duplicateKey = allAgents.find(a => a.publicKey === body.publicKey)
-  if (duplicateKey) {
-    throw createError({ statusCode: 409, statusMessage: 'An agent with this public key already exists' })
-  }
-
   const agent = await agentStore.create({
     id: body.id || crypto.randomUUID(),
     email: agentEmail,
