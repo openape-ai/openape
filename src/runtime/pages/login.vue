@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { navigateTo, useRoute } from '#imports'
 import { useIdpAuth } from '../composables/useIdpAuth'
 import { useWebAuthn } from '../composables/useWebAuthn'
@@ -9,7 +9,16 @@ const { login, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
 const route = useRoute()
 
 const email = ref((route.query.login_hint as string) ?? '')
-const error = ref('')
+const error = ref((route.query.error as string) ?? '')
+const federationProviders = ref<{ id: string, name: string }[]>([])
+
+onMounted(async () => {
+  try {
+    const providers = await $fetch<{ id: string, name: string }[]>('/api/federation/providers')
+    federationProviders.value = providers
+  }
+  catch {}
+})
 
 async function handleLogin() {
   error.value = ''
@@ -27,6 +36,15 @@ async function handleLogin() {
   catch {
     error.value = webauthnError.value
   }
+}
+
+function federationLogin(providerId: string) {
+  const returnTo = route.query.returnTo as string | undefined
+  let url = `/auth/federated/${providerId}`
+  if (returnTo) {
+    url += `?returnTo=${encodeURIComponent(returnTo)}`
+  }
+  window.location.href = url
 }
 </script>
 
@@ -64,6 +82,31 @@ async function handleLogin() {
           :label="webauthnLoading ? 'Authenticating...' : 'Sign in with Passkey'"
           @click="handleLogin"
         />
+      </div>
+
+      <div
+        v-if="federationProviders.length > 0"
+        class="mt-4"
+      >
+        <div class="relative my-4">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t" />
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="bg-(--ui-bg) px-2 text-(--ui-text-muted)">or</span>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <UButton
+            v-for="provider in federationProviders"
+            :key="provider.id"
+            block
+            variant="outline"
+            :label="`Sign in with ${provider.name}`"
+            @click="federationLogin(provider.id)"
+          />
+        </div>
       </div>
 
       <template #footer>

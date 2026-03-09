@@ -29,6 +29,8 @@ export interface ModuleOptions {
   grants: Partial<GrantsOptions>
   routes: boolean | Partial<RoutesOptions>
   pages: boolean
+  /** Federation providers as JSON string (parsed at runtime) */
+  federationProviders: string
 }
 
 function resolveRoutes(routes: boolean | Partial<RoutesOptions> | undefined): RoutesOptions {
@@ -68,6 +70,7 @@ export default defineNuxtModule<ModuleOptions>({
     },
     routes: true,
     pages: true,
+    federationProviders: '',
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
@@ -208,6 +211,13 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/agent/challenge', method: 'post', handler: resolve('./runtime/server/api/agent/challenge.post') })
       addServerHandler({ route: '/api/agent/authenticate', method: 'post', handler: resolve('./runtime/server/api/agent/authenticate.post') })
       addServerHandler({ route: '/api/agent/enroll', method: 'post', handler: resolve('./runtime/server/api/agent/enroll.post') })
+    }
+
+    // Server route handlers — Federation
+    if (routeConfig.auth) {
+      addServerHandler({ route: '/auth/federated/:providerId', handler: resolve('./runtime/server/routes/auth/federated/[providerId].get') })
+      addServerHandler({ route: '/auth/federated/:providerId/callback', handler: resolve('./runtime/server/routes/auth/federated/[providerId].callback.get') })
+      addServerHandler({ route: '/api/federation/providers', handler: resolve('./runtime/server/api/federation/providers.get') })
     }
   },
 })
