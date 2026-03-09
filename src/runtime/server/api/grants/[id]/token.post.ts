@@ -1,5 +1,8 @@
 import { issueAuthzJWT } from '@openape/grants'
 import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { requireAgent } from '../../../utils/agent-auth'
+import { useGrantStores } from '../../../utils/grant-stores'
+import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 
 export default defineEventHandler(async (event) => {
   const agentPayload = await requireAgent(event)

@@ -1,5 +1,9 @@
 import type { OpenApeGrant } from '@openape/core'
 import { defineEventHandler, getQuery } from 'h3'
+import { isAdmin } from '../../utils/admin'
+import { useGrantStores } from '../../utils/grant-stores'
+import { getAppSession } from '../../utils/session'
+import { useIdpStores } from '../../utils/stores'
 
 export default defineEventHandler(async (event) => {
   const { grantStore } = useGrantStores()

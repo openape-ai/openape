@@ -1,13 +1,28 @@
 import type { AuthorizeParams } from '@openape/auth'
-import type { ActorType, DDISADelegateClaim, OpenApeGrant } from '@openape/core'
+import type { ActorType, DDISADelegateClaim, OpenApeAuthorizationDetail, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
-import { useGrant } from '@openape/grants'
+import { approveGrant, createGrant, useGrant } from '@openape/grants'
 import { tryAgentAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
+
+function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizationDetail[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (d: unknown): d is OpenApeAuthorizationDetail =>
+        typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_grant' && typeof (d as Record<string, unknown>).action === 'string',
+    )
+  }
+  catch {
+    return []
+  }
+}
 
 function findDelegateGrant(grants: OpenApeGrant[], target: string): OpenApeGrant | null {
   const now = Math.floor(Date.now() / 1000)
@@ -105,6 +120,32 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, redirectUrl.toString())
   }
 
+  // Parse and process authorization_details (RFC 9396)
+  const authzDetails = parseAuthorizationDetails(String(query.authorization_details ?? ''))
+  let approvedDetails: OpenApeAuthorizationDetail[] | undefined
+
+  if (authzDetails.length > 0) {
+    const { grantStore } = useGrantStores()
+    approvedDetails = []
+
+    for (const detail of authzDetails) {
+      const grant = await createGrant({
+        requester: agentPayload ? agentPayload.sub : userId,
+        target: params.sp_id,
+        grant_type: detail.approval ?? 'once',
+        permissions: [detail.action],
+        reason: detail.reason,
+      }, grantStore)
+
+      // Auto-approve: user consents by authenticating in the authorize flow
+      const approved = await approveGrant(grant.id, userId, grantStore)
+      approvedDetails.push({
+        ...detail,
+        grant_id: approved.id,
+      })
+    }
+  }
+
   const code = crypto.randomUUID()
   await codeStore.save({
     code,
@@ -117,6 +158,7 @@ export default defineEventHandler(async (event) => {
     act: actorType,
     delegate: delegateInfo,
     scope: params.scope || undefined,
+    authorizationDetails: approvedDetails,
   })
 
   const redirectUrl = new URL(params.redirect_uri)

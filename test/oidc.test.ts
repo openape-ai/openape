@@ -30,6 +30,8 @@ describe('oIDC discovery', () => {
     expect(result.claims_supported).toContain('email')
     expect(result.claims_supported).toContain('name')
     expect(result.claims_supported).toContain('act')
+    expect(result.claims_supported).toContain('authorization_details')
+    expect(result.authorization_details_types_supported).toEqual(['openape_grant'])
     expect(result.token_endpoint_auth_methods_supported).toEqual(['none', 'private_key_jwt'])
     expect(result.token_endpoint_auth_signing_alg_values_supported).toEqual(['EdDSA', 'ES256'])
     expect(result.scopes_supported).toContain('offline_access')

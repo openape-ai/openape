@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { navigateTo, useIdpAuth, useRoute } from '#imports'
+
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 
@@ -9,6 +12,14 @@ const processing = ref(false)
 
 const grantId = computed(() => route.query.grant_id as string)
 const callbackUrl = computed(() => route.query.callback as string)
+const isDelegate = computed(() => (grant.value as any)?.request?.permissions?.includes('delegate'))
+const delegateDuration = computed(() => {
+  const req = (grant.value as any)?.request
+  if (!req?.duration) return null
+  const h = Math.floor(req.duration / 3600)
+  const m = Math.floor((req.duration % 3600) / 60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+})
 
 onMounted(async () => {
   await fetchUser()
@@ -106,7 +117,28 @@ async function handleDeny() {
 
       <template v-else-if="grant">
         <div v-if="(grant as any).status === 'pending'" class="space-y-4">
-          <UAlert color="warning" title="An application is requesting permission:">
+          <UAlert
+            v-if="isDelegate"
+            color="error"
+            title="Identity Delegation Request"
+          >
+            <template #description>
+              <p class="font-semibold">
+                {{ (grant as any).request?.requester }} is requesting to act <strong>as you</strong> at {{ (grant as any).request?.target }}.
+              </p>
+              <p v-if="delegateDuration" class="mt-1 text-sm">
+                Duration: {{ delegateDuration }}
+              </p>
+              <p v-else-if="(grant as any).request?.grant_type === 'once'" class="mt-1 text-sm">
+                Single use only.
+              </p>
+              <p v-else-if="(grant as any).request?.grant_type === 'always'" class="mt-1 text-sm">
+                Permanent — until revoked.
+              </p>
+            </template>
+          </UAlert>
+
+          <UAlert :color="isDelegate ? 'error' : 'warning'" title="An application is requesting permission:">
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div>

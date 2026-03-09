@@ -18,6 +18,7 @@ export default defineEventHandler(() => {
     token_endpoint_auth_signing_alg_values_supported: ['EdDSA', 'ES256'],
     code_challenge_methods_supported: ['S256'],
     scopes_supported: ['openid', 'email', 'profile', 'offline_access'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'nonce', 'act', 'email', 'name'],
+    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'nonce', 'act', 'email', 'name', 'authorization_details'],
+    authorization_details_types_supported: ['openape_grant'],
   }
 })

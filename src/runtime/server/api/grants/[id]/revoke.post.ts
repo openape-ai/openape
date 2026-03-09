@@ -1,5 +1,8 @@
 import { revokeGrant } from '@openape/grants'
 import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { isAdmin, requireAuth } from '../../../utils/admin'
+import { useGrantStores } from '../../../utils/grant-stores'
+import { useIdpStores } from '../../../utils/stores'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

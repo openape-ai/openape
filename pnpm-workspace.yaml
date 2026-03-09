@@ -5,3 +5,4 @@ trustPolicy: no-downgrade
 overrides:
   '@openape/auth': link:../auth
   '@openape/core': link:../core
+  '@openape/grants': link:../grants

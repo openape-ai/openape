@@ -1,5 +1,6 @@
 import { introspectGrant } from '@openape/grants'
 import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { useGrantStores } from '../../utils/grant-stores'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

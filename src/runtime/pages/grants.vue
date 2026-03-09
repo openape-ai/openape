@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { navigateTo, useIdpAuth } from '#imports'
+
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 
 interface Grant {
