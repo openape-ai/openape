@@ -161,6 +161,7 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/authorize', handler: resolve('./runtime/server/routes/authorize.get') })
       addServerHandler({ route: '/token', method: 'post', handler: resolve('./runtime/server/routes/token.post') })
       addServerHandler({ route: '/.well-known/jwks.json', handler: resolve('./runtime/server/routes/well-known/jwks.json.get') })
+      addServerHandler({ route: '/.well-known/openid-configuration', handler: resolve('./runtime/server/routes/well-known/openid-configuration.get') })
     }
 
     // Server route handlers — Admin

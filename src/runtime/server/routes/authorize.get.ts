@@ -1,15 +1,27 @@
 import type { AuthorizeParams } from '@openape/auth'
-import type { ActorType } from '@openape/core'
+import type { ActorType, DDISADelegateClaim, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
+import { useGrant } from '@openape/grants'
 import { tryAgentAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
+import { useGrantStores } from '../utils/grant-stores'
+
+function findDelegateGrant(grants: OpenApeGrant[], target: string): OpenApeGrant | null {
+  const now = Math.floor(Date.now() / 1000)
+  return grants.find(g =>
+    g.status === 'approved'
+    && g.request.target === target
+    && g.request.permissions?.includes('delegate')
+    && (!g.expires_at || g.expires_at > now),
+  ) ?? null
+}
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const { codeStore } = useIdpStores()
+  const { codeStore, agentStore } = useIdpStores()
 
   const params: AuthorizeParams = {
     sp_id: String(query.sp_id ?? ''),
@@ -19,6 +31,7 @@ export default defineEventHandler(async (event) => {
     code_challenge_method: String(query.code_challenge_method ?? ''),
     nonce: String(query.nonce ?? ''),
     response_type: String(query.response_type ?? ''),
+    scope: String(query.scope ?? ''),
   }
 
   const error = validateAuthorizeRequest(params)
@@ -30,10 +43,38 @@ export default defineEventHandler(async (event) => {
   const agentPayload = await tryAgentAuth(event)
   let userId: string
   let actorType: ActorType | undefined
+  let delegateInfo: DDISADelegateClaim | undefined
 
   if (agentPayload) {
-    userId = agentPayload.sub
-    actorType = 'agent'
+    // Check for delegate grant — agent acting as human owner
+    const { grantStore } = useGrantStores()
+    const grants = await grantStore.findByRequester(agentPayload.sub)
+    const delegateGrant = findDelegateGrant(grants, params.sp_id)
+
+    if (delegateGrant) {
+      const agent = await agentStore.findByEmail(agentPayload.sub)
+      if (agent) {
+        userId = agent.owner
+        actorType = undefined // → default 'human' in issueAssertion
+        delegateInfo = {
+          sub: agentPayload.sub,
+          act: 'agent' as const,
+          grant_id: delegateGrant.id,
+        }
+        // Consume grant (once → used, timed/always → noop)
+        await useGrant(delegateGrant.id, grantStore)
+      }
+      else {
+        // Agent not found in store — fall back to standard agent mode
+        userId = agentPayload.sub
+        actorType = 'agent'
+      }
+    }
+    else {
+      // Standard agent mode
+      userId = agentPayload.sub
+      actorType = 'agent'
+    }
   }
   else {
     const session = await getAppSession(event)
@@ -74,6 +115,8 @@ export default defineEventHandler(async (event) => {
     nonce: params.nonce,
     expiresAt: Date.now() + 60_000,
     act: actorType,
+    delegate: delegateInfo,
+    scope: params.scope || undefined,
   })
 
   const redirectUrl = new URL(params.redirect_uri)
