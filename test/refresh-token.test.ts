@@ -53,6 +53,14 @@ vi.mock('../src/runtime/server/utils/agent-token', () => ({
   issueAgentToken: vi.fn().mockResolvedValue('mock-agent-jwt'),
 }))
 
+// Mock grant-stores (imports nitropack/runtime which is unavailable in tests)
+vi.mock('../src/runtime/server/utils/grant-stores', () => ({
+  useGrantStores: () => ({
+    grantStore: {},
+    challengeStore: {},
+  }),
+}))
+
 describe('refresh_token grant', () => {
   it('exchanges refresh token for new token set', async () => {
     await setup()

@@ -1,9 +1,9 @@
 import type { AuthorizeParams } from '@openape/auth'
-import type { ActorType, DDISADelegateClaim, OpenApeAuthorizationDetail, OpenApeGrant } from '@openape/core'
+import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import { createError, defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
-import { approveGrant, createGrant, useGrant } from '@openape/grants'
+import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
 import { tryAgentAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
@@ -24,19 +24,9 @@ function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizatio
   }
 }
 
-function findDelegateGrant(grants: OpenApeGrant[], target: string): OpenApeGrant | null {
-  const now = Math.floor(Date.now() / 1000)
-  return grants.find(g =>
-    g.status === 'approved'
-    && g.request.target === target
-    && g.request.permissions?.includes('delegate')
-    && (!g.expires_at || g.expires_at > now),
-  ) ?? null
-}
-
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const { codeStore, agentStore } = useIdpStores()
+  const { codeStore } = useIdpStores()
 
   const params: AuthorizeParams = {
     sp_id: String(query.sp_id ?? ''),
@@ -58,32 +48,28 @@ export default defineEventHandler(async (event) => {
   const agentPayload = await tryAgentAuth(event)
   let userId: string
   let actorType: ActorType | undefined
-  let delegateInfo: DDISADelegateClaim | undefined
+  let delegationAct: DelegationActClaim | undefined
+  let delegationGrantId: string | undefined
+
+  // Check for explicit delegation_grant parameter
+  const delegationGrantParam = String(query.delegation_grant ?? '')
 
   if (agentPayload) {
-    // Check for delegate grant — agent acting as human owner
-    const { grantStore } = useGrantStores()
-    const grants = await grantStore.findByRequester(agentPayload.sub)
-    const delegateGrant = findDelegateGrant(grants, params.sp_id)
-
-    if (delegateGrant) {
-      const agent = await agentStore.findByEmail(agentPayload.sub)
-      if (agent) {
-        userId = agent.owner
-        actorType = undefined // → default 'human' in issueAssertion
-        delegateInfo = {
-          sub: agentPayload.sub,
-          act: 'agent' as const,
-          grant_id: delegateGrant.id,
-        }
-        // Consume grant (once → used, timed/always → noop)
-        await useGrant(delegateGrant.id, grantStore)
-      }
-      else {
-        // Agent not found in store — fall back to standard agent mode
-        userId = agentPayload.sub
-        actorType = 'agent'
-      }
+    if (delegationGrantParam) {
+      // Agent with explicit delegation grant
+      const { grantStore } = useGrantStores()
+      const grant = await validateDelegation(
+        delegationGrantParam,
+        agentPayload.sub,
+        params.sp_id,
+        grantStore,
+      )
+      // sub becomes the delegator, act becomes the delegate
+      userId = grant.request.delegator!
+      delegationAct = { sub: agentPayload.sub }
+      delegationGrantId = grant.id
+      // Consume grant (once → used, timed/always → noop)
+      await useGrant(grant.id, grantStore)
     }
     else {
       // Standard agent mode
@@ -104,7 +90,24 @@ export default defineEventHandler(async (event) => {
       }
       return sendRedirect(event, loginUrl.pathname + loginUrl.search)
     }
-    userId = session.data.userId
+
+    if (delegationGrantParam) {
+      // Human with explicit delegation grant (e.g. Lisa acting as Patrick)
+      const { grantStore } = useGrantStores()
+      const grant = await validateDelegation(
+        delegationGrantParam,
+        session.data.userId,
+        params.sp_id,
+        grantStore,
+      )
+      userId = grant.request.delegator!
+      delegationAct = { sub: session.data.userId }
+      delegationGrantId = grant.id
+      await useGrant(grant.id, grantStore)
+    }
+    else {
+      userId = session.data.userId
+    }
   }
 
   const userDomain = extractDomain(userId)
@@ -156,9 +159,10 @@ export default defineEventHandler(async (event) => {
     nonce: params.nonce,
     expiresAt: Date.now() + 60_000,
     act: actorType,
-    delegate: delegateInfo,
     scope: params.scope || undefined,
     authorizationDetails: approvedDetails,
+    delegationAct,
+    delegationGrant: delegationGrantId,
   })
 
   const redirectUrl = new URL(params.redirect_uri)

@@ -60,6 +60,24 @@ vi.mock('../src/runtime/server/utils/ed25519', () => ({
   sshEd25519ToKeyObject: () => agentPublicKey,
 }))
 
+// Mock grant-stores (imports nitropack/runtime which is unavailable in tests)
+const mockGrantStore = {
+  save: vi.fn(),
+  findById: vi.fn(),
+  updateStatus: vi.fn(),
+  findPending: vi.fn(),
+  findByRequester: vi.fn(),
+  findByDelegate: vi.fn(),
+  findByDelegator: vi.fn(),
+}
+
+vi.mock('../src/runtime/server/utils/grant-stores', () => ({
+  useGrantStores: () => ({
+    grantStore: mockGrantStore,
+    challengeStore: {},
+  }),
+}))
+
 async function buildClientAssertion(overrides: Partial<{ iss: string, aud: string, jti: string }> = {}): Promise<string> {
   return new SignJWT({})
     .setProtectedHeader({ alg: 'EdDSA' })

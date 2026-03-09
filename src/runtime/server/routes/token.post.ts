@@ -1,9 +1,11 @@
 import type { TokenExchangeParams } from '@openape/auth'
 import { createError, defineEventHandler, readRawBody } from 'h3'
-import { handleRefreshGrant, handleTokenExchange, validateClientAssertion } from '@openape/auth'
+import { handleRefreshGrant, handleTokenExchange, issueAssertion, validateClientAssertion } from '@openape/auth'
+import { useGrant, validateDelegation } from '@openape/grants'
 import { sshEd25519ToKeyObject } from '../utils/ed25519'
 import { issueAgentToken } from '../utils/agent-token'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
+import { useGrantStores } from '../utils/grant-stores'
 
 function parseScope(scope?: string): Set<string> {
   if (!scope) return new Set()
@@ -61,6 +63,8 @@ export default defineEventHandler(async (event) => {
 async function handleClientCredentialsGrant(body: Record<string, string>) {
   const assertionType = body.client_assertion_type
   const assertion = body.client_assertion
+  const delegationGrantParam = body.delegation_grant
+  const audience = body.audience
 
   if (assertionType !== 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer') {
     throw createError({ statusCode: 400, statusMessage: 'Unsupported client_assertion_type' })
@@ -85,6 +89,36 @@ async function handleClientCredentialsGrant(body: Record<string, string>) {
       jtiStore,
     )
 
+    // Delegation flow: agent acts as delegator
+    if (delegationGrantParam) {
+      if (!audience) {
+        throw createError({ statusCode: 400, statusMessage: 'Missing audience for delegation' })
+      }
+
+      const { grantStore } = useGrantStores()
+      const grant = await validateDelegation(delegationGrantParam, sub, audience, grantStore)
+      await useGrant(grant.id, grantStore)
+
+      const token = await issueAssertion(
+        {
+          sub: grant.request.delegator!,
+          aud: audience,
+          nonce: crypto.randomUUID(),
+          delegation_act: { sub },
+          delegation_grant: grant.id,
+        },
+        keyStore,
+        issuer,
+      )
+
+      return {
+        access_token: token,
+        token_type: 'Bearer',
+        expires_in: 300,
+      }
+    }
+
+    // Standard agent token
     const signingKey = await keyStore.getSigningKey()
     const token = await issueAgentToken(
       { sub },

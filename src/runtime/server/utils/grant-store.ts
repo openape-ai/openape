@@ -4,6 +4,8 @@ import { useGrantStorage } from './grant-storage'
 
 export interface ExtendedGrantStore extends GrantStore {
   findAll: () => Promise<OpenApeGrant[]>
+  findByDelegate: (delegate: string) => Promise<OpenApeGrant[]>
+  findByDelegator: (delegator: string) => Promise<OpenApeGrant[]>
 }
 
 export function createGrantStore(): ExtendedGrantStore {
@@ -53,6 +55,28 @@ export function createGrantStore(): ExtendedGrantStore {
       for (const key of keys) {
         const grant = await storage.getItem<OpenApeGrant>(key)
         if (grant)
+          results.push(grant)
+      }
+      return results.sort((a, b) => b.created_at - a.created_at)
+    },
+
+    async findByDelegate(delegate: string) {
+      const keys = await storage.getKeys('grants:')
+      const results: OpenApeGrant[] = []
+      for (const key of keys) {
+        const grant = await storage.getItem<OpenApeGrant>(key)
+        if (grant?.type === 'delegation' && grant.request.delegate === delegate)
+          results.push(grant)
+      }
+      return results.sort((a, b) => b.created_at - a.created_at)
+    },
+
+    async findByDelegator(delegator: string) {
+      const keys = await storage.getKeys('grants:')
+      const results: OpenApeGrant[] = []
+      for (const key of keys) {
+        const grant = await storage.getItem<OpenApeGrant>(key)
+        if (grant?.type === 'delegation' && grant.request.delegator === delegator)
           results.push(grant)
       }
       return results.sort((a, b) => b.created_at - a.created_at)
