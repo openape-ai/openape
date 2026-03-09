@@ -169,10 +169,16 @@ export interface OpenApeAuthZClaims {
   permissions?: string[]
   /** Command hash */
   cmd_hash?: string
+  /** Plaintext command array (for apes grant-token mode) */
+  command?: string[]
   /** Nonce */
   nonce?: string
   /** Who approved/denied the grant */
   decided_by?: string
+  /** Grant approval type (once/timed/always) */
+  approval?: GrantType
+  /** Run command as this user */
+  run_as?: string
 }
 
 /** DNS resolver options */
