@@ -38,6 +38,16 @@ export interface SPManifest {
 /** Actor type — distinguishes human users from automated agents */
 export type ActorType = 'human' | 'agent'
 
+/** Delegate claim — included when an agent acts on behalf of a human */
+export interface DDISADelegateClaim {
+  /** Agent identifier (email) */
+  sub: string
+  /** Always 'agent' — the delegate is an agent */
+  act: 'agent'
+  /** Grant ID that authorized the delegation */
+  grant_id: string
+}
+
 /** DDISA Assertion JWT claims */
 export interface DDISAAssertionClaims {
   /** Issuer — must match DNS-delegated IdP */
@@ -56,6 +66,8 @@ export interface DDISAAssertionClaims {
   nonce: string
   /** JWT ID */
   jti?: string
+  /** Delegate info — present when an agent acts as a human via delegate grant */
+  delegate?: DDISADelegateClaim
 }
 
 /** OpenApe grant types */
@@ -102,6 +114,16 @@ export interface OpenApeGrant {
   expires_at?: number
   /** When the grant was used (for 'once' grants) */
   used_at?: number
+}
+
+/** RFC 9396 Rich Authorization Request — OpenApe Grant type */
+export interface OpenApeAuthorizationDetail {
+  type: 'openape_grant'
+  action: string
+  locations?: string[]
+  approval?: GrantType
+  reason?: string
+  grant_id?: string
 }
 
 /** OpenApe AuthZ-JWT claims */

@@ -143,6 +143,46 @@ describe('validateAssertion', () => {
     expect(result.valid).toBe(false)
     expect(result.error).toContain('No verification key')
   })
+
+  it('validates assertion with delegate claim', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        act: 'human',
+        iat: now,
+        exp: now + 300,
+        nonce: 'test-nonce',
+        delegate: {
+          sub: 'agent@idp.example.com',
+          act: 'agent',
+          grant_id: 'grant-123',
+        },
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      expectedNonce: 'test-nonce',
+      now,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.claims?.sub).toBe('alice@example.com')
+    expect(result.claims?.act).toBe('human')
+    expect(result.claims?.delegate).toEqual({
+      sub: 'agent@idp.example.com',
+      act: 'agent',
+      grant_id: 'grant-123',
+    })
+  })
 })
 
 describe('validateSPManifest', () => {
