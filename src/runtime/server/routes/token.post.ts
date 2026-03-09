@@ -1,6 +1,6 @@
 import type { TokenExchangeParams } from '@openape/auth'
 import { createError, defineEventHandler, readRawBody } from 'h3'
-import { handleTokenExchange, validateClientAssertion } from '@openape/auth'
+import { handleRefreshGrant, handleTokenExchange, validateClientAssertion } from '@openape/auth'
 import { sshEd25519ToKeyObject } from '../utils/ed25519'
 import { issueAgentToken } from '../utils/agent-token'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
@@ -8,6 +8,31 @@ import { getIdpIssuer, useIdpStores } from '../utils/stores'
 function parseScope(scope?: string): Set<string> {
   if (!scope) return new Set()
   return new Set(scope.split(/\s+/).filter(Boolean))
+}
+
+function resolveUserClaimsFactory() {
+  const { userStore } = useIdpStores()
+  return async (userId: string, scope?: string) => {
+    const scopes = parseScope(scope)
+    const claims: { email?: string, name?: string } = {}
+
+    const includeAll = scopes.size === 0
+    const needsUser = includeAll || scopes.has('email') || scopes.has('profile')
+
+    if (needsUser) {
+      const user = await userStore.findByEmail(userId)
+      if (user) {
+        if (includeAll || scopes.has('email')) {
+          claims.email = user.email
+        }
+        if (includeAll || scopes.has('profile')) {
+          claims.name = user.name
+        }
+      }
+    }
+
+    return claims
+  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -24,6 +49,10 @@ export default defineEventHandler(async (event) => {
 
   if (grantType === 'client_credentials') {
     return handleClientCredentialsGrant(body)
+  }
+
+  if (grantType === 'refresh_token') {
+    return handleRefreshTokenGrant(body)
   }
 
   return handleAuthorizationCodeGrant(body as unknown as TokenExchangeParams)
@@ -76,8 +105,40 @@ async function handleClientCredentialsGrant(body: Record<string, string>) {
   }
 }
 
+async function handleRefreshTokenGrant(body: Record<string, string>) {
+  const refreshToken = body.refresh_token
+  const clientId = body.client_id
+
+  if (!refreshToken) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing refresh_token' })
+  }
+
+  if (!clientId) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing client_id' })
+  }
+
+  const { keyStore, refreshTokenStore } = useIdpStores()
+  const issuer = getIdpIssuer()
+
+  try {
+    const result = await handleRefreshGrant(
+      refreshToken,
+      clientId,
+      refreshTokenStore,
+      keyStore,
+      issuer,
+      resolveUserClaimsFactory(),
+    )
+    return result
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Refresh token exchange failed'
+    throw createError({ statusCode: 401, statusMessage: message })
+  }
+}
+
 async function handleAuthorizationCodeGrant(body: TokenExchangeParams) {
-  const { codeStore, keyStore, userStore } = useIdpStores()
+  const { codeStore, keyStore, refreshTokenStore } = useIdpStores()
 
   if (!body.grant_type || !body.code || !body.code_verifier || !body.redirect_uri || !body.sp_id) {
     throw createError({
@@ -87,27 +148,14 @@ async function handleAuthorizationCodeGrant(body: TokenExchangeParams) {
   }
 
   try {
-    const result = await handleTokenExchange(body, codeStore, keyStore, getIdpIssuer(), async (userId, scope) => {
-      const scopes = parseScope(scope)
-      const claims: { email?: string, name?: string } = {}
-
-      const includeAll = scopes.size === 0
-      const needsUser = includeAll || scopes.has('email') || scopes.has('profile')
-
-      if (needsUser) {
-        const user = await userStore.findByEmail(userId)
-        if (user) {
-          if (includeAll || scopes.has('email')) {
-            claims.email = user.email
-          }
-          if (includeAll || scopes.has('profile')) {
-            claims.name = user.name
-          }
-        }
-      }
-
-      return claims
-    })
+    const result = await handleTokenExchange(
+      body,
+      codeStore,
+      keyStore,
+      getIdpIssuer(),
+      resolveUserClaimsFactory(),
+      refreshTokenStore,
+    )
     return result
   }
   catch (err: unknown) {

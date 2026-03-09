@@ -5,6 +5,7 @@ import { createCodeStore } from './code-store'
 import { createCredentialStore } from './credential-store'
 import { createJtiStore } from './jti-store'
 import { createKeyStore } from './key-store'
+import { createRefreshTokenStore } from './refresh-token-store'
 import { createRegistrationUrlStore } from './registration-url-store'
 import { createUserStore } from './user-store'
 
@@ -20,6 +21,7 @@ function initStores() {
     challengeStore: createChallengeStore(),
     registrationUrlStore: createRegistrationUrlStore(),
     jtiStore: createJtiStore(),
+    refreshTokenStore: createRefreshTokenStore(),
   }
 }
 

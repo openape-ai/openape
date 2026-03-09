@@ -10,13 +10,14 @@ export default defineEventHandler(() => {
     token_endpoint: `${issuer}/token`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'client_credentials'],
+    revocation_endpoint: `${issuer}/revoke`,
+    grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['ES256'],
     token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
     token_endpoint_auth_signing_alg_values_supported: ['EdDSA', 'ES256'],
     code_challenge_methods_supported: ['S256'],
-    scopes_supported: ['openid', 'email', 'profile'],
+    scopes_supported: ['openid', 'email', 'profile', 'offline_access'],
     claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'nonce', 'act', 'email', 'name'],
   }
 })

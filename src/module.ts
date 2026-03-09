@@ -160,6 +160,7 @@ export default defineNuxtModule<ModuleOptions>({
     if (routeConfig.oauth) {
       addServerHandler({ route: '/authorize', handler: resolve('./runtime/server/routes/authorize.get') })
       addServerHandler({ route: '/token', method: 'post', handler: resolve('./runtime/server/routes/token.post') })
+      addServerHandler({ route: '/revoke', method: 'post', handler: resolve('./runtime/server/routes/revoke.post') })
       addServerHandler({ route: '/.well-known/jwks.json', handler: resolve('./runtime/server/routes/well-known/jwks.json.get') })
       addServerHandler({ route: '/.well-known/openid-configuration', handler: resolve('./runtime/server/routes/well-known/openid-configuration.get') })
     }
@@ -178,6 +179,11 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/admin/agents/:id', handler: resolve('./runtime/server/api/admin/agents/[id].get') })
       addServerHandler({ route: '/api/admin/agents/:id', method: 'put', handler: resolve('./runtime/server/api/admin/agents/[id].put') })
       addServerHandler({ route: '/api/admin/agents/:id', method: 'delete', handler: resolve('./runtime/server/api/admin/agents/[id].delete') })
+
+      // Admin Sessions
+      addServerHandler({ route: '/api/admin/sessions', handler: resolve('./runtime/server/api/admin/sessions/index.get') })
+      addServerHandler({ route: '/api/admin/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/[familyId].delete') })
+      addServerHandler({ route: '/api/admin/sessions/user/:email', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/user/[email].delete') })
 
       // Admin Registration URLs
       addServerHandler({ route: '/api/admin/registration-urls', handler: resolve('./runtime/server/api/admin/registration-urls/index.get') })
