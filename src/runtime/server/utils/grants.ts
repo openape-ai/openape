@@ -1,4 +1,4 @@
-import type { OpenApeAuthorizationDetail } from '@openape/core'
+import type { DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import type { H3Event } from 'h3'
 import { getSpSession } from './sp-session'
 import { getSpConfig } from './sp-config'
@@ -50,4 +50,39 @@ export async function consumeGrant(event: H3Event, grantId: string): Promise<{ v
   }
 
   return response.json() as Promise<{ valid: boolean }>
+}
+
+/**
+ * Check if the current session is a delegated session (has act claim as object).
+ */
+export async function isDelegated(event: H3Event): Promise<boolean> {
+  const session = await getSpSession(event)
+  const claims = session.data.claims as Record<string, unknown> | undefined
+  if (!claims) return false
+  return typeof claims.act === 'object' && claims.act !== null && 'sub' in (claims.act as Record<string, unknown>)
+}
+
+/**
+ * Get the actual actor (delegate) from a delegated session.
+ * Returns the delegate's identifier (e.g. agent email) or null if not delegated.
+ */
+export async function getActor(event: H3Event): Promise<string | null> {
+  const session = await getSpSession(event)
+  const claims = session.data.claims as Record<string, unknown> | undefined
+  if (!claims) return null
+  const act = claims.act as DelegationActClaim | string | undefined
+  if (typeof act === 'object' && act !== null && 'sub' in act) {
+    return act.sub
+  }
+  return null
+}
+
+/**
+ * Get the subject (delegator — person being acted on behalf of) from the session.
+ */
+export async function getSubject(event: H3Event): Promise<string | null> {
+  const session = await getSpSession(event)
+  const claims = session.data.claims as Record<string, unknown> | undefined
+  if (!claims) return null
+  return (claims.sub as string) ?? null
 }
