@@ -4,7 +4,7 @@
   "description": "Universal Grant Management CLI for OpenAPE",
   "type": "module",
   "bin": {
-    "grapes": "./dist/cli.mjs"
+    "grapes": "./dist/cli.js"
   },
   "files": [
     "dist"
