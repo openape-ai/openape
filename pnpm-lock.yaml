@@ -4,13 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@openape/core': link:../core
+
 importers:
 
   .:
     dependencies:
       '@openape/core':
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: link:../core
+        version: link:../core
       jose:
         specifier: ^5.9.0
         version: 5.10.0
@@ -617,9 +620,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@openape/core@0.1.2':
-    resolution: {integrity: sha512-NPhuJ9gD8wEYWZsGs+ecc/xYjihmvFO9hvAa+M/BayJf7C4G5ToF5YteNwD5OEqWKfdZ4C5LPtjkZSVObUvhCQ==}
 
   '@ota-meshi/ast-token-store@0.3.0':
     resolution: {integrity: sha512-XRO0zi2NIUKq2lUk3T1ecFSld1fMWRKE6naRFGkgkdeosx7IslyUKNv5Dcb5PJTja9tHJoFu0v/7yEpAkrkrTg==}
@@ -2939,10 +2939,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@openape/core@0.1.2':
-    dependencies:
-      jose: 5.10.0
 
   '@ota-meshi/ast-token-store@0.3.0': {}
 

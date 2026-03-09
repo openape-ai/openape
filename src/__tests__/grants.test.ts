@@ -234,6 +234,60 @@ describe('grant lifecycle', () => {
     })
   })
 
+  describe('delegate permission grants', () => {
+    const delegateOnceRequest: OpenApeGrantRequest = {
+      requester: 'agent@example.com',
+      target: 'sp.example.com',
+      grant_type: 'once',
+      permissions: ['delegate'],
+      reason: 'Login als Owner bei sp.example.com',
+    }
+
+    const delegateTimedRequest: OpenApeGrantRequest = {
+      requester: 'agent@example.com',
+      target: 'sp.example.com',
+      grant_type: 'timed',
+      permissions: ['delegate'],
+      duration: 3600,
+      reason: 'Login als Owner bei sp.example.com',
+    }
+
+    it('creates and approves delegate once-grant', async () => {
+      const grant = await createGrant(delegateOnceRequest, store)
+      expect(grant.request.permissions).toContain('delegate')
+
+      const approved = await approveGrant(grant.id, 'alice@example.com', store)
+      expect(approved.status).toBe('approved')
+
+      const used = await useGrant(grant.id, store)
+      expect(used.status).toBe('used')
+
+      await expect(useGrant(grant.id, store)).rejects.toThrow('Grant is not approved')
+    })
+
+    it('creates and approves delegate timed-grant with expiry', async () => {
+      const grant = await createGrant(delegateTimedRequest, store)
+      const approved = await approveGrant(grant.id, 'alice@example.com', store)
+
+      expect(approved.status).toBe('approved')
+      expect(approved.expires_at).toBeDefined()
+
+      const used = await useGrant(grant.id, store)
+      expect(used.status).toBe('approved')
+    })
+
+    it('findByRequester returns delegate grants', async () => {
+      await createGrant(delegateOnceRequest, store)
+      await createGrant(onceRequest, store)
+
+      const grants = await store.findByRequester('agent@example.com')
+      expect(grants).toHaveLength(2)
+
+      const delegateGrants = grants.filter(g => g.request.permissions?.includes('delegate'))
+      expect(delegateGrants).toHaveLength(1)
+    })
+  })
+
   describe('inMemoryGrantStore', () => {
     it('finds pending grants', async () => {
       await createGrant(onceRequest, store)
