@@ -183,6 +183,37 @@ describe('validateAssertion', () => {
       grant_id: 'grant-123',
     })
   })
+
+  it('validates assertion with delegation act claim (rfc 8693)', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'patrick@hofmann.eco',
+        aud: 'bank.example.com',
+        act: { sub: 'agent+patrick@id.openape.at' },
+        iat: now,
+        exp: now + 300,
+        nonce: 'n',
+        delegation_grant: 'del-abc123',
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'bank.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.claims?.sub).toBe('patrick@hofmann.eco')
+    expect(result.claims?.act).toEqual({ sub: 'agent+patrick@id.openape.at' })
+    expect(result.claims?.delegation_grant).toBe('del-abc123')
+  })
 })
 
 describe('validateSPManifest', () => {

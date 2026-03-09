@@ -38,6 +38,12 @@ export interface SPManifest {
 /** Actor type — distinguishes human users from automated agents */
 export type ActorType = 'human' | 'agent'
 
+/** RFC 8693 act claim — identifies who is actually performing the action during delegation */
+export interface DelegationActClaim {
+  /** The identity actually performing the action (delegate) */
+  sub: string
+}
+
 /** Delegate claim — included when an agent acts on behalf of a human */
 export interface DDISADelegateClaim {
   /** Agent identifier (email) */
@@ -52,12 +58,12 @@ export interface DDISADelegateClaim {
 export interface DDISAAssertionClaims {
   /** Issuer — must match DNS-delegated IdP */
   iss: string
-  /** Subject — user identifier (e.g. alice@example.com) */
+  /** Subject — user identifier. During delegation: the delegator (person being acted on behalf of) */
   sub: string
   /** Audience — must match sp_id */
   aud: string
-  /** Actor type — human or agent */
-  act: ActorType
+  /** Actor type or RFC 8693 delegation claim. String = actor type. Object = delegation with delegate sub. */
+  act: ActorType | DelegationActClaim
   /** Issued at (unix timestamp) */
   iat: number
   /** Expiration (unix timestamp, max 5 min from iat) */
@@ -68,6 +74,8 @@ export interface DDISAAssertionClaims {
   jti?: string
   /** Delegate info — present when an agent acts as a human via delegate grant */
   delegate?: DDISADelegateClaim
+  /** Grant ID that authorized the delegation (RFC 8693) */
+  delegation_grant?: string
 }
 
 /** OpenApe grant types */
@@ -94,12 +102,25 @@ export interface OpenApeGrantRequest {
   duration?: number
   /** Human-readable reason for the request */
   reason?: string
+  /** Delegator — who is being acted on behalf of (delegation grants only) */
+  delegator?: string
+  /** Delegate — who is allowed to act (delegation grants only) */
+  delegate?: string
+  /** Audience — at which SP the delegation is valid (delegation grants only) */
+  audience?: string
+  /** Scopes — what actions are allowed under the delegation */
+  scopes?: string[]
 }
+
+/** Grant category */
+export type GrantCategory = 'command' | 'delegation'
 
 /** OpenApe grant */
 export interface OpenApeGrant {
   /** Unique grant ID */
   id: string
+  /** Grant category: command (default) or delegation */
+  type?: GrantCategory
   /** Grant request details */
   request: OpenApeGrantRequest
   /** Current status */
