@@ -124,7 +124,7 @@ Nitro auto-maps runtime config keys to env vars using the pattern `NUXT_<SNAKE_C
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `NUXT_OPENAPE_SP_ID` | SP identifier (= domain) | `sp.example.com` |
+| `NUXT_OPENAPE_CLIENT_ID` | SP identifier (= domain) | `sp.example.com` |
 | `NUXT_OPENAPE_SP_NAME` | Display name | `My Service` |
 | `NUXT_OPENAPE_SP_SESSION_SECRET` | Cookie signing secret (>=32 chars) | `<random-string>` |
 | `NUXT_OPENAPE_URL` | IdP URL override. Leave empty for DNS discovery! | *(empty)* |
@@ -133,7 +133,7 @@ Nitro auto-maps runtime config keys to env vars using the pattern `NUXT_<SNAKE_C
 
 | Vercel Env Var | Maps to |
 | --- | --- |
-| `NUXT_OPENAPE_SP_SP_ID` | `openapeSp.spId` |
+| `NUXT_OPENAPE_SP_CLIENT_ID` | `openapeSp.clientId` |
 | `NUXT_OPENAPE_SP_SP_NAME` | `openapeSp.spName` |
 | `NUXT_OPENAPE_SP_SESSION_SECRET` | `openapeSp.sessionSecret` |
 | `NUXT_OPENAPE_SP_OPENAPE_URL` | `openapeSp.openapeUrl` |
@@ -191,7 +191,7 @@ vercel deploy --prebuilt --prod --yes
 cd ../openape-sp-example
 rm -f .vercel/.env.production.local
 
-NUXT_OPENAPE_SP_ID=sp.example.com \
+NUXT_OPENAPE_CLIENT_ID=sp.example.com \
 NUXT_OPENAPE_SP_NAME="My Service" \
 NUXT_OPENAPE_SP_SESSION_SECRET=<secret-min-32-chars> \
 npx nuxt build

@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<{ action?: string, reason?: string }>(event)
-  const { spId, openapeUrl } = getSpConfig()
+  const { clientId, openapeUrl } = getSpConfig()
   const origin = getRequestURL(event).origin
 
   // Create grant request on the IdP
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     method: 'POST',
     body: {
       requester: claims.sub,
-      target: spId,
+      target: clientId,
       grant_type: 'once',
       permissions: [body.action || 'protected-action'],
       reason: body.reason || 'User requested permission for protected action',

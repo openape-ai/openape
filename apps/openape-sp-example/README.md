@@ -48,7 +48,7 @@ The SP is now running at **http://localhost:3001**.
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `NUXT_OPENAPE_SP_ID` | `'sp.example.com'` | SP identifier (domain) |
+| `NUXT_OPENAPE_CLIENT_ID` | `'sp.example.com'` | SP identifier (domain) |
 | `NUXT_OPENAPE_SP_NAME` | `'OpenApe Service Provider'` | SP display name |
 | `NUXT_OPENAPE_SP_SESSION_SECRET` | `'change-me-sp-secret-...'` | Session signing secret |
 | `NUXT_OPENAPE_URL` | `'http://localhost:3000'` | URL of the Identity Provider |

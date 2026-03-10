@@ -8,7 +8,7 @@ export default defineNuxtConfig({
     preference: 'dark',
   },
   openapeSp: {
-    spId: process.env.NUXT_OPENAPE_SP_ID || 'sp.example.com',
+    clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'sp.example.com',
     spName: process.env.NUXT_OPENAPE_SP_NAME || 'OpenApe Service Provider',
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || 'change-me-sp-secret-at-least-32-chars-long',
     openapeUrl: process.env.NUXT_OPENAPE_URL ?? '',
