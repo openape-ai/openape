@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   colorMode: { preference: 'dark' },
 
   openapeSp: {
-    spId: process.env.NUXT_OPENAPE_SP_ID || 'localhost:3003',
+    clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'localhost:3003',
     spName: 'OpenApe Agent Mail',
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || '',
     openapeUrl: process.env.NUXT_OPENAPE_URL || '',
