@@ -1,7 +1,7 @@
 {
   "name": "@openape/nuxt-auth-sp",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "OpenAPE Service Provider Nuxt module — adds OIDC login via DNS-based IdP discovery",
   "author": "Delta Mind GmbH",
   "license": "AGPL-3.0-or-later",
@@ -33,9 +33,8 @@
   },
   "dependencies": {
     "@nuxt/kit": "^3.21.1",
-    "@openape/auth": "^0.1.3",
-    "@openape/core": "^0.1.2",
-    "@openape/nuxt-auth-sp": "0.4.0",
+    "@openape/auth": "^0.2.0",
+    "@openape/core": "^0.2.0",
     "defu": "^6.1.4"
   },
   "peerDependencies": {
