@@ -219,27 +219,27 @@ describe('validateAssertion', () => {
 describe('validateSPManifest', () => {
   it('validates a correct manifest', () => {
     const result = validateSPManifest({
-      sp_id: 'sp.example.com',
+      client_id: 'sp.example.com',
       name: 'Example SP',
       redirect_uris: ['https://sp.example.com/callback'],
     })
     expect(result.valid).toBe(true)
-    expect(result.manifest?.sp_id).toBe('sp.example.com')
+    expect(result.manifest?.client_id).toBe('sp.example.com')
   })
 
-  it('rejects manifest without sp_id', () => {
+  it('rejects manifest without client_id', () => {
     const result = validateSPManifest({ name: 'Test', redirect_uris: ['https://example.com'] })
     expect(result.valid).toBe(false)
-    expect(result.errors).toContain('sp_id is required and must be a non-empty string')
+    expect(result.errors).toContain('client_id is required and must be a non-empty string')
   })
 
   it('rejects manifest with empty redirect_uris', () => {
-    const result = validateSPManifest({ sp_id: 'test', name: 'Test', redirect_uris: [] })
+    const result = validateSPManifest({ client_id: 'test', name: 'Test', redirect_uris: [] })
     expect(result.valid).toBe(false)
   })
 
   it('rejects manifest with invalid redirect_uri', () => {
-    const result = validateSPManifest({ sp_id: 'test', name: 'Test', redirect_uris: ['not-a-url'] })
+    const result = validateSPManifest({ client_id: 'test', name: 'Test', redirect_uris: ['not-a-url'] })
     expect(result.valid).toBe(false)
     expect(result.errors.some(e => e.includes('Invalid redirect_uri'))).toBe(true)
   })

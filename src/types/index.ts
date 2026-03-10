@@ -19,8 +19,8 @@ export interface DDISARecord {
 
 /** SP Manifest published at /.well-known/sp-manifest.json */
 export interface SPManifest {
-  /** Service Provider identifier (typically a domain) */
-  sp_id: string
+  /** Client identifier (typically a domain, OIDC-compatible) */
+  client_id: string
   /** Display name */
   name: string
   /** Redirect URIs for callback */
@@ -60,7 +60,7 @@ export interface DDISAAssertionClaims {
   iss: string
   /** Subject — user identifier. During delegation: the delegator (person being acted on behalf of) */
   sub: string
-  /** Audience — must match sp_id */
+  /** Audience — must match client_id */
   aud: string
   /** Actor type or RFC 8693 delegation claim. String = actor type. Object = delegation with delegate sub. */
   act: ActorType | DelegationActClaim
@@ -280,8 +280,8 @@ export interface ResolverOptions {
 
 /** Authorization request parameters (SP → IdP redirect) */
 export interface AuthorizationRequest {
-  /** SP identifier */
-  sp_id: string
+  /** Client identifier */
+  client_id: string
   /** Redirect URI for callback */
   redirect_uri: string
   /** CSRF protection state */
@@ -304,8 +304,8 @@ export interface TokenExchangeRequest {
   code_verifier: string
   /** Redirect URI (must match authorization request) */
   redirect_uri: string
-  /** SP identifier */
-  sp_id: string
+  /** Client identifier */
+  client_id: string
   /** Grant type (always 'authorization_code') */
   grant_type: 'authorization_code'
 }

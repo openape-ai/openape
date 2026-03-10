@@ -18,8 +18,8 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
 
   const obj = data as Record<string, unknown>
 
-  if (typeof obj.sp_id !== 'string' || !obj.sp_id) {
-    errors.push('sp_id is required and must be a non-empty string')
+  if (typeof obj.client_id !== 'string' || !obj.client_id) {
+    errors.push('client_id is required and must be a non-empty string')
   }
 
   if (typeof obj.name !== 'string' || !obj.name) {

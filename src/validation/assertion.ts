@@ -6,7 +6,7 @@ import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 export interface AssertionValidationOptions {
   /** Expected issuer (must match DNS-delegated IdP) */
   expectedIss: string
-  /** Expected audience (must match sp_id) */
+  /** Expected audience (must match client_id) */
   expectedAud: string
   /** JWKS URI for the IdP */
   jwksUri?: string
