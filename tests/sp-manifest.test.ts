@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 describe('SP Manifest redirect_uri validation', () => {
   // Test the redirect_uri origin-matching fallback logic directly
-  function validateRedirectUriOriginFallback(spId: string, redirectUri: string): boolean {
+  function validateRedirectUriOriginFallback(clientId: string, redirectUri: string): boolean {
     const redirectOrigin = new URL(redirectUri).origin
-    const expectedOrigin = spId.startsWith('http') ? new URL(spId).origin : `https://${spId}`
+    const expectedOrigin = clientId.startsWith('http') ? new URL(clientId).origin : `https://${clientId}`
     return redirectOrigin === expectedOrigin
   }
 
-  it('accepts redirect_uri matching sp_id origin', () => {
+  it('accepts redirect_uri matching client_id origin', () => {
     expect(validateRedirectUriOriginFallback('sp.example.com', 'https://sp.example.com/callback')).toBe(true)
   })
 
@@ -16,7 +16,7 @@ describe('SP Manifest redirect_uri validation', () => {
     expect(validateRedirectUriOriginFallback('sp.example.com', 'https://evil.com/callback')).toBe(false)
   })
 
-  it('handles sp_id with protocol prefix', () => {
+  it('handles client_id with protocol prefix', () => {
     expect(validateRedirectUriOriginFallback('https://sp.example.com', 'https://sp.example.com/callback')).toBe(true)
   })
 

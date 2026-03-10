@@ -12,7 +12,7 @@ beforeEach(async () => {
   db = drizzle(client, { schema })
   await db.run(sql`CREATE TABLE IF NOT EXISTS auth_codes (
     code TEXT PRIMARY KEY NOT NULL,
-    sp_id TEXT NOT NULL,
+    client_id TEXT NOT NULL,
     redirect_uri TEXT NOT NULL,
     code_challenge TEXT NOT NULL,
     user_id TEXT NOT NULL,
@@ -36,7 +36,7 @@ describe('CodeStore (Drizzle)', () => {
   it('saves and retrieves an auth code', async () => {
     const entry = {
       code: 'test-code-123',
-      spId: 'sp.example.com',
+      clientId: 'sp.example.com',
       redirectUri: 'https://sp.example.com/callback',
       codeChallenge: 'challenge-value',
       userId: 'alice@example.com',
@@ -46,7 +46,7 @@ describe('CodeStore (Drizzle)', () => {
 
     await db.insert(schema.authCodes).values({
       code: entry.code,
-      spId: entry.spId,
+      clientId: entry.clientId,
       redirectUri: entry.redirectUri,
       codeChallenge: entry.codeChallenge,
       userId: entry.userId,
@@ -56,7 +56,7 @@ describe('CodeStore (Drizzle)', () => {
 
     const row = await db.select().from(schema.authCodes).where(eq(schema.authCodes.code, 'test-code-123')).get()
     expect(row).not.toBeNull()
-    expect(row!.spId).toBe('sp.example.com')
+    expect(row!.clientId).toBe('sp.example.com')
     expect(row!.userId).toBe('alice@example.com')
     expect(row!.nonce).toBe('test-nonce')
   })
@@ -69,7 +69,7 @@ describe('CodeStore (Drizzle)', () => {
   it('deletes a code (single use)', async () => {
     await db.insert(schema.authCodes).values({
       code: 'delete-me',
-      spId: 'sp',
+      clientId: 'sp',
       redirectUri: 'https://sp/cb',
       codeChallenge: 'ch',
       userId: 'user@example.com',
@@ -86,7 +86,7 @@ describe('CodeStore (Drizzle)', () => {
   it('identifies expired codes', async () => {
     await db.insert(schema.authCodes).values({
       code: 'expired-code',
-      spId: 'sp',
+      clientId: 'sp',
       redirectUri: 'https://sp/cb',
       codeChallenge: 'ch',
       userId: 'user@example.com',
