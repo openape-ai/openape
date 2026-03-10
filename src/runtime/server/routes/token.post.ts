@@ -174,10 +174,10 @@ async function handleRefreshTokenGrant(body: Record<string, string>) {
 async function handleAuthorizationCodeGrant(body: TokenExchangeParams) {
   const { codeStore, keyStore, refreshTokenStore } = useIdpStores()
 
-  if (!body.grant_type || !body.code || !body.code_verifier || !body.redirect_uri || !body.sp_id) {
+  if (!body.grant_type || !body.code || !body.code_verifier || !body.redirect_uri || !body.client_id) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Missing required fields: grant_type, code, code_verifier, redirect_uri, sp_id',
+      statusMessage: 'Missing required fields: grant_type, code, code_verifier, redirect_uri, client_id',
     })
   }
 

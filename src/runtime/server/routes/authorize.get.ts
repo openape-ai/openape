@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   const { codeStore } = useIdpStores()
 
   const params: AuthorizeParams = {
-    sp_id: String(query.sp_id ?? ''),
+    client_id: String(query.client_id ?? ''),
     redirect_uri: String(query.redirect_uri ?? ''),
     state: String(query.state ?? ''),
     code_challenge: String(query.code_challenge ?? ''),
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
       const grant = await validateDelegation(
         delegationGrantParam,
         agentPayload.sub,
-        params.sp_id,
+        params.client_id,
         grantStore,
       )
       // sub becomes the delegator, act becomes the delegate
@@ -97,7 +97,7 @@ export default defineEventHandler(async (event) => {
       const grant = await validateDelegation(
         delegationGrantParam,
         session.data.userId,
-        params.sp_id,
+        params.client_id,
         grantStore,
       )
       userId = grant.request.delegator!
@@ -114,7 +114,7 @@ export default defineEventHandler(async (event) => {
   const ddisaRecord = await resolveDDISA(userDomain)
   const policyMode = ddisaRecord?.mode ?? 'open'
   const noopConsentStore = { hasConsent: async () => false, save: async () => {} }
-  const decision = await evaluatePolicy(policyMode, params.sp_id, userId, noopConsentStore)
+  const decision = await evaluatePolicy(policyMode, params.client_id, userId, noopConsentStore)
 
   if (decision !== 'allow') {
     const redirectUrl = new URL(params.redirect_uri)
@@ -134,7 +134,7 @@ export default defineEventHandler(async (event) => {
     for (const detail of authzDetails) {
       const grant = await createGrant({
         requester: agentPayload ? agentPayload.sub : userId,
-        target: params.sp_id,
+        target: params.client_id,
         grant_type: detail.approval ?? 'once',
         permissions: [detail.action],
         reason: detail.reason,
@@ -152,7 +152,7 @@ export default defineEventHandler(async (event) => {
   const code = crypto.randomUUID()
   await codeStore.save({
     code,
-    spId: params.sp_id,
+    clientId: params.client_id,
     redirectUri: params.redirect_uri,
     codeChallenge: params.code_challenge,
     userId,

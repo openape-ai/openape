@@ -71,7 +71,7 @@ describe('authorization_details in token response', () => {
 
     mockCodeStore.find.mockResolvedValue({
       code: 'test-code',
-      spId: 'sp.example.com',
+      clientId: 'sp.example.com',
       redirectUri: 'https://sp.example.com/callback',
       codeChallenge: 'valid-challenge',
       userId: 'alice@example.com',
@@ -90,7 +90,7 @@ describe('authorization_details in token response', () => {
     const challenge = await generateCodeChallenge('test-verifier')
     mockCodeStore.find.mockResolvedValue({
       code: 'test-code',
-      spId: 'sp.example.com',
+      clientId: 'sp.example.com',
       redirectUri: 'https://sp.example.com/callback',
       codeChallenge: challenge,
       userId: 'alice@example.com',
@@ -105,7 +105,7 @@ describe('authorization_details in token response', () => {
       code: 'test-code',
       code_verifier: 'test-verifier',
       redirect_uri: 'https://sp.example.com/callback',
-      sp_id: 'sp.example.com',
+      client_id: 'sp.example.com',
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
@@ -131,7 +131,7 @@ describe('authorization_details in token response', () => {
 
     mockCodeStore.find.mockResolvedValue({
       code: 'no-authz-code',
-      spId: 'sp.example.com',
+      clientId: 'sp.example.com',
       redirectUri: 'https://sp.example.com/callback',
       codeChallenge: challenge,
       userId: 'alice@example.com',
@@ -150,7 +150,7 @@ describe('authorization_details in token response', () => {
       code: 'no-authz-code',
       code_verifier: 'test-verifier-2',
       redirect_uri: 'https://sp.example.com/callback',
-      sp_id: 'sp.example.com',
+      client_id: 'sp.example.com',
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
