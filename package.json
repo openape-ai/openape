@@ -1,7 +1,7 @@
 {
   "name": "@openape/auth",
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenApe authentication: IdP + SP OIDC protocol logic",
   "author": "Delta Mind GmbH",
   "license": "AGPL-3.0-or-later",
