@@ -7,3 +7,5 @@ dist/
 .env
 .env.*
 !.env.example
+pnpm-workspace.yaml
+.vercel
