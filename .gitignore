@@ -6,3 +6,4 @@ node_modules
 .env.*
 *.local
 dev.db
+pnpm-workspace.yaml
