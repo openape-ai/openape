@@ -68,8 +68,8 @@ export interface DDISAAssertionClaims {
   iat: number
   /** Expiration (unix timestamp, max 5 min from iat) */
   exp: number
-  /** Nonce for replay protection */
-  nonce: string
+  /** Nonce for replay protection (required for implicit flow, optional for code flow) */
+  nonce?: string
   /** JWT ID */
   jti?: string
   /** Delegate info — present when an agent acts as a human via delegate grant */
