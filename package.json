@@ -17,7 +17,7 @@
     "test": "vitest run --passWithNoTests",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "npm pack --dry-run && npm publish --provenance --access public"
+    "release": "changeset publish"
   },
   "dependencies": {
     "@openape/core": "^0.3.0",
