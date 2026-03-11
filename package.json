@@ -25,7 +25,7 @@
     "lint": "eslint .",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "npm pack --dry-run && npm publish --provenance --access public"
+    "release": "changeset publish"
   },
   "dependencies": {
     "jose": "^5.9.0"
