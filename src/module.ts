@@ -115,6 +115,7 @@ export default defineNuxtModule<ModuleOptions>({
     if (routeConfig.oauth) {
       corsRules['/.well-known/**'] = { cors: true }
       corsRules['/token'] = { cors: true }
+      corsRules['/userinfo'] = { cors: true }
     }
     if (routeConfig.grants)
       corsRules['/api/grants/**'] = { cors: true }
@@ -175,6 +176,7 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/revoke', method: 'post', handler: resolve('./runtime/server/routes/revoke.post') })
       addServerHandler({ route: '/.well-known/jwks.json', handler: resolve('./runtime/server/routes/well-known/jwks.json.get') })
       addServerHandler({ route: '/.well-known/openid-configuration', handler: resolve('./runtime/server/routes/well-known/openid-configuration.get') })
+      addServerHandler({ route: '/userinfo', handler: resolve('./runtime/server/routes/userinfo.get') })
     }
 
     // Server route handlers — Admin
