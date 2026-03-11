@@ -101,8 +101,17 @@ export default defineNuxtModule<ModuleOptions>({
     // Register composables (auto-imported by Vue)
     addImportsDir(resolve('./runtime/composables'))
 
+    // Security headers
+    const securityHeaders: Record<string, string> = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': 'frame-ancestors \'none\'',
+    }
+
     // CORS rules
-    const corsRules: Record<string, { cors: boolean }> = {}
+    const corsRules: Record<string, { cors?: boolean, headers?: Record<string, string> }> = {
+      '/**': { headers: securityHeaders },
+    }
     if (routeConfig.oauth) {
       corsRules['/.well-known/**'] = { cors: true }
       corsRules['/token'] = { cors: true }

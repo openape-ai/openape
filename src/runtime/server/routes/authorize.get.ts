@@ -34,13 +34,28 @@ export default defineEventHandler(async (event) => {
     state: String(query.state ?? ''),
     code_challenge: String(query.code_challenge ?? ''),
     code_challenge_method: String(query.code_challenge_method ?? ''),
-    nonce: String(query.nonce ?? ''),
+    nonce: query.nonce ? String(query.nonce) : undefined,
     response_type: String(query.response_type ?? ''),
     scope: String(query.scope ?? ''),
   }
 
   const error = validateAuthorizeRequest(params)
   if (error) {
+    // RFC 6749 §4.1.2.1: redirect with error params when redirect_uri is valid
+    if (params.redirect_uri) {
+      try {
+        const errorUrl = new URL(params.redirect_uri)
+        errorUrl.searchParams.set('error', 'invalid_request')
+        errorUrl.searchParams.set('error_description', error)
+        if (params.state) {
+          errorUrl.searchParams.set('state', params.state)
+        }
+        return sendRedirect(event, errorUrl.toString())
+      }
+      catch {
+        // Invalid redirect_uri — fall through to createError
+      }
+    }
     throw createError({ statusCode: 400, statusMessage: error })
   }
 

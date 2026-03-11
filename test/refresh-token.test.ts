@@ -15,6 +15,8 @@ async function setup() {
 vi.mock('h3', () => ({
   defineEventHandler: (fn: any) => fn,
   readRawBody: vi.fn(),
+  getRequestHeader: vi.fn(),
+  setResponseStatus: vi.fn(),
   createError: (opts: any) => Object.assign(new Error(opts.statusMessage), { statusCode: opts.statusCode }),
 }))
 
@@ -107,7 +109,10 @@ describe('refresh_token grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
-    await expect(handler({} as any)).rejects.toThrow('Missing refresh_token')
+    const result = await handler({} as any)
+
+    expect(result.error).toBe('invalid_request')
+    expect(result.error_description).toContain('refresh_token')
   })
 
   it('rejects missing client_id', async () => {
@@ -118,7 +123,10 @@ describe('refresh_token grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
-    await expect(handler({} as any)).rejects.toThrow('Missing client_id')
+    const result = await handler({} as any)
+
+    expect(result.error).toBe('invalid_request')
+    expect(result.error_description).toContain('client_id')
   })
 
   it('rejects invalid refresh token', async () => {
@@ -132,7 +140,10 @@ describe('refresh_token grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
-    await expect(handler({} as any)).rejects.toThrow('Invalid refresh token')
+    const result = await handler({} as any)
+
+    expect(result.error).toBe('invalid_grant')
+    expect(result.error_description).toContain('Invalid refresh token')
   })
 })
 
@@ -144,6 +155,20 @@ describe('revocation endpoint', () => {
     ;(readRawBody as any).mockResolvedValue(JSON.stringify({
       token: 'some-refresh-token',
     }))
+
+    const { default: handler } = await import('../src/runtime/server/routes/revoke.post')
+    const result = await handler({} as any)
+
+    expect(result.status).toBe('ok')
+    expect(mockRefreshTokenStore.revokeByToken).toHaveBeenCalledWith('some-refresh-token')
+  })
+
+  it('accepts form-urlencoded body', async () => {
+    mockRefreshTokenStore.revokeByToken.mockResolvedValue(undefined)
+
+    const { readRawBody, getRequestHeader } = await import('h3')
+    ;(getRequestHeader as any).mockReturnValueOnce('application/x-www-form-urlencoded')
+    ;(readRawBody as any).mockResolvedValue('token=some-refresh-token')
 
     const { default: handler } = await import('../src/runtime/server/routes/revoke.post')
     const result = await handler({} as any)

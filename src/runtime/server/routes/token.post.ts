@@ -1,5 +1,6 @@
+import type { H3Event } from 'h3'
 import type { TokenExchangeParams } from '@openape/auth'
-import { createError, defineEventHandler, readRawBody } from 'h3'
+import { defineEventHandler, getRequestHeader, readRawBody, setResponseStatus } from 'h3'
 import { handleRefreshGrant, handleTokenExchange, issueAssertion, validateClientAssertion } from '@openape/auth'
 import { useGrant, validateDelegation } from '@openape/grants'
 import { sshEd25519ToKeyObject } from '../utils/ed25519'
@@ -8,6 +9,11 @@ import { getIdpIssuer, useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
 
 const RE_WHITESPACE = /\s+/
+
+function oauthError(event: H3Event, status: number, error: string, description: string) {
+  setResponseStatus(event, status)
+  return { error, error_description: description }
+}
 
 function parseScope(scope?: string): Set<string> {
   if (!scope) return new Set()
@@ -40,40 +46,51 @@ function resolveUserClaimsFactory() {
 }
 
 export default defineEventHandler(async (event) => {
-  const rawBody = await readRawBody(event, 'utf-8')
+  const contentType = getRequestHeader(event, 'content-type') || ''
+  const rawBody = await readRawBody(event, 'utf-8') || ''
+
   let body: Record<string, string>
-  try {
-    body = JSON.parse(rawBody || '{}')
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    body = Object.fromEntries(new URLSearchParams(rawBody))
   }
-  catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid JSON body' })
+  else {
+    try {
+      body = JSON.parse(rawBody || '{}')
+    }
+    catch {
+      return oauthError(event, 400, 'invalid_request', 'Malformed request body')
+    }
   }
 
   const grantType = body.grant_type
 
   if (grantType === 'client_credentials') {
-    return handleClientCredentialsGrant(body)
+    return handleClientCredentialsGrant(event, body)
   }
 
   if (grantType === 'refresh_token') {
-    return handleRefreshTokenGrant(body)
+    return handleRefreshTokenGrant(event, body)
   }
 
-  return handleAuthorizationCodeGrant(body as unknown as TokenExchangeParams)
+  if (grantType === 'authorization_code') {
+    return handleAuthorizationCodeGrant(event, body as unknown as TokenExchangeParams)
+  }
+
+  return oauthError(event, 400, 'unsupported_grant_type', 'Grant type not supported')
 })
 
-async function handleClientCredentialsGrant(body: Record<string, string>) {
+async function handleClientCredentialsGrant(event: H3Event, body: Record<string, string>) {
   const assertionType = body.client_assertion_type
   const assertion = body.client_assertion
   const delegationGrantParam = body.delegation_grant
   const audience = body.audience
 
   if (assertionType !== 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer') {
-    throw createError({ statusCode: 400, statusMessage: 'Unsupported client_assertion_type' })
+    return oauthError(event, 400, 'invalid_request', 'Unsupported client_assertion_type')
   }
 
   if (!assertion) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing client_assertion' })
+    return oauthError(event, 400, 'invalid_request', 'Missing client_assertion')
   }
 
   const { agentStore, keyStore, jtiStore } = useIdpStores()
@@ -94,7 +111,7 @@ async function handleClientCredentialsGrant(body: Record<string, string>) {
     // Delegation flow: agent acts as delegator
     if (delegationGrantParam) {
       if (!audience) {
-        throw createError({ statusCode: 400, statusMessage: 'Missing audience for delegation' })
+        return oauthError(event, 400, 'invalid_request', 'Missing audience for delegation')
       }
 
       const { grantStore } = useGrantStores()
@@ -137,20 +154,20 @@ async function handleClientCredentialsGrant(body: Record<string, string>) {
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Client credentials authentication failed'
-    throw createError({ statusCode: 401, statusMessage: message })
+    return oauthError(event, 401, 'invalid_client', message)
   }
 }
 
-async function handleRefreshTokenGrant(body: Record<string, string>) {
+async function handleRefreshTokenGrant(event: H3Event, body: Record<string, string>) {
   const refreshToken = body.refresh_token
   const clientId = body.client_id
 
   if (!refreshToken) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing refresh_token' })
+    return oauthError(event, 400, 'invalid_request', 'Missing refresh_token')
   }
 
   if (!clientId) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing client_id' })
+    return oauthError(event, 400, 'invalid_request', 'Missing client_id')
   }
 
   const { keyStore, refreshTokenStore } = useIdpStores()
@@ -169,18 +186,15 @@ async function handleRefreshTokenGrant(body: Record<string, string>) {
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Refresh token exchange failed'
-    throw createError({ statusCode: 401, statusMessage: message })
+    return oauthError(event, 400, 'invalid_grant', message)
   }
 }
 
-async function handleAuthorizationCodeGrant(body: TokenExchangeParams) {
+async function handleAuthorizationCodeGrant(event: H3Event, body: TokenExchangeParams) {
   const { codeStore, keyStore, refreshTokenStore } = useIdpStores()
 
   if (!body.grant_type || !body.code || !body.code_verifier || !body.redirect_uri || !body.client_id) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Missing required fields: grant_type, code, code_verifier, redirect_uri, client_id',
-    })
+    return oauthError(event, 400, 'invalid_request', 'Missing required fields: grant_type, code, code_verifier, redirect_uri, client_id')
   }
 
   try {
@@ -196,6 +210,6 @@ async function handleAuthorizationCodeGrant(body: TokenExchangeParams) {
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Token exchange failed'
-    throw createError({ statusCode: 400, statusMessage: message })
+    return oauthError(event, 400, 'invalid_grant', message)
   }
 }

@@ -1,14 +1,21 @@
-import { createError, defineEventHandler, readRawBody } from 'h3'
+import { createError, defineEventHandler, getRequestHeader, readRawBody } from 'h3'
 import { useIdpStores } from '../utils/stores'
 
 export default defineEventHandler(async (event) => {
-  const rawBody = await readRawBody(event, 'utf-8')
+  const contentType = getRequestHeader(event, 'content-type') || ''
+  const rawBody = await readRawBody(event, 'utf-8') || ''
+
   let body: Record<string, string>
-  try {
-    body = JSON.parse(rawBody || '{}')
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    body = Object.fromEntries(new URLSearchParams(rawBody))
   }
-  catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid JSON body' })
+  else {
+    try {
+      body = JSON.parse(rawBody || '{}')
+    }
+    catch {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid JSON body' })
+    }
   }
 
   const token = body.token

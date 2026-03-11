@@ -8,6 +8,7 @@ export default defineEventHandler(() => {
     issuer,
     authorization_endpoint: `${issuer}/authorize`,
     token_endpoint: `${issuer}/token`,
+    userinfo_endpoint: `${issuer}/userinfo`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     response_types_supported: ['code'],
     revocation_endpoint: `${issuer}/revoke`,

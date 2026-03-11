@@ -23,6 +23,8 @@ async function setup() {
 vi.mock('h3', () => ({
   defineEventHandler: (fn: any) => fn,
   readRawBody: vi.fn(),
+  getRequestHeader: vi.fn(),
+  setResponseStatus: vi.fn(),
   createError: (opts: any) => Object.assign(new Error(opts.statusMessage), { statusCode: opts.statusCode }),
 }))
 
@@ -142,8 +144,10 @@ describe('client_credentials grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
 
-    await expect(handler({} as any)).rejects.toThrow('Unknown agent')
+    expect(result.error).toBe('invalid_client')
+    expect(result.error_description).toContain('Unknown agent')
   })
 
   it('rejects inactive agent', async () => {
@@ -164,8 +168,10 @@ describe('client_credentials grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
 
-    await expect(handler({} as any)).rejects.toThrow('Unknown agent')
+    expect(result.error).toBe('invalid_client')
+    expect(result.error_description).toContain('Unknown agent')
   })
 
   it('rejects replay (same jti)', async () => {
@@ -188,8 +194,10 @@ describe('client_credentials grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
 
-    await expect(handler({} as any)).rejects.toThrow('JTI already used')
+    expect(result.error).toBe('invalid_client')
+    expect(result.error_description).toContain('JTI already used')
   })
 
   it('rejects wrong audience', async () => {
@@ -211,8 +219,9 @@ describe('client_credentials grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
 
-    await expect(handler({} as any)).rejects.toThrow()
+    expect(result.error).toBe('invalid_client')
   })
 
   it('rejects unsupported assertion type', async () => {
@@ -226,7 +235,9 @@ describe('client_credentials grant', () => {
     }))
 
     const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
 
-    await expect(handler({} as any)).rejects.toThrow('Unsupported client_assertion_type')
+    expect(result.error).toBe('invalid_request')
+    expect(result.error_description).toContain('Unsupported client_assertion_type')
   })
 })

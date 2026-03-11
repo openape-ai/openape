@@ -15,6 +15,8 @@ async function setup() {
 vi.mock('h3', () => ({
   defineEventHandler: (fn: any) => fn,
   readRawBody: vi.fn(),
+  getRequestHeader: vi.fn(),
+  setResponseStatus: vi.fn(),
   createError: (opts: any) => Object.assign(new Error(opts.statusMessage), { statusCode: opts.statusCode }),
 }))
 
