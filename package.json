@@ -1,7 +1,7 @@
 {
   "name": "@openape/auth",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenApe authentication: IdP + SP OIDC protocol logic",
   "author": "Delta Mind GmbH",
   "license": "AGPL-3.0-or-later",
@@ -36,7 +36,7 @@
     }
   },
   "dependencies": {
-    "@openape/core": "^0.1.2",
+    "@openape/core": "^0.3.0",
     "@simplewebauthn/server": "^11",
     "@simplewebauthn/types": "^11",
     "jose": "^5.9.0"

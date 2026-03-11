@@ -2,16 +2,22 @@ import { generateRegistrationOptions, verifyRegistrationResponse } from '@simple
 import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/types'
 import type { RPConfig, WebAuthnCredential } from './types.js'
 
+const RE_PLUS = /\+/g
+const RE_SLASH = /\//g
+const RE_EQUALS = /=/g
+const RE_DASH = /-/g
+const RE_UNDERSCORE = /_/g
+
 export function uint8ArrayToBase64URL(bytes: Uint8Array): string {
   let binary = ''
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  return btoa(binary).replace(RE_PLUS, '-').replace(RE_SLASH, '_').replace(RE_EQUALS, '')
 }
 
 export function base64URLToUint8Array(base64url: string): Uint8Array {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  const base64 = base64url.replace(RE_DASH, '+').replace(RE_UNDERSCORE, '/')
   const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
   const binary = atob(padded)
   const bytes = new Uint8Array(binary.length)

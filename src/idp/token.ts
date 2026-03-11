@@ -3,6 +3,8 @@ import type { JWTPayload } from 'jose'
 import type { CodeStore, KeyStore, RefreshTokenStore } from './stores.js'
 import { generateCodeChallenge, signJWT } from '@openape/core'
 
+const RE_WHITESPACE = /\s+/
+
 export interface TokenExchangeParams {
   grant_type: string
   code: string
@@ -104,7 +106,7 @@ export async function handleTokenExchange(
   }
 
   // Generate refresh token if offline_access scope requested
-  const scopes = new Set((codeEntry.scope ?? '').split(/\s+/).filter(Boolean))
+  const scopes = new Set((codeEntry.scope ?? '').split(RE_WHITESPACE).filter(Boolean))
   if (scopes.has('offline_access') && refreshTokenStore) {
     const { token } = await refreshTokenStore.create(codeEntry.userId, params.client_id)
     result.refresh_token = token
