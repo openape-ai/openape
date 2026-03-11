@@ -1,0 +1,31 @@
+{
+  "name": "openape-agent-proxy",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3004",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.90",
+    "@nuxt/ui": "^4.4.0",
+    "@openape/nuxt-auth-sp": "^0.1.11",
+    "nuxt": "^4.0.0",
+    "tailwindcss": "^4.0.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.35.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.29.3",
+  "engines": {
+    "node": ">=22"
+  }
+}
