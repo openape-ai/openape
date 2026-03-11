@@ -1,6 +1,8 @@
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { useIdpStorage } from './storage'
 
+const RE_TRAILING_SLASH = /\/$/
+
 export interface FederationProvider {
   id: string
   type: 'oidc'
@@ -71,7 +73,7 @@ export async function fetchOidcDiscovery(issuer: string): Promise<OidcDiscovery>
     return cached.data
   }
 
-  const url = `${issuer.replace(/\/$/, '')}/.well-known/openid-configuration`
+  const url = `${issuer.replace(RE_TRAILING_SLASH, '')}/.well-known/openid-configuration`
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Failed to fetch OIDC discovery from ${url}: ${response.status}`)

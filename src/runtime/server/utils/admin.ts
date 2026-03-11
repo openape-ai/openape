@@ -24,12 +24,14 @@ export function isAdmin(email: string): boolean {
   return getAdminEmails().includes(email.toLowerCase())
 }
 
+const RE_BEARER_PREFIX = /^Bearer\s+/i
+
 function hasManagementToken(event: H3Event): boolean {
   const config = useRuntimeConfig()
   if (!config.openapeIdp.managementToken) return false
   const auth = getHeader(event, 'Authorization')
   if (!auth) return false
-  const token = auth.replace(/^Bearer\s+/i, '')
+  const token = auth.replace(RE_BEARER_PREFIX, '')
   return token === config.openapeIdp.managementToken
 }
 

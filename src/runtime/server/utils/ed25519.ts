@@ -3,8 +3,10 @@ import { createPublicKey, verify } from 'node:crypto'
 
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex')
 
+const RE_WHITESPACE = /\s+/
+
 function parseSSHEd25519PublicKey(sshKey: string): KeyObject {
-  const parts = sshKey.trim().split(/\s+/)
+  const parts = sshKey.trim().split(RE_WHITESPACE)
   if (parts[0] !== 'ssh-ed25519' || !parts[1]) {
     throw new Error('Not an ssh-ed25519 key')
   }

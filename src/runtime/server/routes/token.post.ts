@@ -7,9 +7,11 @@ import { issueAgentToken } from '../utils/agent-token'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
 
+const RE_WHITESPACE = /\s+/
+
 function parseScope(scope?: string): Set<string> {
   if (!scope) return new Set()
-  return new Set(scope.split(/\s+/).filter(Boolean))
+  return new Set(scope.split(RE_WHITESPACE).filter(Boolean))
 }
 
 function resolveUserClaimsFactory() {

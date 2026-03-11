@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const RE_ISSUER_URL = /^https:\/\/id\.openape\.at\//
+
 // Mock h3 (Nitro dependency, not available in unit tests)
 vi.mock('h3', () => ({
   defineEventHandler: (fn: any) => fn,
@@ -42,9 +44,9 @@ describe('oIDC discovery', () => {
     const { default: handler } = await import('../src/runtime/server/routes/well-known/openid-configuration.get')
     const result = await handler({} as any)
 
-    expect(result.authorization_endpoint).toMatch(/^https:\/\/id\.openape\.at\//)
-    expect(result.token_endpoint).toMatch(/^https:\/\/id\.openape\.at\//)
-    expect(result.jwks_uri).toMatch(/^https:\/\/id\.openape\.at\//)
+    expect(result.authorization_endpoint).toMatch(RE_ISSUER_URL)
+    expect(result.token_endpoint).toMatch(RE_ISSUER_URL)
+    expect(result.jwks_uri).toMatch(RE_ISSUER_URL)
   })
 })
 
