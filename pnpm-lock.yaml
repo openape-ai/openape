@@ -4,20 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@openape/core': link:../core
-  '@openape/grants': link:../grants
-
 importers:
 
   .:
     dependencies:
       '@openape/core':
-        specifier: link:../core
-        version: link:../core
+        specifier: ^0.3.0
+        version: 0.3.0
       '@openape/grants':
-        specifier: link:../grants
-        version: link:../grants
+        specifier: ^0.2.0
+        version: 0.2.0
       jose:
         specifier: ^5.9.0
         version: 5.10.0
@@ -489,6 +485,22 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@openape/core@0.1.2':
+    resolution: {integrity: sha512-NPhuJ9gD8wEYWZsGs+ecc/xYjihmvFO9hvAa+M/BayJf7C4G5ToF5YteNwD5OEqWKfdZ4C5LPtjkZSVObUvhCQ==}
+
+  '@openape/core@0.3.0':
+    resolution: {integrity: sha512-J56aMoKCh9NEJsxSGXf+9mixaP4ZLu9isji3FOVZWieuYnMMyxcNwtV0CzHHGWVdrmimaU3UgY4zmyiqSDJc1A==}
+    engines: {node: '>=22'}
+
+  '@openape/grants@0.2.0':
+    resolution: {integrity: sha512-S97oc+v5Q6K7VgGTUB8xOMnftJ2HuOzzLHHP8hlSjOv9twI3R0yY2rMolAkbP5iZzp7OYwTpIBpP2r/XAkLY0A==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      h3: ^1.13.0
+    peerDependenciesMeta:
+      h3:
+        optional: true
 
   '@ota-meshi/ast-token-store@0.3.0':
     resolution: {integrity: sha512-XRO0zi2NIUKq2lUk3T1ecFSld1fMWRKE6naRFGkgkdeosx7IslyUKNv5Dcb5PJTja9tHJoFu0v/7yEpAkrkrTg==}
@@ -2738,6 +2750,19 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@openape/core@0.1.2':
+    dependencies:
+      jose: 5.10.0
+
+  '@openape/core@0.3.0':
+    dependencies:
+      jose: 5.10.0
+
+  '@openape/grants@0.2.0':
+    dependencies:
+      '@openape/core': 0.1.2
+      jose: 5.10.0
 
   '@ota-meshi/ast-token-store@0.3.0': {}
 
