@@ -46,5 +46,8 @@ export default antfu({
     'markdown/fenced-code-language': 'off',
     'toml/array-bracket-spacing': 'off',
     'toml/array-element-newline': 'off',
+    'e18e/prefer-static-regex': 'off',
+    'e18e/prefer-array-at': 'off',
+    'e18e/prefer-spread-syntax': 'off',
   },
 })
