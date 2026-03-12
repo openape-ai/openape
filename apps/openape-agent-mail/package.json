@@ -20,26 +20,23 @@
     "@iconify-json/lucide": "^1.2.90",
     "@libsql/client": "^0.14.0",
     "@nuxt/ui": "^4.4.0",
-    "@openape/core": "^0.5.0",
-    "@openape/auth": "^0.5.0",
-    "@openape/nuxt-auth-sp": "^0.6.0",
+    "@openape/core": "workspace:*",
+    "@openape/auth": "workspace:*",
+    "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "^0.44.0",
     "nuxt": "^4.0.0",
     "resend": "^4.0.0",
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^7.6.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "better-sqlite3": "^12.6.2",
     "drizzle-kit": "^0.30.0",
-    "eslint": "^9.35.0",
     "h3": "^1.15.5",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "packageManager": "pnpm@10.29.3",
   "engines": {
     "node": ">=22"
   },

@@ -1,0 +1,25 @@
+{
+  "name": "openape-sp-example",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3001",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@nuxt/ui": "4.4.0",
+    "@openape/auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "nuxt": "^4.3.1",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.19.13"
+  }
+}

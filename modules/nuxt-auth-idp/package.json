@@ -19,7 +19,7 @@
   "scripts": {
     "build": "nuxt-module-build build",
     "dev": "nuxt-module-build build --stub",
-    "prepare": "nuxi prepare playground",
+    "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"
