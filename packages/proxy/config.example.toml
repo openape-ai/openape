@@ -1,0 +1,48 @@
+[proxy]
+listen = "127.0.0.1:9090"
+idp_url = "https://id.office.or.at"
+agent_email = "mini-claw@office.or.at"
+default_action = "request"     # block | request | request-async
+audit_log = "./audit.jsonl"
+
+# Always allowed (no grant needed)
+[[allow]]
+domain = "*.openape.at"
+
+[[allow]]
+domain = "api.github.com"
+methods = ["GET"]
+
+[[allow]]
+domain = "registry.npmjs.org"
+
+# Always blocked
+[[deny]]
+domain = "169.254.169.254"
+note = "AWS/cloud metadata endpoint"
+
+[[deny]]
+domain = "*.internal"
+note = "internal network"
+
+# Grant-controlled access
+[[grant_required]]
+domain = "api.github.com"
+methods = ["POST", "PUT", "DELETE", "PATCH"]
+grant_type = "once"
+permissions = ["github:write"]
+
+[[grant_required]]
+domain = "api.openai.com"
+grant_type = "always"
+permissions = ["openai:api"]
+
+[[grant_required]]
+domain = "smtp.gmail.com"
+grant_type = "once"
+permissions = ["email:send"]
+
+# Catch-all: everything else needs a one-time grant
+[[grant_required]]
+domain = "*"
+grant_type = "once"

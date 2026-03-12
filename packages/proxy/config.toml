@@ -1,0 +1,35 @@
+[proxy]
+listen = "127.0.0.1:9090"
+idp_url = "https://id.test.openape.at"
+agent_email = "openclaw@macmini.local"
+default_action = "block"
+audit_log = "/tmp/openape-proxy-audit.log"
+
+# Free access - no grant needed
+[[allow]]
+domain = "httpbin.org"
+methods = ["GET"]
+note = "Test endpoint - GET always allowed"
+
+[[allow]]
+domain = "api.github.com"
+methods = ["GET"]
+note = "GitHub API read-only - allowed"
+
+# Blocked domains
+[[deny]]
+domain = "evil.example.com"
+note = "Blocked domain"
+
+# Needs human approval
+[[grant_required]]
+domain = "api.github.com"
+methods = ["POST", "PUT", "DELETE"]
+grant_type = "allow_once"
+note = "GitHub API write operations need approval"
+
+[[grant_required]]
+domain = "httpbin.org"
+methods = ["POST"]
+grant_type = "allow_once"
+note = "POST to httpbin needs approval"
