@@ -1,6 +1,7 @@
 import { useRuntimeConfig, useStorage, useEvent } from 'nitropack/runtime'
+import type { Storage } from 'unstorage'
 
-export const useGrantStorage = () => {
+export const useGrantStorage = (): Storage => {
   try {
     const event = useEvent()
     if (event?.context?.openapeGrantsStorageKey) {
