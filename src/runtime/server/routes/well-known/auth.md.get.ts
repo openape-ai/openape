@@ -24,7 +24,7 @@ DDISA v1 (DNS-Discoverable Identity & Service Authorization)
 | GET | /api/callback | OAuth callback (automatic) |
 | GET | /api/me | Get current session (returns 401 if not authenticated) |
 | POST | /api/logout | End session |
-| GET | /.well-known/sp-manifest.json | SP metadata |
+| GET | /.well-known/oauth-client-metadata | SP client metadata (RFC 7591) |
 
 ## How to Authenticate
 

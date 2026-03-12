@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { createError, defineEventHandler, getQuery, getRequestURL, readBody, sendRedirect } from 'h3'
-import { createAuthorizationURL, createSPManifest, discoverIdP, handleCallback } from '@openape/auth'
+import { createAuthorizationURL, createClientMetadata, discoverIdP, handleCallback } from '@openape/auth'
 import type { DDISAAssertionClaims } from '@openape/core'
 import { getSpConfig, saveFlowState, getFlowState, clearFlowState } from './utils/sp-config'
 
@@ -16,9 +16,9 @@ export interface CallbackHandlerOptions {
   onError?: (event: H3Event, error: Error) => Promise<void>
 }
 
-export interface SPManifestHandlerOptions {
+export interface ClientMetadataHandlerOptions {
   callbackPath: string
-  description?: string
+  clientUri?: string
 }
 
 export function defineOpenApeLoginHandler(options: LoginHandlerOptions) {
@@ -124,15 +124,16 @@ export function defineOpenApeCallbackHandler(options: CallbackHandlerOptions) {
   })
 }
 
-export function defineOpenApeSPManifestHandler(options: SPManifestHandlerOptions) {
+export function defineOpenApeClientMetadataHandler(options: ClientMetadataHandlerOptions) {
   return defineEventHandler((event) => {
     const { clientId, spName } = getSpConfig()
     const origin = getRequestURL(event).origin
-    return createSPManifest({
+    return createClientMetadata({
       client_id: clientId,
-      name: spName,
+      client_name: spName,
       redirect_uris: [`${origin}${options.callbackPath}`],
-      description: options.description || `${spName} — OpenApe Service Provider`,
+      client_uri: options.clientUri || origin,
+      contacts: [],
     })
   })
 }

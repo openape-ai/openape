@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addComponentsDir, useLogger } from '@nuxt/kit'
+import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addComponentsDir, useLogger } from '@nuxt/kit'
 import { defu } from 'defu'
 
 export interface ManifestConfig {
@@ -103,6 +103,9 @@ export default defineNuxtModule<ModuleOptions>({
       }
     }
 
+    // RFC 7807 Problem Details error formatting
+    addServerPlugin(resolve('./runtime/server/plugins/problem-details'))
+
     // Register server utils (available via #imports or auto-import)
     addServerImportsDir(resolve('./runtime/server/utils'))
 
@@ -121,7 +124,7 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/callback', handler: resolve('./runtime/server/api/callback.get') })
       addServerHandler({ route: '/api/logout', method: 'post', handler: resolve('./runtime/server/api/logout.post') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
-      addServerHandler({ route: '/.well-known/sp-manifest.json', handler: resolve('./runtime/server/routes/well-known/sp-manifest.json.get') })
+      addServerHandler({ route: '/.well-known/oauth-client-metadata', handler: resolve('./runtime/server/routes/well-known/oauth-client-metadata.get') })
       addServerHandler({ route: '/.well-known/auth.md', handler: resolve('./runtime/server/routes/well-known/auth.md.get') })
       addServerHandler({ route: '/.well-known/openape.json', handler: resolve('./runtime/server/routes/well-known/openape.json.get') })
     }
