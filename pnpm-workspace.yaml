@@ -1,0 +1,20 @@
+packages:
+  - 'packages/*'
+  - 'modules/*'
+  - 'apps/*'
+  - 'examples/*'
+
+catalog:
+  typescript: ^5.9.3
+  tsup: ^8.5.1
+  vitest: ^3.2.4
+  eslint: ^9.39.3
+  '@antfu/eslint-config': ^7.6.1
+  '@types/node': ^22.19.13
+  '@changesets/cli': ^2.30.0
+  nuxt: ^4.3.1
+  '@nuxt/kit': ^3.21.1
+  '@nuxt/module-builder': ^1.0.2
+  vue: ^3.5.30
+  h3: ^1.15.5
+  jose: ^5.9.0
