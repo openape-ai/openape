@@ -219,6 +219,15 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/grants/:id/revoke', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/revoke.post') })
       addServerHandler({ route: '/api/grants/:id/token', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/token.post') })
       addServerHandler({ route: '/api/grants/:id/consume', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/consume.post') })
+      addServerHandler({ route: '/api/grants/batch', method: 'post', handler: resolve('./runtime/server/api/grants/batch.post') })
+    }
+
+    // Server route handlers — Delegations
+    if (routeConfig.grants) {
+      addServerHandler({ route: '/api/delegations', handler: resolve('./runtime/server/api/delegations/index.get') })
+      addServerHandler({ route: '/api/delegations', method: 'post', handler: resolve('./runtime/server/api/delegations/index.post') })
+      addServerHandler({ route: '/api/delegations/:id', method: 'delete', handler: resolve('./runtime/server/api/delegations/[id].delete') })
+      addServerHandler({ route: '/api/delegations/:id/validate', method: 'post', handler: resolve('./runtime/server/api/delegations/[id]/validate.post') })
     }
 
     // Server route handlers — Agent
