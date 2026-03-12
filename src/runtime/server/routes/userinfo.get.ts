@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   try {
     const result = await jwtVerify(token, signingKey.publicKey, {
       issuer,
-      algorithms: ['ES256'],
+      algorithms: ['EdDSA'],
     })
     payload = result.payload as Record<string, unknown>
   }

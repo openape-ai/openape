@@ -13,7 +13,7 @@ export async function issueAgentToken(
   kid?: string,
 ): Promise<string> {
   const jwt = new SignJWT({ sub: payload.sub, act: 'agent' })
-    .setProtectedHeader({ alg: 'ES256', ...(kid ? { kid } : {}) })
+    .setProtectedHeader({ alg: 'EdDSA', ...(kid ? { kid } : {}) })
     .setIssuer(issuer)
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -29,7 +29,7 @@ export async function verifyAgentToken(
 ): Promise<AgentTokenPayload> {
   const { payload } = await jwtVerify(token, publicKey, {
     issuer,
-    algorithms: ['ES256'],
+    algorithms: ['EdDSA'],
   })
 
   if (payload.act !== 'agent') {

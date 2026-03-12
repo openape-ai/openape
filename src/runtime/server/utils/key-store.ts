@@ -29,8 +29,8 @@ export function createKeyStore(): KeyStore {
       if (!stored || stored.isActive === false)
         continue
 
-      const privateKey = await importJWK(stored.privateKeyJwk, 'ES256') as KeyLike
-      const publicKey = await importJWK(stored.publicKeyJwk, 'ES256') as KeyLike
+      const privateKey = await importJWK(stored.privateKeyJwk, 'EdDSA') as KeyLike
+      const publicKey = await importJWK(stored.publicKeyJwk, 'EdDSA') as KeyLike
 
       keys.push({ kid: stored.kid, privateKey, publicKey })
     }

@@ -8,7 +8,7 @@ export default defineEventHandler(async () => {
   const keys = await Promise.all(
     entries.map(async (entry) => {
       const jwk = await exportJWK(entry.publicKey)
-      return { ...jwk, kid: entry.kid, alg: 'ES256', use: 'sig' }
+      return { ...jwk, kid: entry.kid, alg: 'EdDSA', use: 'sig' }
     }),
   )
   return { keys }
