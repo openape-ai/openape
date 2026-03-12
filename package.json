@@ -13,10 +13,12 @@
     "build": "tsup",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
   },
   "dependencies": {
-    "@openape/core": "workspace:*",
+    "@openape/core": "^0.5.0",
     "citty": "^0.1.6",
     "consola": "^3.4.2"
   },
@@ -28,11 +30,6 @@
     "tsup": "^8.5.1",
     "typescript": "^5.8.2",
     "vitest": "^3.2.4"
-  },
-  "pnpm": {
-    "overrides": {
-      "@openape/core": "link:../core"
-    }
   },
   "license": "AGPL-3.0-or-later",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>"

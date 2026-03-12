@@ -4,16 +4,13 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@openape/core': link:../core
-
 importers:
 
   .:
     dependencies:
       '@openape/core':
-        specifier: link:../core
-        version: link:../core
+        specifier: ^0.5.0
+        version: 0.5.1
       citty:
         specifier: ^0.1.6
         version: 0.1.6
@@ -470,6 +467,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@openape/core@0.5.1':
+    resolution: {integrity: sha512-5JdQlH3TW7t5M+vDCgyVbyJfpAVibZR14fm87xJZgnl+9T4ipJ2DhOalKN77HX3YbyKI1AfUUrNOirJ2tZB3UQ==}
+    engines: {node: '>=22'}
 
   '@pkgr/core@0.2.9':
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
@@ -1446,6 +1447,9 @@ packages:
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+
+  jose@5.10.0:
+    resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
@@ -2731,6 +2735,10 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
+  '@openape/core@0.5.1':
+    dependencies:
+      jose: 5.10.0
+
   '@pkgr/core@0.2.9': {}
 
   '@rollup/rollup-android-arm-eabi@4.59.0':
@@ -3727,6 +3735,8 @@ snapshots:
   is-windows@1.0.2: {}
 
   isexe@2.0.0: {}
+
+  jose@5.10.0: {}
 
   joycon@3.1.1: {}
 
