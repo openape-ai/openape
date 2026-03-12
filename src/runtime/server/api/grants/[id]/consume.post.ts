@@ -1,7 +1,8 @@
 import { introspectGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
-import { createError, defineEventHandler, getHeader, getRouterParam } from 'h3'
+import { defineEventHandler, getHeader, getRouterParam } from 'h3'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 /**
  * POST /api/grants/:id/consume
@@ -23,13 +24,13 @@ import { useIdpStores } from '../../../utils/stores'
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Grant ID is required' })
+    throw createProblemError({ status: 400, title: 'Grant ID is required' })
   }
 
   // Extract JWT from Authorization header
   const authHeader = getHeader(event, 'authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Missing or invalid Authorization header' })
+    throw createProblemError({ status: 401, title: 'Missing or invalid Authorization header' })
   }
   const token = authHeader.slice(7)
 
@@ -41,19 +42,19 @@ export default defineEventHandler(async (event) => {
   })
 
   if (!result.valid) {
-    throw createError({ statusCode: 401, statusMessage: `Invalid grant token: ${result.error}` })
+    throw createProblemError({ status: 401, title: `Invalid grant token: ${result.error}`, type: 'https://openape.org/errors/invalid_authz_jwt' })
   }
 
   // Verify grant_id in JWT matches URL parameter
   if (result.claims?.grant_id !== id) {
-    throw createError({ statusCode: 400, statusMessage: 'Grant ID in token does not match URL' })
+    throw createProblemError({ status: 400, title: 'Grant ID in token does not match URL' })
   }
 
   // Look up grant and check status
   const { grantStore } = useGrantStores()
   const grant = await introspectGrant(id, grantStore)
   if (!grant) {
-    throw createError({ statusCode: 404, statusMessage: 'Grant not found' })
+    throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
   // Check grant status

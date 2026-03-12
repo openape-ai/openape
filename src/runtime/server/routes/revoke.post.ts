@@ -1,5 +1,6 @@
-import { createError, defineEventHandler, getRequestHeader, readRawBody } from 'h3'
+import { defineEventHandler, getRequestHeader, readRawBody } from 'h3'
 import { useIdpStores } from '../utils/stores'
+import { createProblemError } from '../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const contentType = getRequestHeader(event, 'content-type') || ''
@@ -14,13 +15,13 @@ export default defineEventHandler(async (event) => {
       body = JSON.parse(rawBody || '{}')
     }
     catch {
-      throw createError({ statusCode: 400, statusMessage: 'Invalid JSON body' })
+      throw createProblemError({ status: 400, title: 'Invalid JSON body' })
     }
   }
 
   const token = body.token
   if (!token) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing token' })
+    throw createProblemError({ status: 400, title: 'Missing token' })
   }
 
   const { refreshTokenStore } = useIdpStores()

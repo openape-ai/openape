@@ -1,4 +1,4 @@
-import { defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, extendPages } from '@nuxt/kit'
+import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, extendPages } from '@nuxt/kit'
 import { defu } from 'defu'
 
 export interface GrantsOptions {
@@ -94,6 +94,9 @@ export default defineNuxtModule<ModuleOptions>({
       nuxt.options.runtimeConfig.openapeGrants as Record<string, unknown> || {},
       { storageKey: grants.storageKey },
     ) as { storageKey: string }
+
+    // RFC 7807 Problem Details error formatting
+    addServerPlugin(resolve('./runtime/server/plugins/problem-details'))
 
     // Register server utils (auto-imported by Nitro)
     addServerImportsDir(resolve('./runtime/server/utils'))

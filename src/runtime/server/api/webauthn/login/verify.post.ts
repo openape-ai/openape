@@ -1,13 +1,14 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { verifyAuthentication } from '@openape/auth'
 import { getAppSession } from '../../../utils/session'
 import { getRPConfig } from '../../../utils/rp-config'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ challengeToken: string, response: any }>(event) ?? {} as { challengeToken: string, response: any }
   if (!body.challengeToken || !body.response) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing required fields: challengeToken, response' })
+    throw createProblemError({ status: 400, title: 'Missing required fields: challengeToken, response' })
   }
 
   const { challengeStore, credentialStore, userStore } = useIdpStores()
@@ -15,24 +16,24 @@ export default defineEventHandler(async (event) => {
 
   const challenge = await challengeStore.consume(body.challengeToken)
   if (!challenge) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid or expired challenge' })
+    throw createProblemError({ status: 400, title: 'Invalid or expired challenge' })
   }
 
   // Find the credential that was used
   const credentialId = body.response.id
   const credential = await credentialStore.findById(credentialId)
   if (!credential) {
-    throw createError({ statusCode: 400, statusMessage: 'Unknown credential' })
+    throw createProblemError({ status: 400, title: 'Unknown credential' })
   }
 
   // If email was specified during options, verify it matches
   if (challenge.userEmail && credential.userEmail !== challenge.userEmail) {
-    throw createError({ statusCode: 400, statusMessage: 'Credential does not belong to specified user' })
+    throw createProblemError({ status: 400, title: 'Credential does not belong to specified user' })
   }
 
   const { verified, newCounter } = await verifyAuthentication(body.response, challenge.challenge, rpConfig, credential)
   if (!verified) {
-    throw createError({ statusCode: 400, statusMessage: 'Authentication verification failed' })
+    throw createProblemError({ status: 400, title: 'Authentication verification failed' })
   }
 
   // Update counter
@@ -42,7 +43,7 @@ export default defineEventHandler(async (event) => {
 
   const user = await userStore.findByEmail(credential.userEmail)
   if (!user) {
-    throw createError({ statusCode: 400, statusMessage: 'User not found' })
+    throw createProblemError({ status: 400, title: 'User not found' })
   }
 
   // Create session

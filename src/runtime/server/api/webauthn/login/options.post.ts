@@ -1,7 +1,8 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { createAuthenticationOptions } from '@openape/auth'
 import { getRPConfig } from '../../../utils/rp-config'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string }>(event) ?? {}
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (body.email) {
     credentials = await credentialStore.findByUser(body.email)
     if (credentials.length === 0) {
-      throw createError({ statusCode: 404, statusMessage: 'No passkeys found for this email' })
+      throw createProblemError({ status: 404, title: 'No passkeys found for this email' })
     }
   }
 

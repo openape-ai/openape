@@ -1,6 +1,7 @@
-import { createError, defineEventHandler, getQuery, getRequestURL, getRouterParam, sendRedirect } from 'h3'
+import { defineEventHandler, getQuery, getRequestURL, getRouterParam, sendRedirect } from 'h3'
 import { generateCodeChallenge, generateCodeVerifier } from '@openape/core'
 import { fetchOidcDiscovery, findProvider, saveFederationState } from '../../../utils/federation'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const providerId = getRouterParam(event, 'providerId')!
@@ -9,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const provider = findProvider(providerId)
   if (!provider) {
-    throw createError({ statusCode: 404, statusMessage: `Unknown federation provider: ${providerId}` })
+    throw createProblemError({ status: 404, title: `Unknown federation provider: ${providerId}` })
   }
 
   const discovery = await fetchOidcDiscovery(provider.issuer)

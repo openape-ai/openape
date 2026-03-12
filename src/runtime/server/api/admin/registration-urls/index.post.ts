@@ -1,14 +1,15 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { requireAdmin } from '../../../utils/admin'
 import { getRPConfig } from '../../../utils/rp-config'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
   const body = await readBody<{ email: string, name: string, expiresInHours?: number }>(event)
 
   if (!body.email || !body.name) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing required fields: email, name' })
+    throw createProblemError({ status: 400, title: 'Missing required fields: email, name' })
   }
 
   const { registrationUrlStore } = useIdpStores()

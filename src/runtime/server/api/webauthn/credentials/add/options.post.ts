@@ -1,8 +1,9 @@
-import { createError, defineEventHandler } from 'h3'
+import { defineEventHandler } from 'h3'
 import { createRegistrationOptions } from '@openape/auth'
 import { requireAuth } from '../../../../utils/admin'
 import { getRPConfig } from '../../../../utils/rp-config'
 import { useIdpStores } from '../../../../utils/stores'
+import { createProblemError } from '../../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const userId = await requireAuth(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   const user = await userStore.findByEmail(userId)
   if (!user) {
-    throw createError({ statusCode: 404, statusMessage: 'User not found' })
+    throw createProblemError({ status: 404, title: 'User not found' })
   }
 
   const existingCredentials = await credentialStore.findByUser(userId)

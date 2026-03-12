@@ -1,6 +1,7 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { requireAdmin } from '../../utils/admin'
+import { createProblemError } from '../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
@@ -15,24 +16,24 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   if (!body.email || !body.name || !body.publicKey) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing required fields: email, name, publicKey' })
+    throw createProblemError({ status: 400, title: 'Missing required fields: email, name, publicKey' })
   }
 
   if (!body.publicKey.startsWith('ssh-ed25519 ')) {
-    throw createError({ statusCode: 400, statusMessage: 'Public key must be in ssh-ed25519 format' })
+    throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }
 
   const { agentStore } = useIdpStores()
 
   const duplicateEmail = await agentStore.findByEmail(body.email)
   if (duplicateEmail) {
-    throw createError({ statusCode: 409, statusMessage: 'An agent with this email already exists' })
+    throw createProblemError({ status: 409, title: 'An agent with this email already exists' })
   }
 
   const existingAgents = await agentStore.listAll()
   const duplicateKey = existingAgents.find(a => a.publicKey === body.publicKey)
   if (duplicateKey) {
-    throw createError({ statusCode: 409, statusMessage: 'An agent with this public key already exists' })
+    throw createProblemError({ status: 409, title: 'An agent with this public key already exists' })
   }
 
   const agent = await agentStore.create({

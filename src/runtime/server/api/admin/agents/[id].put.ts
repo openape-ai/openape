@@ -1,6 +1,7 @@
-import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
+import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireAdmin } from '../../../utils/admin'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -8,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Agent ID is required' })
+    throw createProblemError({ status: 400, title: 'Agent ID is required' })
   }
 
   const body = await readBody<{
@@ -21,12 +22,12 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   if (body.publicKey && !body.publicKey.startsWith('ssh-ed25519 ')) {
-    throw createError({ statusCode: 400, statusMessage: 'Public key must be in ssh-ed25519 format' })
+    throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }
 
   const existing = await agentStore.findById(id)
   if (!existing) {
-    throw createError({ statusCode: 404, statusMessage: 'Agent not found' })
+    throw createProblemError({ status: 404, title: 'Agent not found' })
   }
 
   const update: Record<string, unknown> = {}

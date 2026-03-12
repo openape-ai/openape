@@ -1,8 +1,9 @@
 import type { H3Event } from 'h3'
-import { createError, getHeader } from 'h3'
+import { getHeader } from 'h3'
 import { useEvent } from 'nitropack/runtime'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { getAppSession } from './session'
+import { createProblemError } from './problem'
 
 function getAdminEmails(): string[] {
   try {
@@ -40,7 +41,7 @@ export async function requireAuth(event: H3Event): Promise<string> {
 
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+    throw createProblemError({ status: 401, title: 'Authentication required' })
   }
   return session.data.userId as string
 }
@@ -50,11 +51,11 @@ export async function requireAdmin(event: H3Event): Promise<string> {
 
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+    throw createProblemError({ status: 401, title: 'Authentication required' })
   }
   const email = session.data.userId as string
   if (isAdmin(email)) {
     return email
   }
-  throw createError({ statusCode: 403, statusMessage: 'Admin access required' })
+  throw createProblemError({ status: 403, title: 'Admin access required' })
 }

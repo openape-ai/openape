@@ -1,12 +1,13 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { createRegistrationOptions } from '@openape/auth'
 import { getRPConfig } from '../../../utils/rp-config'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ token: string }>(event)
   if (!body.token) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing required field: token' })
+    throw createProblemError({ status: 400, title: 'Missing required field: token' })
   }
 
   const { registrationUrlStore, credentialStore, challengeStore } = useIdpStores()
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   const regUrl = await registrationUrlStore.find(body.token)
   if (!regUrl) {
-    throw createError({ statusCode: 404, statusMessage: 'Invalid or expired registration URL' })
+    throw createProblemError({ status: 404, title: 'Invalid or expired registration URL' })
   }
 
   const existingCredentials = await credentialStore.findByUser(regUrl.email)

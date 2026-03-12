@@ -1,13 +1,14 @@
 import type { H3Event } from 'h3'
-import { createError, getHeader } from 'h3'
+import { getHeader } from 'h3'
 import type { AgentTokenPayload } from './agent-token'
 import { verifyAgentToken } from './agent-token'
 import { getIdpIssuer, useIdpStores } from './stores'
+import { createProblemError } from './problem'
 
 export async function requireAgent(event: H3Event): Promise<AgentTokenPayload> {
   const authHeader = getHeader(event, 'authorization')
   if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Bearer token required' })
+    throw createProblemError({ status: 401, title: 'Bearer token required' })
   }
 
   const token = authHeader.slice(7)
@@ -18,7 +19,7 @@ export async function requireAgent(event: H3Event): Promise<AgentTokenPayload> {
     return await verifyAgentToken(token, getIdpIssuer(), signingKey.publicKey)
   }
   catch {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired agent token' })
+    throw createProblemError({ status: 401, title: 'Invalid or expired agent token' })
   }
 }
 

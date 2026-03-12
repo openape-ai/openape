@@ -1,6 +1,7 @@
-import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAdmin } from '../../../utils/admin'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
@@ -8,18 +9,18 @@ export default defineEventHandler(async (event) => {
 
   const email = getRouterParam(event, 'email')
   if (!email) {
-    throw createError({ statusCode: 400, statusMessage: 'Email is required' })
+    throw createProblemError({ status: 400, title: 'Email is required' })
   }
 
   const decoded = decodeURIComponent(email)
 
   if (decoded === adminEmail) {
-    throw createError({ statusCode: 400, statusMessage: 'Cannot delete your own account' })
+    throw createProblemError({ status: 400, title: 'Cannot delete your own account' })
   }
 
   const existing = await userStore.findByEmail(decoded)
   if (!existing) {
-    throw createError({ statusCode: 404, statusMessage: 'User not found' })
+    throw createProblemError({ status: 404, title: 'User not found' })
   }
 
   await userStore.deleteUser(decoded)

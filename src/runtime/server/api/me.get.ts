@@ -1,12 +1,13 @@
-import { createError, defineEventHandler } from 'h3'
+import { defineEventHandler } from 'h3'
 import { isAdmin } from '../utils/admin'
 import { getAppSession } from '../utils/session'
+import { createProblemError } from '../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const session = await getAppSession(event)
 
   if (!session.data.userId) {
-    throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
+    throw createProblemError({ status: 401, title: 'Not authenticated' })
   }
 
   return {

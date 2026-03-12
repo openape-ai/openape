@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, getQuery, getRequestURL, getRouterParam, sendRedirect } from 'h3'
+import { defineEventHandler, getQuery, getRequestURL, getRouterParam, sendRedirect } from 'h3'
 import { decodeJwt } from 'jose'
 import {
   consumeFederationState,
@@ -9,6 +9,7 @@ import {
 } from '../../../utils/federation'
 import { getAppSession } from '../../../utils/session'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const providerId = getRouterParam(event, 'providerId')!
@@ -43,7 +44,7 @@ export default defineEventHandler(async (event) => {
 
   const provider = findProvider(providerId)
   if (!provider) {
-    throw createError({ statusCode: 404, statusMessage: `Unknown federation provider: ${providerId}` })
+    throw createProblemError({ status: 404, title: `Unknown federation provider: ${providerId}` })
   }
 
   try {

@@ -1,6 +1,7 @@
-import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAdmin } from '../../../utils/admin'
 import { useIdpStores } from '../../../utils/stores'
+import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -8,12 +9,12 @@ export default defineEventHandler(async (event) => {
 
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Agent ID is required' })
+    throw createProblemError({ status: 400, title: 'Agent ID is required' })
   }
 
   const agent = await agentStore.findById(id)
   if (!agent) {
-    throw createError({ statusCode: 404, statusMessage: 'Agent not found' })
+    throw createProblemError({ status: 404, title: 'Agent not found' })
   }
 
   return agent

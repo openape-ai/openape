@@ -1,12 +1,13 @@
-import { createError, defineEventHandler, getRouterParam } from 'h3'
+import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAdmin } from '../../../../utils/admin'
 import { useIdpStores } from '../../../../utils/stores'
+import { createProblemError } from '../../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
   const email = getRouterParam(event, 'email')
   if (!email) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing email parameter' })
+    throw createProblemError({ status: 400, title: 'Missing email parameter' })
   }
 
   const { credentialStore } = useIdpStores()

@@ -1,6 +1,6 @@
 import type { AuthorizeParams } from '@openape/auth'
 import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
-import { createError, defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
+import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
 import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
@@ -8,6 +8,7 @@ import { tryAgentAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
+import { createProblemError } from '../utils/problem'
 
 function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizationDetail[] {
   if (!raw) return []
@@ -53,10 +54,10 @@ export default defineEventHandler(async (event) => {
         return sendRedirect(event, errorUrl.toString())
       }
       catch {
-        // Invalid redirect_uri — fall through to createError
+        // Invalid redirect_uri — fall through to createProblemError
       }
     }
-    throw createError({ statusCode: 400, statusMessage: error })
+    throw createProblemError({ status: 400, title: error })
   }
 
   // Determine userId: Agent Bearer Token or Human Session
