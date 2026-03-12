@@ -26,27 +26,21 @@
     "prepare": "nuxi prepare playground",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset publish"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@nuxt/kit": "^3.21.1",
-    "@openape/auth": "^0.5.0",
-    "@openape/core": "^0.5.0",
+    "@openape/auth": "workspace:*",
+    "@openape/core": "workspace:*",
     "defu": "^6.1.4"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^7.6.1",
-    "@changesets/cli": "^2.30.0",
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/ui": "^4.5.1",
     "@types/node": "^22.19.13",
-    "eslint": "^9.39.3",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
@@ -57,5 +51,12 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@10.29.3"
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "modules/nuxt-auth-sp"
+  }
 }
