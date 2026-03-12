@@ -8,7 +8,7 @@
     "dev": "nuxt dev --port 3003",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "nuxi prepare && nuxt typecheck",
     "lint": "eslint .",
     "test": "nuxi prepare && vitest --config vitest.config.ts",
     "test:run": "nuxi prepare && vitest run --config vitest.config.ts",

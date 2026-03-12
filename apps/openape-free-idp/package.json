@@ -8,7 +8,7 @@
     "dev": "nuxt dev --port 3002",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "nuxi prepare && nuxt typecheck",
     "lint": "eslint .",
     "test": "vitest run"
   },

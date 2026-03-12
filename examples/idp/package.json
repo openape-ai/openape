@@ -7,7 +7,7 @@
     "postinstall": "nuxt prepare",
     "build": "nuxt build",
     "dev": "nuxt dev --port 3000",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "nuxi prepare && nuxt typecheck",
     "lint": "eslint ."
   },
   "dependencies": {

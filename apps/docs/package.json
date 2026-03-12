@@ -8,7 +8,7 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "typecheck": "nuxt typecheck",
+    "typecheck": "nuxi prepare && nuxt typecheck",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
