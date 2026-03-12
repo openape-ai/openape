@@ -1,2 +1,0 @@
-patchedDependencies:
-  unstorage@1.17.4: patches/unstorage@1.17.4.patch
