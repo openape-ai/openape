@@ -1,0 +1,71 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Quality gates
+        run: |
+          pnpm run lint
+          pnpm run typecheck
+          pnpm run test
+          pnpm run build
+
+      - name: Check for changesets
+        id: changesets
+        run: |
+          if ls .changeset/*.md 1>/dev/null 2>&1; then
+            echo "pending=true" >> $GITHUB_OUTPUT
+          else
+            echo "pending=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Version and publish
+        if: steps.changesets.outputs.pending == 'true'
+        run: |
+          pnpm changeset version
+          pnpm run build
+          pnpm run release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit version bump
+        if: steps.changesets.outputs.pending == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "release: version packages [skip ci]"
+          git push
