@@ -25,7 +25,7 @@ describe('oIDC discovery', () => {
     expect(result.response_types_supported).toEqual(['code'])
     expect(result.grant_types_supported).toEqual(['authorization_code', 'client_credentials', 'refresh_token'])
     expect(result.subject_types_supported).toEqual(['public'])
-    expect(result.id_token_signing_alg_values_supported).toEqual(['ES256'])
+    expect(result.id_token_signing_alg_values_supported).toEqual(['EdDSA'])
     expect(result.code_challenge_methods_supported).toEqual(['S256'])
     expect(result.scopes_supported).toEqual(['openid', 'email', 'profile', 'offline_access'])
     expect(result.claims_supported).toContain('sub')
@@ -35,7 +35,7 @@ describe('oIDC discovery', () => {
     expect(result.claims_supported).toContain('authorization_details')
     expect(result.authorization_details_types_supported).toEqual(['openape_grant'])
     expect(result.token_endpoint_auth_methods_supported).toEqual(['none', 'private_key_jwt'])
-    expect(result.token_endpoint_auth_signing_alg_values_supported).toEqual(['EdDSA', 'ES256'])
+    expect(result.token_endpoint_auth_signing_alg_values_supported).toEqual(['EdDSA'])
     expect(result.scopes_supported).toContain('offline_access')
     expect(result.revocation_endpoint).toBe('https://id.openape.at/revoke')
   })
@@ -55,7 +55,7 @@ describe('jWKS endpoint', () => {
     const { generateKeyPair } = await import('jose')
 
     // Mock keyStore that returns a real key
-    const { publicKey } = await generateKeyPair('ES256')
+    const { publicKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
     const kid = 'key-test-123'
 
     vi.doMock('../src/runtime/server/utils/stores', () => ({
@@ -81,12 +81,11 @@ describe('jWKS endpoint', () => {
 
     const key = result.keys[0]
     expect(key.kid).toBe('key-test-123')
-    expect(key.alg).toBe('ES256')
+    expect(key.alg).toBe('EdDSA')
     expect(key.use).toBe('sig')
-    expect(key.kty).toBe('EC')
-    expect(key.crv).toBe('P-256')
+    expect(key.kty).toBe('OKP')
+    expect(key.crv).toBe('Ed25519')
     expect(key.x).toBeTruthy()
-    expect(key.y).toBeTruthy()
     // Must NOT contain private key material
     expect(key.d).toBeUndefined()
   })

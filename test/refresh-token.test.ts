@@ -7,7 +7,7 @@ const ISSUER = 'https://id.openape.at'
 let idpSigningKey: { privateKey: KeyLike, publicKey: KeyLike, kid: string }
 
 async function setup() {
-  const kp = await generateKeyPair('ES256')
+  const kp = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
   idpSigningKey = { ...kp, kid: 'idp-key-1' }
 }
 
@@ -95,7 +95,7 @@ describe('refresh_token grant', () => {
     expect(result.expires_in).toBe(300)
 
     const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
-      algorithms: ['ES256'],
+      algorithms: ['EdDSA'],
     })
     expect(payload.sub).toBe('alice@example.com')
     expect(payload.aud).toBe('sp.example.com')

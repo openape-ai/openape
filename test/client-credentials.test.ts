@@ -14,8 +14,8 @@ async function setup() {
   agentPublicKey = agentKp.publicKey
   agentPrivateKey = agentKp.privateKey
 
-  const { generateKeyPair: genES256 } = await import('jose')
-  const idpKp = await genES256('ES256')
+  const { generateKeyPair: genEdDSA } = await import('jose')
+  const idpKp = await genEdDSA('EdDSA', { crv: 'Ed25519' })
   idpSigningKey = { ...idpKp, kid: 'idp-key-1' }
 }
 
@@ -124,7 +124,7 @@ describe('client_credentials grant', () => {
 
     // Verify the issued token
     const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
-      algorithms: ['ES256'],
+      algorithms: ['EdDSA'],
     })
     expect(payload.sub).toBe(AGENT_EMAIL)
     expect(payload.act).toBe('agent')

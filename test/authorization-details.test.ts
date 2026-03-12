@@ -7,7 +7,7 @@ const ISSUER = 'https://id.openape.at'
 let idpSigningKey: { privateKey: KeyLike, publicKey: KeyLike, kid: string }
 
 async function setup() {
-  const kp = await generateKeyPair('ES256')
+  const kp = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
   idpSigningKey = { ...kp, kid: 'idp-key-1' }
 }
 
@@ -119,7 +119,7 @@ describe('authorization_details in token response', () => {
 
     // JWT includes authorization_details claim
     const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
-      algorithms: ['ES256'],
+      algorithms: ['EdDSA'],
     })
     expect(payload.authorization_details).toEqual(authzDetails)
   })
@@ -161,7 +161,7 @@ describe('authorization_details in token response', () => {
     expect(result.authorization_details).toBeUndefined()
 
     const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
-      algorithms: ['ES256'],
+      algorithms: ['EdDSA'],
     })
     expect(payload.authorization_details).toBeUndefined()
   })
