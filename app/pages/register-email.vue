@@ -20,7 +20,7 @@ async function requestRegistration() {
     sent.value = true
   }
   catch (e: any) {
-    error.value = e?.data?.statusMessage || 'Ein Fehler ist aufgetreten'
+    error.value = e?.data?.detail || e?.data?.title || 'Ein Fehler ist aufgetreten'
   }
   finally {
     loading.value = false

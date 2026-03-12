@@ -48,8 +48,8 @@ async function handleEnroll() {
     await navigateTo('/agent?enrolled=true')
   }
   catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }, message?: string }
-    error.value = e.data?.statusMessage ?? e.message ?? 'Enrollment failed'
+    const e = err as { data?: { detail?: string, title?: string }, message?: string }
+    error.value = e.data?.detail ?? e.data?.title ?? e.message ?? 'Enrollment failed'
   }
   finally {
     enrolling.value = false

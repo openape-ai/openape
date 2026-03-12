@@ -112,8 +112,8 @@ async function saveKey() {
     editingKey.value = false
   }
   catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }, message?: string }
-    keyError.value = e.data?.statusMessage ?? e.message ?? 'Update failed'
+    const e = err as { data?: { detail?: string, title?: string }, message?: string }
+    keyError.value = e.data?.detail ?? e.data?.title ?? e.message ?? 'Update failed'
   }
   finally {
     savingKey.value = false
@@ -140,8 +140,8 @@ async function handleDelete() {
     agent.value = null
   }
   catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string }, message?: string }
-    deleteError.value = e.data?.statusMessage ?? e.message ?? 'Delete failed'
+    const e = err as { data?: { detail?: string, title?: string }, message?: string }
+    deleteError.value = e.data?.detail ?? e.data?.title ?? e.message ?? 'Delete failed'
   }
   finally {
     deleting.value = false
