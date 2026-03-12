@@ -12,14 +12,14 @@ importers:
         specifier: ^3.16.0
         version: 3.21.1(magicast@0.5.2)
       '@openape/auth':
-        specifier: ^0.4.0
-        version: 0.4.0(h3@1.15.6)
+        specifier: ^0.5.0
+        version: 0.5.0(h3@1.15.6)
       '@openape/core':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.5.0
+        version: 0.5.1
       '@openape/grants':
-        specifier: ^0.2.1
-        version: 0.2.1(h3@1.15.6)
+        specifier: ^0.3.0
+        version: 0.3.0(h3@1.15.6)
       '@simplewebauthn/browser':
         specifier: ^11
         version: 11.0.0
@@ -1003,8 +1003,8 @@ packages:
   '@nuxtjs/color-mode@3.5.2':
     resolution: {integrity: sha512-cC6RfgZh3guHBMLLjrBB2Uti5eUoGM9KyauOaYS9ETmxNWBMTvpgjvSiSJp1OFljIXPIqVTJ3xtJpSNZiO3ZaA==}
 
-  '@openape/auth@0.4.0':
-    resolution: {integrity: sha512-9OsjnC/bVqFaeHqNBAeCE+D82DZNWgSa+AKNFeuTGK8VPk0cT14YXb0OxQSRsPIWa971NIJgilHwIdm7jxZAWQ==}
+  '@openape/auth@0.5.0':
+    resolution: {integrity: sha512-5WEjSnG+8UUD1hUcojlKof/8ENK/v/WMLyur/CJ+jAcmvOanLIGHFyDr9yfgTr3kDWa1MigbKAgU64+IGyJhAg==}
     engines: {node: '>=22'}
     peerDependencies:
       h3: ^1.13.0
@@ -1020,8 +1020,12 @@ packages:
     resolution: {integrity: sha512-JG1cm9ipPTpMXTGYyp+ljpVVrkBO9I0bVI3RZtBEXyb4SbSyEH8xRfRpKMnuI5qrewtgOTOMxAi/sHufF04iIw==}
     engines: {node: '>=22'}
 
-  '@openape/grants@0.2.1':
-    resolution: {integrity: sha512-FSg9zcrHt3pVHMJzju+JwQAWvuqqKxp/7w4XSr3MhkR3JM8pQvBtRyxVxs0jY0+z70A7T0nsjqF5AyGkXU1atA==}
+  '@openape/core@0.5.1':
+    resolution: {integrity: sha512-5JdQlH3TW7t5M+vDCgyVbyJfpAVibZR14fm87xJZgnl+9T4ipJ2DhOalKN77HX3YbyKI1AfUUrNOirJ2tZB3UQ==}
+    engines: {node: '>=22'}
+
+  '@openape/grants@0.3.0':
+    resolution: {integrity: sha512-IFevLNaV7wJAFe6LBp00sjilKwax4oJ61z0HpIpWM+Vn276jU5bn3q8kBJx6C62VZcKkuWFM2MS96I2xxhNSRg==}
     engines: {node: '>=22'}
     peerDependencies:
       h3: ^1.13.0
@@ -7309,7 +7313,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@openape/auth@0.4.0(h3@1.15.6)':
+  '@openape/auth@0.5.0(h3@1.15.6)':
     dependencies:
       '@openape/core': 0.4.0
       '@simplewebauthn/server': 11.0.0
@@ -7328,7 +7332,11 @@ snapshots:
     dependencies:
       jose: 5.10.0
 
-  '@openape/grants@0.2.1(h3@1.15.6)':
+  '@openape/core@0.5.1':
+    dependencies:
+      jose: 5.10.0
+
+  '@openape/grants@0.3.0(h3@1.15.6)':
     dependencies:
       '@openape/core': 0.3.0
       jose: 5.10.0

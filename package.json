@@ -29,9 +29,9 @@
   },
   "dependencies": {
     "@nuxt/kit": "^3.16.0",
-    "@openape/auth": "^0.4.0",
-    "@openape/core": "^0.4.0",
-    "@openape/grants": "^0.2.1",
+    "@openape/auth": "^0.5.0",
+    "@openape/core": "^0.5.0",
+    "@openape/grants": "^0.3.0",
     "@simplewebauthn/browser": "^11",
     "defu": "^6.1.4",
     "jose": "^5.9.0"
