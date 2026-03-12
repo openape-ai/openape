@@ -19,7 +19,7 @@
     "@nuxt/ui": "^4.4.0",
     "@openape/auth": "^0.4.0",
     "@openape/core": "^0.4.0",
-    "@openape/nuxt-auth-idp": "^0.5.0",
+    "@openape/nuxt-auth-idp": "^0.5.1",
     "db0": "^0.3.0",
     "nuxt": "^4.0.0",
     "resend": "^4.0.0",
