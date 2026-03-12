@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { generateKeyPair, signJWT } from '../crypto/jwt.js'
 import { validateAssertion } from '../validation/assertion.js'
 import { computeCmdHash } from '../validation/grant.js'
-import { validateSPManifest } from '../validation/manifest.js'
+import { validateClientMetadata } from '../validation/manifest.js'
 
 describe('validateAssertion', () => {
   it('validates a correct assertion', async () => {
@@ -95,7 +95,7 @@ describe('validateAssertion', () => {
     expect(result.error).toContain('Nonce')
   })
 
-  it('rejects assertion with missing act claim', async () => {
+  it('accepts assertion with missing act claim (OPTIONAL per spec)', async () => {
     const { publicKey, privateKey } = await generateKeyPair()
     const now = Math.floor(Date.now() / 1000)
 
@@ -111,16 +111,15 @@ describe('validateAssertion', () => {
       now,
     })
 
-    expect(result.valid).toBe(false)
-    expect(result.error).toContain('act')
+    expect(result.valid).toBe(true)
   })
 
-  it('rejects assertion with invalid act claim', async () => {
+  it('accepts assertion with free-form act claim string', async () => {
     const { publicKey, privateKey } = await generateKeyPair()
     const now = Math.floor(Date.now() / 1000)
 
     const token = await signJWT(
-      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'bot', iat: now, exp: now + 300, nonce: 'n' },
+      { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'service', iat: now, exp: now + 300, nonce: 'n' },
       privateKey,
     )
 
@@ -131,8 +130,8 @@ describe('validateAssertion', () => {
       now,
     })
 
-    expect(result.valid).toBe(false)
-    expect(result.error).toContain('act')
+    expect(result.valid).toBe(true)
+    expect(result.claims?.act).toBe('service')
   })
 
   it('returns error when no key provided', async () => {
@@ -216,36 +215,42 @@ describe('validateAssertion', () => {
   })
 })
 
-describe('validateSPManifest', () => {
-  it('validates a correct manifest', () => {
-    const result = validateSPManifest({
+describe('validateClientMetadata', () => {
+  it('validates correct client metadata', () => {
+    const result = validateClientMetadata({
       client_id: 'sp.example.com',
-      name: 'Example SP',
+      client_name: 'Example SP',
       redirect_uris: ['https://sp.example.com/callback'],
     })
     expect(result.valid).toBe(true)
     expect(result.manifest?.client_id).toBe('sp.example.com')
   })
 
-  it('rejects manifest without client_id', () => {
-    const result = validateSPManifest({ name: 'Test', redirect_uris: ['https://example.com'] })
+  it('rejects metadata without client_id', () => {
+    const result = validateClientMetadata({ client_name: 'Test', redirect_uris: ['https://example.com'] })
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('client_id is required and must be a non-empty string')
   })
 
-  it('rejects manifest with empty redirect_uris', () => {
-    const result = validateSPManifest({ client_id: 'test', name: 'Test', redirect_uris: [] })
+  it('rejects metadata without client_name', () => {
+    const result = validateClientMetadata({ client_id: 'test', redirect_uris: ['https://example.com'] })
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContain('client_name is required and must be a non-empty string')
+  })
+
+  it('rejects metadata with empty redirect_uris', () => {
+    const result = validateClientMetadata({ client_id: 'test', client_name: 'Test', redirect_uris: [] })
     expect(result.valid).toBe(false)
   })
 
-  it('rejects manifest with invalid redirect_uri', () => {
-    const result = validateSPManifest({ client_id: 'test', name: 'Test', redirect_uris: ['not-a-url'] })
+  it('rejects metadata with invalid redirect_uri', () => {
+    const result = validateClientMetadata({ client_id: 'test', client_name: 'Test', redirect_uris: ['not-a-url'] })
     expect(result.valid).toBe(false)
     expect(result.errors.some(e => e.includes('Invalid redirect_uri'))).toBe(true)
   })
 
   it('rejects non-object input', () => {
-    const result = validateSPManifest('string')
+    const result = validateClientMetadata('string')
     expect(result.valid).toBe(false)
   })
 })

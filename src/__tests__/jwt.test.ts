@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { exportPublicKeyJWK, generateKeyPair, signJWT, verifyJWT } from '../crypto/jwt.js'
 
 describe('jWT sign and verify', () => {
-  it('signs and verifies a JWT with ES256', async () => {
+  it('signs and verifies a JWT with EdDSA', async () => {
     const { publicKey, privateKey } = await generateKeyPair()
 
     const payload = {
@@ -48,9 +48,9 @@ describe('jWT sign and verify', () => {
   it('exports public key as JWK', async () => {
     const { publicKey } = await generateKeyPair()
     const jwk = await exportPublicKeyJWK(publicKey, 'key-1')
-    expect(jwk.alg).toBe('ES256')
+    expect(jwk.alg).toBe('EdDSA')
     expect(jwk.use).toBe('sig')
     expect(jwk.kid).toBe('key-1')
-    expect(jwk.kty).toBe('EC')
+    expect(jwk.kty).toBe('OKP')
   })
 })

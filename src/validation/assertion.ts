@@ -61,22 +61,16 @@ export async function validateAssertion(
       return { valid: false, error: 'Nonce mismatch' }
     }
 
-    // Check act claim: string ('human'/'agent') or RFC 8693 delegation object ({ sub: string })
-    if (!payload.act) {
-      return { valid: false, error: 'Missing act claim' }
-    }
-    if (typeof payload.act === 'string') {
-      if (!['human', 'agent'].includes(payload.act)) {
-        return { valid: false, error: 'Invalid act claim' }
+    // Check act claim: OPTIONAL per spec. If present: string (free-form) or RFC 8693 delegation object ({ sub: string })
+    if (payload.act !== undefined) {
+      if (typeof payload.act === 'object') {
+        if (!('sub' in payload.act) || typeof payload.act.sub !== 'string') {
+          return { valid: false, error: 'Invalid delegation act claim' }
+        }
       }
-    }
-    else if (typeof payload.act === 'object') {
-      if (!('sub' in payload.act) || typeof payload.act.sub !== 'string') {
-        return { valid: false, error: 'Invalid delegation act claim' }
+      else if (typeof payload.act !== 'string') {
+        return { valid: false, error: 'Invalid act claim type' }
       }
-    }
-    else {
-      return { valid: false, error: 'Invalid act claim type' }
     }
 
     // Check required fields

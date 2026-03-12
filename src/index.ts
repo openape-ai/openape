@@ -1,5 +1,6 @@
 export * from './constants.js'
 export * from './crypto/index.js'
 export * from './dns/index.js'
+export * from './errors.js'
 export * from './types/index.js'
 export * from './validation/index.js'

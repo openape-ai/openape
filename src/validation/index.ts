@@ -12,9 +12,9 @@ export {
 } from './grant.js'
 
 export {
-  fetchAndValidateSPManifest,
+  fetchAndValidateClientMetadata,
   type ManifestValidationResult,
-  validateSPManifest,
+  validateClientMetadata,
 } from './manifest.js'
 
 export {

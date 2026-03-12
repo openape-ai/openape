@@ -1,19 +1,19 @@
-import type { SPManifest } from '../types/index.js'
+import type { SPClientMetadata } from '../types/index.js'
 
 export interface ManifestValidationResult {
   valid: boolean
-  manifest?: SPManifest
+  manifest?: SPClientMetadata
   errors: string[]
 }
 
 /**
- * Validate an SP Manifest object.
+ * Validate an SP Client Metadata object (RFC 7591).
  */
-export function validateSPManifest(data: unknown): ManifestValidationResult {
+export function validateClientMetadata(data: unknown): ManifestValidationResult {
   const errors: string[] = []
 
   if (!data || typeof data !== 'object') {
-    return { valid: false, errors: ['Manifest must be an object'] }
+    return { valid: false, errors: ['Client metadata must be an object'] }
   }
 
   const obj = data as Record<string, unknown>
@@ -22,8 +22,8 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
     errors.push('client_id is required and must be a non-empty string')
   }
 
-  if (typeof obj.name !== 'string' || !obj.name) {
-    errors.push('name is required and must be a non-empty string')
+  if (typeof obj.client_name !== 'string' || !obj.client_name) {
+    errors.push('client_name is required and must be a non-empty string')
   }
 
   if (!Array.isArray(obj.redirect_uris) || obj.redirect_uris.length === 0) {
@@ -44,6 +44,10 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
     }
   }
 
+  if (obj.contacts !== undefined && !Array.isArray(obj.contacts)) {
+    errors.push('contacts must be an array if provided')
+  }
+
   if (obj.jwks_uri !== undefined && typeof obj.jwks_uri !== 'string') {
     errors.push('jwks_uri must be a string if provided')
   }
@@ -54,29 +58,29 @@ export function validateSPManifest(data: unknown): ManifestValidationResult {
 
   return {
     valid: true,
-    manifest: obj as unknown as SPManifest,
+    manifest: obj as unknown as SPClientMetadata,
     errors: [],
   }
 }
 
 /**
- * Fetch and validate an SP Manifest from a remote URL.
+ * Fetch and validate SP Client Metadata from a remote URL.
  */
-export async function fetchAndValidateSPManifest(
-  spManifestUrl: string,
+export async function fetchAndValidateClientMetadata(
+  metadataUrl: string,
 ): Promise<ManifestValidationResult> {
   try {
-    const response = await fetch(spManifestUrl)
+    const response = await fetch(metadataUrl)
     if (!response.ok) {
-      return { valid: false, errors: [`Failed to fetch manifest: HTTP ${response.status}`] }
+      return { valid: false, errors: [`Failed to fetch client metadata: HTTP ${response.status}`] }
     }
     const data = await response.json()
-    return validateSPManifest(data)
+    return validateClientMetadata(data)
   }
   catch (err) {
     return {
       valid: false,
-      errors: [err instanceof Error ? err.message : 'Failed to fetch manifest'],
+      errors: [err instanceof Error ? err.message : 'Failed to fetch client metadata'],
     }
   }
 }

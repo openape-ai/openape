@@ -17,22 +17,26 @@ export interface DDISARecord {
   raw: string
 }
 
-/** SP Manifest published at /.well-known/sp-manifest.json */
-export interface SPManifest {
+/** SP Client Metadata published at /.well-known/oauth-client-metadata (RFC 7591) */
+export interface SPClientMetadata {
   /** Client identifier (typically a domain, OIDC-compatible) */
   client_id: string
   /** Display name */
-  name: string
+  client_name: string
   /** Redirect URIs for callback */
   redirect_uris: string[]
-  /** JWKS URI for SP's public keys */
-  jwks_uri?: string
-  /** SP description */
-  description?: string
+  /** Contact emails */
+  contacts?: string[]
+  /** Client URI */
+  client_uri?: string
   /** Logo URL */
   logo_uri?: string
-  /** Contact email */
-  contact?: string
+  /** JWKS URI for SP's public keys */
+  jwks_uri?: string
+  /** Policy URI */
+  policy_uri?: string
+  /** Terms of service URI */
+  tos_uri?: string
 }
 
 /** Actor type — distinguishes human users from automated agents */
@@ -62,8 +66,8 @@ export interface DDISAAssertionClaims {
   sub: string
   /** Audience — must match client_id */
   aud: string
-  /** Actor type or RFC 8693 delegation claim. String = actor type. Object = delegation with delegate sub. */
-  act: ActorType | DelegationActClaim
+  /** Actor type or RFC 8693 delegation claim. OPTIONAL per spec. String = free-form actor type. Object = delegation with delegate sub. */
+  act?: string | DelegationActClaim
   /** Issued at (unix timestamp) */
   iat: number
   /** Expiration (unix timestamp, max 5 min from iat) */
@@ -322,4 +326,29 @@ export interface AuthFlowState {
   idpUrl: string
   /** Created timestamp */
   createdAt: number
+}
+
+/** RFC 7807 Problem Details */
+export interface ProblemDetails {
+  type: string
+  title: string
+  status: number
+  detail?: string
+  instance?: string
+  [key: string]: unknown
+}
+
+/** Pagination query parameters */
+export interface PaginationParams {
+  limit?: number
+  cursor?: string
+}
+
+/** Paginated response envelope */
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: {
+    cursor: string | null
+    has_more: boolean
+  }
 }
