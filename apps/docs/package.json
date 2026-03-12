@@ -1,0 +1,50 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.90",
+    "@iconify-json/simple-icons": "^1.2.70",
+    "@iconify-json/vscode-icons": "^1.2.42",
+    "@nuxt/content": "^3.11.2",
+    "@nuxt/image": "^2.0.0",
+    "@nuxt/ui": "^4.4.0",
+    "@nuxtjs/mcp-toolkit": "^0.7.0",
+    "@nuxtjs/mdc": "^0.20.1",
+    "@vueuse/core": "^14.2.1",
+    "better-sqlite3": "^12.6.2",
+    "minimark": "^0.2.0",
+    "nuxt": "^4.3.1",
+    "nuxt-llms": "0.2.0",
+    "nuxt-og-image": "^5.1.13",
+    "tailwindcss": "^4.1.18",
+    "ufo": "^1.6.3",
+    "unist-util-visit": "^5.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.15.1",
+    "eslint": "^10.0.0",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.2.4",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/docs.git"
+  },
+  "author": "Patrick Hofmann",
+  "engines": {
+    "node": ">=22"
+  }
+}
