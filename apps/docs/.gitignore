@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.nuxt/
+.output/
+.data/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+pnpm-workspace.yaml
+.vercel
