@@ -1,0 +1,61 @@
+{
+  "name": "@openape/nuxt-auth-sp",
+  "type": "module",
+  "version": "0.6.0",
+  "description": "OpenAPE Service Provider Nuxt module — adds OIDC login via DNS-based IdP discovery",
+  "author": "Delta Mind GmbH",
+  "license": "AGPL-3.0-or-later",
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/module.mjs"
+    },
+    "./handlers": {
+      "types": "./dist/runtime/server/handlers.d.ts",
+      "import": "./dist/runtime/server/handlers.js"
+    }
+  },
+  "main": "./dist/module.mjs",
+  "types": "./dist/types.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "nuxt-module-build build",
+    "dev": "nuxt-module-build build --stub",
+    "prepare": "nuxi prepare playground",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
+  },
+  "dependencies": {
+    "@nuxt/kit": "^3.21.1",
+    "@openape/auth": "^0.5.0",
+    "@openape/core": "^0.5.0",
+    "defu": "^6.1.4"
+  },
+  "peerDependencies": {
+    "nuxt": "^4.0.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "@changesets/cli": "^2.30.0",
+    "@nuxt/module-builder": "^1.0.2",
+    "@nuxt/ui": "^4.5.1",
+    "@types/node": "^22.19.13",
+    "eslint": "^9.39.3",
+    "nuxt": "^4.3.1",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "vue": "^3.5.30",
+    "vue-tsc": "^3.2.5"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.29.3"
+}
