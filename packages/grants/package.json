@@ -22,10 +22,7 @@
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset publish"
+    "lint": "eslint ."
   },
   "peerDependencies": {
     "h3": "^1.13.0"
@@ -36,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@openape/core": "^0.5.0",
+    "@openape/core": "workspace:*",
     "jose": "^5.9.0"
   },
   "devDependencies": {
@@ -44,13 +41,17 @@
     "h3": "^1.13.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0",
-    "@antfu/eslint-config": "^7.6.1",
-    "eslint": "^9.35.0",
-    "@changesets/cli": "^2.29.7"
+    "vitest": "^2.1.0"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@10.29.3"
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/grants"
+  }
 }

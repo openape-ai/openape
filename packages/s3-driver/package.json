@@ -12,29 +12,27 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "npm pack --dry-run && npm publish --provenance --access public"
+    "test": "vitest run --passWithNoTests"
   },
   "license": "AGPL-3.0-or-later",
   "author": "Delta Mind GmbH",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/openape-ai/unstorage-s3-driver"
-  },
   "dependencies": {
     "aws4fetch": "^1.0.20"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "@antfu/eslint-config": "^7.6.1",
     "@types/node": "^22.18.6",
-    "eslint": "^9.35.0",
-    "vitest": "^3.2.4",
-    "@changesets/cli": "^2.29.7"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/s3-driver"
   }
 }
