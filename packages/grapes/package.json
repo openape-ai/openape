@@ -1,0 +1,36 @@
+{
+  "name": "@openape/grapes",
+  "version": "0.2.0",
+  "description": "Universal Grant Management CLI for OpenAPE",
+  "type": "module",
+  "bin": {
+    "grapes": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
+  },
+  "dependencies": {
+    "@openape/core": "^0.5.0",
+    "citty": "^0.1.6",
+    "consola": "^3.4.2"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^4.12.0",
+    "@changesets/cli": "^2.30.0",
+    "@types/node": "^25.3.5",
+    "eslint": "^9.22.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.2.4"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "Patrick Hofmann <phofmann@delta-mind.at>"
+}
