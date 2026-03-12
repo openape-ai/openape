@@ -17,6 +17,18 @@
     "version-packages": "changeset version",
     "release": "changeset publish"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "sharp",
+      "@parcel/watcher",
+      "unrs-resolver"
+    ],
+    "overrides": {
+      "eslint": "^9.35.0"
+    }
+  },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@changesets/cli": "catalog:",

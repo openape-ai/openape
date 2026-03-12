@@ -2,6 +2,7 @@ import antfu from '@antfu/eslint-config'
 
 export default antfu({
   typescript: true,
+  vue: true,
   ignores: [
     '**/dist/**',
     '**/.nuxt/**',
@@ -49,5 +50,10 @@ export default antfu({
     'e18e/prefer-static-regex': 'off',
     'e18e/prefer-array-at': 'off',
     'e18e/prefer-spread-syntax': 'off',
+    'space-in-parens': 'off',
+    'vue/comma-dangle': 'off',
+    'vue/space-infix-ops': 'off',
+    'e18e/prefer-array-fill': 'off',
+    'test/prefer-lowercase-title': 'off',
   },
 })

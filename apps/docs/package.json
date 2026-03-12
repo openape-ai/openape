@@ -33,15 +33,9 @@
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.15.1",
-    "eslint": "^10.0.0",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.2.4",
     "vitest": "^3.2.4"
-  },
-  "packageManager": "pnpm@9.15.4",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/openape-ai/docs.git"
   },
   "author": "Patrick Hofmann",
   "engines": {
