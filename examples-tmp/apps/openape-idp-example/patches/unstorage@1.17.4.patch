@@ -1,0 +1,13 @@
+diff --git a/drivers/s3.mjs b/drivers/s3.mjs
+index aae4fccebd91e214c18daf5ee736633d93b6a05d..649d5ebbeade6a3663f5308b3506b99d972bce62 100644
+--- a/drivers/s3.mjs
++++ b/drivers/s3.mjs
+@@ -152,7 +152,7 @@ async function sha256Base64(str) {
+   return btoa(binaryString);
+ }
+ function parseList(xml) {
+-  if (!xml.startsWith("<?xml")) {
++  if (!xml.startsWith("<?xml") && !xml.startsWith("<ListBucketResult") && !xml.startsWith("<Error")) {
+     throw new Error("Invalid XML");
+   }
+   const listBucketResult = xml.match(
