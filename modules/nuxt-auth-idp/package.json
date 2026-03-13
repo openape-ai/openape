@@ -1,7 +1,7 @@
 {
   "name": "@openape/nuxt-auth-idp",
   "type": "module",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "OpenAPE Identity Provider Nuxt module — adds user auth, OAuth, admin, and agent management",
   "author": "Delta Mind GmbH",
   "license": "AGPL-3.0-or-later",
@@ -17,6 +17,7 @@
     "dist"
   ],
   "scripts": {
+    "prepack": "nuxt-module-build build",
     "build": "nuxt-module-build build",
     "dev": "nuxt-module-build build --stub",
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
