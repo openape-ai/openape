@@ -43,7 +43,8 @@ onMounted(async () => {
 async function loadGrants() {
   loading.value = true
   try {
-    grants.value = await $fetch<Grant[]>('/api/grants')
+    const response = await $fetch<{ data: Grant[] }>('/api/grants')
+    grants.value = response.data
   }
   catch {
     grants.value = []
