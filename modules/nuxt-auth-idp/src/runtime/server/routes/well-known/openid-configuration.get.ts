@@ -23,8 +23,8 @@ export default defineEventHandler(() => {
     authorization_details_types_supported: ['openape_grant'],
 
     // DDISA extensions (REQUIRED per core.md §3.2)
-    ddisa_version: 'ddisa1',
-    ddisa_auth_methods_supported: ['passkey', 'ed25519'],
+    ddisa_version: '1.0',
+    ddisa_auth_methods_supported: ['webauthn', 'ed25519'],
     ddisa_agent_challenge_endpoint: `${issuer}/api/agent/challenge`,
     ddisa_agent_authenticate_endpoint: `${issuer}/api/agent/authenticate`,
 

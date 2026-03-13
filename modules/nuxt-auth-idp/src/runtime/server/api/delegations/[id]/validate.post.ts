@@ -16,14 +16,16 @@ export default defineEventHandler(async (event) => {
 
   try {
     const grant = await validateDelegation(id, body.delegate, body.audience, useGrantStores().grantStore)
-    return grant
+    return {
+      valid: true,
+      delegation: grant,
+      scopes: grant.request.scopes || [],
+    }
   }
   catch (err) {
-    throw createProblemError({
-      status: 403,
-      title: 'Delegation invalid',
-      type: 'https://openape.org/errors/delegation_invalid',
-      detail: err instanceof Error ? err.message : 'Delegation validation failed',
-    })
+    return {
+      valid: false,
+      error: err instanceof Error ? err.message : 'Delegation validation failed',
+    }
   }
 })

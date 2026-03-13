@@ -1,4 +1,4 @@
-import { defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { createDelegation } from '@openape/grants'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
@@ -36,5 +36,6 @@ export default defineEventHandler(async (event) => {
     duration: typeof body.duration === 'number' ? body.duration : undefined,
   }, grantStore)
 
+  setResponseStatus(event, 201)
   return grant
 })

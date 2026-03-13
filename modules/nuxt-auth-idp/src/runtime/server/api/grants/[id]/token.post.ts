@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const signingKey = await keyStore.getSigningKey()
-  const authzJWT = await issueAuthzJWT(grant, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
+  const authzJwt = await issueAuthzJWT(grant, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
 
-  return { authzJWT, grant }
+  return { authz_jwt: authzJwt, grant }
 })

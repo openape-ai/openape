@@ -63,17 +63,17 @@ describe('once-Grant Re-request Flow', () => {
     // Approve the grant on IdP (user is already authenticated there)
     const { status: approveStatus, data: approveData } = await client.postJSON<{
       grant: { status: string }
-      authzJWT: string
+      authz_jwt: string
     }>(`${IDP_URL}/api/grants/${grantId}/approve`, {})
     expect(approveStatus).toBe(200)
-    expect(approveData.authzJWT).toBeTruthy()
+    expect(approveData.authz_jwt).toBeTruthy()
 
     // Extract the callback base URL from the approval redirect URL
     const approvalUrl = new URL(permData.redirectUrl)
     const callbackBase = approvalUrl.searchParams.get('callback')!
 
     // Simulate the IdP redirect to SP grant-callback with the approval
-    const callbackUrl = `${callbackBase}?grant_id=${grantId}&authz_jwt=${encodeURIComponent(approveData.authzJWT)}&status=approved`
+    const callbackUrl = `${callbackBase}?grant_id=${grantId}&authz_jwt=${encodeURIComponent(approveData.authz_jwt)}&status=approved`
     const cbRes = await client.fetch(callbackUrl)
     expect(cbRes.status).toBe(302)
     expect(cbRes.headers.get('Location')).toBe('/dashboard?grant_status=approved')
@@ -92,7 +92,7 @@ describe('once-Grant Re-request Flow', () => {
     // --- First grant cycle ---
     await requestAndApproveGrant(client)
 
-    // Verify session has authzJWT
+    // Verify session has authz_jwt
     const { data: status1 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
       `${SP_URL}/api/grant-status`,
     )
@@ -116,7 +116,7 @@ describe('once-Grant Re-request Flow', () => {
     // --- Second grant cycle ---
     await requestAndApproveGrant(client)
 
-    // Verify session has new authzJWT
+    // Verify session has new authz_jwt
     const { data: status3 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
       `${SP_URL}/api/grant-status`,
     )

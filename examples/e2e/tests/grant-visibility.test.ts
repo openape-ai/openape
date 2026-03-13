@@ -55,7 +55,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     // Approve the grant
     const { status: approveStatus, data: approveData } = await client.postJSON<{
       grant: { id: string, status: string }
-      authzJWT: string
+      authz_jwt: string
     }>(`${IDP_URL}/api/grants/${grant1.id}/approve`, {})
     expect(approveStatus).toBe(200)
     expect(approveData.grant.status).toBe('approved')
@@ -93,11 +93,11 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     const grant = await createGrant(client, 'once')
     const { data: approveData } = await client.postJSON<{
       grant: { id: string, status: string }
-      authzJWT: string
+      authz_jwt: string
     }>(`${IDP_URL}/api/grants/${grant.id}/approve`, {})
-    expect(approveData.authzJWT).toBeTruthy()
+    expect(approveData.authz_jwt).toBeTruthy()
 
-    const token = approveData.authzJWT
+    const token = approveData.authz_jwt
 
     // First verify: should succeed and consume the grant
     const { status: v1Status, data: v1 } = await client.postJSON<{

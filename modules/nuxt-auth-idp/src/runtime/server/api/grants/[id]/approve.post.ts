@@ -29,8 +29,8 @@ export default defineEventHandler(async (event) => {
   try {
     const approved = await approveGrant(id, email, grantStore)
     const signingKey = await keyStore.getSigningKey()
-    const authzJWT = await issueAuthzJWT(approved, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
-    return { grant: approved, authzJWT }
+    const authzJwt = await issueAuthzJWT(approved, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
+    return { grant: approved, authz_jwt: authzJwt }
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to approve grant'
