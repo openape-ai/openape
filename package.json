@@ -15,7 +15,8 @@
     "dev": "turbo run dev",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish"
+    "release": "node scripts/publish-chain.mjs",
+    "release:dry": "node scripts/publish-chain.mjs --dry-run"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
