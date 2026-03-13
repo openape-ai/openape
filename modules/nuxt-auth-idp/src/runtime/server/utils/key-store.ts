@@ -29,10 +29,15 @@ export function createKeyStore(): KeyStore {
       if (!stored || stored.isActive === false)
         continue
 
-      const privateKey = await importJWK(stored.privateKeyJwk, 'EdDSA') as KeyLike
-      const publicKey = await importJWK(stored.publicKeyJwk, 'EdDSA') as KeyLike
-
-      keys.push({ kid: stored.kid, privateKey, publicKey })
+      try {
+        const privateKey = await importJWK(stored.privateKeyJwk, 'EdDSA') as KeyLike
+        const publicKey = await importJWK(stored.publicKeyJwk, 'EdDSA') as KeyLike
+        keys.push({ kid: stored.kid, privateKey, publicKey })
+      }
+      catch {
+        // Key uses an incompatible algorithm (e.g. old ES256) — deactivate it
+        await storage.setItem<StoredKey>(key, { ...stored, isActive: false })
+      }
     }
 
     cachedKeys = keys
