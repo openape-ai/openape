@@ -1,6 +1,6 @@
 import type { GrantType, OpenApeGrantRequest } from '@openape/core'
 import { createGrant } from '@openape/grants'
-import { defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryAgentAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
@@ -29,5 +29,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const grant = await createGrant(body, grantStore)
+  setResponseStatus(event, 201)
   return grant
 })

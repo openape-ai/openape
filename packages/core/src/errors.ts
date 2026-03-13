@@ -40,11 +40,11 @@ export function tokenExpired(detail?: string): ProblemDetails {
 }
 
 export function invalidAudience(detail?: string): ProblemDetails {
-  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_audience`, title: 'Invalid audience', status: 403, detail })
+  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_audience`, title: 'Invalid audience', status: 401, detail })
 }
 
 export function invalidNonce(detail?: string): ProblemDetails {
-  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_nonce`, title: 'Invalid nonce', status: 400, detail })
+  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_nonce`, title: 'Invalid nonce', status: 401, detail })
 }
 
 export function unsupportedAuthMethod(detail?: string): ProblemDetails {
@@ -66,11 +66,11 @@ export function grantExpired(detail?: string): ProblemDetails {
 }
 
 export function grantNotApproved(detail?: string): ProblemDetails {
-  return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}grant_not_approved`, title: 'Grant not approved', status: 403, detail })
+  return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}grant_not_approved`, title: 'Grant not approved', status: 400, detail })
 }
 
 export function grantAlreadyUsed(detail?: string): ProblemDetails {
-  return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}grant_already_used`, title: 'Grant already used', status: 409, detail })
+  return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}grant_already_used`, title: 'Grant already used', status: 410, detail })
 }
 
 export function invalidGrantType(detail?: string): ProblemDetails {
@@ -87,4 +87,18 @@ export function batchPartialFailure(detail?: string): ProblemDetails {
 
 export function invalidAuthzJwt(detail?: string): ProblemDetails {
   return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}invalid_authz_jwt`, title: 'Invalid authorization JWT', status: 401, detail })
+}
+
+// --- DDISA errors (core.md §6.2) — additional ---
+
+export function policyDenied(detail?: string): ProblemDetails {
+  return createProblemDetails({ type: `${DDISA_ERROR_BASE}policy_denied`, title: 'Policy denied', status: 403, detail })
+}
+
+export function invalidPkce(detail?: string): ProblemDetails {
+  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_pkce`, title: 'Invalid PKCE', status: 400, detail })
+}
+
+export function invalidState(detail?: string): ProblemDetails {
+  return createProblemDetails({ type: `${DDISA_ERROR_BASE}invalid_state`, title: 'Invalid state', status: 400, detail })
 }

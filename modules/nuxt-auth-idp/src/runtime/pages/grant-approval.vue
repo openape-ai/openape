@@ -50,7 +50,7 @@ onMounted(async () => {
 async function handleApprove() {
   processing.value = true
   try {
-    const result = await $fetch<{ grant: Record<string, unknown>, authzJWT: string }>(
+    const result = await $fetch<{ grant: Record<string, unknown>, authz_jwt: string }>(
       `/api/grants/${grantId.value}/approve`,
       { method: 'POST' },
     )
@@ -58,7 +58,7 @@ async function handleApprove() {
     if (callbackUrl.value) {
       const url = new URL(callbackUrl.value)
       url.searchParams.set('grant_id', grantId.value)
-      url.searchParams.set('authz_jwt', result.authzJWT)
+      url.searchParams.set('authz_jwt', result.authz_jwt)
       url.searchParams.set('status', 'approved')
       await navigateTo(url.toString(), { external: true })
     }

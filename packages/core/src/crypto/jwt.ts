@@ -2,14 +2,14 @@ import * as jose from 'jose'
 import { ALGORITHM } from '../constants.js'
 
 /**
- * Generate an ES256 key pair for signing/verifying.
+ * Generate an EdDSA key pair for signing/verifying.
  */
 export async function generateKeyPair(): Promise<jose.GenerateKeyPairResult<jose.KeyLike>> {
   return jose.generateKeyPair(ALGORITHM, { extractable: true })
 }
 
 /**
- * Sign a JWT with ES256.
+ * Sign a JWT with EdDSA.
  */
 export async function signJWT(
   payload: jose.JWTPayload,
@@ -27,7 +27,7 @@ export async function signJWT(
 }
 
 /**
- * Verify a JWT with ES256 using a static key.
+ * Verify a JWT with EdDSA.
  */
 export async function verifyJWT<T = jose.JWTPayload>(
   token: string,

@@ -1,4 +1,4 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, getQuery } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { createProblemError } from '../../utils/problem'
@@ -11,6 +11,19 @@ export default defineEventHandler(async (event) => {
 
   const email = session.data.userId as string
   const { grantStore } = useGrantStores()
+
+  const query = getQuery(event)
+  const role = query.role as string | undefined
+
+  if (role === 'delegator') {
+    const results = await grantStore.findByDelegator(email)
+    return results.sort((a, b) => b.created_at - a.created_at)
+  }
+
+  if (role === 'delegate') {
+    const results = await grantStore.findByDelegate(email)
+    return results.sort((a, b) => b.created_at - a.created_at)
+  }
 
   const [asDelegator, asDelegate] = await Promise.all([
     grantStore.findByDelegator(email),
