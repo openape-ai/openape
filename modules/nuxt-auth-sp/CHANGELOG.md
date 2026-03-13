@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+### Patch Changes
+
+- fix: correct @openape/core dependency (was ^0.4.0 with ES256, needs ^0.5.0 for EdDSA)
+
+- Updated dependencies []:
+  - @openape/auth@0.5.1
+
 ## 0.6.1
 
 ### Patch Changes
