@@ -23,7 +23,9 @@ export async function issueAuthzJWT(
   const now = Math.floor(Date.now() / 1000)
   let exp: number
 
-  switch (grant.request.grant_type) {
+  const grantType = grant.request.grant_type ?? 'once'
+
+  switch (grantType) {
     case 'once':
       exp = now + 300 // 5 minutes
       break
@@ -47,8 +49,8 @@ export async function issueAuthzJWT(
     exp,
     jti: crypto.randomUUID(),
     grant_id: grant.id,
-    grant_type: grant.request.grant_type,
-    approval: grant.request.grant_type,
+    grant_type: grantType,
+    approval: grantType,
     ...(grant.request.permissions ? { permissions: grant.request.permissions } : {}),
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
     ...(grant.request.command ? { command: grant.request.command } : {}),

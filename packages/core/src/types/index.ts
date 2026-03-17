@@ -96,8 +96,8 @@ export interface OpenApeGrantRequest {
   target_host: string
   /** Service or relying party identifier (e.g. 'apes', 'proxy') */
   audience: string
-  /** Grant type */
-  grant_type: GrantType
+  /** Grant type (default: 'once') */
+  grant_type?: GrantType
   /** Requested permissions */
   permissions?: string[]
   /** Plaintext command (for display in approval UI) */

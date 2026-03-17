@@ -1,7 +1,7 @@
 {
   "name": "@openape/grants",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "OpenAPE authorization server: grant issuance, revocation, introspection",
   "author": "Delta Mind GmbH",
   "license": "AGPL-3.0-or-later",

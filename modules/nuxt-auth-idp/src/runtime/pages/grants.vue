@@ -17,6 +17,7 @@ interface Grant {
     reason?: string
     permissions?: string[]
     run_as?: string
+    duration?: number
   }
   created_at: number
   decided_at?: number
@@ -28,6 +29,32 @@ interface Grant {
 const grants = ref<Grant[]>([])
 const loading = ref(true)
 const actionError = ref('')
+
+const grantTypeSelections = ref<Record<string, 'once' | 'timed' | 'always'>>({})
+const durationPresetSelections = ref<Record<string, string>>({})
+const customDurations = ref<Record<string, number>>({})
+
+const DURATION_PRESETS = [
+  { label: '1 hour', value: '3600' },
+  { label: '4 hours', value: '14400' },
+  { label: '1 day', value: '86400' },
+  { label: '1 week', value: '604800' },
+  { label: 'Custom', value: 'custom' },
+]
+
+const GRANT_TYPE_OPTIONS = [
+  { label: 'Once', value: 'once', description: 'Single use only' },
+  { label: 'Timed', value: 'timed', description: 'Time-limited' },
+  { label: 'Always', value: 'always', description: 'Until revoked' },
+]
+
+function getEffectiveDuration(grantId: string): number | undefined {
+  if (grantTypeSelections.value[grantId] !== 'timed') return undefined
+  const preset = durationPresetSelections.value[grantId] ?? '3600'
+  return preset === 'custom'
+    ? (customDurations.value[grantId] ?? 3600)
+    : Number(preset)
+}
 
 const pendingGrants = computed(() => grants.value.filter(g => g.status === 'pending'))
 const activeGrants = computed(() => grants.value.filter(g => g.status === 'approved' && g.request.grant_type !== 'once'))
@@ -47,6 +74,14 @@ async function loadGrants() {
   try {
     const response = await $fetch<{ data: Grant[] }>('/api/grants')
     grants.value = response.data
+    // Initialize per-grant type selection defaults for pending grants
+    for (const g of response.data) {
+      if (g.status === 'pending' && !grantTypeSelections.value[g.id]) {
+        grantTypeSelections.value[g.id] = 'once'
+        durationPresetSelections.value[g.id] = '3600'
+        customDurations.value[g.id] = 3600
+      }
+    }
   }
   catch {
     grants.value = []
@@ -59,7 +94,14 @@ async function loadGrants() {
 async function approveGrant(id: string) {
   actionError.value = ''
   try {
-    await $fetch(`/api/grants/${id}/approve`, { method: 'POST' })
+    const grantType = grantTypeSelections.value[id] ?? 'once'
+    await $fetch(`/api/grants/${id}/approve`, {
+      method: 'POST',
+      body: {
+        grant_type: grantType,
+        ...(grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {}),
+      },
+    })
     await loadGrants()
   }
   catch (err: unknown) {
@@ -165,6 +207,31 @@ function formatTime(ts: number): string {
                   <p class="text-xs text-dimmed">
                     Created: {{ formatTime(grant.created_at) }}
                   </p>
+                </div>
+                <div class="space-y-2">
+                  <div>
+                    <label class="text-xs font-medium text-muted block mb-1">Approval Type</label>
+                    <URadioGroup
+                      v-model="grantTypeSelections[grant.id]"
+                      :items="GRANT_TYPE_OPTIONS"
+                    />
+                  </div>
+                  <div v-if="grantTypeSelections[grant.id] === 'timed'" class="space-y-1">
+                    <label class="text-xs font-medium text-muted block">Duration</label>
+                    <USelect
+                      v-model="durationPresetSelections[grant.id]"
+                      :items="DURATION_PRESETS"
+                      size="sm"
+                    />
+                    <UInput
+                      v-if="durationPresetSelections[grant.id] === 'custom'"
+                      v-model.number="customDurations[grant.id]"
+                      type="number"
+                      :min="60"
+                      placeholder="Duration in seconds"
+                      size="sm"
+                    />
+                  </div>
                 </div>
                 <div class="flex gap-2">
                   <UButton color="success" size="sm" class="flex-1" @click="approveGrant(grant.id)">

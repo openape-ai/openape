@@ -21,6 +21,31 @@ const delegateDuration = computed(() => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`
 })
 
+const selectedGrantType = ref<'once' | 'timed' | 'always'>('once')
+const selectedDurationPreset = ref('3600')
+const customDuration = ref(3600)
+
+const DURATION_PRESETS = [
+  { label: '1 hour', value: '3600' },
+  { label: '4 hours', value: '14400' },
+  { label: '1 day', value: '86400' },
+  { label: '1 week', value: '604800' },
+  { label: 'Custom', value: 'custom' },
+]
+
+const GRANT_TYPE_OPTIONS = [
+  { label: 'Once', value: 'once', description: 'Single use only' },
+  { label: 'Timed', value: 'timed', description: 'Time-limited' },
+  { label: 'Always', value: 'always', description: 'Until revoked' },
+]
+
+const effectiveDuration = computed(() => {
+  if (selectedGrantType.value !== 'timed') return undefined
+  return selectedDurationPreset.value === 'custom'
+    ? customDuration.value
+    : Number(selectedDurationPreset.value)
+})
+
 onMounted(async () => {
   await fetchUser()
 
@@ -52,7 +77,13 @@ async function handleApprove() {
   try {
     const result = await $fetch<{ grant: Record<string, unknown>, authz_jwt: string }>(
       `/api/grants/${grantId.value}/approve`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        body: {
+          grant_type: selectedGrantType.value,
+          ...(selectedGrantType.value === 'timed' ? { duration: effectiveDuration.value } : {}),
+        },
+      },
     )
 
     if (callbackUrl.value) {
@@ -142,40 +173,97 @@ async function handleDeny() {
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div>
-                  <dt class="text-muted">Requester</dt>
-                  <dd class="font-mono text-sm break-all">{{ (grant as any).request?.requester }}</dd>
+                  <dt class="text-muted">
+                    Requester
+                  </dt>
+                  <dd class="font-mono text-sm break-all">
+                    {{ (grant as any).request?.requester }}
+                  </dd>
                 </div>
                 <div>
-                  <dt class="text-muted">Target</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request?.target }}</dd>
+                  <dt class="text-muted">
+                    Target
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request?.target }}
+                  </dd>
                 </div>
                 <div>
-                  <dt class="text-muted">Type</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request?.grant_type }}</dd>
+                  <dt class="text-muted">
+                    Type
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request?.grant_type }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.run_as">
-                  <dt class="text-muted">Run as</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request.run_as }}</dd>
+                  <dt class="text-muted">
+                    Run as
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request.run_as }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.command?.length">
-                  <dt class="text-muted mb-1">Command</dt>
-                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words">{{ (grant as any).request.command.join(' ') }}</dd>
+                  <dt class="text-muted mb-1">
+                    Command
+                  </dt>
+                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words">
+                    {{ (grant as any).request.command.join(' ') }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.cmd_hash">
-                  <dt class="text-muted">Hash</dt>
-                  <dd class="font-mono text-xs text-dimmed break-all">{{ (grant as any).request.cmd_hash }}</dd>
+                  <dt class="text-muted">
+                    Hash
+                  </dt>
+                  <dd class="font-mono text-xs text-dimmed break-all">
+                    {{ (grant as any).request.cmd_hash }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.reason">
-                  <dt class="text-muted">Reason</dt>
+                  <dt class="text-muted">
+                    Reason
+                  </dt>
                   <dd>{{ (grant as any).request?.reason }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.permissions?.length">
-                  <dt class="text-muted">Permissions</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request?.permissions?.join(', ') }}</dd>
+                  <dt class="text-muted">
+                    Permissions
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request?.permissions?.join(', ') }}
+                  </dd>
                 </div>
               </dl>
             </template>
           </UAlert>
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm font-medium text-muted block mb-2">Approval Type</label>
+              <p v-if="(grant as any).request?.grant_type" class="text-xs text-dimmed mb-2">
+                Requested: {{ (grant as any).request.grant_type }}
+              </p>
+              <URadioGroup
+                v-model="selectedGrantType"
+                :items="GRANT_TYPE_OPTIONS"
+              />
+            </div>
+            <div v-if="selectedGrantType === 'timed'" class="space-y-2">
+              <label class="text-sm font-medium text-muted block">Duration</label>
+              <USelect
+                v-model="selectedDurationPreset"
+                :items="DURATION_PRESETS"
+              />
+              <UInput
+                v-if="selectedDurationPreset === 'custom'"
+                v-model.number="customDuration"
+                type="number"
+                :min="60"
+                placeholder="Duration in seconds"
+              />
+            </div>
+          </div>
 
           <div class="flex gap-3">
             <UButton
@@ -207,27 +295,47 @@ async function handleDeny() {
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div>
-                  <dt class="text-muted">Requester</dt>
-                  <dd class="font-mono text-sm break-all">{{ (grant as any).request?.requester }}</dd>
+                  <dt class="text-muted">
+                    Requester
+                  </dt>
+                  <dd class="font-mono text-sm break-all">
+                    {{ (grant as any).request?.requester }}
+                  </dd>
                 </div>
                 <div>
-                  <dt class="text-muted">Target</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request?.target }}</dd>
+                  <dt class="text-muted">
+                    Target
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request?.target }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.run_as">
-                  <dt class="text-muted">Run as</dt>
-                  <dd class="font-mono text-sm">{{ (grant as any).request.run_as }}</dd>
+                  <dt class="text-muted">
+                    Run as
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ (grant as any).request.run_as }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.command?.length">
-                  <dt class="text-muted">Command</dt>
-                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ (grant as any).request.command.join(' ') }}</dd>
+                  <dt class="text-muted">
+                    Command
+                  </dt>
+                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">
+                    {{ (grant as any).request.command.join(' ') }}
+                  </dd>
                 </div>
                 <div v-if="(grant as any).request?.reason">
-                  <dt class="text-muted">Reason</dt>
+                  <dt class="text-muted">
+                    Reason
+                  </dt>
                   <dd>{{ (grant as any).request?.reason }}</dd>
                 </div>
                 <div v-if="(grant as any).decided_by">
-                  <dt class="text-muted">Decided by</dt>
+                  <dt class="text-muted">
+                    Decided by
+                  </dt>
                   <dd>{{ (grant as any).decided_by }}</dd>
                 </div>
               </dl>

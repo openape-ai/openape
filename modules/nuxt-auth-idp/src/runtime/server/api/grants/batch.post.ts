@@ -1,4 +1,5 @@
-import type { ProblemDetails } from '@openape/core'
+import type { GrantType, ProblemDetails } from '@openape/core'
+import type { ApproveGrantOverrides } from '@openape/grants'
 import { approveGrant, denyGrant, revokeGrant } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { requireAuth } from '../../utils/admin'
@@ -8,6 +9,8 @@ import { createProblemError } from '../../utils/problem'
 interface BatchOperation {
   id: string
   action: 'approve' | 'deny' | 'revoke'
+  grant_type?: GrantType
+  duration?: number
 }
 
 interface BatchResult {
@@ -33,9 +36,13 @@ export default defineEventHandler(async (event) => {
     try {
       let grant
       switch (item.action) {
-        case 'approve':
-          grant = await approveGrant(item.id, email, grantStore)
+        case 'approve': {
+          const overrides: ApproveGrantOverrides | undefined = item.grant_type
+            ? { grant_type: item.grant_type, duration: item.duration }
+            : undefined
+          grant = await approveGrant(item.id, email, grantStore, overrides)
           break
+        }
         case 'deny':
           grant = await denyGrant(item.id, email, grantStore)
           break

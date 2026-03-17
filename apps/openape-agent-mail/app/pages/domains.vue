@@ -67,12 +67,16 @@ async function showDetails(id: string) {
       <div class="flex items-center gap-3">
         <UButton to="/dashboard" icon="i-lucide-arrow-left" variant="ghost" size="sm" />
         <AppLogo />
-        <h1 class="text-lg font-semibold text-white">Domains</h1>
+        <h1 class="text-lg font-semibold text-white">
+          Domains
+        </h1>
       </div>
 
       <UCard>
         <template #header>
-          <h2 class="font-semibold text-white">Add Domain</h2>
+          <h2 class="font-semibold text-white">
+            Add Domain
+          </h2>
         </template>
         <form class="flex gap-3" @submit.prevent="addDomain">
           <UInput
@@ -85,12 +89,16 @@ async function showDetails(id: string) {
             Add
           </UButton>
         </form>
-        <p v-if="error" class="mt-2 text-sm text-red-400">{{ error }}</p>
+        <p v-if="error" class="mt-2 text-sm text-red-400">
+          {{ error }}
+        </p>
       </UCard>
 
       <UCard>
         <template #header>
-          <h2 class="font-semibold text-white">Your Domains</h2>
+          <h2 class="font-semibold text-white">
+            Your Domains
+          </h2>
         </template>
         <div v-if="(domainsData || []).length === 0" class="text-sm text-gray-500 text-center py-4">
           No domains configured yet.
@@ -104,8 +112,12 @@ async function showDetails(id: string) {
             <div class="flex items-center gap-3">
               <UIcon name="i-lucide-globe" class="text-gray-400" />
               <div>
-                <p class="text-white font-medium">{{ d.domain }}</p>
-                <p class="text-xs text-gray-500">Added {{ new Date(d.createdAt).toLocaleDateString() }}</p>
+                <p class="text-white font-medium">
+                  {{ d.domain }}
+                </p>
+                <p class="text-xs text-gray-500">
+                  Added {{ new Date(d.createdAt).toLocaleDateString() }}
+                </p>
               </div>
             </div>
             <div class="flex items-center gap-2">
@@ -143,7 +155,9 @@ async function showDetails(id: string) {
       <UCard v-if="selectedDomain">
         <template #header>
           <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-white">DNS Records — {{ selectedDomain.domain }}</h2>
+            <h2 class="font-semibold text-white">
+              DNS Records — {{ selectedDomain.domain }}
+            </h2>
             <UButton size="xs" variant="ghost" icon="i-lucide-x" @click="selectedDomain = null" />
           </div>
         </template>
@@ -160,10 +174,14 @@ async function showDetails(id: string) {
               <span class="text-yellow-400 w-12">{{ record.type }}</span>
               <span class="text-white flex-1 break-all">{{ record.name }}</span>
             </div>
-            <div class="mt-1 text-gray-300 break-all pl-16">{{ record.value }}</div>
+            <div class="mt-1 text-gray-300 break-all pl-16">
+              {{ record.value }}
+            </div>
           </div>
         </div>
-        <p v-else class="text-sm text-gray-500">No DNS records available.</p>
+        <p v-else class="text-sm text-gray-500">
+          No DNS records available.
+        </p>
       </UCard>
     </div>
   </div>

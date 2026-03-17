@@ -1,6 +1,11 @@
 import type { GrantType, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { GrantStore } from './stores.js'
 
+export interface ApproveGrantOverrides {
+  grant_type?: GrantType
+  duration?: number
+}
+
 /**
  * Create a new grant with status 'pending'.
  */
@@ -20,11 +25,13 @@ export async function createGrant(
 
 /**
  * Approve a grant. For 'timed' grants, sets expires_at based on request duration.
+ * Overrides allow the approver to change grant_type and/or duration.
  */
 export async function approveGrant(
   grantId: string,
   approver: string,
   store: GrantStore,
+  overrides?: ApproveGrantOverrides,
 ): Promise<OpenApeGrant> {
   const grant = await store.findById(grantId)
   if (!grant) {
@@ -34,14 +41,28 @@ export async function approveGrant(
     throw new Error(`Grant is not pending: ${grant.status}`)
   }
 
+  const effectiveType = overrides?.grant_type ?? grant.request.grant_type ?? 'once'
+  const effectiveDuration = overrides?.duration ?? grant.request.duration
+
+  if (effectiveType === 'timed' && !effectiveDuration) {
+    throw new Error('Duration is required for timed grants')
+  }
+
+  const modifiedRequest: OpenApeGrantRequest = {
+    ...grant.request,
+    grant_type: effectiveType,
+    ...(effectiveDuration !== undefined ? { duration: effectiveDuration } : {}),
+  }
+
   const now = Math.floor(Date.now() / 1000)
   const extra: Partial<OpenApeGrant> = {
     decided_by: approver,
     decided_at: now,
+    request: modifiedRequest,
   }
 
-  if (grant.request.grant_type === 'timed' && grant.request.duration) {
-    extra.expires_at = now + grant.request.duration
+  if (effectiveType === 'timed' && effectiveDuration) {
+    extra.expires_at = now + effectiveDuration
   }
 
   await store.updateStatus(grantId, 'approved', extra)

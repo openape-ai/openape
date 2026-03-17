@@ -10,7 +10,9 @@ const grants = computed(() => grantsResponse.value?.data ?? [])
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">Grants</h1>
+      <h1 class="text-2xl font-bold">
+        Grants
+      </h1>
       <UButton label="Refresh" variant="ghost" @click="refresh()" />
     </div>
 
@@ -18,25 +20,43 @@ const grants = computed(() => grantsResponse.value?.data ?? [])
       <table v-if="grants?.length" class="w-full text-sm">
         <thead class="border-b border-gray-800 text-gray-400">
           <tr>
-            <th class="text-left p-4">ID</th>
-            <th class="text-left p-4">Agent</th>
-            <th class="text-left p-4">User</th>
-            <th class="text-left p-4">Status</th>
-            <th class="text-left p-4">Scopes</th>
+            <th class="text-left p-4">
+              ID
+            </th>
+            <th class="text-left p-4">
+              Agent
+            </th>
+            <th class="text-left p-4">
+              User
+            </th>
+            <th class="text-left p-4">
+              Status
+            </th>
+            <th class="text-left p-4">
+              Scopes
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="grant in grants" :key="grant.id" class="border-b border-gray-800/50">
-            <td class="p-4 font-mono text-xs">{{ grant.id?.slice(0, 8) }}...</td>
-            <td class="p-4">{{ grant.agentId }}</td>
-            <td class="p-4">{{ grant.userId }}</td>
+            <td class="p-4 font-mono text-xs">
+              {{ grant.id?.slice(0, 8) }}...
+            </td>
+            <td class="p-4">
+              {{ grant.agentId }}
+            </td>
+            <td class="p-4">
+              {{ grant.userId }}
+            </td>
             <td class="p-4">
               <UBadge
                 :color="grant.status === 'approved' ? 'success' : grant.status === 'pending' ? 'warning' : 'error'"
                 :label="grant.status"
               />
             </td>
-            <td class="p-4 text-xs">{{ grant.scopes?.join(', ') }}</td>
+            <td class="p-4 text-xs">
+              {{ grant.scopes?.join(', ') }}
+            </td>
           </tr>
         </tbody>
       </table>

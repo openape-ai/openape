@@ -1,5 +1,13 @@
 # @openape/proxy
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.7.0
+  - @openape/grants@0.5.0
+
 ## 0.2.2
 
 ### Patch Changes
