@@ -1,6 +1,5 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { defineEventHandler, getQuery } from 'h3'
-import { isAdmin } from '../../utils/admin'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -27,11 +26,7 @@ export default defineEventHandler(async (event) => {
 
   const email = session.data.userId as string
 
-  if (isAdmin(email)) {
-    return await grantStore.listGrants({ limit, cursor, status })
-  }
-
-  // For non-admin users: filter by owned/approved agents + own grants
+  // All users (including admins) only see grants from their own agents
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
   const agentEmails = new Set([
