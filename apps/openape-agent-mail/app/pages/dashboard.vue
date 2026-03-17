@@ -19,7 +19,9 @@ const verifiedDomains = computed(() =>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <AppLogo />
-          <p class="text-sm text-gray-400">{{ user?.sub }}</p>
+          <p class="text-sm text-gray-400">
+            {{ user?.sub }}
+          </p>
         </div>
         <UButton color="neutral" variant="ghost" icon="i-lucide-log-out" @click="logout()">
           Logout
@@ -29,16 +31,26 @@ const verifiedDomains = computed(() =>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <UCard>
           <div class="text-center">
-            <p class="text-3xl font-bold text-white">{{ (domainsData || []).length }}</p>
-            <p class="text-sm text-gray-400">Domains</p>
-            <p class="text-xs text-gray-500">{{ verifiedDomains }} verified</p>
+            <p class="text-3xl font-bold text-white">
+              {{ (domainsData || []).length }}
+            </p>
+            <p class="text-sm text-gray-400">
+              Domains
+            </p>
+            <p class="text-xs text-gray-500">
+              {{ verifiedDomains }} verified
+            </p>
           </div>
         </UCard>
 
         <UCard>
           <div class="text-center">
-            <p class="text-3xl font-bold text-white">{{ (mailboxesData || []).length }}</p>
-            <p class="text-sm text-gray-400">Mailboxes</p>
+            <p class="text-3xl font-bold text-white">
+              {{ (mailboxesData || []).length }}
+            </p>
+            <p class="text-sm text-gray-400">
+              Mailboxes
+            </p>
           </div>
         </UCard>
 
@@ -47,7 +59,9 @@ const verifiedDomains = computed(() =>
             <p class="text-3xl font-bold text-white">
               {{ Math.round((mailboxesData || []).reduce((s: number, m: any) => s + (m.totalSizeBytes || 0), 0) / 1024 / 1024 * 10) / 10 }}
             </p>
-            <p class="text-sm text-gray-400">MB used</p>
+            <p class="text-sm text-gray-400">
+              MB used
+            </p>
           </div>
         </UCard>
       </div>
@@ -56,7 +70,9 @@ const verifiedDomains = computed(() =>
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-white">Domains</h2>
+              <h2 class="font-semibold text-white">
+                Domains
+              </h2>
               <UButton size="sm" to="/domains" icon="i-lucide-arrow-right" variant="ghost">
                 Manage
               </UButton>
@@ -78,7 +94,9 @@ const verifiedDomains = computed(() =>
         <UCard>
           <template #header>
             <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-white">Mailboxes</h2>
+              <h2 class="font-semibold text-white">
+                Mailboxes
+              </h2>
               <UButton size="sm" to="/mailboxes" icon="i-lucide-arrow-right" variant="ghost">
                 Manage
               </UButton>

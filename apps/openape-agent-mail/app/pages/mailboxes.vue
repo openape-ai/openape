@@ -62,7 +62,9 @@ function formatBytes(bytes: number) {
       <div class="flex items-center gap-3">
         <UButton to="/dashboard" icon="i-lucide-arrow-left" variant="ghost" size="sm" />
         <AppLogo />
-        <h1 class="text-lg font-semibold text-white">Mailboxes</h1>
+        <h1 class="text-lg font-semibold text-white">
+          Mailboxes
+        </h1>
       </div>
 
       <!-- API Key Alert -->
@@ -70,7 +72,9 @@ function formatBytes(bytes: number) {
         <div class="space-y-3">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-key" class="text-green-400" />
-            <h3 class="font-semibold text-green-400">API Key Created</h3>
+            <h3 class="font-semibold text-green-400">
+              API Key Created
+            </h3>
           </div>
           <p class="text-sm text-gray-400">
             Copy this key now — it will not be shown again.
@@ -86,11 +90,15 @@ function formatBytes(bytes: number) {
 
       <UCard>
         <template #header>
-          <h2 class="font-semibold text-white">Create Mailbox</h2>
+          <h2 class="font-semibold text-white">
+            Create Mailbox
+          </h2>
         </template>
         <div v-if="verifiedDomains.length === 0" class="text-sm text-gray-500 text-center py-4">
           You need at least one verified domain before creating mailboxes.
-          <UButton to="/domains" variant="link" size="sm">Add a domain</UButton>
+          <UButton to="/domains" variant="link" size="sm">
+            Add a domain
+          </UButton>
         </div>
         <form v-else class="flex gap-3 items-end" @submit.prevent="createMailbox">
           <UFormField label="Local part" class="flex-1">
@@ -107,12 +115,16 @@ function formatBytes(bytes: number) {
             Create
           </UButton>
         </form>
-        <p v-if="error" class="mt-2 text-sm text-red-400">{{ error }}</p>
+        <p v-if="error" class="mt-2 text-sm text-red-400">
+          {{ error }}
+        </p>
       </UCard>
 
       <UCard>
         <template #header>
-          <h2 class="font-semibold text-white">Your Mailboxes</h2>
+          <h2 class="font-semibold text-white">
+            Your Mailboxes
+          </h2>
         </template>
         <div v-if="(mailboxesData || []).length === 0" class="text-sm text-gray-500 text-center py-4">
           No mailboxes created yet.
@@ -126,7 +138,9 @@ function formatBytes(bytes: number) {
             <div class="flex items-center gap-3">
               <UIcon name="i-lucide-mail" class="text-gray-400" />
               <div>
-                <p class="text-white font-medium">{{ m.address }}</p>
+                <p class="text-white font-medium">
+                  {{ m.address }}
+                </p>
                 <p class="text-xs text-gray-500">
                   {{ m.messageCount }} messages · {{ formatBytes(m.totalSizeBytes || 0) }} / {{ formatBytes(m.softCapBytes) }}
                 </p>

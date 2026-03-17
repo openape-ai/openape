@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.7.0
+
 ## 0.3.1
 
 ### Patch Changes

@@ -2,8 +2,12 @@
   <div class="grid md:grid-cols-2 gap-6">
     <!-- Free -->
     <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <h3 class="text-xl font-bold mb-1">Free</h3>
-      <p class="text-gray-400 text-sm mb-4">Get started with the basics</p>
+      <h3 class="text-xl font-bold mb-1">
+        Free
+      </h3>
+      <p class="text-gray-400 text-sm mb-4">
+        Get started with the basics
+      </p>
       <div class="text-3xl font-bold mb-6">
         €0<span class="text-base font-normal text-gray-400">/month</span>
       </div>
@@ -20,8 +24,12 @@
 
     <!-- Pay-as-you-grow -->
     <div class="bg-gray-900 rounded-xl p-6 border border-primary/50 ring-1 ring-primary/20">
-      <h3 class="text-xl font-bold mb-1">Pay as you grow</h3>
-      <p class="text-gray-400 text-sm mb-4">Scale without limits</p>
+      <h3 class="text-xl font-bold mb-1">
+        Pay as you grow
+      </h3>
+      <p class="text-gray-400 text-sm mb-4">
+        Scale without limits
+      </p>
       <div class="text-3xl font-bold mb-6">
         €1<span class="text-base font-normal text-gray-400">/user/month</span>
       </div>

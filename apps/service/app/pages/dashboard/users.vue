@@ -37,7 +37,9 @@ async function deleteUser(email: string) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">Users</h1>
+      <h1 class="text-2xl font-bold">
+        Users
+      </h1>
       <UButton label="Invite User" @click="showInvite = !showInvite" />
     </div>
 
@@ -57,15 +59,25 @@ async function deleteUser(email: string) {
       <table class="w-full text-sm">
         <thead class="border-b border-gray-800 text-gray-400">
           <tr>
-            <th class="text-left p-4">Email</th>
-            <th class="text-left p-4">Name</th>
-            <th class="text-right p-4">Actions</th>
+            <th class="text-left p-4">
+              Email
+            </th>
+            <th class="text-left p-4">
+              Name
+            </th>
+            <th class="text-right p-4">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="user in users" :key="user.email" class="border-b border-gray-800/50">
-            <td class="p-4">{{ user.email }}</td>
-            <td class="p-4">{{ user.name }}</td>
+            <td class="p-4">
+              {{ user.email }}
+            </td>
+            <td class="p-4">
+              {{ user.name }}
+            </td>
             <td class="p-4 text-right">
               <UButton size="xs" variant="ghost" color="error" label="Delete" @click="deleteUser(user.email)" />
             </td>

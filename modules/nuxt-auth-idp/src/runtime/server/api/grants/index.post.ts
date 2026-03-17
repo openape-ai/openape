@@ -16,8 +16,13 @@ export default defineEventHandler(async (event) => {
     body.requester = agentPayload.sub
   }
 
-  if (!body.requester || !body.target_host || !body.audience || !body.grant_type) {
-    throw createProblemError({ status: 400, title: 'Missing required fields: requester, target_host, audience, grant_type' })
+  if (!body.requester || !body.target_host || !body.audience) {
+    throw createProblemError({ status: 400, title: 'Missing required fields: requester, target_host, audience' })
+  }
+
+  // Default grant_type to 'once'
+  if (!body.grant_type) {
+    body.grant_type = 'once'
   }
 
   if (!VALID_GRANT_TYPES.includes(body.grant_type)) {
@@ -26,6 +31,24 @@ export default defineEventHandler(async (event) => {
 
   if (body.grant_type === 'timed' && !body.duration) {
     throw createProblemError({ status: 400, title: 'Duration is required for timed grants', type: 'https://openape.org/errors/missing_duration' })
+  }
+
+  // Grant-Reuse: check for an active reusable grant with matching parameters
+  if (body.cmd_hash) {
+    const existingGrants = await grantStore.findByRequester(body.requester)
+    const now = Math.floor(Date.now() / 1000)
+    const reusable = existingGrants.find(g =>
+      g.status === 'approved'
+      && g.request.target_host === body.target_host
+      && g.request.audience === body.audience
+      && g.request.cmd_hash === body.cmd_hash
+      && (g.request.grant_type ?? 'once') !== 'once'
+      && (!g.expires_at || g.expires_at > now)
+      && g.request.run_as === (body.run_as ?? undefined),
+    )
+    if (reusable) {
+      return reusable
+    }
   }
 
   const grant = await createGrant(body, grantStore)

@@ -5,6 +5,7 @@ export {
 } from './authz-jwt.js'
 export {
   approveGrant,
+  type ApproveGrantOverrides,
   createDelegation,
   createGrant,
   denyGrant,

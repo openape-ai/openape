@@ -35,11 +35,15 @@ async function saveSettings() {
 
 <template>
   <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">Settings</h1>
+    <h1 class="text-2xl font-bold mb-6">
+      Settings
+    </h1>
 
     <form class="space-y-6" @submit.prevent="saveSettings">
       <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 space-y-4">
-        <h2 class="text-lg font-semibold">Organization</h2>
+        <h2 class="text-lg font-semibold">
+          Organization
+        </h2>
         <UFormField label="Name">
           <UInput v-model="orgName" class="w-full" />
         </UFormField>
@@ -49,7 +53,9 @@ async function saveSettings() {
       </div>
 
       <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 space-y-4">
-        <h2 class="text-lg font-semibold">Custom Domain</h2>
+        <h2 class="text-lg font-semibold">
+          Custom Domain
+        </h2>
         <p class="text-sm text-gray-400">
           Set a custom domain for your identity provider. After saving, point a CNAME record to <code class="text-gray-300">cname.vercel-dns.com</code>.
         </p>

@@ -34,13 +34,17 @@ async function openPortal() {
 
 <template>
   <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">Billing</h1>
+    <h1 class="text-2xl font-bold mb-6">
+      Billing
+    </h1>
 
     <UAlert v-if="route.query.success" color="success" title="Payment successful! Your plan has been upgraded." class="mb-6" />
     <UAlert v-if="route.query.canceled" color="warning" title="Checkout canceled." class="mb-6" />
 
     <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
-      <div class="text-sm text-gray-400 mb-2">Current Plan</div>
+      <div class="text-sm text-gray-400 mb-2">
+        Current Plan
+      </div>
       <div class="flex items-center gap-3 mb-4">
         <UBadge
           size="lg"
@@ -65,15 +69,25 @@ async function openPortal() {
     </div>
 
     <div v-if="stats" class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <div class="text-sm text-gray-400 mb-4">Current Usage</div>
+      <div class="text-sm text-gray-400 mb-4">
+        Current Usage
+      </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <div class="text-2xl font-bold">{{ stats.stats.users }}</div>
-          <div class="text-sm text-gray-400">Users (limit: {{ stats.limits.maxUsers }})</div>
+          <div class="text-2xl font-bold">
+            {{ stats.stats.users }}
+          </div>
+          <div class="text-sm text-gray-400">
+            Users (limit: {{ stats.limits.maxUsers }})
+          </div>
         </div>
         <div>
-          <div class="text-2xl font-bold">{{ stats.stats.agents }}</div>
-          <div class="text-sm text-gray-400">Agents (limit: {{ stats.limits.maxAgents }})</div>
+          <div class="text-2xl font-bold">
+            {{ stats.stats.agents }}
+          </div>
+          <div class="text-sm text-gray-400">
+            Agents (limit: {{ stats.limits.maxAgents }})
+          </div>
         </div>
       </div>
     </div>

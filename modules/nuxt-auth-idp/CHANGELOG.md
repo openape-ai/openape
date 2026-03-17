@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- feat: grant approval type selector and grant reuse
+
+  Approvers can now choose the grant type (once/timed/always) when approving a grant, with duration picker for timed grants. Active timed/always grants with matching parameters are automatically reused instead of creating new pending grants. The grant_type field in OpenApeGrantRequest is now optional, defaulting to 'once'.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.7.0
+  - @openape/grants@0.5.0
+  - @openape/auth@0.5.3
+
 ## 0.7.3
 
 ### Patch Changes

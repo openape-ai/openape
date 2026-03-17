@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.7.0
+  - @openape/auth@0.5.3
+
 ## 0.6.3
 
 ### Patch Changes

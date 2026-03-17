@@ -1,9 +1,13 @@
+import type { GrantType } from '@openape/core'
+import type { ApproveGrantOverrides } from '@openape/grants'
 import { approveGrant, issueAuthzJWT } from '@openape/grants'
-import { defineEventHandler, getRouterParam } from 'h3'
+import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireAuth } from '../../../utils/admin'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
+
+const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -15,6 +19,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const email = await requireAuth(event)
+
+  const body = await readBody(event).catch(() => ({})) as Record<string, unknown>
+
+  // Validate overrides if provided
+  if (body.grant_type !== undefined) {
+    if (!VALID_GRANT_TYPES.includes(body.grant_type as GrantType)) {
+      throw createProblemError({ status: 400, title: `Invalid grant_type. Must be one of: ${VALID_GRANT_TYPES.join(', ')}` })
+    }
+    if (body.grant_type === 'timed' && (!body.duration || typeof body.duration !== 'number' || body.duration <= 0)) {
+      throw createProblemError({ status: 400, title: 'Duration must be a positive number for timed grants' })
+    }
+  }
 
   const grant = await grantStore.findById(id)
   if (!grant) {
@@ -30,8 +46,12 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 403, title: 'Only the agent owner or approver can approve this grant' })
   }
 
+  const overrides: ApproveGrantOverrides | undefined = body.grant_type
+    ? { grant_type: body.grant_type as GrantType, duration: body.duration as number | undefined }
+    : undefined
+
   try {
-    const approved = await approveGrant(id, email, grantStore)
+    const approved = await approveGrant(id, email, grantStore, overrides)
     const signingKey = await keyStore.getSigningKey()
     const authzJwt = await issueAuthzJWT(approved, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
     return { grant: approved, authz_jwt: authzJwt }

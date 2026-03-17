@@ -17,7 +17,9 @@ const { data: stats, refresh } = await useFetch('/api/platform/stats')
 
     <div v-if="stats" class="grid md:grid-cols-3 gap-6 mb-8">
       <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <div class="text-sm text-gray-400 mb-1">Users</div>
+        <div class="text-sm text-gray-400 mb-1">
+          Users
+        </div>
         <div class="text-3xl font-bold">
           {{ stats.stats.users }}
         </div>
@@ -26,7 +28,9 @@ const { data: stats, refresh } = await useFetch('/api/platform/stats')
         </div>
       </div>
       <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <div class="text-sm text-gray-400 mb-1">Agents</div>
+        <div class="text-sm text-gray-400 mb-1">
+          Agents
+        </div>
         <div class="text-3xl font-bold">
           {{ stats.stats.agents }}
         </div>
@@ -35,7 +39,9 @@ const { data: stats, refresh } = await useFetch('/api/platform/stats')
         </div>
       </div>
       <div class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <div class="text-sm text-gray-400 mb-1">Grants</div>
+        <div class="text-sm text-gray-400 mb-1">
+          Grants
+        </div>
         <div class="text-3xl font-bold">
           {{ stats.stats.grants }}
         </div>
@@ -43,7 +49,9 @@ const { data: stats, refresh } = await useFetch('/api/platform/stats')
     </div>
 
     <div v-if="stats" class="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <div class="text-sm text-gray-400 mb-1">Plan</div>
+      <div class="text-sm text-gray-400 mb-1">
+        Plan
+      </div>
       <div class="flex items-center gap-3">
         <UBadge :color="stats.org.plan === 'payg' ? 'primary' : 'neutral'" :label="stats.org.plan === 'payg' ? 'Pay-as-you-grow' : 'Free'" />
         <NuxtLink v-if="stats.org.plan === 'free'" to="/dashboard/billing">

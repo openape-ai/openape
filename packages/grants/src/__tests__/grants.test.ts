@@ -104,6 +104,69 @@ describe('grant lifecycle', () => {
         approveGrant('non-existent', 'admin@example.com', store),
       ).rejects.toThrow('Grant not found')
     })
+
+    it('overrides grant_type from once to timed', async () => {
+      const grant = await createGrant(onceRequest, store)
+      const approved = await approveGrant(grant.id, 'admin@example.com', store, {
+        grant_type: 'timed',
+        duration: 3600,
+      })
+
+      expect(approved.request.grant_type).toBe('timed')
+      expect(approved.expires_at).toBeDefined()
+      expect(approved.expires_at! - approved.decided_at!).toBe(3600)
+    })
+
+    it('overrides grant_type from once to always', async () => {
+      const grant = await createGrant(onceRequest, store)
+      const approved = await approveGrant(grant.id, 'admin@example.com', store, {
+        grant_type: 'always',
+      })
+
+      expect(approved.request.grant_type).toBe('always')
+      expect(approved.expires_at).toBeUndefined()
+    })
+
+    it('overrides grant_type from timed to always', async () => {
+      const grant = await createGrant(timedRequest, store)
+      const approved = await approveGrant(grant.id, 'admin@example.com', store, {
+        grant_type: 'always',
+      })
+
+      expect(approved.request.grant_type).toBe('always')
+      expect(approved.expires_at).toBeUndefined()
+    })
+
+    it('overrides duration for timed grant', async () => {
+      const grant = await createGrant(timedRequest, store)
+      const approved = await approveGrant(grant.id, 'admin@example.com', store, {
+        duration: 7200,
+      })
+
+      expect(approved.request.grant_type).toBe('timed')
+      expect(approved.expires_at! - approved.decided_at!).toBe(7200)
+    })
+
+    it('rejects timed override without duration', async () => {
+      const grant = await createGrant(onceRequest, store)
+
+      await expect(
+        approveGrant(grant.id, 'admin@example.com', store, { grant_type: 'timed' }),
+      ).rejects.toThrow('Duration is required for timed grants')
+    })
+
+    it('defaults grant_type to once when not specified in request', async () => {
+      const requestWithoutType: OpenApeGrantRequest = {
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'apes',
+      }
+      const grant = await createGrant(requestWithoutType, store)
+      const approved = await approveGrant(grant.id, 'admin@example.com', store)
+
+      expect(approved.request.grant_type).toBe('once')
+      expect(approved.expires_at).toBeUndefined()
+    })
   })
 
   describe('denyGrant', () => {

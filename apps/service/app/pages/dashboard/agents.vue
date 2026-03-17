@@ -35,7 +35,9 @@ async function deleteAgent(id: string) {
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">Agents</h1>
+      <h1 class="text-2xl font-bold">
+        Agents
+      </h1>
       <UButton label="Create Agent" @click="showCreate = !showCreate" />
     </div>
 
@@ -52,15 +54,25 @@ async function deleteAgent(id: string) {
       <table class="w-full text-sm">
         <thead class="border-b border-gray-800 text-gray-400">
           <tr>
-            <th class="text-left p-4">ID</th>
-            <th class="text-left p-4">Name</th>
-            <th class="text-right p-4">Actions</th>
+            <th class="text-left p-4">
+              ID
+            </th>
+            <th class="text-left p-4">
+              Name
+            </th>
+            <th class="text-right p-4">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="agent in agents" :key="agent.id" class="border-b border-gray-800/50">
-            <td class="p-4 font-mono text-xs">{{ agent.id }}</td>
-            <td class="p-4">{{ agent.name }}</td>
+            <td class="p-4 font-mono text-xs">
+              {{ agent.id }}
+            </td>
+            <td class="p-4">
+              {{ agent.name }}
+            </td>
             <td class="p-4 text-right">
               <UButton size="xs" variant="ghost" color="error" label="Delete" @click="deleteAgent(agent.id)" />
             </td>
