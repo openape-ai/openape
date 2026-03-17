@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { defineCommand, runMain } from 'citty'
+import { defineCommand, runCommand as runCitty } from 'citty'
 import { loginCommand } from './commands/login'
 import { logoutCommand } from './commands/logout'
 import { whoamiCommand } from './commands/whoami'
@@ -16,31 +16,6 @@ import { delegationsCommand } from './commands/delegations'
 import { ApiError } from './http'
 
 const debug = process.argv.includes('--debug')
-
-// Human-readable errors by default, stack traces with --debug
-if (!debug) {
-  process.on('uncaughtException', (err) => {
-    if (err instanceof ApiError) {
-      consola.error(err.message)
-    }
-    else {
-      consola.error(err.message || String(err))
-    }
-    process.exit(1)
-  })
-  process.on('unhandledRejection', (err) => {
-    if (err instanceof ApiError) {
-      consola.error(err.message)
-    }
-    else if (err instanceof Error) {
-      consola.error(err.message)
-    }
-    else {
-      consola.error(String(err))
-    }
-    process.exit(1)
-  })
-}
 
 const main = defineCommand({
   meta: {
@@ -65,4 +40,12 @@ const main = defineCommand({
   },
 })
 
-runMain(main)
+runCitty(main, { rawArgs: process.argv.slice(2) }).catch((err) => {
+  if (debug) {
+    consola.error(err)
+  }
+  else {
+    consola.error(err instanceof Error ? err.message : String(err))
+  }
+  process.exit(1)
+})
