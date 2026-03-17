@@ -89,14 +89,19 @@ export async function apiFetch<T = unknown>(
     const contentType = response.headers.get('content-type') || ''
 
     // Parse RFC 7807 Problem Details
-    if (contentType.includes('application/problem+json')) {
-      const problem = await response.json() as Record<string, unknown>
-      const message = (problem.detail as string) || (problem.title as string) || `${response.status} ${response.statusText}`
-      throw new ApiError(response.status, message, problem)
+    if (contentType.includes('application/problem+json') || contentType.includes('application/json')) {
+      try {
+        const problem = await response.json() as Record<string, unknown>
+        const message = (problem.detail as string) || (problem.title as string) || `${response.status} ${response.statusText}`
+        throw new ApiError(response.status, message, problem)
+      }
+      catch (e) {
+        if (e instanceof ApiError) throw e
+      }
     }
 
     const text = await response.text()
-    throw new ApiError(response.status, `${response.status} ${response.statusText}: ${text}`)
+    throw new ApiError(response.status, text || `${response.status} ${response.statusText}`)
   }
 
   return response.json() as Promise<T>
