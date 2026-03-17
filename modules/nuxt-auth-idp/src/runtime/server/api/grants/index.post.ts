@@ -1,4 +1,5 @@
 import type { GrantType, OpenApeGrantRequest } from '@openape/core'
+import { computeCmdHash } from '@openape/core'
 import { createGrant } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryAgentAuth } from '../../utils/agent-auth'
@@ -33,19 +34,38 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Duration is required for timed grants', type: 'https://openape.org/errors/missing_duration' })
   }
 
+  // Compute cmd_hash server-side from command array (never trust client-provided hash)
+  if (body.command?.length) {
+    body.cmd_hash = await computeCmdHash(body.command.join(' '))
+  }
+
   // Grant-Reuse: check for an active reusable grant with matching parameters
-  if (body.cmd_hash) {
+  // Only timed/always grants are reusable (once grants are single-use by definition)
+  {
     const existingGrants = await grantStore.findByRequester(body.requester)
     const now = Math.floor(Date.now() / 1000)
-    const reusable = existingGrants.find(g =>
-      g.status === 'approved'
-      && g.request.target_host === body.target_host
-      && g.request.audience === body.audience
-      && g.request.cmd_hash === body.cmd_hash
-      && (g.request.grant_type ?? 'once') !== 'once'
-      && (!g.expires_at || g.expires_at > now)
-      && g.request.run_as === (body.run_as ?? undefined),
-    )
+    const reusable = existingGrants.find((g) => {
+      if (g.status !== 'approved') return false
+      if ((g.request.grant_type ?? 'once') === 'once') return false
+      if (g.expires_at && g.expires_at <= now) return false
+      if (g.request.target_host !== body.target_host) return false
+      if (g.request.audience !== body.audience) return false
+      if (g.request.run_as !== (body.run_as ?? undefined)) return false
+      // Match by cmd_hash (server-computed from command)
+      if (body.cmd_hash || g.request.cmd_hash) {
+        if (g.request.cmd_hash !== body.cmd_hash) return false
+      }
+      // Match permissions if present
+      if (body.permissions || g.request.permissions) {
+        const reqPerms = (body.permissions ?? []).toSorted().join(',')
+        const grantPerms = (g.request.permissions ?? []).toSorted().join(',')
+        if (reqPerms !== grantPerms) return false
+      }
+      // Match delegation fields
+      if (body.delegator !== (g.request.delegator ?? undefined)) return false
+      if (body.delegate !== (g.request.delegate ?? undefined)) return false
+      return true
+    })
     if (reusable) {
       return reusable
     }
