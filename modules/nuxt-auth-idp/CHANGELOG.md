@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+### Patch Changes
+
+- Restrict grant visibility: only show grants from user's own/approved agents (not all pending grants to all users).
+
 ## 0.7.1
 
 ### Patch Changes
