@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Patch Changes
+
+- Token endpoint accepts both agent and session auth. grapes shows clean error messages by default (use --debug for stack traces).
+
 ## 0.3.0
 
 ### Minor Changes
