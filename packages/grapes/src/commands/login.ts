@@ -163,7 +163,8 @@ async function loginWithPKCE(idp: string) {
 
 async function loginWithKey(idp: string, keyPath: string, email?: string) {
   const { readFileSync } = await import('node:fs')
-  const { createPrivateKey, sign } = await import('node:crypto')
+  const { sign } = await import('node:crypto')
+  const { loadEd25519PrivateKey } = await import('../ssh-key.js')
 
   const agentEmail = email
   if (!agentEmail) {
@@ -186,9 +187,9 @@ async function loginWithKey(idp: string, keyPath: string, email?: string) {
 
   const { challenge } = await challengeResp.json() as { challenge: string }
 
-  // Sign challenge with Ed25519 private key
+  // Sign challenge with Ed25519 private key (supports OpenSSH + PKCS8 format)
   const keyContent = readFileSync(keyPath, 'utf-8')
-  const privateKey = createPrivateKey(keyContent)
+  const privateKey = loadEd25519PrivateKey(keyContent)
   const signature = sign(null, Buffer.from(challenge), privateKey).toString('base64')
 
   // Authenticate (endpoint resolved via OIDC discovery)
