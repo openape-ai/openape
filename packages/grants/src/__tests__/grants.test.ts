@@ -17,7 +17,8 @@ describe('grant lifecycle', () => {
 
   const onceRequest: OpenApeGrantRequest = {
     requester: 'agent@example.com',
-    target: 'api.example.com',
+    target_host: 'macmini',
+    audience: 'apes',
     grant_type: 'once',
     permissions: ['read'],
     reason: 'Need to read data',
@@ -25,7 +26,8 @@ describe('grant lifecycle', () => {
 
   const timedRequest: OpenApeGrantRequest = {
     requester: 'agent@example.com',
-    target: 'api.example.com',
+    target_host: 'macmini',
+    audience: 'apes',
     grant_type: 'timed',
     permissions: ['read', 'write'],
     duration: 3600, // 1 hour
@@ -33,7 +35,8 @@ describe('grant lifecycle', () => {
 
   const alwaysRequest: OpenApeGrantRequest = {
     requester: 'agent@example.com',
-    target: 'api.example.com',
+    target_host: 'macmini',
+    audience: 'apes',
     grant_type: 'always',
     permissions: ['read'],
   }
@@ -158,7 +161,8 @@ describe('grant lifecycle', () => {
     it('auto-expires timed grants past expiration', async () => {
       const shortTimedRequest: OpenApeGrantRequest = {
         requester: 'agent@example.com',
-        target: 'api.example.com',
+        target_host: 'macmini',
+        audience: 'apes',
         grant_type: 'timed',
         duration: 1, // 1 second
       }
@@ -239,7 +243,8 @@ describe('grant lifecycle', () => {
   describe('delegate permission grants', () => {
     const delegateOnceRequest: OpenApeGrantRequest = {
       requester: 'agent@example.com',
-      target: 'sp.example.com',
+      target_host: 'sp.example.com',
+      audience: 'proxy',
       grant_type: 'once',
       permissions: ['delegate'],
       reason: 'Login als Owner bei sp.example.com',
@@ -247,7 +252,8 @@ describe('grant lifecycle', () => {
 
     const delegateTimedRequest: OpenApeGrantRequest = {
       requester: 'agent@example.com',
-      target: 'sp.example.com',
+      target_host: 'sp.example.com',
+      audience: 'proxy',
       grant_type: 'timed',
       permissions: ['delegate'],
       duration: 3600,
@@ -304,7 +310,8 @@ describe('grant lifecycle', () => {
 
       const otherRequest: OpenApeGrantRequest = {
         requester: 'other@example.com',
-        target: 'api.example.com',
+        target_host: 'macmini',
+        audience: 'apes',
         grant_type: 'once',
       }
       await createGrant(otherRequest, store)

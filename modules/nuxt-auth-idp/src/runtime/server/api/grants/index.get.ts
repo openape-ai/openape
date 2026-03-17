@@ -42,7 +42,6 @@ export default defineEventHandler(async (event) => {
   // Get all grants and filter, then paginate in-memory
   const allGrants = await grantStore.findAll()
   let filtered = allGrants.filter((grant: OpenApeGrant) => {
-    if (grant.request.target === email) return true
     if (grant.request.requester === email) return true
     if (agentEmails.has(grant.request.requester)) return true
     if (grant.status === 'pending') return true

@@ -187,6 +187,7 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
       const existing = await grantsClient.findExistingGrant(
         effectiveEmail,
         domain,
+        'proxy',
         permissions,
       ).catch(() => null)
 
@@ -211,7 +212,8 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
         // Create grant request, return 407 immediately
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
-          target: domain,
+          targetHost: domain,
+          audience: 'proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,
@@ -242,7 +244,8 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
       try {
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
-          target: domain,
+          targetHost: domain,
+          audience: 'proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,

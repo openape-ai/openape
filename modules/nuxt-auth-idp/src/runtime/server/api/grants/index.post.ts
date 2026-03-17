@@ -16,8 +16,8 @@ export default defineEventHandler(async (event) => {
     body.requester = agentPayload.sub
   }
 
-  if (!body.requester || !body.target || !body.grant_type) {
-    throw createProblemError({ status: 400, title: 'Missing required fields: requester, target, grant_type' })
+  if (!body.requester || !body.target_host || !body.audience || !body.grant_type) {
+    throw createProblemError({ status: 400, title: 'Missing required fields: requester, target_host, audience, grant_type' })
   }
 
   if (!VALID_GRANT_TYPES.includes(body.grant_type)) {

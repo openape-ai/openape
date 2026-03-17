@@ -1,6 +1,7 @@
+import { hostname } from 'node:os'
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { getIdpUrl, loadAuth, loadConfig } from '../config'
+import { getIdpUrl, loadAuth } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
 
 export const requestCommand = defineCommand({
@@ -14,17 +15,23 @@ export const requestCommand = defineCommand({
       description: 'Command to request permission for',
       required: true,
     },
+    audience: {
+      type: 'string',
+      description: 'Service identifier (e.g. "apes", "proxy")',
+      required: true,
+    },
+    host: {
+      type: 'string',
+      description: 'Target host (default: system hostname)',
+    },
     reason: {
       type: 'string',
       description: 'Reason for the request',
     },
-    for: {
-      type: 'string',
-      description: 'Target user email (owner/approver)',
-    },
     approval: {
       type: 'string',
       description: 'Approval type: once, timed, always',
+      default: 'once',
     },
     wait: {
       type: 'boolean',
@@ -39,30 +46,20 @@ export const requestCommand = defineCommand({
       return process.exit(1)
     }
 
-    const config = loadConfig()
-    const forUser = args.for || config.defaults?.for
-    const approval = args.approval || config.defaults?.approval || 'once'
-
-    if (!forUser) {
-      consola.error('Target user required. Use --for <email> or set defaults.for in config.')
-      return process.exit(1)
-    }
-
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
     const command = args.command.split(' ')
+    const targetHost = args.host || hostname()
 
     const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
       method: 'POST',
       body: {
-        type: 'command',
         requester: auth.email,
-        owner: forUser,
-        request: {
-          command,
-          grant_type: approval,
-          reason: args.reason || command.join(' '),
-        },
+        target_host: targetHost,
+        audience: args.audience,
+        grant_type: args.approval,
+        command,
+        reason: args.reason || command.join(' '),
       },
     })
 

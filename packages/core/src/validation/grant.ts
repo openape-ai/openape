@@ -5,7 +5,7 @@ import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 export interface GrantValidationOptions {
   /** Expected issuer (OpenApe server) */
   expectedIss: string
-  /** Expected audience (target system) */
+  /** Expected audience (service identifier) */
   expectedAud: string
   /** JWKS URI for the OpenApe server */
   jwksUri?: string

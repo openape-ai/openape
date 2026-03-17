@@ -150,7 +150,8 @@ export default defineEventHandler(async (event) => {
     for (const detail of authzDetails) {
       const grant = await createGrant({
         requester: agentPayload ? agentPayload.sub : userId,
-        target: params.client_id,
+        target_host: params.client_id,
+        audience: params.client_id,
         grant_type: detail.approval ?? 'once',
         permissions: [detail.action],
         reason: detail.reason,

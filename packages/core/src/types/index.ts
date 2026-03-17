@@ -92,8 +92,10 @@ export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expir
 export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
   requester: string
-  /** Target system/resource */
-  target: string
+  /** Host or domain where this grant is valid */
+  target_host: string
+  /** Service or relying party identifier (e.g. 'apes', 'proxy') */
+  audience: string
   /** Grant type */
   grant_type: GrantType
   /** Requested permissions */
@@ -106,12 +108,12 @@ export interface OpenApeGrantRequest {
   duration?: number
   /** Human-readable reason for the request */
   reason?: string
+  /** Execute as this user identity */
+  run_as?: string
   /** Delegator — who is being acted on behalf of (delegation grants only) */
   delegator?: string
   /** Delegate — who is allowed to act (delegation grants only) */
   delegate?: string
-  /** Audience — at which SP the delegation is valid (delegation grants only) */
-  audience?: string
   /** Scopes — what actions are allowed under the delegation */
   scopes?: string[]
 }
@@ -157,8 +159,10 @@ export interface OpenApeAuthZClaims {
   iss: string
   /** Subject — the requester */
   sub: string
-  /** Audience — target system */
+  /** Audience — service or relying party identifier */
   aud: string
+  /** Host or domain where this grant is valid */
+  target_host: string
   /** Issued at */
   iat: number
   /** Expiration */

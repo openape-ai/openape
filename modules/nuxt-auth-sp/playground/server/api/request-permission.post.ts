@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
     method: 'POST',
     body: {
       requester: claims.sub,
-      target: clientId,
+      target_host: clientId,
+      audience: clientId,
       grant_type: 'once',
       permissions: [body.action || 'protected-action'],
       reason: body.reason || 'User requested permission for protected action',
