@@ -18,16 +18,16 @@ export const tokenCommand = defineCommand({
   async run({ args }) {
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
-    const result = await apiFetch<{ token: string }>(`${grantsUrl}/${args.id}/token`, {
+    const result = await apiFetch<{ authz_jwt: string }>(`${grantsUrl}/${args.id}/token`, {
       method: 'POST',
     })
 
-    if (!result.token) {
+    if (!result.authz_jwt) {
       consola.error('No token received. Grant may not be approved.')
       return process.exit(1)
     }
 
     // Output raw token to stdout (pipeable)
-    process.stdout.write(result.token)
+    process.stdout.write(result.authz_jwt)
   },
 })
