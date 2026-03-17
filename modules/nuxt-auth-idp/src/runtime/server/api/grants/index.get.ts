@@ -44,7 +44,6 @@ export default defineEventHandler(async (event) => {
   let filtered = allGrants.filter((grant: OpenApeGrant) => {
     if (grant.request.requester === email) return true
     if (agentEmails.has(grant.request.requester)) return true
-    if (grant.status === 'pending') return true
     return false
   })
 
