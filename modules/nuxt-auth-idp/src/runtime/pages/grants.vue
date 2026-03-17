@@ -9,7 +9,8 @@ interface Grant {
   status: string
   request: {
     requester: string
-    target: string
+    target_host: string
+    audience: string
     grant_type: string
     command?: string[]
     cmd_hash?: string
@@ -145,7 +146,7 @@ function formatTime(ts: number): string {
                     <UBadge color="secondary" :label="grant.request.grant_type" />
                   </div>
                   <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
-                  <p><span class="text-muted">Target:</span> {{ grant.request.target }}</p>
+                  <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                   <div v-if="grant.request.command?.length" class="mt-1">
                     <span class="text-muted">Command:</span>
                     <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>
@@ -194,7 +195,7 @@ function formatTime(ts: number): string {
                     <UBadge color="secondary" :label="grant.request.grant_type" />
                   </div>
                   <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
-                  <p><span class="text-muted">Target:</span> {{ grant.request.target }}</p>
+                  <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                   <div v-if="grant.request.command?.length" class="mt-1">
                     <span class="text-muted">Command:</span>
                     <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>
@@ -248,7 +249,7 @@ function formatTime(ts: number): string {
                   />
                 </div>
                 <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
-                <p><span class="text-muted">Target:</span> {{ grant.request.target }}</p>
+                <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                 <div v-if="grant.request.command?.length" class="mt-1">
                   <span class="text-muted">Command:</span>
                   <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>

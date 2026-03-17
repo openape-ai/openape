@@ -41,7 +41,8 @@ export async function issueAuthzJWT(
   const claims: OpenApeAuthZClaims = {
     iss: issuer,
     sub: grant.request.requester,
-    aud: grant.request.target,
+    aud: grant.request.audience,
+    target_host: grant.request.target_host,
     iat: now,
     exp,
     jti: crypto.randomUUID(),
@@ -52,6 +53,7 @@ export async function issueAuthzJWT(
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
     ...(grant.request.command ? { command: grant.request.command } : {}),
     ...(grant.decided_by ? { decided_by: grant.decided_by } : {}),
+    ...(grant.request.run_as ? { run_as: grant.request.run_as } : {}),
   }
 
   return signJWT(claims as unknown as JWTPayload, privateKey, { kid })

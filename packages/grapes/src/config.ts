@@ -14,7 +14,6 @@ export interface GrapesConfig {
   defaults?: {
     idp?: string
     approval?: string
-    for?: string
   }
   agent?: {
     key?: string

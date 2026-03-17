@@ -9,7 +9,8 @@ function makeApprovedGrant(overrides?: Partial<OpenApeGrant>): OpenApeGrant {
     id: 'grant-123',
     request: {
       requester: 'agent@example.com',
-      target: 'api.example.com',
+      target_host: 'macmini',
+      audience: 'apes',
       grant_type: 'once',
       permissions: ['read', 'write'],
     },
@@ -39,7 +40,8 @@ describe('authZ-JWT', () => {
       const grant = makeApprovedGrant({
         request: {
           requester: 'agent@example.com',
-          target: 'api.example.com',
+          target_host: 'macmini',
+          audience: 'apes',
           grant_type: 'timed',
           permissions: ['read'],
           duration: 3600,
@@ -56,7 +58,8 @@ describe('authZ-JWT', () => {
       const grant = makeApprovedGrant({
         request: {
           requester: 'agent@example.com',
-          target: 'api.example.com',
+          target_host: 'macmini',
+          audience: 'apes',
           grant_type: 'always',
           permissions: ['read'],
         },
@@ -80,7 +83,8 @@ describe('authZ-JWT', () => {
       const grant = makeApprovedGrant({
         request: {
           requester: 'agent@example.com',
-          target: 'api.example.com',
+          target_host: 'macmini',
+          audience: 'apes',
           grant_type: 'timed',
           duration: 3600,
         },
@@ -117,14 +121,15 @@ describe('authZ-JWT', () => {
       const result = await verifyAuthzJWT(token, {
         publicKey,
         expectedIss: 'https://openape.example.com',
-        expectedAud: 'api.example.com',
+        expectedAud: 'apes',
       })
 
       expect(result.valid).toBe(true)
       expect(result.claims).toBeDefined()
       expect(result.claims!.iss).toBe('https://openape.example.com')
       expect(result.claims!.sub).toBe('agent@example.com')
-      expect(result.claims!.aud).toBe('api.example.com')
+      expect(result.claims!.aud).toBe('apes')
+      expect(result.claims!.target_host).toBe('macmini')
       expect(result.claims!.grant_id).toBe('grant-123')
       expect(result.claims!.grant_type).toBe('once')
       expect(result.claims!.permissions).toEqual(['read', 'write'])
@@ -163,7 +168,7 @@ describe('authZ-JWT', () => {
       const token = await issueAuthzJWT(grant, 'https://openape.example.com', privateKey)
       const result = await verifyAuthzJWT(token, {
         publicKey,
-        expectedAud: 'wrong-audience.example.com',
+        expectedAud: 'wrong-audience',
       })
 
       expect(result.valid).toBe(false)
@@ -208,7 +213,8 @@ describe('authZ-JWT', () => {
       const grant = makeApprovedGrant({
         request: {
           requester: 'agent@example.com',
-          target: 'api.example.com',
+          target_host: 'macmini',
+          audience: 'apes',
           grant_type: 'once',
           cmd_hash: 'abc123hash',
         },

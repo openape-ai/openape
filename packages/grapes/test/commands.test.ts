@@ -25,8 +25,8 @@ describe('commands', () => {
     const { requestCommand } = await import('../src/commands/request')
     expect(requestCommand.meta?.name).toBe('request')
     expect(requestCommand.args).toHaveProperty('command')
+    expect(requestCommand.args).toHaveProperty('audience')
     expect(requestCommand.args).toHaveProperty('reason')
-    expect(requestCommand.args).toHaveProperty('for')
     expect(requestCommand.args).toHaveProperty('approval')
     expect(requestCommand.args).toHaveProperty('wait')
   })
@@ -69,11 +69,12 @@ describe('commands', () => {
     expect(denyCommand.args).toHaveProperty('id')
   })
 
-  it('exec command has correct meta and args', async () => {
-    const { execCommand } = await import('../src/commands/exec')
-    expect(execCommand.meta?.name).toBe('exec')
-    expect(execCommand.args).toHaveProperty('command')
-    expect(execCommand.args).toHaveProperty('apes-path')
+  it('run command has correct meta and args', async () => {
+    const { runCommand } = await import('../src/commands/run')
+    expect(runCommand.meta?.name).toBe('run')
+    expect(runCommand.args).toHaveProperty('audience')
+    expect(runCommand.args).toHaveProperty('action')
+    expect(runCommand.args).toHaveProperty('apes-path')
   })
 
   it('delegate command has correct meta and args', async () => {
@@ -108,7 +109,7 @@ describe('cli entry', () => {
       (await import('../src/commands/revoke')).revokeCommand,
       (await import('../src/commands/approve')).approveCommand,
       (await import('../src/commands/deny')).denyCommand,
-      (await import('../src/commands/exec')).execCommand,
+      (await import('../src/commands/run')).runCommand,
       (await import('../src/commands/delegate')).delegateCommand,
       (await import('../src/commands/delegations')).delegationsCommand,
     ]

@@ -69,7 +69,7 @@ describe('grant consume endpoint', () => {
     mockGrants.set('grant-1', {
       id: 'grant-1',
       status: 'approved',
-      request: { requester: 'agent@example.com', grant_type: 'once', target: 'server' },
+      request: { requester: 'agent@example.com', grant_type: 'once', target_host: 'server', audience: 'apes' },
     })
 
     const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')
@@ -83,7 +83,7 @@ describe('grant consume endpoint', () => {
     mockGrants.set('grant-1', {
       id: 'grant-1',
       status: 'approved',
-      request: { requester: 'agent@example.com', grant_type: 'timed', target: 'server' },
+      request: { requester: 'agent@example.com', grant_type: 'timed', target_host: 'server', audience: 'apes' },
       expires_at: Math.floor(Date.now() / 1000) + 3600,
     })
 
@@ -98,7 +98,7 @@ describe('grant consume endpoint', () => {
     mockGrants.set('grant-1', {
       id: 'grant-1',
       status: 'approved',
-      request: { requester: 'agent@example.com', grant_type: 'always', target: 'server' },
+      request: { requester: 'agent@example.com', grant_type: 'always', target_host: 'server', audience: 'apes' },
     })
 
     const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')
@@ -112,7 +112,7 @@ describe('grant consume endpoint', () => {
     mockGrants.set('grant-1', {
       id: 'grant-1',
       status: 'used',
-      request: { requester: 'agent@example.com', grant_type: 'once', target: 'server' },
+      request: { requester: 'agent@example.com', grant_type: 'once', target_host: 'server', audience: 'apes' },
     })
 
     const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')
@@ -126,7 +126,7 @@ describe('grant consume endpoint', () => {
     mockGrants.set('grant-1', {
       id: 'grant-1',
       status: 'revoked',
-      request: { requester: 'agent@example.com', grant_type: 'once', target: 'server' },
+      request: { requester: 'agent@example.com', grant_type: 'once', target_host: 'server', audience: 'apes' },
     })
 
     const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')

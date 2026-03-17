@@ -9,7 +9,7 @@ import { tokenCommand } from './commands/token'
 import { revokeCommand } from './commands/revoke'
 import { approveCommand } from './commands/approve'
 import { denyCommand } from './commands/deny'
-import { execCommand } from './commands/exec'
+import { runCommand } from './commands/run'
 import { delegateCommand } from './commands/delegate'
 import { delegationsCommand } from './commands/delegations'
 
@@ -30,7 +30,7 @@ const main = defineCommand({
     revoke: revokeCommand,
     approve: approveCommand,
     deny: denyCommand,
-    exec: execCommand,
+    run: runCommand,
     delegate: delegateCommand,
     delegations: delegationsCommand,
   },

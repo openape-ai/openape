@@ -29,7 +29,8 @@ export class GrantsClient {
    */
   async requestGrant(opts: {
     requester: string
-    target: string
+    targetHost: string
+    audience: string
     grantType: GrantType
     permissions?: string[]
     reason?: string
@@ -41,7 +42,8 @@ export class GrantsClient {
       headers: this.headers(),
       body: JSON.stringify({
         requester: opts.requester,
-        target: opts.target,
+        target_host: opts.targetHost,
+        audience: opts.audience,
         grant_type: opts.grantType,
         permissions: opts.permissions,
         reason: opts.reason,
@@ -88,13 +90,13 @@ export class GrantsClient {
   }
 
   /**
-   * Check if there's an existing approved grant for a domain+permissions combo.
-   * Only matches grants whose target matches the requested domain and that
-   * have matching permissions. Ignores `allow_once` grants (they're single-use).
+   * Check if there's an existing approved grant for a host+audience+permissions combo.
+   * Ignores `once` grants (they're single-use).
    */
   async findExistingGrant(
     requester: string,
-    target: string,
+    targetHost: string,
+    audience: string,
     permissions?: string[],
   ): Promise<OpenApeGrant | null> {
     const params = new URLSearchParams({
@@ -112,15 +114,11 @@ export class GrantsClient {
     const now = Math.floor(Date.now() / 1000)
 
     return grants.find((g) => {
-      // Must be approved
       if (g.status !== 'approved') return false
-      // Must not be expired
       if (g.expires_at && g.expires_at <= now) return false
-      // allow_once grants are single-use — don't reuse them
       if (g.request?.grant_type === 'once') return false
-      // Target must match the requested domain
-      if (g.request?.target !== target) return false
-      // If permissions specified, grant must cover them
+      if (g.request?.target_host !== targetHost) return false
+      if (g.request?.audience !== audience) return false
       if (permissions?.length && g.request?.permissions?.length) {
         const grantedPerms = new Set(g.request.permissions)
         if (!permissions.every(p => grantedPerms.has(p))) return false

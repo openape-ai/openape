@@ -28,7 +28,8 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
       `${IDP_URL}/api/grants`,
       {
         requester: TEST_USER.email,
-        target: 'test-sp',
+        target_host: 'test-sp',
+        audience: 'apes',
         grant_type: grantType,
         permissions: ['read'],
       },

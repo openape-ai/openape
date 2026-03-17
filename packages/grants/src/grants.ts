@@ -171,11 +171,11 @@ export async function createDelegation(
     type: 'delegation',
     request: {
       requester: params.delegator,
-      target: params.audience,
+      target_host: params.audience,
+      audience: params.audience,
       grant_type: params.grant_type,
       delegator: params.delegator,
       delegate: params.delegate,
-      audience: params.audience,
       scopes: params.scopes,
       duration: params.duration,
     },

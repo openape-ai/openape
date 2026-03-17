@@ -1,31 +1,42 @@
 import { execFileSync } from 'node:child_process'
+import { hostname } from 'node:os'
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { getIdpUrl, loadAuth, loadConfig } from '../config'
+import { getIdpUrl, loadAuth } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
 
-export const execCommand = defineCommand({
+export const runCommand = defineCommand({
   meta: {
-    name: 'exec',
-    description: 'Request grant, wait for approval, execute via apes',
+    name: 'run',
+    description: 'Request grant for audience, wait for approval, execute',
   },
   args: {
-    'command': {
+    'audience': {
       type: 'positional',
-      description: 'Command to execute (after --)',
+      description: 'Service identifier (e.g. "apes", "proxy")',
       required: true,
+    },
+    'action': {
+      type: 'positional',
+      description: 'Action or command to execute',
+      required: true,
+    },
+    'approval': {
+      type: 'string',
+      description: 'Approval type: once, timed, always',
+      default: 'once',
     },
     'reason': {
       type: 'string',
       description: 'Reason for the request',
     },
-    'for': {
+    'run-as': {
       type: 'string',
-      description: 'Target user email (owner/approver)',
+      description: 'Execute as this user identity',
     },
-    'approval': {
+    'host': {
       type: 'string',
-      description: 'Approval type: once, timed, always',
+      description: 'Target host (default: system hostname)',
     },
     'apes-path': {
       type: 'string',
@@ -40,32 +51,23 @@ export const execCommand = defineCommand({
       return process.exit(1)
     }
 
-    const config = loadConfig()
-    const forUser = args.for || config.defaults?.for
-    const approval = args.approval || config.defaults?.approval || 'once'
-
-    if (!forUser) {
-      consola.error('Target user required. Use --for <email> or set defaults.for in config.')
-      return process.exit(1)
-    }
-
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
-    const command = args.command.split(' ')
+    const command = args.action.split(' ')
+    const targetHost = args.host || hostname()
 
     // Step 1: Request grant
-    consola.info(`Requesting grant for: ${command.join(' ')}`)
+    consola.info(`Requesting ${args.audience} grant on ${targetHost}: ${command.join(' ')}`)
     const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
       method: 'POST',
       body: {
-        type: 'command',
         requester: auth.email,
-        owner: forUser,
-        request: {
-          command,
-          grant_type: approval,
-          reason: args.reason || command.join(' '),
-        },
+        target_host: targetHost,
+        audience: args.audience,
+        grant_type: args.approval,
+        command,
+        reason: args.reason || command.join(' '),
+        ...(args['run-as'] ? { run_as: args['run-as'] } : {}),
       },
     })
     consola.success(`Grant requested: ${grant.id}`)
@@ -76,19 +78,26 @@ export const execCommand = defineCommand({
 
     // Step 3: Get grant token
     consola.info('Fetching grant token...')
-    const { token } = await apiFetch<{ token: string }>(`${grantsUrl}/${grant.id}/token`, {
+    const { authz_jwt } = await apiFetch<{ authz_jwt: string }>(`${grantsUrl}/${grant.id}/token`, {
       method: 'POST',
     })
 
-    // Step 4: Execute via apes
-    consola.info(`Executing: ${command.join(' ')}`)
-    try {
-      execFileSync(args['apes-path'], ['--grant', token, '--', ...command], {
-        stdio: 'inherit',
-      })
-    } catch (err: unknown) {
-      const exitCode = (err as { status?: number }).status || 1
-      process.exit(exitCode)
+    // Step 4: Execute or output token
+    if (args.audience === 'apes') {
+      consola.info(`Executing: ${command.join(' ')}`)
+      try {
+        execFileSync(args['apes-path'], ['--grant', authz_jwt, '--', ...command], {
+          stdio: 'inherit',
+        })
+      }
+      catch (err: unknown) {
+        const exitCode = (err as { status?: number }).status || 1
+        process.exit(exitCode)
+      }
+    }
+    else {
+      // For non-apes audiences, output the token
+      process.stdout.write(authz_jwt)
     }
   },
 })
