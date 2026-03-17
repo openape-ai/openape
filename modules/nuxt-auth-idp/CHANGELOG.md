@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+### Patch Changes
+
+- Security: grant approve/deny now requires agent owner or approver (admin bypass removed). Grant list restricted to own agents for all users.
+
 ## 0.7.2
 
 ### Patch Changes
