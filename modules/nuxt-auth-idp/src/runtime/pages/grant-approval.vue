@@ -153,6 +153,10 @@ async function handleDeny() {
                   <dt class="text-muted">Type</dt>
                   <dd class="font-mono text-sm">{{ (grant as any).request?.grant_type }}</dd>
                 </div>
+                <div v-if="(grant as any).request?.run_as">
+                  <dt class="text-muted">Run as</dt>
+                  <dd class="font-mono text-sm">{{ (grant as any).request.run_as }}</dd>
+                </div>
                 <div v-if="(grant as any).request?.command?.length">
                   <dt class="text-muted mb-1">Command</dt>
                   <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words">{{ (grant as any).request.command.join(' ') }}</dd>
@@ -209,6 +213,10 @@ async function handleDeny() {
                 <div>
                   <dt class="text-muted">Target</dt>
                   <dd class="font-mono text-sm">{{ (grant as any).request?.target }}</dd>
+                </div>
+                <div v-if="(grant as any).request?.run_as">
+                  <dt class="text-muted">Run as</dt>
+                  <dd class="font-mono text-sm">{{ (grant as any).request.run_as }}</dd>
                 </div>
                 <div v-if="(grant as any).request?.command?.length">
                   <dt class="text-muted">Command</dt>
