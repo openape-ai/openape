@@ -1,6 +1,6 @@
 import { approveGrant, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
-import { isAdmin, requireAuth } from '../../../utils/admin'
+import { requireAuth } from '../../../utils/admin'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
@@ -22,8 +22,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const agent = await agentStore.findByEmail(grant.request.requester)
-  if (agent && agent.approver !== email && !isAdmin(email)) {
-    throw createProblemError({ status: 403, title: 'Only the agent approver or admin can approve this grant' })
+  if (!agent) {
+    throw createProblemError({ status: 403, title: 'Agent not found for this grant' })
+  }
+  const isOwnerOrApprover = agent.owner === email || agent.approver === email
+  if (!isOwnerOrApprover) {
+    throw createProblemError({ status: 403, title: 'Only the agent owner or approver can approve this grant' })
   }
 
   try {
