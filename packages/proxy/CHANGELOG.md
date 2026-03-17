@@ -1,8 +1,8 @@
-# Changelog
+# @openape/proxy
 
-## 0.7.0
+## 0.2.2
 
-### Minor Changes
+### Patch Changes
 
 - [#1](https://github.com/openape-ai/openape/pull/1) [`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Align implementation with DDISA spec v1.0-draft
 
@@ -38,22 +38,6 @@
 
   - Update `GrantsClient` to use `targetHost` + `audience` parameters
 
-### Patch Changes
-
 - Updated dependencies [[`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f)]:
   - @openape/core@0.6.0
   - @openape/grants@0.4.0
-  - @openape/auth@0.5.2
-
-## 0.6.2
-
-### Patch Changes
-
-- Updated dependencies []:
-  - @openape/auth@0.5.1
-
-## 0.6.1
-
-### Patch Changes
-
-- Auto-rotate incompatible signing keys in IDP key store. Old ES256 keys from before the EdDSA migration are now deactivated automatically instead of crashing the token exchange.
