@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Patch Changes
+
+- Relicense from AGPL-3.0-or-later to MIT, rename OpenAPE to OpenApe
+
 ## 0.7.0
 
 ### Minor Changes
