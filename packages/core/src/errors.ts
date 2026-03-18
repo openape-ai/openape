@@ -51,7 +51,7 @@ export function unsupportedAuthMethod(detail?: string): ProblemDetails {
   return createProblemDetails({ type: `${DDISA_ERROR_BASE}unsupported_auth_method`, title: 'Unsupported authentication method', status: 400, detail })
 }
 
-// --- OpenAPE errors (grants.md §9) ---
+// --- OpenApe errors (grants.md §9) ---
 
 export function grantNotFound(detail?: string): ProblemDetails {
   return createProblemDetails({ type: `${OPENAPE_ERROR_BASE}grant_not_found`, title: 'Grant not found', status: 404, detail })

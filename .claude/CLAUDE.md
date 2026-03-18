@@ -1,10 +1,10 @@
-# OpenAPE Monorepo
+# OpenApe Monorepo
 
 ## Project Overview
 
-OpenAPE implements the **DDISA protocol** (DNS-Discoverable Identity & Service Authorization) — decentralized identity and authorization for the open web. It uses WebAuthn passkeys, DNS TXT record discovery, and grant-based authorization.
+OpenApe implements the **DDISA protocol** (DNS-Discoverable Identity & Service Authorization) — decentralized identity and authorization for the open web. It uses WebAuthn passkeys, DNS TXT record discovery, and grant-based authorization.
 
-- **License:** AGPL-3.0-or-later
+- **License:** MIT
 - **Author:** Patrick Hofmann (Delta Mind GmbH)
 - **Node.js:** >=22
 - **Package Manager:** pnpm (workspace monorepo)
@@ -129,7 +129,7 @@ Ohne bestandene Checks: kein Commit, kein Deploy.
 
 ## DDISA Protocol Compliance
 
-OpenAPE implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol`.
+OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol`.
 
 **Pflicht bei jeder Änderung an protokollrelevanten Dateien:**
 

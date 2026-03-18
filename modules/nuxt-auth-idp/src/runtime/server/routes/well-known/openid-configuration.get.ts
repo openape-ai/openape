@@ -28,7 +28,7 @@ export default defineEventHandler(() => {
     ddisa_agent_challenge_endpoint: `${issuer}/api/agent/challenge`,
     ddisa_agent_authenticate_endpoint: `${issuer}/api/agent/authenticate`,
 
-    // OpenAPE extensions
+    // OpenApe extensions
     openape_grants_endpoint: `${issuer}/api/grants`,
     openape_delegations_endpoint: `${issuer}/api/delegations`,
     openape_grant_types_supported: ['once', 'timed', 'always'],

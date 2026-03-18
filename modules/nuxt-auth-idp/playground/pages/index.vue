@@ -54,7 +54,7 @@ async function handleLogout() {
           Playground IdP
         </h1>
         <p class="text-center text-sm text-muted mt-2">
-          OpenAPE Identity Provider Playground
+          OpenApe Identity Provider Playground
         </p>
       </template>
 

@@ -21,7 +21,7 @@ const main = defineCommand({
   meta: {
     name: 'grapes',
     version: '0.1.0',
-    description: 'Universal Grant Management CLI for OpenAPE',
+    description: 'Universal Grant Management CLI for OpenApe',
   },
   subCommands: {
     login: loginCommand,
