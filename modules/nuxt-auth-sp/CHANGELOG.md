@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.5
+
+### Patch Changes
+
+- Relicense from AGPL-3.0-or-later to MIT, rename OpenAPE to OpenApe
+
+- Updated dependencies []:
+  - @openape/core@0.7.1
+  - @openape/auth@0.5.4
+
 ## 0.6.4
 
 ### Patch Changes

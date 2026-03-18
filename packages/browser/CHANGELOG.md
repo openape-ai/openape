@@ -1,5 +1,14 @@
 # @openape/browser
 
+## 0.1.3
+
+### Patch Changes
+
+- Relicense from AGPL-3.0-or-later to MIT, rename OpenAPE to OpenApe
+
+- Updated dependencies []:
+  - @openape/core@0.7.1
+
 ## 0.1.2
 
 ### Patch Changes

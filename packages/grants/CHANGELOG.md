@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- Fix: token endpoint now rejects expired timed grants via introspectGrant, defensive exp check in issueAuthzJWT
+
+- Relicense from AGPL-3.0-or-later to MIT, rename OpenAPE to OpenApe
+
+- Updated dependencies []:
+  - @openape/core@0.7.1
+
 ## 0.5.0
 
 ### Minor Changes

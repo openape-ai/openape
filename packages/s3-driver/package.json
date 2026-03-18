@@ -1,6 +1,6 @@
 {
   "name": "@openape/unstorage-s3-driver",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "S3-compatible unstorage driver (works with Exoscale SOS, MinIO, etc.)",
   "type": "module",
   "main": "dist/index.js",
