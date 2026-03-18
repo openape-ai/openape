@@ -10,7 +10,7 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxi prepare && nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "nuxi prepare && vitest run"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
