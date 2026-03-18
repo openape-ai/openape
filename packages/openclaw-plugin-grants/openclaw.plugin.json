@@ -1,0 +1,63 @@
+{
+  "name": "openclaw-plugin-grants",
+  "version": "0.1.0",
+  "description": "Grant-based command execution with granular adapter permissions",
+  "entry": "dist/index.js",
+  "capabilities": {
+    "tools": ["grant_exec"],
+    "hooks": ["before_tool_call"],
+    "httpRoutes": ["/grants/.well-known/jwks.json"],
+    "cli": ["grants"]
+  },
+  "config": {
+    "mode": {
+      "type": "string",
+      "enum": ["local", "idp"],
+      "default": "local",
+      "description": "Grant approval mode: local (channel-approval) or idp (federation)"
+    },
+    "audience": {
+      "type": "string",
+      "default": "openclaw",
+      "description": "JWT audience claim"
+    },
+    "defaultApproval": {
+      "type": "string",
+      "enum": ["once", "timed", "always"],
+      "default": "once",
+      "description": "Default grant approval type"
+    },
+    "adapterPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Additional adapter search directories"
+    },
+    "agentEmail": {
+      "type": "string",
+      "description": "Agent email for IdP mode (DNS discovery)"
+    },
+    "agentKeyPath": {
+      "type": "string",
+      "description": "Path to Ed25519 private key for IdP mode"
+    },
+    "idpUrl": {
+      "type": "string",
+      "description": "Pin IdP URL (skip DNS discovery)"
+    },
+    "apes": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "binaryPath": { "type": "string", "default": "apes" }
+      }
+    },
+    "pollIntervalMs": {
+      "type": "number",
+      "default": 3000
+    },
+    "pollTimeoutMs": {
+      "type": "number",
+      "default": 300000
+    }
+  }
+}
