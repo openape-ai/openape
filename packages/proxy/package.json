@@ -4,7 +4,7 @@
   "version": "0.2.3",
   "description": "OpenApe agent HTTP gateway — forward proxy with grant-based access control",
   "author": "Patrick Hofmann",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "bin": {
     "openape-proxy": "./src/index.ts"
   },

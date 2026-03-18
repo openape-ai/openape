@@ -2,7 +2,7 @@
   "name": "@openape/browser",
   "type": "module",
   "version": "0.1.2",
-  "description": "Grant-aware headless browser for OpenAPE — Playwright wrapper with route interception, grants, and delegation login",
+  "description": "Grant-aware headless browser for OpenApe — Playwright wrapper with route interception, grants, and delegation login",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

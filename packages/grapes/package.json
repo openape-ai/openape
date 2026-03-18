@@ -1,7 +1,7 @@
 {
   "name": "@openape/grapes",
   "version": "0.3.2",
-  "description": "Universal Grant Management CLI for OpenAPE",
+  "description": "Universal Grant Management CLI for OpenApe",
   "type": "module",
   "bin": {
     "grapes": "./dist/cli.js"
@@ -26,7 +26,7 @@
     "typescript": "^5.8.2",
     "vitest": "^3.2.4"
   },
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>",
   "publishConfig": {
     "access": "public"

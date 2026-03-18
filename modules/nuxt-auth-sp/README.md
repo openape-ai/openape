@@ -119,4 +119,4 @@ See the [examples](../examples) directory for a fully working SP setup.
 
 ## License
 
-[AGPL-3.0-or-later](./LICENSE)
+[MIT](./LICENSE)
