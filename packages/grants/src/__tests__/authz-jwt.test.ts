@@ -96,6 +96,25 @@ describe('authZ-JWT', () => {
       ).rejects.toThrow('Timed grant missing expires_at')
     })
 
+    it('rejects timed grant with expires_at in the past', async () => {
+      const { privateKey } = await generateKeyPair()
+      const now = Math.floor(Date.now() / 1000)
+      const grant = makeApprovedGrant({
+        request: {
+          requester: 'agent@example.com',
+          target_host: 'macmini',
+          audience: 'apes',
+          grant_type: 'timed',
+          duration: 3600,
+        },
+        expires_at: now - 100,
+      })
+
+      await expect(
+        issueAuthzJWT(grant, 'https://openape.example.com', privateKey),
+      ).rejects.toThrow('Grant has already expired')
+    })
+
     it('includes kid in JWT header when provided', async () => {
       const { privateKey, publicKey } = await generateKeyPair()
       const grant = makeApprovedGrant()
