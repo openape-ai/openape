@@ -40,6 +40,10 @@ export async function issueAuthzJWT(
       break
   }
 
+  if (exp <= now) {
+    throw new Error('Grant has already expired')
+  }
+
   const claims: OpenApeAuthZClaims = {
     iss: issuer,
     sub: grant.request.requester,

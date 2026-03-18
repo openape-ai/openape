@@ -1,4 +1,4 @@
-import { issueAuthzJWT } from '@openape/grants'
+import { introspectGrant, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { tryAgentAuth } from '../../../utils/agent-auth'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
   }
 
-  const grant = await grantStore.findById(id)
+  const grant = await introspectGrant(id, grantStore)
   if (!grant) {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
