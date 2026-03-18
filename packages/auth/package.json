@@ -4,7 +4,7 @@
   "version": "0.5.3",
   "description": "OpenApe authentication: IdP + SP OIDC protocol logic",
   "author": "Delta Mind GmbH",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
