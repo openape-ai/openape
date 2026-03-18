@@ -7,6 +7,14 @@ import type {
   ToolResult,
 } from './types.js'
 import { DEFAULT_CONFIG } from './types.js'
+import { discoverAdapters } from './adapters/loader.js'
+import type { LoadedAdapter } from './adapters/types.js'
+import { GrantStore } from './store/grant-store.js'
+import { GrantCache } from './store/grant-cache.js'
+import { AuditLog } from './store/audit-log.js'
+import { LocalJwtSigner } from './local/local-jwt.js'
+import { ChannelApproval } from './approval/channel-approval.js'
+import { handleGrantExec } from './tools/grant-exec.js'
 
 export type { PluginApi, PluginConfig } from './types.js'
 export {
@@ -28,6 +36,13 @@ export type {
   ResolvedCommand,
   AdapterSearchPaths,
 } from './adapters/index.js'
+export { GrantStore } from './store/grant-store.js'
+export { GrantCache } from './store/grant-cache.js'
+export { AuditLog } from './store/audit-log.js'
+export { LocalJwtSigner } from './local/local-jwt.js'
+export { ChannelApproval } from './approval/channel-approval.js'
+export { executeCommand } from './execution/executor.js'
+export { handleGrantExec } from './tools/grant-exec.js'
 
 const BLOCKED_TOOLS = new Set(['exec', 'bash', 'shell', 'run_command'])
 
@@ -35,6 +50,35 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
   const config: PluginConfig = { ...DEFAULT_CONFIG, ...userConfig }
 
   api.log.info(`[grants] Initializing in ${config.mode} mode`)
+
+  // --- State ---
+  const stateDir = api.runtime.config.getStateDir()
+  const workspaceDir = api.runtime.config.getWorkspaceDir()
+
+  const store = new GrantStore(stateDir)
+  const cache = new GrantCache()
+  const audit = new AuditLog(stateDir)
+
+  // --- Adapters ---
+  const adapters: LoadedAdapter[] = discoverAdapters({
+    explicit: config.adapterPaths,
+    workspaceDir,
+  })
+  api.log.info(`[grants] Loaded ${adapters.length} adapters: ${adapters.map(a => a.adapter.cli.id).join(', ')}`)
+
+  // --- Local Mode Setup ---
+  let localJwt: LocalJwtSigner | null = null
+  let channelApproval: ChannelApproval | null = null
+
+  if (config.mode === 'local') {
+    localJwt = new LocalJwtSigner(stateDir)
+    channelApproval = new ChannelApproval(api, store, config.pollTimeoutMs)
+
+    // Init key pair asynchronously
+    localJwt.init().catch((error) => {
+      api.log.error(`[grants] Failed to init local JWT: ${error}`)
+    })
+  }
 
   // --- Tool: grant_exec ---
   api.registerTool({
@@ -64,11 +108,10 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
     },
     handler: async (input: ToolInput): Promise<ToolResult> => {
       api.log.info(`[grants] grant_exec called: ${input.command}`)
-      // Stub — full implementation in M3
-      return {
-        success: false,
-        error: 'grant_exec not yet implemented (stub)',
-      }
+      return handleGrantExec(
+        { config, api, adapters, store, cache, audit, localJwt, channelApproval },
+        input,
+      )
     },
   })
 
@@ -76,6 +119,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
   api.on('before_tool_call', async (context: HookContext): Promise<HookResult> => {
     if (BLOCKED_TOOLS.has(context.toolName)) {
       api.log.warn(`[grants] Blocked tool: ${context.toolName} — use grant_exec instead`)
+      audit.write({ event: 'exec_blocked', command: String(context.toolInput.command ?? context.toolName) })
       return {
         allow: false,
         message: `Direct command execution via "${context.toolName}" is disabled. Use grant_exec instead for authorized command execution.`,
@@ -88,12 +132,29 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
   api.registerHttpRoute({
     path: '/grants/.well-known/jwks.json',
     method: 'GET',
-    handler: async () => {
-      // Stub — full implementation in M3 (local JWT)
-      return {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: { keys: [] },
+    handler: async (): Promise<{ status: number, headers: Record<string, string>, body: unknown }> => {
+      if (!localJwt) {
+        return {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+          body: { error: 'JWKS not available in IdP mode' },
+        }
+      }
+
+      try {
+        const jwks = await localJwt.getJwks()
+        return {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+          body: jwks,
+        }
+      }
+      catch {
+        return {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: { error: 'JWKS not ready' },
+        }
       }
     },
   })
@@ -107,16 +168,24 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
         name: 'status',
         description: 'Show grant system status (mode, auth, active grants)',
         handler: async () => {
-          // Stub — full implementation in M6
           console.log(`Mode: ${config.mode}`)
-          console.log('Status: initialized (stub)')
+          console.log(`Adapters: ${adapters.length} loaded`)
+          console.log(`Active grants: ${store.getActiveGrantCount()}`)
+          console.log(`Cache entries: ${cache.size()}`)
         },
       },
       {
         name: 'list',
         description: 'List all grants',
         handler: async () => {
-          console.log('No grants yet (stub)')
+          const grants = store.listGrants()
+          if (grants.length === 0) {
+            console.log('No grants')
+            return
+          }
+          for (const g of grants) {
+            console.log(`${g.id} [${g.status}] ${g.permission} (${g.approval})`)
+          }
         },
       },
       {
@@ -128,14 +197,31 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
             console.error('Usage: openclaw grants revoke <grant-id>')
             return
           }
-          console.log(`Revoke grant ${id} (stub)`)
+          const success = store.revokeGrant(id)
+          if (success) {
+            cache.remove(store.getGrant(id)?.permission ?? '')
+            audit.write({ event: 'grant_revoked', grantId: id })
+            console.log(`Grant ${id} revoked`)
+          }
+          else {
+            console.error(`Grant ${id} not found or cannot be revoked`)
+          }
         },
       },
       {
         name: 'adapters',
         description: 'List loaded adapters and their operations',
         handler: async () => {
-          console.log('No adapters loaded yet (stub)')
+          if (adapters.length === 0) {
+            console.log('No adapters loaded')
+            return
+          }
+          for (const a of adapters) {
+            console.log(`\n${a.adapter.cli.id} (${a.adapter.cli.executable})`)
+            for (const op of a.adapter.operations) {
+              console.log(`  ${op.id}: ${op.display} [${op.risk}]`)
+            }
+          }
         },
       },
     ],
