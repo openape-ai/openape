@@ -15,6 +15,9 @@ import { AuditLog } from './store/audit-log.js'
 import { LocalJwtSigner } from './local/local-jwt.js'
 import { ChannelApproval } from './approval/channel-approval.js'
 import { handleGrantExec } from './tools/grant-exec.js'
+import { authenticateAgent, isTokenExpired } from './idp/auth.js'
+import type { AgentAuthState } from './idp/auth.js'
+import { discoverIdpUrl } from './idp/discovery.js'
 
 export type { PluginApi, PluginConfig } from './types.js'
 export {
@@ -43,6 +46,10 @@ export { LocalJwtSigner } from './local/local-jwt.js'
 export { ChannelApproval } from './approval/channel-approval.js'
 export { executeCommand } from './execution/executor.js'
 export { handleGrantExec } from './tools/grant-exec.js'
+export { authenticateAgent, isTokenExpired } from './idp/auth.js'
+export type { AgentAuthState } from './idp/auth.js'
+export { discoverIdpUrl, discoverEndpoints, getGrantsEndpoint, clearDiscoveryCache } from './idp/discovery.js'
+export { handleIdpGrantExec } from './idp/idp-grants.js'
 
 const BLOCKED_TOOLS = new Set(['exec', 'bash', 'shell', 'run_command'])
 
@@ -80,6 +87,31 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
     })
   }
 
+  // --- IdP Mode Setup ---
+  let idpAuthState: AgentAuthState | null = null
+
+  if (config.mode === 'idp') {
+    if (!config.agentEmail || !config.agentKeyPath) {
+      api.log.error('[grants] IdP mode requires agentEmail and agentKeyPath')
+    }
+    else {
+      // Init auth asynchronously
+      discoverIdpUrl(config.agentEmail, config.idpUrl)
+        .then(idpUrl => authenticateAgent({
+          idpUrl,
+          email: config.agentEmail!,
+          keyPath: config.agentKeyPath!,
+        }))
+        .then((state) => {
+          idpAuthState = state
+          api.log.info(`[grants] IdP auth OK: ${state.email} @ ${state.idpUrl}`)
+        })
+        .catch((error) => {
+          api.log.error(`[grants] IdP auth failed: ${error}`)
+        })
+    }
+  }
+
   // --- Tool: grant_exec ---
   api.registerTool({
     name: 'grant_exec',
@@ -109,7 +141,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
     handler: async (input: ToolInput): Promise<ToolResult> => {
       api.log.info(`[grants] grant_exec called: ${input.command}`)
       return handleGrantExec(
-        { config, api, adapters, store, cache, audit, localJwt, channelApproval },
+        { config, api, adapters, store, cache, audit, localJwt, channelApproval, idpAuthState },
         input,
       )
     },
