@@ -7,6 +7,8 @@ import { AuditLog } from '../store/audit-log.js'
 import { LocalJwtSigner } from '../local/local-jwt.js'
 import { ChannelApproval } from '../approval/channel-approval.js'
 import { executeCommand } from '../execution/executor.js'
+import { handleIdpGrantExec } from '../idp/idp-grants.js'
+import type { AgentAuthState } from '../idp/auth.js'
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext } from '@openape/core'
 
 export interface GrantExecContext {
@@ -18,6 +20,7 @@ export interface GrantExecContext {
   audit: AuditLog
   localJwt: LocalJwtSigner | null
   channelApproval: ChannelApproval | null
+  idpAuthState: AgentAuthState | null
 }
 
 export async function handleGrantExec(
@@ -118,8 +121,19 @@ export async function handleGrantExec(
     return doExecute(ctx, argv, input, jwt)
   }
 
-  // IdP mode handled in M4
-  return { success: false, error: `Mode "${config.mode}" not yet implemented` }
+  // IdP mode
+  if (config.mode === 'idp') {
+    if (!ctx.idpAuthState) {
+      return { success: false, error: 'IdP authentication not available. Check agentEmail and agentKeyPath config.' }
+    }
+
+    return handleIdpGrantExec(
+      { config, api, authState: ctx.idpAuthState, store, cache, audit },
+      { resolved: resolution.resolved, fallback: resolution.fallback, command: input.command, reason: input.reason, privileged: input.privileged },
+    )
+  }
+
+  return { success: false, error: `Unknown mode: ${config.mode}` }
 }
 
 async function doExecute(
