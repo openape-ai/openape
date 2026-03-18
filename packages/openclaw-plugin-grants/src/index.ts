@@ -9,6 +9,25 @@ import type {
 import { DEFAULT_CONFIG } from './types.js'
 
 export type { PluginApi, PluginConfig } from './types.js'
+export {
+  parseAdapterToml,
+  resolveCommand,
+  resolveCommandFromAdapters,
+  createFallbackCommand,
+  parseCommandString,
+  loadAdapter,
+  loadAdapterFromFile,
+  discoverAdapters,
+} from './adapters/index.js'
+export type {
+  AdapterDefinition,
+  AdapterOperation,
+  CommandResolutionResult,
+  FallbackCommand,
+  LoadedAdapter,
+  ResolvedCommand,
+  AdapterSearchPaths,
+} from './adapters/index.js'
 
 const BLOCKED_TOOLS = new Set(['exec', 'bash', 'shell', 'run_command'])
 
