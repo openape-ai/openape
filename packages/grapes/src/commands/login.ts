@@ -13,7 +13,7 @@ const CLIENT_ID = 'grapes-cli'
 export const loginCommand = defineCommand({
   meta: {
     name: 'login',
-    description: 'Authenticate with an OpenAPE IdP',
+    description: 'Authenticate with an OpenApe IdP',
   },
   args: {
     idp: {

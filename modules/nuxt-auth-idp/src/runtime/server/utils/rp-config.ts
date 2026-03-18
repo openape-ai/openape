@@ -7,7 +7,7 @@ export function getRPConfig(): RPConfig {
     if (event?.context?.openapeRpConfig) {
       const tenant = event.context.openapeRpConfig as Partial<RPConfig>
       return {
-        rpName: tenant.rpName || 'OpenAPE Identity Server',
+        rpName: tenant.rpName || 'OpenApe Identity Server',
         rpID: tenant.rpID || 'localhost',
         origin: tenant.origin || `https://${tenant.rpID}`,
         requireUserVerification: tenant.requireUserVerification ?? false,
@@ -21,7 +21,7 @@ export function getRPConfig(): RPConfig {
   const config = useRuntimeConfig()
   const idpConfig = (config.openapeIdp || {}) as Record<string, any>
 
-  const rpName = (idpConfig.rpName || 'OpenAPE Identity Server').trim()
+  const rpName = (idpConfig.rpName || 'OpenApe Identity Server').trim()
   const rpID = (idpConfig.rpID || idpConfig.rpId || idpConfig.rpid || idpConfig.rPID || idpConfig.rp_id || 'localhost').trim()
   const origin = (idpConfig.rpOrigin || idpConfig.rporigin || `http://${rpID}:3000`).trim()
   if (rpID === 'localhost') {

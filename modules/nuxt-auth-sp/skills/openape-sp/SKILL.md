@@ -1,6 +1,6 @@
 ---
 name: openape-sp
-description: Integrate DDISA login into a Nuxt app using the @openape/nuxt-auth-sp Service Provider module. Use when adding passwordless authentication via OpenAPE IdP with DNS discovery, PKCE, and grant-based authorization.
+description: Integrate DDISA login into a Nuxt app using the @openape/nuxt-auth-sp Service Provider module. Use when adding passwordless authentication via OpenApe IdP with DNS discovery, PKCE, and grant-based authorization.
 metadata:
   openclaw:
     emoji: "\U0001F310"
@@ -9,7 +9,7 @@ metadata:
         - NUXT_SESSION_SECRET
 ---
 
-# OpenAPE Service Provider (Nuxt Module)
+# OpenApe Service Provider (Nuxt Module)
 
 Nuxt module that adds DDISA-based authentication to any Nuxt app. Users log in with their email — the SP discovers their IdP via DNS, performs a PKCE OAuth flow, and establishes an authenticated session.
 
