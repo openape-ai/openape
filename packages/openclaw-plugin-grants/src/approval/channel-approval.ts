@@ -3,10 +3,10 @@ import type { GrantRecord } from '../types.js'
 import type { GrantStore } from '../store/grant-store.js'
 
 const RISK_EMOJI: Record<string, string> = {
-  low: '\u{1f7e2}',     // green circle
-  medium: '\u{1f7e1}',  // yellow circle
-  high: '\u{1f534}',    // red circle
-  critical: '\u{26d4}', // no entry
+  low: '\u{1F7E2}',     // green circle
+  medium: '\u{1F7E1}',  // yellow circle
+  high: '\u{1F534}',    // red circle
+  critical: '\u{26D4}', // no entry
 }
 
 export class ChannelApproval {
@@ -24,9 +24,9 @@ export class ChannelApproval {
   }
 
   async requestApproval(grant: GrantRecord): Promise<{ approved: boolean, approval?: 'once' | 'timed' | 'always' }> {
-    const emoji = RISK_EMOJI[grant.risk] ?? '\u{1f50d}'
+    const emoji = RISK_EMOJI[grant.risk] ?? '\u{1F50D}'
     const message = [
-      `\u{1f510} Grant Request ${emoji} [${grant.risk} risk]`,
+      `\u{1F510} Grant Request ${emoji} [${grant.risk} risk]`,
       `Operation: ${grant.display}`,
       `Permission: ${grant.permission}`,
       grant.reason ? `Reason: ${grant.reason}` : '',

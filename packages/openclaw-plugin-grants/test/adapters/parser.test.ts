@@ -15,7 +15,7 @@ describe('parseCommandString', () => {
   })
 
   it('handles single quotes', () => {
-    expect(parseCommandString("echo 'hello world'")).toEqual(['echo', 'hello world'])
+    expect(parseCommandString('echo \'hello world\'')).toEqual(['echo', 'hello world'])
   })
 
   it('handles multiple spaces', () => {
