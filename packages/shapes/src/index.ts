@@ -1,3 +1,5 @@
 export { loadAdapter, resolveAdapterPath } from './adapters.js'
+export { resolveCapabilityRequest } from './capabilities.js'
 export { resolveCommand } from './parser.js'
-export type { LoadedAdapter, ResolvedCommand, ShapesAdapter, ShapesOperation } from './types.js'
+export { buildExactCommandGrantRequest, buildStructuredCliGrantRequest } from './request-builders.js'
+export type { BuiltGrantRequest, GrantRequestOptions, LoadedAdapter, ResolvedCapability, ResolvedCommand, ShapesAdapter, ShapesOperation } from './types.js'

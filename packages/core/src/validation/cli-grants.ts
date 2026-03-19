@@ -123,6 +123,10 @@ function resourceRefCovers(granted: OpenApeCliResourceRef, required: OpenApeCliR
   return Object.entries(grantedSelector).every(([key, value]) => requiredSelector[key] === value)
 }
 
+export function isCliAuthorizationDetailExact(detail: Pick<OpenApeCliAuthorizationDetail, 'constraints'>): boolean {
+  return detail.constraints?.exact_command === true
+}
+
 export function cliAuthorizationDetailCovers(
   granted: OpenApeCliAuthorizationDetail,
   required: OpenApeCliAuthorizationDetail,
@@ -137,6 +141,15 @@ export function cliAuthorizationDetailCovers(
     return false
 
   return granted.resource_chain.every((resource, index) => resourceRefCovers(resource, required.resource_chain[index]!))
+}
+
+export function cliAuthorizationDetailsCover(
+  grantedDetails: OpenApeCliAuthorizationDetail[],
+  requiredDetails: OpenApeCliAuthorizationDetail[],
+): boolean {
+  return requiredDetails.every(required =>
+    grantedDetails.some(granted => cliAuthorizationDetailCovers(granted, required)),
+  )
 }
 
 export async function computeArgvHash(argv: string[]): Promise<string> {

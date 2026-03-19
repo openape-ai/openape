@@ -29,6 +29,7 @@ const PACKAGES = [
   { name: '@openape/auth', dir: 'packages/auth' },
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/browser', dir: 'packages/browser' },
+  { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/grapes', dir: 'packages/grapes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/openclaw-plugin-grants', dir: 'packages/openclaw-plugin-grants' },

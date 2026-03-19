@@ -103,10 +103,10 @@ export interface OpenApeCliResourceRef {
 
 /** Execution-time context for a wrapped command */
 export interface OpenApeExecutionContext {
-  /** Full argv, including executable */
-  argv: string[]
+  /** Full argv, including executable, when bound to a concrete command */
+  argv?: string[]
   /** Stable hash of argv for exact-command binding */
-  argv_hash: string
+  argv_hash?: string
   /** Adapter identifier */
   adapter_id: string
   /** Adapter schema/version string */
