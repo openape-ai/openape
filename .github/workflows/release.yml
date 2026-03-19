@@ -13,15 +13,28 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build
+      - name: Build publishable packages only
+        run: >-
+          pnpm turbo run build
+          --filter=@openape/core
+          --filter=@openape/auth
+          --filter=@openape/grants
+          --filter=@openape/grapes
+          --filter=@openape/proxy
+          --filter=@openape/browser
+          --filter=@openape/unstorage-s3-driver
+          --filter=@openape/openclaw-plugin-grants
+          --filter=@openape/shapes
+          --filter=@openape/nuxt-auth-idp
+          --filter=@openape/nuxt-auth-sp
       - uses: changesets/action@v1
         with:
           publish: pnpm release
