@@ -1,113 +1,114 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { navigateTo, useIdpAuth } from "#imports";
-import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from "../utils/cli-grants";
-const { user, loading: authLoading, fetchUser } = useIdpAuth();
-const grants = ref([]);
-const loading = ref(true);
-const actionError = ref("");
-const grantTypeSelections = ref({});
-const durationPresetSelections = ref({});
-const customDurations = ref({});
+import { computed, onMounted, ref } from 'vue'
+import { navigateTo, useIdpAuth } from '#imports'
+import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const grants = ref([])
+const loading = ref(true)
+const actionError = ref('')
+const grantTypeSelections = ref({})
+const durationPresetSelections = ref({})
+const customDurations = ref({})
 const DURATION_PRESETS = [
-  { label: "1 hour", value: "3600" },
-  { label: "4 hours", value: "14400" },
-  { label: "1 day", value: "86400" },
-  { label: "1 week", value: "604800" },
-  { label: "Custom", value: "custom" }
-];
+  { label: '1 hour', value: '3600' },
+  { label: '4 hours', value: '14400' },
+  { label: '1 day', value: '86400' },
+  { label: '1 week', value: '604800' },
+  { label: 'Custom', value: 'custom' }
+]
 const GRANT_TYPE_OPTIONS = [
-  { label: "Once", value: "once", description: "Single use only" },
-  { label: "Timed", value: "timed", description: "Time-limited" },
-  { label: "Always", value: "always", description: "Until revoked" }
-];
+  { label: 'Once', value: 'once', description: 'Single use only' },
+  { label: 'Timed', value: 'timed', description: 'Time-limited' },
+  { label: 'Always', value: 'always', description: 'Until revoked' }
+]
 function getEffectiveDuration(grantId) {
-  if (grantTypeSelections.value[grantId] !== "timed") return void 0;
-  const preset = durationPresetSelections.value[grantId] ?? "3600";
-  return preset === "custom" ? customDurations.value[grantId] ?? 3600 : Number(preset);
+  if (grantTypeSelections.value[grantId] !== 'timed') return void 0
+  const preset = durationPresetSelections.value[grantId] ?? '3600'
+  return preset === 'custom' ? customDurations.value[grantId] ?? 3600 : Number(preset)
 }
-const pendingGrants = computed(() => grants.value.filter((g) => g.status === "pending"));
-const activeGrants = computed(() => grants.value.filter((g) => g.status === "approved" && g.request.grant_type !== "once"));
-const historyGrants = computed(() => grants.value.filter((g) => g.status !== "pending" && !(g.status === "approved" && g.request.grant_type !== "once")));
+const pendingGrants = computed(() => grants.value.filter(g => g.status === 'pending'))
+const activeGrants = computed(() => grants.value.filter(g => g.status === 'approved' && g.request.grant_type !== 'once'))
+const historyGrants = computed(() => grants.value.filter(g => g.status !== 'pending' && !(g.status === 'approved' && g.request.grant_type !== 'once')))
 onMounted(async () => {
-  await fetchUser();
+  await fetchUser()
   if (!user.value) {
-    await navigateTo("/login");
-    return;
+    await navigateTo('/login')
+    return
   }
-  await loadGrants();
-});
+  await loadGrants()
+})
 async function loadGrants() {
-  loading.value = true;
+  loading.value = true
   try {
-    const response = await $fetch("/api/grants");
-    grants.value = response.data;
+    const response = await $fetch('/api/grants')
+    grants.value = response.data
     for (const g of response.data) {
-      if (g.status === "pending" && !grantTypeSelections.value[g.id]) {
-        grantTypeSelections.value[g.id] = "once";
-        durationPresetSelections.value[g.id] = "3600";
-        customDurations.value[g.id] = 3600;
+      if (g.status === 'pending' && !grantTypeSelections.value[g.id]) {
+        grantTypeSelections.value[g.id] = 'once'
+        durationPresetSelections.value[g.id] = '3600'
+        customDurations.value[g.id] = 3600
       }
     }
   } catch {
-    grants.value = [];
+    grants.value = []
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 async function approveGrant(id) {
-  actionError.value = "";
+  actionError.value = ''
   try {
-    const grantType = grantTypeSelections.value[id] ?? "once";
+    const grantType = grantTypeSelections.value[id] ?? 'once'
     await $fetch(`/api/grants/${id}/approve`, {
-      method: "POST",
+      method: 'POST',
       body: {
         grant_type: grantType,
-        ...grantType === "timed" ? { duration: getEffectiveDuration(id) } : {}
+        ...grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {}
       }
-    });
-    await loadGrants();
+    })
+    await loadGrants()
   } catch (err) {
-    const e = err;
-    actionError.value = e.data?.statusMessage ?? "Failed to approve grant";
+    const e = err
+    actionError.value = e.data?.statusMessage ?? 'Failed to approve grant'
   }
 }
 async function denyGrant(id) {
-  actionError.value = "";
+  actionError.value = ''
   try {
-    await $fetch(`/api/grants/${id}/deny`, { method: "POST" });
-    await loadGrants();
+    await $fetch(`/api/grants/${id}/deny`, { method: 'POST' })
+    await loadGrants()
   } catch (err) {
-    const e = err;
-    actionError.value = e.data?.statusMessage ?? "Failed to deny grant";
+    const e = err
+    actionError.value = e.data?.statusMessage ?? 'Failed to deny grant'
   }
 }
 async function revokeGrant(id) {
-  actionError.value = "";
+  actionError.value = ''
   try {
-    await $fetch(`/api/grants/${id}/revoke`, { method: "POST" });
-    await loadGrants();
+    await $fetch(`/api/grants/${id}/revoke`, { method: 'POST' })
+    await loadGrants()
   } catch (err) {
-    const e = err;
-    actionError.value = e.data?.statusMessage ?? "Failed to revoke grant";
+    const e = err
+    actionError.value = e.data?.statusMessage ?? 'Failed to revoke grant'
   }
 }
 function formatRequester(requester) {
-  if (requester.startsWith("agent:"))
-    return `Agent ${requester.slice(6, 14)}...`;
-  return requester;
+  if (requester.startsWith('agent:'))
+    return `Agent ${requester.slice(6, 14)}...`
+  return requester
 }
 function formatTime(ts) {
-  return new Date(ts * 1e3).toLocaleString();
+  return new Date(ts * 1e3).toLocaleString()
 }
 function cliSummary(grant) {
-  return summarizeCliGrant(grant.request.authorization_details);
+  return summarizeCliGrant(grant.request.authorization_details)
 }
 function cliDetails(grant) {
-  return getCliAuthorizationDetails(grant.request.authorization_details);
+  return getCliAuthorizationDetails(grant.request.authorization_details)
 }
 function isExactCommand(detail) {
-  return detail.constraints?.exact_command === true;
+  return detail.constraints?.exact_command === true
 }
 </script>
 

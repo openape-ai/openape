@@ -1,114 +1,115 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
-import { navigateTo, useIdpAuth, useRoute } from "#imports";
-import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from "../utils/cli-grants";
-const { user, loading: authLoading, fetchUser } = useIdpAuth();
-const route = useRoute();
-const grant = ref(null);
-const loading = ref(true);
-const error = ref("");
-const processing = ref(false);
-const grantId = computed(() => route.query.grant_id);
-const callbackUrl = computed(() => route.query.callback);
-const isDelegate = computed(() => grant.value?.request?.permissions?.includes("delegate"));
-const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details));
-const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details));
+import { computed, onMounted, ref } from 'vue'
+import { navigateTo, useIdpAuth, useRoute } from '#imports'
+import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const route = useRoute()
+const grant = ref(null)
+const loading = ref(true)
+const error = ref('')
+const processing = ref(false)
+const grantId = computed(() => route.query.grant_id)
+const callbackUrl = computed(() => route.query.callback)
+const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
+const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
+const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 const delegateDuration = computed(() => {
-  const req = grant.value?.request;
-  if (!req?.duration) return null;
-  const h = Math.floor(req.duration / 3600);
-  const m = Math.floor(req.duration % 3600 / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-});
-const selectedGrantType = ref("once");
-const selectedDurationPreset = ref("3600");
-const customDuration = ref(3600);
+  const req = grant.value?.request
+  if (!req?.duration) return null
+  const h = Math.floor(req.duration / 3600)
+  const m = Math.floor(req.duration % 3600 / 60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+})
+const selectedGrantType = ref('once')
+const selectedDurationPreset = ref('3600')
+const customDuration = ref(3600)
 const DURATION_PRESETS = [
-  { label: "1 hour", value: "3600" },
-  { label: "4 hours", value: "14400" },
-  { label: "1 day", value: "86400" },
-  { label: "1 week", value: "604800" },
-  { label: "Custom", value: "custom" }
-];
+  { label: '1 hour', value: '3600' },
+  { label: '4 hours', value: '14400' },
+  { label: '1 day', value: '86400' },
+  { label: '1 week', value: '604800' },
+  { label: 'Custom', value: 'custom' }
+]
 const GRANT_TYPE_OPTIONS = [
-  { label: "Once", value: "once", description: "Single use only" },
-  { label: "Timed", value: "timed", description: "Time-limited" },
-  { label: "Always", value: "always", description: "Until revoked" }
-];
+  { label: 'Once', value: 'once', description: 'Single use only' },
+  { label: 'Timed', value: 'timed', description: 'Time-limited' },
+  { label: 'Always', value: 'always', description: 'Until revoked' }
+]
 const effectiveDuration = computed(() => {
-  if (selectedGrantType.value !== "timed") return void 0;
-  return selectedDurationPreset.value === "custom" ? customDuration.value : Number(selectedDurationPreset.value);
-});
+  if (selectedGrantType.value !== 'timed') return void 0
+  return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
+})
 onMounted(async () => {
-  await fetchUser();
+  await fetchUser()
   if (!user.value) {
-    const returnTo = `/grant-approval?${new URLSearchParams(route.query).toString()}`;
-    await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`);
-    return;
+    const returnTo = `/grant-approval?${new URLSearchParams(route.query).toString()}`
+    await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+    return
   }
   if (!grantId.value) {
-    error.value = "Missing grant_id parameter";
-    loading.value = false;
-    return;
+    error.value = 'Missing grant_id parameter'
+    loading.value = false
+    return
   }
   try {
-    grant.value = await $fetch(`/api/grants/${grantId.value}`);
+    grant.value = await $fetch(`/api/grants/${grantId.value}`)
   } catch {
-    error.value = "Grant not found";
+    error.value = 'Grant not found'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-});
+})
 async function handleApprove() {
-  processing.value = true;
+  processing.value = true
   try {
     const result = await $fetch(
       `/api/grants/${grantId.value}/approve`,
       {
-        method: "POST",
+        method: 'POST',
         body: {
           grant_type: selectedGrantType.value,
-          ...selectedGrantType.value === "timed" ? { duration: effectiveDuration.value } : {}
+          ...selectedGrantType.value === 'timed' ? { duration: effectiveDuration.value } : {}
         }
       }
-    );
+    )
     if (callbackUrl.value) {
-      const url = new URL(callbackUrl.value);
-      url.searchParams.set("grant_id", grantId.value);
-      url.searchParams.set("authz_jwt", result.authz_jwt);
-      url.searchParams.set("status", "approved");
-      await navigateTo(url.toString(), { external: true });
+      const url = new URL(callbackUrl.value)
+      url.searchParams.set('grant_id', grantId.value)
+      url.searchParams.set('authz_jwt', result.authz_jwt)
+      url.searchParams.set('status', 'approved')
+      await navigateTo(url.toString(), { external: true })
     } else {
-      grant.value = result.grant;
+      grant.value = result.grant
     }
   } catch (err) {
-    const e = err;
-    error.value = e.data?.statusMessage ?? e.message ?? "Approval failed";
+    const e = err
+    error.value = e.data?.statusMessage ?? e.message ?? 'Approval failed'
   } finally {
-    processing.value = false;
+    processing.value = false
   }
 }
 async function handleDeny() {
-  processing.value = true;
+  processing.value = true
   try {
-    await $fetch(`/api/grants/${grantId.value}/deny`, { method: "POST" });
+    await $fetch(`/api/grants/${grantId.value}/deny`, { method: 'POST' })
     if (callbackUrl.value) {
-      const url = new URL(callbackUrl.value);
-      url.searchParams.set("grant_id", grantId.value);
-      url.searchParams.set("status", "denied");
-      await navigateTo(url.toString(), { external: true });
+      const url = new URL(callbackUrl.value)
+      url.searchParams.set('grant_id', grantId.value)
+      url.searchParams.set('status', 'denied')
+      await navigateTo(url.toString(), { external: true })
     } else {
-      grant.value = { ...grant.value ?? {}, status: "denied" };
+      grant.value = { ...grant.value ?? {}, status: 'denied' }
     }
   } catch (err) {
-    const e = err;
-    error.value = e.data?.statusMessage ?? e.message ?? "Denial failed";
+    const e = err
+    error.value = e.data?.statusMessage ?? e.message ?? 'Denial failed'
   } finally {
-    processing.value = false;
+    processing.value = false
   }
 }
 function isExactCommand(detail) {
-  return detail.constraints?.exact_command === true;
+  return detail.constraints?.exact_command === true
 }
 </script>
 

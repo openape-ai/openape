@@ -1,64 +1,65 @@
 <script setup>
-import { onMounted, ref } from "vue";
-import { navigateTo } from "#imports";
-import { useIdpAuth } from "../composables/useIdpAuth";
-import { useWebAuthn } from "../composables/useWebAuthn";
-const { user, loading: authLoading, fetchUser } = useIdpAuth();
-const { addDevice, error: webauthnError, loading: webauthnLoading } = useWebAuthn();
-const credentials = ref([]);
-const credentialsLoading = ref(false);
-const error = ref("");
-const success = ref("");
-const newDeviceName = ref("");
+import { onMounted, ref } from 'vue'
+import { navigateTo } from '#imports'
+import { useIdpAuth } from '../composables/useIdpAuth'
+import { useWebAuthn } from '../composables/useWebAuthn'
+
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const { addDevice, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
+const credentials = ref([])
+const credentialsLoading = ref(false)
+const error = ref('')
+const success = ref('')
+const newDeviceName = ref('')
 onMounted(async () => {
-  await fetchUser();
+  await fetchUser()
   if (!user.value) {
-    await navigateTo("/login");
-    return;
+    await navigateTo('/login')
+    return
   }
-  await loadCredentials();
-});
+  await loadCredentials()
+})
 async function loadCredentials() {
-  credentialsLoading.value = true;
+  credentialsLoading.value = true
   try {
-    credentials.value = await $fetch("/api/webauthn/credentials");
+    credentials.value = await $fetch('/api/webauthn/credentials')
   } catch {
-    credentials.value = [];
+    credentials.value = []
   } finally {
-    credentialsLoading.value = false;
+    credentialsLoading.value = false
   }
 }
 async function handleAddDevice() {
-  error.value = "";
-  success.value = "";
+  error.value = ''
+  success.value = ''
   try {
-    await addDevice(newDeviceName.value || void 0);
-    success.value = "Device added successfully";
-    newDeviceName.value = "";
-    await loadCredentials();
+    await addDevice(newDeviceName.value || void 0)
+    success.value = 'Device added successfully'
+    newDeviceName.value = ''
+    await loadCredentials()
   } catch {
-    error.value = webauthnError.value;
+    error.value = webauthnError.value
   }
 }
 async function handleDeleteCredential(credentialId) {
-  if (!confirm("Remove this device?"))
-    return;
-  error.value = "";
+  if (!confirm('Remove this device?'))
+    return
+  error.value = ''
   try {
-    await $fetch(`/api/webauthn/credentials/${encodeURIComponent(credentialId)}`, { method: "DELETE" });
-    await loadCredentials();
+    await $fetch(`/api/webauthn/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' })
+    await loadCredentials()
   } catch (err) {
-    const e = err;
-    error.value = e.data?.statusMessage ?? "Failed to remove device";
+    const e = err
+    error.value = e.data?.statusMessage ?? 'Failed to remove device'
   }
 }
 function formatDate(ts) {
-  return new Date(ts).toLocaleDateString();
+  return new Date(ts).toLocaleDateString()
 }
 function deviceLabel(c) {
-  if (c.name) return c.name;
-  if (c.deviceType === "multiDevice") return "Synced Passkey";
-  return "Device-bound Passkey";
+  if (c.name) return c.name
+  if (c.deviceType === 'multiDevice') return 'Synced Passkey'
+  return 'Device-bound Passkey'
 }
 </script>
 
