@@ -56,8 +56,10 @@ export async function issueAuthzJWT(
     grant_type: grantType,
     approval: grantType,
     ...(grant.request.permissions ? { permissions: grant.request.permissions } : {}),
+    ...(grant.request.authorization_details ? { authorization_details: grant.request.authorization_details } : {}),
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
     ...(grant.request.command ? { command: grant.request.command } : {}),
+    ...(grant.request.execution_context ? { execution_context: grant.request.execution_context } : {}),
     ...(grant.decided_by ? { decided_by: grant.decided_by } : {}),
     ...(grant.request.run_as ? { run_as: grant.request.run_as } : {}),
   }

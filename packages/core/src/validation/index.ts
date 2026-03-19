@@ -5,6 +5,14 @@ export {
 } from './assertion.js'
 
 export {
+  canonicalizeCliPermission,
+  cliAuthorizationDetailCovers,
+  computeArgvHash,
+  type CliAuthorizationDetailValidationResult,
+  validateCliAuthorizationDetail,
+} from './cli-grants.js'
+
+export {
   computeCmdHash,
   type GrantValidationOptions,
   type GrantValidationResult,

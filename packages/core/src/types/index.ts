@@ -88,6 +88,68 @@ export type GrantType = 'once' | 'timed' | 'always'
 /** OpenApe grant status */
 export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'
 
+/** Selector values for a CLI resource reference */
+export interface OpenApeCliSelector {
+  [key: string]: string
+}
+
+/** A CLI resource resolved from a wrapped command */
+export interface OpenApeCliResourceRef {
+  /** Resource kind, e.g. "repo" or "pull-request" */
+  resource: string
+  /** Optional concrete selector bindings; omitted means wildcard */
+  selector?: OpenApeCliSelector
+}
+
+/** Execution-time context for a wrapped command */
+export interface OpenApeExecutionContext {
+  /** Full argv, including executable */
+  argv: string[]
+  /** Stable hash of argv for exact-command binding */
+  argv_hash: string
+  /** Adapter identifier */
+  adapter_id: string
+  /** Adapter schema/version string */
+  adapter_version: string
+  /** Digest of the adapter used during resolution */
+  adapter_digest: string
+  /** Path or command name of the resolved executable */
+  resolved_executable: string
+  /** Captured bindings used to render the resource chain */
+  context_bindings?: Record<string, string>
+}
+
+/** RFC 9396 Rich Authorization Request — OpenApe Grant type */
+export interface OpenApeGrantAuthorizationDetail {
+  type: 'openape_grant'
+  action: string
+  locations?: string[]
+  approval?: GrantType
+  reason?: string
+  grant_id?: string
+}
+
+/** RFC 9396 Rich Authorization Request — structured CLI grant */
+export interface OpenApeCliAuthorizationDetail {
+  type: 'openape_cli'
+  cli_id: string
+  operation_id: string
+  resource_chain: OpenApeCliResourceRef[]
+  action: string
+  approval?: GrantType
+  reason?: string
+  grant_id?: string
+  permission: string
+  display: string
+  risk: 'low' | 'medium' | 'high' | 'critical'
+  constraints?: {
+    exact_command?: boolean
+  }
+}
+
+/** Supported OpenApe authorization detail variants */
+export type OpenApeAuthorizationDetail = OpenApeGrantAuthorizationDetail | OpenApeCliAuthorizationDetail
+
 /** OpenApe grant request */
 export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
@@ -100,10 +162,14 @@ export interface OpenApeGrantRequest {
   grant_type?: GrantType
   /** Requested permissions */
   permissions?: string[]
+  /** Structured authorization details */
+  authorization_details?: OpenApeAuthorizationDetail[]
   /** Plaintext command (for display in approval UI) */
   command?: string[]
   /** Command hash for direct/local mode */
   cmd_hash?: string
+  /** Structured execution context for wrapped CLIs */
+  execution_context?: OpenApeExecutionContext
   /** Duration in seconds (for 'timed' grants) */
   duration?: number
   /** Human-readable reason for the request */
@@ -143,16 +209,6 @@ export interface OpenApeGrant {
   used_at?: number
 }
 
-/** RFC 9396 Rich Authorization Request — OpenApe Grant type */
-export interface OpenApeAuthorizationDetail {
-  type: 'openape_grant'
-  action: string
-  locations?: string[]
-  approval?: GrantType
-  reason?: string
-  grant_id?: string
-}
-
 /** OpenApe AuthZ-JWT claims */
 export interface OpenApeAuthZClaims {
   /** Issuer — OpenApe server */
@@ -175,10 +231,14 @@ export interface OpenApeAuthZClaims {
   grant_type: GrantType
   /** Permissions array */
   permissions?: string[]
+  /** Structured authorization details */
+  authorization_details?: OpenApeAuthorizationDetail[]
   /** Command hash */
   cmd_hash?: string
   /** Plaintext command array (for apes grant-token mode) */
   command?: string[]
+  /** Execution context for wrapped CLIs */
+  execution_context?: OpenApeExecutionContext
   /** Nonce */
   nonce?: string
   /** Who approved/denied the grant */
