@@ -1,0 +1,33 @@
+#!/bin/sh
+# Pre-commit hook: ensure pnpm-lock.yaml stays in sync with package.json files
+#
+# If any package.json is staged, verify the lockfile matches.
+# If pnpm-lock.yaml is dirty after the check, abort and tell the user to stage it.
+
+staged_package_jsons=$(git diff --cached --name-only --diff-filter=ACMR | grep 'package\.json$' || true)
+
+if [ -z "$staged_package_jsons" ]; then
+  exit 0
+fi
+
+echo "[pre-commit] package.json changes detected, verifying lockfile..."
+
+# Check if lockfile matches the staged state
+# We use --lockfile-only to avoid a full install
+if ! pnpm install --lockfile-only 2>/dev/null; then
+  echo ""
+  echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync."
+  echo "  Run: pnpm install"
+  echo "  Then stage: git add pnpm-lock.yaml"
+  exit 1
+fi
+
+# Check if the lockfile was modified by the install
+if ! git diff --quiet pnpm-lock.yaml; then
+  echo ""
+  echo "[pre-commit] pnpm-lock.yaml was updated. Please stage it:"
+  echo "  git add pnpm-lock.yaml"
+  exit 1
+fi
+
+echo "[pre-commit] lockfile OK"

@@ -19,7 +19,8 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "node scripts/publish-chain.mjs",
-    "release:dry": "node scripts/publish-chain.mjs --dry-run"
+    "release:dry": "node scripts/publish-chain.mjs --dry-run",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
