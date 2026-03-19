@@ -57,11 +57,11 @@ const BLOCKED_TOOLS = new Set(['exec', 'bash', 'shell', 'run_command'])
 export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): void {
   const config: PluginConfig = { ...DEFAULT_CONFIG, ...userConfig }
 
-  api.log.info(`[grants] Initializing in ${config.mode} mode`)
+  api.logger.info(`[grants] Initializing in ${config.mode} mode`)
 
   // --- State ---
-  const stateDir = api.runtime.config.getStateDir()
-  const workspaceDir = api.runtime.config.getWorkspaceDir()
+  const stateDir = api.runtime.state.resolveStateDir()
+  const workspaceDir = api.rootDir
 
   const store = new GrantStore(stateDir)
   const cache = new GrantCache()
@@ -72,7 +72,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
     explicit: config.adapterPaths,
     workspaceDir,
   })
-  api.log.info(`[grants] Loaded ${adapters.length} adapters: ${adapters.map(a => a.adapter.cli.id).join(', ')}`)
+  api.logger.info(`[grants] Loaded ${adapters.length} adapters: ${adapters.map(a => a.adapter.cli.id).join(', ')}`)
 
   // --- Local Mode Setup ---
   let localJwt: LocalJwtSigner | null = null
@@ -80,11 +80,18 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
 
   if (config.mode === 'local') {
     localJwt = new LocalJwtSigner(stateDir)
-    channelApproval = new ChannelApproval(api, store, config.pollTimeoutMs)
+
+    // ChannelApproval requires sendChannelMessage/onChannelCommand — only init if available
+    if (typeof (api as any).sendChannelMessage === 'function' && typeof (api as any).onChannelCommand === 'function') {
+      channelApproval = new ChannelApproval(api, store, config.pollTimeoutMs)
+    }
+    else {
+      api.logger.info('[grants] Channel approval not available — use CLI grant commands instead')
+    }
 
     // Init key pair asynchronously
     localJwt.init().catch((error) => {
-      api.log.error(`[grants] Failed to init local JWT: ${error}`)
+      api.logger.error(`[grants] Failed to init local JWT: ${error}`)
     })
   }
 
@@ -93,7 +100,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
 
   if (config.mode === 'idp') {
     if (!config.agentEmail || !config.agentKeyPath) {
-      api.log.error('[grants] IdP mode requires agentEmail and agentKeyPath')
+      api.logger.error('[grants] IdP mode requires agentEmail and agentKeyPath')
     }
     else {
       // Init auth asynchronously
@@ -105,10 +112,10 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
         }))
         .then((state) => {
           idpAuthState = state
-          api.log.info(`[grants] IdP auth OK: ${state.email} @ ${state.idpUrl}`)
+          api.logger.info(`[grants] IdP auth OK: ${state.email} @ ${state.idpUrl}`)
         })
         .catch((error) => {
-          api.log.error(`[grants] IdP auth failed: ${error}`)
+          api.logger.error(`[grants] IdP auth failed: ${error}`)
         })
     }
   }
@@ -140,7 +147,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
       required: ['command'],
     },
     handler: async (input: ToolInput): Promise<ToolResult> => {
-      api.log.info(`[grants] grant_exec called: ${input.command}`)
+      api.logger.info(`[grants] grant_exec called: ${input.command}`)
       return handleGrantExec(
         { config, api, adapters, store, cache, audit, localJwt, channelApproval, idpAuthState },
         input,
@@ -151,7 +158,7 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
   // --- Hook: before_tool_call → block exec/bash ---
   api.on('before_tool_call', async (context: HookContext): Promise<HookResult> => {
     if (BLOCKED_TOOLS.has(context.toolName)) {
-      api.log.warn(`[grants] Blocked tool: ${context.toolName} — use grant_exec instead`)
+      api.logger.warn(`[grants] Blocked tool: ${context.toolName} — use grant_exec instead`)
       audit.write({ event: 'exec_blocked', command: String(context.toolInput.command ?? context.toolName) })
       return {
         allow: false,
@@ -264,5 +271,5 @@ export function register(api: PluginApi, userConfig?: Partial<PluginConfig>): vo
     },
   })
 
-  api.log.info('[grants] Plugin registered successfully')
+  api.logger.info('[grants] Plugin registered successfully')
 }

@@ -79,7 +79,7 @@ export class ChannelApproval {
 
       const grant = this.store.approveGrant(id, approval, expiresAt)
       if (!grant) {
-        this.api.log.warn(`[grants] Cannot approve grant ${id}: not found or not pending`)
+        this.api.logger.warn(`[grants] Cannot approve grant ${id}: not found or not pending`)
         return
       }
 
