@@ -61,7 +61,7 @@ export async function handleIdpGrantExec(
   if (detail) {
     const cached = cache.lookup(permission, detail)
     if (cached) {
-      api.log.info(`[grants] IdP cache hit for ${permission}`)
+      api.logger.info(`[grants] IdP cache hit for ${permission}`)
       audit.write({ event: 'grant_used', grantId: cached.id, permission, command, detail: 'idp cache hit' })
       return doExecute(api, config, argv, cached.jwt, privileged)
     }

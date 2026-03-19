@@ -63,7 +63,7 @@ export async function handleGrantExec(
   if (detail) {
     const cached = cache.lookup(permission, detail)
     if (cached) {
-      api.log.info(`[grants] Cache hit for ${permission}`)
+      api.logger.info(`[grants] Cache hit for ${permission}`)
       audit.write({ event: 'grant_used', grantId: cached.id, permission, command: input.command, detail: 'cache hit' })
       return doExecute(ctx, argv, input, cached.jwt)
     }

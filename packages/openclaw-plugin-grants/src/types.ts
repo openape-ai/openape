@@ -110,6 +110,7 @@ export interface ChannelAction {
 }
 
 export interface PluginApi {
+  rootDir: string
   registerTool(tool: ToolDefinition): void
   on(event: 'before_tool_call', handler: HookHandler, options?: { priority?: number }): void
   registerHttpRoute(route: HttpRouteDefinition): void
@@ -128,14 +129,13 @@ export interface PluginApi {
         env?: Record<string, string>
       }): Promise<{ stdout: string, stderr: string, exitCode: number }>
     }
-    config: {
-      getStateDir(): string
-      getWorkspaceDir(): string
+    state: {
+      resolveStateDir(): string
     }
   }
 
   // Logging
-  log: {
+  logger: {
     info(message: string, ...args: unknown[]): void
     warn(message: string, ...args: unknown[]): void
     error(message: string, ...args: unknown[]): void
