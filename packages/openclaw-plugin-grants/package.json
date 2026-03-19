@@ -1,7 +1,7 @@
 {
   "name": "@openape/openclaw-plugin-grants",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenClaw plugin for grant-based command execution with granular permissions",
   "license": "MIT",
   "author": "Patrick Hofmann <patrick@delta-mind.at>",
@@ -48,7 +48,9 @@
     "node": ">=22"
   },
   "openclaw": {
-    "extensions": ["./dist/index.js"]
+    "extensions": [
+      "./dist/index.js"
+    ]
   },
   "publishConfig": {
     "access": "public"

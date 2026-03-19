@@ -1,6 +1,6 @@
 {
   "name": "@openape/shapes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Grant-aware CLI wrappers for OpenApe",
   "type": "module",
   "bin": {
