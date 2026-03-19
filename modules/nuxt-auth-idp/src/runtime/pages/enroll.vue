@@ -1,31 +1,32 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
-import { navigateTo, useIdpAuth, useRoute } from "#imports";
-const { user, loading: authLoading, fetchUser } = useIdpAuth();
-const route = useRoute();
-const agentId = computed(() => route.query.id || "");
-const agentEmail = computed(() => route.query.email || "");
-const agentName = computed(() => route.query.name || "");
-const agentKey = computed(() => route.query.key || "");
-const validParams = computed(() => agentEmail.value && agentName.value && agentKey.value.startsWith("ssh-ed25519 "));
-const owner = ref("");
-const approver = ref("");
-const enrolling = ref(false);
-const declined = ref(false);
-const error = ref("");
-onMounted(() => fetchUser());
+import { computed, onMounted, ref, watch } from 'vue'
+import { navigateTo, useIdpAuth, useRoute } from '#imports'
+
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const route = useRoute()
+const agentId = computed(() => route.query.id || '')
+const agentEmail = computed(() => route.query.email || '')
+const agentName = computed(() => route.query.name || '')
+const agentKey = computed(() => route.query.key || '')
+const validParams = computed(() => agentEmail.value && agentName.value && agentKey.value.startsWith('ssh-ed25519 '))
+const owner = ref('')
+const approver = ref('')
+const enrolling = ref(false)
+const declined = ref(false)
+const error = ref('')
+onMounted(() => fetchUser())
 watch(user, (u) => {
   if (u?.email) {
-    owner.value = u.email;
-    approver.value = u.email;
+    owner.value = u.email
+    approver.value = u.email
   }
-}, { immediate: true });
+}, { immediate: true })
 async function handleEnroll() {
-  enrolling.value = true;
-  error.value = "";
+  enrolling.value = true
+  error.value = ''
   try {
-    const data = await $fetch("/api/agent/enroll", {
-      method: "POST",
+    const data = await $fetch('/api/agent/enroll', {
+      method: 'POST',
       body: {
         id: agentId.value || void 0,
         email: agentEmail.value,
@@ -34,13 +35,13 @@ async function handleEnroll() {
         owner: owner.value,
         approver: approver.value
       }
-    });
-    await navigateTo(`/admin?tab=agents&enrolled=${data.agent_id}`);
+    })
+    await navigateTo(`/admin?tab=agents&enrolled=${data.agent_id}`)
   } catch (err) {
-    const e = err;
-    error.value = e.data?.statusMessage ?? e.message ?? "Enrollment failed";
+    const e = err
+    error.value = e.data?.statusMessage ?? e.message ?? 'Enrollment failed'
   } finally {
-    enrolling.value = false;
+    enrolling.value = false
   }
 }
 </script>
