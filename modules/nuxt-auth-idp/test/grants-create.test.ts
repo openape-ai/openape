@@ -23,19 +23,26 @@ vi.mock('../src/runtime/server/utils/grant-stores', () => ({
   }),
 }))
 
-function shapesDetail(permission = 'gh.owner[login=openape].repo[*]#list') {
+function shapesDetail(overrides: Partial<{
+  operation_id: string
+  resource_chain: Array<{ resource: string, selector?: Record<string, string> }>
+  action: string
+  permission: string
+  exact_command: boolean
+}> = {}) {
   return {
     type: 'openape_cli' as const,
     cli_id: 'gh',
-    operation_id: 'repo.list',
-    resource_chain: [
+    operation_id: overrides.operation_id ?? 'repo.list',
+    resource_chain: overrides.resource_chain ?? [
       { resource: 'owner', selector: { login: 'openape' } },
       { resource: 'repo' },
     ],
-    action: 'list',
-    permission,
+    action: overrides.action ?? 'list',
+    permission: overrides.permission ?? 'gh.owner[login=openape].repo[*]#list',
     display: 'List repositories for owner openape',
     risk: 'low' as const,
+    ...(overrides.exact_command ? { constraints: { exact_command: true as const } } : {}),
   }
 }
 
@@ -79,7 +86,7 @@ describe('grant create endpoint', () => {
       target_host: 'macmini',
       audience: 'shapes',
       grant_type: 'once',
-      authorization_details: [shapesDetail('wrong.permission')],
+      authorization_details: [shapesDetail({ permission: 'wrong.permission' })],
     })
 
     const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
@@ -132,5 +139,110 @@ describe('grant create endpoint', () => {
 
     expect(result.id).toBe('existing-grant')
     expect(setResponseStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('reuses a broader structured grant for a narrower incoming request even when argv differs', async () => {
+    await grantStore.save({
+      id: 'existing-broad-grant',
+      status: 'approved',
+      created_at: Math.floor(Date.now() / 1000),
+      decided_at: Math.floor(Date.now() / 1000),
+      request: {
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'always',
+        permissions: ['gh.owner[login=openape].repo[*]#list'],
+        authorization_details: [shapesDetail()],
+        execution_context: {
+          argv: ['gh', 'repo', 'list', 'openape'],
+          argv_hash: await computeArgvHash(['gh', 'repo', 'list', 'openape']),
+          adapter_id: 'gh',
+          adapter_version: '1',
+          adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          resolved_executable: 'gh',
+        },
+        cmd_hash: await computeCmdHash('gh repo list openape'),
+      },
+    } as any)
+
+    readBodyMock.mockResolvedValue({
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'shapes',
+      grant_type: 'always',
+      authorization_details: [
+        shapesDetail({
+          operation_id: 'repo.list.one',
+          resource_chain: [
+            { resource: 'owner', selector: { login: 'openape' } },
+            { resource: 'repo', selector: { name: 'api' } },
+          ],
+          permission: 'gh.owner[login=openape].repo[name=api]#list',
+        }),
+      ],
+      execution_context: {
+        argv: ['gh', 'repo', 'view', '--repo', 'openape/api'],
+        argv_hash: 'SHA-256:not-the-same-hash',
+        adapter_id: 'gh',
+        adapter_version: '1',
+        adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        resolved_executable: 'gh',
+      },
+    })
+
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+
+    expect(result.id).toBe('existing-broad-grant')
+    expect(setResponseStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('does not reuse an exact-only structured grant when argv_hash differs', async () => {
+    await grantStore.save({
+      id: 'existing-exact-grant',
+      status: 'approved',
+      created_at: Math.floor(Date.now() / 1000),
+      decided_at: Math.floor(Date.now() / 1000),
+      request: {
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'always',
+        permissions: ['gh.owner[login=openape].repo[*]#list'],
+        authorization_details: [shapesDetail({ exact_command: true })],
+        execution_context: {
+          argv: ['gh', 'repo', 'list', 'openape'],
+          argv_hash: await computeArgvHash(['gh', 'repo', 'list', 'openape']),
+          adapter_id: 'gh',
+          adapter_version: '1',
+          adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          resolved_executable: 'gh',
+        },
+        cmd_hash: await computeCmdHash('gh repo list openape'),
+      },
+    } as any)
+
+    readBodyMock.mockResolvedValue({
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'shapes',
+      grant_type: 'always',
+      authorization_details: [shapesDetail({ exact_command: true })],
+      execution_context: {
+        argv: ['gh', 'repo', 'list', 'openape', '--json', 'name'],
+        argv_hash: await computeArgvHash(['gh', 'repo', 'list', 'openape', '--json', 'name']),
+        adapter_id: 'gh',
+        adapter_version: '1',
+        adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        resolved_executable: 'gh',
+      },
+    })
+
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+
+    expect(result.id).not.toBe('existing-exact-grant')
+    expect(setResponseStatusMock).toHaveBeenCalledWith(expect.anything(), 201)
   })
 })

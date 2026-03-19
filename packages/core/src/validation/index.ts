@@ -7,7 +7,9 @@ export {
 export {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
+  cliAuthorizationDetailsCover,
   computeArgvHash,
+  isCliAuthorizationDetailExact,
   type CliAuthorizationDetailValidationResult,
   validateCliAuthorizationDetail,
 } from './cli-grants.js'

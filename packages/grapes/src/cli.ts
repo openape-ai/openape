@@ -4,6 +4,8 @@ import { loginCommand } from './commands/login'
 import { logoutCommand } from './commands/logout'
 import { whoamiCommand } from './commands/whoami'
 import { requestCommand } from './commands/request'
+import { requestCmdCommand } from './commands/request-cmd'
+import { requestCapabilityCommand } from './commands/request-capability'
 import { listCommand } from './commands/list'
 import { statusCommand } from './commands/status'
 import { tokenCommand } from './commands/token'
@@ -28,6 +30,8 @@ const main = defineCommand({
     logout: logoutCommand,
     whoami: whoamiCommand,
     request: requestCommand,
+    'request-cmd': requestCmdCommand,
+    'request-capability': requestCapabilityCommand,
     list: listCommand,
     status: statusCommand,
     token: tokenCommand,

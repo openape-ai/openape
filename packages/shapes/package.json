@@ -1,8 +1,16 @@
 {
   "name": "@openape/shapes",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Grant-aware CLI wrappers for OpenApe",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "shapes": "./dist/cli.js"
   },

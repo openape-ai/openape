@@ -1,5 +1,5 @@
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
-import { canonicalizeCliPermission, computeArgvHash, computeCmdHash, validateCliAuthorizationDetail } from '@openape/core'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, computeCmdHash, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/core'
 import { createGrant } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryAgentAuth } from '../../utils/agent-auth'
@@ -51,6 +51,18 @@ function detailSignature(detail: OpenApeAuthorizationDetail): string {
   })
 }
 
+function cliDetails(details?: OpenApeAuthorizationDetail[]): OpenApeCliAuthorizationDetail[] {
+  return (details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail.type === 'openape_cli')
+}
+
+function hasStructuredCliGrant(request: Pick<OpenApeGrantRequest, 'authorization_details'>): boolean {
+  return cliDetails(request.authorization_details).length > 0
+}
+
+function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorization_details'>): boolean {
+  return cliDetails(request.authorization_details).some(isCliAuthorizationDetailExact)
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody<OpenApeGrantRequest>(event)
   const { grantStore } = useGrantStores()
@@ -85,14 +97,16 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  if (body.execution_context?.argv?.length) {
+  const executionContext = body.execution_context
+  const executionArgv = executionContext?.argv
+  if (executionContext && executionArgv?.length) {
     body.execution_context = {
-      ...body.execution_context,
-      argv_hash: await computeArgvHash(body.execution_context.argv),
-      resolved_executable: body.execution_context.resolved_executable || body.execution_context.argv[0] || '',
+      ...executionContext,
+      argv_hash: await computeArgvHash(executionArgv),
+      resolved_executable: executionContext.resolved_executable || executionArgv[0] || '',
     }
     if (!body.command?.length) {
-      body.command = [...body.execution_context.argv]
+      body.command = [...executionArgv]
     }
   }
 
@@ -113,12 +127,33 @@ export default defineEventHandler(async (event) => {
       if (g.request.target_host !== body.target_host) return false
       if (g.request.audience !== body.audience) return false
       if (g.request.run_as !== (body.run_as ?? undefined)) return false
-      if ((g.request.execution_context?.adapter_digest ?? undefined) !== (body.execution_context?.adapter_digest ?? undefined)) return false
-      // Match by cmd_hash (server-computed from command)
+      // Match delegation fields
+      if (body.delegator !== (g.request.delegator ?? undefined)) return false
+      if (body.delegate !== (g.request.delegate ?? undefined)) return false
+
+      const incomingStructured = hasStructuredCliGrant(body)
+      const existingStructured = hasStructuredCliGrant(g.request)
+
+      if (incomingStructured || existingStructured) {
+        if (!incomingStructured || !existingStructured) return false
+        if ((g.request.execution_context?.adapter_digest ?? undefined) !== (body.execution_context?.adapter_digest ?? undefined)) return false
+
+        if (!cliAuthorizationDetailsCover(cliDetails(g.request.authorization_details), cliDetails(body.authorization_details))) {
+          return false
+        }
+
+        if (hasExactStructuredDetail(body) || hasExactStructuredDetail(g.request)) {
+          if ((g.request.execution_context?.argv_hash ?? undefined) !== (body.execution_context?.argv_hash ?? undefined)) {
+            return false
+          }
+        }
+        return true
+      }
+
+      // Exact command grants reuse only on exact command binding.
       if (body.cmd_hash || g.request.cmd_hash) {
         if (g.request.cmd_hash !== body.cmd_hash) return false
       }
-      // Match permissions if present
       if (body.permissions || g.request.permissions) {
         const reqPerms = (body.permissions ?? []).toSorted().join(',')
         const grantPerms = (g.request.permissions ?? []).toSorted().join(',')
@@ -129,9 +164,6 @@ export default defineEventHandler(async (event) => {
         const grantDetails = (g.request.authorization_details ?? []).map(detailSignature).toSorted().join(',')
         if (reqDetails !== grantDetails) return false
       }
-      // Match delegation fields
-      if (body.delegator !== (g.request.delegator ?? undefined)) return false
-      if (body.delegate !== (g.request.delegate ?? undefined)) return false
       return true
     })
     if (reusable) {

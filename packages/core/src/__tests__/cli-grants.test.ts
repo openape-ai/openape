@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import type { OpenApeCliAuthorizationDetail } from '../types/index.js'
 import {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
+  cliAuthorizationDetailsCover,
   computeArgvHash,
+  isCliAuthorizationDetailExact,
   validateCliAuthorizationDetail,
 } from '../validation/index.js'
 
 describe('cli grant helpers', () => {
-  const detail = {
+  const detail: OpenApeCliAuthorizationDetail = {
     type: 'openape_cli' as const,
     cli_id: 'gh',
     operation_id: 'repo.list',
@@ -43,6 +46,16 @@ describe('cli grant helpers', () => {
 
     expect(cliAuthorizationDetailCovers(granted, required)).toBe(true)
     expect(cliAuthorizationDetailCovers(required, granted)).toBe(false)
+    expect(cliAuthorizationDetailsCover([granted], [required])).toBe(true)
+    expect(cliAuthorizationDetailsCover([required], [granted])).toBe(false)
+  })
+
+  it('detects exact-command constraints', () => {
+    expect(isCliAuthorizationDetailExact(detail)).toBe(false)
+    expect(isCliAuthorizationDetailExact({
+      ...detail,
+      constraints: { exact_command: true },
+    })).toBe(true)
   })
 
   it('hashes argv deterministically', async () => {

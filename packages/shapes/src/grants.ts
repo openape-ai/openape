@@ -1,5 +1,5 @@
 import { verifyAuthzJWT } from '@openape/grants'
-import { cliAuthorizationDetailCovers } from '@openape/core'
+import { cliAuthorizationDetailCovers, computeCmdHash } from '@openape/core'
 import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
@@ -80,6 +80,10 @@ function grantedCliDetails(claims: Record<string, unknown>): OpenApeCliAuthoriza
   )
 }
 
+function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
+  return grantedCliDetails(claims).length > 0
+}
+
 export async function verifyAndExecute(token: string, resolved: ResolvedCommand): Promise<void> {
   const payload = decodePayload(token)
   const issuer = String(payload.iss ?? '')
@@ -100,23 +104,39 @@ export async function verifyAndExecute(token: string, resolved: ResolvedCommand)
 
   const claims = result.claims
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
-  if (details.length > 0 && !details.some(detail => cliAuthorizationDetailCovers(detail, resolved.detail))) {
-    throw new Error(`Grant does not cover required permission: ${resolved.permission}`)
-  }
-  if (details.length === 0 && !claims.permissions?.includes(resolved.permission)) {
-    throw new Error(`Grant does not include required permission: ${resolved.permission}`)
-  }
 
   if (claims.execution_context?.adapter_digest && claims.execution_context.adapter_digest !== resolved.digest) {
     throw new Error('Adapter digest mismatch')
   }
 
-  const exactRequired = details.some(detail =>
-    cliAuthorizationDetailCovers(detail, resolved.detail) && detail.constraints?.exact_command,
-  )
+  if (!hasStructuredCliGrant(claims as unknown as Record<string, unknown>)) {
+    const argv = resolved.executionContext.argv
+    if (!argv?.length) {
+      throw new Error('Resolved command is missing argv')
+    }
+    const expectedCmdHash = await computeCmdHash(argv.join(' '))
+    if (claims.command?.join('\0') !== argv.join('\0')) {
+      throw new Error('Granted command does not match current argv')
+    }
+    if (claims.cmd_hash && claims.cmd_hash !== expectedCmdHash) {
+      throw new Error('Granted command does not match current argv')
+    }
+    if (!claims.command?.length && !claims.cmd_hash) {
+      throw new Error('Grant is not a structured CLI grant and is missing command binding')
+    }
+  }
+  else {
+    if (!details.some(detail => cliAuthorizationDetailCovers(detail, resolved.detail))) {
+      throw new Error(`Grant does not cover required permission: ${resolved.permission}`)
+    }
 
-  if ((exactRequired || claims.execution_context?.argv_hash) && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
-    throw new Error('Granted command does not match current argv')
+    const exactRequired = details.some(detail =>
+      cliAuthorizationDetailCovers(detail, resolved.detail) && detail.constraints?.exact_command,
+    )
+
+    if ((exactRequired || claims.execution_context?.argv_hash) && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
+      throw new Error('Granted command does not match current argv')
+    }
   }
 
   const grantsEndpoint = await getGrantsEndpoint(issuer)
@@ -136,6 +156,6 @@ export async function verifyAndExecute(token: string, resolved: ResolvedCommand)
     throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
   }
 
-  consola.info(`Executing ${resolved.executionContext.argv.join(' ')}`)
+  consola.info(`Executing ${(resolved.executionContext.argv ?? [resolved.executable, ...resolved.commandArgv]).join(' ')}`)
   execFileSync(resolved.executable, resolved.commandArgv, { stdio: 'inherit' })
 }
