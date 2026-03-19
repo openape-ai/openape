@@ -1,7 +1,7 @@
 {
   "name": "@openape/core",
   "type": "module",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Shared types, DNS resolver, JWT, PKCE, validation for OpenApe",
   "author": "Delta Mind GmbH",
   "license": "MIT",
