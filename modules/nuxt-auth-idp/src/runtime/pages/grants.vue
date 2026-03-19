@@ -1,147 +1,113 @@
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { navigateTo, useIdpAuth } from '#imports'
-
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
-
-interface Grant {
-  id: string
-  status: string
-  request: {
-    requester: string
-    target_host: string
-    audience: string
-    grant_type: string
-    command?: string[]
-    cmd_hash?: string
-    reason?: string
-    permissions?: string[]
-    run_as?: string
-    duration?: number
-  }
-  created_at: number
-  decided_at?: number
-  decided_by?: string
-  expires_at?: number
-  used_at?: number
-}
-
-const grants = ref<Grant[]>([])
-const loading = ref(true)
-const actionError = ref('')
-
-const grantTypeSelections = ref<Record<string, 'once' | 'timed' | 'always'>>({})
-const durationPresetSelections = ref<Record<string, string>>({})
-const customDurations = ref<Record<string, number>>({})
-
+<script setup>
+import { computed, onMounted, ref } from "vue";
+import { navigateTo, useIdpAuth } from "#imports";
+import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from "../utils/cli-grants";
+const { user, loading: authLoading, fetchUser } = useIdpAuth();
+const grants = ref([]);
+const loading = ref(true);
+const actionError = ref("");
+const grantTypeSelections = ref({});
+const durationPresetSelections = ref({});
+const customDurations = ref({});
 const DURATION_PRESETS = [
-  { label: '1 hour', value: '3600' },
-  { label: '4 hours', value: '14400' },
-  { label: '1 day', value: '86400' },
-  { label: '1 week', value: '604800' },
-  { label: 'Custom', value: 'custom' },
-]
-
+  { label: "1 hour", value: "3600" },
+  { label: "4 hours", value: "14400" },
+  { label: "1 day", value: "86400" },
+  { label: "1 week", value: "604800" },
+  { label: "Custom", value: "custom" }
+];
 const GRANT_TYPE_OPTIONS = [
-  { label: 'Once', value: 'once', description: 'Single use only' },
-  { label: 'Timed', value: 'timed', description: 'Time-limited' },
-  { label: 'Always', value: 'always', description: 'Until revoked' },
-]
-
-function getEffectiveDuration(grantId: string): number | undefined {
-  if (grantTypeSelections.value[grantId] !== 'timed') return undefined
-  const preset = durationPresetSelections.value[grantId] ?? '3600'
-  return preset === 'custom'
-    ? (customDurations.value[grantId] ?? 3600)
-    : Number(preset)
+  { label: "Once", value: "once", description: "Single use only" },
+  { label: "Timed", value: "timed", description: "Time-limited" },
+  { label: "Always", value: "always", description: "Until revoked" }
+];
+function getEffectiveDuration(grantId) {
+  if (grantTypeSelections.value[grantId] !== "timed") return void 0;
+  const preset = durationPresetSelections.value[grantId] ?? "3600";
+  return preset === "custom" ? customDurations.value[grantId] ?? 3600 : Number(preset);
 }
-
-const pendingGrants = computed(() => grants.value.filter(g => g.status === 'pending'))
-const activeGrants = computed(() => grants.value.filter(g => g.status === 'approved' && g.request.grant_type !== 'once'))
-const historyGrants = computed(() => grants.value.filter(g => g.status !== 'pending' && !(g.status === 'approved' && g.request.grant_type !== 'once')))
-
+const pendingGrants = computed(() => grants.value.filter((g) => g.status === "pending"));
+const activeGrants = computed(() => grants.value.filter((g) => g.status === "approved" && g.request.grant_type !== "once"));
+const historyGrants = computed(() => grants.value.filter((g) => g.status !== "pending" && !(g.status === "approved" && g.request.grant_type !== "once")));
 onMounted(async () => {
-  await fetchUser()
+  await fetchUser();
   if (!user.value) {
-    await navigateTo('/login')
-    return
+    await navigateTo("/login");
+    return;
   }
-  await loadGrants()
-})
-
+  await loadGrants();
+});
 async function loadGrants() {
-  loading.value = true
+  loading.value = true;
   try {
-    const response = await $fetch<{ data: Grant[] }>('/api/grants')
-    grants.value = response.data
-    // Initialize per-grant type selection defaults for pending grants
+    const response = await $fetch("/api/grants");
+    grants.value = response.data;
     for (const g of response.data) {
-      if (g.status === 'pending' && !grantTypeSelections.value[g.id]) {
-        grantTypeSelections.value[g.id] = 'once'
-        durationPresetSelections.value[g.id] = '3600'
-        customDurations.value[g.id] = 3600
+      if (g.status === "pending" && !grantTypeSelections.value[g.id]) {
+        grantTypeSelections.value[g.id] = "once";
+        durationPresetSelections.value[g.id] = "3600";
+        customDurations.value[g.id] = 3600;
       }
     }
-  }
-  catch {
-    grants.value = []
-  }
-  finally {
-    loading.value = false
+  } catch {
+    grants.value = [];
+  } finally {
+    loading.value = false;
   }
 }
-
-async function approveGrant(id: string) {
-  actionError.value = ''
+async function approveGrant(id) {
+  actionError.value = "";
   try {
-    const grantType = grantTypeSelections.value[id] ?? 'once'
+    const grantType = grantTypeSelections.value[id] ?? "once";
     await $fetch(`/api/grants/${id}/approve`, {
-      method: 'POST',
+      method: "POST",
       body: {
         grant_type: grantType,
-        ...(grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {}),
-      },
-    })
-    await loadGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    actionError.value = e.data?.statusMessage ?? 'Failed to approve grant'
+        ...grantType === "timed" ? { duration: getEffectiveDuration(id) } : {}
+      }
+    });
+    await loadGrants();
+  } catch (err) {
+    const e = err;
+    actionError.value = e.data?.statusMessage ?? "Failed to approve grant";
   }
 }
-
-async function denyGrant(id: string) {
-  actionError.value = ''
+async function denyGrant(id) {
+  actionError.value = "";
   try {
-    await $fetch(`/api/grants/${id}/deny`, { method: 'POST' })
-    await loadGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    actionError.value = e.data?.statusMessage ?? 'Failed to deny grant'
+    await $fetch(`/api/grants/${id}/deny`, { method: "POST" });
+    await loadGrants();
+  } catch (err) {
+    const e = err;
+    actionError.value = e.data?.statusMessage ?? "Failed to deny grant";
   }
 }
-
-async function revokeGrant(id: string) {
-  actionError.value = ''
+async function revokeGrant(id) {
+  actionError.value = "";
   try {
-    await $fetch(`/api/grants/${id}/revoke`, { method: 'POST' })
-    await loadGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    actionError.value = e.data?.statusMessage ?? 'Failed to revoke grant'
+    await $fetch(`/api/grants/${id}/revoke`, { method: "POST" });
+    await loadGrants();
+  } catch (err) {
+    const e = err;
+    actionError.value = e.data?.statusMessage ?? "Failed to revoke grant";
   }
 }
-
-function formatRequester(requester: string): string {
-  if (requester.startsWith('agent:'))
-    return `Agent ${requester.slice(6, 14)}...`
-  return requester
+function formatRequester(requester) {
+  if (requester.startsWith("agent:"))
+    return `Agent ${requester.slice(6, 14)}...`;
+  return requester;
 }
-
-function formatTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleString()
+function formatTime(ts) {
+  return new Date(ts * 1e3).toLocaleString();
+}
+function cliSummary(grant) {
+  return summarizeCliGrant(grant.request.authorization_details);
+}
+function cliDetails(grant) {
+  return getCliAuthorizationDetails(grant.request.authorization_details);
+}
+function isExactCommand(detail) {
+  return detail.constraints?.exact_command === true;
 }
 </script>
 
@@ -190,16 +156,42 @@ function formatTime(ts: number): string {
                   </div>
                   <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                   <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
+                  <p v-if="cliSummary(grant)">
+                    <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
+                  </p>
                   <p v-if="grant.request.run_as">
                     <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                   </p>
                   <div v-if="grant.request.command?.length" class="mt-1">
                     <span class="text-muted">Command:</span>
-                    <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>
+                    <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
                   </div>
                   <div v-if="grant.request.permissions?.length" class="mt-1">
                     <span class="text-muted">Permissions:</span>
-                    <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(', ') }}</code>
+                    <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(", ") }}</code>
+                  </div>
+                  <div v-if="cliDetails(grant).length" class="mt-1 space-y-1">
+                    <span class="text-muted">Structured Permissions:</span>
+                    <div
+                      v-for="detail in cliDetails(grant)"
+                      :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
+                      class="rounded bg-gray-950/50 px-2 py-1"
+                    >
+                      <div class="flex flex-wrap items-center gap-2">
+                        <UBadge color="primary" variant="soft" :label="detail.cli_id" />
+                        <UBadge color="neutral" variant="soft" :label="detail.action" />
+                        <UBadge :color="isExactCommand(detail) ? 'warning' : 'success'" variant="soft" :label="isExactCommand(detail) ? 'exact-only' : 'reusable'" />
+                      </div>
+                      <div class="text-xs mt-1">
+                        {{ detail.display }}
+                      </div>
+                      <div class="font-mono text-xs text-dimmed break-all">
+                        {{ detail.permission }}
+                      </div>
+                      <div class="font-mono text-xs text-dimmed">
+                        {{ formatCliResourceChain(detail) }}
+                      </div>
+                    </div>
                   </div>
                   <p v-if="grant.request.reason">
                     <span class="text-muted">Reason:</span> {{ grant.request.reason }}
@@ -267,16 +259,33 @@ function formatTime(ts: number): string {
                   </div>
                   <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                   <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
+                  <p v-if="cliSummary(grant)">
+                    <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
+                  </p>
                   <p v-if="grant.request.run_as">
                     <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                   </p>
                   <div v-if="grant.request.command?.length" class="mt-1">
                     <span class="text-muted">Command:</span>
-                    <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>
+                    <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
                   </div>
                   <div v-if="grant.request.permissions?.length" class="mt-1">
                     <span class="text-muted">Permissions:</span>
-                    <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(', ') }}</code>
+                    <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(", ") }}</code>
+                  </div>
+                  <div v-if="cliDetails(grant).length" class="mt-1 space-y-1">
+                    <div
+                      v-for="detail in cliDetails(grant)"
+                      :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
+                      class="text-xs"
+                    >
+                      <div class="font-medium">
+                        {{ detail.display }}
+                      </div>
+                      <div class="font-mono text-dimmed break-all">
+                        {{ detail.permission }}
+                      </div>
+                    </div>
                   </div>
                   <p v-if="grant.request.reason">
                     <span class="text-muted">Reason:</span> {{ grant.request.reason }}
@@ -317,23 +326,40 @@ function formatTime(ts: number): string {
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-mono text-xs text-dimmed">{{ grant.id.slice(0, 8) }}...</span>
                   <UBadge
-                    :color="(({ denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' } as Record<string, 'error' | 'neutral' | 'warning' | 'info'>)[grant.status] || 'neutral')"
+                    :color="{ denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' }[grant.status] || 'neutral'"
                     :variant="grant.status === 'expired' ? 'outline' : 'soft'"
                     :label="grant.status"
                   />
                 </div>
                 <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
+                <p v-if="cliSummary(grant)">
+                  <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
+                </p>
                 <p v-if="grant.request.run_as">
                   <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                 </p>
                 <div v-if="grant.request.command?.length" class="mt-1">
                   <span class="text-muted">Command:</span>
-                  <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(' ') }}</code>
+                  <code class="block font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
                 </div>
                 <div v-if="grant.request.permissions?.length" class="mt-1">
                   <span class="text-muted">Permissions:</span>
-                  <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(', ') }}</code>
+                  <code class="block font-mono text-xs bg-gray-900 text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(", ") }}</code>
+                </div>
+                <div v-if="cliDetails(grant).length" class="mt-1 space-y-1">
+                  <div
+                    v-for="detail in cliDetails(grant)"
+                    :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
+                    class="text-xs"
+                  >
+                    <div class="font-medium">
+                      {{ detail.display }}
+                    </div>
+                    <div class="font-mono text-dimmed break-all">
+                      {{ detail.permission }}
+                    </div>
+                  </div>
                 </div>
                 <p v-if="grant.request.reason">
                   <span class="text-muted">Reason:</span> {{ grant.request.reason }}

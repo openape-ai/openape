@@ -40,7 +40,10 @@
   "devDependencies": {
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/ui": "^4.5.1",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/test-utils": "^2.4.6",
     "@types/node": "^22.0.0",
+    "happy-dom": "^18.0.1",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.7.0",

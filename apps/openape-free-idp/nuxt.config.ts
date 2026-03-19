@@ -1,3 +1,6 @@
+const e2e = process.env.OPENAPE_E2E === '1'
+const localIssuer = process.env.OPENAPE_ISSUER || 'https://id.openape.at'
+
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-idp'],
@@ -5,16 +8,16 @@ export default defineNuxtConfig({
   colorMode: { preference: 'dark' },
 
   openapeIdp: {
-    sessionSecret: '',
-    managementToken: '',
-    adminEmails: '',
+    sessionSecret: process.env.OPENAPE_SESSION_SECRET || '',
+    managementToken: process.env.OPENAPE_MANAGEMENT_TOKEN || '',
+    adminEmails: process.env.OPENAPE_ADMIN_EMAILS || '',
     storageKey: 'idp',
-    issuer: 'https://id.openape.at',
-    rpName: 'OpenApe Free IdP',
-    rpID: 'id.openape.at',
-    rpOrigin: 'https://id.openape.at',
+    issuer: localIssuer,
+    rpName: process.env.OPENAPE_RP_NAME || 'OpenApe Free IdP',
+    rpID: process.env.OPENAPE_RP_ID || new URL(localIssuer).hostname,
+    rpOrigin: process.env.OPENAPE_RP_ORIGIN || localIssuer,
     grants: { enablePages: true, storageKey: 'grants' },
-    routes: { admin: false },
+    routes: { admin: e2e },
   },
 
   runtimeConfig: {
