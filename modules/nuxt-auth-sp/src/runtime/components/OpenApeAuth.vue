@@ -1,52 +1,39 @@
-<script setup lang="ts">
-withDefaults(defineProps<{
-  title?: string
-  subtitle?: string
-  buttonText?: string
-  placeholder?: string
-}>(), {
-  title: 'Sign in',
-  subtitle: 'Enter your email to continue',
-  buttonText: 'Continue',
-  placeholder: 'you@example.com',
-})
-
-const emit = defineEmits<{
-  error: [error: Error]
-}>()
-
-const { user, loading, fetchUser, login } = useOpenApeAuth()
-const email = ref('')
-const error = ref('')
-const submitting = ref(false)
-
-const route = useRoute()
-
+<script setup>
+defineProps({
+  title: { type: String, required: false, default: "Sign in" },
+  subtitle: { type: String, required: false, default: "Enter your email to continue" },
+  buttonText: { type: String, required: false, default: "Continue" },
+  placeholder: { type: String, required: false, default: "you@example.com" }
+});
+const emit = defineEmits(["error"]);
+const { user, loading, fetchUser, login } = useOpenApeAuth();
+const email = ref("");
+const error = ref("");
+const submitting = ref(false);
+const route = useRoute();
 onMounted(async () => {
-  await fetchUser()
+  await fetchUser();
   if (user.value) {
-    navigateTo('/dashboard')
+    navigateTo("/dashboard");
   }
   if (route.query.error) {
-    error.value = String(route.query.error)
+    error.value = String(route.query.error);
   }
-})
-
+});
 async function handleSubmit() {
-  error.value = ''
-  if (!email.value || !email.value.includes('@')) {
-    error.value = 'Please enter a valid email address'
-    return
+  error.value = "";
+  if (!email.value || !email.value.includes("@")) {
+    error.value = "Please enter a valid email address";
+    return;
   }
-  submitting.value = true
+  submitting.value = true;
   try {
-    await login(email.value)
-  }
-  catch (e: unknown) {
-    const err = e instanceof Error ? e : new Error('Login failed')
-    error.value = (e as any)?.data?.message || err.message
-    emit('error', err)
-    submitting.value = false
+    await login(email.value);
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error("Login failed");
+    error.value = e?.data?.message || err.message;
+    emit("error", err);
+    submitting.value = false;
   }
 }
 </script>
@@ -108,160 +95,5 @@ async function handleSubmit() {
 </template>
 
 <style>
-.openape-auth {
-  --oa-bg: #ffffff;
-  --oa-border: #e2e2e2;
-  --oa-text: #1a1a1a;
-  --oa-text-muted: #6b7280;
-  --oa-primary: #18181b;
-  --oa-primary-hover: #27272a;
-  --oa-primary-text: #ffffff;
-  --oa-error: #dc2626;
-  --oa-error-bg: #fef2f2;
-  --oa-input-bg: #ffffff;
-  --oa-input-border: #d1d5db;
-  --oa-input-focus: #18181b;
-  --oa-radius: 8px;
-  --oa-font: system-ui, -apple-system, sans-serif;
-
-  font-family: var(--oa-font);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
-  border-radius: var(--oa-radius);
-  padding: 2rem;
-  width: 100%;
-  max-width: 400px;
-  box-sizing: border-box;
-  color: var(--oa-text);
-}
-
-.openape-auth--loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.openape-auth-spinner {
-  width: 24px;
-  height: 24px;
-  border: 2.5px solid var(--oa-border);
-  border-top-color: var(--oa-primary);
-  border-radius: 50%;
-  animation: oa-spin 0.6s linear infinite;
-}
-
-.openape-auth-header {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.openape-auth-title {
-  font-size: 1.375rem;
-  font-weight: 600;
-  margin: 0 0 0.375rem;
-  letter-spacing: -0.01em;
-  color: var(--oa-text);
-}
-
-.openape-auth-subtitle {
-  font-size: 0.875rem;
-  color: var(--oa-text-muted);
-  margin: 0;
-}
-
-.openape-auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.openape-auth-error {
-  font-size: 0.8125rem;
-  color: var(--oa-error);
-  background: var(--oa-error-bg);
-  border-radius: calc(var(--oa-radius) - 2px);
-  padding: 0.625rem 0.75rem;
-  margin: 0;
-}
-
-.openape-auth-input {
-  font-family: var(--oa-font);
-  font-size: 0.9375rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--oa-input-border);
-  border-radius: calc(var(--oa-radius) - 2px);
-  background: var(--oa-input-bg);
-  color: var(--oa-text);
-  outline: none;
-  transition: border-color 0.15s;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.openape-auth-input:focus {
-  border-color: var(--oa-input-focus);
-  box-shadow: 0 0 0 1px var(--oa-input-focus);
-}
-
-.openape-auth-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.openape-auth-button {
-  font-family: var(--oa-font);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  padding: 0.625rem 1rem;
-  border: none;
-  border-radius: calc(var(--oa-radius) - 2px);
-  background: var(--oa-primary);
-  color: var(--oa-primary-text);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.openape-auth-button:hover:not(:disabled) {
-  background: var(--oa-primary-hover);
-}
-
-.openape-auth-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.openape-auth-button-loading {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  justify-content: center;
-}
-
-.openape-auth-spinner-icon {
-  width: 16px;
-  height: 16px;
-  animation: oa-spin 0.6s linear infinite;
-}
-
-@keyframes oa-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Dark mode support via prefers-color-scheme */
-@media (prefers-color-scheme: dark) {
-  .openape-auth {
-    --oa-bg: #18181b;
-    --oa-border: #2e2e32;
-    --oa-text: #f4f4f5;
-    --oa-text-muted: #a1a1aa;
-    --oa-primary: #f4f4f5;
-    --oa-primary-hover: #e4e4e7;
-    --oa-primary-text: #18181b;
-    --oa-error-bg: #2d1215;
-    --oa-input-bg: #1f1f23;
-    --oa-input-border: #3f3f46;
-    --oa-input-focus: #a1a1aa;
-  }
-}
+.openape-auth{--oa-bg:#fff;--oa-border:#e2e2e2;--oa-text:#1a1a1a;--oa-text-muted:#6b7280;--oa-primary:#18181b;--oa-primary-hover:#27272a;--oa-primary-text:#fff;--oa-error:#dc2626;--oa-error-bg:#fef2f2;--oa-input-bg:#fff;--oa-input-border:#d1d5db;--oa-input-focus:#18181b;--oa-radius:8px;--oa-font:system-ui,-apple-system,sans-serif;background:var(--oa-bg);border:1px solid var(--oa-border);border-radius:var(--oa-radius);box-sizing:border-box;color:var(--oa-text);font-family:var(--oa-font);max-width:400px;padding:2rem;width:100%}.openape-auth--loading{align-items:center;display:flex;justify-content:center;min-height:200px}.openape-auth-spinner{animation:oa-spin .6s linear infinite;border:2.5px solid var(--oa-border);border-radius:50%;border-top-color:var(--oa-primary);height:24px;width:24px}.openape-auth-header{margin-bottom:1.5rem;text-align:center}.openape-auth-title{color:var(--oa-text);font-size:1.375rem;font-weight:600;letter-spacing:-.01em;margin:0 0 .375rem}.openape-auth-subtitle{color:var(--oa-text-muted);font-size:.875rem;margin:0}.openape-auth-form{display:flex;flex-direction:column;gap:.75rem}.openape-auth-error{background:var(--oa-error-bg);border-radius:calc(var(--oa-radius) - 2px);color:var(--oa-error);font-size:.8125rem;margin:0;padding:.625rem .75rem}.openape-auth-input{background:var(--oa-input-bg);border:1px solid var(--oa-input-border);border-radius:calc(var(--oa-radius) - 2px);box-sizing:border-box;color:var(--oa-text);font-family:var(--oa-font);font-size:.9375rem;outline:none;padding:.625rem .75rem;transition:border-color .15s;width:100%}.openape-auth-input:focus{border-color:var(--oa-input-focus);box-shadow:0 0 0 1px var(--oa-input-focus)}.openape-auth-input:disabled{cursor:not-allowed;opacity:.6}.openape-auth-button{background:var(--oa-primary);border:none;border-radius:calc(var(--oa-radius) - 2px);color:var(--oa-primary-text);cursor:pointer;font-family:var(--oa-font);font-size:.9375rem;font-weight:500;padding:.625rem 1rem;transition:background .15s}.openape-auth-button:hover:not(:disabled){background:var(--oa-primary-hover)}.openape-auth-button:disabled{cursor:not-allowed;opacity:.5}.openape-auth-button-loading{align-items:center;display:inline-flex;gap:.5rem;justify-content:center}.openape-auth-spinner-icon{animation:oa-spin .6s linear infinite;height:16px;width:16px}@keyframes oa-spin{to{transform:rotate(1turn)}}@media (prefers-color-scheme:dark){.openape-auth{--oa-bg:#18181b;--oa-border:#2e2e32;--oa-text:#f4f4f5;--oa-text-muted:#a1a1aa;--oa-primary:#f4f4f5;--oa-primary-hover:#e4e4e7;--oa-primary-text:#18181b;--oa-error-bg:#2d1215;--oa-input-bg:#1f1f23;--oa-input-border:#3f3f46;--oa-input-focus:#a1a1aa}}
 </style>
