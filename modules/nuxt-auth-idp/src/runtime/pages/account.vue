@@ -1,81 +1,64 @@
-<script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { navigateTo } from '#imports'
-import { useIdpAuth } from '../composables/useIdpAuth'
-import { useWebAuthn } from '../composables/useWebAuthn'
-
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
-const { addDevice, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
-
-interface Credential {
-  credentialId: string
-  name?: string
-  deviceType: string
-  backedUp: boolean
-  createdAt: number
-  transports?: string[]
-}
-
-const credentials = ref<Credential[]>([])
-const credentialsLoading = ref(false)
-const error = ref('')
-const success = ref('')
-const newDeviceName = ref('')
-
+<script setup>
+import { onMounted, ref } from "vue";
+import { navigateTo } from "#imports";
+import { useIdpAuth } from "../composables/useIdpAuth";
+import { useWebAuthn } from "../composables/useWebAuthn";
+const { user, loading: authLoading, fetchUser } = useIdpAuth();
+const { addDevice, error: webauthnError, loading: webauthnLoading } = useWebAuthn();
+const credentials = ref([]);
+const credentialsLoading = ref(false);
+const error = ref("");
+const success = ref("");
+const newDeviceName = ref("");
 onMounted(async () => {
-  await fetchUser()
+  await fetchUser();
   if (!user.value) {
-    await navigateTo('/login')
-    return
+    await navigateTo("/login");
+    return;
   }
-  await loadCredentials()
-})
-
+  await loadCredentials();
+});
 async function loadCredentials() {
-  credentialsLoading.value = true
+  credentialsLoading.value = true;
   try {
-    credentials.value = await $fetch('/api/webauthn/credentials')
+    credentials.value = await $fetch("/api/webauthn/credentials");
+  } catch {
+    credentials.value = [];
+  } finally {
+    credentialsLoading.value = false;
   }
-  catch { credentials.value = [] }
-  finally { credentialsLoading.value = false }
 }
-
 async function handleAddDevice() {
-  error.value = ''
-  success.value = ''
+  error.value = "";
+  success.value = "";
   try {
-    await addDevice(newDeviceName.value || undefined)
-    success.value = 'Device added successfully'
-    newDeviceName.value = ''
-    await loadCredentials()
-  }
-  catch {
-    error.value = webauthnError.value
+    await addDevice(newDeviceName.value || void 0);
+    success.value = "Device added successfully";
+    newDeviceName.value = "";
+    await loadCredentials();
+  } catch {
+    error.value = webauthnError.value;
   }
 }
-
-async function handleDeleteCredential(credentialId: string) {
-  if (!confirm('Remove this device?'))
-    return
-  error.value = ''
+async function handleDeleteCredential(credentialId) {
+  if (!confirm("Remove this device?"))
+    return;
+  error.value = "";
   try {
-    await $fetch(`/api/webauthn/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' })
-    await loadCredentials()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    error.value = e.data?.statusMessage ?? 'Failed to remove device'
+    await $fetch(`/api/webauthn/credentials/${encodeURIComponent(credentialId)}`, { method: "DELETE" });
+    await loadCredentials();
+  } catch (err) {
+    const e = err;
+    error.value = e.data?.statusMessage ?? "Failed to remove device";
   }
 }
-
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString()
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString();
 }
-
-function deviceLabel(c: Credential): string {
-  if (c.name) return c.name
-  if (c.deviceType === 'multiDevice') return 'Synced Passkey'
-  return 'Device-bound Passkey'
+function deviceLabel(c) {
+  if (c.name) return c.name;
+  if (c.deviceType === "multiDevice") return "Synced Passkey";
+  return "Device-bound Passkey";
 }
 </script>
 
@@ -165,7 +148,7 @@ function deviceLabel(c: Credential): string {
                 </td>
                 <td class="px-4 py-3">
                   <UBadge :color="c.backedUp ? 'success' : 'neutral'" variant="subtle" size="sm">
-                    {{ c.deviceType === 'multiDevice' ? 'Synced' : 'Device-bound' }}
+                    {{ c.deviceType === "multiDevice" ? "Synced" : "Device-bound" }}
                   </UBadge>
                 </td>
                 <td class="px-4 py-3 text-xs text-muted">

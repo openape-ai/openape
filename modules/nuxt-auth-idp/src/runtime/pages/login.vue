@@ -1,50 +1,43 @@
-<script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { navigateTo, useRoute } from '#imports'
-import { useIdpAuth } from '../composables/useIdpAuth'
-import { useWebAuthn } from '../composables/useWebAuthn'
-
-const { fetchUser } = useIdpAuth()
-const { login, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
-const route = useRoute()
-
-const email = ref((route.query.login_hint as string) ?? '')
-const error = ref((route.query.error as string) ?? '')
-const federationProviders = ref<{ id: string, name: string }[]>([])
-
+<script setup>
+import { onMounted, ref } from "vue";
+import { navigateTo, useRoute } from "#imports";
+import { useIdpAuth } from "../composables/useIdpAuth";
+import { useWebAuthn } from "../composables/useWebAuthn";
+const { fetchUser } = useIdpAuth();
+const { login, error: webauthnError, loading: webauthnLoading } = useWebAuthn();
+const route = useRoute();
+const email = ref(route.query.login_hint ?? "");
+const error = ref(route.query.error ?? "");
+const federationProviders = ref([]);
 onMounted(async () => {
   try {
-    const providers = await $fetch<{ id: string, name: string }[]>('/api/federation/providers')
-    federationProviders.value = providers
+    const providers = await $fetch("/api/federation/providers");
+    federationProviders.value = providers;
+  } catch {
   }
-  catch {}
-})
-
+});
 async function handleLogin() {
-  error.value = ''
+  error.value = "";
   try {
-    await login(email.value || undefined)
-    await fetchUser()
-    const returnTo = route.query.returnTo as string | undefined
+    await login(email.value || void 0);
+    await fetchUser();
+    const returnTo = route.query.returnTo;
     if (returnTo) {
-      await navigateTo(returnTo, { external: true })
+      await navigateTo(returnTo, { external: true });
+    } else {
+      await navigateTo("/");
     }
-    else {
-      await navigateTo('/')
-    }
-  }
-  catch {
-    error.value = webauthnError.value
+  } catch {
+    error.value = webauthnError.value;
   }
 }
-
-function federationLogin(providerId: string) {
-  const returnTo = route.query.returnTo as string | undefined
-  let url = `/auth/federated/${providerId}`
+function federationLogin(providerId) {
+  const returnTo = route.query.returnTo;
+  let url = `/auth/federated/${providerId}`;
   if (returnTo) {
-    url += `?returnTo=${encodeURIComponent(returnTo)}`
+    url += `?returnTo=${encodeURIComponent(returnTo)}`;
   }
-  window.location.href = url
+  window.location.href = url;
 }
 </script>
 

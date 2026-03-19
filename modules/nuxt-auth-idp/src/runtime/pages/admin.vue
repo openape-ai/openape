@@ -1,256 +1,208 @@
-<script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { navigateTo, useRoute } from '#imports'
-import { useIdpAuth } from '../composables/useIdpAuth'
-
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
-const route = useRoute()
-
-const activeTab = ref<string>(
-  route.query.tab === 'agents' ? 'agents' : route.query.tab === 'registration' ? 'registration' : 'users',
-)
-const enrolledAgentId = ref(route.query.enrolled as string || '')
-
-// Users
-const users = ref<{ email: string, name: string }[]>([])
-const usersLoading = ref(false)
-const newUser = ref({ name: '', email: '' })
-const userError = ref('')
-const userSuccess = ref('')
-
-// Agents
-interface Agent {
-  id: string
-  email: string
-  name: string
-  owner: string
-  approver: string
-  publicKey: string
-  isActive: boolean
-  createdAt: number
-}
-const agents = ref<Agent[]>([])
-const agentsLoading = ref(false)
-const newAgent = ref({ email: '', name: '', owner: '', approver: '', publicKey: '' })
-const agentError = ref('')
-const agentSuccess = ref('')
-const editingAgent = ref<Agent | null>(null)
-
-// Registration URLs
-interface RegistrationUrlEntry {
-  token: string
-  email: string
-  name: string
-  createdAt: number
-  expiresAt: number
-  createdBy: string
-  consumed: boolean
-}
-const regUrls = ref<RegistrationUrlEntry[]>([])
-const regUrlsLoading = ref(false)
-const newRegUrl = ref({ email: '', name: '', expiresInHours: 24 })
-const regUrlError = ref('')
-const regUrlSuccess = ref('')
-const copiedToken = ref('')
-
+<script setup>
+import { onMounted, ref } from "vue";
+import { navigateTo, useRoute } from "#imports";
+import { useIdpAuth } from "../composables/useIdpAuth";
+const { user, loading: authLoading, fetchUser } = useIdpAuth();
+const route = useRoute();
+const activeTab = ref(
+  route.query.tab === "agents" ? "agents" : route.query.tab === "registration" ? "registration" : "users"
+);
+const enrolledAgentId = ref(route.query.enrolled || "");
+const users = ref([]);
+const usersLoading = ref(false);
+const newUser = ref({ name: "", email: "" });
+const userError = ref("");
+const userSuccess = ref("");
+const agents = ref([]);
+const agentsLoading = ref(false);
+const newAgent = ref({ email: "", name: "", owner: "", approver: "", publicKey: "" });
+const agentError = ref("");
+const agentSuccess = ref("");
+const editingAgent = ref(null);
+const regUrls = ref([]);
+const regUrlsLoading = ref(false);
+const newRegUrl = ref({ email: "", name: "", expiresInHours: 24 });
+const regUrlError = ref("");
+const regUrlSuccess = ref("");
+const copiedToken = ref("");
 onMounted(async () => {
-  await fetchUser()
+  await fetchUser();
   if (!user.value) {
-    await navigateTo('/login')
-    return
+    await navigateTo("/login");
+    return;
   }
   if (!user.value.isAdmin) {
-    await navigateTo('/')
-    return
+    await navigateTo("/");
+    return;
   }
-  await Promise.all([loadUsers(), loadAgents(), loadRegUrls()])
-})
-
-// User CRUD
+  await Promise.all([loadUsers(), loadAgents(), loadRegUrls()]);
+});
 async function loadUsers() {
-  usersLoading.value = true
+  usersLoading.value = true;
   try {
-    users.value = await $fetch('/api/admin/users')
+    users.value = await $fetch("/api/admin/users");
+  } catch {
+    users.value = [];
+  } finally {
+    usersLoading.value = false;
   }
-  catch { users.value = [] }
-  finally { usersLoading.value = false }
 }
-
 async function createUser() {
-  userError.value = ''
-  userSuccess.value = ''
+  userError.value = "";
+  userSuccess.value = "";
   try {
-    await $fetch('/api/admin/users', { method: 'POST', body: newUser.value })
-    userSuccess.value = `User ${newUser.value.email} created`
-    newUser.value = { name: '', email: '' }
-    await loadUsers()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    userError.value = e.data?.statusMessage ?? 'Failed to create user'
+    await $fetch("/api/admin/users", { method: "POST", body: newUser.value });
+    userSuccess.value = `User ${newUser.value.email} created`;
+    newUser.value = { name: "", email: "" };
+    await loadUsers();
+  } catch (err) {
+    const e = err;
+    userError.value = e.data?.statusMessage ?? "Failed to create user";
   }
 }
-
-async function deleteUser(email: string) {
+async function deleteUser(email) {
   if (!confirm(`Delete user ${email}?`))
-    return
-  userError.value = ''
+    return;
+  userError.value = "";
   try {
-    await $fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' })
-    await loadUsers()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    userError.value = e.data?.statusMessage ?? 'Failed to delete user'
+    await $fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: "DELETE" });
+    await loadUsers();
+  } catch (err) {
+    const e = err;
+    userError.value = e.data?.statusMessage ?? "Failed to delete user";
   }
 }
-
-// Agent CRUD
 async function loadAgents() {
-  agentsLoading.value = true
+  agentsLoading.value = true;
   try {
-    agents.value = await $fetch('/api/admin/agents')
+    agents.value = await $fetch("/api/admin/agents");
+  } catch {
+    agents.value = [];
+  } finally {
+    agentsLoading.value = false;
   }
-  catch { agents.value = [] }
-  finally { agentsLoading.value = false }
 }
-
 async function createAgent() {
-  agentError.value = ''
-  agentSuccess.value = ''
+  agentError.value = "";
+  agentSuccess.value = "";
   try {
-    await $fetch('/api/admin/agents', { method: 'POST', body: newAgent.value })
-    agentSuccess.value = `Agent "${newAgent.value.name}" created`
-    newAgent.value = { email: '', name: '', owner: '', approver: '', publicKey: '' }
-    await loadAgents()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    agentError.value = e.data?.statusMessage ?? 'Failed to create agent'
+    await $fetch("/api/admin/agents", { method: "POST", body: newAgent.value });
+    agentSuccess.value = `Agent "${newAgent.value.name}" created`;
+    newAgent.value = { email: "", name: "", owner: "", approver: "", publicKey: "" };
+    await loadAgents();
+  } catch (err) {
+    const e = err;
+    agentError.value = e.data?.statusMessage ?? "Failed to create agent";
   }
 }
-
-async function deleteAgent(id: string) {
-  if (!confirm('Delete this agent?'))
-    return
-  agentError.value = ''
+async function deleteAgent(id) {
+  if (!confirm("Delete this agent?"))
+    return;
+  agentError.value = "";
   try {
-    await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' })
-    await loadAgents()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    agentError.value = e.data?.statusMessage ?? 'Failed to delete agent'
+    await $fetch(`/api/admin/agents/${id}`, { method: "DELETE" });
+    await loadAgents();
+  } catch (err) {
+    const e = err;
+    agentError.value = e.data?.statusMessage ?? "Failed to delete agent";
   }
 }
-
-async function toggleAgent(agent: Agent) {
-  agentError.value = ''
+async function toggleAgent(agent) {
+  agentError.value = "";
   try {
     await $fetch(`/api/admin/agents/${agent.id}`, {
-      method: 'PUT',
-      body: { isActive: !agent.isActive },
-    })
-    await loadAgents()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
+      method: "PUT",
+      body: { isActive: !agent.isActive }
+    });
+    await loadAgents();
+  } catch (err) {
+    const e = err;
+    agentError.value = e.data?.statusMessage ?? "Failed to update agent";
   }
 }
-
-async function startEditAgent(agent: Agent) {
-  editingAgent.value = { ...agent }
+async function startEditAgent(agent) {
+  editingAgent.value = { ...agent };
 }
-
 async function saveEditAgent() {
   if (!editingAgent.value)
-    return
-  agentError.value = ''
+    return;
+  agentError.value = "";
   try {
     await $fetch(`/api/admin/agents/${editingAgent.value.id}`, {
-      method: 'PUT',
+      method: "PUT",
       body: {
         email: editingAgent.value.email,
         name: editingAgent.value.name,
         owner: editingAgent.value.owner,
         approver: editingAgent.value.approver,
-        publicKey: editingAgent.value.publicKey,
-      },
-    })
-    editingAgent.value = null
-    await loadAgents()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
+        publicKey: editingAgent.value.publicKey
+      }
+    });
+    editingAgent.value = null;
+    await loadAgents();
+  } catch (err) {
+    const e = err;
+    agentError.value = e.data?.statusMessage ?? "Failed to update agent";
   }
 }
-
-// Registration URLs
 async function loadRegUrls() {
-  regUrlsLoading.value = true
+  regUrlsLoading.value = true;
   try {
-    regUrls.value = await $fetch('/api/admin/registration-urls')
+    regUrls.value = await $fetch("/api/admin/registration-urls");
+  } catch {
+    regUrls.value = [];
+  } finally {
+    regUrlsLoading.value = false;
   }
-  catch { regUrls.value = [] }
-  finally { regUrlsLoading.value = false }
 }
-
 async function createRegUrl() {
-  regUrlError.value = ''
-  regUrlSuccess.value = ''
+  regUrlError.value = "";
+  regUrlSuccess.value = "";
   try {
-    const result = await $fetch<{ registrationUrl: string }>('/api/admin/registration-urls', {
-      method: 'POST',
-      body: newRegUrl.value,
-    })
-    regUrlSuccess.value = result.registrationUrl
-    newRegUrl.value = { email: '', name: '', expiresInHours: 24 }
-    await loadRegUrls()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    regUrlError.value = e.data?.statusMessage ?? 'Failed to create registration URL'
+    const result = await $fetch("/api/admin/registration-urls", {
+      method: "POST",
+      body: newRegUrl.value
+    });
+    regUrlSuccess.value = result.registrationUrl;
+    newRegUrl.value = { email: "", name: "", expiresInHours: 24 };
+    await loadRegUrls();
+  } catch (err) {
+    const e = err;
+    regUrlError.value = e.data?.statusMessage ?? "Failed to create registration URL";
   }
 }
-
-async function deleteRegUrl(token: string) {
-  if (!confirm('Delete this registration URL?'))
-    return
-  regUrlError.value = ''
+async function deleteRegUrl(token) {
+  if (!confirm("Delete this registration URL?"))
+    return;
+  regUrlError.value = "";
   try {
-    await $fetch(`/api/admin/registration-urls/${token}`, { method: 'DELETE' })
-    await loadRegUrls()
+    await $fetch(`/api/admin/registration-urls/${token}`, { method: "DELETE" });
+    await loadRegUrls();
+  } catch (err) {
+    const e = err;
+    regUrlError.value = e.data?.statusMessage ?? "Failed to delete registration URL";
   }
-  catch (err: unknown) {
-    const e = err as { data?: { statusMessage?: string } }
-    regUrlError.value = e.data?.statusMessage ?? 'Failed to delete registration URL'
-  }
 }
-
-function registerUrl(token: string): string {
-  return `${window.location.origin}/register?token=${token}`
+function registerUrl(token) {
+  return `${window.location.origin}/register?token=${token}`;
 }
-
-async function copyToClipboard(text: string, token: string) {
-  await navigator.clipboard.writeText(text)
-  copiedToken.value = token
-  setTimeout(() => { copiedToken.value = '' }, 2000)
+async function copyToClipboard(text, token) {
+  await navigator.clipboard.writeText(text);
+  copiedToken.value = token;
+  setTimeout(() => {
+    copiedToken.value = "";
+  }, 2e3);
 }
-
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString()
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString();
 }
-
-function formatDateTime(ts: number): string {
-  return new Date(ts).toLocaleString()
+function formatDateTime(ts) {
+  return new Date(ts).toLocaleString();
 }
-
-function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: string } {
-  if (entry.consumed) return { label: 'Used', color: 'neutral' }
-  if (entry.expiresAt < Date.now()) return { label: 'Expired', color: 'error' }
-  return { label: 'Active', color: 'success' }
+function regUrlStatus(entry) {
+  if (entry.consumed) return { label: "Used", color: "neutral" };
+  if (entry.expiresAt < Date.now()) return { label: "Expired", color: "error" };
+  return { label: "Active", color: "success" };
 }
 </script>
 
@@ -279,10 +231,10 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
         <UTabs
           v-model="activeTab"
           :items="[
-            { label: `Users (${users.length})`, value: 'users', slot: 'users' },
-            { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' },
-            { label: 'Registration URLs', value: 'registration', slot: 'registration' },
-          ]"
+  { label: `Users (${users.length})`, value: 'users', slot: 'users' },
+  { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' },
+  { label: 'Registration URLs', value: 'registration', slot: 'registration' }
+]"
         >
           <!-- Users Tab -->
           <template #users>
@@ -496,7 +448,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                       </td>
                       <td class="px-4 py-3">
                         <UBadge :color="a.isActive ? 'success' : 'error'" variant="subtle">
-                          {{ a.isActive ? 'Active' : 'Inactive' }}
+                          {{ a.isActive ? "Active" : "Inactive" }}
                         </UBadge>
                       </td>
                       <td class="px-4 py-3 text-xs text-muted">
@@ -507,7 +459,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                           Edit
                         </UButton>
                         <UButton variant="ghost" size="xs" color="warning" @click="toggleAgent(a)">
-                          {{ a.isActive ? 'Deactivate' : 'Activate' }}
+                          {{ a.isActive ? "Deactivate" : "Activate" }}
                         </UButton>
                         <UButton variant="ghost" size="xs" color="error" @click="deleteAgent(a.id)">
                           Delete
@@ -539,7 +491,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                       variant="soft"
                       @click="copyToClipboard(regUrlSuccess, 'success')"
                     >
-                      {{ copiedToken === 'success' ? 'Copied!' : 'Copy' }}
+                      {{ copiedToken === "success" ? "Copied!" : "Copy" }}
                     </UButton>
                   </div>
                 </UAlert>
@@ -602,7 +554,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                         {{ r.name }}
                       </td>
                       <td class="px-4 py-3">
-                        <UBadge :color="regUrlStatus(r).color as any" variant="subtle">
+                        <UBadge :color="regUrlStatus(r).color" variant="subtle">
                           {{ regUrlStatus(r).label }}
                         </UBadge>
                       </td>
@@ -616,7 +568,7 @@ function regUrlStatus(entry: RegistrationUrlEntry): { label: string, color: stri
                           size="xs"
                           @click="copyToClipboard(registerUrl(r.token), r.token)"
                         >
-                          {{ copiedToken === r.token ? 'Copied!' : 'Copy URL' }}
+                          {{ copiedToken === r.token ? "Copied!" : "Copy URL" }}
                         </UButton>
                         <UButton variant="ghost" size="xs" color="error" @click="deleteRegUrl(r.token)">
                           Delete

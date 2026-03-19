@@ -1,32 +1,27 @@
-<script setup lang="ts">
-import { ref } from 'vue'
-import { navigateTo, useRoute } from '#imports'
-import { useIdpAuth } from '../composables/useIdpAuth'
-import { useWebAuthn } from '../composables/useWebAuthn'
-
-const { fetchUser } = useIdpAuth()
-const { registerWithToken, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
-const route = useRoute()
-
-const token = route.query.token as string
-const deviceName = ref('')
-const error = ref('')
-const registered = ref(false)
-
+<script setup>
+import { ref } from "vue";
+import { navigateTo, useRoute } from "#imports";
+import { useIdpAuth } from "../composables/useIdpAuth";
+import { useWebAuthn } from "../composables/useWebAuthn";
+const { fetchUser } = useIdpAuth();
+const { registerWithToken, error: webauthnError, loading: webauthnLoading } = useWebAuthn();
+const route = useRoute();
+const token = route.query.token;
+const deviceName = ref("");
+const error = ref("");
+const registered = ref(false);
 if (!token) {
-  error.value = 'No registration token provided'
+  error.value = "No registration token provided";
 }
-
 async function handleRegister() {
-  error.value = ''
+  error.value = "";
   try {
-    await registerWithToken(token, deviceName.value || undefined)
-    registered.value = true
-    await fetchUser()
-    await navigateTo('/')
-  }
-  catch {
-    error.value = webauthnError.value
+    await registerWithToken(token, deviceName.value || void 0);
+    registered.value = true;
+    await fetchUser();
+    await navigateTo("/");
+  } catch {
+    error.value = webauthnError.value;
   }
 }
 </script>
