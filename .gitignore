@@ -10,3 +10,9 @@ dist/
 !.env.example
 .vercel
 .env*.local
+
+# nuxt-module-build --stub artifacts (regenerated on pnpm prepare)
+modules/*/src/runtime/**/*.js
+modules/*/src/runtime/**/*.d.ts
+modules/*/src/runtime/**/*.d.vue.ts
+modules/*/src/runtime/**/*.vue.d.ts
