@@ -4,8 +4,10 @@
  * Publish all @openape packages in dependency order.
  *
  * Dependency chain:
- *   core → auth → nuxt-auth-sp
- *                → nuxt-auth-idp
+ *   core → grants → proxy
+ *        → auth   → nuxt-auth-sp
+ *                 → nuxt-auth-idp
+ *   core → openclaw-plugin-grants (depends on core, grants)
  *
  * For each package: compares local version vs npm, builds if needed,
  * publishes with --ignore-scripts (to avoid prepare/stub issues in Nuxt modules).
@@ -23,7 +25,13 @@ const ROOT = new URL('..', import.meta.url).pathname
 
 const PACKAGES = [
   { name: '@openape/core', dir: 'packages/core' },
+  { name: '@openape/grants', dir: 'packages/grants' },
   { name: '@openape/auth', dir: 'packages/auth' },
+  { name: '@openape/proxy', dir: 'packages/proxy' },
+  { name: '@openape/browser', dir: 'packages/browser' },
+  { name: '@openape/grapes', dir: 'packages/grapes' },
+  { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
+  { name: '@openape/openclaw-plugin-grants', dir: 'packages/openclaw-plugin-grants' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
 ]
