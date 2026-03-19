@@ -17,7 +17,10 @@ function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizatio
     if (!Array.isArray(parsed)) return []
     return parsed.filter(
       (d: unknown): d is OpenApeAuthorizationDetail =>
-        typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_grant' && typeof (d as Record<string, unknown>).action === 'string',
+        typeof d === 'object'
+        && d !== null
+        && ['openape_grant', 'openape_cli'].includes(String((d as Record<string, unknown>).type ?? ''))
+        && typeof (d as Record<string, unknown>).action === 'string',
     )
   }
   catch {
@@ -153,7 +156,8 @@ export default defineEventHandler(async (event) => {
         target_host: params.client_id,
         audience: params.client_id,
         grant_type: detail.approval ?? 'once',
-        permissions: [detail.action],
+        permissions: [detail.type === 'openape_cli' ? detail.permission : detail.action],
+        ...(detail.type === 'openape_cli' ? { authorization_details: [detail] } : {}),
         reason: detail.reason,
       }, grantStore)
 

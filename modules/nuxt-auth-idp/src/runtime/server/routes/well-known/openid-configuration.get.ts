@@ -20,7 +20,7 @@ export default defineEventHandler(() => {
     code_challenge_methods_supported: ['S256'],
     scopes_supported: ['openid', 'email', 'profile', 'offline_access'],
     claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'nonce', 'act', 'email', 'name', 'authorization_details', 'delegation_grant'],
-    authorization_details_types_supported: ['openape_grant'],
+    authorization_details_types_supported: ['openape_grant', 'openape_cli'],
 
     // DDISA extensions (REQUIRED per core.md §3.2)
     ddisa_version: '1.0',
