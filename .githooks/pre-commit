@@ -4,6 +4,11 @@
 # If any package.json is staged, verify pnpm-lock.yaml is also staged.
 # Uses a temp worktree of the staged state to run the check cleanly.
 
+# Skip in CI — frozen-lockfile check handles it there
+if [ -n "$CI" ]; then
+  exit 0
+fi
+
 staged_package_jsons=$(git diff --cached --name-only --diff-filter=ACMR | grep 'package\.json$' || true)
 
 if [ -z "$staged_package_jsons" ]; then
