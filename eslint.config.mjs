@@ -13,6 +13,10 @@ export default antfu({
     '**/*.md',
     '**/*.toml',
     '**/*.json',
+    '**/*.d.ts',
+    '**/*.d.vue.ts',
+    '**/*.vue.d.ts',
+    '**/modules/*/src/runtime/**/*.js',
   ],
   rules: {
     'node/prefer-global/process': 'off',
