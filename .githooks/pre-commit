@@ -1,50 +1,70 @@
 #!/bin/sh
-# Pre-commit hook: ensure pnpm-lock.yaml stays in sync with package.json files
-#
-# If any package.json is staged, verify pnpm-lock.yaml is also staged.
-# Uses a temp worktree of the staged state to run the check cleanly.
+# Pre-commit hook for OpenAPE monorepo
+# 1. Lockfile sync check (only when package.json changes)
+# 2. Lint + typecheck on affected packages (via turbo --affected)
 
-# Skip in CI — frozen-lockfile check handles it there
+# Skip in CI — these checks run in the CI workflow
 if [ -n "$CI" ]; then
   exit 0
 fi
 
-staged_package_jsons=$(git diff --cached --name-only --diff-filter=ACMR | grep 'package\.json$' || true)
-
-if [ -z "$staged_package_jsons" ]; then
+# Skip with SKIP_HOOKS=1 for emergency commits
+if [ "$SKIP_HOOKS" = "1" ]; then
   exit 0
 fi
 
-echo "[pre-commit] package.json changes detected, verifying lockfile..."
+errors=0
 
-# Check if pnpm-lock.yaml is also staged
-lockfile_staged=$(git diff --cached --name-only | grep '^pnpm-lock.yaml$' || true)
+# --- Lockfile sync ---
+staged_package_jsons=$(git diff --cached --name-only --diff-filter=ACMR | grep 'package\.json$' || true)
 
-if [ -z "$lockfile_staged" ]; then
-  # pnpm-lock.yaml not staged — check if it needs to be
-  # Create a temp dir with the staged state of all package.json files
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
+if [ -n "$staged_package_jsons" ]; then
+  echo "[pre-commit] package.json changes detected, verifying lockfile..."
 
-  # Export the staged tree to temp dir
-  git checkout-index --prefix="$tmpdir/" -a 2>/dev/null
+  lockfile_staged=$(git diff --cached --name-only | grep '^pnpm-lock.yaml$' || true)
 
-  # Run lockfile check in the staged state
-  if ! (cd "$tmpdir" && pnpm install --lockfile-only 2>/dev/null); then
-    echo ""
-    echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync with staged package.json files."
-    echo "  Run: pnpm install"
-    echo "  Then stage: git add pnpm-lock.yaml"
-    exit 1
-  fi
+  if [ -z "$lockfile_staged" ]; then
+    tmpdir=$(mktemp -d)
+    trap 'rm -rf "$tmpdir"' EXIT
 
-  # Compare the generated lockfile with the staged one
-  if ! diff -q "$tmpdir/pnpm-lock.yaml" pnpm-lock.yaml >/dev/null 2>&1; then
-    echo ""
-    echo "[pre-commit] pnpm-lock.yaml needs updating. Run:"
-    echo "  pnpm install && git add pnpm-lock.yaml"
-    exit 1
+    git checkout-index --prefix="$tmpdir/" -a 2>/dev/null
+
+    if ! (cd "$tmpdir" && pnpm install --lockfile-only 2>/dev/null); then
+      echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync."
+      echo "  Run: pnpm install && git add pnpm-lock.yaml"
+      errors=1
+    elif ! diff -q "$tmpdir/pnpm-lock.yaml" pnpm-lock.yaml >/dev/null 2>&1; then
+      echo "[pre-commit] ERROR: pnpm-lock.yaml needs updating."
+      echo "  Run: pnpm install && git add pnpm-lock.yaml"
+      errors=1
+    else
+      echo "[pre-commit] lockfile OK"
+    fi
+  else
+    echo "[pre-commit] lockfile staged, OK"
   fi
 fi
 
-echo "[pre-commit] lockfile OK"
+# --- Lint + Typecheck (affected packages only) ---
+staged_src=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|vue)$' || true)
+
+if [ -n "$staged_src" ]; then
+  echo "[pre-commit] Running lint on affected packages..."
+  if ! pnpm turbo run lint --affected --concurrency=4 2>&1 | tail -5; then
+    echo "[pre-commit] ERROR: lint failed"
+    errors=1
+  fi
+
+  echo "[pre-commit] Running typecheck on affected packages..."
+  if ! pnpm turbo run typecheck --affected --concurrency=4 2>&1 | tail -5; then
+    echo "[pre-commit] ERROR: typecheck failed"
+    errors=1
+  fi
+fi
+
+if [ "$errors" -ne 0 ]; then
+  echo ""
+  echo "[pre-commit] BLOCKED — fix errors above before committing."
+  echo "  Skip with: SKIP_HOOKS=1 git commit ..."
+  exit 1
+fi
