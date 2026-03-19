@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+set -o pipefail
 # Pre-commit hook for OpenAPE monorepo
 # 1. Lockfile sync check (only when package.json changes)
 # 2. Lint + typecheck on affected packages (via turbo --affected)
