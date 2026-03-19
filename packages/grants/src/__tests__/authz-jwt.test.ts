@@ -134,7 +134,38 @@ describe('authZ-JWT', () => {
   describe('verifyAuthzJWT', () => {
     it('verifies a valid JWT round-trip', async () => {
       const { publicKey, privateKey } = await generateKeyPair()
-      const grant = makeApprovedGrant()
+      const grant = makeApprovedGrant({
+        request: {
+          requester: 'agent@example.com',
+          target_host: 'macmini',
+          audience: 'apes',
+          grant_type: 'once',
+          permissions: ['read', 'write'],
+          authorization_details: [
+            {
+              type: 'openape_cli',
+              cli_id: 'gh',
+              operation_id: 'repo.list',
+              resource_chain: [
+                { resource: 'owner', selector: { login: 'openape' } },
+                { resource: 'repo' },
+              ],
+              action: 'list',
+              permission: 'gh.owner[login=openape].repo[*]#list',
+              display: 'List repositories for owner openape',
+              risk: 'low',
+            },
+          ],
+          execution_context: {
+            argv: ['gh', 'repo', 'list', 'openape'],
+            argv_hash: 'SHA-256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            adapter_id: 'gh',
+            adapter_version: '1',
+            adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            resolved_executable: 'gh',
+          },
+        },
+      })
 
       const token = await issueAuthzJWT(grant, 'https://openape.example.com', privateKey)
       const result = await verifyAuthzJWT(token, {
@@ -152,6 +183,8 @@ describe('authZ-JWT', () => {
       expect(result.claims!.grant_id).toBe('grant-123')
       expect(result.claims!.grant_type).toBe('once')
       expect(result.claims!.permissions).toEqual(['read', 'write'])
+      expect(result.claims!.authorization_details?.[0]?.type).toBe('openape_cli')
+      expect(result.claims!.execution_context?.adapter_id).toBe('gh')
     })
 
     it('rejects JWT with wrong key', async () => {
