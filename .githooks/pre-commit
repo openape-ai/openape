@@ -1,8 +1,8 @@
 #!/bin/sh
 # Pre-commit hook: ensure pnpm-lock.yaml stays in sync with package.json files
 #
-# If any package.json is staged, verify the lockfile matches.
-# If pnpm-lock.yaml is dirty after the check, abort and tell the user to stage it.
+# If any package.json is staged, verify pnpm-lock.yaml is also staged.
+# Uses a temp worktree of the staged state to run the check cleanly.
 
 staged_package_jsons=$(git diff --cached --name-only --diff-filter=ACMR | grep 'package\.json$' || true)
 
@@ -12,22 +12,34 @@ fi
 
 echo "[pre-commit] package.json changes detected, verifying lockfile..."
 
-# Check if lockfile matches the staged state
-# We use --lockfile-only to avoid a full install
-if ! pnpm install --lockfile-only 2>/dev/null; then
-  echo ""
-  echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync."
-  echo "  Run: pnpm install"
-  echo "  Then stage: git add pnpm-lock.yaml"
-  exit 1
-fi
+# Check if pnpm-lock.yaml is also staged
+lockfile_staged=$(git diff --cached --name-only | grep '^pnpm-lock.yaml$' || true)
 
-# Check if the lockfile was modified by the install
-if ! git diff --quiet pnpm-lock.yaml; then
-  echo ""
-  echo "[pre-commit] pnpm-lock.yaml was updated. Please stage it:"
-  echo "  git add pnpm-lock.yaml"
-  exit 1
+if [ -z "$lockfile_staged" ]; then
+  # pnpm-lock.yaml not staged — check if it needs to be
+  # Create a temp dir with the staged state of all package.json files
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  # Export the staged tree to temp dir
+  git checkout-index --prefix="$tmpdir/" -a 2>/dev/null
+
+  # Run lockfile check in the staged state
+  if ! (cd "$tmpdir" && pnpm install --lockfile-only 2>/dev/null); then
+    echo ""
+    echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync with staged package.json files."
+    echo "  Run: pnpm install"
+    echo "  Then stage: git add pnpm-lock.yaml"
+    exit 1
+  fi
+
+  # Compare the generated lockfile with the staged one
+  if ! diff -q "$tmpdir/pnpm-lock.yaml" pnpm-lock.yaml >/dev/null 2>&1; then
+    echo ""
+    echo "[pre-commit] pnpm-lock.yaml needs updating. Run:"
+    echo "  pnpm install && git add pnpm-lock.yaml"
+    exit 1
+  fi
 fi
 
 echo "[pre-commit] lockfile OK"
