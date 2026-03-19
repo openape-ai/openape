@@ -31,6 +31,17 @@ describe('commands', () => {
     expect(requestCommand.args).toHaveProperty('wait')
   })
 
+  it('request-cmd alias exports request semantics', async () => {
+    const { requestCmdCommand } = await import('../src/commands/request-cmd')
+    expect(requestCmdCommand.meta?.name).toBe('request')
+  })
+
+  it('request-capability command has correct meta', async () => {
+    const { requestCapabilityCommand } = await import('../src/commands/request-capability')
+    expect(requestCapabilityCommand.meta?.name).toBe('request-capability')
+    expect(requestCapabilityCommand.meta?.description).toBeDefined()
+  })
+
   it('list command has correct meta and args', async () => {
     const { listCommand } = await import('../src/commands/list')
     expect(listCommand.meta?.name).toBe('list')
@@ -95,7 +106,7 @@ describe('commands', () => {
 })
 
 describe('cli entry', () => {
-  it('exports all 13 subcommands', async () => {
+  it('exports all 15 subcommands', async () => {
     // We can't actually run the CLI, but we can verify the module structure
     // by checking the imported commands are valid citty commands
     const commands = [
@@ -103,6 +114,8 @@ describe('cli entry', () => {
       (await import('../src/commands/logout')).logoutCommand,
       (await import('../src/commands/whoami')).whoamiCommand,
       (await import('../src/commands/request')).requestCommand,
+      (await import('../src/commands/request-cmd')).requestCmdCommand,
+      (await import('../src/commands/request-capability')).requestCapabilityCommand,
       (await import('../src/commands/list')).listCommand,
       (await import('../src/commands/status')).statusCommand,
       (await import('../src/commands/token')).tokenCommand,
@@ -114,7 +127,7 @@ describe('cli entry', () => {
       (await import('../src/commands/delegations')).delegationsCommand,
     ]
 
-    expect(commands).toHaveLength(13)
+    expect(commands).toHaveLength(15)
     for (const cmd of commands) {
       expect(cmd.meta?.name).toBeDefined()
       expect(cmd.meta?.description).toBeDefined()

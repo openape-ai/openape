@@ -182,6 +182,54 @@ describe('@openape/shapes grants', () => {
     expect(execFileSyncMock).toHaveBeenCalledWith('gh', ['repo', 'list', 'openape'], { stdio: 'inherit' })
   })
 
+  it('verifies, consumes, and executes an exact raw command grant', async () => {
+    const resolved = buildResolved()
+    discoverEndpointsMock.mockResolvedValue({
+      jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
+    })
+    verifyAuthzJWTMock.mockResolvedValue({
+      valid: true,
+      claims: {
+        iss: 'https://idp.example.com',
+        aud: 'shapes',
+        grant_id: 'grant-1',
+        command: ['gh', 'repo', 'list', 'openape'],
+      },
+    })
+    getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'consumed' }),
+    }))
+
+    const { verifyAndExecute } = await import('../src/grants.js')
+    await verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any)
+
+    expect(execFileSyncMock).toHaveBeenCalledWith('gh', ['repo', 'list', 'openape'], { stdio: 'inherit' })
+  })
+
+  it('rejects an exact raw command grant when argv differs', async () => {
+    const resolved = buildResolved()
+    discoverEndpointsMock.mockResolvedValue({
+      jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
+    })
+    verifyAuthzJWTMock.mockResolvedValue({
+      valid: true,
+      claims: {
+        iss: 'https://idp.example.com',
+        aud: 'shapes',
+        grant_id: 'grant-1',
+        command: ['gh', 'repo', 'view', 'openape'],
+      },
+    })
+
+    const { verifyAndExecute } = await import('../src/grants.js')
+    await expect(
+      verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any),
+    ).rejects.toThrow('Granted command does not match current argv')
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
   it('rejects execution when the granted adapter digest differs', async () => {
     const resolved = buildResolved()
     discoverEndpointsMock.mockResolvedValue({

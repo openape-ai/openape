@@ -1,4 +1,4 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext, ScopeRiskLevel } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext, OpenApeGrantRequest, ScopeRiskLevel } from '@openape/core'
 
 export interface ShapesAdapter {
   schema: string
@@ -39,4 +39,27 @@ export interface ResolvedCommand {
   detail: OpenApeCliAuthorizationDetail
   executionContext: OpenApeExecutionContext
   permission: string
+}
+
+export interface ResolvedCapability {
+  adapter: ShapesAdapter
+  source: string
+  digest: string
+  executable: string
+  details: OpenApeCliAuthorizationDetail[]
+  executionContext: OpenApeExecutionContext
+  permissions: string[]
+  summary: string
+}
+
+export interface GrantRequestOptions {
+  requester: string
+  target_host: string
+  grant_type: 'once' | 'timed' | 'always'
+  reason?: string
+  run_as?: string
+}
+
+export interface BuiltGrantRequest {
+  request: OpenApeGrantRequest
 }

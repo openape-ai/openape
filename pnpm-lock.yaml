@@ -561,6 +561,9 @@ importers:
       '@openape/core':
         specifier: workspace:*
         version: link:../core
+      '@openape/shapes':
+        specifier: workspace:*
+        version: link:../shapes
       citty:
         specifier: ^0.1.6
         version: 0.1.6
