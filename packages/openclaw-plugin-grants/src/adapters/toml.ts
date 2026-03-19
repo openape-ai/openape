@@ -139,7 +139,7 @@ export function parseAdapterToml(content: string): AdapterDefinition {
         throw new Error(`Operation ${String(operation.id ?? '<unknown>')} is missing resource_chain[]`)
       }
       if (typeof operation.id !== 'string' || typeof operation.display !== 'string' || typeof operation.action !== 'string') {
-        throw new Error('Operation must define id, display, and action')
+        throw new TypeError('Operation must define id, display, and action')
       }
       return {
         id: operation.id,
