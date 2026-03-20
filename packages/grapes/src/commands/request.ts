@@ -38,6 +38,10 @@ export const requestCommand = defineCommand({
       type: 'string',
       description: 'Duration for timed grants (e.g. 30m, 1h, 7d)',
     },
+    'run-as': {
+      type: 'string',
+      description: 'Execute as this user (e.g. openclaw, root)',
+    },
     wait: {
       type: 'boolean',
       description: 'Wait for approval',
@@ -68,6 +72,7 @@ export const requestCommand = defineCommand({
         command,
         reason: args.reason || command.join(' '),
         ...(duration != null ? { duration } : {}),
+        ...(args['run-as'] ? { run_as: args['run-as'] } : {}),
       },
     })
 
