@@ -258,12 +258,57 @@ Auth credentials stored in: `~/.config/grapes/auth.json`
 
 Environment variable: `GRAPES_IDP` overrides the default IdP URL.
 
+## Multi-Action Grants (one grant, many operations)
+
+`request-capability` supports **multiple `--action` flags** in a single request. Each action becomes a separate `authorization_detail` inside one grant — no need for separate grants per operation.
+
+```bash
+# ONE grant that covers list, read, search, and edit on mail
+grapes request-capability o365mail \
+  --resource account --resource mail \
+  --action list --action read --action search --action edit \
+  --approval always \
+  --reason "E-Mail-Triage"
+```
+
+This single grant covers: `mail.list`, `mail.read`, `mail.search`, `mail.mark-read`, `mail.mark-unread`, `mail.move` — any operation matching the resource chain and actions.
+
+**Combine with wildcard selectors for maximum coverage:**
+
+```bash
+# ONE grant for all read/list operations on any account
+grapes request-capability o365mail \
+  --resource account --resource mail \
+  --action list --action read --action search \
+  --approval always \
+  --reason "Mail read access for all accounts"
+
+# ONE grant for all folder operations
+grapes request-capability o365mail \
+  --resource account --resource folder \
+  --action list --action create --action delete \
+  --approval always \
+  --reason "Folder management"
+```
+
+**Anti-pattern — do NOT create separate grants per operation:**
+
+```bash
+# WRONG — unnecessarily splits into many grants
+grapes request-capability o365mail --resource account --resource mail --action list --approval always --wait
+grapes request-capability o365mail --resource account --resource mail --action read --approval always --wait
+grapes request-capability o365mail --resource account --resource mail --action search --approval always --wait
+
+# RIGHT — one grant covers all three
+grapes request-capability o365mail --resource account --resource mail --action list --action read --action search --approval always --wait
+```
+
 ## Guardrails
 
 - **Never auto-approve grants.** Every grant requires explicit human decision.
-- **Use `once` grants** unless a standing grant is explicitly needed.
+- **Use `once` grants** for one-off commands; `timed`/`always` for repeated access.
 - **Respect denials** — do not retry a denied grant. Ask the user for guidance.
 - **Handle timeouts gracefully** — if no approver responds within 5min, inform the user.
-- **One command per grant** — do not chain commands; use separate grant requests.
+- **One grant per resource scope** — combine multiple actions into one grant via multiple `--action` flags. Do NOT create separate grants per operation.
 - **Prefer `grapes run`** for simple privilege elevation (combines request + wait + execute).
 - **Use `request-capability`** when working with shapes adapters for structured permissions.
