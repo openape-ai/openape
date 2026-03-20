@@ -242,6 +242,34 @@ rm ~/.openape/shapes/cache/registry.json
 
 Note: GitHub's raw CDN also caches files. If `--refresh` still shows stale data, wait 1–2 minutes for the CDN to propagate.
 
+### Grant not reused (adapter_digest mismatch)
+
+`shapes request` checks for existing approved grants via `findExistingGrant()`. If it creates a new grant instead of reusing an existing one, the most common cause is an **adapter digest mismatch**: the grant was created with an older version of the adapter.
+
+**How it happens:**
+1. You create a grant with adapter digest `SHA-256:abc...`
+2. The adapter is updated in the registry (new operations, fixes)
+3. You run `shapes adapter update <id> --yes` → local digest changes to `SHA-256:def...`
+4. `findExistingGrant()` skips the old grant because `req.execution_context.adapter_digest !== resolved.digest`
+
+**Fix:**
+1. Update the local adapter: `shapes adapter update <id> --yes`
+2. Create a **new** grant — the old grant with the old digest will never match
+3. Revoke the old grant if no longer needed
+
+**Important:** Adapter updates invalidate ALL existing grants for that adapter. This is intentional — the adapter defines what permissions mean, so a changed adapter requires re-approval.
+
+### Existing grant not found (wrong resource chain)
+
+If you created a grant via `grapes request-capability` and `shapes request` doesn't find it, check that the resource chain matches. The covering logic requires:
+
+- Same `cli_id` (adapter ID)
+- Same `action`
+- Same number of resource chain entries
+- Each granted resource covers the required resource (wildcard granted selector covers any required selector)
+
+Example: a grant with `--resource account --resource mail --action list` covers `o365-mail-cli mail list --account foo@bar.com` because the granted `account` resource has no selector (wildcard) which covers `{email: foo@bar.com}`.
+
 ## Guardrails
 
 - **Never execute wrapped commands without a grant.** The `--grant` flag or the `shapes request` flow is mandatory.
