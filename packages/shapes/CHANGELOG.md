@@ -1,5 +1,11 @@
 # @openape/shapes
 
+## 0.3.0
+
+### Minor Changes
+
+- [`df035ff`](https://github.com/openape-ai/openape/commit/df035ff990edadb9b26e677893e5a1322f4bdab3) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add --duration flag to grapes request and request-capability for timed grants. Fix shapes --help not showing adapter subcommand. Add --refresh flag to all shapes adapter subcommands to bypass registry cache. Document wildcard grant pattern and cache troubleshooting in skills.
+
 ## 0.1.1
 
 ### Patch Changes
