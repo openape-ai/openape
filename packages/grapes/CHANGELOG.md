@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- [`68c244e`](https://github.com/openape-ai/openape/commit/68c244e87c09285ef1e3e74d5f824b24ddccf8da) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add --run-as flag to grapes request and request-capability to send run_as in grant requests, making the target user visible in the IdP UI.
+
+- [`df035ff`](https://github.com/openape-ai/openape/commit/df035ff990edadb9b26e677893e5a1322f4bdab3) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add --duration flag to grapes request and request-capability for timed grants. Fix shapes --help not showing adapter subcommand. Add --refresh flag to all shapes adapter subcommands to bypass registry cache. Document wildcard grant pattern and cache troubleshooting in skills.
+
+### Patch Changes
+
+- Updated dependencies [[`df035ff`](https://github.com/openape-ai/openape/commit/df035ff990edadb9b26e677893e5a1322f4bdab3)]:
+  - @openape/shapes@0.3.0
+
 ## 0.3.4
 
 ### Patch Changes
