@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { fetchRegistry, findAdapter, searchAdapters } from '../registry.js'
-import { getInstalledDigest, installAdapter, isInstalled } from '../installer.js'
+import { findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter } from '../installer.js'
 import { loadAdapter } from '../adapters.js'
 
 export const adapterCommand = defineCommand({
@@ -107,10 +107,50 @@ export const adapterCommand = defineCommand({
         if (!entry)
           throw new Error(`Adapter "${id}" not found in registry. Use \`shapes adapter search ${id}\` to search.`)
 
+        const conflicts = findConflictingAdapters(entry.executable, id)
+        if (conflicts.length > 0) {
+          for (const c of conflicts) {
+            consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
+            consola.warn(`  This adapter claims the same executable "${c.executable}" and will shadow the new one.`)
+            consola.warn(`  Remove it with: shapes adapter remove ${c.adapterId}`)
+            consola.warn(`  Or manually: rm ${c.path}`)
+          }
+        }
+
         const result = await installAdapter(entry, { local })
         const verb = result.updated ? 'Updated' : 'Installed'
         consola.success(`${verb} ${result.id} → ${result.path}`)
         consola.info(`Digest: ${result.digest}`)
+      },
+    }),
+
+    remove: defineCommand({
+      meta: {
+        name: 'remove',
+        description: 'Remove an installed adapter',
+      },
+      args: {
+        id: {
+          type: 'positional',
+          description: 'Adapter ID to remove (or filename without .toml)',
+          required: true,
+        },
+        local: {
+          type: 'boolean',
+          description: 'Remove from project-local .openape/',
+          default: false,
+        },
+      },
+      async run({ args }) {
+        const id = String(args.id)
+        const local = Boolean(args.local)
+        if (removeAdapter(id, local)) {
+          consola.success(`Removed adapter: ${id}`)
+        }
+        else {
+          consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
+          process.exit(1)
+        }
       },
     }),
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { RegistryEntry } from './types.js'
@@ -64,4 +64,48 @@ export function isInstalled(id: string, local: boolean): boolean {
 
 export function getInstalledPath(id: string, local: boolean): string {
   return adapterPath(id, local)
+}
+
+export function removeAdapter(id: string, local: boolean): boolean {
+  const path = adapterPath(id, local)
+  if (!existsSync(path))
+    return false
+  unlinkSync(path)
+  return true
+}
+
+export interface ConflictingAdapter {
+  file: string
+  path: string
+  adapterId: string
+  executable: string
+}
+
+export function findConflictingAdapters(executable: string, excludeId: string): ConflictingAdapter[] {
+  const conflicts: ConflictingAdapter[] = []
+  const dirs = [
+    join(process.cwd(), '.openape', 'shapes', 'adapters'),
+    join(homedir(), '.openape', 'shapes', 'adapters'),
+  ]
+
+  for (const dir of dirs) {
+    if (!existsSync(dir))
+      continue
+    try {
+      for (const file of readdirSync(dir).filter(f => f.endsWith('.toml'))) {
+        const path = join(dir, file)
+        const content = readFileSync(path, 'utf-8')
+        const execMatch = content.match(/^\s*executable\s*=\s*"([^"]+)"/m)
+        const idMatch = content.match(/^\s*id\s*=\s*"([^"]+)"/m)
+        if (execMatch?.[1] === executable && idMatch?.[1] !== excludeId) {
+          conflicts.push({ file, path, adapterId: idMatch?.[1] ?? file, executable })
+        }
+      }
+    }
+    catch {
+      // directory not readable
+    }
+  }
+
+  return conflicts
 }
