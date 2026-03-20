@@ -34,7 +34,6 @@ jobs:
           --filter=@openape/proxy
           --filter=@openape/browser
           --filter=@openape/unstorage-s3-driver
-          --filter=@openape/openclaw-plugin-grants
           --filter=@openape/nuxt-auth-idp
           --filter=@openape/nuxt-auth-sp
       - uses: changesets/action@v1
