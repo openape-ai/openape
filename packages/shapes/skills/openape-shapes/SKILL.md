@@ -39,11 +39,12 @@ Searches by ID, name, description, tags, and category.
 ### Install an Adapter
 
 ```bash
-shapes adapter install <id> [--local]
+shapes adapter install <id> [--local] [--refresh]
 ```
 
 - Default: installs to `~/.openape/shapes/adapters/`
 - `--local`: installs to `.openape/shapes/adapters/` (project-scoped)
+- `--refresh`: bypass the registry cache (useful after pushing new adapters)
 
 ### List Adapters
 
@@ -221,6 +222,25 @@ await installAdapter(entry)
 // Load and use an adapter
 const loaded = loadAdapter('gh')
 ```
+
+## Troubleshooting
+
+### Newly pushed adapter not found
+
+The registry is cached locally for 1 hour at `~/.openape/shapes/cache/registry.json`. After pushing new adapters to the shapes-registry repo, use `--refresh` to bypass the cache:
+
+```bash
+shapes adapter install <id> --refresh
+shapes adapter list --remote --refresh
+```
+
+Or manually delete the cache:
+
+```bash
+rm ~/.openape/shapes/cache/registry.json
+```
+
+Note: GitHub's raw CDN also caches files. If `--refresh` still shows stale data, wait 1–2 minutes for the CDN to propagate.
 
 ## Guardrails
 
