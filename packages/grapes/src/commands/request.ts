@@ -2,6 +2,7 @@ import { hostname } from 'node:os'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../config'
+import { parseDuration } from '../duration'
 import { apiFetch, getGrantsEndpoint } from '../http'
 
 export const requestCommand = defineCommand({
@@ -33,6 +34,10 @@ export const requestCommand = defineCommand({
       description: 'Approval type: once, timed, always',
       default: 'once',
     },
+    duration: {
+      type: 'string',
+      description: 'Duration for timed grants (e.g. 30m, 1h, 7d)',
+    },
     wait: {
       type: 'boolean',
       description: 'Wait for approval',
@@ -51,6 +56,8 @@ export const requestCommand = defineCommand({
     const command = args.command.split(' ')
     const targetHost = args.host || hostname()
 
+    const duration = args.duration ? parseDuration(args.duration) : undefined
+
     const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
       method: 'POST',
       body: {
@@ -60,6 +67,7 @@ export const requestCommand = defineCommand({
         grant_type: args.approval,
         command,
         reason: args.reason || command.join(' '),
+        ...(duration != null ? { duration } : {}),
       },
     })
 

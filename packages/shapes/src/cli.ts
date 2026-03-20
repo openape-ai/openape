@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { defineCommand, runCommand as runCitty } from 'citty'
+import { defineCommand, runMain } from 'citty'
 import { adapterCommand } from './commands/adapter.js'
 import { explainCommand, extractOption, extractWrappedCommand } from './commands/explain.js'
 import { requestCommand } from './commands/request.js'
@@ -40,13 +40,14 @@ async function run() {
   const args = process.argv.slice(2)
 
   // Legacy mode: shapes --grant <jwt> -- <cli> ...
-  // This doesn't fit citty's subcommand model, so handle it directly
-  if (args.includes('--grant')) {
+  // This doesn't fit citty's subcommand model, so handle it directly.
+  // Let --help / -h pass through to citty even when --grant is present.
+  if (args.includes('--grant') && !args.includes('--help') && !args.includes('-h')) {
     await executeWithGrant(args)
     return
   }
 
-  await runCitty(main, { rawArgs: args })
+  await runMain(main, { rawArgs: args })
 }
 
 run().catch((error) => {

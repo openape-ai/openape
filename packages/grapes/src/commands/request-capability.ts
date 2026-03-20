@@ -3,6 +3,7 @@ import { buildStructuredCliGrantRequest, loadAdapter, resolveCapabilityRequest }
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../config'
+import { parseDuration } from '../duration'
 import { apiFetch, getGrantsEndpoint } from '../http'
 
 function parseCapabilityArgs(rawArgs: string[]): {
@@ -11,6 +12,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
   idp?: string
   approval: 'once' | 'timed' | 'always'
   reason?: string
+  duration?: number
   wait: boolean
   resources: string[]
   selectors: string[]
@@ -33,6 +35,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
   let idp: string | undefined
   let approval: 'once' | 'timed' | 'always' = 'once'
   let reason: string | undefined
+  let duration: number | undefined
   let wait = false
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -76,6 +79,11 @@ function parseCapabilityArgs(rawArgs: string[]): {
         reason = next
         index += 1
         break
+      case '--duration':
+        if (!next) throw new Error('Missing value for --duration')
+        duration = parseDuration(next)
+        index += 1
+        break
       case '--wait':
         wait = true
         break
@@ -90,6 +98,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
     idp,
     approval,
     reason,
+    duration,
     wait,
     resources,
     selectors,
@@ -155,6 +164,10 @@ export const requestCapabilityCommand = defineCommand({
       grant_type: parsed.approval,
       ...(parsed.reason ? { reason: parsed.reason } : {}),
     })
+
+    if (parsed.duration != null) {
+      request.duration = parsed.duration
+    }
 
     const grantsUrl = await getGrantsEndpoint(idp)
     const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
