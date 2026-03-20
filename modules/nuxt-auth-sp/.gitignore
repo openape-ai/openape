@@ -5,6 +5,10 @@ dist/
 .turbo/
 .data/
 *.tsbuildinfo
+# nuxt-module-build --stub artifacts
+src/**/*.d.ts
+src/**/*.d.vue.ts
+src/**/*.js
 .env
 .env.*
 !.env.example

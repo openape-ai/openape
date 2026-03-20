@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,25 +12,55 @@ function digest(content: string): string {
   return `SHA-256:${createHash('sha256').update(content).digest('hex')}`
 }
 
-function bundledAdapterPath(cliId: string): string {
-  return join(PACKAGE_DIR, '..', 'adapters', `${cliId}.toml`)
+function adapterDirs(): string[] {
+  return [
+    join(process.cwd(), '.openape', 'shapes', 'adapters'),
+    join(homedir(), '.openape', 'shapes', 'adapters'),
+    join('/etc', 'openape', 'shapes', 'adapters'),
+    join(PACKAGE_DIR, '..', 'adapters'),
+  ]
+}
+
+function findByExecutable(executable: string): string | undefined {
+  for (const dir of adapterDirs()) {
+    if (!existsSync(dir))
+      continue
+    try {
+      const files = readdirSync(dir).filter(f => f.endsWith('.toml'))
+      for (const file of files) {
+        const path = join(dir, file)
+        const content = readFileSync(path, 'utf-8')
+        const match = content.match(/^\s*executable\s*=\s*"([^"]+)"/m)
+        if (match && match[1] === executable)
+          return path
+      }
+    }
+    catch {
+      // directory not readable
+    }
+  }
+  return undefined
 }
 
 export function resolveAdapterPath(cliId: string, explicitPath?: string): string {
-  const candidates = explicitPath
-    ? [explicitPath]
-    : [
-        join(process.cwd(), '.openape', 'shapes', 'adapters', `${cliId}.toml`),
-        join(homedir(), '.openape', 'shapes', 'adapters', `${cliId}.toml`),
-        join('/etc', 'openape', 'shapes', 'adapters', `${cliId}.toml`),
-        bundledAdapterPath(cliId),
-      ]
+  if (explicitPath) {
+    if (existsSync(explicitPath))
+      return explicitPath
+    throw new Error(`Adapter file not found: ${explicitPath}`)
+  }
 
+  // Try direct lookup by ID
+  const candidates = adapterDirs().map(dir => join(dir, `${cliId}.toml`))
   const match = candidates.find(path => existsSync(path))
-  if (!match)
-    throw new Error(`No adapter found for ${cliId}`)
+  if (match)
+    return match
 
-  return match
+  // Fallback: scan for adapter with matching executable name
+  const byExec = findByExecutable(cliId)
+  if (byExec)
+    return byExec
+
+  throw new Error(`No adapter found for ${cliId}`)
 }
 
 export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter {
@@ -38,9 +68,12 @@ export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter
   const content = readFileSync(source, 'utf-8')
   const adapter = parseAdapterToml(content)
 
-  if (adapter.cli.id !== cliId && basename(source) !== `${cliId}.toml`) {
+  // Accept if either the adapter ID or the executable matches the requested cliId
+  const idMatch = adapter.cli.id === cliId
+  const fileMatch = basename(source) === `${cliId}.toml`
+  const execMatch = adapter.cli.executable === cliId
+  if (!idMatch && !fileMatch && !execMatch)
     throw new Error(`Adapter ${source} does not match requested CLI ${cliId}`)
-  }
 
   return {
     adapter,

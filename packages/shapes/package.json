@@ -27,6 +27,7 @@
   "dependencies": {
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
+    "citty": "^0.1.6",
     "consola": "^3.4.2"
   },
   "devDependencies": {
