@@ -254,4 +254,192 @@ describe('@openape/shapes grants', () => {
     await expect(verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any)).rejects.toThrow('Adapter digest mismatch')
     expect(execFileSyncMock).not.toHaveBeenCalled()
   })
+
+  it('skips argv_hash check for always grants without exact_command', async () => {
+    const resolved = buildResolved()
+    discoverEndpointsMock.mockResolvedValue({
+      jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
+    })
+    verifyAuthzJWTMock.mockResolvedValue({
+      valid: true,
+      claims: {
+        iss: 'https://idp.example.com',
+        aud: 'shapes',
+        grant_id: 'grant-1',
+        grant_type: 'always',
+        permissions: [resolved.permission],
+        authorization_details: [resolved.detail],
+        execution_context: {
+          adapter_digest: resolved.digest,
+          argv_hash: 'SHA-256:different',
+        },
+      },
+    })
+    getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'consumed' }),
+    }))
+
+    const { verifyAndExecute } = await import('../src/grants.js')
+    await verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any)
+
+    expect(execFileSyncMock).toHaveBeenCalledWith('gh', ['repo', 'list', 'openape'], { stdio: 'inherit' })
+  })
+
+  it('enforces argv_hash for once grants', async () => {
+    const resolved = buildResolved()
+    discoverEndpointsMock.mockResolvedValue({
+      jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
+    })
+    verifyAuthzJWTMock.mockResolvedValue({
+      valid: true,
+      claims: {
+        iss: 'https://idp.example.com',
+        aud: 'shapes',
+        grant_id: 'grant-1',
+        grant_type: 'once',
+        permissions: [resolved.permission],
+        authorization_details: [resolved.detail],
+        execution_context: {
+          adapter_digest: resolved.digest,
+          argv_hash: 'SHA-256:different',
+        },
+      },
+    })
+
+    const { verifyAndExecute } = await import('../src/grants.js')
+    await expect(
+      verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any),
+    ).rejects.toThrow('Granted command does not match current argv')
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('enforces argv_hash for always grants with exact_command constraint', async () => {
+    const resolved = buildResolved()
+    const detailWithExact = { ...resolved.detail, constraints: { exact_command: true } }
+    discoverEndpointsMock.mockResolvedValue({
+      jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
+    })
+    verifyAuthzJWTMock.mockResolvedValue({
+      valid: true,
+      claims: {
+        iss: 'https://idp.example.com',
+        aud: 'shapes',
+        grant_id: 'grant-1',
+        grant_type: 'always',
+        permissions: [resolved.permission],
+        authorization_details: [detailWithExact],
+        execution_context: {
+          adapter_digest: resolved.digest,
+          argv_hash: 'SHA-256:different',
+        },
+      },
+    })
+
+    const { verifyAndExecute } = await import('../src/grants.js')
+    await expect(
+      verifyAndExecute(buildJwt({ iss: 'https://idp.example.com' }), resolved as any),
+    ).rejects.toThrow('Granted command does not match current argv')
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  describe('findExistingGrant', () => {
+    it('finds a matching always grant', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-reuse-1',
+          status: 'approved',
+          request: {
+            grant_type: 'always',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: resolved.digest,
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBe('grant-reuse-1')
+    })
+
+    it('skips expired timed grants', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-expired',
+          status: 'approved',
+          expires_at: Math.floor(Date.now() / 1000) - 60,
+          request: {
+            grant_type: 'timed',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: resolved.digest,
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBeNull()
+    })
+
+    it('skips once grants', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-once',
+          status: 'approved',
+          request: {
+            grant_type: 'once',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: resolved.digest,
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBeNull()
+    })
+
+    it('skips grants with mismatched adapter digest', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-wrong-digest',
+          status: 'approved',
+          request: {
+            grant_type: 'always',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: 'SHA-256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBeNull()
+    })
+  })
 })
