@@ -13,6 +13,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
   approval: 'once' | 'timed' | 'always'
   reason?: string
   duration?: number
+  runAs?: string
   wait: boolean
   resources: string[]
   selectors: string[]
@@ -36,6 +37,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
   let approval: 'once' | 'timed' | 'always' = 'once'
   let reason: string | undefined
   let duration: number | undefined
+  let runAs: string | undefined
   let wait = false
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -84,6 +86,11 @@ function parseCapabilityArgs(rawArgs: string[]): {
         duration = parseDuration(next)
         index += 1
         break
+      case '--run-as':
+        if (!next) throw new Error('Missing value for --run-as')
+        runAs = next
+        index += 1
+        break
       case '--wait':
         wait = true
         break
@@ -99,6 +106,7 @@ function parseCapabilityArgs(rawArgs: string[]): {
     approval,
     reason,
     duration,
+    runAs,
     wait,
     resources,
     selectors,
@@ -167,6 +175,9 @@ export const requestCapabilityCommand = defineCommand({
 
     if (parsed.duration != null) {
       request.duration = parsed.duration
+    }
+    if (parsed.runAs) {
+      request.run_as = parsed.runAs
     }
 
     const grantsUrl = await getGrantsEndpoint(idp)
