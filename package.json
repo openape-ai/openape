@@ -20,6 +20,7 @@
     "version-packages": "changeset version",
     "release": "node scripts/publish-chain.mjs",
     "release:dry": "node scripts/publish-chain.mjs --dry-run",
+    "sync:openclaw": "bash scripts/sync-openclaw-skills.sh",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "pnpm": {
