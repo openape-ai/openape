@@ -26,10 +26,16 @@ export const adapterCommand = defineCommand({
           description: 'Output as JSON',
           default: false,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: false,
+        },
       },
       async run({ args }) {
+        const forceRefresh = Boolean(args.refresh)
         if (args.remote) {
-          const index = await fetchRegistry()
+          const index = await fetchRegistry(forceRefresh)
           if (args.json) {
             process.stdout.write(`${JSON.stringify(index.adapters, null, 2)}\n`)
             return
@@ -43,7 +49,7 @@ export const adapterCommand = defineCommand({
         }
 
         // List locally available adapters by trying to load each known one
-        const index = await fetchRegistry()
+        const index = await fetchRegistry(forceRefresh)
         const local: { id: string, source: string, digest: string }[] = []
         for (const a of index.adapters) {
           try {
@@ -87,11 +93,16 @@ export const adapterCommand = defineCommand({
           description: 'Install to project-local .openape/ instead of ~/.openape/',
           default: false,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: false,
+        },
       },
       async run({ args }) {
         const id = String(args.id)
         const local = Boolean(args.local)
-        const index = await fetchRegistry()
+        const index = await fetchRegistry(Boolean(args.refresh))
         const entry = findAdapter(index, id)
         if (!entry)
           throw new Error(`Adapter "${id}" not found in registry. Use \`shapes adapter search ${id}\` to search.`)
@@ -114,10 +125,15 @@ export const adapterCommand = defineCommand({
           description: 'Adapter ID',
           required: true,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: false,
+        },
       },
       async run({ args }) {
         const id = String(args.id)
-        const index = await fetchRegistry()
+        const index = await fetchRegistry(Boolean(args.refresh))
         const entry = findAdapter(index, id)
         if (!entry)
           throw new Error(`Adapter "${id}" not found in registry`)
@@ -160,10 +176,15 @@ export const adapterCommand = defineCommand({
           description: 'Output as JSON',
           default: false,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: false,
+        },
       },
       async run({ args }) {
         const query = String(args.query)
-        const index = await fetchRegistry()
+        const index = await fetchRegistry(Boolean(args.refresh))
         const results = searchAdapters(index, query)
 
         if (args.json) {
@@ -198,9 +219,14 @@ export const adapterCommand = defineCommand({
           description: 'Skip confirmation',
           default: false,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: true,
+        },
       },
       async run({ args }) {
-        const index = await fetchRegistry(true)
+        const index = await fetchRegistry(Boolean(args.refresh))
         const targetId = args.id ? String(args.id) : undefined
         const targets = targetId
           ? [targetId]
@@ -254,11 +280,16 @@ export const adapterCommand = defineCommand({
           description: 'Check project-local adapter',
           default: false,
         },
+        refresh: {
+          type: 'boolean',
+          description: 'Force refresh the registry cache',
+          default: false,
+        },
       },
       async run({ args }) {
         const id = String(args.id)
         const local = Boolean(args.local)
-        const index = await fetchRegistry()
+        const index = await fetchRegistry(Boolean(args.refresh))
         const entry = findAdapter(index, id)
         if (!entry)
           throw new Error(`Adapter "${id}" not found in registry`)

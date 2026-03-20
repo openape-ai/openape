@@ -73,31 +73,65 @@ pending → approved → used (consumed by apes/shapes)
 ### Request a Generic Grant
 
 ```bash
-grapes request "<command>" --audience <service> [--approval once|timed|always] [--reason "<text>"] [--host <hostname>] [--wait]
+grapes request "<command>" --audience <service> [--approval once|timed|always] [--duration <duration>] [--reason "<text>"] [--host <hostname>] [--wait]
 ```
 
 - `--audience` — target service: `apes` (privilege elevation), `proxy` (HTTP gateway), or custom
+- `--duration` — required for `timed` grants (e.g. `30m`, `1h`, `7d`)
 - `--wait` — block until the grant is approved or denied (polls every 3s, timeout 5min)
 
 Example:
 
 ```bash
 grapes request "apt update" --audience apes --reason "security patches" --wait
+grapes request "apt update" --audience apes --approval timed --duration 1h --reason "maintenance window" --wait
 ```
 
 ### Request a Structured Capability Grant (for shapes)
 
 ```bash
-grapes request-capability <cli-id> --resource <resource> --action <action> [--selector <selector>] [--approval once|timed|always] [--reason "<text>"] [--wait]
+grapes request-capability <cli-id> --resource <resource> --action <action> [--selector <selector>] [--approval once|timed|always] [--duration <duration>] [--reason "<text>"] [--wait]
 ```
 
 Uses the shapes adapter to build a structured grant request with resource chains and permissions.
+
+- `--duration` — required for `timed` grants (e.g. `30m`, `1h`, `7d`)
 
 Example:
 
 ```bash
 grapes request-capability gh --resource "repo:openape-ai/protocol" --action "pull_request:create" --wait
 ```
+
+### Wildcard Grants (reusable across arguments)
+
+By default, grants are bound to exact arguments (`once` grants enforce `argv_hash`). To create a grant that works for **any** value of a resource (e.g. any path for `ls`), omit the selector and use `timed` or `always` approval:
+
+```bash
+# Grant covers ls on ANY path (wildcard selector)
+grapes request-capability ls --resource filesystem --action list --approval always --reason "general directory listing" --wait
+
+# This single grant now works for:
+#   shapes --grant $TOKEN -- ls /tmp
+#   shapes --grant $TOKEN -- ls /var/log
+#   shapes --grant $TOKEN -- ls /home/user
+```
+
+**How it works:**
+- A resource without a selector (e.g. `--resource filesystem`) becomes a wildcard that covers any selector value
+- `once` grants enforce exact `argv_hash` — one grant per exact command invocation
+- `timed`/`always` grants with `exact_command = false` skip `argv_hash` enforcement — the same grant covers different arguments
+- Operations with `exact_command = true` (e.g. `chmod`, `chown`) always enforce `argv_hash` regardless of grant type
+
+**Choose the right grant type:**
+
+| Need | Grant Type | argv_hash | Use Case |
+|------|-----------|-----------|----------|
+| Single exact command | `once` | enforced | `chmod 644 /tmp/key` |
+| Repeated access, time-limited | `timed --duration 1h` | not enforced* | maintenance window |
+| Standing permission | `always` | not enforced* | `ls` on any path |
+
+\* Unless the adapter operation has `exact_command = true`
 
 ## Checking Grant Status
 
