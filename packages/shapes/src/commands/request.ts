@@ -2,7 +2,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadAdapter } from '../adapters.js'
 import { getIdpUrl } from '../config.js'
-import { createShapesGrant, fetchGrantToken, verifyAndExecute, waitForGrantStatus } from '../grants.js'
+import { createShapesGrant, fetchGrantToken, findExistingGrant, verifyAndExecute, waitForGrantStatus } from '../grants.js'
 import { resolveCommand } from '../parser.js'
 import { extractOption, extractWrappedCommand } from './explain.js'
 
@@ -48,6 +48,22 @@ export const requestCommand = defineCommand({
     const loaded = loadAdapter(command[0]!, adapterOpt)
     const resolved = await resolveCommand(loaded, command)
     const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
+
+    if (approval !== 'once') {
+      try {
+        const existingGrantId = await findExistingGrant(resolved, idp)
+        if (existingGrantId) {
+          consola.info(`Reusing existing grant: ${existingGrantId}`)
+          const token = await fetchGrantToken(idp, existingGrantId)
+          await verifyAndExecute(token, resolved)
+          return
+        }
+      }
+      catch {
+        // Fall through to creating a new grant
+      }
+    }
+
     const grant = await createShapesGrant(resolved, {
       idp,
       approval,

@@ -1,6 +1,6 @@
 import { verifyAuthzJWT } from '@openape/grants'
 import { cliAuthorizationDetailCovers, computeCmdHash } from '@openape/core'
-import type { OpenApeCliAuthorizationDetail } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeGrant } from '@openape/core'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import consola from 'consola'
@@ -134,7 +134,10 @@ export async function verifyAndExecute(token: string, resolved: ResolvedCommand)
       cliAuthorizationDetailCovers(detail, resolved.detail) && detail.constraints?.exact_command,
     )
 
-    if ((exactRequired || claims.execution_context?.argv_hash) && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
+    const isOnce = claims.grant_type === 'once' || claims.approval === 'once'
+    const enforceArgvHash = exactRequired || (isOnce && !!claims.execution_context?.argv_hash)
+
+    if (enforceArgvHash && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
       throw new Error('Granted command does not match current argv')
     }
   }
@@ -158,4 +161,44 @@ export async function verifyAndExecute(token: string, resolved: ResolvedCommand)
 
   consola.info(`Executing ${(resolved.executionContext.argv ?? [resolved.executable, ...resolved.commandArgv]).join(' ')}`)
   execFileSync(resolved.executable, resolved.commandArgv, { stdio: 'inherit' })
+}
+
+export async function findExistingGrant(
+  resolved: ResolvedCommand,
+  idp: string,
+): Promise<string | null> {
+  const grantsEndpoint = await getGrantsEndpoint(idp)
+  const response = await apiFetch<{ data: OpenApeGrant[] }>(
+    `${grantsEndpoint}?status=approved`,
+    { idp },
+  )
+
+  const now = Math.floor(Date.now() / 1000)
+  const expectedAudience = resolved.adapter.cli.audience ?? 'shapes'
+
+  for (const grant of response.data) {
+    const req = grant.request
+    if (req.grant_type === 'once')
+      continue
+    if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
+      continue
+    if (req.audience !== expectedAudience)
+      continue
+    if (req.execution_context?.adapter_digest && req.execution_context.adapter_digest !== resolved.digest)
+      continue
+
+    const cliDetails = (req.authorization_details ?? []).filter(
+      (d): d is OpenApeCliAuthorizationDetail => d.type === 'openape_cli',
+    )
+
+    if (cliDetails.length > 0) {
+      if (cliDetails.some(detail => cliAuthorizationDetailCovers(detail, resolved.detail)))
+        return grant.id
+    }
+    else if (req.permissions?.includes(resolved.permission)) {
+      return grant.id
+    }
+  }
+
+  return null
 }
