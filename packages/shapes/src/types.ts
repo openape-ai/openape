@@ -63,3 +63,37 @@ export interface GrantRequestOptions {
 export interface BuiltGrantRequest {
   request: OpenApeGrantRequest
 }
+
+// ── Registry Types ──────────────────────────────────
+
+export interface RegistryEntry {
+  id: string
+  name: string
+  description: string
+  category: string
+  tags: string[]
+  author: string
+  executable: string
+  min_shapes_version: string
+  digest: string
+  download_url: string
+}
+
+export interface RegistryIndex {
+  version: number
+  generated_at: string
+  adapters: RegistryEntry[]
+}
+
+export interface AdapterMeta {
+  id: string
+  name: string
+  description: string
+  author: string
+  category: string
+  tags: string[]
+  executable: string
+  risk_summary?: string
+  homepage?: string
+  min_shapes_version: string
+}
