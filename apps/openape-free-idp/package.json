@@ -20,6 +20,7 @@
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "db0": "^0.3.0",
+    "drizzle-orm": "^0.44.7",
     "nuxt": "^4.0.0",
     "resend": "^4.0.0",
     "tailwindcss": "^4.0.0"

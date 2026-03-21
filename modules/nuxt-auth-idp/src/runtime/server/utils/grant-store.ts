@@ -11,6 +11,15 @@ export interface ExtendedGrantStore extends GrantStore {
 export function createGrantStore(): ExtendedGrantStore {
   const storage = useGrantStorage()
 
+  async function getAllGrants(): Promise<OpenApeGrant[]> {
+    const keys = await storage.getKeys('grants:')
+    if (keys.length === 0) return []
+    const items = await storage.getItems(keys)
+    return items
+      .map(item => item.value as OpenApeGrant)
+      .filter((grant): grant is OpenApeGrant => grant != null)
+  }
+
   return {
     async save(grant) {
       await storage.setItem(`grants:${grant.id}`, grant)
@@ -28,73 +37,48 @@ export function createGrantStore(): ExtendedGrantStore {
     },
 
     async findPending() {
-      const keys = await storage.getKeys('grants:')
-      const results: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.status === 'pending')
-          results.push(grant)
-      }
-      return results.sort((a, b) => b.created_at - a.created_at)
+      const grants = await getAllGrants()
+      return grants
+        .filter(g => g.status === 'pending')
+        .sort((a, b) => b.created_at - a.created_at)
     },
 
     async findByRequester(requester) {
-      const keys = await storage.getKeys('grants:')
-      const results: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.request.requester === requester)
-          results.push(grant)
-      }
-      return results.sort((a, b) => b.created_at - a.created_at)
+      const grants = await getAllGrants()
+      return grants
+        .filter(g => g.request.requester === requester)
+        .sort((a, b) => b.created_at - a.created_at)
     },
 
     async findAll() {
-      const keys = await storage.getKeys('grants:')
-      const results: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant)
-          results.push(grant)
-      }
-      return results.sort((a, b) => b.created_at - a.created_at)
+      const grants = await getAllGrants()
+      return grants.sort((a, b) => b.created_at - a.created_at)
     },
 
     async findByDelegate(delegate: string) {
-      const keys = await storage.getKeys('grants:')
-      const results: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.type === 'delegation' && grant.request.delegate === delegate)
-          results.push(grant)
-      }
-      return results.sort((a, b) => b.created_at - a.created_at)
+      const grants = await getAllGrants()
+      return grants
+        .filter(g => g.type === 'delegation' && g.request.delegate === delegate)
+        .sort((a, b) => b.created_at - a.created_at)
     },
 
     async findByDelegator(delegator: string) {
-      const keys = await storage.getKeys('grants:')
-      const results: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (grant?.type === 'delegation' && grant.request.delegator === delegator)
-          results.push(grant)
-      }
-      return results.sort((a, b) => b.created_at - a.created_at)
+      const grants = await getAllGrants()
+      return grants
+        .filter(g => g.type === 'delegation' && g.request.delegator === delegator)
+        .sort((a, b) => b.created_at - a.created_at)
     },
 
     async listGrants(params?: GrantListParams): Promise<PaginatedResponse<OpenApeGrant>> {
       const limit = Math.min(Math.max(params?.limit ?? 20, 1), 100)
       const cursor = params?.cursor
 
-      const keys = await storage.getKeys('grants:')
-      let grants: OpenApeGrant[] = []
-      for (const key of keys) {
-        const grant = await storage.getItem<OpenApeGrant>(key)
-        if (!grant) continue
-        if (params?.status && grant.status !== params.status) continue
-        if (params?.requester && grant.request.requester !== params.requester) continue
-        grants.push(grant)
-      }
+      const allGrants = await getAllGrants()
+      let grants = allGrants.filter((grant) => {
+        if (params?.status && grant.status !== params.status) return false
+        if (params?.requester && grant.request.requester !== params.requester) return false
+        return true
+      })
 
       grants.sort((a, b) => b.created_at - a.created_at)
 

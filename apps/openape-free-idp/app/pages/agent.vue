@@ -15,7 +15,7 @@ await fetchUser()
 async function loadAgent() {
   loading.value = true
   try {
-    agent.value = await $fetch('/api/my-agent')
+    agent.value = await ($fetch as any)('/api/my-agent') // eslint-disable-line ts/no-explicit-any -- Nuxt route type stack overflow
   }
   catch {
     agent.value = null

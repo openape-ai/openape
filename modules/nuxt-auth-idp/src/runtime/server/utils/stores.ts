@@ -1,5 +1,8 @@
+import type { H3Event } from 'h3'
+import type { ChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { createAgentStore } from './agent-store'
+import type { AgentStore } from './agent-store'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
 import { createCredentialStore } from './credential-store'
@@ -8,10 +11,24 @@ import { createKeyStore } from './key-store'
 import { createRefreshTokenStore } from './refresh-token-store'
 import { createRegistrationUrlStore } from './registration-url-store'
 import { createUserStore } from './user-store'
+import type { UserStore } from './user-store'
+import { getStoreFactory } from './store-registry'
 
-let _stores: ReturnType<typeof initStores> | null = null
+interface IdpStores {
+  userStore: UserStore
+  codeStore: CodeStore
+  keyStore: KeyStore
+  agentStore: AgentStore
+  credentialStore: CredentialStore
+  challengeStore: ChallengeStore
+  registrationUrlStore: RegistrationUrlStore
+  jtiStore: JtiStore
+  refreshTokenStore: RefreshTokenStore
+}
 
-function initStores() {
+let _stores: IdpStores | null = null
+
+function initDefaultStores(): IdpStores {
   return {
     userStore: createUserStore(),
     codeStore: createCodeStore(),
@@ -25,21 +42,41 @@ function initStores() {
   }
 }
 
-function getStores() {
+function initStoresWithRegistry(event: H3Event): IdpStores {
+  return {
+    userStore: getStoreFactory<UserStore>('userStore')?.(event) ?? createUserStore(),
+    codeStore: getStoreFactory<CodeStore>('codeStore')?.(event) ?? createCodeStore(),
+    keyStore: getStoreFactory<KeyStore>('keyStore')?.(event) ?? createKeyStore(),
+    agentStore: getStoreFactory<AgentStore>('agentStore')?.(event) ?? createAgentStore(),
+    credentialStore: getStoreFactory<CredentialStore>('credentialStore')?.(event) ?? createCredentialStore(),
+    challengeStore: getStoreFactory<ChallengeStore>('challengeStore')?.(event) ?? createChallengeStore(),
+    registrationUrlStore: getStoreFactory<RegistrationUrlStore>('registrationUrlStore')?.(event) ?? createRegistrationUrlStore(),
+    jtiStore: getStoreFactory<JtiStore>('jtiStore')?.(event) ?? createJtiStore(),
+    refreshTokenStore: getStoreFactory<RefreshTokenStore>('refreshTokenStore')?.(event) ?? createRefreshTokenStore(),
+  }
+}
+
+function getStores(): IdpStores {
   if (!_stores) {
-    _stores = initStores()
+    _stores = initDefaultStores()
   }
   return _stores
 }
 
-export function useIdpStores() {
+export function useIdpStores(): IdpStores {
   try {
     const event = useEvent()
     if (event?.context?.openapeStorageKey) {
       if (!event.context._idpStores) {
-        event.context._idpStores = initStores()
+        event.context._idpStores = initStoresWithRegistry(event)
       }
-      return event.context._idpStores as ReturnType<typeof initStores>
+      return event.context._idpStores as IdpStores
+    }
+    if (event) {
+      if (!event.context._idpStores) {
+        event.context._idpStores = initStoresWithRegistry(event)
+      }
+      return event.context._idpStores as IdpStores
     }
   }
   catch {}
