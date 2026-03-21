@@ -16,6 +16,8 @@ export interface RoutesOptions {
 
 export interface ModuleOptions {
   sessionSecret: string
+  /** Session cookie max age in seconds (default: 604800 = 7 days) */
+  sessionMaxAge: number
   managementToken: string
   adminEmails: string
   storageKey: string
@@ -54,6 +56,7 @@ export default defineNuxtModule<ModuleOptions>({
   },
   defaults: {
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
+    sessionMaxAge: 60 * 60 * 24 * 7, // 7 days
     managementToken: '',
     adminEmails: '',
     storageKey: 'openape-idp',
