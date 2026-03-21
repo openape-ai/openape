@@ -1,32 +1,28 @@
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-export const magicLinkTokens = sqliteTable('magic_link_tokens', {
-  token: text('token').primaryKey(),
-  email: text('email').notNull(),
-  expiresAt: integer('expires_at').notNull(),
+export const grants = sqliteTable('grants', {
+  id: text('id').primaryKey(),
+  status: text('status').notNull(),
+  type: text('type'),
+  requester: text('requester').notNull(),
+  targetHost: text('target_host').notNull(),
+  audience: text('audience').notNull(),
+  grantType: text('grant_type').notNull(),
+  request: text('request', { mode: 'json' }).notNull(),
   createdAt: integer('created_at').notNull(),
-})
+  decidedAt: integer('decided_at'),
+  decidedBy: text('decided_by'),
+  expiresAt: integer('expires_at'),
+  usedAt: integer('used_at'),
+}, table => [
+  index('idx_grants_status').on(table.status),
+  index('idx_grants_requester').on(table.requester),
+  index('idx_grants_created_at').on(table.createdAt),
+  index('idx_grants_type').on(table.type),
+])
 
-export const rateLimits = sqliteTable('rate_limits', {
-  key: text('key').primaryKey(),
-  count: integer('count').default(0).notNull(),
-  windowStart: integer('window_start').notNull(),
-})
-
-export const authCodes = sqliteTable('auth_codes', {
-  code: text('code').primaryKey(),
-  clientId: text('client_id').notNull(),
-  redirectUri: text('redirect_uri').notNull(),
-  codeChallenge: text('code_challenge').notNull(),
-  userId: text('user_id').notNull(),
-  nonce: text('nonce').notNull(),
+export const grantChallenges = sqliteTable('grant_challenges', {
+  challenge: text('challenge').primaryKey(),
+  agentId: text('agent_id').notNull(),
   expiresAt: integer('expires_at').notNull(),
-})
-
-export const signingKeys = sqliteTable('signing_keys', {
-  kid: text('kid').primaryKey(),
-  privateKeyJwk: text('private_key_jwk').notNull(),
-  publicKeyJwk: text('public_key_jwk').notNull(),
-  isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
-  createdAt: integer('created_at').notNull(),
 })
