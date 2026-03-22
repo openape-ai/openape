@@ -7,14 +7,6 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   colorMode: { preference: 'dark' },
 
-  app: {
-    head: {
-      link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-      ],
-    },
-  },
-
   openapeIdp: {
     sessionSecret: process.env.OPENAPE_SESSION_SECRET || '',
     managementToken: process.env.OPENAPE_MANAGEMENT_TOKEN || '',
