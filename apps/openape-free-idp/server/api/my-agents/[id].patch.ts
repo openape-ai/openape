@@ -1,12 +1,18 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const email = await requireAuth(event)
-  const { agentStore } = useIdpStores()
-  const agents = await agentStore.findByOwner(email)
+  const id = getRouterParam(event, 'id')
 
-  if (agents.length === 0) {
-    throw createError({ statusCode: 404, statusMessage: 'No agent found' })
+  if (!id) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing agent ID' })
+  }
+
+  const { agentStore } = useIdpStores()
+  const agent = await agentStore.findById(id)
+
+  if (!agent || agent.owner !== email) {
+    throw createError({ statusCode: 404, statusMessage: 'Agent not found' })
   }
 
   const body = await readBody<{ publicKey: string }>(event)
@@ -19,7 +25,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Public key must be in ssh-ed25519 format' })
   }
 
-  const agent = agents[0]!
-
-  return await agentStore.update(agent.id, { publicKey: body.publicKey })
+  return await agentStore.update(id, { publicKey: body.publicKey })
 })

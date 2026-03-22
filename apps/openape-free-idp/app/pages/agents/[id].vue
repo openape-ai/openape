@@ -1,21 +1,34 @@
 <script setup lang="ts">
-useSeoMeta({ title: 'Agent verwalten' })
+import { computed, ref, watch } from 'vue'
+import { useIdpAuth } from '#imports'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 
-const agent = ref<{ id: string, email: string, name: string, publicKey: string, owner: string, approver: string, isActive: boolean, createdAt: number } | null>(null)
+interface Agent {
+  id: string
+  email: string
+  name: string
+  publicKey: string
+  owner: string
+  approver: string
+  isActive: boolean
+  createdAt: number
+}
+
+const agent = ref<Agent | null>(null)
 const loading = ref(true)
 const deleting = ref(false)
 const deleteError = ref('')
-const justEnrolled = computed(() => route.query.enrolled === 'true')
+
+useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 'Agent') })
 
 await fetchUser()
 
 async function loadAgent() {
   loading.value = true
   try {
-    agent.value = await ($fetch as any)('/api/my-agent') // eslint-disable-line ts/no-explicit-any -- Nuxt route type stack overflow
+    agent.value = await ($fetch as any)(`/api/my-agents/${route.params.id}`)
   }
   catch {
     agent.value = null
@@ -28,14 +41,6 @@ async function loadAgent() {
 watch(user, (u) => {
   if (u) loadAgent()
 }, { immediate: true })
-
-const sudoCommand = computed(() => {
-  const email = user.value?.email ?? ''
-  const name = email.split('@')[0] ?? 'agent'
-  const [local, domain] = email.split('@')
-  const agentEmail = `agent+${local}+${(domain ?? '').replace(/\./g, '_')}@id.openape.at`
-  return `sudo escapes enroll \\\n  --server https://id.openape.at \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/openape/agent.key`
-})
 
 const authInstructions = computed(() => {
   if (!agent.value) return ''
@@ -57,10 +62,6 @@ Agent email: ${email}
    Response: { "token": "<jwt>", "expires_in": 3600 }
 
 Use the token as: Authorization: Bearer <token>`
-})
-
-const agentInstructions = computed(() => {
-  return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.at/enroll?name=<agent-name>&key=<url-encoded-public-key>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n\nThe agent email will be automatically derived from the logged-in user's email.`
 })
 
 const escapesCommands = computed(() => {
@@ -104,10 +105,11 @@ function cancelEditKey() {
 }
 
 async function saveKey() {
+  if (!agent.value) return
   savingKey.value = true
   keyError.value = ''
   try {
-    await $fetch('/api/my-agent', { method: 'PATCH', body: { publicKey: editKeyValue.value } })
+    await $fetch(`/api/my-agents/${agent.value.id}`, { method: 'PATCH', body: { publicKey: editKeyValue.value } })
     await loadAgent()
     editingKey.value = false
   }
@@ -128,16 +130,13 @@ function copyField(field: string, text: string) {
   setTimeout(() => copied.value = '', 2000)
 }
 
-function copyText(text: string) {
-  copyField('text', text)
-}
-
 async function handleDelete() {
+  if (!agent.value) return
   deleting.value = true
   deleteError.value = ''
   try {
-    await $fetch('/api/my-agent', { method: 'DELETE' })
-    agent.value = null
+    await $fetch(`/api/my-agents/${agent.value.id}`, { method: 'DELETE' })
+    await navigateTo('/agents')
   }
   catch (err: unknown) {
     const e = err as { data?: { detail?: string, title?: string }, message?: string }
@@ -155,10 +154,10 @@ async function handleDelete() {
       <template #header>
         <div class="flex items-center justify-between">
           <h1 class="text-2xl font-bold text-white">
-            Agent verwalten
+            Agent Details
           </h1>
           <UButton
-            to="/"
+            to="/agents"
             color="neutral"
             variant="ghost"
             icon="i-lucide-arrow-left"
@@ -176,21 +175,29 @@ async function handleDelete() {
           Du musst angemeldet sein.
         </p>
         <UButton
-          to="/login?returnTo=/agent"
+          :to="`/login?returnTo=/agents/${route.params.id}`"
           color="primary"
           block
           label="Anmelden"
         />
       </template>
 
-      <template v-else-if="agent">
+      <template v-else-if="!agent">
         <UAlert
-          v-if="justEnrolled"
-          color="success"
-          title="Agent erfolgreich registriert!"
-          class="mb-4"
+          color="error"
+          title="Agent nicht gefunden"
+          description="Dieser Agent existiert nicht oder gehört nicht zu deinem Account."
         />
+        <UButton
+          to="/agents"
+          color="primary"
+          block
+          class="mt-4"
+          label="Zurück zur Übersicht"
+        />
+      </template>
 
+      <template v-else>
         <div class="space-y-4">
           <div>
             <p class="text-sm text-gray-400 mb-1">
@@ -350,85 +357,6 @@ async function handleDelete() {
             Agent löschen
           </UButton>
         </div>
-      </template>
-
-      <template v-else>
-        <UTabs
-          default-value="agent"
-          :items="[
-            { label: 'Enroll with agent', value: 'agent', slot: 'agent' },
-            { label: 'Enroll with escapes', value: 'sudo', slot: 'sudo' },
-          ]"
-        >
-          <template #agent>
-            <div class="space-y-5 pt-4">
-              <p class="text-sm text-gray-400">
-                Paste the following instructions to your AI agent so it can generate an enrollment URL for you.
-              </p>
-
-              <div class="relative">
-                <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ agentInstructions }}</pre>
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :icon="copied === 'text' ? 'i-lucide-check' : 'i-lucide-copy'"
-                  class="absolute top-2 right-2"
-                  @click="copyText(agentInstructions)"
-                />
-              </div>
-
-              <p class="text-sm text-gray-400">
-                Once the agent gives you the URL, open it in your browser and confirm the enrollment.
-              </p>
-            </div>
-          </template>
-
-          <template #sudo>
-            <div class="space-y-5 pt-4">
-              <p class="text-sm text-gray-400">
-                Run this command on the machine where your agent should run.
-              </p>
-
-              <!-- Step 1 -->
-              <div class="space-y-2">
-                <div class="flex items-center gap-2">
-                  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs font-bold shrink-0">1</span>
-                  <p class="text-sm text-gray-300">
-                    Run this on the target machine:
-                  </p>
-                </div>
-                <div class="relative">
-                  <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ sudoCommand }}</pre>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    :icon="copied === 'text' ? 'i-lucide-check' : 'i-lucide-copy'"
-                    class="absolute top-2 right-2"
-                    @click="copyText(sudoCommand.replace(/\\\n\s*/g, ''))"
-                  />
-                </div>
-              </div>
-
-              <!-- Step 2 -->
-              <div class="flex items-start gap-2">
-                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs font-bold shrink-0 mt-0.5">2</span>
-                <p class="text-sm text-gray-300">
-                  Open the enrollment URL that the command outputs in your browser.
-                </p>
-              </div>
-
-              <!-- Step 3 -->
-              <div class="flex items-start gap-2">
-                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white text-xs font-bold shrink-0 mt-0.5">3</span>
-                <p class="text-sm text-gray-300">
-                  Confirm the enrollment. Your agent can then authenticate via challenge-response.
-                </p>
-              </div>
-            </div>
-          </template>
-        </UTabs>
       </template>
     </UCard>
   </div>
