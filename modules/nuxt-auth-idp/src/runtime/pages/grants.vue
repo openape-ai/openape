@@ -107,7 +107,17 @@ async function denyGrant(id) {
     actionError.value = e.data?.statusMessage ?? 'Failed to deny grant'
   }
 }
-async function revokeGrant(id) {
+const revokeConfirmId = ref(null)
+function requestRevoke(id) {
+  revokeConfirmId.value = id
+}
+function cancelRevoke() {
+  revokeConfirmId.value = null
+}
+async function confirmRevoke() {
+  const id = revokeConfirmId.value
+  revokeConfirmId.value = null
+  if (!id) return
   actionError.value = ''
   try {
     await $fetch(`/api/grants/${id}/revoke`, { method: 'POST' })
@@ -326,7 +336,7 @@ function isExactCommand(detail) {
                   color="neutral"
                   size="xs"
                   class="flex-shrink-0"
-                  @click="revokeGrant(grant.id)"
+                  @click="requestRevoke(grant.id)"
                 >
                   Revoke
                 </UButton>
@@ -405,6 +415,27 @@ function isExactCommand(detail) {
           </div>
         </section>
       </template>
+
+      <UModal :open="!!revokeConfirmId" @close="cancelRevoke">
+        <template #content>
+          <div class="p-6 space-y-4">
+            <h3 class="text-lg font-semibold">
+              Revoke Permission?
+            </h3>
+            <p class="text-sm text-muted">
+              This will permanently revoke this grant. The agent will no longer be able to use this permission.
+            </p>
+            <div class="flex gap-3 justify-end">
+              <UButton color="neutral" variant="soft" @click="cancelRevoke">
+                Cancel
+              </UButton>
+              <UButton color="error" @click="confirmRevoke">
+                Revoke
+              </UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
     </div>
   </div>
 </template>
