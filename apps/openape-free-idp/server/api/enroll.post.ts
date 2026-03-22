@@ -1,12 +1,19 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 
-function deriveAgentEmail(ownerEmail: string): string {
+function sanitizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-') || 'agent'
+}
+
+function deriveAgentEmail(ownerEmail: string, agentName: string): string {
   const [local, domain] = ownerEmail.split('@')
-  return `agent+${local}+${domain!.replace(/\./g, '_')}@id.openape.at`
+  const safeName = sanitizeName(agentName)
+  return `${safeName}+${local}+${domain!.replace(/\./g, '_')}@id.openape.at`
 }
 
 export default defineEventHandler(async (event) => {
   const email = await requireAuth(event)
+  const config = useRuntimeConfig()
+  const maxAgents = config.public.maxAgentsPerUser
 
   const body = await readBody<{
     id?: string
@@ -24,13 +31,17 @@ export default defineEventHandler(async (event) => {
 
   const { agentStore } = useIdpStores()
 
-  // One-agent-per-user limit
   const existingAgents = await agentStore.findByOwner(email)
-  if (existingAgents.length > 0) {
-    throw createError({ statusCode: 409, statusMessage: 'You already have an agent registered. Delete it first to enroll a new one.' })
+  if (existingAgents.length >= maxAgents) {
+    throw createError({ statusCode: 409, statusMessage: `Agent limit reached (${maxAgents}). Delete an existing agent first.` })
   }
 
-  const agentEmail = deriveAgentEmail(email)
+  const agentEmail = deriveAgentEmail(email, body.name)
+
+  const existingByEmail = await agentStore.findByEmail(agentEmail)
+  if (existingByEmail) {
+    throw createError({ statusCode: 409, statusMessage: 'An agent with this name already exists. Choose a different name.' })
+  }
 
   const agent = await agentStore.create({
     id: body.id || crypto.randomUUID(),

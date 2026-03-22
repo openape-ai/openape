@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useIdpAuth, useRoute, navigateTo } from '#imports'
+
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 
@@ -10,8 +13,12 @@ const validParams = computed(() => agentName.value && agentKey.value.startsWith(
 const enrolling = ref(false)
 const declined = ref(false)
 const error = ref('')
-const hasAgent = ref(false)
-const checkingAgent = ref(true)
+const agentCount = ref(0)
+const checkingAgents = ref(true)
+
+const config = useRuntimeConfig()
+const maxAgents = config.public.maxAgentsPerUser
+const limitReached = computed(() => agentCount.value >= maxAgents)
 
 onMounted(async () => {
   await fetchUser()
@@ -19,16 +26,16 @@ onMounted(async () => {
 
 watch(user, async (u) => {
   if (u?.email) {
-    checkingAgent.value = true
+    checkingAgents.value = true
     try {
-      const existing = await $fetch('/api/my-agent')
-      hasAgent.value = !!existing
+      const agents = await ($fetch as any)('/api/my-agents') as unknown[]
+      agentCount.value = agents.length
     }
     catch {
-      hasAgent.value = false
+      agentCount.value = 0
     }
     finally {
-      checkingAgent.value = false
+      checkingAgents.value = false
     }
   }
 }, { immediate: true })
@@ -45,7 +52,7 @@ async function handleEnroll() {
         publicKey: agentKey.value,
       },
     })
-    await navigateTo('/agent?enrolled=true')
+    await navigateTo('/agents?enrolled=true')
   }
   catch (err: unknown) {
     const e = err as { data?: { detail?: string, title?: string }, message?: string }
@@ -66,7 +73,7 @@ async function handleEnroll() {
         </h1>
       </template>
 
-      <div v-if="authLoading || checkingAgent" class="text-center text-gray-400">
+      <div v-if="authLoading || checkingAgents" class="text-center text-gray-400">
         Loading...
       </div>
 
@@ -90,10 +97,10 @@ async function handleEnroll() {
       />
 
       <UAlert
-        v-else-if="hasAgent"
+        v-else-if="limitReached"
         color="warning"
         title="Agent-Limit erreicht"
-        description="Du hast bereits einen Agent registriert. Lösche ihn zuerst unter 'Agent verwalten', um einen neuen zu registrieren."
+        :description="`Du hast bereits ${agentCount}/${maxAgents} Agents registriert. Lösche einen bestehenden Agent unter 'Agents verwalten', um einen neuen zu registrieren.`"
       />
 
       <UAlert
