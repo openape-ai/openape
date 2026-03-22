@@ -7,7 +7,7 @@ import { createProblemError } from '../../../utils/problem'
 /**
  * POST /api/grants/:id/consume
  *
- * Called by apes before command execution. Verifies the grant JWT,
+ * Called by escapes before command execution. Verifies the grant JWT,
  * checks the grant is still valid, and consumes it for `once` grants.
  *
  * Authorization: Bearer <grant-jwt>

@@ -18,7 +18,7 @@ export const requestCommand = defineCommand({
     },
     audience: {
       type: 'string',
-      description: 'Service identifier (e.g. "apes", "proxy")',
+      description: 'Service identifier (e.g. "escapes", "proxy")',
       required: true,
     },
     host: {

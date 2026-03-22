@@ -105,7 +105,7 @@ Ohne bestandene Checks: kein Commit, kein Deploy.
 
 ## Important Notes
 
-- **`desktop/` and `sudo/`** are separate repos (`openape-ai/desktop`, `openape-ai/sudo`) — not part of this monorepo
+- **`desktop/` and `sudo/`** are separate repos (`openape-ai/desktop`, `openape-ai/escapes`) — not part of this monorepo
 - **ESLint override:** `eslint` is pinned to `^9.35.0` via pnpm overrides to avoid eslint 10 incompatibility with vue-eslint-parser
 - **Nuxt module stubs:** modules run `nuxt-module-build build --stub` during `prepare` so apps can load them during install
 

@@ -34,7 +34,7 @@ const sudoCommand = computed(() => {
   const name = email.split('@')[0] ?? 'agent'
   const [local, domain] = email.split('@')
   const agentEmail = `agent+${local}+${(domain ?? '').replace(/\./g, '_')}@id.openape.at`
-  return `sudo apes enroll \\\n  --server https://id.openape.at \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/apes/agent.key`
+  return `sudo escapes enroll \\\n  --server https://id.openape.at \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/openape/agent.key`
 })
 
 const authInstructions = computed(() => {
@@ -63,26 +63,26 @@ const agentInstructions = computed(() => {
   return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.at/enroll?name=<agent-name>&key=<url-encoded-public-key>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n\nThe agent email will be automatically derived from the logged-in user's email.`
 })
 
-const apesCommands = computed(() => {
+const escapesCommands = computed(() => {
   if (!agent.value) return []
   const email = agent.value.email
   const name = agent.value.name
   return [
     {
       label: 'Enroll (neuer Server)',
-      cmd: `sudo apes enroll --server https://id.openape.at --agent-email "${email}" --agent-name "${name}" --key /etc/apes/agent.key --existing`,
+      cmd: `sudo escapes enroll --server https://id.openape.at --agent-email "${email}" --agent-name "${name}" --key /etc/openape/agent.key --existing`,
     },
     {
       label: 'Server-URL ändern',
-      cmd: `sudo apes update --email "${email}" --server https://id.openape.at`,
+      cmd: `sudo escapes update --email "${email}" --server https://id.openape.at`,
     },
     {
       label: 'Agent entfernen (nur lokal)',
-      cmd: `sudo apes remove --email "${email}"`,
+      cmd: `sudo escapes remove --email "${email}"`,
     },
     {
       label: 'Agent entfernen (lokal + remote)',
-      cmd: `sudo apes remove --email "${email}" --remote`,
+      cmd: `sudo escapes remove --email "${email}" --remote`,
     },
   ]
 })
@@ -306,13 +306,13 @@ async function handleDelete() {
             </div>
           </div>
 
-          <div v-if="apesCommands.length">
+          <div v-if="escapesCommands.length">
             <p class="text-sm text-gray-400 mb-2">
-              Server-Befehle (apes)
+              Server-Befehle (escapes)
             </p>
             <div class="space-y-2">
               <div
-                v-for="item in apesCommands"
+                v-for="item in escapesCommands"
                 :key="item.label"
               >
                 <p class="text-xs text-gray-500 mb-1">
@@ -357,7 +357,7 @@ async function handleDelete() {
           default-value="agent"
           :items="[
             { label: 'Enroll with agent', value: 'agent', slot: 'agent' },
-            { label: 'Enroll with apes', value: 'sudo', slot: 'sudo' },
+            { label: 'Enroll with escapes', value: 'sudo', slot: 'sudo' },
           ]"
         >
           <template #agent>

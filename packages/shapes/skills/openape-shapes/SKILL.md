@@ -22,7 +22,7 @@ Shapes wraps arbitrary CLI tools with structured adapters that describe what eac
 
 - **`shapes` binary** installed (`npm install -g @openape/shapes`)
 - **`grapes` CLI** for grant management (see `openape-grapes` skill)
-- For privilege elevation: **`apes`/`escapes`** binary (see `openape-sudo` skill)
+- For privilege elevation: **`escapes`** binary (see `openape-escapes` skill)
 
 ## Adapter Registry
 
@@ -193,17 +193,17 @@ Or step-by-step with grapes for more control:
 5. shapes --grant $TOKEN -- gh pr merge 42 --squash              # Execute
 ```
 
-### With Privilege Elevation (apes)
+### With Privilege Elevation (escapes)
 
 For commands that need root:
 
 ```
-1. grapes request "apt update" --audience apes --reason "patches" --wait
+1. grapes request "apt update" --audience escapes --reason "patches" --wait
 2. TOKEN=$(grapes token <grant-id>)
-3. apes --grant $TOKEN -- apt update
+3. escapes --grant $TOKEN -- apt update
 ```
 
-Use `apes` directly (not shapes) when the command needs root privileges. Shapes is for user-level CLI wrappers.
+Use `escapes` directly (not shapes) when the command needs root privileges. Shapes is for user-level CLI wrappers.
 
 ## Programmatic API
 
