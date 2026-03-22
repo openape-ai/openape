@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+
+### Minor Changes
+
+- [`deee941`](https://github.com/openape-ai/openape/commit/deee941887ef584ae43f0680c27c1464ef95b7c4) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat: add defineXxxStore pattern for custom storage backends
+
+  All 11 stores (grants, challenges, users, agents, credentials, etc.) are now replaceable via Nitro plugins. Apps can register custom store implementations using `defineGrantStore()`, `defineUserStore()`, etc. The default Unstorage-based implementation remains — no changes needed for existing apps.
+
 ## 0.8.2
 
 ### Patch Changes
