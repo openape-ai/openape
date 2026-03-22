@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-
 useSeoMeta({ title: 'Free Identity Provider' })
 
 const { user, loading, fetchUser, logout } = useIdpAuth()
-const initialized = ref(false)
 
 await fetchUser()
-initialized.value = true
 
 async function handleLogout() {
   await logout()
@@ -17,10 +13,8 @@ async function handleLogout() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4">
-    <div v-if="!initialized || loading" />
-
     <!-- Logged in -->
-    <UCard v-else-if="user" class="w-full max-w-md bg-gray-900 border border-gray-800">
+    <UCard v-if="user" class="w-full max-w-md bg-gray-900 border border-gray-800">
       <div class="flex flex-col items-center gap-4 py-4">
         <AppLogo />
         <div class="text-center">
