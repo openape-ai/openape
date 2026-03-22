@@ -37,13 +37,17 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
-  const agent = await agentStore.findByEmail(grant.request.requester)
-  if (!agent) {
-    throw createProblemError({ status: 403, title: 'Agent not found for this grant' })
-  }
-  const isOwnerOrApprover = agent.owner === email || agent.approver === email
-  if (!isOwnerOrApprover) {
-    throw createProblemError({ status: 403, title: 'Only the agent owner or approver can approve this grant' })
+  // Allow if the logged-in user is the requester themselves
+  const isRequester = grant.request.requester === email
+  if (!isRequester) {
+    const agent = await agentStore.findByEmail(grant.request.requester)
+    if (!agent) {
+      throw createProblemError({ status: 403, title: 'Agent not found for this grant' })
+    }
+    const isOwnerOrApprover = agent.owner === email || agent.approver === email
+    if (!isOwnerOrApprover) {
+      throw createProblemError({ status: 403, title: 'Only the agent owner or approver can approve this grant' })
+    }
   }
 
   const overrides: ApproveGrantOverrides | undefined = body.grant_type
