@@ -91,6 +91,10 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
       if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
       if (extra?.expires_at !== undefined) updates.expiresAt = extra.expires_at
       if (extra?.used_at !== undefined) updates.usedAt = extra.used_at
+      if (extra?.request !== undefined) {
+        updates.request = extra.request as unknown as Record<string, unknown>
+        updates.grantType = (extra.request as OpenApeGrantRequest).grant_type ?? 'once'
+      }
 
       await db.update(grants).set(updates).where(eq(grants.id, id))
     },
