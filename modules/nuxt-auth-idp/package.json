@@ -1,7 +1,7 @@
 {
   "name": "@openape/nuxt-auth-idp",
   "type": "module",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "OpenApe Identity Provider Nuxt module — adds user auth, OAuth, admin, and agent management",
   "author": "Delta Mind GmbH",
   "license": "MIT",

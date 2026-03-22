@@ -1,6 +1,6 @@
 {
   "name": "@openape/grapes",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Universal Grant Management CLI for OpenApe",
   "type": "module",
   "bin": {
