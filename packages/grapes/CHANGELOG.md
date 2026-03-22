@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- [`aec76f8`](https://github.com/openape-ai/openape/commit/aec76f8f888a029f60139ab5b16bfaacf432cd62) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - rename: apes → escapes
+
+  CLI flag `--apes-path` renamed to `--escapes-path`. Audience check changed from `"apes"` to `"escapes"`. Use `grapes run escapes "command"` instead of `grapes run apes "command"`.
+
 ## 0.5.0
 
 ### Minor Changes
