@@ -29,7 +29,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
       {
         requester: TEST_USER.email,
         target_host: 'test-sp',
-        audience: 'apes',
+        audience: 'escapes',
         grant_type: grantType,
         permissions: ['read'],
       },

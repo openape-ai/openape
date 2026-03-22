@@ -13,7 +13,7 @@ export const runCommand = defineCommand({
   args: {
     'audience': {
       type: 'positional',
-      description: 'Service identifier (e.g. "apes", "proxy")',
+      description: 'Service identifier (e.g. "escapes", "proxy")',
       required: true,
     },
     'action': {
@@ -38,10 +38,10 @@ export const runCommand = defineCommand({
       type: 'string',
       description: 'Target host (default: system hostname)',
     },
-    'apes-path': {
+    'escapes-path': {
       type: 'string',
-      description: 'Path to apes binary',
-      default: 'apes',
+      description: 'Path to escapes binary',
+      default: 'escapes',
     },
   },
   async run({ args }) {
@@ -83,10 +83,10 @@ export const runCommand = defineCommand({
     })
 
     // Step 4: Execute or output token
-    if (args.audience === 'apes') {
+    if (args.audience === 'escapes') {
       consola.info(`Executing: ${command.join(' ')}`)
       try {
-        execFileSync(args['apes-path'], ['--grant', authz_jwt, '--', ...command], {
+        execFileSync(args['escapes-path'], ['--grant', authz_jwt, '--', ...command], {
           stdio: 'inherit',
         })
       }
@@ -96,7 +96,7 @@ export const runCommand = defineCommand({
       }
     }
     else {
-      // For non-apes audiences, output the token
+      // For non-escapes audiences, output the token
       process.stdout.write(authz_jwt)
     }
   },

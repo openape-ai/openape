@@ -16,7 +16,7 @@ metadata:
 
 # OpenAPE Grant Management (grapes)
 
-CLI for managing authorization grants in the OpenAPE/DDISA ecosystem. Grants are the central authorization primitive — every privileged action (via `apes`/`escapes` or `shapes`) requires a grant approved by a human.
+CLI for managing authorization grants in the OpenAPE/DDISA ecosystem. Grants are the central authorization primitive — every privileged action (via `escapes` or `shapes`) requires a grant approved by a human.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ grapes login --idp https://id.openape.at
 For non-interactive agents:
 
 ```bash
-grapes login --idp https://id.openape.at --key ~/.apes/keys/deploy.key --email agent+deploy@example.com
+grapes login --idp https://id.openape.at --key /etc/openape/agent.key --email agent+deploy@example.com
 ```
 
 ### Check Identity
@@ -58,7 +58,7 @@ grapes logout
 ## Grant Lifecycle
 
 ```
-pending → approved → used (consumed by apes/shapes)
+pending → approved → used (consumed by escapes/shapes)
        → denied
        → revoked (by owner, at any time)
 ```
@@ -76,15 +76,15 @@ pending → approved → used (consumed by apes/shapes)
 grapes request "<command>" --audience <service> [--approval once|timed|always] [--duration <duration>] [--reason "<text>"] [--host <hostname>] [--wait]
 ```
 
-- `--audience` — target service: `apes` (privilege elevation), `proxy` (HTTP gateway), or custom
+- `--audience` — target service: `escapes` (privilege elevation), `proxy` (HTTP gateway), or custom
 - `--duration` — required for `timed` grants (e.g. `30m`, `1h`, `7d`)
 - `--wait` — block until the grant is approved or denied (polls every 3s, timeout 5min)
 
 Example:
 
 ```bash
-grapes request "apt update" --audience apes --reason "security patches" --wait
-grapes request "apt update" --audience apes --approval timed --duration 1h --reason "maintenance window" --wait
+grapes request "apt update" --audience escapes --reason "security patches" --wait
+grapes request "apt update" --audience escapes --approval timed --duration 1h --reason "maintenance window" --wait
 ```
 
 ### Request a Structured Capability Grant (for shapes)
@@ -169,21 +169,21 @@ grapes deny <grant-id>
 grapes token <grant-id>
 ```
 
-Outputs the raw JWT to stdout (pipeable). Use with `apes --grant` or `shapes --grant`.
+Outputs the raw JWT to stdout (pipeable). Use with `escapes --grant` or `shapes --grant`.
 
 ### Request + Wait + Execute (all-in-one)
 
 ```bash
-grapes run <audience> "<command>" [--approval once|timed|always] [--reason "<text>"] [--apes-path <path>]
+grapes run <audience> "<command>" [--approval once|timed|always] [--reason "<text>"] [--escapes-path <path>]
 ```
 
-For `apes` audience: requests grant, waits for approval, fetches token, executes via `apes --grant`.
+For `escapes` audience: requests grant, waits for approval, fetches token, executes via `escapes --grant`.
 For other audiences: outputs the token to stdout.
 
 Example:
 
 ```bash
-grapes run apes "systemctl restart nginx" --reason "deploy v2.0"
+grapes run escapes "systemctl restart nginx" --reason "deploy v2.0"
 ```
 
 ## Revoking Grants
@@ -203,7 +203,7 @@ grapes delegate --to <email> --at <audience> [--scopes <comma-separated>] [--app
 Example:
 
 ```bash
-grapes delegate --to agent+ci@example.com --at apes --scopes "apt,systemctl" --approval timed --expires 2026-04-01T00:00:00Z
+grapes delegate --to agent+ci@example.com --at escapes --scopes "apt,systemctl" --approval timed --expires 2026-04-01T00:00:00Z
 ```
 
 ### List Delegations
@@ -218,16 +218,16 @@ Typical flow for an agent that needs to execute a privileged command:
 
 ```
 1. grapes login --idp <url> --key <key> --email <agent-email>
-2. grapes request "<command>" --audience apes --reason "<why>" --wait
+2. grapes request "<command>" --audience escapes --reason "<why>" --wait
 3. GRANT_ID=$(grapes list --status approved --json | jq -r '.data[0].id')
 4. TOKEN=$(grapes token $GRANT_ID)
-5. apes --grant $TOKEN -- <command>
+5. escapes --grant $TOKEN -- <command>
 ```
 
 Or use the all-in-one shortcut:
 
 ```bash
-grapes run apes "<command>" --reason "<why>"
+grapes run escapes "<command>" --reason "<why>"
 ```
 
 ## Combined Workflow with shapes

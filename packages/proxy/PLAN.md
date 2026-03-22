@@ -63,7 +63,7 @@ Das Agent-JWT kommt aus dem bestehenden Ed25519 Challenge-Response Flow.
 [proxy]
 listen = "127.0.0.1:9090"
 idp_url = "https://id.office.or.at"
-agent_key = "/etc/apes/agent.key"
+agent_key = "/etc/openape/agent.key"
 agent_id = "mini-claw@office.or.at"
 default_action = "request"   # block | request | request-async
 audit_log = "/var/log/openape-proxy/audit.jsonl"
@@ -134,7 +134,7 @@ grant_type = "once"
 
 ### Sprache: Rust
 
-- Wie `apes` — konsistent im Ökosystem
+- Wie `escapes` — konsistent im Ökosystem
 - Performant für Proxy-Workload (viele gleichzeitige Connections)
 - `tokio` + `hyper` für async HTTP
 - Kein TLS-Aufbrechen nötig: CONNECT-Tunnel ist opak (nur Domain sichtbar, nicht der Inhalt)
@@ -229,7 +229,7 @@ Ziel: Volle Transparenz über Agent-Aktivität im Web.
 Ziel: Nahtlose Einbindung in OpenApe und Agent-Runtimes.
 
 - [ ] `@openape/proxy` npm Package (programmatisch starten/konfigurieren)
-- [ ] Integration mit `apes` (ein Setup: Proxy + sudo gemeinsam konfiguriert)
+- [ ] Integration mit `escapes` (ein Setup: Proxy + sudo gemeinsam konfiguriert)
 - [ ] OpenClaw Plugin (Proxy automatisch starten wenn Agent startet)
 - [ ] Agent-Runtime SDKs (Python, Go) — für Agents die nicht auf HTTP_PROXY setzen
 - [ ] Auto-Discovery (Agent fragt IdP: "Welche Domains darf ich?" → Config generieren)
@@ -253,9 +253,9 @@ openape-proxy --status
 | Komponente | Rolle |
 |---|---|
 | `openape-proxy` | Kontrolliert ausgehenden Agent-Traffic |
-| `apes` (openape-sudo) | Kontrolliert lokale Privilege Elevation |
+| `escapes` (openape-escapes) | Kontrolliert lokale Privilege Elevation |
 | `@openape/grants` | Grant-Logik (shared zwischen Proxy und sudo) |
 | `@openape/nuxt-grants` | Web-UI für Grant-Approval |
 | IdP (id.office.or.at) | Zentrale Autorität für Agents + Grants |
 
-**Zusammen:** Ein Agent kann weder lokal (apes) noch im Web (proxy) etwas tun, ohne dass ein Mensch es erlaubt hat.
+**Zusammen:** Ein Agent kann weder lokal (escapes) noch im Web (proxy) etwas tun, ohne dass ein Mensch es erlaubt hat.

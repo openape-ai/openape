@@ -85,7 +85,7 @@ describe('commands', () => {
     expect(runCommand.meta?.name).toBe('run')
     expect(runCommand.args).toHaveProperty('audience')
     expect(runCommand.args).toHaveProperty('action')
-    expect(runCommand.args).toHaveProperty('apes-path')
+    expect(runCommand.args).toHaveProperty('escapes-path')
   })
 
   it('delegate command has correct meta and args', async () => {
