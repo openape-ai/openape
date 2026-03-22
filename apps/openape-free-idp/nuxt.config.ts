@@ -25,6 +25,9 @@ export default defineNuxtConfig({
     resendFrom: 'auth@openape.at',
     tursoUrl: '',
     tursoAuthToken: '',
+    public: {
+      maxAgentsPerUser: 10,
+    },
   },
 
   compatibilityDate: '2025-01-01',

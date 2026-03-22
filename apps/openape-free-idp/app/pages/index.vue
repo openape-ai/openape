@@ -37,14 +37,14 @@ async function handleLogout() {
             Passkeys verwalten
           </UButton>
           <UButton
-            to="/agent"
+            to="/agents"
             color="primary"
             variant="outline"
             size="lg"
             block
             icon="i-lucide-bot"
           >
-            Agent verwalten
+            Agents verwalten
           </UButton>
           <UButton
             to="/grants"
