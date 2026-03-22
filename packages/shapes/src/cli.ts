@@ -7,10 +7,12 @@ import { loadAdapter } from './adapters.js'
 import { verifyAndExecute } from './grants.js'
 import { resolveCommand } from './parser.js'
 
+declare const __VERSION__: string
+
 const main = defineCommand({
   meta: {
     name: 'shapes',
-    version: '0.3.0',
+    version: __VERSION__,
     description: 'Grant-aware CLI wrappers for OpenApe',
   },
   subCommands: {

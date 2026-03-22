@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { defineCommand, runCommand as runCitty } from 'citty'
+import { defineCommand, runMain } from 'citty'
 import { loginCommand } from './commands/login'
 import { logoutCommand } from './commands/logout'
 import { whoamiCommand } from './commands/whoami'
@@ -19,10 +19,12 @@ import { ApiError } from './http'
 
 const debug = process.argv.includes('--debug')
 
+declare const __VERSION__: string
+
 const main = defineCommand({
   meta: {
     name: 'grapes',
-    version: '0.1.0',
+    version: __VERSION__,
     description: 'Universal Grant Management CLI for OpenApe',
   },
   subCommands: {
@@ -44,7 +46,7 @@ const main = defineCommand({
   },
 })
 
-runCitty(main, { rawArgs: process.argv.slice(2) }).catch((err) => {
+runMain(main).catch((err) => {
   if (debug) {
     consola.error(err)
   }
