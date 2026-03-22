@@ -4,7 +4,11 @@ import { navigateTo, useIdpAuth } from '#imports'
 import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
-const grants = ref([])
+const activeAndPending = ref([])
+const historyGrants = ref([])
+const historyCursor = ref(null)
+const historyHasMore = ref(false)
+const loadingHistory = ref(false)
 const loading = ref(true)
 const actionError = ref('')
 const grantTypeSelections = ref({})
@@ -27,9 +31,8 @@ function getEffectiveDuration(grantId) {
   const preset = durationPresetSelections.value[grantId] ?? '3600'
   return preset === 'custom' ? customDurations.value[grantId] ?? 3600 : Number(preset)
 }
-const pendingGrants = computed(() => grants.value.filter(g => g.status === 'pending'))
-const activeGrants = computed(() => grants.value.filter(g => g.status === 'approved' && g.request.grant_type !== 'once'))
-const historyGrants = computed(() => grants.value.filter(g => g.status !== 'pending' && !(g.status === 'approved' && g.request.grant_type !== 'once')))
+const pendingGrants = computed(() => activeAndPending.value.filter(g => g.status === 'pending'))
+const activeGrants = computed(() => activeAndPending.value.filter(g => g.status === 'approved'))
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
@@ -41,9 +44,15 @@ onMounted(async () => {
 async function loadGrants() {
   loading.value = true
   try {
-    const response = await $fetch('/api/grants')
-    grants.value = response.data
-    for (const g of response.data) {
+    const [activeRes, historyRes] = await Promise.all([
+      $fetch('/api/grants?section=active'),
+      $fetch('/api/grants?section=history'),
+    ])
+    activeAndPending.value = activeRes.data
+    historyGrants.value = historyRes.data
+    historyCursor.value = historyRes.pagination?.cursor ?? null
+    historyHasMore.value = historyRes.pagination?.has_more ?? false
+    for (const g of activeRes.data) {
       if (g.status === 'pending' && !grantTypeSelections.value[g.id]) {
         grantTypeSelections.value[g.id] = 'once'
         durationPresetSelections.value[g.id] = '3600'
@@ -51,9 +60,24 @@ async function loadGrants() {
       }
     }
   } catch {
-    grants.value = []
+    activeAndPending.value = []
+    historyGrants.value = []
   } finally {
     loading.value = false
+  }
+}
+async function loadMoreHistory() {
+  if (!historyCursor.value || loadingHistory.value) return
+  loadingHistory.value = true
+  try {
+    const res = await $fetch(`/api/grants?section=history&cursor=${historyCursor.value}`)
+    historyGrants.value = [...historyGrants.value, ...res.data]
+    historyCursor.value = res.pagination?.cursor ?? null
+    historyHasMore.value = res.pagination?.has_more ?? false
+  } catch {
+    // ignore
+  } finally {
+    loadingHistory.value = false
   }
 }
 async function approveGrant(id) {
@@ -318,7 +342,7 @@ function isExactCommand(detail) {
           </h2>
           <UCard v-if="historyGrants.length === 0">
             <p class="text-sm text-muted text-center">
-              No history.
+              No recent history.
             </p>
           </UCard>
           <div v-else class="space-y-3">
@@ -327,7 +351,7 @@ function isExactCommand(detail) {
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-mono text-xs text-dimmed">{{ grant.id.slice(0, 8) }}...</span>
                   <UBadge
-                    :color="{ denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info' }[grant.status] || 'neutral'"
+                    :color="{ denied: 'error', revoked: 'neutral', expired: 'warning', used: 'info', approved: 'success' }[grant.status] || 'neutral'"
                     :variant="grant.status === 'expired' ? 'outline' : 'soft'"
                     :label="grant.status"
                   />
@@ -373,6 +397,11 @@ function isExactCommand(detail) {
                 </p>
               </div>
             </UCard>
+            <div v-if="historyHasMore" class="text-center pt-2">
+              <UButton color="neutral" variant="soft" size="sm" :loading="loadingHistory" @click="loadMoreHistory">
+                Load more
+              </UButton>
+            </div>
           </div>
         </section>
       </template>
