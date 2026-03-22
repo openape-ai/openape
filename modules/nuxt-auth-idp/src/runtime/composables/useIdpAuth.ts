@@ -1,4 +1,4 @@
-import { useState } from '#imports'
+import { useState, useRequestHeaders } from '#imports'
 
 interface AuthUser {
   email: string
@@ -13,7 +13,8 @@ export function useIdpAuth() {
   async function fetchUser() {
     loading.value = true
     try {
-      const data = await $fetch<AuthUser>('/api/me')
+      const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+      const data = await $fetch<AuthUser>('/api/me', { headers })
       user.value = data
     }
     catch {
