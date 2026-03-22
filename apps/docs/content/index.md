@@ -16,7 +16,7 @@ AI agents are getting powerful. They send emails, move money, deploy code. OpenA
   Human-in-the-loop permission system. Agents request, humans approve — once, time-limited, or standing.
   ::
   ::card{title="Ecosystem" icon="i-heroicons-cube" to="/ecosystem"}
-  Small, focused packages you compose as needed. Core, Auth, Grants, Nuxt modules, and `apes` CLI.
+  Small, focused packages you compose as needed. Core, Auth, Grants, Nuxt modules, and `escapes` CLI.
   ::
   ::card{title="Compliance" icon="i-heroicons-document-check" to="/security/compliance"}
   NIS2 and NIST CSF 2.0 compliant by design. Passkeys-only, phishing-proof, no bolt-on MFA.
