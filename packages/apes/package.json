@@ -1,6 +1,6 @@
 {
   "name": "@openape/apes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Unified CLI + MCP Server for OpenApe",
   "type": "module",
   "bin": {
