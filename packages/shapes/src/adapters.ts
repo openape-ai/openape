@@ -1,12 +1,9 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, join } from 'node:path'
 import type { LoadedAdapter } from './types.js'
 import { parseAdapterToml } from './toml.js'
-
-const PACKAGE_DIR = dirname(fileURLToPath(import.meta.url))
 
 function digest(content: string): string {
   return `SHA-256:${createHash('sha256').update(content).digest('hex')}`
@@ -17,7 +14,6 @@ function adapterDirs(): string[] {
     join(process.cwd(), '.openape', 'shapes', 'adapters'),
     join(homedir(), '.openape', 'shapes', 'adapters'),
     join('/etc', 'openape', 'shapes', 'adapters'),
-    join(PACKAGE_DIR, '..', 'adapters'),
   ]
 }
 

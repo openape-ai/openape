@@ -1,0 +1,49 @@
+{
+  "name": "@openape/apes",
+  "version": "0.1.0",
+  "description": "Unified CLI + MCP Server for OpenApe",
+  "type": "module",
+  "bin": {
+    "apes": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
+    "@openape/shapes": "workspace:*",
+    "citty": "^0.1.6",
+    "consola": "^3.4.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsup": "^8.5.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.2.4"
+  },
+  "license": "MIT",
+  "author": "Patrick Hofmann <phofmann@delta-mind.at>",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/apes"
+  }
+}
