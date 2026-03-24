@@ -1,10 +1,13 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadAdapter } from '../src/adapters.js'
 import { resolveCommand } from '../src/parser.js'
 
+const fixturesDir = join(import.meta.dirname, 'fixtures')
+
 describe('@openape/shapes adapters', () => {
   it('resolves gh repo list', async () => {
-    const loaded = loadAdapter('gh')
+    const loaded = loadAdapter('gh', join(fixturesDir, 'gh.toml'))
     const resolved = await resolveCommand(loaded, ['gh', 'repo', 'list', 'openape'])
 
     expect(resolved.detail.operation_id).toBe('repo.list')
@@ -12,7 +15,7 @@ describe('@openape/shapes adapters', () => {
   })
 
   it('resolves az repos pr list with explicit bindings', async () => {
-    const loaded = loadAdapter('az')
+    const loaded = loadAdapter('az', join(fixturesDir, 'az.toml'))
     const resolved = await resolveCommand(loaded, [
       'az',
       'repos',
@@ -31,7 +34,7 @@ describe('@openape/shapes adapters', () => {
   })
 
   it('resolves exo dns show and keeps delete separate', async () => {
-    const loaded = loadAdapter('exo')
+    const loaded = loadAdapter('exo', join(fixturesDir, 'exo.toml'))
     const read = await resolveCommand(loaded, ['exo', 'dns', 'show', 'example.com'])
     const remove = await resolveCommand(loaded, ['exo', 'dns', 'remove', 'example.com', 'www'])
 

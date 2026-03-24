@@ -30,6 +30,7 @@ jobs:
           --filter=@openape/core
           --filter=@openape/auth
           --filter=@openape/grants
+          --filter=@openape/apes
           --filter=@openape/grapes
           --filter=@openape/proxy
           --filter=@openape/browser
