@@ -1,7 +1,7 @@
 {
   "name": "@openape/shapes",
   "version": "0.3.0",
-  "description": "Grant-aware CLI wrappers for OpenApe",
+  "description": "DEPRECATED: Use @openape/apes instead. Grant-aware CLI wrappers for OpenApe",
   "type": "module",
   "exports": {
     ".": {
@@ -15,8 +15,7 @@
     "shapes": "./dist/cli.js"
   },
   "files": [
-    "dist",
-    "adapters"
+    "dist"
   ],
   "scripts": {
     "build": "tsup",
