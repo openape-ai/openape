@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`c195c81`](https://github.com/openape-ai/openape/commit/c195c8107d6b7723bbcd190cfa50d21acadbb3fc)]:
+  - @openape/shapes@0.4.0
+
 ## 0.6.0
 
 ### Minor Changes
