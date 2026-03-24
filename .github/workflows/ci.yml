@@ -19,7 +19,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run lint typecheck test build --concurrency=2
+      - run: pnpm turbo run lint typecheck test build --affected
 
   validate-apps:
     runs-on: ubuntu-latest
