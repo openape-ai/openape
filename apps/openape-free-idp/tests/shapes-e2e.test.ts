@@ -200,6 +200,11 @@ describe('free-idp + shapes end-to-end', () => {
       expires_at: Math.floor(Date.now() / 1000) + 3600,
     }))
 
+    const adaptersDir = join(sandboxDir, '.openape', 'shapes', 'adapters')
+    mkdirSync(adaptersDir, { recursive: true })
+    const exoFixture = join(monorepoRoot, 'packages', 'shapes', 'test', 'fixtures', 'exo.toml')
+    writeFileSync(join(adaptersDir, 'exo.toml'), readFileSync(exoFixture, 'utf-8'))
+
     const binDir = join(sandboxDir, 'bin')
     mkdirSync(binDir, { recursive: true })
     const executionLog = join(sandboxDir, 'exo-exec.txt')

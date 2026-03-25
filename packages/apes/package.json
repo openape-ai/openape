@@ -1,6 +1,7 @@
 {
   "name": "@openape/apes",
   "version": "0.2.1",
+  "turbo": { "tags": ["publishable"] },
   "description": "Unified CLI + MCP Server for OpenApe",
   "type": "module",
   "bin": {

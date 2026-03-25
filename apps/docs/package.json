@@ -1,6 +1,7 @@
 {
   "name": "docs",
   "private": true,
+  "turbo": { "tags": ["app"] },
   "type": "module",
   "scripts": {
     "build": "nuxt build",
