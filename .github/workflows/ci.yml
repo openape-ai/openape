@@ -19,4 +19,4 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run lint typecheck test build --affected --filter='!./examples/*'
+      - run: pnpm turbo run lint typecheck test build --filter='./packages/*' --filter='./modules/*' --filter='./apps/*'
