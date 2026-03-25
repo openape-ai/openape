@@ -3,7 +3,11 @@
   "type": "module",
   "version": "0.2.0",
   "private": true,
-  "turbo": { "tags": ["app"] },
+  "turbo": {
+    "tags": [
+      "app"
+    ]
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev --port 3002",

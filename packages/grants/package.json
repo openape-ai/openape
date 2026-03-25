@@ -1,8 +1,12 @@
 {
   "name": "@openape/grants",
   "type": "module",
-  "version": "0.5.2",
-  "turbo": { "tags": ["publishable"] },
+  "version": "0.5.3",
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
+  },
   "description": "OpenApe authorization server: grant issuance, revocation, introspection",
   "author": "Delta Mind GmbH",
   "license": "MIT",
