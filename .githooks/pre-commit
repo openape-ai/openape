@@ -14,6 +14,25 @@ if [ "$SKIP_HOOKS" = "1" ]; then
   exit 0
 fi
 
+# --- Branch policy ---
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$branch" = "main" ]; then
+  # On main: only allow infra/config commits
+  staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+  non_infra=$(echo "$staged_files" | grep -vE '^(\.(claude|github|githooks|changeset)/|scripts/|\.gitignore|\.gitattributes|\.npmrc|eslint\.config\.mjs|turbo\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|LICENSE|README\.md|CHANGELOG\.md|CONTRIBUTING\.md|package\.json$)' || true)
+
+  if [ -n "$non_infra" ]; then
+    echo "[pre-commit] BLOCKED — Source-Änderungen auf 'main' nicht erlaubt:"
+    echo "$non_infra" | head -10
+    echo ""
+    echo "  Feature-Branch erstellen:  git checkout -b <type>/issue-<nr>-<desc> origin/main"
+    echo "  Oder in Claude Code:       /issue <nr>"
+    echo "  Skip:                      SKIP_HOOKS=1 git commit ..."
+    exit 1
+  fi
+fi
+
 errors=0
 
 # --- Lockfile sync ---
