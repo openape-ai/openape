@@ -1,8 +1,12 @@
 {
   "name": "@openape/auth",
   "type": "module",
-  "version": "0.5.5",
-  "turbo": { "tags": ["publishable"] },
+  "version": "0.5.6",
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
+  },
   "description": "OpenApe authentication: IdP + SP OIDC protocol logic",
   "author": "Delta Mind GmbH",
   "license": "MIT",
