@@ -21,8 +21,9 @@
     "dist"
   ],
   "scripts": {
+    "clean:stubs": "find src/runtime \\( -name '*.d.ts' -o -name '*.d.vue.ts' -o -name '*.js' \\) -delete 2>/dev/null; true",
     "prepack": "nuxt-module-build build",
-    "prebuild": "find src/runtime \\( -name '*.d.ts' -o -name '*.d.vue.ts' -o -name '*.js' \\) -delete 2>/dev/null; true",
+    "prebuild": "pnpm clean:stubs",
     "build": "nuxt-module-build build",
     "dev": "nuxt-module-build build --stub",
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
