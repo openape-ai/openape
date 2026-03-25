@@ -8,7 +8,6 @@
  *        → auth   → nuxt-auth-sp
  *                 → nuxt-auth-idp
  *        → shapes → apes
- *                 → grapes
  *
  * For each package: compares local version vs npm, builds if needed,
  * publishes with --ignore-scripts (to avoid prepare/stub issues in Nuxt modules).
@@ -32,7 +31,6 @@ const PACKAGES = [
   { name: '@openape/browser', dir: 'packages/browser' },
   { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/apes', dir: 'packages/apes' },
-  { name: '@openape/grapes', dir: 'packages/grapes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
