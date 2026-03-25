@@ -168,6 +168,7 @@ describe('grant approval pages', () => {
 
   it('loads the grant dashboard and approves a pending CLI grant', async () => {
     const fetchMock = vi.fn()
+      // Initial load: active section
       .mockResolvedValueOnce({
         data: [
           buildCliGrant(),
@@ -182,7 +183,11 @@ describe('grant approval pages', () => {
           }),
         ],
       })
+      // Initial load: history section
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+      // Approve call
       .mockResolvedValueOnce({ id: 'grant-1', status: 'approved' })
+      // Refresh after approve: active section
       .mockResolvedValueOnce({
         data: [
           buildCliGrant({
@@ -196,6 +201,8 @@ describe('grant approval pages', () => {
           }),
         ],
       })
+      // Refresh after approve: history section
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
     vi.stubGlobal('$fetch', fetchMock)
 
     const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
@@ -218,16 +225,26 @@ describe('grant approval pages', () => {
 
   it('denies a pending grant from the dashboard', async () => {
     const fetchMock = vi.fn()
+      // Initial load: active section
       .mockResolvedValueOnce({
         data: [buildCliGrant()],
       })
+      // Initial load: history section
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+      // Deny call
       .mockResolvedValueOnce({ id: 'grant-1', status: 'denied' })
+      // Refresh after deny: active section
+      .mockResolvedValueOnce({
+        data: [],
+      })
+      // Refresh after deny: history section
       .mockResolvedValueOnce({
         data: [
           buildCliGrant({
             status: 'denied',
           }),
         ],
+        pagination: { cursor: null, has_more: false },
       })
     vi.stubGlobal('$fetch', fetchMock)
 
