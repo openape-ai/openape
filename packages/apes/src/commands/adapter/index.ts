@@ -107,25 +107,30 @@ export const adapterCommand = defineCommand({
         },
       },
       async run({ args }) {
-        const id = String(args.id)
+        const ids = [String(args.id), ...args._].filter(Boolean)
         const local = Boolean(args.local)
         const index = await fetchRegistry(Boolean(args.refresh))
-        const entry = findAdapter(index, id)
-        if (!entry)
-          throw new Error(`Adapter "${id}" not found in registry. Use \`apes adapter search ${id}\` to search.`)
 
-        const conflicts = findConflictingAdapters(entry.executable, id)
-        if (conflicts.length > 0) {
-          for (const c of conflicts) {
-            consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
-            consola.warn(`  Remove it with: apes adapter remove ${c.adapterId}`)
+        for (const id of ids) {
+          const entry = findAdapter(index, id)
+          if (!entry) {
+            consola.error(`Adapter "${id}" not found in registry. Use \`apes adapter search ${id}\` to search.`)
+            continue
           }
-        }
 
-        const result = await installAdapter(entry, { local })
-        const verb = result.updated ? 'Updated' : 'Installed'
-        consola.success(`${verb} ${result.id} → ${result.path}`)
-        consola.info(`Digest: ${result.digest}`)
+          const conflicts = findConflictingAdapters(entry.executable, id)
+          if (conflicts.length > 0) {
+            for (const c of conflicts) {
+              consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
+              consola.warn(`  Remove it with: apes adapter remove ${c.adapterId}`)
+            }
+          }
+
+          const result = await installAdapter(entry, { local })
+          const verb = result.updated ? 'Updated' : 'Installed'
+          consola.success(`${verb} ${result.id} → ${result.path}`)
+          consola.info(`Digest: ${result.digest}`)
+        }
       },
     }),
 
@@ -147,15 +152,22 @@ export const adapterCommand = defineCommand({
         },
       },
       async run({ args }) {
-        const id = String(args.id)
+        const ids = [String(args.id), ...args._].filter(Boolean)
         const local = Boolean(args.local)
-        if (removeAdapter(id, local)) {
-          consola.success(`Removed adapter: ${id}`)
+        let failed = false
+
+        for (const id of ids) {
+          if (removeAdapter(id, local)) {
+            consola.success(`Removed adapter: ${id}`)
+          }
+          else {
+            consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
+            failed = true
+          }
         }
-        else {
-          consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
+
+        if (failed)
           process.exit(1)
-        }
       },
     }),
 
