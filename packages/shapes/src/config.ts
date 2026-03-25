@@ -9,14 +9,13 @@ interface AuthData {
   expires_at: number
 }
 
-const GRAPES_AUTH_FILE = join(homedir(), '.config', 'grapes', 'auth.json')
+const AUTH_FILE = join(homedir(), '.config', 'apes', 'auth.json')
 
 export function loadAuth(): AuthData | null {
-  if (!existsSync(GRAPES_AUTH_FILE))
+  if (!existsSync(AUTH_FILE))
     return null
-
   try {
-    return JSON.parse(readFileSync(GRAPES_AUTH_FILE, 'utf-8')) as AuthData
+    return JSON.parse(readFileSync(AUTH_FILE, 'utf-8')) as AuthData
   }
   catch {
     return null
@@ -26,10 +25,10 @@ export function loadAuth(): AuthData | null {
 export function getIdpUrl(explicit?: string): string | null {
   if (explicit)
     return explicit
+  if (process.env.APES_IDP)
+    return process.env.APES_IDP
   if (process.env.SHAPES_IDP)
     return process.env.SHAPES_IDP
-  if (process.env.GRAPES_IDP)
-    return process.env.GRAPES_IDP
   return loadAuth()?.idp ?? null
 }
 

@@ -21,7 +21,6 @@ packages/         # Publishable libraries
   proxy/          # @openape/proxy — agent HTTP gateway
   s3-driver/      # @openape/unstorage-s3-driver — S3 storage driver
   browser/        # @openape/browser — Playwright wrapper
-  grapes/         # @openape/grapes — grant management CLI
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
@@ -148,7 +147,7 @@ OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Re
 
 1. Prüfe ob die Änderung mit der DDISA-Spec kompatibel ist
 2. Protokollrelevante Bereiche: DNS Discovery, Auth Flow, JWT Claims, Grant API, Delegation API, Error Format, Well-Known Endpoints
-3. Betroffene Packages: `packages/core`, `packages/auth`, `packages/grants`, `modules/nuxt-auth-idp`, `modules/nuxt-auth-sp`, `packages/grapes`, `apps/docs`
+3. Betroffene Packages: `packages/core`, `packages/auth`, `packages/grants`, `modules/nuxt-auth-idp`, `modules/nuxt-auth-sp`, `packages/apes`, `apps/docs`
 4. Bei Abweichung von der Spec: **User WARNEN und FRAGEN** ob die Abweichung beabsichtigt ist
 5. Spec-Dokumente: `core.md`, `grants.md`, `delegation.md` im Repo `openape-ai/protocol`
 

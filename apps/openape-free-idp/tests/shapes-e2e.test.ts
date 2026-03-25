@@ -191,9 +191,9 @@ describe('free-idp + shapes end-to-end', () => {
 
     const agentToken = await createAgentToken(baseUrl, privateKey, AGENT_EMAIL)
 
-    const grapesConfigDir = join(sandboxDir, '.config', 'grapes')
-    mkdirSync(grapesConfigDir, { recursive: true })
-    writeFileSync(join(grapesConfigDir, 'auth.json'), JSON.stringify({
+    const apesConfigDir = join(sandboxDir, '.config', 'apes')
+    mkdirSync(apesConfigDir, { recursive: true })
+    writeFileSync(join(apesConfigDir, 'auth.json'), JSON.stringify({
       idp: baseUrl,
       access_token: agentToken,
       email: AGENT_EMAIL,

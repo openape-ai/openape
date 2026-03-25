@@ -26,7 +26,7 @@ export async function createShapesGrant(
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
   const requester = getRequesterIdentity()
   if (!requester) {
-    throw new Error('No requester identity available. Run `grapes login` first.')
+    throw new Error('No requester identity available. Run `apes login` first.')
   }
   return apiFetch<{ id: string, status: string }>(grantsEndpoint, {
     method: 'POST',

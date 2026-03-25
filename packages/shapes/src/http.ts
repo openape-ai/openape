@@ -23,11 +23,11 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const token = options.token ?? getAuthToken()
   if (!token)
-    throw new Error('Not authenticated. Run `grapes login` first.')
+    throw new Error('Not authenticated. Run `apes login` first.')
 
   const idp = options.idp ?? getIdpUrl()
   if (!path.startsWith('http') && !idp)
-    throw new Error('No IdP URL configured. Use --idp or log in with grapes.')
+    throw new Error('No IdP URL configured. Use --idp or log in with apes.')
 
   const url = path.startsWith('http') ? path : `${idp}${path}`
   const response = await fetch(url, {

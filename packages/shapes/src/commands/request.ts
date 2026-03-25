@@ -43,7 +43,7 @@ export const requestCommand = defineCommand({
     const adapterOpt = extractOption(rawArgs ?? [], 'adapter')
     const idp = getIdpUrl(args.idp)
     if (!idp)
-      throw new Error('No IdP URL configured. Use --idp or log in with grapes.')
+      throw new Error('No IdP URL configured. Use --idp or log in with apes.')
 
     const loaded = loadAdapter(command[0]!, adapterOpt)
     const resolved = await resolveCommand(loaded, command)

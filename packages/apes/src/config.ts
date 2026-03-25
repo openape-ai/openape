@@ -25,10 +25,6 @@ const CONFIG_DIR = join(homedir(), '.config', 'apes')
 const AUTH_FILE = join(CONFIG_DIR, 'auth.json')
 const CONFIG_FILE = join(CONFIG_DIR, 'config.toml')
 
-const GRAPES_CONFIG_DIR = join(homedir(), '.config', 'grapes')
-const GRAPES_AUTH_FILE = join(GRAPES_CONFIG_DIR, 'auth.json')
-const GRAPES_CONFIG_FILE = join(GRAPES_CONFIG_DIR, 'config.toml')
-
 function ensureDir() {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true })
@@ -36,23 +32,14 @@ function ensureDir() {
 }
 
 export function loadAuth(): AuthData | null {
-  // Apes config first
-  if (existsSync(AUTH_FILE)) {
-    try {
-      return JSON.parse(readFileSync(AUTH_FILE, 'utf-8'))
-    }
-    catch {}
+  if (!existsSync(AUTH_FILE))
+    return null
+  try {
+    return JSON.parse(readFileSync(AUTH_FILE, 'utf-8'))
   }
-
-  // Fallback to grapes config
-  if (existsSync(GRAPES_AUTH_FILE)) {
-    try {
-      return JSON.parse(readFileSync(GRAPES_AUTH_FILE, 'utf-8'))
-    }
-    catch {}
+  catch {
+    return null
   }
-
-  return null
 }
 
 export function saveAuth(data: AuthData): void {
@@ -67,23 +54,14 @@ export function clearAuth(): void {
 }
 
 export function loadConfig(): ApesConfig {
-  // Apes config first
-  if (existsSync(CONFIG_FILE)) {
-    try {
-      return parseTOML(readFileSync(CONFIG_FILE, 'utf-8'))
-    }
-    catch {}
+  if (!existsSync(CONFIG_FILE))
+    return {}
+  try {
+    return parseTOML(readFileSync(CONFIG_FILE, 'utf-8'))
   }
-
-  // Fallback to grapes config
-  if (existsSync(GRAPES_CONFIG_FILE)) {
-    try {
-      return parseTOML(readFileSync(GRAPES_CONFIG_FILE, 'utf-8'))
-    }
-    catch {}
+  catch {
+    return {}
   }
-
-  return {}
 }
 
 function parseTOML(content: string): ApesConfig {
@@ -148,8 +126,6 @@ export function getIdpUrl(explicit?: string): string | null {
     return explicit
   if (process.env.APES_IDP)
     return process.env.APES_IDP
-  if (process.env.GRAPES_IDP)
-    return process.env.GRAPES_IDP
 
   const auth = loadAuth()
   if (auth?.idp)
