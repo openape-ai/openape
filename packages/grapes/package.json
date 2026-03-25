@@ -1,6 +1,6 @@
 {
   "name": "@openape/grapes",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "DEPRECATED: Use @openape/apes instead. Universal Grant Management CLI for OpenApe",
   "type": "module",
   "bin": {
