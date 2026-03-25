@@ -1,6 +1,0 @@
-node_modules/
-dist/
-.nuxt/
-coverage/
-*.tgz
-.DS_Store
