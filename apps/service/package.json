@@ -3,7 +3,11 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "turbo": { "tags": ["app"] },
+  "turbo": {
+    "tags": [
+      "app"
+    ]
+  },
   "description": "OpenApe Cloud — Multi-Tenant Identity & Authorization SaaS",
   "author": "Delta Mind GmbH",
   "license": "MIT",
