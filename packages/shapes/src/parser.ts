@@ -2,32 +2,55 @@ import { canonicalizeCliPermission, computeArgvHash } from '@openape/core'
 import type { OpenApeCliAuthorizationDetail, OpenApeCliResourceRef } from '@openape/core'
 import type { LoadedAdapter, ResolvedCommand, ShapesOperation } from './types.js'
 
-function parseOptionArgs(tokens: string[]): { options: Record<string, string>, positionals: string[] } {
+function parseOptionArgs(tokens: string[], valueOptions?: string[]): { options: Record<string, string>, positionals: string[] } {
   const options: Record<string, string> = {}
   const positionals: string[] = []
+  const takesValue = new Set(valueOptions ?? [])
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!
-    if (!token.startsWith('--')) {
+
+    if (token.startsWith('--')) {
+      // Long option: --name value or --name=value
+      const stripped = token.slice(2)
+      const eqIndex = stripped.indexOf('=')
+      if (eqIndex >= 0) {
+        options[stripped.slice(0, eqIndex)] = stripped.slice(eqIndex + 1)
+        continue
+      }
+
+      const next = tokens[index + 1]
+      if (next && !next.startsWith('-')) {
+        options[stripped] = next
+        index += 1
+        continue
+      }
+
+      options[stripped] = 'true'
+    }
+    else if (token.startsWith('-') && token.length > 1 && !/^-\d/.test(token)) {
+      // Short option: -name value, -f value, or -l (boolean)
+      const key = token.slice(1)
+
+      if (key.length === 1 && !takesValue.has(key)) {
+        // Single-char flag not in required_options → boolean
+        options[key] = 'true'
+      }
+      else {
+        // Multi-char option (-name) or known value option (-f) → consume next as value
+        const next = tokens[index + 1]
+        if (next && !next.startsWith('-')) {
+          options[key] = next
+          index += 1
+        }
+        else {
+          options[key] = 'true'
+        }
+      }
+    }
+    else {
       positionals.push(token)
-      continue
     }
-
-    const stripped = token.slice(2)
-    const eqIndex = stripped.indexOf('=')
-    if (eqIndex >= 0) {
-      options[stripped.slice(0, eqIndex)] = stripped.slice(eqIndex + 1)
-      continue
-    }
-
-    const next = tokens[index + 1]
-    if (next && !next.startsWith('--')) {
-      options[stripped] = next
-      index += 1
-      continue
-    }
-
-    options[stripped] = 'true'
   }
 
   return { options, positionals }
@@ -91,7 +114,7 @@ function matchOperation(operation: ShapesOperation, argv: string[]): Record<stri
     return null
 
   const remainder = argv.slice(operation.command.length)
-  const { options, positionals } = parseOptionArgs(remainder)
+  const { options, positionals } = parseOptionArgs(remainder, operation.required_options)
 
   const expectedPositionals = operation.positionals ?? []
   if (positionals.length !== expectedPositionals.length)
@@ -109,6 +132,28 @@ function matchOperation(operation: ShapesOperation, argv: string[]): Record<stri
   return bindings
 }
 
+function expandCombinedFlags(argv: string[]): string[] {
+  return argv.flatMap((token) => {
+    // Expand -rl into -r, -l (only single-letter combined flags)
+    if (token.startsWith('-') && !token.startsWith('--') && token.length > 2 && /^-[a-z]+$/i.test(token)) {
+      return Array.from(token.slice(1), c => `-${c}`)
+    }
+    return [token]
+  })
+}
+
+function tryMatch(operations: ShapesOperation[], argv: string[]) {
+  return operations.flatMap((operation) => {
+    try {
+      const bindings = matchOperation(operation, argv)
+      return bindings ? [{ operation, bindings }] : []
+    }
+    catch {
+      return []
+    }
+  })
+}
+
 export async function resolveCommand(loaded: LoadedAdapter, fullArgv: string[]): Promise<ResolvedCommand> {
   const [executable, ...commandArgv] = fullArgv
   if (!executable) {
@@ -118,21 +163,24 @@ export async function resolveCommand(loaded: LoadedAdapter, fullArgv: string[]):
     throw new Error(`Adapter ${loaded.adapter.cli.id} expects executable ${loaded.adapter.cli.executable}, got ${executable}`)
   }
 
-  const matches = loaded.adapter.operations.flatMap((operation) => {
-    try {
-      const bindings = matchOperation(operation, commandArgv)
-      return bindings ? [{ operation, bindings }] : []
+  // Pass 1: exact match
+  let matches = tryMatch(loaded.adapter.operations, commandArgv)
+
+  // Pass 2: try with expanded combined flags (e.g. -rl → -r -l)
+  if (matches.length === 0) {
+    const expanded = expandCombinedFlags(commandArgv)
+    if (expanded.length !== commandArgv.length) {
+      matches = tryMatch(loaded.adapter.operations, expanded)
     }
-    catch {
-      return []
-    }
-  })
+  }
 
   if (matches.length === 0) {
     throw new Error(`No adapter operation matched: ${fullArgv.join(' ')}`)
   }
   if (matches.length > 1) {
-    throw new Error(`Ambiguous adapter match for command: ${fullArgv.join(' ')}`)
+    // Prefer the most specific match (longest command prefix)
+    matches.sort((a, b) => b.operation.command.length - a.operation.command.length)
+    matches = [matches[0]!]
   }
 
   const { operation, bindings } = matches[0]!
