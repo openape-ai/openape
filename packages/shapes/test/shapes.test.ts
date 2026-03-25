@@ -42,4 +42,32 @@ describe('@openape/shapes adapters', () => {
     expect(remove.permission).toBe('exo.account[name=current].dns-domain[name=example.com].dns-record[name=www]#delete')
     expect(read.permission).not.toBe(remove.permission)
   })
+
+  it('resolves grep -r (single short flag)', async () => {
+    const loaded = loadAdapter('grep', join(fixturesDir, 'grep.toml'))
+    const resolved = await resolveCommand(loaded, ['grep', '-r', 'TODO', '/src'])
+
+    expect(resolved.detail.operation_id).toBe('grep.search-recursive')
+  })
+
+  it('resolves grep -rl (combined short flags)', async () => {
+    const loaded = loadAdapter('grep', join(fixturesDir, 'grep.toml'))
+    const resolved = await resolveCommand(loaded, ['grep', '-rl', 'TODO', '/src'])
+
+    expect(resolved.detail.operation_id).toBe('grep.search-recursive')
+  })
+
+  it('resolves find -name (short option with value)', async () => {
+    const loaded = loadAdapter('find', join(fixturesDir, 'find.toml'))
+    const resolved = await resolveCommand(loaded, ['find', '/src', '-name', '*.md'])
+
+    expect(resolved.detail.operation_id).toBe('find.by-name')
+  })
+
+  it('resolves find -type (short option with value)', async () => {
+    const loaded = loadAdapter('find', join(fixturesDir, 'find.toml'))
+    const resolved = await resolveCommand(loaded, ['find', '/tmp', '-type', 'f'])
+
+    expect(resolved.detail.operation_id).toBe('find.by-type')
+  })
 })
