@@ -198,11 +198,19 @@ describe('grant lifecycle', () => {
       expect(revoked.status).toBe('revoked')
     })
 
-    it('rejects revocation of non-approved grant', async () => {
+    it('revokes a pending grant', async () => {
       const grant = await createGrant(onceRequest, store)
+      const revoked = await revokeGrant(grant.id, store)
+
+      expect(revoked.status).toBe('revoked')
+    })
+
+    it('rejects revocation of denied grant', async () => {
+      const grant = await createGrant(onceRequest, store)
+      await denyGrant(grant.id, 'admin@example.com', store)
 
       await expect(revokeGrant(grant.id, store)).rejects.toThrow(
-        'Grant is not approved',
+        'Grant cannot be revoked',
       )
     })
   })
