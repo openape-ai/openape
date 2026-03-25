@@ -21,7 +21,7 @@ Shapes wraps arbitrary CLI tools with structured adapters that describe what eac
 ## Prerequisites
 
 - **`shapes` binary** installed (`npm install -g @openape/shapes`)
-- **`grapes` CLI** for grant management (see `openape-grapes` skill)
+- **`apes` CLI** for grant management and authentication
 - For privilege elevation: **`escapes`** binary (see `openape-escapes` skill)
 
 ## Adapter Registry
@@ -151,12 +151,12 @@ shapes request --reason "merge release PR" -- gh pr merge 42 --squash
 shapes --grant <jwt> [--adapter <file>] -- <cli> <args...>
 ```
 
-Use when you already have a grant token (e.g. from `grapes token`).
+Use when you already have a grant token (e.g. from `apes grants token`).
 
 Example:
 
 ```bash
-TOKEN=$(grapes token $GRANT_ID)
+TOKEN=$(apes grants token $GRANT_ID)
 shapes --grant $TOKEN -- gh pr merge 42 --squash
 ```
 
@@ -182,15 +182,15 @@ Complete flow for an agent executing a CLI command through shapes:
    # → Creates grant, waits for approval, executes on approval
 ```
 
-Or step-by-step with grapes for more control:
+Or step-by-step with apes for more control:
 
 ```
-1. shapes adapter install gh                                     # Install adapter
-2. shapes explain -- gh pr merge 42 --squash                     # Check permission needed
-3. grapes request-capability gh --resource "repo:myorg/myrepo" \
-     --action "pr:merge" --wait                                  # Request grant
-4. TOKEN=$(grapes token <grant-id>)                              # Get token
-5. shapes --grant $TOKEN -- gh pr merge 42 --squash              # Execute
+1. shapes adapter install gh                                          # Install adapter
+2. shapes explain -- gh pr merge 42 --squash                          # Check permission needed
+3. apes grants request-capability gh --resource "repo:myorg/myrepo" \
+     --action "pr:merge" --wait                                       # Request grant
+4. TOKEN=$(apes grants token <grant-id>)                              # Get token
+5. shapes --grant $TOKEN -- gh pr merge 42 --squash                   # Execute
 ```
 
 ### With Privilege Elevation (escapes)
@@ -198,8 +198,8 @@ Or step-by-step with grapes for more control:
 For commands that need root:
 
 ```
-1. grapes request "apt update" --audience escapes --reason "patches" --wait
-2. TOKEN=$(grapes token <grant-id>)
+1. apes grants request "apt update" --audience escapes --reason "patches" --wait
+2. TOKEN=$(apes grants token <grant-id>)
 3. escapes --grant $TOKEN -- apt update
 ```
 
@@ -261,7 +261,7 @@ Note: GitHub's raw CDN also caches files. If `--refresh` still shows stale data,
 
 ### Existing grant not found (wrong resource chain)
 
-If you created a grant via `grapes request-capability` and `shapes request` doesn't find it, check that the resource chain matches. The covering logic requires:
+If you created a grant via `apes grants request-capability` and `shapes request` doesn't find it, check that the resource chain matches. The covering logic requires:
 
 - Same `cli_id` (adapter ID)
 - Same `action`
@@ -275,6 +275,6 @@ Example: a grant with `--resource account --resource mail --action list` covers 
 - **Never execute wrapped commands without a grant.** The `--grant` flag or the `shapes request` flow is mandatory.
 - **Verify adapter digests** before trusting them, especially after updates.
 - **Use `shapes explain`** before requesting grants to understand what permission you're asking for.
-- **Prefer `shapes request`** (all-in-one) for simple flows; use grapes step-by-step for complex flows.
+- **Prefer `shapes request`** (all-in-one) for simple flows; use apes step-by-step for complex flows.
 - **Do not bypass the adapter system** by running CLI commands directly — shapes ensures auditability and grant binding.
 - **Update adapters carefully** — digest changes invalidate existing grants.

@@ -36,11 +36,9 @@ describe('parseDuration', () => {
 describe('config', () => {
   const testDir = join(tmpdir(), `apes-test-${Date.now()}`)
   const apesDir = join(testDir, '.config', 'apes')
-  const grapesDir = join(testDir, '.config', 'grapes')
 
   beforeEach(() => {
     mkdirSync(apesDir, { recursive: true })
-    mkdirSync(grapesDir, { recursive: true })
   })
 
   afterEach(() => {
