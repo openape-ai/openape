@@ -107,8 +107,8 @@ export async function revokeGrant(
   if (!grant) {
     throw new Error(`Grant not found: ${grantId}`)
   }
-  if (grant.status !== 'approved') {
-    throw new Error(`Grant is not approved: ${grant.status}`)
+  if (grant.status !== 'pending' && grant.status !== 'approved') {
+    throw new Error(`Grant cannot be revoked (status: ${grant.status})`)
   }
 
   await store.updateStatus(grantId, 'revoked')
