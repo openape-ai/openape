@@ -1,6 +1,6 @@
 {
   "name": "@openape/shapes",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "DEPRECATED: Use @openape/apes instead. Grant-aware CLI wrappers for OpenApe",
   "type": "module",
   "exports": {
