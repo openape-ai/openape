@@ -108,20 +108,18 @@ async function runAdapterMode(
   const resolved = await resolveCommand(loaded, command)
   const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
 
-  // Try reusing an existing grant for non-once approvals
-  if (approval !== 'once') {
-    try {
-      const existingGrantId = await findExistingGrant(resolved, idp)
-      if (existingGrantId) {
-        consola.info(`Reusing existing grant: ${existingGrantId}`)
-        const token = await fetchGrantToken(idp, existingGrantId)
-        await verifyAndExecute(token, resolved)
-        return
-      }
+  // Try reusing an existing timed/always grant (findExistingGrant skips once grants)
+  try {
+    const existingGrantId = await findExistingGrant(resolved, idp)
+    if (existingGrantId) {
+      consola.info(`Reusing existing grant: ${existingGrantId}`)
+      const token = await fetchGrantToken(idp, existingGrantId)
+      await verifyAndExecute(token, resolved)
+      return
     }
-    catch {
-      // Fall through to creating a new grant
-    }
+  }
+  catch {
+    // Fall through to creating a new grant
   }
 
   const grant = await createShapesGrant(resolved, {
