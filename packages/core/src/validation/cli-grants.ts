@@ -137,7 +137,7 @@ export function cliAuthorizationDetailCovers(
     return false
   if (granted.action !== required.action)
     return false
-  if (granted.resource_chain.length !== required.resource_chain.length)
+  if (granted.resource_chain.length > required.resource_chain.length)
     return false
 
   return granted.resource_chain.every((resource, index) => resourceRefCovers(resource, required.resource_chain[index]!))
