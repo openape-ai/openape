@@ -7,11 +7,16 @@ export {
 export {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
+  cliAuthorizationDetailIsSimilar,
   cliAuthorizationDetailsCover,
   computeArgvHash,
+  findDifferingSelectors,
   isCliAuthorizationDetailExact,
+  mergeCliAuthorizationDetails,
+  resourceChainsStructurallyMatch,
   type CliAuthorizationDetailValidationResult,
   validateCliAuthorizationDetail,
+  widenCliAuthorizationDetail,
 } from './cli-grants.js'
 
 export {

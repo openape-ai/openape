@@ -1,7 +1,8 @@
-import type { OpenApeGrantRequest } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   approveGrant,
+  approveGrantWithExtension,
   createDelegation,
   createGrant,
   denyGrant,
@@ -553,6 +554,189 @@ describe('grant lifecycle', () => {
       const grants = await store.findByDelegator('patrick@hofmann.eco')
       expect(grants).toHaveLength(1)
       expect(grants[0].request.delegate).toBe('agent+patrick@id.openape.at')
+    })
+  })
+
+  describe('approveGrantWithExtension', () => {
+    function makeCliDetail(overrides: Partial<OpenApeCliAuthorizationDetail> = {}): OpenApeCliAuthorizationDetail {
+      return {
+        type: 'openape_cli',
+        cli_id: 'gh',
+        operation_id: 'repo.list',
+        resource_chain: [],
+        action: 'list',
+        permission: '',
+        display: 'List repos',
+        risk: 'low',
+        ...overrides,
+      }
+    }
+
+    const oldRequest: OpenApeGrantRequest = {
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'shapes',
+      grant_type: 'always',
+      authorization_details: [makeCliDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'cli' } },
+        ],
+        permission: 'gh.owner[login=openape].repo[name=cli]#list',
+      })],
+    }
+
+    const newRequest: OpenApeGrantRequest = {
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'shapes',
+      grant_type: 'always',
+      authorization_details: [makeCliDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'docs' } },
+        ],
+        permission: 'gh.owner[login=openape].repo[name=docs]#list',
+      })],
+    }
+
+    it('widen: revokes old grant and approves pending with wildcard', async () => {
+      const oldGrant = await createGrant(oldRequest, store)
+      await approveGrant(oldGrant.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const pendingGrant = await createGrant(newRequest, store)
+
+      const result = await approveGrantWithExtension(
+        pendingGrant.id,
+        'admin@example.com',
+        store,
+        { extend_mode: 'widen', extend_grant_ids: [oldGrant.id], grant_type: 'always' },
+      )
+
+      expect(result.status).toBe('approved')
+      const perms = result.request.permissions ?? []
+      expect(perms).toContain('gh.owner[login=openape].repo[*]#list')
+
+      const revokedOld = await store.findById(oldGrant.id)
+      expect(revokedOld!.status).toBe('revoked')
+    })
+
+    it('merge: revokes old grant and approves pending with combined details', async () => {
+      const oldGrant = await createGrant(oldRequest, store)
+      await approveGrant(oldGrant.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const pendingGrant = await createGrant(newRequest, store)
+
+      const result = await approveGrantWithExtension(
+        pendingGrant.id,
+        'admin@example.com',
+        store,
+        { extend_mode: 'merge', extend_grant_ids: [oldGrant.id], grant_type: 'always' },
+      )
+
+      expect(result.status).toBe('approved')
+      const perms = result.request.permissions ?? []
+      expect(perms).toContain('gh.owner[login=openape].repo[name=cli]#list')
+      expect(perms).toContain('gh.owner[login=openape].repo[name=docs]#list')
+
+      const revokedOld = await store.findById(oldGrant.id)
+      expect(revokedOld!.status).toBe('revoked')
+    })
+
+    it('rejects if extend_grant_id not found', async () => {
+      const pendingGrant = await createGrant(newRequest, store)
+
+      await expect(
+        approveGrantWithExtension(pendingGrant.id, 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: ['nonexistent'],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('Extend grant not found')
+    })
+
+    it('rejects if extend_grant_id is not approved', async () => {
+      const oldGrant = await createGrant(oldRequest, store)
+      const pendingGrant = await createGrant(newRequest, store)
+
+      await expect(
+        approveGrantWithExtension(pendingGrant.id, 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: [oldGrant.id],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('Extend grant is not approved')
+    })
+
+    it('rejects if pending grant is not pending', async () => {
+      const oldGrant = await createGrant(oldRequest, store)
+      await approveGrant(oldGrant.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const alreadyApproved = await createGrant(newRequest, store)
+      await approveGrant(alreadyApproved.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      await expect(
+        approveGrantWithExtension(alreadyApproved.id, 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: [oldGrant.id],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('Grant is not pending')
+    })
+
+    it('rejects if extend grant has different audience', async () => {
+      const mismatchRequest: OpenApeGrantRequest = {
+        ...oldRequest,
+        audience: 'proxy',
+      }
+      const oldGrant = await createGrant(mismatchRequest, store)
+      await approveGrant(oldGrant.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const pendingGrant = await createGrant(newRequest, store)
+
+      await expect(
+        approveGrantWithExtension(pendingGrant.id, 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: [oldGrant.id],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('audience mismatch')
+    })
+
+    it('handles multiple extend_grant_ids', async () => {
+      const oldGrant1 = await createGrant(oldRequest, store)
+      await approveGrant(oldGrant1.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const oldRequest2: OpenApeGrantRequest = {
+        ...oldRequest,
+        authorization_details: [makeCliDetail({
+          resource_chain: [
+            { resource: 'owner', selector: { login: 'openape' } },
+            { resource: 'repo', selector: { name: 'api' } },
+          ],
+          permission: 'gh.owner[login=openape].repo[name=api]#list',
+        })],
+      }
+      const oldGrant2 = await createGrant(oldRequest2, store)
+      await approveGrant(oldGrant2.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const pendingGrant = await createGrant(newRequest, store)
+
+      const result = await approveGrantWithExtension(
+        pendingGrant.id,
+        'admin@example.com',
+        store,
+        { extend_mode: 'merge', extend_grant_ids: [oldGrant1.id, oldGrant2.id], grant_type: 'always' },
+      )
+
+      expect(result.status).toBe('approved')
+      const perms = result.request.permissions ?? []
+      expect(perms).toContain('gh.owner[login=openape].repo[name=cli]#list')
+      expect(perms).toContain('gh.owner[login=openape].repo[name=docs]#list')
+      expect(perms).toContain('gh.owner[login=openape].repo[name=api]#list')
+
+      expect((await store.findById(oldGrant1.id))!.status).toBe('revoked')
+      expect((await store.findById(oldGrant2.id))!.status).toBe('revoked')
     })
   })
 })

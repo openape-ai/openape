@@ -15,6 +15,12 @@ function decodePayload(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as Record<string, unknown>
 }
 
+interface SimilarGrantsInfo {
+  similar_grants: Array<{ grant: { id: string }, similar_detail_indices: number[] }>
+  widened_details: Array<{ permission: string }>
+  merged_details: Array<{ permission: string }>
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {
@@ -22,13 +28,13 @@ export async function createShapesGrant(
     approval: 'once' | 'timed' | 'always'
     reason?: string
   },
-): Promise<{ id: string, status: string }> {
+): Promise<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }> {
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
   const requester = getRequesterIdentity()
   if (!requester) {
     throw new Error('No requester identity available. Run `apes login` first.')
   }
-  return apiFetch<{ id: string, status: string }>(grantsEndpoint, {
+  return apiFetch<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }>(grantsEndpoint, {
     method: 'POST',
     idp: params.idp,
     body: {
