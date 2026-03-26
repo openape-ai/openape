@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { navigateTo, useIdpAuth } from '#imports'
-import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const activeAndPending = ref([])
@@ -14,6 +14,8 @@ const actionError = ref('')
 const grantTypeSelections = ref({})
 const durationPresetSelections = ref({})
 const customDurations = ref({})
+const extendModeSelections = ref({})
+const similarGrantsData = ref({})
 const DURATION_PRESETS = [
   { label: '1 hour', value: '3600' },
   { label: '4 hours', value: '14400' },
@@ -26,6 +28,28 @@ const GRANT_TYPE_OPTIONS = [
   { label: 'Timed', value: 'timed', description: 'Time-limited' },
   { label: 'Always', value: 'always', description: 'Until revoked' }
 ]
+const EXTEND_MODE_OPTIONS = [
+  { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards' },
+  { label: 'Add this value', value: 'merge', description: 'Merge keeping specific selectors' },
+  { label: 'Approve as separate', value: 'separate', description: 'New independent grant' },
+]
+async function loadSimilarGrants(grantId) {
+  if (similarGrantsData.value[grantId]) return
+  try {
+    const data = await $fetch(`/api/grants/${grantId}`)
+    if (data.similar_grants) {
+      similarGrantsData.value[grantId] = data.similar_grants
+      if (!extendModeSelections.value[grantId]) {
+        extendModeSelections.value[grantId] = 'separate'
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+function hasSimilar(grantId) {
+  return !!similarGrantsData.value[grantId]?.similar_grants?.length
+}
 function getEffectiveDuration(grantId) {
   if (grantTypeSelections.value[grantId] !== 'timed') return void 0
   const preset = durationPresetSelections.value[grantId] ?? '3600'
@@ -57,6 +81,9 @@ async function loadGrants() {
         grantTypeSelections.value[g.id] = 'once'
         durationPresetSelections.value[g.id] = '3600'
         customDurations.value[g.id] = 3600
+        if (getCliAuthorizationDetails(g.request?.authorization_details).length > 0) {
+          loadSimilarGrants(g.id)
+        }
       }
     }
   } catch {
@@ -84,11 +111,20 @@ async function approveGrant(id) {
   actionError.value = ''
   try {
     const grantType = grantTypeSelections.value[id] ?? 'once'
+    const extendMode = extendModeSelections.value[id]
+    const similar = similarGrantsData.value[id]
+    const extendBody = extendMode && extendMode !== 'separate' && similar?.similar_grants?.length
+      ? {
+          extend_mode: extendMode,
+          extend_grant_ids: similar.similar_grants.map(s => s.grant.id),
+        }
+      : {}
     await $fetch(`/api/grants/${id}/approve`, {
       method: 'POST',
       body: {
         grant_type: grantType,
-        ...grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {}
+        ...grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {},
+        ...extendBody,
       }
     })
     await loadGrants()
@@ -234,6 +270,54 @@ function isExactCommand(detail) {
                   <p class="text-xs text-dimmed">
                     Created: {{ formatTime(grant.created_at) }}
                   </p>
+                </div>
+                <div v-if="hasSimilar(grant.id)" class="rounded border border-info/30 bg-info/5 px-3 py-2 space-y-2">
+                  <div class="flex items-center gap-2">
+                    <UBadge color="info" variant="soft" label="Similar grants exist" />
+                  </div>
+                  <div
+                    v-for="similar in similarGrantsData[grant.id]?.similar_grants ?? []"
+                    :key="similar.grant.id"
+                    class="text-xs"
+                  >
+                    <span class="text-muted">Existing:</span>
+                    <span class="font-mono text-dimmed">{{ similar.grant.id.slice(0, 8) }}...</span>
+                    <div
+                      v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
+                      :key="detail.permission"
+                      class="font-mono text-dimmed break-all"
+                    >
+                      {{ detail.permission }}
+                    </div>
+                  </div>
+                  <URadioGroup
+                    v-model="extendModeSelections[grant.id]"
+                    :items="EXTEND_MODE_OPTIONS"
+                  />
+                  <div v-if="extendModeSelections[grant.id] === 'widen'" class="rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p
+                      v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.widened_details ?? [])"
+                      :key="perm"
+                      class="font-mono text-xs text-green-400"
+                    >
+                      {{ perm }}
+                    </p>
+                  </div>
+                  <div v-if="extendModeSelections[grant.id] === 'merge'" class="rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p
+                      v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.merged_details ?? [])"
+                      :key="perm"
+                      class="font-mono text-xs text-blue-400"
+                    >
+                      {{ perm }}
+                    </p>
+                  </div>
                 </div>
                 <div class="space-y-2">
                   <div>

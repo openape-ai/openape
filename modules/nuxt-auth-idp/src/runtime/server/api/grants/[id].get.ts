@@ -1,7 +1,14 @@
-import { introspectGrant } from '@openape/grants'
+import type { OpenApeCliAuthorizationDetail } from '@openape/core'
+import { findSimilarCliGrants, introspectGrant } from '@openape/grants'
 import { defineEventHandler, getRequestHeader, getRouterParam, setResponseHeader, setResponseStatus } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
+
+function hasStructuredCliGrant(details?: unknown[]): boolean {
+  return (details ?? []).some((d): d is OpenApeCliAuthorizationDetail =>
+    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli',
+  )
+}
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -24,6 +31,15 @@ export default defineEventHandler(async (event) => {
   if (ifNoneMatch === etag) {
     setResponseStatus(event, 304)
     return ''
+  }
+
+  // Attach similar grants for pending CLI grants
+  if (grant.status === 'pending' && hasStructuredCliGrant(grant.request.authorization_details)) {
+    const existingGrants = await grantStore.findByRequester(grant.request.requester)
+    const similarResult = findSimilarCliGrants(grant.request, existingGrants)
+    if (similarResult) {
+      return { ...grant, similar_grants: similarResult }
+    }
   }
 
   return grant

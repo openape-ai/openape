@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
-import { formatCliResourceChain, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -9,9 +9,19 @@ const grant = ref(null)
 const loading = ref(true)
 const error = ref('')
 const processing = ref(false)
+const selectedExtendMode = ref('separate')
 const grantId = computed(() => route.query.grant_id)
 const callbackUrl = computed(() => route.query.callback)
 const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
+const hasSimilarGrants = computed(() => grant.value?.similar_grants?.similar_grants?.length > 0)
+const similarGrants = computed(() => grant.value?.similar_grants?.similar_grants ?? [])
+const widenedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.widened_details ?? []))
+const mergedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.merged_details ?? []))
+const EXTEND_MODE_OPTIONS = [
+  { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards (replaces existing grant)' },
+  { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
+  { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
+]
 const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 const delegateDuration = computed(() => {
@@ -63,13 +73,20 @@ onMounted(async () => {
 async function handleApprove() {
   processing.value = true
   try {
+    const extendBody = hasSimilarGrants.value && selectedExtendMode.value !== 'separate'
+      ? {
+          extend_mode: selectedExtendMode.value,
+          extend_grant_ids: similarGrants.value.map(s => s.grant.id),
+        }
+      : {}
     const result = await $fetch(
       `/api/grants/${grantId.value}/approve`,
       {
         method: 'POST',
         body: {
           grant_type: selectedGrantType.value,
-          ...selectedGrantType.value === 'timed' ? { duration: effectiveDuration.value } : {}
+          ...selectedGrantType.value === 'timed' ? { duration: effectiveDuration.value } : {},
+          ...extendBody,
         }
       }
     )
@@ -253,6 +270,54 @@ function isExactCommand(detail) {
                   </dd>
                 </div>
               </dl>
+            </template>
+          </UAlert>
+
+          <UAlert
+            v-if="hasSimilarGrants"
+            color="info"
+            title="Similar grant(s) exist"
+          >
+            <template #description>
+              <div class="text-sm space-y-2 mt-2">
+                <div v-for="similar in similarGrants" :key="similar.grant.id">
+                  <p class="text-muted">
+                    Existing grant: <span class="font-mono text-xs">{{ similar.grant.id.slice(0, 8) }}...</span>
+                  </p>
+                  <div
+                    v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
+                    :key="detail.permission"
+                    class="font-mono text-xs text-dimmed break-all"
+                  >
+                    {{ detail.permission }}
+                  </div>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <p class="text-muted font-medium">
+                    Extension options:
+                  </p>
+                  <URadioGroup
+                    v-model="selectedExtendMode"
+                    :items="EXTEND_MODE_OPTIONS"
+                  />
+                  <div v-if="selectedExtendMode === 'widen'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p v-for="perm in widenedPreview" :key="perm" class="font-mono text-xs text-green-400">
+                      {{ perm }}
+                    </p>
+                  </div>
+                  <div v-if="selectedExtendMode === 'merge'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p v-for="perm in mergedPreview" :key="perm" class="font-mono text-xs text-blue-400">
+                      {{ perm }}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </template>
           </UAlert>
 

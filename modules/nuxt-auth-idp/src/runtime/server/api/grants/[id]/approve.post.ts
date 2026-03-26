@@ -1,6 +1,6 @@
 import type { GrantType } from '@openape/core'
-import type { ApproveGrantOverrides } from '@openape/grants'
-import { approveGrant, issueAuthzJWT } from '@openape/grants'
+import type { ApproveGrantOverrides, ExtendMode } from '@openape/grants'
+import { approveGrant, approveGrantWithExtension, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireAuth } from '../../../utils/admin'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -50,17 +50,35 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const overrides: ApproveGrantOverrides | undefined = body.grant_type
-    ? { grant_type: body.grant_type as GrantType, duration: body.duration as number | undefined }
-    : undefined
-
   try {
-    const approved = await approveGrant(id, email, grantStore, overrides)
+    let approved
+
+    if (body.extend_mode && Array.isArray(body.extend_grant_ids) && body.extend_grant_ids.length > 0) {
+      const validModes: ExtendMode[] = ['widen', 'merge']
+      if (!validModes.includes(body.extend_mode as ExtendMode)) {
+        throw createProblemError({ status: 400, title: 'Invalid extend_mode. Must be "widen" or "merge"' })
+      }
+
+      approved = await approveGrantWithExtension(id, email, grantStore, {
+        grant_type: body.grant_type as GrantType | undefined,
+        duration: body.duration as number | undefined,
+        extend_mode: body.extend_mode as ExtendMode,
+        extend_grant_ids: body.extend_grant_ids as string[],
+      })
+    }
+    else {
+      const overrides: ApproveGrantOverrides | undefined = body.grant_type
+        ? { grant_type: body.grant_type as GrantType, duration: body.duration as number | undefined }
+        : undefined
+      approved = await approveGrant(id, email, grantStore, overrides)
+    }
+
     const signingKey = await keyStore.getSigningKey()
     const authzJwt = await issueAuthzJWT(approved, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
     return { grant: approved, authz_jwt: authzJwt }
   }
   catch (err: unknown) {
+    if (err && typeof err === 'object' && 'statusCode' in err) throw err
     const message = err instanceof Error ? err.message : 'Failed to approve grant'
     throw createProblemError({ status: 400, title: message, type: 'https://openape.org/errors/grant_already_decided' })
   }

@@ -1,9 +1,14 @@
-import type { GrantType, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import { canonicalizeCliPermission, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from '@openape/core'
 import type { GrantStore } from './stores.js'
+
+export type ExtendMode = 'widen' | 'merge'
 
 export interface ApproveGrantOverrides {
   grant_type?: GrantType
   duration?: number
+  extend_mode?: ExtendMode
+  extend_grant_ids?: string[]
 }
 
 /**
@@ -207,6 +212,87 @@ export async function createDelegation(
 
   // Auto-approve since the delegator is creating it
   return approveGrant(grant.id, params.delegator, store)
+}
+
+function cliDetails(details?: unknown[]): OpenApeCliAuthorizationDetail[] {
+  return (details ?? []).filter((d): d is OpenApeCliAuthorizationDetail =>
+    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli',
+  )
+}
+
+/**
+ * Approve a grant with extension: revokes specified old grants and modifies
+ * the pending grant's authorization_details before approving.
+ */
+export async function approveGrantWithExtension(
+  grantId: string,
+  approver: string,
+  store: GrantStore,
+  overrides: ApproveGrantOverrides & Required<Pick<ApproveGrantOverrides, 'extend_mode' | 'extend_grant_ids'>>,
+): Promise<OpenApeGrant> {
+  const pendingGrant = await store.findById(grantId)
+  if (!pendingGrant)
+    throw new Error(`Grant not found: ${grantId}`)
+  if (pendingGrant.status !== 'pending')
+    throw new Error(`Grant is not pending: ${pendingGrant.status}`)
+
+  const oldGrants: OpenApeGrant[] = []
+  for (const oldId of overrides.extend_grant_ids) {
+    const old = await store.findById(oldId)
+    if (!old)
+      throw new Error(`Extend grant not found: ${oldId}`)
+    if (old.status !== 'approved')
+      throw new Error(`Extend grant is not approved: ${old.status}`)
+    if (old.request.target_host !== pendingGrant.request.target_host)
+      throw new Error(`Extend grant target_host mismatch`)
+    if (old.request.audience !== pendingGrant.request.audience)
+      throw new Error(`Extend grant audience mismatch`)
+    oldGrants.push(old)
+  }
+
+  const pendingCliDetails = cliDetails(pendingGrant.request.authorization_details)
+  let newDetails: OpenApeCliAuthorizationDetail[]
+
+  if (overrides.extend_mode === 'widen') {
+    const allOldDetails = oldGrants.flatMap(g => cliDetails(g.request.authorization_details))
+    const widened: OpenApeCliAuthorizationDetail[] = [...pendingCliDetails]
+    for (const existingDetail of allOldDetails) {
+      for (const incomingDetail of pendingCliDetails) {
+        if (cliAuthorizationDetailIsSimilar(existingDetail, incomingDetail)) {
+          widened.push(widenCliAuthorizationDetail(existingDetail, incomingDetail))
+        }
+      }
+    }
+    newDetails = mergeCliAuthorizationDetails(widened)
+  }
+  else {
+    newDetails = mergeCliAuthorizationDetails(
+      pendingCliDetails,
+      ...oldGrants.map(g => cliDetails(g.request.authorization_details)),
+    )
+  }
+
+  // Update the pending grant's request with the new authorization details
+  const modifiedRequest: OpenApeGrantRequest = {
+    ...pendingGrant.request,
+    authorization_details: newDetails,
+    permissions: newDetails.map(d => canonicalizeCliPermission(d)),
+    // Clear command/cmd_hash when widening — the original narrow command no longer
+    // represents the broader scope of the extended grant
+    ...(overrides.extend_mode === 'widen' ? { command: undefined, cmd_hash: undefined } : {}),
+  }
+  await store.updateStatus(grantId, 'pending', { request: modifiedRequest })
+
+  // Revoke old grants
+  for (const old of oldGrants) {
+    await revokeGrant(old.id, store)
+  }
+
+  // Approve the modified pending grant
+  return approveGrant(grantId, approver, store, {
+    grant_type: overrides.grant_type,
+    duration: overrides.duration,
+  })
 }
 
 /**
