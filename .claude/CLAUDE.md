@@ -108,7 +108,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 
 **Kurzfassung für Agents:**
 
-1. **Nie Source-Code auf `main` editieren** — `/issue <nr>` zum Starten verwenden
+1. **Nie Source-Code auf `main` editieren** — `/issue-start <nr>` zum Starten verwenden
 2. **Branch-Naming:** `<type>/issue-<nr>-<kurzbeschreibung>`
 3. **PRs required** — CI muss grün sein vor Merge
 4. **Ausnahmen für direct-to-main:** `.claude/`, `.github/`, `.githooks/`, `scripts/`, Config-Dateien
