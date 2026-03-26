@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- feat: incremental capability grants — extend existing grants with new requests
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.11.0
+
 ## 0.5.3
 
 ### Patch Changes

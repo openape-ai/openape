@@ -1,5 +1,18 @@
 # @openape/apes
 
+## 0.4.0
+
+### Minor Changes
+
+- feat: incremental capability grants — extend existing grants with new requests
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.11.0
+  - @openape/grants@0.6.0
+  - @openape/shapes@0.6.0
+
 ## 0.3.0
 
 ### Minor Changes
