@@ -152,6 +152,114 @@ export function cliAuthorizationDetailsCover(
   )
 }
 
+/**
+ * Check if two resource chains have the same structure
+ * (same resource names, same order, same length).
+ */
+export function resourceChainsStructurallyMatch(
+  a: OpenApeCliResourceRef[],
+  b: OpenApeCliResourceRef[],
+): boolean {
+  if (a.length !== b.length)
+    return false
+  return a.every((resource, index) => resource.resource === b[index]!.resource)
+}
+
+/**
+ * Find indices where selectors differ between two structurally matching resource chains.
+ * Both chains must have the same length (call resourceChainsStructurallyMatch first).
+ */
+export function findDifferingSelectors(
+  a: OpenApeCliResourceRef[],
+  b: OpenApeCliResourceRef[],
+): number[] {
+  const indices: number[] = []
+  for (let i = 0; i < a.length; i++) {
+    const sA = selectorString(a[i]!.selector)
+    const sB = selectorString(b[i]!.selector)
+    if (sA !== sB)
+      indices.push(i)
+  }
+  return indices
+}
+
+/**
+ * Check if two CLI authorization details are "similar" — same structure but different selectors.
+ * Returns true when cli_id and action match, chains structurally match,
+ * at least one selector differs, and the existing detail does NOT already cover the incoming one.
+ */
+export function cliAuthorizationDetailIsSimilar(
+  existing: OpenApeCliAuthorizationDetail,
+  incoming: OpenApeCliAuthorizationDetail,
+): boolean {
+  if (existing.type !== 'openape_cli' || incoming.type !== 'openape_cli')
+    return false
+  if (existing.cli_id !== incoming.cli_id)
+    return false
+  if (existing.action !== incoming.action)
+    return false
+  if (!resourceChainsStructurallyMatch(existing.resource_chain, incoming.resource_chain))
+    return false
+  if (cliAuthorizationDetailCovers(existing, incoming))
+    return false
+  const differing = findDifferingSelectors(existing.resource_chain, incoming.resource_chain)
+  return differing.length > 0
+}
+
+/**
+ * Widen a CLI authorization detail by removing selectors at positions where they differ
+ * between existing and incoming, effectively making those positions wildcards.
+ */
+export function widenCliAuthorizationDetail(
+  existing: OpenApeCliAuthorizationDetail,
+  incoming: OpenApeCliAuthorizationDetail,
+): OpenApeCliAuthorizationDetail {
+  const differing = findDifferingSelectors(existing.resource_chain, incoming.resource_chain)
+  const widenedChain: OpenApeCliResourceRef[] = existing.resource_chain.map((resource, index) => {
+    if (differing.includes(index)) {
+      return { resource: resource.resource }
+    }
+    return { ...resource }
+  })
+
+  const permission = canonicalizeCliPermission({ cli_id: existing.cli_id, resource_chain: widenedChain, action: existing.action })
+  return {
+    ...existing,
+    resource_chain: widenedChain,
+    permission,
+    display: `${existing.display} (widened)`,
+  }
+}
+
+/**
+ * Merge multiple sets of CLI authorization details into a single deduplicated array.
+ * Deduplicates by canonical permission string. When duplicates exist, the broader
+ * entry (fewer non-wildcard selectors) is kept.
+ */
+export function mergeCliAuthorizationDetails(
+  ...detailSets: OpenApeCliAuthorizationDetail[][]
+): OpenApeCliAuthorizationDetail[] {
+  const all = detailSets.flat()
+  const byPermission = new Map<string, OpenApeCliAuthorizationDetail>()
+
+  for (const detail of all) {
+    const key = canonicalizeCliPermission(detail)
+    const current = byPermission.get(key)
+    if (!current) {
+      byPermission.set(key, { ...detail, permission: key })
+    }
+    else {
+      const currentSpecificity = current.resource_chain.filter(r => normalizeSelector(r.selector)).length
+      const newSpecificity = detail.resource_chain.filter(r => normalizeSelector(r.selector)).length
+      if (newSpecificity < currentSpecificity) {
+        byPermission.set(key, { ...detail, permission: key })
+      }
+    }
+  }
+
+  return Array.from(byPermission.values())
+}
+
 export async function computeArgvHash(argv: string[]): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(JSON.stringify(argv))

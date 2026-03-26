@@ -27,3 +27,21 @@ export function summarizeCliGrant(details?: OpenApeAuthorizationDetail[]): strin
   const first = cliDetails[0]!
   return `${first.cli_id}: ${cliDetails.length} requested operations`
 }
+
+export function formatWidenedPreview(details: OpenApeCliAuthorizationDetail[]): string[] {
+  return details.map(d => d.permission)
+}
+
+export function describeExtension(
+  original: OpenApeCliAuthorizationDetail[],
+  widened: OpenApeCliAuthorizationDetail[],
+): string[] {
+  const descriptions: string[] = []
+  for (const w of widened) {
+    const match = original.find(o => o.cli_id === w.cli_id && o.action === w.action)
+    if (match && match.permission !== w.permission) {
+      descriptions.push(`${match.permission} → ${w.permission}`)
+    }
+  }
+  return descriptions
+}

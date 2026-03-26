@@ -1,6 +1,6 @@
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, computeCmdHash, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/core'
-import { createGrant } from '@openape/grants'
+import { createGrant, findSimilarCliGrants } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryAgentAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
@@ -168,6 +168,17 @@ export default defineEventHandler(async (event) => {
     })
     if (reusable) {
       return reusable
+    }
+
+    // Similarity check: find approved CLI grants that overlap but don't cover
+    const incomingCliDetails = cliDetails(body.authorization_details)
+    if (incomingCliDetails.length > 0) {
+      const similarResult = findSimilarCliGrants(body, existingGrants)
+      if (similarResult) {
+        const grant = await createGrant(body, grantStore)
+        setResponseStatus(event, 201)
+        return { ...grant, similar_grants: similarResult }
+      }
     }
   }
 

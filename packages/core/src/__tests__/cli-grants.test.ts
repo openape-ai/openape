@@ -3,10 +3,15 @@ import type { OpenApeCliAuthorizationDetail } from '../types/index.js'
 import {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
+  cliAuthorizationDetailIsSimilar,
   cliAuthorizationDetailsCover,
   computeArgvHash,
+  findDifferingSelectors,
   isCliAuthorizationDetailExact,
+  mergeCliAuthorizationDetails,
+  resourceChainsStructurallyMatch,
   validateCliAuthorizationDetail,
+  widenCliAuthorizationDetail,
 } from '../validation/index.js'
 
 describe('cli grant helpers', () => {
@@ -150,5 +155,242 @@ describe('cli grant helpers', () => {
     const second = await computeArgvHash(['gh', 'repo', 'list', 'openape'])
     expect(first).toBe(second)
     expect(first).toMatch(/^SHA-256:/)
+  })
+
+  // -- similarity detection tests --
+
+  describe('resourceChainsStructurallyMatch', () => {
+    it('matches identical chains', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner', selector: { login: 'a' } }, { resource: 'repo' }]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner', selector: { login: 'b' } }, { resource: 'repo', selector: { name: 'x' } }]
+      expect(resourceChainsStructurallyMatch(a, b)).toBe(true)
+    })
+
+    it('rejects different lengths', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner' }]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner' }, { resource: 'repo' }]
+      expect(resourceChainsStructurallyMatch(a, b)).toBe(false)
+    })
+
+    it('rejects different resource names', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner' }, { resource: 'repo' }]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner' }, { resource: 'issue' }]
+      expect(resourceChainsStructurallyMatch(a, b)).toBe(false)
+    })
+
+    it('matches empty chains', () => {
+      expect(resourceChainsStructurallyMatch([], [])).toBe(true)
+    })
+  })
+
+  describe('findDifferingSelectors', () => {
+    it('finds no differences for identical selectors', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner', selector: { login: 'openape' } }]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'owner', selector: { login: 'openape' } }]
+      expect(findDifferingSelectors(a, b)).toEqual([])
+    })
+
+    it('finds one differing position', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [
+        { resource: 'owner', selector: { login: 'openape' } },
+        { resource: 'repo', selector: { name: 'cli' } },
+      ]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [
+        { resource: 'owner', selector: { login: 'openape' } },
+        { resource: 'repo', selector: { name: 'docs' } },
+      ]
+      expect(findDifferingSelectors(a, b)).toEqual([1])
+    })
+
+    it('finds multiple differing positions', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [
+        { resource: 'owner', selector: { login: 'alice' } },
+        { resource: 'repo', selector: { name: 'cli' } },
+      ]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [
+        { resource: 'owner', selector: { login: 'bob' } },
+        { resource: 'repo', selector: { name: 'docs' } },
+      ]
+      expect(findDifferingSelectors(a, b)).toEqual([0, 1])
+    })
+
+    it('detects wildcard vs concrete as different', () => {
+      const a: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'repo' }]
+      const b: OpenApeCliAuthorizationDetail['resource_chain'] = [{ resource: 'repo', selector: { name: 'cli' } }]
+      expect(findDifferingSelectors(a, b)).toEqual([0])
+    })
+  })
+
+  describe('cliAuthorizationDetailIsSimilar', () => {
+    const detailA = makeDetail({
+      resource_chain: [
+        { resource: 'owner', selector: { login: 'openape' } },
+        { resource: 'repo', selector: { name: 'cli' } },
+      ],
+    })
+    const detailB = makeDetail({
+      resource_chain: [
+        { resource: 'owner', selector: { login: 'openape' } },
+        { resource: 'repo', selector: { name: 'docs' } },
+      ],
+    })
+
+    it('returns true for same structure, different selectors', () => {
+      expect(cliAuthorizationDetailIsSimilar(detailA, detailB)).toBe(true)
+    })
+
+    it('returns false for different cli_id', () => {
+      expect(cliAuthorizationDetailIsSimilar(
+        detailA,
+        makeDetail({ ...detailB, cli_id: 'npm' }),
+      )).toBe(false)
+    })
+
+    it('returns false for different action', () => {
+      expect(cliAuthorizationDetailIsSimilar(
+        detailA,
+        makeDetail({ ...detailB, action: 'delete' }),
+      )).toBe(false)
+    })
+
+    it('returns false when existing already covers incoming', () => {
+      const wildcard = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo' },
+        ],
+      })
+      const concrete = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'cli' } },
+        ],
+      })
+      expect(cliAuthorizationDetailIsSimilar(wildcard, concrete)).toBe(false)
+    })
+
+    it('returns false for identical details', () => {
+      expect(cliAuthorizationDetailIsSimilar(detailA, detailA)).toBe(false)
+    })
+
+    it('returns false for different chain lengths', () => {
+      const short = makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }],
+      })
+      expect(cliAuthorizationDetailIsSimilar(short, detailA)).toBe(false)
+    })
+  })
+
+  describe('widenCliAuthorizationDetail', () => {
+    it('widens differing selector positions to wildcard', () => {
+      const existing = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'cli' } },
+        ],
+      })
+      const incoming = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'docs' } },
+        ],
+      })
+
+      const widened = widenCliAuthorizationDetail(existing, incoming)
+      expect(widened.resource_chain[0]!.selector).toEqual({ login: 'openape' })
+      expect(widened.resource_chain[1]!.selector).toBeUndefined()
+      expect(widened.permission).toBe('gh.owner[login=openape].repo[*]#list')
+    })
+
+    it('widens multiple differing positions', () => {
+      const existing = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'alice' } },
+          { resource: 'repo', selector: { name: 'cli' } },
+        ],
+      })
+      const incoming = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'bob' } },
+          { resource: 'repo', selector: { name: 'docs' } },
+        ],
+      })
+
+      const widened = widenCliAuthorizationDetail(existing, incoming)
+      expect(widened.resource_chain[0]!.selector).toBeUndefined()
+      expect(widened.resource_chain[1]!.selector).toBeUndefined()
+      expect(widened.permission).toBe('gh.owner[*].repo[*]#list')
+    })
+
+    it('preserves non-differing selectors', () => {
+      const existing = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'cli' } },
+          { resource: 'issue', selector: { number: '1' } },
+        ],
+      })
+      const incoming = makeDetail({
+        resource_chain: [
+          { resource: 'owner', selector: { login: 'openape' } },
+          { resource: 'repo', selector: { name: 'docs' } },
+          { resource: 'issue', selector: { number: '1' } },
+        ],
+      })
+
+      const widened = widenCliAuthorizationDetail(existing, incoming)
+      expect(widened.resource_chain[0]!.selector).toEqual({ login: 'openape' })
+      expect(widened.resource_chain[1]!.selector).toBeUndefined()
+      expect(widened.resource_chain[2]!.selector).toEqual({ number: '1' })
+    })
+  })
+
+  describe('mergeCliAuthorizationDetails', () => {
+    it('unions two non-overlapping sets', () => {
+      const setA = [makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }, { resource: 'repo', selector: { name: 'cli' } }],
+        permission: 'gh.owner[login=openape].repo[name=cli]#list',
+      })]
+      const setB = [makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }, { resource: 'repo', selector: { name: 'docs' } }],
+        permission: 'gh.owner[login=openape].repo[name=docs]#list',
+      })]
+
+      const merged = mergeCliAuthorizationDetails(setA, setB)
+      expect(merged).toHaveLength(2)
+    })
+
+    it('deduplicates by canonical permission', () => {
+      const detailA = makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }, { resource: 'repo', selector: { name: 'cli' } }],
+        permission: 'gh.owner[login=openape].repo[name=cli]#list',
+      })
+
+      const merged = mergeCliAuthorizationDetails([detailA], [detailA])
+      expect(merged).toHaveLength(1)
+    })
+
+    it('keeps broader entry on duplicate', () => {
+      const specific = makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }, { resource: 'repo' }],
+        permission: 'gh.owner[login=openape].repo[*]#list',
+      })
+      const alsoSpecific = makeDetail({
+        resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }, { resource: 'repo' }],
+        permission: 'gh.owner[login=openape].repo[*]#list',
+      })
+
+      const merged = mergeCliAuthorizationDetails([specific], [alsoSpecific])
+      expect(merged).toHaveLength(1)
+    })
+
+    it('merges three sets', () => {
+      const a = [makeDetail({ resource_chain: [{ resource: 'repo', selector: { name: 'a' } }], permission: 'gh.repo[name=a]#list' })]
+      const b = [makeDetail({ resource_chain: [{ resource: 'repo', selector: { name: 'b' } }], permission: 'gh.repo[name=b]#list' })]
+      const c = [makeDetail({ resource_chain: [{ resource: 'repo', selector: { name: 'c' } }], permission: 'gh.repo[name=c]#list' })]
+
+      const merged = mergeCliAuthorizationDetails(a, b, c)
+      expect(merged).toHaveLength(3)
+    })
   })
 })

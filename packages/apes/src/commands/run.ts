@@ -131,6 +131,17 @@ async function runAdapterMode(
   consola.info(`Grant requested: ${grant.id}`)
   consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
+  if (grant.similar_grants?.similar_grants?.length) {
+    const n = grant.similar_grants.similar_grants.length
+    consola.info('')
+    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
+    if (grant.similar_grants.widened_details?.length) {
+      const wider = grant.similar_grants.widened_details.map(d => d.permission).join(', ')
+      consola.info(`  Broader scope: ${wider}`)
+    }
+    consola.info('')
+  }
+
   const status = await waitForGrantStatus(idp, grant.id)
   if (status !== 'approved')
     throw new Error(`Grant ${status}`)
