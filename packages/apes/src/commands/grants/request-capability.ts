@@ -153,6 +153,55 @@ export const requestCapabilityCommand = defineCommand({
     name: 'request-capability',
     description: 'Request a structured CLI capability grant',
   },
+  args: {
+    'cliId': {
+      type: 'positional',
+      description: 'CLI adapter identifier (e.g. docker, kubectl)',
+      required: true,
+    },
+    'resource': {
+      type: 'string',
+      description: 'Resource scope (repeatable)',
+    },
+    'selector': {
+      type: 'string',
+      description: 'Selector filter (repeatable)',
+    },
+    'action': {
+      type: 'string',
+      description: 'Action to permit (repeatable)',
+    },
+    'adapter': {
+      type: 'string',
+      description: 'Explicit path to adapter TOML file',
+    },
+    'idp': {
+      type: 'string',
+      description: 'IdP URL',
+    },
+    'approval': {
+      type: 'string',
+      description: 'Approval type: once, timed, always',
+      default: 'once',
+    },
+    'reason': {
+      type: 'string',
+      description: 'Reason for the request',
+    },
+    'duration': {
+      type: 'string',
+      description: 'Duration for timed grants (e.g. 30m, 1h, 7d)',
+    },
+    'run-as': {
+      type: 'string',
+      description: 'Execute as this user (e.g. root)',
+    },
+    'wait': {
+      type: 'boolean',
+      description: 'Wait for approval before returning',
+      default: false,
+    },
+  },
   async run({ rawArgs }) {
     const auth = loadAuth()
     if (!auth) {
