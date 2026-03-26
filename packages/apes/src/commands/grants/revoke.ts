@@ -1,26 +1,113 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { getIdpUrl } from '../../config'
+import { getIdpUrl, loadAuth } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+
+interface Grant {
+  id: string
+  status: string
+  requester: string
+  request: { command?: string[] }
+}
+
+interface PaginatedGrants {
+  data: Grant[]
+  pagination: { cursor: string | null, has_more: boolean }
+}
+
+interface BatchResult {
+  id: string
+  status: string
+  success: boolean
+  error?: { title: string }
+}
 
 export const revokeCommand = defineCommand({
   meta: {
     name: 'revoke',
-    description: 'Revoke a grant',
+    description: 'Revoke one or more grants',
   },
   args: {
     id: {
       type: 'positional',
-      description: 'Grant ID',
-      required: true,
+      description: 'Grant ID(s) to revoke',
+      required: false,
+    },
+    allPending: {
+      type: 'boolean',
+      description: 'Revoke all own pending grants',
+      default: false,
     },
   },
   async run({ args }) {
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
-    await apiFetch(`${grantsUrl}/${args.id}/revoke`, {
-      method: 'POST',
-    })
-    consola.success(`Grant ${args.id} revoked.`)
+
+    const explicitIds = args.id
+      ? [String(args.id), ...args._].filter(Boolean)
+      : []
+
+    if (args.allPending && explicitIds.length > 0) {
+      consola.error('Use either --all-pending or grant IDs, not both.')
+      return process.exit(1)
+    }
+
+    let ids: string[]
+
+    if (args.allPending) {
+      const auth = loadAuth()
+      const response = await apiFetch<PaginatedGrants>(
+        `${grantsUrl}?status=pending&limit=100`,
+      )
+      const ownPending = auth?.email
+        ? response.data.filter(g => g.requester === auth.email)
+        : response.data
+      if (ownPending.length === 0) {
+        consola.info('No pending grants to revoke.')
+        return
+      }
+      ids = ownPending.map(g => g.id)
+      consola.info(`Found ${ids.length} pending grant(s) to revoke.`)
+    }
+    else if (explicitIds.length > 0) {
+      ids = explicitIds
+    }
+    else {
+      consola.error('Provide grant ID(s) or use --all-pending.')
+      return process.exit(1)
+    }
+
+    // Single grant: use direct endpoint
+    if (ids.length === 1) {
+      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST' })
+      consola.success(`Grant ${ids[0]} revoked.`)
+      return
+    }
+
+    // Multiple grants: use batch endpoint
+    const operations = ids.map(id => ({ id, action: 'revoke' as const }))
+    const { results } = await apiFetch<{ results: BatchResult[] }>(
+      `${grantsUrl}/batch`,
+      { method: 'POST', body: { operations } },
+    )
+
+    let succeeded = 0
+    for (const r of results) {
+      if (r.success) {
+        consola.success(`Grant ${r.id} revoked.`)
+        succeeded++
+      }
+      else {
+        consola.error(`Grant ${r.id}: ${r.error?.title || 'Failed'}`)
+      }
+    }
+
+    if (succeeded < results.length) {
+      consola.info(`Revoked ${succeeded} of ${results.length} grants.`)
+      process.exit(1)
+    }
+    else {
+      consola.success(`All ${succeeded} grants revoked.`)
+    }
   },
 })
