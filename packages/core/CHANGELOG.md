@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+### Minor Changes
+
+- feat: incremental capability grants — extend existing grants with new requests
+
 ## 0.10.0
 
 ### Minor Changes

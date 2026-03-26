@@ -1,7 +1,7 @@
 {
   "name": "@openape/nuxt-auth-sp",
   "type": "module",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "turbo": {
     "tags": [
       "publishable"

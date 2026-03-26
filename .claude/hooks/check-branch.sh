@@ -20,7 +20,7 @@ FILE_PATH=$(echo "$INPUT" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([
 # If we can't determine the file, block (safe default on main)
 if [ -z "$FILE_PATH" ]; then
   echo "BLOCKED: Du bist auf 'main' und die Zieldatei konnte nicht ermittelt werden." >&2
-  echo "Starte mit:  /issue <nr>" >&2
+  echo "Starte mit:  /issue-start <nr>" >&2
   exit 2
 fi
 
@@ -57,6 +57,6 @@ fi
 echo "BLOCKED: Du bist auf 'main'. Source-Änderungen müssen auf einem Feature-Branch passieren." >&2
 echo "  Datei: $FILE_PATH" >&2
 echo "" >&2
-echo "Starte mit:  /issue <nr>" >&2
+echo "Starte mit:  /issue-start <nr>" >&2
 echo "Oder manuell: git checkout -b <type>/issue-<nr>-<beschreibung> origin/main" >&2
 exit 2
