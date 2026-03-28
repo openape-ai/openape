@@ -33,6 +33,7 @@
     "@openape/shapes": "workspace:*",
     "citty": "^0.1.6",
     "consola": "^3.4.2",
+    "giget": "^2.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

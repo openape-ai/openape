@@ -21,6 +21,9 @@ import { configGetCommand } from './commands/config/get'
 import { configSetCommand } from './commands/config/set'
 import { fetchCommand } from './commands/fetch/index'
 import { mcpCommand } from './commands/mcp/index'
+import { initCommand } from './commands/init/index'
+import { enrollCommand } from './commands/enroll'
+import { dnsCheckCommand } from './commands/dns-check'
 import { ApiError } from './http'
 
 const debug = process.argv.includes('--debug')
@@ -65,6 +68,9 @@ const main = defineCommand({
     description: 'Unified CLI for OpenApe',
   },
   subCommands: {
+    init: initCommand,
+    enroll: enrollCommand,
+    'dns-check': dnsCheckCommand,
     login: loginCommand,
     logout: logoutCommand,
     whoami: whoamiCommand,
