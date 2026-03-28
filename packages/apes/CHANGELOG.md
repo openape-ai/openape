@@ -1,5 +1,15 @@
 # @openape/apes
 
+## 0.5.0
+
+### Minor Changes
+
+- Add `init`, `enroll`, and `dns-check` commands for 3-minute onboarding
+
+  - `apes init --sp/--idp`: scaffold SP or IdP projects from GitHub templates via giget
+  - `apes enroll`: agent enrollment with browser handoff and Ed25519 challenge polling
+  - `apes dns-check <domain>`: validate DDISA DNS TXT records and verify IdP discovery
+
 ## 0.4.0
 
 ### Minor Changes
