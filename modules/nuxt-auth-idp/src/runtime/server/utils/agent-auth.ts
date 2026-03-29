@@ -35,7 +35,8 @@ export async function tryAgentAuth(event: H3Event): Promise<AgentTokenPayload | 
   try {
     return await verifyAgentToken(token, getIdpIssuer(), signingKey.publicKey)
   }
-  catch {
+  catch (err) {
+    console.warn('[openape-idp] Agent token verification failed:', err instanceof Error ? err.message : String(err))
     return null
   }
 }
