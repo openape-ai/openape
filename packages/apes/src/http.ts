@@ -1,5 +1,5 @@
 import consola from 'consola'
-import { getAuthToken, getIdpUrl } from './config'
+import { getAuthToken, getIdpUrl, loadAuth, loadConfig, saveAuth } from './config'
 
 const debug = process.argv.includes('--debug')
 
@@ -53,6 +53,73 @@ export async function getDelegationsEndpoint(idpUrl: string): Promise<string> {
   return (disco.openape_delegations_endpoint as string) || `${idpUrl}/api/delegations`
 }
 
+/**
+ * Re-authenticate an agent using Ed25519 challenge-response.
+ * Called automatically when the token is expired.
+ */
+async function refreshAgentToken(): Promise<string | null> {
+  const auth = loadAuth()
+  if (!auth)
+    return null
+
+  const config = loadConfig()
+  const keyPath = config.agent?.key
+  if (!keyPath)
+    return null
+
+  try {
+    const { readFileSync } = await import('node:fs')
+    const { sign } = await import('node:crypto')
+    const { homedir } = await import('node:os')
+    const { loadEd25519PrivateKey } = await import('./ssh-key.js')
+
+    const resolved = keyPath.replace(/^~/, homedir())
+    const keyContent = readFileSync(resolved, 'utf-8')
+    const privateKey = loadEd25519PrivateKey(keyContent)
+
+    const challengeUrl = await getAgentChallengeEndpoint(auth.idp)
+    const challengeResp = await fetch(challengeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: auth.email }),
+    })
+
+    if (!challengeResp.ok)
+      return null
+
+    const { challenge } = await challengeResp.json() as { challenge: string }
+    const { Buffer } = await import('node:buffer')
+    const signature = sign(null, Buffer.from(challenge), privateKey).toString('base64')
+
+    const authenticateUrl = await getAgentAuthenticateEndpoint(auth.idp)
+    const authResp = await fetch(authenticateUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: auth.email, challenge, signature }),
+    })
+
+    if (!authResp.ok)
+      return null
+
+    const { token, expires_in } = await authResp.json() as { token: string, expires_in: number }
+
+    saveAuth({
+      ...auth,
+      access_token: token,
+      expires_at: Math.floor(Date.now() / 1000) + (expires_in || 3600),
+    })
+
+    if (debug) {
+      consola.debug('Token refreshed via Ed25519 challenge-response')
+    }
+
+    return token
+  }
+  catch {
+    return null
+  }
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: {
@@ -62,9 +129,15 @@ export async function apiFetch<T = unknown>(
     token?: string
   } = {},
 ): Promise<T> {
-  const token = options.token || getAuthToken()
+  let token = options.token || getAuthToken()
+
+  // Auto-refresh expired agent tokens
   if (!token) {
-    throw new Error('Not authenticated. Run `apes login` first.')
+    token = await refreshAgentToken()
+  }
+
+  if (!token) {
+    throw new Error('Not authenticated (token expired). Run `apes login` first.')
   }
 
   let url: string
