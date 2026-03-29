@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { getIdpUrl, loadAuth } from '../../config'
+import { getAuthToken, getIdpUrl, loadAuth } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
 
 interface Grant {
@@ -40,8 +40,18 @@ export const revokeCommand = defineCommand({
     },
   },
   async run({ args }) {
+    const auth = loadAuth()
+    const token = getAuthToken()
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
+
+    if (process.argv.includes('--debug')) {
+      consola.debug(`idp: ${idp}`)
+      consola.debug(`grantsUrl: ${grantsUrl}`)
+      consola.debug(`auth.email: ${auth?.email}`)
+      consola.debug(`auth.expires_at: ${auth?.expires_at} (now: ${Math.floor(Date.now() / 1000)})`)
+      consola.debug(`getAuthToken(): ${token ? `${token.substring(0, 20)}...` : 'NULL'}`)
+    }
 
     const explicitIds = args.id
       ? [String(args.id), ...args._].filter(Boolean)
@@ -79,7 +89,7 @@ export const revokeCommand = defineCommand({
 
     // Single grant: use direct endpoint
     if (ids.length === 1) {
-      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST' })
+      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST', token: token || undefined })
       consola.success(`Grant ${ids[0]} revoked.`)
       return
     }
@@ -88,7 +98,7 @@ export const revokeCommand = defineCommand({
     const operations = ids.map(id => ({ id, action: 'revoke' as const }))
     const { results } = await apiFetch<{ results: BatchResult[] }>(
       `${grantsUrl}/batch`,
-      { method: 'POST', body: { operations } },
+      { method: 'POST', body: { operations }, token: token || undefined },
     )
 
     let succeeded = 0
