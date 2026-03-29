@@ -38,6 +38,11 @@ export const revokeCommand = defineCommand({
       description: 'Revoke all own pending grants',
       default: false,
     },
+    debug: {
+      type: 'boolean',
+      description: 'Print debug information (does not include full tokens)',
+      default: false,
+    },
   },
   async run({ args }) {
     const auth = loadAuth()
@@ -45,12 +50,18 @@ export const revokeCommand = defineCommand({
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
 
-    if (process.argv.includes('--debug')) {
+    if (args.debug) {
       consola.debug(`idp: ${idp}`)
       consola.debug(`grantsUrl: ${grantsUrl}`)
       consola.debug(`auth.email: ${auth?.email}`)
       consola.debug(`auth.expires_at: ${auth?.expires_at} (now: ${Math.floor(Date.now() / 1000)})`)
       consola.debug(`getAuthToken(): ${token ? `${token.substring(0, 20)}...` : 'NULL'}`)
+    }
+
+    if (!auth || !token) {
+      consola.error('Authentication required')
+      consola.info('Run `apes login` and try again.')
+      return process.exit(1)
     }
 
     const explicitIds = args.id
@@ -68,6 +79,7 @@ export const revokeCommand = defineCommand({
       const auth = loadAuth()
       const response = await apiFetch<PaginatedGrants>(
         `${grantsUrl}?status=pending&limit=100`,
+        { token },
       )
       const ownPending = auth?.email
         ? response.data.filter(g => g.requester === auth.email)
