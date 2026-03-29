@@ -6,8 +6,9 @@ import { apiFetch, getGrantsEndpoint } from '../../http'
 interface Grant {
   id: string
   status: string
-  requester: string
-  request: { command?: string[] }
+  // Some list endpoints return requester nested under request
+  requester?: string
+  request?: { requester?: string, command?: string[] }
 }
 
 interface PaginatedGrants {
@@ -82,7 +83,7 @@ export const revokeCommand = defineCommand({
         { token },
       )
       const ownPending = auth?.email
-        ? response.data.filter(g => g.requester === auth.email)
+        ? response.data.filter(g => g.request?.requester === auth.email)
         : response.data
       if (ownPending.length === 0) {
         consola.info('No pending grants to revoke.')
