@@ -102,7 +102,7 @@ export const revokeCommand = defineCommand({
 
     // Single grant: use direct endpoint
     if (ids.length === 1) {
-      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST', token: token || undefined })
+      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST', token })
       consola.success(`Grant ${ids[0]} revoked.`)
       return
     }
@@ -111,7 +111,7 @@ export const revokeCommand = defineCommand({
     const operations = ids.map(id => ({ id, action: 'revoke' as const }))
     const { results } = await apiFetch<{ results: BatchResult[] }>(
       `${grantsUrl}/batch`,
-      { method: 'POST', body: { operations }, token: token || undefined },
+      { method: 'POST', body: { operations }, token },
     )
 
     let succeeded = 0
