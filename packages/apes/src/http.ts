@@ -1,4 +1,7 @@
+import consola from 'consola'
 import { getAuthToken, getIdpUrl } from './config'
+
+const debug = process.argv.includes('--debug')
 
 export class ApiError extends Error {
   constructor(public statusCode: number, message: string, public problemDetails?: Record<string, unknown>) {
@@ -75,16 +78,26 @@ export async function apiFetch<T = unknown>(
     }
     url = `${idp}${path}`
   }
+  const method = options.method || 'GET'
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
   }
 
+  if (debug) {
+    consola.debug(`${method} ${url}`)
+    consola.debug(`Token: ${token.substring(0, 20)}...${token.substring(token.length - 10)}`)
+  }
+
   const response = await fetch(url, {
-    method: options.method || 'GET',
+    method,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   })
+
+  if (debug) {
+    consola.debug(`Response: ${response.status} ${response.statusText}`)
+  }
 
   if (!response.ok) {
     const contentType = response.headers.get('content-type') || ''
