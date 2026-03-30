@@ -6,8 +6,9 @@ import { apiFetch, getGrantsEndpoint } from '../../http'
 interface Grant {
   id: string
   status: string
-  requester: string
-  request: { command?: string[] }
+  // Some list endpoints return requester nested under request
+  requester?: string
+  request?: { requester?: string, command?: string[] }
 }
 
 interface PaginatedGrants {
@@ -38,6 +39,11 @@ export const revokeCommand = defineCommand({
       description: 'Revoke all own pending grants',
       default: false,
     },
+    debug: {
+      type: 'boolean',
+      description: 'Print debug information (does not include full tokens)',
+      default: false,
+    },
   },
   async run({ args }) {
     const auth = loadAuth()
@@ -45,12 +51,18 @@ export const revokeCommand = defineCommand({
     const idp = getIdpUrl()!
     const grantsUrl = await getGrantsEndpoint(idp)
 
-    if (process.argv.includes('--debug')) {
+    if (args.debug) {
       consola.debug(`idp: ${idp}`)
       consola.debug(`grantsUrl: ${grantsUrl}`)
       consola.debug(`auth.email: ${auth?.email}`)
       consola.debug(`auth.expires_at: ${auth?.expires_at} (now: ${Math.floor(Date.now() / 1000)})`)
       consola.debug(`getAuthToken(): ${token ? `${token.substring(0, 20)}...` : 'NULL'}`)
+    }
+
+    if (!auth || !token) {
+      consola.error('Authentication required')
+      consola.info('Run `apes login` and try again.')
+      return process.exit(1)
     }
 
     const explicitIds = args.id
@@ -68,9 +80,10 @@ export const revokeCommand = defineCommand({
       const auth = loadAuth()
       const response = await apiFetch<PaginatedGrants>(
         `${grantsUrl}?status=pending&limit=100`,
+        { token },
       )
       const ownPending = auth?.email
-        ? response.data.filter(g => g.requester === auth.email)
+        ? response.data.filter(g => g.request?.requester === auth.email)
         : response.data
       if (ownPending.length === 0) {
         consola.info('No pending grants to revoke.')
@@ -89,7 +102,7 @@ export const revokeCommand = defineCommand({
 
     // Single grant: use direct endpoint
     if (ids.length === 1) {
-      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST', token: token || undefined })
+      await apiFetch(`${grantsUrl}/${ids[0]}/revoke`, { method: 'POST', token })
       consola.success(`Grant ${ids[0]} revoked.`)
       return
     }
@@ -98,7 +111,7 @@ export const revokeCommand = defineCommand({
     const operations = ids.map(id => ({ id, action: 'revoke' as const }))
     const { results } = await apiFetch<{ results: BatchResult[] }>(
       `${grantsUrl}/batch`,
-      { method: 'POST', body: { operations }, token: token || undefined },
+      { method: 'POST', body: { operations }, token },
     )
 
     let succeeded = 0
