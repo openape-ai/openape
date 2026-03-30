@@ -103,6 +103,13 @@ async function runAdapterMode(
   if (!idp)
     throw new Error('No IdP URL configured. Run `apes login` first or pass --idp.')
 
+  // If caller wants to run as another user (e.g. root), auto-switch to the escapes audience flow.
+  // Adapter mode (Shapes) is user-level and cannot elevate privileges.
+  if (args.as) {
+    await runAudienceMode('escapes', command.join(' '), args)
+    return
+  }
+
   const adapterOpt = extractOption(rawArgs, 'adapter')
   const loaded = loadAdapter(command[0]!, adapterOpt)
   const resolved = await resolveCommand(loaded, command)
