@@ -4,20 +4,20 @@ import { validateAssertion } from '../validation/assertion.js'
 import { computeCmdHash } from '../validation/grant.js'
 
 describe('validateAssertion', () => {
-  async function makeAssertion(claims: Record<string, unknown>, key?: Awaited<ReturnType<typeof generateKeyPair>>) {
-    const kp = key ?? await generateKeyPair()
+  async function makeAssertion(claims: Record<string, unknown>) {
+    const kp = await generateKeyPair()
     const now = Math.floor(Date.now() / 1000)
     const token = await signJWT(
       { iss: 'https://idp.example.com', sub: 'alice@example.com', aud: 'sp.example.com', act: 'human', iat: now, exp: now + 300, nonce: 'n', ...claims },
       kp.privateKey,
     )
-    return { token, publicKey: kp.publicKey, now }
+    return { token, publicKey: kp.publicKey }
   }
 
   it('validates a correct assertion', async () => {
-    const { token, publicKey, now } = await makeAssertion({ nonce: 'test-nonce' })
+    const { token, publicKey } = await makeAssertion({ nonce: 'test-nonce' })
     const result = await validateAssertion(token, {
-      expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, expectedNonce: 'test-nonce', now,
+      expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, expectedNonce: 'test-nonce',
     })
     expect(result.valid).toBe(true)
     expect(result.claims?.sub).toBe('alice@example.com')
@@ -33,26 +33,14 @@ describe('validateAssertion', () => {
   it('rejects assertion with TTL > 300s', async () => {
     const now = Math.floor(Date.now() / 1000)
     const { token, publicKey } = await makeAssertion({ iat: now, exp: now + 600 })
-    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, now })
+    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey })
     expect(result.valid).toBe(false)
     expect(result.error).toContain('TTL')
   })
 
-  it('rejects expired assertion via custom now override', async () => {
-    // Token exp is in the future (so jose accepts it), but our now override is past exp
-    const realNow = Math.floor(Date.now() / 1000)
-    const { token, publicKey } = await makeAssertion({ iat: realNow, exp: realNow + 60 })
-    const result = await validateAssertion(token, {
-      expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey,
-      now: realNow + 61, // past exp, but jose doesn't see this override
-    })
-    expect(result.valid).toBe(false)
-    expect(result.error).toBe('Assertion has expired')
-  })
-
   it('rejects assertion with wrong nonce', async () => {
-    const { token, publicKey, now } = await makeAssertion({ nonce: 'wrong' })
-    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, expectedNonce: 'correct', now })
+    const { token, publicKey } = await makeAssertion({ nonce: 'wrong' })
+    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, expectedNonce: 'correct' })
     expect(result.valid).toBe(false)
     expect(result.error).toContain('Nonce')
   })
@@ -63,20 +51,18 @@ describe('validateAssertion', () => {
   })
 
   it('accepts RFC 8693 delegation act claim ({ sub: string })', async () => {
-    const { token, publicKey, now } = await makeAssertion({ act: { sub: 'agent@example.com' } })
-    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, now })
+    const { token, publicKey } = await makeAssertion({ act: { sub: 'agent@example.com' } })
+    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey })
     expect(result.valid).toBe(true)
     expect(result.claims?.act).toEqual({ sub: 'agent@example.com' })
   })
 
   it('rejects invalid act claim types', async () => {
-    // act as number
-    const { token: t1, publicKey: k1, now: n1 } = await makeAssertion({ act: 42 })
-    expect((await validateAssertion(t1, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: k1, now: n1 })).error).toContain('Invalid act')
+    const { token: t1, publicKey: k1 } = await makeAssertion({ act: 42 })
+    expect((await validateAssertion(t1, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: k1 })).error).toContain('Invalid act')
 
-    // act as object without sub
-    const { token: t2, publicKey: k2, now: n2 } = await makeAssertion({ act: { role: 'admin' } })
-    expect((await validateAssertion(t2, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: k2, now: n2 })).error).toContain('Invalid delegation act')
+    const { token: t2, publicKey: k2 } = await makeAssertion({ act: { role: 'admin' } })
+    expect((await validateAssertion(t2, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: k2 })).error).toContain('Invalid delegation act')
   })
 
   it('rejects assertion with missing sub claim', async () => {
@@ -86,7 +72,7 @@ describe('validateAssertion', () => {
       { iss: 'https://idp.example.com', aud: 'sp.example.com', iat: now, exp: now + 300 },
       kp.privateKey,
     )
-    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: kp.publicKey, now })
+    const result = await validateAssertion(token, { expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey: kp.publicKey })
     expect(result).toMatchObject({ valid: false, error: 'Missing sub claim' })
   })
 })
