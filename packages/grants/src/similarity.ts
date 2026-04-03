@@ -1,5 +1,5 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
-import { cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from '@openape/core'
+import { cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from './cli-permissions.js'
 
 export interface SimilarGrantMatch {
   grant: OpenApeGrant

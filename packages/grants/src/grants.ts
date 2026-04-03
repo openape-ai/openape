@@ -1,5 +1,5 @@
 import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from '@openape/core'
+import { canonicalizeCliPermission, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from './cli-permissions.js'
 import type { GrantStore } from './stores.js'
 
 export type ExtendMode = 'widen' | 'merge'

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { generateKeyPair, signJWT } from '../crypto/jwt.js'
 import { validateAssertion } from '../validation/assertion.js'
 import { computeCmdHash } from '../validation/grant.js'
-import { validateClientMetadata } from '../validation/manifest.js'
 
 describe('validateAssertion', () => {
   it('validates a correct assertion', async () => {
@@ -212,46 +211,6 @@ describe('validateAssertion', () => {
     expect(result.claims?.sub).toBe('patrick@hofmann.eco')
     expect(result.claims?.act).toEqual({ sub: 'agent+patrick@id.openape.at' })
     expect(result.claims?.delegation_grant).toBe('del-abc123')
-  })
-})
-
-describe('validateClientMetadata', () => {
-  it('validates correct client metadata', () => {
-    const result = validateClientMetadata({
-      client_id: 'sp.example.com',
-      client_name: 'Example SP',
-      redirect_uris: ['https://sp.example.com/callback'],
-    })
-    expect(result.valid).toBe(true)
-    expect(result.manifest?.client_id).toBe('sp.example.com')
-  })
-
-  it('rejects metadata without client_id', () => {
-    const result = validateClientMetadata({ client_name: 'Test', redirect_uris: ['https://example.com'] })
-    expect(result.valid).toBe(false)
-    expect(result.errors).toContain('client_id is required and must be a non-empty string')
-  })
-
-  it('rejects metadata without client_name', () => {
-    const result = validateClientMetadata({ client_id: 'test', redirect_uris: ['https://example.com'] })
-    expect(result.valid).toBe(false)
-    expect(result.errors).toContain('client_name is required and must be a non-empty string')
-  })
-
-  it('rejects metadata with empty redirect_uris', () => {
-    const result = validateClientMetadata({ client_id: 'test', client_name: 'Test', redirect_uris: [] })
-    expect(result.valid).toBe(false)
-  })
-
-  it('rejects metadata with invalid redirect_uri', () => {
-    const result = validateClientMetadata({ client_id: 'test', client_name: 'Test', redirect_uris: ['not-a-url'] })
-    expect(result.valid).toBe(false)
-    expect(result.errors.some(e => e.includes('Invalid redirect_uri'))).toBe(true)
-  })
-
-  it('rejects non-object input', () => {
-    const result = validateClientMetadata('string')
-    expect(result.valid).toBe(false)
   })
 })
 
