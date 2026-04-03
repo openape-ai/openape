@@ -195,6 +195,11 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/admin/users/:email', method: 'delete', handler: resolve('./runtime/server/api/admin/users/[email].delete') })
       addServerHandler({ route: '/api/admin/users/:email/credentials', handler: resolve('./runtime/server/api/admin/users/[email]/credentials.get') })
 
+      // Admin SSH Keys
+      addServerHandler({ route: '/api/admin/users/:email/ssh-keys', handler: resolve('./runtime/server/api/admin/users/[email]/ssh-keys.get') })
+      addServerHandler({ route: '/api/admin/users/:email/ssh-keys', method: 'post', handler: resolve('./runtime/server/api/admin/users/[email]/ssh-keys.post') })
+      addServerHandler({ route: '/api/admin/users/:email/ssh-keys/:keyId', method: 'delete', handler: resolve('./runtime/server/api/admin/users/[email]/ssh-keys/[keyId].delete') })
+
       // Admin Agents
       addServerHandler({ route: '/api/admin/agents', handler: resolve('./runtime/server/api/admin/agents/index.get') })
       addServerHandler({ route: '/api/admin/agents', method: 'post', handler: resolve('./runtime/server/api/admin/agents/index.post') })
