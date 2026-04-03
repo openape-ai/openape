@@ -1,15 +1,9 @@
 import { defineEventHandler, getQuery } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
-import { getAppSession } from '../../utils/session'
-import { createProblemError } from '../../utils/problem'
+import { requireAuth } from '../../utils/admin'
 
 export default defineEventHandler(async (event) => {
-  const session = await getAppSession(event)
-  if (!session.data.userId) {
-    throw createProblemError({ status: 401, title: 'Not authenticated' })
-  }
-
-  const email = session.data.userId as string
+  const email = await requireAuth(event)
   const { grantStore } = useGrantStores()
 
   const query = getQuery(event)
