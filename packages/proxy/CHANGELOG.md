@@ -1,5 +1,15 @@
 # @openape/proxy
 
+## 0.2.8
+
+### Patch Changes
+
+- Fix ReDoS-vulnerable regex in proxy auth header parsing. Fix lint violations across packages. Update import paths for CLI permissions moved to @openape/grants.
+
+- Updated dependencies []:
+  - @openape/core@0.12.0
+  - @openape/grants@0.7.0
+
 ## 0.2.7
 
 ### Patch Changes

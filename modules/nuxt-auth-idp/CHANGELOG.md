@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- Add SSH key store and unified auth endpoints (`/api/auth/challenge`, `/api/auth/authenticate`), generalized token system supporting both `act: 'agent'` and `act: 'human'`, admin SSH key management endpoints, 'As requested' option in grant approval UI, Bearer token support in delegations endpoints. Add Drizzle SSH key store for Free-IdP. Update OIDC Discovery with new auth endpoints.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/auth@0.6.0
+  - @openape/core@0.12.0
+  - @openape/grants@0.7.0
+
 ## 0.11.0
 
 ### Minor Changes

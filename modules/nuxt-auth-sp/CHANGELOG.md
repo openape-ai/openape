@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.9
+
+### Patch Changes
+
+- Fix ReDoS-vulnerable regex in proxy auth header parsing. Fix lint violations across packages. Update import paths for CLI permissions moved to @openape/grants.
+
+- Updated dependencies []:
+  - @openape/auth@0.6.0
+  - @openape/core@0.12.0
+
 ## 0.6.8
 
 ### Patch Changes

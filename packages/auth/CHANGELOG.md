@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- Add unified User/SshKey/GrantChallengeStore interfaces and in-memory implementations. The User interface replaces the separate User + Agent model — an agent is a User with `owner` set. New exports: `User`, `UserStore`, `InMemoryUserStore`, `SshKey`, `SshKeyStore`, `InMemorySshKeyStore`, `GrantChallengeStore`, `InMemoryGrantChallengeStore`.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.12.0
+
 ## 0.5.7
 
 ### Patch Changes
