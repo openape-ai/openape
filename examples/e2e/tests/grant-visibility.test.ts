@@ -38,6 +38,15 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     return { status: res.status, data }
   }
 
+  /** Fetch the flat grant list from the paginated /api/grants endpoint. */
+  async function listGrants(jwt: string): Promise<{ id: string, status: string }[]> {
+    const { data } = await idpGet<{
+      data: { id: string, status: string }[]
+      pagination: { cursor: string | null, has_more: boolean }
+    }>(jwt, '/api/grants')
+    return data.data
+  }
+
   async function createGrant(jwt: string, grantType: 'once' | 'timed' | 'always' = 'once') {
     const { status, data } = await idpPost<{ id: string, status: string }>(jwt, '/api/grants', {
       requester: TEST_USER.email,
@@ -46,7 +55,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
       grant_type: grantType,
       permissions: ['read'],
     })
-    expect(status).toBe(200)
+    expect(status).toBe(201)
     expect(data.id).toBeTruthy()
     expect(data.status).toBe('pending')
     return data
@@ -59,7 +68,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     const grant1 = await createGrant(jwt)
 
     // Dashboard should show the pending grant
-    const { data: grants1 } = await idpGet<{ id: string, status: string }[]>(jwt, '/api/grants')
+    const grants1 = await listGrants(jwt)
     expect(grants1.some(g => g.id === grant1.id && g.status === 'pending')).toBe(true)
 
     // Approve the grant
@@ -74,7 +83,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     if (IS_PROD) await new Promise(r => setTimeout(r, 1000))
 
     // Dashboard should show the approved grant
-    const { data: grants2 } = await idpGet<{ id: string, status: string }[]>(jwt, '/api/grants')
+    const grants2 = await listGrants(jwt)
     expect(grants2.some(g => g.id === grant1.id && g.status === 'approved')).toBe(true)
 
     // Create a second grant and deny it
@@ -83,7 +92,7 @@ describe('grant Lifecycle & Dashboard Visibility', () => {
     expect(denyStatus).toBe(200)
 
     // Dashboard should show both grants
-    const { data: grants3 } = await idpGet<{ id: string, status: string }[]>(jwt, '/api/grants')
+    const grants3 = await listGrants(jwt)
     expect(grants3.some(g => g.id === grant1.id)).toBe(true)
     expect(grants3.some(g => g.id === grant2.id && g.status === 'denied')).toBe(true)
   })
