@@ -62,6 +62,12 @@ describe('parseDDISARecord', () => {
     }
   })
 
+  it('skips parts without = separator', () => {
+    const result = parseDDISARecord('v=ddisa1 idp=https://idp.example.com; garbage; mode=open')
+    expect(result?.idp).toBe('https://idp.example.com')
+    expect(result?.mode).toBe('open')
+  })
+
   it('handles extra whitespace', () => {
     const result = parseDDISARecord('  v=ddisa1 idp = https://idp.example.com ;  mode = open  ')
     expect(result?.idp).toBe('https://idp.example.com')
