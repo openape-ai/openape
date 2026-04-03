@@ -1,0 +1,14 @@
+# @openape/server
+
+## 0.2.0
+
+### Minor Changes
+
+- Initial release. Programmatic DDISA IdP and SP server built on h3. `createIdPApp(config)` starts a full IdP with ed25519 challenge-response auth, OIDC authorize/token flow, grant lifecycle, admin SSH key management. `createSPApp(config)` starts a Service Provider with login, callback, and session management. All endpoints work with in-memory stores — ideal for testing and lightweight deployments.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/auth@0.6.0
+  - @openape/core@0.12.0
+  - @openape/grants@0.7.0

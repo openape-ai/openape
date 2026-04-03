@@ -1,5 +1,18 @@
 # @openape/apes
 
+## 0.6.0
+
+### Minor Changes
+
+- Add SSH key authentication for humans, workflow-guides discovery command (`apes workflows`), EPIPE handler for piped commands, 'As requested' option in grant approval. Refactor `process.exit()` to `CliError`/`CliExit` throws for testability. Export `CliError` and `CliExit` classes.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.12.0
+  - @openape/grants@0.7.0
+  - @openape/shapes@0.6.1
+
 ## 0.5.0
 
 ### Minor Changes
