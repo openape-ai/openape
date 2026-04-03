@@ -11,5 +11,16 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    coverage: {
+      provider: 'istanbul',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
+      reporter: ['text', 'lcov'],
+      thresholds: {
+        statements: 19,
+        functions: 16,
+        lines: 19,
+      },
+    },
   },
 })
