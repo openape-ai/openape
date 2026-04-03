@@ -125,8 +125,10 @@ export default defineNuxtModule<ModuleOptions>({
     }
     if (routeConfig.grants)
       corsRules['/api/grants/**'] = { cors: true }
-    if (routeConfig.agent)
+    if (routeConfig.agent) {
       corsRules['/api/agent/**'] = { cors: true }
+      corsRules['/api/auth/**'] = { cors: true }
+    }
     nuxt.options.routeRules = defu(nuxt.options.routeRules || {}, corsRules)
 
     // Pages (overridable by the consuming app)
@@ -238,6 +240,10 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/agent/challenge', method: 'post', handler: resolve('./runtime/server/api/agent/challenge.post') })
       addServerHandler({ route: '/api/agent/authenticate', method: 'post', handler: resolve('./runtime/server/api/agent/authenticate.post') })
       addServerHandler({ route: '/api/agent/enroll', method: 'post', handler: resolve('./runtime/server/api/agent/enroll.post') })
+
+      // Unified auth endpoints (agents + humans with SSH keys)
+      addServerHandler({ route: '/api/auth/challenge', method: 'post', handler: resolve('./runtime/server/api/auth/challenge.post') })
+      addServerHandler({ route: '/api/auth/authenticate', method: 'post', handler: resolve('./runtime/server/api/auth/authenticate.post') })
     }
 
     // Server route handlers — Federation
