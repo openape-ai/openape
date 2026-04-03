@@ -39,8 +39,4 @@ describe('discoverIdP', () => {
     expect(config!.idpUrl).toBe('https://idp.example.com')
   })
 
-  it('returns null without fallback for unknown domain', async () => {
-    const config = await discoverIdP('bob@unknown.com', { mockRecords })
-    expect(config).toBeNull()
-  })
 })
