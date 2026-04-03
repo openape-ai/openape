@@ -1,12 +1,11 @@
 import { defineCommand } from 'citty'
-import consola from 'consola'
 import { getAuthToken } from '../../config'
+import { CliError } from '../../errors'
 
 async function doRequest(method: string, url: string, body: string | undefined, contentType: string, raw: boolean, showHeaders: boolean) {
   const token = getAuthToken()
   if (!token) {
-    consola.error('Not authenticated. Run `apes login` first.')
-    return process.exit(1)
+    throw new CliError('Not authenticated. Run `apes login` first.')
   }
 
   const response = await fetch(url, {
@@ -42,7 +41,7 @@ async function doRequest(method: string, url: string, body: string | undefined, 
   }
 
   if (!response.ok) {
-    process.exit(1)
+    throw new CliError(`HTTP ${response.status} ${response.statusText}`)
   }
 }
 

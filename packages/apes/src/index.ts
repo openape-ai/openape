@@ -41,3 +41,4 @@ export { loadAuth, saveAuth, clearAuth, loadConfig, saveConfig, getIdpUrl, getAu
 export type { AuthData, ApesConfig } from './config'
 export { apiFetch, discoverEndpoints, ApiError } from './http'
 export { parseDuration } from './duration'
+export { CliError, CliExit } from './errors'

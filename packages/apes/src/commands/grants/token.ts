@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty'
-import consola from 'consola'
 import { getIdpUrl } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 export const tokenCommand = defineCommand({
   meta: {
@@ -23,8 +23,7 @@ export const tokenCommand = defineCommand({
     })
 
     if (!result.authz_jwt) {
-      consola.error('No token received. Grant may not be approved.')
-      return process.exit(1)
+      throw new CliError('No token received. Grant may not be approved.')
     }
 
     // Output raw token to stdout (pipeable)

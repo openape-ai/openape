@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth, loadConfig } from '../../config'
+import { CliError } from '../../errors'
 
 export const configGetCommand = defineCommand({
   meta: {
@@ -50,8 +51,7 @@ export const configGetCommand = defineCommand({
           }
         }
         else {
-          consola.error(`Unknown key: "${key}". Use: idp, email, defaults.idp, defaults.approval, agent.key, agent.email`)
-          process.exit(1)
+          throw new CliError(`Unknown key: "${key}". Use: idp, email, defaults.idp, defaults.approval, agent.key, agent.email`)
         }
       }
     }

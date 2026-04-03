@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { resolveDDISA } from '@openape/core'
+import { CliError } from '../errors'
 
 export const dnsCheckCommand = defineCommand({
   meta: {
@@ -23,11 +24,10 @@ export const dnsCheckCommand = defineCommand({
       const result = await resolveDDISA(domain)
 
       if (!result) {
-        consola.error(`No DDISA record found for ${domain}`)
         console.log('')
         console.log('To set up DDISA, add a DNS TXT record:')
         console.log(`  _ddisa.${domain} TXT "v=ddisa1 idp=https://id.${domain}"`)
-        return process.exit(1)
+        throw new CliError(`No DDISA record found for ${domain}`)
       }
 
       consola.success(`_ddisa.${domain} → ${result.idp}`)
@@ -65,8 +65,7 @@ export const dnsCheckCommand = defineCommand({
       }
     }
     catch (err) {
-      consola.error(`DNS check failed: ${err instanceof Error ? err.message : String(err)}`)
-      return process.exit(1)
+      throw new CliError(`DNS check failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   },
 })

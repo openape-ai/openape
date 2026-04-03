@@ -2,6 +2,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { apiFetch, getDelegationsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 export const delegateCommand = defineCommand({
   meta: {
@@ -36,8 +37,7 @@ export const delegateCommand = defineCommand({
   async run({ args }) {
     const auth = loadAuth()
     if (!auth) {
-      consola.error('Not logged in. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('Not logged in. Run `apes login` first.')
     }
 
     const idp = getIdpUrl()!

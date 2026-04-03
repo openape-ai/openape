@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import { CliError, CliExit } from '../../errors'
 
 const DEFAULT_IDP_URL = 'https://id.openape.at'
 
@@ -29,7 +30,7 @@ function installDeps(dir: string) {
 async function promptChoice(message: string, choices: string[]): Promise<string> {
   const result = await consola.prompt(message, { type: 'select', options: choices })
   if (typeof result === 'symbol') {
-    process.exit(0)
+    throw new CliExit(0)
   }
   return result as string
 }
@@ -37,7 +38,7 @@ async function promptChoice(message: string, choices: string[]): Promise<string>
 async function promptText(message: string, defaultValue?: string): Promise<string> {
   const result = await consola.prompt(message, { type: 'text', default: defaultValue, placeholder: defaultValue })
   if (typeof result === 'symbol') {
-    process.exit(0)
+    throw new CliExit(0)
   }
   return (result as string) || defaultValue || ''
 }
@@ -92,8 +93,7 @@ async function initSP(targetDir?: string) {
   const dir = targetDir || 'my-app'
 
   if (existsSync(join(dir, 'package.json'))) {
-    consola.error(`Directory "${dir}" already contains a project.`)
-    return process.exit(1)
+    throw new CliError(`Directory "${dir}" already contains a project.`)
   }
 
   consola.start('Scaffolding SP starter...')
@@ -125,8 +125,7 @@ async function initIdP(targetDir?: string) {
   const dir = targetDir || 'my-idp'
 
   if (existsSync(join(dir, 'package.json'))) {
-    consola.error(`Directory "${dir}" already contains a project.`)
-    return process.exit(1)
+    throw new CliError(`Directory "${dir}" already contains a project.`)
   }
 
   // Interactive questions

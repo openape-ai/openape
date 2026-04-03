@@ -2,6 +2,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getAuthToken, getIdpUrl, loadAuth } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 interface Grant {
   id: string
@@ -60,9 +61,7 @@ export const revokeCommand = defineCommand({
     }
 
     if (!auth || !token) {
-      consola.error('Authentication required')
-      consola.info('Run `apes login` and try again.')
-      return process.exit(1)
+      throw new CliError('Authentication required. Run `apes login` and try again.')
     }
 
     const explicitIds = args.id
@@ -70,8 +69,7 @@ export const revokeCommand = defineCommand({
       : []
 
     if (args.allPending && explicitIds.length > 0) {
-      consola.error('Use either --all-pending or grant IDs, not both.')
-      return process.exit(1)
+      throw new CliError('Use either --all-pending or grant IDs, not both.')
     }
 
     let ids: string[]
@@ -96,8 +94,7 @@ export const revokeCommand = defineCommand({
       ids = explicitIds
     }
     else {
-      consola.error('Provide grant ID(s) or use --all-pending.')
-      return process.exit(1)
+      throw new CliError('Provide grant ID(s) or use --all-pending.')
     }
 
     // Single grant: use direct endpoint
@@ -126,8 +123,7 @@ export const revokeCommand = defineCommand({
     }
 
     if (succeeded < results.length) {
-      consola.info(`Revoked ${succeeded} of ${results.length} grants.`)
-      process.exit(1)
+      throw new CliError(`Revoked ${succeeded} of ${results.length} grants.`)
     }
     else {
       consola.success(`All ${succeeded} grants revoked.`)
