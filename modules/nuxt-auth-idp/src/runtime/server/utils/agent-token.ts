@@ -1,5 +1,49 @@
+import type { ActorType } from '@openape/core'
 import type { KeyLike } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
+
+// --- Generalized auth token (supports both 'agent' and 'human') ---
+
+export interface AuthTokenPayload {
+  sub: string
+  act: ActorType
+}
+
+export async function issueAuthToken(
+  payload: { sub: string, act: ActorType },
+  issuer: string,
+  privateKey: KeyLike,
+  kid?: string,
+): Promise<string> {
+  const jwt = new SignJWT({ sub: payload.sub, act: payload.act })
+    .setProtectedHeader({ alg: 'EdDSA', ...(kid ? { kid } : {}) })
+    .setIssuer(issuer)
+    .setSubject(payload.sub)
+    .setIssuedAt()
+    .setExpirationTime('1h')
+
+  return await jwt.sign(privateKey)
+}
+
+export async function verifyAuthToken(
+  token: string,
+  issuer: string,
+  publicKey: KeyLike | Uint8Array,
+): Promise<AuthTokenPayload> {
+  const { payload } = await jwtVerify(token, publicKey, {
+    issuer,
+    algorithms: ['EdDSA'],
+  })
+
+  const act = payload.act
+  if (act !== 'agent' && act !== 'human') {
+    throw new Error('Invalid act claim')
+  }
+
+  return { sub: payload.sub as string, act }
+}
+
+// --- Agent-specific wrappers (backward compatibility) ---
 
 export interface AgentTokenPayload {
   sub: string
@@ -12,14 +56,7 @@ export async function issueAgentToken(
   privateKey: KeyLike,
   kid?: string,
 ): Promise<string> {
-  const jwt = new SignJWT({ sub: payload.sub, act: 'agent' })
-    .setProtectedHeader({ alg: 'EdDSA', ...(kid ? { kid } : {}) })
-    .setIssuer(issuer)
-    .setSubject(payload.sub)
-    .setIssuedAt()
-    .setExpirationTime('1h')
-
-  return await jwt.sign(privateKey)
+  return issueAuthToken({ sub: payload.sub, act: 'agent' }, issuer, privateKey, kid)
 }
 
 export async function verifyAgentToken(
@@ -27,14 +64,9 @@ export async function verifyAgentToken(
   issuer: string,
   publicKey: KeyLike | Uint8Array,
 ): Promise<AgentTokenPayload> {
-  const { payload } = await jwtVerify(token, publicKey, {
-    issuer,
-    algorithms: ['EdDSA'],
-  })
-
-  if (payload.act !== 'agent') {
+  const result = await verifyAuthToken(token, issuer, publicKey)
+  if (result.act !== 'agent') {
     throw new Error('Not an agent token')
   }
-
-  return payload as unknown as AgentTokenPayload
+  return result as AgentTokenPayload
 }
