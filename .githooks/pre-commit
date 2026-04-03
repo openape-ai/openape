@@ -20,7 +20,7 @@ branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" = "main" ]; then
   # On main: only allow infra/config commits
   staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
-  non_infra=$(echo "$staged_files" | grep -vE '^(\.(claude|github|githooks|changeset)/|scripts/|\.gitignore|\.gitattributes|\.npmrc|eslint\.config\.mjs|turbo\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|LICENSE|README\.md|CHANGELOG\.md|CONTRIBUTING\.md|package\.json$)' || true)
+  non_infra=$(echo "$staged_files" | grep -vE '^(\.(claude|github|githooks|changeset)/|scripts/|apps/docs/content/|\.gitignore|\.gitattributes|\.npmrc|eslint\.config\.mjs|turbo\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|LICENSE|README\.md|CHANGELOG\.md|CONTRIBUTING\.md|package\.json$)' || true)
 
   if [ -n "$non_infra" ]; then
     echo "[pre-commit] BLOCKED — Source-Änderungen auf 'main' nicht erlaubt:"
