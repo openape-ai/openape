@@ -1,4 +1,4 @@
-import type { ChallengeStore, CodeStore, ConsentStore, JtiStore, KeyStore, RefreshTokenStore } from '@openape/auth'
+import type { CodeStore, GrantChallengeStore, JtiStore, KeyStore, RefreshTokenStore, SshKeyStore, UserStore } from '@openape/auth'
 import type { GrantStore } from '@openape/grants'
 
 export interface IdPConfig {
@@ -8,11 +8,11 @@ export interface IdPConfig {
 }
 
 export interface IdPStores {
-  // TODO: Add UserStore and SshKeyStore once M1 (store interfaces) is merged
+  userStore: UserStore
+  sshKeyStore: SshKeyStore
   keyStore: KeyStore
   codeStore: CodeStore
-  consentStore: ConsentStore
-  challengeStore: ChallengeStore
+  challengeStore: GrantChallengeStore
   grantStore: GrantStore
   jtiStore: JtiStore
   refreshTokenStore: RefreshTokenStore
