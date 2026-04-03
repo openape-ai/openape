@@ -27,7 +27,7 @@ describe('resolveTXT (DoH)', () => {
     ])
 
     expect(fetchMock).toHaveBeenCalledOnce()
-    const url = fetchMock.mock.calls[0][0] as string
+    const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toContain('type=TXT')
     expect(url).toContain('name=example.com')
   })
@@ -99,7 +99,7 @@ describe('resolveTXT (DoH)', () => {
     })
 
     await resolveTXT('example.com', 'https://custom-dns.example.com/resolve')
-    const url = fetchMock.mock.calls[0][0] as string
+    const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toMatch(/^https:\/\/custom-dns\.example\.com\/resolve/)
   })
 })
