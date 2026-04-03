@@ -5,7 +5,7 @@ import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
-  const { userStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
 
   const email = getRouterParam(event, 'email')
   if (!email) {
@@ -24,5 +24,6 @@ export default defineEventHandler(async (event) => {
   }
 
   await userStore.deleteUser(decoded)
+  await sshKeyStore.deleteAllForUser(decoded)
   return { ok: true }
 })
