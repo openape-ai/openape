@@ -275,6 +275,136 @@ export class InMemoryRefreshTokenStore implements RefreshTokenStore {
   }
 }
 
+// --- Unified User (replaces separate User + Agent) ---
+
+export interface User {
+  email: string
+  name: string
+  owner?: string // undefined = self-registered, set = enrolled by another user
+  approver?: string // undefined = defaults to owner or self
+  isActive: boolean
+  createdAt: number
+}
+
+export interface UserStore {
+  create: (user: User) => Promise<User>
+  findByEmail: (email: string) => Promise<User | null>
+  list: () => Promise<User[]>
+  update: (email: string, data: Partial<Omit<User, 'email' | 'createdAt'>>) => Promise<User>
+  delete: (email: string) => Promise<void>
+  findByOwner: (owner: string) => Promise<User[]>
+}
+
+// --- SSH Keys ---
+
+export interface SshKey {
+  keyId: string
+  userEmail: string
+  publicKey: string
+  name: string
+  createdAt: number
+}
+
+export interface SshKeyStore {
+  save: (key: SshKey) => Promise<void>
+  findById: (keyId: string) => Promise<SshKey | null>
+  findByUser: (email: string) => Promise<SshKey[]>
+  findByPublicKey: (publicKey: string) => Promise<SshKey | null>
+  delete: (keyId: string) => Promise<void>
+  deleteAllForUser: (email: string) => Promise<void>
+}
+
+// --- Grant Challenge Store (ed25519 challenge-response) ---
+
+export interface GrantChallengeStore {
+  createChallenge: (entityId: string) => Promise<string>
+  consumeChallenge: (challenge: string, entityId: string) => Promise<boolean>
+}
+
+// In-memory implementations
+
+export class InMemoryUserStore implements UserStore {
+  private users = new Map<string, User>()
+
+  async create(user: User): Promise<User> {
+    this.users.set(user.email, user)
+    return user
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.users.get(email) ?? null
+  }
+
+  async list(): Promise<User[]> {
+    return [...this.users.values()].toSorted((a, b) => b.createdAt - a.createdAt)
+  }
+
+  async update(email: string, data: Partial<Omit<User, 'email' | 'createdAt'>>): Promise<User> {
+    const user = this.users.get(email)
+    if (!user) throw new Error(`User not found: ${email}`)
+    const updated = { ...user, ...data }
+    this.users.set(email, updated)
+    return updated
+  }
+
+  async delete(email: string): Promise<void> {
+    this.users.delete(email)
+  }
+
+  async findByOwner(owner: string): Promise<User[]> {
+    return [...this.users.values()].filter(u => u.owner === owner)
+  }
+}
+
+export class InMemorySshKeyStore implements SshKeyStore {
+  private keys = new Map<string, SshKey>()
+
+  async save(key: SshKey): Promise<void> {
+    this.keys.set(key.keyId, key)
+  }
+
+  async findById(keyId: string): Promise<SshKey | null> {
+    return this.keys.get(keyId) ?? null
+  }
+
+  async findByUser(email: string): Promise<SshKey[]> {
+    return [...this.keys.values()].filter(k => k.userEmail === email)
+  }
+
+  async findByPublicKey(publicKey: string): Promise<SshKey | null> {
+    return [...this.keys.values()].find(k => k.publicKey === publicKey) ?? null
+  }
+
+  async delete(keyId: string): Promise<void> {
+    this.keys.delete(keyId)
+  }
+
+  async deleteAllForUser(email: string): Promise<void> {
+    for (const [id, key] of this.keys) {
+      if (key.userEmail === email) this.keys.delete(id)
+    }
+  }
+}
+
+export class InMemoryGrantChallengeStore implements GrantChallengeStore {
+  private challenges = new Map<string, { entityId: string, expiresAt: number }>()
+
+  async createChallenge(entityId: string): Promise<string> {
+    const challenge = randomBytes(32).toString('hex')
+    this.challenges.set(challenge, { entityId, expiresAt: Date.now() + 60_000 })
+    return challenge
+  }
+
+  async consumeChallenge(challenge: string, entityId: string): Promise<boolean> {
+    const stored = this.challenges.get(challenge)
+    if (!stored) return false
+    this.challenges.delete(challenge)
+    if (stored.expiresAt < Date.now()) return false
+    if (stored.entityId !== entityId) return false
+    return true
+  }
+}
+
 export class InMemoryKeyStore implements KeyStore {
   private keys: KeyEntry[] = []
   private initialized = false
