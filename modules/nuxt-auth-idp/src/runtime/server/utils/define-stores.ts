@@ -4,6 +4,7 @@ import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
 import type { UserStore } from './user-store'
 import type { AgentStore } from './agent-store'
+import type { SshKeyStore } from './ssh-key-store'
 import { registerStoreFactory } from './store-registry'
 
 // Grant Stores (Gruppe B)
@@ -52,4 +53,10 @@ export function defineJtiStore(factory: (event: H3Event) => JtiStore) {
 
 export function defineRefreshTokenStore(factory: (event: H3Event) => RefreshTokenStore) {
   registerStoreFactory('refreshTokenStore', factory)
+}
+
+// SSH Key Store
+
+export function defineSshKeyStore(factory: (event: H3Event) => SshKeyStore) {
+  registerStoreFactory('sshKeyStore', factory)
 }
