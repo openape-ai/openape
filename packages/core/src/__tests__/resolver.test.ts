@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearDNSCache, resolveDDISA, resolveIdP } from '../dns/resolver.js'
+import { resolveDDISA, resolveIdP } from '../dns/resolver.js'
 
 describe('resolveDDISA with mock records', () => {
   const mockRecords = {
@@ -53,8 +53,3 @@ describe('resolveDDISA with env-based mock records', () => {
   })
 })
 
-describe('dns cache', () => {
-  it('clears cache without error', () => {
-    expect(() => clearDNSCache()).not.toThrow()
-  })
-})
