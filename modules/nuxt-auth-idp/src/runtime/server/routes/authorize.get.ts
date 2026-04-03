@@ -4,7 +4,7 @@ import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
 import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
-import { tryAgentAuth } from '../utils/agent-auth'
+import { tryBearerAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
@@ -63,8 +63,8 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: error })
   }
 
-  // Determine userId: Agent Bearer Token or Human Session
-  const agentPayload = await tryAgentAuth(event)
+  // Determine userId: Bearer Token (agent or human) or Human Session
+  const bearerPayload = await tryBearerAuth(event)
   let userId: string
   let actorType: ActorType | undefined
   let delegationAct: DelegationActClaim | undefined
@@ -73,27 +73,27 @@ export default defineEventHandler(async (event) => {
   // Check for explicit delegation_grant parameter
   const delegationGrantParam = String(query.delegation_grant ?? '')
 
-  if (agentPayload) {
+  if (bearerPayload) {
     if (delegationGrantParam) {
-      // Agent with explicit delegation grant
+      // Bearer token with explicit delegation grant
       const { grantStore } = useGrantStores()
       const grant = await validateDelegation(
         delegationGrantParam,
-        agentPayload.sub,
+        bearerPayload.sub,
         params.client_id,
         grantStore,
       )
       // sub becomes the delegator, act becomes the delegate
       userId = grant.request.delegator!
-      delegationAct = { sub: agentPayload.sub }
+      delegationAct = { sub: bearerPayload.sub }
       delegationGrantId = grant.id
       // Consume grant (once → used, timed/always → noop)
       await useGrant(grant.id, grantStore)
     }
     else {
-      // Standard agent mode
-      userId = agentPayload.sub
-      actorType = 'agent'
+      // Standard bearer mode
+      userId = bearerPayload.sub
+      actorType = bearerPayload.act === 'agent' ? 'agent' : undefined
     }
   }
   else {
@@ -152,7 +152,7 @@ export default defineEventHandler(async (event) => {
 
     for (const detail of authzDetails) {
       const grant = await createGrant({
-        requester: agentPayload ? agentPayload.sub : userId,
+        requester: bearerPayload ? bearerPayload.sub : userId,
         target_host: params.client_id,
         audience: params.client_id,
         grant_type: detail.approval ?? 'once',
@@ -191,7 +191,7 @@ export default defineEventHandler(async (event) => {
   redirectUrl.searchParams.set('state', params.state)
 
   // Session cleanup only for human flow
-  if (!agentPayload) {
+  if (!bearerPayload) {
     const session = await getAppSession(event)
     await session.update({ pendingAuthorize: undefined, returnTo: undefined })
   }
