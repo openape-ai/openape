@@ -2,12 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveTXT } from '../dns/node.js'
 import { clearDNSCache, resolveDDISA } from '../dns/resolver.js'
 
-// Mock the node DNS resolver and detect to force the node path
+// Mock the node DNS resolver (resolver.ts tries node first, falls back to DoH)
 vi.mock('../dns/node.js', () => ({
   resolveTXT: vi.fn(),
-}))
-vi.mock('../dns/detect.js', () => ({
-  detectRuntime: vi.fn().mockReturnValue('node'),
 }))
 
 const mockResolveTXT = vi.mocked(resolveTXT)
@@ -131,6 +128,21 @@ describe('resolveDDISA with DNS resolution', () => {
 
     // Should still be cached (within 1 second)
     await resolveDDISA('ttl-test.com')
+    expect(mockResolveTXT).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to DoH when native DNS throws', async () => {
+    // Simulate edge/browser runtime where node:dns is unavailable
+    mockResolveTXT.mockRejectedValueOnce(new Error('not implemented'))
+
+    const record = await resolveDDISA('doh-fallback.com', {
+      noCache: true,
+      dohProvider: 'https://cloudflare-dns.com/dns-query',
+    })
+
+    // DoH will try a real DNS lookup for _ddisa.doh-fallback.com — expect null (no record)
+    // The important thing is that it doesn't throw
+    expect(record).toBeNull()
     expect(mockResolveTXT).toHaveBeenCalledTimes(1)
   })
 })
