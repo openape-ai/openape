@@ -41,107 +41,50 @@ describe('createProblemDetails', () => {
     })
   })
 
-  it('defaults type to about:blank when not provided', () => {
-    const result = createProblemDetails({
-      title: 'Test',
-      status: 500,
-    })
+  it('defaults type to about:blank and omits detail when not provided', () => {
+    const result = createProblemDetails({ title: 'Test', status: 500 })
     expect(result.type).toBe('about:blank')
-  })
-
-  it('omits detail when not provided', () => {
-    const result = createProblemDetails({
-      title: 'Test',
-      status: 500,
-    })
     expect(result).not.toHaveProperty('detail')
   })
 })
 
-describe('DDISA error factories', () => {
-  const ddisaErrors: Array<{
+describe('error factories', () => {
+  const allFactories: Array<{
     fn: (detail?: string) => ReturnType<typeof createProblemDetails>
-    name: string
+    base: string
+    slug: string
     title: string
     status: number
-    errorSlug: string
   }> = [
-    { fn: invalidRecord, name: 'invalidRecord', title: 'Invalid DDISA record', status: 400, errorSlug: 'invalid_record' },
-    { fn: idpUnreachable, name: 'idpUnreachable', title: 'IdP unreachable', status: 502, errorSlug: 'idp_unreachable' },
-    { fn: invalidManifest, name: 'invalidManifest', title: 'Invalid manifest', status: 400, errorSlug: 'invalid_manifest' },
-    { fn: invalidToken, name: 'invalidToken', title: 'Invalid token', status: 401, errorSlug: 'invalid_token' },
-    { fn: tokenExpired, name: 'tokenExpired', title: 'Token expired', status: 401, errorSlug: 'token_expired' },
-    { fn: invalidAudience, name: 'invalidAudience', title: 'Invalid audience', status: 401, errorSlug: 'invalid_audience' },
-    { fn: invalidNonce, name: 'invalidNonce', title: 'Invalid nonce', status: 401, errorSlug: 'invalid_nonce' },
-    { fn: unsupportedAuthMethod, name: 'unsupportedAuthMethod', title: 'Unsupported authentication method', status: 400, errorSlug: 'unsupported_auth_method' },
-    { fn: policyDenied, name: 'policyDenied', title: 'Policy denied', status: 403, errorSlug: 'policy_denied' },
-    { fn: invalidPkce, name: 'invalidPkce', title: 'Invalid PKCE', status: 400, errorSlug: 'invalid_pkce' },
-    { fn: invalidState, name: 'invalidState', title: 'Invalid state', status: 400, errorSlug: 'invalid_state' },
+    { fn: invalidRecord, base: DDISA_ERROR_BASE, slug: 'invalid_record', title: 'Invalid DDISA record', status: 400 },
+    { fn: idpUnreachable, base: DDISA_ERROR_BASE, slug: 'idp_unreachable', title: 'IdP unreachable', status: 502 },
+    { fn: invalidManifest, base: DDISA_ERROR_BASE, slug: 'invalid_manifest', title: 'Invalid manifest', status: 400 },
+    { fn: invalidToken, base: DDISA_ERROR_BASE, slug: 'invalid_token', title: 'Invalid token', status: 401 },
+    { fn: tokenExpired, base: DDISA_ERROR_BASE, slug: 'token_expired', title: 'Token expired', status: 401 },
+    { fn: invalidAudience, base: DDISA_ERROR_BASE, slug: 'invalid_audience', title: 'Invalid audience', status: 401 },
+    { fn: invalidNonce, base: DDISA_ERROR_BASE, slug: 'invalid_nonce', title: 'Invalid nonce', status: 401 },
+    { fn: unsupportedAuthMethod, base: DDISA_ERROR_BASE, slug: 'unsupported_auth_method', title: 'Unsupported authentication method', status: 400 },
+    { fn: policyDenied, base: DDISA_ERROR_BASE, slug: 'policy_denied', title: 'Policy denied', status: 403 },
+    { fn: invalidPkce, base: DDISA_ERROR_BASE, slug: 'invalid_pkce', title: 'Invalid PKCE', status: 400 },
+    { fn: invalidState, base: DDISA_ERROR_BASE, slug: 'invalid_state', title: 'Invalid state', status: 400 },
+    { fn: grantNotFound, base: OPENAPE_ERROR_BASE, slug: 'grant_not_found', title: 'Grant not found', status: 404 },
+    { fn: grantAlreadyDecided, base: OPENAPE_ERROR_BASE, slug: 'grant_already_decided', title: 'Grant already decided', status: 409 },
+    { fn: grantExpired, base: OPENAPE_ERROR_BASE, slug: 'grant_expired', title: 'Grant expired', status: 410 },
+    { fn: grantNotApproved, base: OPENAPE_ERROR_BASE, slug: 'grant_not_approved', title: 'Grant not approved', status: 400 },
+    { fn: grantAlreadyUsed, base: OPENAPE_ERROR_BASE, slug: 'grant_already_used', title: 'Grant already used', status: 410 },
+    { fn: invalidGrantType, base: OPENAPE_ERROR_BASE, slug: 'invalid_grant_type', title: 'Invalid grant type', status: 400 },
+    { fn: missingDuration, base: OPENAPE_ERROR_BASE, slug: 'missing_duration', title: 'Missing duration', status: 400 },
+    { fn: batchPartialFailure, base: OPENAPE_ERROR_BASE, slug: 'batch_partial_failure', title: 'Batch partial failure', status: 207 },
+    { fn: invalidAuthzJwt, base: OPENAPE_ERROR_BASE, slug: 'invalid_authz_jwt', title: 'Invalid authorization JWT', status: 401 },
   ]
 
-  for (const { fn, name, title, status, errorSlug } of ddisaErrors) {
-    describe(name, () => {
-      it('returns correct type, title, and status without detail', () => {
-        const result = fn()
-        expect(result).toEqual({
-          type: `${DDISA_ERROR_BASE}${errorSlug}`,
-          title,
-          status,
-        })
-      })
+  it('all factories return correct type, title, status and pass through detail', () => {
+    for (const { fn, base, slug, title, status } of allFactories) {
+      const without = fn()
+      expect(without).toEqual({ type: `${base}${slug}`, title, status })
 
-      it('includes detail when provided', () => {
-        const result = fn('extra info')
-        expect(result).toEqual({
-          type: `${DDISA_ERROR_BASE}${errorSlug}`,
-          title,
-          status,
-          detail: 'extra info',
-        })
-      })
-    })
-  }
-})
-
-describe('OpenApe error factories', () => {
-  const openapeErrors: Array<{
-    fn: (detail?: string) => ReturnType<typeof createProblemDetails>
-    name: string
-    title: string
-    status: number
-    errorSlug: string
-  }> = [
-    { fn: grantNotFound, name: 'grantNotFound', title: 'Grant not found', status: 404, errorSlug: 'grant_not_found' },
-    { fn: grantAlreadyDecided, name: 'grantAlreadyDecided', title: 'Grant already decided', status: 409, errorSlug: 'grant_already_decided' },
-    { fn: grantExpired, name: 'grantExpired', title: 'Grant expired', status: 410, errorSlug: 'grant_expired' },
-    { fn: grantNotApproved, name: 'grantNotApproved', title: 'Grant not approved', status: 400, errorSlug: 'grant_not_approved' },
-    { fn: grantAlreadyUsed, name: 'grantAlreadyUsed', title: 'Grant already used', status: 410, errorSlug: 'grant_already_used' },
-    { fn: invalidGrantType, name: 'invalidGrantType', title: 'Invalid grant type', status: 400, errorSlug: 'invalid_grant_type' },
-    { fn: missingDuration, name: 'missingDuration', title: 'Missing duration', status: 400, errorSlug: 'missing_duration' },
-    { fn: batchPartialFailure, name: 'batchPartialFailure', title: 'Batch partial failure', status: 207, errorSlug: 'batch_partial_failure' },
-    { fn: invalidAuthzJwt, name: 'invalidAuthzJwt', title: 'Invalid authorization JWT', status: 401, errorSlug: 'invalid_authz_jwt' },
-  ]
-
-  for (const { fn, name, title, status, errorSlug } of openapeErrors) {
-    describe(name, () => {
-      it('returns correct type, title, and status without detail', () => {
-        const result = fn()
-        expect(result).toEqual({
-          type: `${OPENAPE_ERROR_BASE}${errorSlug}`,
-          title,
-          status,
-        })
-      })
-
-      it('includes detail when provided', () => {
-        const result = fn('extra info')
-        expect(result).toEqual({
-          type: `${OPENAPE_ERROR_BASE}${errorSlug}`,
-          title,
-          status,
-          detail: 'extra info',
-        })
-      })
-    })
-  }
+      const withDetail = fn('extra')
+      expect(withDetail).toEqual({ type: `${base}${slug}`, title, status, detail: 'extra' })
+    }
+  })
 })

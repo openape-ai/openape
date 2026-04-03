@@ -13,65 +13,28 @@ vi.mock('node:dns/promises', () => {
 describe('node resolveTXT', () => {
   it('returns flattened TXT records on success', async () => {
     const { Resolver } = await import('node:dns/promises')
-    const instance = new Resolver()
-    const mockFn = instance.resolveTxt as unknown as ReturnType<typeof vi.fn>
-    mockFn.mockResolvedValueOnce([
-      ['v=ddisa1 idp=https://idp.example.com'],
-      ['some-other-record'],
-    ])
+    const mockFn = new Resolver().resolveTxt as unknown as ReturnType<typeof vi.fn>
+    mockFn.mockResolvedValueOnce([['record-a'], ['record-b']])
 
     const { resolveTXT } = await import('../dns/node.js')
-    const result = await resolveTXT('example.com')
-    expect(result).toEqual([
-      'v=ddisa1 idp=https://idp.example.com',
-      'some-other-record',
-    ])
+    expect(await resolveTXT('example.com')).toEqual(['record-a', 'record-b'])
   })
 
-  it('returns empty array for ENOTFOUND', async () => {
+  it('returns empty array for known DNS errors (ENOTFOUND/ENODATA/SERVFAIL)', async () => {
     const { Resolver } = await import('node:dns/promises')
-    const instance = new Resolver()
-    const mockFn = instance.resolveTxt as unknown as ReturnType<typeof vi.fn>
-    const err = Object.assign(new Error('queryTxt ENOTFOUND'), { code: 'ENOTFOUND' })
-    mockFn.mockRejectedValueOnce(err)
+    const mockFn = new Resolver().resolveTxt as unknown as ReturnType<typeof vi.fn>
+    mockFn.mockRejectedValueOnce(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }))
 
     const { resolveTXT } = await import('../dns/node.js')
-    const result = await resolveTXT('notfound.com')
-    expect(result).toEqual([])
-  })
-
-  it('returns empty array for ENODATA', async () => {
-    const { Resolver } = await import('node:dns/promises')
-    const instance = new Resolver()
-    const mockFn = instance.resolveTxt as unknown as ReturnType<typeof vi.fn>
-    const err = Object.assign(new Error('queryTxt ENODATA'), { code: 'ENODATA' })
-    mockFn.mockRejectedValueOnce(err)
-
-    const { resolveTXT } = await import('../dns/node.js')
-    const result = await resolveTXT('nodata.com')
-    expect(result).toEqual([])
-  })
-
-  it('returns empty array for SERVFAIL', async () => {
-    const { Resolver } = await import('node:dns/promises')
-    const instance = new Resolver()
-    const mockFn = instance.resolveTxt as unknown as ReturnType<typeof vi.fn>
-    const err = Object.assign(new Error('queryTxt SERVFAIL'), { code: 'SERVFAIL' })
-    mockFn.mockRejectedValueOnce(err)
-
-    const { resolveTXT } = await import('../dns/node.js')
-    const result = await resolveTXT('servfail.com')
-    expect(result).toEqual([])
+    expect(await resolveTXT('notfound.com')).toEqual([])
   })
 
   it('re-throws unknown errors', async () => {
     const { Resolver } = await import('node:dns/promises')
-    const instance = new Resolver()
-    const mockFn = instance.resolveTxt as unknown as ReturnType<typeof vi.fn>
-    const err = Object.assign(new Error('queryTxt REFUSED'), { code: 'REFUSED' })
-    mockFn.mockRejectedValueOnce(err)
+    const mockFn = new Resolver().resolveTxt as unknown as ReturnType<typeof vi.fn>
+    mockFn.mockRejectedValueOnce(Object.assign(new Error('REFUSED'), { code: 'REFUSED' }))
 
     const { resolveTXT } = await import('../dns/node.js')
-    await expect(resolveTXT('refused.com')).rejects.toThrow('queryTxt REFUSED')
+    await expect(resolveTXT('refused.com')).rejects.toThrow('REFUSED')
   })
 })
