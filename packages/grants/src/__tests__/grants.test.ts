@@ -188,6 +188,12 @@ describe('grant lifecycle', () => {
         denyGrant(grant.id, 'admin@example.com', store),
       ).rejects.toThrow('Grant is not pending')
     })
+
+    it('throws for non-existent grant', async () => {
+      await expect(
+        denyGrant('non-existent', 'admin@example.com', store),
+      ).rejects.toThrow('Grant not found')
+    })
   })
 
   describe('revokeGrant', () => {
@@ -204,6 +210,12 @@ describe('grant lifecycle', () => {
       const revoked = await revokeGrant(grant.id, store)
 
       expect(revoked.status).toBe('revoked')
+    })
+
+    it('throws for non-existent grant', async () => {
+      await expect(revokeGrant('non-existent', store)).rejects.toThrow(
+        'Grant not found',
+      )
     })
 
     it('rejects revocation of denied grant', async () => {
@@ -397,6 +409,92 @@ describe('grant lifecycle', () => {
         store.updateStatus('non-existent', 'approved'),
       ).rejects.toThrow('Grant not found')
     })
+
+    describe('listGrants', () => {
+      it('returns paginated grants sorted by created_at DESC', async () => {
+        // Use store.save directly with distinct timestamps to ensure ordering
+        const g1 = { id: 'g-old', request: onceRequest, status: 'pending' as const, created_at: 1000 }
+        const g2 = { id: 'g-new', request: timedRequest, status: 'pending' as const, created_at: 2000 }
+        await store.save(g1)
+        await store.save(g2)
+
+        const result = await store.listGrants()
+        expect(result.data).toHaveLength(2)
+        // Newest first
+        expect(result.data[0]!.id).toBe('g-new')
+        expect(result.data[1]!.id).toBe('g-old')
+        expect(result.pagination.has_more).toBe(false)
+      })
+
+      it('filters by status', async () => {
+        const g1 = await createGrant(onceRequest, store)
+        await createGrant(timedRequest, store)
+        await approveGrant(g1.id, 'admin@example.com', store)
+
+        const result = await store.listGrants({ status: 'approved' })
+        expect(result.data).toHaveLength(1)
+        expect(result.data[0]!.id).toBe(g1.id)
+      })
+
+      it('filters by requester', async () => {
+        await createGrant(onceRequest, store)
+        await createGrant({ ...onceRequest, requester: 'other@example.com' }, store)
+
+        const result = await store.listGrants({ requester: 'agent@example.com' })
+        expect(result.data).toHaveLength(1)
+      })
+
+      it('respects limit parameter', async () => {
+        await createGrant(onceRequest, store)
+        await createGrant(timedRequest, store)
+        await createGrant(alwaysRequest, store)
+
+        const result = await store.listGrants({ limit: 2 })
+        expect(result.data).toHaveLength(2)
+        expect(result.pagination.has_more).toBe(true)
+      })
+
+      it('clamps limit to minimum 1 and maximum 100', async () => {
+        await createGrant(onceRequest, store)
+
+        const resultMin = await store.listGrants({ limit: 0 })
+        expect(resultMin.data).toHaveLength(1)
+
+        const resultMax = await store.listGrants({ limit: 200 })
+        expect(resultMax.data).toHaveLength(1)
+      })
+
+      it('supports cursor-based pagination', async () => {
+        // Create grants with different timestamps
+        const g1 = await createGrant(onceRequest, store)
+        // Force different created_at by directly saving
+        await store.save({ ...g1, id: 'grant-early', created_at: 1000 })
+        await store.save({ ...g1, id: 'grant-mid', created_at: 2000 })
+        await store.save({ ...g1, id: 'grant-late', created_at: 3000 })
+
+        const page1 = await store.listGrants({ limit: 1 })
+        expect(page1.data).toHaveLength(1)
+        expect(page1.pagination.has_more).toBe(true)
+
+        const page2 = await store.listGrants({ limit: 1, cursor: page1.pagination.cursor! })
+        expect(page2.data).toHaveLength(1)
+        expect(page2.data[0]!.created_at).toBeLessThan(page1.data[0]!.created_at)
+      })
+
+      it('returns empty results for cursor past all grants', async () => {
+        await store.save({ ...await createGrant(onceRequest, store), id: 'g1', created_at: 1000 })
+
+        const result = await store.listGrants({ cursor: '500' })
+        expect(result.data).toHaveLength(0)
+      })
+
+      it('returns empty results with null cursor when no grants exist', async () => {
+        const result = await store.listGrants()
+        expect(result.data).toHaveLength(0)
+        expect(result.pagination.cursor).toBeNull()
+        expect(result.pagination.has_more).toBe(false)
+      })
+    })
   })
 
   describe('delegation grants', () => {
@@ -447,6 +545,15 @@ describe('grant lifecycle', () => {
         store,
       )
       expect(validated.id).toBe(grant.id)
+    })
+
+    it('throws for non-existent delegation grant', async () => {
+      await expect(validateDelegation(
+        'non-existent',
+        'agent+patrick@id.openape.at',
+        'bank.example.com',
+        store,
+      )).rejects.toThrow('Delegation grant not found')
     })
 
     it('rejects delegation for wrong delegate', async () => {
@@ -641,6 +748,35 @@ describe('grant lifecycle', () => {
 
       const revokedOld = await store.findById(oldGrant.id)
       expect(revokedOld!.status).toBe('revoked')
+    })
+
+    it('rejects if pending grant not found', async () => {
+      await expect(
+        approveGrantWithExtension('nonexistent', 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: ['x'],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('Grant not found')
+    })
+
+    it('rejects if extend grant has different target_host', async () => {
+      const mismatchRequest: OpenApeGrantRequest = {
+        ...oldRequest,
+        target_host: 'other-host',
+      }
+      const oldGrant = await createGrant(mismatchRequest, store)
+      await approveGrant(oldGrant.id, 'admin@example.com', store, { grant_type: 'always' })
+
+      const pendingGrant = await createGrant(newRequest, store)
+
+      await expect(
+        approveGrantWithExtension(pendingGrant.id, 'admin@example.com', store, {
+          extend_mode: 'widen',
+          extend_grant_ids: [oldGrant.id],
+          grant_type: 'always',
+        }),
+      ).rejects.toThrow('target_host mismatch')
     })
 
     it('rejects if extend_grant_id not found', async () => {
