@@ -637,6 +637,37 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.2)
 
+  packages/server:
+    dependencies:
+      '@openape/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@openape/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openape/grants':
+        specifier: workspace:*
+        version: link:../grants
+      h3:
+        specifier: ^1.15.0
+        version: 1.15.6
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
+      '@vitest/coverage-istanbul':
+        specifier: ^2.1.0
+        version: 2.1.9(vitest@2.1.9(@types/node@22.19.15)(happy-dom@18.0.1)(lightningcss@1.32.0)(terser@5.46.0))
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.15)(happy-dom@18.0.1)(lightningcss@1.32.0)(terser@5.46.0)
+
   packages/shapes:
     dependencies:
       '@openape/core':
