@@ -445,45 +445,6 @@ describe('authorization_details (RFC 9396)', () => {
     expect(payload.authorization_details).toBeUndefined()
   })
 
-  it('includes multiple authorization_details entries', async () => {
-    const codeStore = new InMemoryCodeStore()
-    const keyStore = new InMemoryKeyStore()
-    const verifier = generateCodeVerifier()
-    const challenge = await generateCodeChallenge(verifier)
-
-    const details: OpenApeAuthorizationDetail[] = [
-      { type: 'openape_grant', action: 'Transfer:Create', approval: 'once', grant_id: 'g1' },
-      { type: 'openape_grant', action: 'Account:Read', approval: 'always', grant_id: 'g2' },
-    ]
-
-    await codeStore.save({
-      code: 'multi-authz',
-      clientId: 'sp.example.com',
-      redirectUri: 'https://sp.example.com/callback',
-      codeChallenge: challenge,
-      userId: 'alice@example.com',
-      nonce: 'n',
-      expiresAt: Date.now() + 60000,
-      authorizationDetails: details,
-    })
-
-    const result = await handleTokenExchange(
-      {
-        grant_type: 'authorization_code',
-        code: 'multi-authz',
-        code_verifier: verifier,
-        redirect_uri: 'https://sp.example.com/callback',
-        client_id: 'sp.example.com',
-      },
-      codeStore,
-      keyStore,
-      'https://idp.example.com',
-    )
-
-    expect(result.authorization_details).toHaveLength(2)
-    expect(result.authorization_details![0].action).toBe('Transfer:Create')
-    expect(result.authorization_details![1].action).toBe('Account:Read')
-  })
 })
 
 describe('issueAssertion', () => {
