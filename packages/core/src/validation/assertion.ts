@@ -14,8 +14,6 @@ export interface AssertionValidationOptions {
   publicKey?: KeyLike | Uint8Array
   /** Expected nonce */
   expectedNonce?: string
-  /** Current time override for testing */
-  now?: number
 }
 
 export interface AssertionValidationResult {
@@ -45,16 +43,13 @@ export async function validateAssertion(
       audience: options.expectedAud,
     })
 
-    // Check TTL (max 5 minutes)
-    const now = options.now ?? Math.floor(Date.now() / 1000)
+    // Check TTL (max 5 minutes per DDISA spec)
     if (payload.exp - payload.iat > MAX_ASSERTION_TTL) {
       return { valid: false, error: `Assertion TTL exceeds maximum of ${MAX_ASSERTION_TTL}s` }
     }
 
-    // Check expiration
-    if (payload.exp <= now) {
-      return { valid: false, error: 'Assertion has expired' }
-    }
+    // Note: exp-based expiration check is not needed here — jose's jwtVerify
+    // already rejects expired tokens before we reach this point.
 
     // Check nonce if expected
     if (options.expectedNonce && payload.nonce !== options.expectedNonce) {
