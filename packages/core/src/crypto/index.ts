@@ -8,12 +8,6 @@ export {
 } from './jwt.js'
 
 export {
-  generateSalt,
-  hashPassword,
-  verifyPassword,
-} from './password.js'
-
-export {
   generateCodeChallenge,
   generateCodeVerifier,
   generateNonce,

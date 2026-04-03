@@ -1,6 +1,6 @@
-import { verifyAuthzJWT } from '@openape/grants'
-import { cliAuthorizationDetailCovers, computeCmdHash } from '@openape/core'
 import type { OpenApeCliAuthorizationDetail, OpenApeGrant } from '@openape/core'
+import { computeCmdHash } from '@openape/core'
+import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import consola from 'consola'

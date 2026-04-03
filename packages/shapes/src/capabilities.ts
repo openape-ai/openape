@@ -1,5 +1,5 @@
-import { canonicalizeCliPermission } from '@openape/core'
 import type { OpenApeCliAuthorizationDetail, OpenApeCliResourceRef } from '@openape/core'
+import { canonicalizeCliPermission } from '@openape/grants'
 import type { LoadedAdapter, ResolvedCapability, ShapesOperation } from './types.js'
 
 interface ParsedOperationChainEntry {

@@ -5,21 +5,6 @@ export {
 } from './assertion.js'
 
 export {
-  canonicalizeCliPermission,
-  cliAuthorizationDetailCovers,
-  cliAuthorizationDetailIsSimilar,
-  cliAuthorizationDetailsCover,
-  computeArgvHash,
-  findDifferingSelectors,
-  isCliAuthorizationDetailExact,
-  mergeCliAuthorizationDetails,
-  resourceChainsStructurallyMatch,
-  type CliAuthorizationDetailValidationResult,
-  validateCliAuthorizationDetail,
-  widenCliAuthorizationDetail,
-} from './cli-grants.js'
-
-export {
   computeCmdHash,
   type GrantValidationOptions,
   type GrantValidationResult,
@@ -27,13 +12,6 @@ export {
 } from './grant.js'
 
 export {
-  fetchAndValidateClientMetadata,
-  type ManifestValidationResult,
-  validateClientMetadata,
-} from './manifest.js'
-
-export {
-  fetchAndValidateOpenApeManifest,
   type OpenApeManifestValidationResult,
   validateOpenApeManifest,
 } from './openape-manifest.js'

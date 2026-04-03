@@ -1,7 +1,7 @@
 import type {
   OpenApeCliAuthorizationDetail,
   OpenApeCliResourceRef,
-} from '../types/index.js'
+} from '@openape/core'
 
 export interface CliAuthorizationDetailValidationResult {
   valid: boolean

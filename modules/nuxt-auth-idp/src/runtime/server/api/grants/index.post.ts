@@ -1,6 +1,6 @@
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, computeCmdHash, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/core'
-import { createGrant, findSimilarCliGrants } from '@openape/grants'
+import { computeCmdHash } from '@openape/core'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryAgentAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
