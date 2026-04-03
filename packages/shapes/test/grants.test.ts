@@ -17,7 +17,7 @@ vi.mock('../src/config.js', () => ({
   getRequesterIdentity: (...args: unknown[]) => getRequesterIdentityMock(...args),
 }))
 
-vi.mock('@openape/grants', async (importOriginal) => ({
+vi.mock('@openape/grants', async importOriginal => ({
   ...await importOriginal<typeof import('@openape/grants')>(),
   verifyAuthzJWT: (...args: unknown[]) => verifyAuthzJWTMock(...args),
 }))
