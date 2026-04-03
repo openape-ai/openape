@@ -1,16 +1,11 @@
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { createDelegation } from '@openape/grants'
 import { useGrantStores } from '../../utils/grant-stores'
-import { getAppSession } from '../../utils/session'
+import { requireAuth } from '../../utils/admin'
 import { createProblemError } from '../../utils/problem'
 
 export default defineEventHandler(async (event) => {
-  const session = await getAppSession(event)
-  if (!session.data.userId) {
-    throw createProblemError({ status: 401, title: 'Not authenticated' })
-  }
-
-  const delegator = session.data.userId as string
+  const delegator = await requireAuth(event)
   const body = await readBody(event)
 
   if (!body.delegate || typeof body.delegate !== 'string') {
