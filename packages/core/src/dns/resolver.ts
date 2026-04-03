@@ -1,6 +1,5 @@
 import type { DDISARecord, ResolverOptions } from '../types/index.js'
 import { DEFAULT_DNS_CACHE_TTL } from '../constants.js'
-import { detectRuntime } from './detect.js'
 import { resolveTXT as resolveDoh } from './doh.js'
 import { parseDDISARecord } from './parser.js'
 
@@ -11,21 +10,25 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>()
 
+/**
+ * Resolve TXT records using native Node.js DNS with DoH fallback.
+ *
+ * Design decision: We always try native DNS first because it respects the
+ * system's DNS configuration (/etc/hosts, local resolvers, split-horizon DNS).
+ * This is essential for local development and testing with custom domains.
+ *
+ * If native DNS is unavailable (Edge runtimes, browsers, Deno) the dynamic
+ * import of node:dns/promises fails and we fall back to DNS-over-HTTPS.
+ * This makes the resolver work in every JavaScript runtime without explicit
+ * runtime detection — the try/catch is the detection.
+ */
 async function resolveTXTRecords(domain: string, options?: ResolverOptions): Promise<string[]> {
-  const runtime = detectRuntime()
-
-  switch (runtime) {
-    case 'node':
-    case 'bun': {
-      const { resolveTXT } = await import('./node.js')
-      return resolveTXT(domain)
-    }
-    case 'deno':
-    case 'edge':
-    case 'browser':
-      return resolveDoh(domain, options?.dohProvider)
-    default:
-      return resolveDoh(domain, options?.dohProvider)
+  try {
+    const { resolveTXT } = await import('./node.js')
+    return await resolveTXT(domain)
+  }
+  catch {
+    return resolveDoh(domain, options?.dohProvider)
   }
 }
 
