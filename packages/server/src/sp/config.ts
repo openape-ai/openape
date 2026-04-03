@@ -1,7 +1,10 @@
+import type { ResolverOptions } from '@openape/core'
+
 export interface SPConfig {
   clientId: string
   redirectUri: string
-  sessionSecret?: string
+  spName?: string
+  resolverOptions?: ResolverOptions
 }
 
 export interface SPInstance {
