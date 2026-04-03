@@ -10,6 +10,8 @@ import { createJtiStore } from './jti-store'
 import { createKeyStore } from './key-store'
 import { createRefreshTokenStore } from './refresh-token-store'
 import { createRegistrationUrlStore } from './registration-url-store'
+import { createSshKeyStore } from './ssh-key-store'
+import type { SshKeyStore } from './ssh-key-store'
 import { createUserStore } from './user-store'
 import type { UserStore } from './user-store'
 import { getStoreFactory } from './store-registry'
@@ -24,6 +26,7 @@ interface IdpStores {
   registrationUrlStore: RegistrationUrlStore
   jtiStore: JtiStore
   refreshTokenStore: RefreshTokenStore
+  sshKeyStore: SshKeyStore
 }
 
 let _stores: IdpStores | null = null
@@ -39,6 +42,7 @@ function initDefaultStores(): IdpStores {
     registrationUrlStore: createRegistrationUrlStore(),
     jtiStore: createJtiStore(),
     refreshTokenStore: createRefreshTokenStore(),
+    sshKeyStore: createSshKeyStore(),
   }
 }
 
@@ -53,6 +57,7 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     registrationUrlStore: getStoreFactory<RegistrationUrlStore>('registrationUrlStore')?.(event) ?? createRegistrationUrlStore(),
     jtiStore: getStoreFactory<JtiStore>('jtiStore')?.(event) ?? createJtiStore(),
     refreshTokenStore: getStoreFactory<RefreshTokenStore>('refreshTokenStore')?.(event) ?? createRefreshTokenStore(),
+    sshKeyStore: getStoreFactory<SshKeyStore>('sshKeyStore')?.(event) ?? createSshKeyStore(),
   }
 }
 
