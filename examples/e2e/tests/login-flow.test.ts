@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { bootstrapTestUser } from '../helpers/bootstrap.js'
-import { IDP_URL, SP_ID, SP_URL, TEST_USER } from '../helpers/constants.js'
+import { bootstrapTestUser, bootstrapTestUserSshKey } from '../helpers/bootstrap.js'
+import { IDP_URL, SP_ID, SP_URL, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY, TEST_USER } from '../helpers/constants.js'
 import { HttpClient } from '../helpers/http-client.js'
+import { loginWithSshKey } from '../helpers/key-auth.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 
 describe('dDISA OIDC Login Flow', () => {
   beforeAll(async () => {
     await startServers()
     await bootstrapTestUser(TEST_USER)
+    await bootstrapTestUserSshKey(TEST_USER.email, TEST_SSH_PUBLIC_KEY)
   })
 
   afterAll(async () => {
@@ -25,41 +27,27 @@ describe('dDISA OIDC Login Flow', () => {
     expect(loginStatus).toBe(200)
     expect(loginData.redirectUrl).toContain(`${IDP_URL}/authorize`)
 
+    // Step 2: Get JWT via SSH key challenge-response auth
+    const jwt = await loginWithSshKey(IDP_URL, TEST_USER.email, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY)
+
+    // Step 3: Hit /authorize with Bearer token — should issue code directly (no login redirect)
     const authorizeUrl = loginData.redirectUrl
-
-    // Step 2: Follow IdP /authorize — not authenticated yet, redirects to /login
-    const step2 = await client.fetch(authorizeUrl)
-    expect(step2.status).toBe(302)
-
-    const loginRedirect = step2.headers.get('Location')!
-    expect(loginRedirect).toContain('/login?returnTo=')
-
-    // Step 3: Authenticate on the IdP
-    const { status: idpLoginStatus, data: idpLoginData } = await client.postJSON<{
-      ok: boolean
-    }>(`${IDP_URL}/api/login`, {
-      email: TEST_USER.email,
-      password: TEST_USER.password,
+    const authRes = await client.fetch(authorizeUrl, {
+      headers: { Authorization: `Bearer ${jwt}` },
     })
+    expect(authRes.status).toBe(302)
 
-    expect(idpLoginStatus).toBe(200)
-    expect(idpLoginData.ok).toBe(true)
-
-    // Step 4: Hit /authorize again — now authenticated, should issue code and redirect to SP callback
-    const step4 = await client.fetch(authorizeUrl)
-    expect(step4.status).toBe(302)
-
-    const callbackRedirect = step4.headers.get('Location')!
+    const callbackRedirect = authRes.headers.get('Location')!
     expect(callbackRedirect).toContain(`${SP_URL}/api/callback`)
     expect(callbackRedirect).toContain('code=')
     expect(callbackRedirect).toContain('state=')
 
-    // Step 5: Follow SP callback — exchanges code for token, sets session, redirects to /dashboard
-    const step5 = await client.fetch(callbackRedirect)
-    expect(step5.status).toBe(302)
-    expect(step5.headers.get('Location')).toBe('/dashboard')
+    // Step 4: Follow SP callback — exchanges code for token, sets session, redirects to /dashboard
+    const step4 = await client.fetch(callbackRedirect)
+    expect(step4.status).toBe(302)
+    expect(step4.headers.get('Location')).toBe('/dashboard')
 
-    // Step 6: Fetch claims from SP /api/me
+    // Step 5: Fetch claims from SP /api/me
     const { status: meStatus, data: claims } = await client.getJSON<{
       sub: string
       iss: string

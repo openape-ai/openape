@@ -1,23 +1,24 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { bootstrapTestUser } from '../helpers/bootstrap.js'
-import { IDP_URL, SP_URL, TEST_USER } from '../helpers/constants.js'
+import { bootstrapTestUser, bootstrapTestUserSshKey } from '../helpers/bootstrap.js'
+import { IDP_URL, SP_URL, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY, TEST_USER } from '../helpers/constants.js'
 import { HttpClient } from '../helpers/http-client.js'
+import { loginWithSshKey } from '../helpers/key-auth.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 
 const TEST_EMAIL = TEST_USER.email
-const TEST_PASSWORD = TEST_USER.password
 
 describe('once-Grant Re-request Flow', () => {
   beforeAll(async () => {
     await startServers()
     await bootstrapTestUser(TEST_USER)
+    await bootstrapTestUserSshKey(TEST_USER.email, TEST_SSH_PUBLIC_KEY)
   })
 
   afterAll(async () => {
     await stopServers()
   })
 
-  /** Login to SP via the full OIDC redirect chain (same pattern as login-flow.test.ts). */
+  /** Login to SP via the OIDC redirect chain using SSH key auth. */
   async function loginToSP(client: HttpClient) {
     // Step 1: SP login — get authorization URL
     const { status, data: loginData } = await client.postJSON<{ redirectUrl: string }>(
@@ -26,28 +27,26 @@ describe('once-Grant Re-request Flow', () => {
     )
     expect(status).toBe(200)
 
-    // Step 2: Follow IdP /authorize — not authenticated, redirects to /login
-    await client.fetch(loginData.redirectUrl)
+    // Step 2: Get JWT via SSH key challenge-response auth
+    const jwt = await loginWithSshKey(IDP_URL, TEST_EMAIL, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY)
 
-    // Step 3: Authenticate on IdP
-    const { status: idpLoginStatus } = await client.postJSON(`${IDP_URL}/api/login`, {
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD,
+    // Step 3: Hit /authorize with Bearer token — should issue code directly
+    const step3 = await client.fetch(loginData.redirectUrl, {
+      headers: { Authorization: `Bearer ${jwt}` },
     })
-    expect(idpLoginStatus).toBe(200)
-
-    // Step 4: Hit /authorize again — now authenticated, redirects to SP callback
-    const step4 = await client.fetch(loginData.redirectUrl)
-    const callbackUrl = step4.headers.get('Location')!
+    expect(step3.status).toBe(302)
+    const callbackUrl = step3.headers.get('Location')!
     expect(callbackUrl).toContain(`${SP_URL}/api/callback`)
 
-    // Step 5: Follow SP callback — sets session, redirects to /dashboard
-    const step5 = await client.fetch(callbackUrl)
-    expect(step5.headers.get('Location')).toBe('/dashboard')
+    // Step 4: Follow SP callback — sets session, redirects to /dashboard
+    const step4 = await client.fetch(callbackUrl)
+    expect(step4.headers.get('Location')).toBe('/dashboard')
+
+    return jwt
   }
 
   /** Request permission on SP, approve on IdP, follow callback back to SP. */
-  async function requestAndApproveGrant(client: HttpClient) {
+  async function requestAndApproveGrant(client: HttpClient, jwt: string) {
     // Request permission on SP — creates grant on IdP
     const { status: permStatus, data: permData } = await client.postJSON<{
       redirectUrl: string
@@ -60,12 +59,21 @@ describe('once-Grant Re-request Flow', () => {
 
     const grantId = permData.grantId
 
-    // Approve the grant on IdP (user is already authenticated there)
-    const { status: approveStatus, data: approveData } = await client.postJSON<{
+    // Approve the grant on IdP (using Bearer token)
+    const approveRes = await fetch(`${IDP_URL}/api/grants/${grantId}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({}),
+    })
+    expect(approveRes.status).toBe(200)
+
+    const approveData = await approveRes.json() as {
       grant: { status: string }
       authz_jwt: string
-    }>(`${IDP_URL}/api/grants/${grantId}/approve`, {})
-    expect(approveStatus).toBe(200)
+    }
     expect(approveData.authz_jwt).toBeTruthy()
 
     // Extract the callback base URL from the approval redirect URL
@@ -82,15 +90,15 @@ describe('once-Grant Re-request Flow', () => {
   it('can request and use a once-grant, then request and use another', async () => {
     const client = new HttpClient()
 
-    // Login to SP via full OIDC flow
-    await loginToSP(client)
+    // Login to SP via full OIDC flow with SSH key auth
+    const jwt = await loginToSP(client)
 
     // Verify we're authenticated
     const { status: meStatus } = await client.getJSON(`${SP_URL}/api/me`)
     expect(meStatus).toBe(200)
 
     // --- First grant cycle ---
-    await requestAndApproveGrant(client)
+    await requestAndApproveGrant(client, jwt)
 
     // Verify session has authz_jwt
     const { data: status1 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
@@ -114,7 +122,7 @@ describe('once-Grant Re-request Flow', () => {
     expect(status2.hasAuthzJWT).toBe(false)
 
     // --- Second grant cycle ---
-    await requestAndApproveGrant(client)
+    await requestAndApproveGrant(client, jwt)
 
     // Verify session has new authz_jwt
     const { data: status3 } = await client.getJSON<{ hasAuthzJWT: boolean }>(
