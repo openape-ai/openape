@@ -1,7 +1,6 @@
 import type { H3Event } from 'h3'
 import { getHeader } from 'h3'
-import { useEvent } from 'nitropack/runtime'
-import { useRuntimeConfig } from 'nitropack/runtime'
+import { useEvent, useRuntimeConfig } from 'nitropack/runtime'
 import { getAppSession } from './session'
 import { createProblemError } from './problem'
 
