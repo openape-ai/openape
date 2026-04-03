@@ -1,3 +1,4 @@
+// Canonical: @openape/server createChallengeHandler
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { useGrantStores } from '../../utils/grant-stores'

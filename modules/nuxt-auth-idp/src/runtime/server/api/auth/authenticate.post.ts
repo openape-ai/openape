@@ -1,3 +1,4 @@
+// Canonical: @openape/server createAuthenticateHandler
 import { defineEventHandler, readBody } from 'h3'
 import { getIdpIssuer, useIdpStores } from '../../utils/stores'
 import { useGrantStores } from '../../utils/grant-stores'
