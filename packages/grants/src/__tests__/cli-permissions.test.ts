@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OpenApeCliAuthorizationDetail } from '../types/index.js'
+import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
@@ -12,7 +12,7 @@ import {
   resourceChainsStructurallyMatch,
   validateCliAuthorizationDetail,
   widenCliAuthorizationDetail,
-} from '../validation/index.js'
+} from '../cli-permissions.js'
 
 describe('cli grant helpers', () => {
   const detail: OpenApeCliAuthorizationDetail = {

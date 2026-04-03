@@ -1,4 +1,18 @@
 export {
+  canonicalizeCliPermission,
+  cliAuthorizationDetailCovers,
+  cliAuthorizationDetailIsSimilar,
+  cliAuthorizationDetailsCover,
+  type CliAuthorizationDetailValidationResult,
+  computeArgvHash,
+  findDifferingSelectors,
+  isCliAuthorizationDetailExact,
+  mergeCliAuthorizationDetails,
+  resourceChainsStructurallyMatch,
+  validateCliAuthorizationDetail,
+  widenCliAuthorizationDetail,
+} from './cli-permissions.js'
+export {
   issueAuthzJWT,
   verifyAuthzJWT,
   type VerifyAuthzOptions,

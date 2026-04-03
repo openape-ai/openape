@@ -108,25 +108,3 @@ export function validateOpenApeManifest(data: unknown): OpenApeManifestValidatio
     errors: [],
   }
 }
-
-/**
- * Fetch and validate an openape.json manifest from a remote URL.
- */
-export async function fetchAndValidateOpenApeManifest(
-  url: string,
-): Promise<OpenApeManifestValidationResult> {
-  try {
-    const response = await fetch(url)
-    if (!response.ok) {
-      return { valid: false, errors: [`Failed to fetch manifest: HTTP ${response.status}`] }
-    }
-    const data = await response.json()
-    return validateOpenApeManifest(data)
-  }
-  catch (err) {
-    return {
-      valid: false,
-      errors: [err instanceof Error ? err.message : 'Failed to fetch manifest'],
-    }
-  }
-}

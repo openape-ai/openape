@@ -1,5 +1,5 @@
-import { canonicalizeCliPermission, computeArgvHash } from '@openape/core'
 import type { OpenApeCliAuthorizationDetail, OpenApeCliResourceRef } from '@openape/core'
+import { canonicalizeCliPermission, computeArgvHash } from '@openape/grants'
 import type { LoadedAdapter, ResolvedCommand, ShapesOperation } from './types.js'
 
 function parseOptionArgs(tokens: string[], valueOptions?: string[]): { options: Record<string, string>, positionals: string[] } {
