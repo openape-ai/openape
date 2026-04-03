@@ -54,4 +54,14 @@ describe('evaluatePolicy', () => {
     await store.save({ userId: 'user', clientId: 'sp', grantedAt: Date.now() })
     expect(await evaluatePolicy('allowlist-user', 'sp', 'user', store)).toBe('allow')
   })
+
+  it('denies for allowlist-admin mode', async () => {
+    const store = new InMemoryConsentStore()
+    expect(await evaluatePolicy('allowlist-admin', 'sp', 'user', store)).toBe('deny')
+  })
+
+  it('defaults to consent for undefined mode', async () => {
+    const store = new InMemoryConsentStore()
+    expect(await evaluatePolicy(undefined, 'sp', 'user', store)).toBe('consent')
+  })
 })
