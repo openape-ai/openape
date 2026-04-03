@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- Remove dead code (password hashing, unused validation functions), move CLI permission engine to @openape/grants, replace runtime detection with node-first DoH fallback, remove redundant exp check in assertion validation.
+
+  BREAKING: `hashPassword`, `verifyPassword`, `validateClientMetadata`, `fetchAndValidateClientMetadata`, `fetchAndValidateOpenApeManifest`, `detectRuntime`, `Runtime` exports removed. CLI permission functions (`canonicalizeCliPermission`, `widenCliAuthorizationDetail`, etc.) moved to `@openape/grants`. `AssertionValidationOptions.now` parameter removed.
+
 ## 0.11.0
 
 ### Minor Changes

@@ -1,8 +1,7 @@
 {
   "name": "@openape/server",
   "type": "module",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "description": "Programmatic DDISA IdP and SP server (h3)",
   "author": "Delta Mind GmbH",
   "license": "MIT",
@@ -42,5 +41,18 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/server"
+  },
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
   }
 }

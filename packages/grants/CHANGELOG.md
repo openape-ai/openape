@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- Add CLI permission engine (moved from @openape/core): `canonicalizeCliPermission`, `widenCliAuthorizationDetail`, `mergeCliAuthorizationDetails`, `cliAuthorizationDetailCovers`, `cliAuthorizationDetailsCover`, `cliAuthorizationDetailIsSimilar`, `validateCliAuthorizationDetail`, `isCliAuthorizationDetailExact`, `computeArgvHash`. Remove unreachable dead code branch in `mergeCliAuthorizationDetails`.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @openape/core@0.12.0
+
 ## 0.6.0
 
 ### Minor Changes
