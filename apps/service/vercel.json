@@ -2,6 +2,7 @@
   "buildCommand": "nuxt build",
   "outputDirectory": ".output",
   "framework": "nuxtjs",
+  "rootDirectory": "apps/service",
   "crons": [
     {
       "path": "/api/platform/billing/report-usage",
