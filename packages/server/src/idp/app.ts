@@ -19,6 +19,7 @@ import {
   createChallengeHandler,
   createConsumeGrantHandler,
   createCreateGrantHandler,
+  createCreateUserHandler,
   createDeleteSshKeyHandler,
   createDenyGrantHandler,
   createDiscoveryHandler,
@@ -30,6 +31,7 @@ import {
   createListSshKeysHandler,
   createRevokeGrantHandler,
   createTokenHandler,
+  createVerifyGrantHandler,
 } from './handlers/index.js'
 
 function createDefaultStores(): IdPStores {
@@ -64,6 +66,7 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   // Grants
   router.get('/api/grants', createListGrantsHandler(resolvedStores, config))
   router.post('/api/grants', createCreateGrantHandler(resolvedStores, config))
+  router.post('/api/grants/verify', createVerifyGrantHandler(resolvedStores, config))
   router.post('/api/grants/batch', createBatchGrantHandler(resolvedStores, config))
   router.get('/api/grants/:id', createGetGrantHandler(resolvedStores))
   router.post('/api/grants/:id/approve', createApproveGrantHandler(resolvedStores, config))
@@ -73,6 +76,7 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.post('/api/grants/:id/consume', createConsumeGrantHandler(resolvedStores))
 
   // Admin
+  router.post('/api/admin/users', createCreateUserHandler(resolvedStores, config))
   router.post('/api/admin/users/:email/ssh-keys', createAddSshKeyHandler(resolvedStores, config))
   router.get('/api/admin/users/:email/ssh-keys', createListSshKeysHandler(resolvedStores, config))
   router.delete('/api/admin/users/:email/ssh-keys/:keyId', createDeleteSshKeyHandler(resolvedStores, config))
