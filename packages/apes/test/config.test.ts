@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 // We test the pure functions by reimporting with mocked paths
 // Since the module uses hardcoded paths, we test the TOML parser and logic separately
