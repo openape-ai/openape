@@ -1,3 +1,4 @@
 {
-  "framework": "nuxtjs"
+  "framework": "nuxtjs",
+  "rootDirectory": "apps/openape-free-idp"
 }
