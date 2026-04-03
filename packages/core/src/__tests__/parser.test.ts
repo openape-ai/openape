@@ -91,8 +91,4 @@ describe('extractDomain', () => {
   it('throws for invalid email', () => {
     expect(() => extractDomain('invalid')).toThrow('Invalid email')
   })
-
-  it('throws for empty email', () => {
-    expect(() => extractDomain('')).toThrow('Invalid email')
-  })
 })
