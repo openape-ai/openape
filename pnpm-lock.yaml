@@ -273,10 +273,14 @@ importers:
         version: 3.2.4(@types/debug@4.1.12)(@types/node@25.5.0)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.2)
 
   examples/e2e:
+    dependencies:
+      '@openape/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      h3:
+        specifier: ^1.15.0
+        version: 1.15.6
     devDependencies:
-      execa:
-        specifier: ^9.0.0
-        version: 9.6.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

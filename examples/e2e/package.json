@@ -3,12 +3,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "echo 'E2E tests require running servers — skipped in CI'",
+    "test": "vitest run",
     "test:e2e": "vitest run",
     "lint": "eslint ."
   },
+  "dependencies": {
+    "@openape/server": "workspace:*",
+    "h3": "^1.15.0"
+  },
   "devDependencies": {
-    "execa": "^9.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

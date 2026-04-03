@@ -14,9 +14,11 @@ export {
   createGrantTokenHandler,
   createListGrantsHandler,
   createRevokeGrantHandler,
+  createVerifyGrantHandler,
 } from './grants.js'
 export {
   createAddSshKeyHandler,
+  createCreateUserHandler,
   createDeleteSshKeyHandler,
   createListSshKeysHandler,
   requireManagementToken,

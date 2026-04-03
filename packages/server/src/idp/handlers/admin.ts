@@ -20,6 +20,32 @@ export function requireManagementToken(event: H3Event, config: IdPConfig): void 
 }
 
 // --- Add SSH Key ---
+// --- Create User ---
+export function createCreateUserHandler(stores: IdPStores, config: IdPConfig) {
+  return defineEventHandler(async (event) => {
+    requireManagementToken(event, config)
+
+    const body = await readBody<{ email: string, name: string, password?: string }>(event)
+    if (!body.email || !body.name) {
+      throw createProblemError({ status: 400, title: 'Missing required fields: email, name' })
+    }
+
+    const existing = await stores.userStore.findByEmail(body.email)
+    if (existing) {
+      throw createProblemError({ status: 409, title: 'User already exists' })
+    }
+
+    const user = await stores.userStore.create({
+      email: body.email,
+      name: body.name,
+      isActive: true,
+      createdAt: Date.now(),
+    })
+    return { ok: true, email: user.email, name: user.name }
+  })
+}
+
+// --- Add SSH Key ---
 export function createAddSshKeyHandler(stores: IdPStores, config: IdPConfig) {
   return defineEventHandler(async (event) => {
     requireManagementToken(event, config)

@@ -5,6 +5,8 @@ export interface SPConfig {
   redirectUri: string
   spName?: string
   resolverOptions?: ResolverOptions
+  /** IdP base URL (for grant verification and other IdP API calls). */
+  idpUrl?: string
 }
 
 export interface SPInstance {
