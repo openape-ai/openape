@@ -41,12 +41,30 @@ const DURATION_PRESETS = [
   { label: '1 week', value: '604800' },
   { label: 'Custom', value: 'custom' }
 ]
-const GRANT_TYPE_OPTIONS = [
-  { label: 'Once', value: 'once', description: 'Single use only' },
-  { label: 'Timed', value: 'timed', description: 'Time-limited' },
-  { label: 'Always', value: 'always', description: 'Until revoked' }
-]
+const asRequestedOption = computed(() => {
+  if (!grant.value?.request) return null
+  const req = grant.value.request
+  const type = req.grant_type || 'once'
+  let desc = `${type}`
+  if (type === 'timed' && req.duration) {
+    const mins = Math.round(req.duration / 60)
+    desc = mins >= 60 ? `timed (${Math.round(mins / 60)}h)` : `timed (${mins}m)`
+  }
+  return { label: 'As requested', value: 'as_requested', description: desc }
+})
+const grantTypeOptions = computed(() => {
+  const base = [
+    { label: 'Once', value: 'once', description: 'Single use only' },
+    { label: 'Timed', value: 'timed', description: 'Time-limited' },
+    { label: 'Always', value: 'always', description: 'Until revoked' },
+  ]
+  const asReq = asRequestedOption.value
+  return asReq ? [asReq, ...base] : base
+})
 const effectiveDuration = computed(() => {
+  if (selectedGrantType.value === 'as_requested') {
+    return grant.value?.request?.duration
+  }
   if (selectedGrantType.value !== 'timed') return void 0
   return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
 })
@@ -79,13 +97,19 @@ async function handleApprove() {
           extend_grant_ids: similarGrants.value.map(s => s.grant.id),
         }
       : {}
+    const resolvedGrantType = selectedGrantType.value === 'as_requested'
+      ? (grant.value?.request?.grant_type || 'once')
+      : selectedGrantType.value
+    const resolvedDuration = selectedGrantType.value === 'as_requested'
+      ? grant.value?.request?.duration
+      : effectiveDuration.value
     const result = await $fetch(
       `/api/grants/${grantId.value}/approve`,
       {
         method: 'POST',
         body: {
-          grant_type: selectedGrantType.value,
-          ...selectedGrantType.value === 'timed' ? { duration: effectiveDuration.value } : {},
+          grant_type: resolvedGrantType,
+          ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
           ...extendBody,
         }
       }
@@ -329,7 +353,7 @@ function isExactCommand(detail) {
               </p>
               <URadioGroup
                 v-model="selectedGrantType"
-                :items="GRANT_TYPE_OPTIONS"
+                :items="grantTypeOptions"
               />
             </div>
             <div v-if="selectedGrantType === 'timed'" class="space-y-2">
