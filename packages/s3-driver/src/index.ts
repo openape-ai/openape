@@ -87,7 +87,7 @@ export default defineDriver((options: S3CompatDriverOptions) => {
 
   const listObjects = async (base?: string) => {
     const listPrefix = [prefix, base ? normalizeKey(base, '/') : ''].filter(Boolean).join('/')
-    const listUrl = listPrefix ? `${baseURL}?prefix=${encodeURIComponent(listPrefix + '/')}` : baseURL
+    const listUrl = listPrefix ? `${baseURL}?prefix=${encodeURIComponent(`${listPrefix}/`)}` : baseURL
     const res = await awsFetch(listUrl).then(r => r?.text())
     if (!res) return null
     const keys = parseList(res)

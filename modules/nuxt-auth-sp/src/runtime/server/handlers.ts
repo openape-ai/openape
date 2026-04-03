@@ -38,7 +38,8 @@ export function defineOpenApeLoginHandler(options: LoginHandlerOptions) {
     let idpConfig
     if (openapeUrl) {
       idpConfig = { idpUrl: openapeUrl, record: { version: 'ddisa1', idp: openapeUrl, raw: `v=ddisa1; idp=${openapeUrl}` } }
-    } else {
+    }
+    else {
       idpConfig = await discoverIdP(email, { fallbackIdpUrl: fallbackIdpUrl || undefined })
     }
 
@@ -112,7 +113,8 @@ export function defineOpenApeCallbackHandler(options: CallbackHandlerOptions) {
 
       await clearFlowState(event)
       await options.onSuccess(event, { claims: result.claims, rawAssertion: result.rawAssertion })
-    } catch (err: unknown) {
+    }
+    catch (err: unknown) {
       await clearFlowState(event)
       const error = err instanceof Error ? err : new Error('Callback processing failed')
       if (options.onError) {

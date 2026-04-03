@@ -111,7 +111,7 @@ export class InMemoryGrantStore implements GrantStore {
     return {
       data: page.map(g => ({ ...g })),
       pagination: {
-        cursor: page.length > 0 ? String(page[page.length - 1]!.created_at) : null,
+        cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
         has_more: hasMore,
       },
     }

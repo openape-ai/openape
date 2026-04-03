@@ -9,12 +9,12 @@ export interface SshKey {
 }
 
 export interface SshKeyStore {
-  save(key: SshKey): Promise<void>
-  findById(keyId: string): Promise<SshKey | null>
-  findByUser(email: string): Promise<SshKey[]>
-  findByPublicKey(publicKey: string): Promise<SshKey | null>
-  delete(keyId: string): Promise<void>
-  deleteAllForUser(email: string): Promise<void>
+  save: (key: SshKey) => Promise<void>
+  findById: (keyId: string) => Promise<SshKey | null>
+  findByUser: (email: string) => Promise<SshKey[]>
+  findByPublicKey: (publicKey: string) => Promise<SshKey | null>
+  delete: (keyId: string) => Promise<void>
+  deleteAllForUser: (email: string) => Promise<void>
 }
 
 export function createSshKeyStore(): SshKeyStore {

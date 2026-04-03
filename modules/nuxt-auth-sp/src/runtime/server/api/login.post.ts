@@ -19,7 +19,8 @@ export default defineEventHandler(async (event) => {
   let idpConfig
   if (openapeUrl) {
     idpConfig = { idpUrl: openapeUrl, record: { version: 'ddisa1', idp: openapeUrl, raw: `v=ddisa1; idp=${openapeUrl}` } }
-  } else {
+  }
+  else {
     idpConfig = await discoverIdP(email, { fallbackIdpUrl: fallbackIdpUrl || undefined })
   }
 

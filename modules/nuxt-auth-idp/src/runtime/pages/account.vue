@@ -23,9 +23,11 @@ async function loadCredentials() {
   credentialsLoading.value = true
   try {
     credentials.value = await $fetch('/api/webauthn/credentials')
-  } catch {
+  }
+  catch {
     credentials.value = []
-  } finally {
+  }
+  finally {
     credentialsLoading.value = false
   }
 }
@@ -37,7 +39,8 @@ async function handleAddDevice() {
     success.value = 'Device added successfully'
     newDeviceName.value = ''
     await loadCredentials()
-  } catch {
+  }
+  catch {
     error.value = webauthnError.value
   }
 }
@@ -48,7 +51,8 @@ async function handleDeleteCredential(credentialId) {
   try {
     await $fetch(`/api/webauthn/credentials/${encodeURIComponent(credentialId)}`, { method: 'DELETE' })
     await loadCredentials()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     error.value = e.data?.statusMessage ?? 'Failed to remove device'
   }

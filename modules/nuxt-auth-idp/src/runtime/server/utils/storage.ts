@@ -1,7 +1,7 @@
 import { useRuntimeConfig, useStorage, useEvent } from 'nitropack/runtime'
 import type { Storage } from 'unstorage'
 
-export const useIdpStorage = (): Storage => {
+export function useIdpStorage(): Storage {
   try {
     const event = useEvent()
     if (event?.context?.openapeStorageKey) {

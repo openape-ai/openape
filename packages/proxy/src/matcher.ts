@@ -7,13 +7,13 @@ import type { ProxyConfig, RuleAction, RuleEntry } from './types.js'
 function globMatch(pattern: string, value: string): boolean {
   // Simple glob: convert * to regex
   const regex = new RegExp(
-    '^' +
-    pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // escape regex chars except *
-      .replace(/\*\*/g, '<<<DOUBLESTAR>>>')
-      .replace(/\*/g, '[^/]*')
-      .replace(/<<<DOUBLESTAR>>>/g, '.*')
-    + '$'
+    `^${
+      pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // escape regex chars except *
+        .replace(/\*\*/g, '<<<DOUBLESTAR>>>')
+        .replace(/\*/g, '[^/]*')
+        .replace(/<<<DOUBLESTAR>>>/g, '.*')
+    }$`,
   )
   return regex.test(value)
 }

@@ -33,14 +33,16 @@ async function handleEnroll() {
         name: agentName.value,
         publicKey: agentKey.value,
         owner: owner.value,
-        approver: approver.value
-      }
+        approver: approver.value,
+      },
     })
     await navigateTo(`/admin?tab=agents&enrolled=${data.agent_id}`)
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     error.value = e.data?.statusMessage ?? e.message ?? 'Enrollment failed'
-  } finally {
+  }
+  finally {
     enrolling.value = false
   }
 }

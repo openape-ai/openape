@@ -3,7 +3,7 @@ defineProps({
   title: { type: String, required: false, default: 'Sign in' },
   subtitle: { type: String, required: false, default: 'Enter your email to continue' },
   buttonText: { type: String, required: false, default: 'Continue' },
-  placeholder: { type: String, required: false, default: 'you@example.com' }
+  placeholder: { type: String, required: false, default: 'you@example.com' },
 })
 const emit = defineEmits(['error'])
 const { user, loading, fetchUser, login } = useOpenApeAuth()
@@ -29,7 +29,8 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await login(email.value)
-  } catch (e) {
+  }
+  catch (e) {
     const err = e instanceof Error ? e : new Error('Login failed')
     error.value = e?.data?.message || err.message
     emit('error', err)

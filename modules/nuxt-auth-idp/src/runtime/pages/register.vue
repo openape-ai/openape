@@ -21,7 +21,8 @@ async function handleRegister() {
     registered.value = true
     await fetchUser()
     await navigateTo('/')
-  } catch {
+  }
+  catch {
     error.value = webauthnError.value
   }
 }

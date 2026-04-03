@@ -115,7 +115,7 @@ export function resolveCapabilityRequest(
   const requestedSequence = params.resources.join('\0')
   const matchingOperations = loaded.adapter.operations.filter((operation) => {
     const sequence = operationChain(operation).map(entry => entry.resource).join('\0')
-    return sequence === requestedSequence || sequence.startsWith(requestedSequence + '\0')
+    return sequence === requestedSequence || sequence.startsWith(`${requestedSequence}\0`)
   })
 
   if (matchingOperations.length === 0) {

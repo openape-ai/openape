@@ -39,7 +39,7 @@ const DURATION_PRESETS = [
   { label: '4 hours', value: '14400' },
   { label: '1 day', value: '86400' },
   { label: '1 week', value: '604800' },
-  { label: 'Custom', value: 'custom' }
+  { label: 'Custom', value: 'custom' },
 ]
 const asRequestedOption = computed(() => {
   if (!grant.value?.request) return null
@@ -82,9 +82,11 @@ onMounted(async () => {
   }
   try {
     grant.value = await $fetch(`/api/grants/${grantId.value}`)
-  } catch {
+  }
+  catch {
     error.value = 'Grant not found'
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 })
@@ -111,8 +113,8 @@ async function handleApprove() {
           grant_type: resolvedGrantType,
           ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
           ...extendBody,
-        }
-      }
+        },
+      },
     )
     if (callbackUrl.value) {
       const url = new URL(callbackUrl.value)
@@ -120,13 +122,16 @@ async function handleApprove() {
       url.searchParams.set('authz_jwt', result.authz_jwt)
       url.searchParams.set('status', 'approved')
       await navigateTo(url.toString(), { external: true })
-    } else {
+    }
+    else {
       grant.value = result.grant
     }
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     error.value = e.data?.statusMessage ?? e.message ?? 'Approval failed'
-  } finally {
+  }
+  finally {
     processing.value = false
   }
 }
@@ -139,13 +144,16 @@ async function handleDeny() {
       url.searchParams.set('grant_id', grantId.value)
       url.searchParams.set('status', 'denied')
       await navigateTo(url.toString(), { external: true })
-    } else {
+    }
+    else {
       grant.value = { ...grant.value ?? {}, status: 'denied' }
     }
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     error.value = e.data?.statusMessage ?? e.message ?? 'Denial failed'
-  } finally {
+  }
+  finally {
     processing.value = false
   }
 }
