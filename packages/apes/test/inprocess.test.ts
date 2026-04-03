@@ -1,38 +1,36 @@
 import type { Server } from 'node:http'
 import { createServer } from 'node:http'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { createPublicKey, generateKeyPairSync, verify } from 'node:crypto'
 import { createRouter, defineEventHandler, readBody, setResponseStatus, toNodeListener } from 'h3'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createIdPApp } from '@openape/server'
 import { SignJWT } from 'jose'
+import consola from 'consola'
 
-const execFileAsync = promisify(execFile)
+// ---------------------------------------------------------------------------
+// Isolate HOME to a tmpdir so config.ts reads/writes there
+// ---------------------------------------------------------------------------
+
+const testHome = join(tmpdir(), `apes-inprocess-${process.pid}-${Date.now()}`)
+mkdirSync(testHome, { recursive: true })
+
+vi.mock('node:os', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:os')>()
+  return { ...original, homedir: () => testHome }
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Path to the built CLI entry (tsup output with __VERSION__ resolved).
- * Requires `pnpm turbo run build --filter=@openape/apes` before running.
- */
-const CLI_ENTRY = resolve(__dirname, '../dist/cli.js')
-
-/**
- * Generate an Ed25519 key pair and return both OpenSSH-formatted public key
- * and PKCS8-PEM private key (the format `loadEd25519PrivateKey` supports).
- */
 function generateTestKeyPair() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519')
 
-  // OpenSSH wire format for public key: "ssh-ed25519 <base64>"
   const rawPub = publicKey.export({ type: 'spki', format: 'der' })
-  const rawKey = rawPub.subarray(12) // strip ASN.1 header to get raw 32 bytes
+  const rawKey = rawPub.subarray(12)
 
   const typeStr = 'ssh-ed25519'
   const typeBuf = Buffer.from(typeStr)
@@ -43,7 +41,6 @@ function generateTestKeyPair() {
   const wireFormat = Buffer.concat([typeLen, typeBuf, keyLen, rawKey])
   const publicKeySsh = `ssh-ed25519 ${wireFormat.toString('base64')}`
 
-  // PKCS8 PEM for private key
   const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
 
   return { publicKeySsh, privateKeyPem }
@@ -67,100 +64,45 @@ function closeServer(server: Server): Promise<void> {
 // Test suite
 // ---------------------------------------------------------------------------
 
-describe('apes CLI integration with @openape/server', () => {
+describe('apes CLI in-process tests', () => {
   let server: Server
   let port: number
   let idpBase: string
-  let tmpDir: string
   const MGMT_TOKEN = 'test-mgmt-token-123'
   const AGENT_EMAIL = 'agent+test@example.com'
   const OWNER_EMAIL = 'admin@example.com'
   const keyPair = generateTestKeyPair()
 
-  /**
-   * Run the built `apes` CLI in a subprocess with an isolated HOME.
-   * Uses async execFile so the event loop stays free to serve HTTP requests.
-   * Returns combined stdout + stderr since consola writes to stderr.
-   *
-   * VITEST env var is removed to prevent consola from suppressing output
-   * (consola sets log level to 1/warn when VITEST=true).
-   */
-  async function apes(args: string[], extraEnv: Record<string, string> = {}): Promise<string> {
-    const env = {
-      ...process.env,
-      HOME: tmpDir,
-      APES_IDP: idpBase,
-      ...extraEnv,
-    }
-    // Remove vitest/test env vars that suppress consola output
-    // (consola sets log level to 1/warn when NODE_ENV=test, VITEST=true, or TEST=true)
-    delete env.VITEST
-    delete env.VITEST_POOL_ID
-    delete env.VITEST_WORKER_ID
-    delete env.VITEST_MODE
-    delete env.NODE_ENV
-    delete env.TEST
-
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        process.execPath,
-        [CLI_ENTRY, ...args],
-        {
-          cwd: tmpDir,
-          env,
-          encoding: 'utf-8',
-          timeout: 15_000,
-        },
-      )
-      return stdout + stderr
-    }
-    catch (err: unknown) {
-      const e = err as { stdout?: string, stderr?: string, message?: string, code?: number }
-      // On non-zero exit, execFile throws but stdout/stderr are still available
-      throw new Error(
-        `CLI failed (code=${e.code}):\nstdout: ${JSON.stringify(e.stdout)}\nstderr: ${JSON.stringify(e.stderr)}`,
-      )
-    }
-  }
+  // Capture console output
+  let logOutput: string[]
+  let stdoutOutput: string[]
 
   beforeAll(async () => {
-    // ---- temp directory for config isolation ----
-    tmpDir = join(tmpdir(), `apes-integration-${Date.now()}`)
-    mkdirSync(tmpDir, { recursive: true })
+    // Write the test private key
+    writeFileSync(join(testHome, 'test_key'), keyPair.privateKeyPem, { mode: 0o600 })
 
-    // Write the test private key to a file
-    writeFileSync(join(tmpDir, 'test_key'), keyPair.privateKeyPem, { mode: 0o600 })
+    // Set APES_IDP so commands discover it
+    process.env.APES_IDP = '' // Will be set after server starts
 
     // ---- start IdP ----
-    // First pass: discover a free port
     const tempIdp = createIdPApp({ issuer: 'http://placeholder', managementToken: MGMT_TOKEN })
     const tempServer = createServer(toNodeListener(tempIdp.app))
     port = await listenOnFreePort(tempServer)
     await closeServer(tempServer)
 
-    // Second pass: create with the correct issuer URL
     idpBase = `http://127.0.0.1:${port}`
+    process.env.APES_IDP = idpBase
+
     const idp = createIdPApp({
       issuer: idpBase,
       managementToken: MGMT_TOKEN,
       adminEmails: [OWNER_EMAIL],
     })
 
-    // The apes CLI discovers endpoints via OIDC well-known:
-    //   - CLI looks for `ddisa_agent_challenge_endpoint` / `ddisa_agent_authenticate_endpoint`
-    //   - Server publishes `ddisa_auth_challenge_endpoint` / `ddisa_auth_authenticate_endpoint`
-    // When the discovery keys are missing, the CLI falls back to:
-    //   /api/agent/challenge  and  /api/agent/authenticate
-    // These don't exist on the server (which has /api/auth/challenge, /api/auth/authenticate).
-    //
-    // Additionally, the CLI sends `agent_id` while the server expects `id`.
-    //
-    // Solution: add compatibility routes on the same h3 app that accept the CLI's
-    // field names and delegate to the same in-memory stores (no self-fetch).
+    // ---- compat routes for agent_id -> id field mapping ----
     const { stores } = idp
     const compatRouter = createRouter()
 
-    // /api/agent/challenge -- accepts { agent_id } -> delegates to store
     compatRouter.post('/api/agent/challenge', defineEventHandler(async (event) => {
       const body = await readBody<{ agent_id: string }>(event)
       if (!body.agent_id) {
@@ -178,7 +120,6 @@ describe('apes CLI integration with @openape/server', () => {
       return { challenge }
     }))
 
-    // /api/agent/authenticate -- accepts { agent_id, challenge, signature } -> delegates to store
     compatRouter.post('/api/agent/authenticate', defineEventHandler(async (event) => {
       const body = await readBody<{ agent_id: string, challenge: string, signature: string }>(event)
       if (!body.agent_id || !body.challenge || !body.signature) {
@@ -192,28 +133,23 @@ describe('apes CLI integration with @openape/server', () => {
         return { error: 'User not found' }
       }
 
-      // Consume challenge
       const valid = await stores.challengeStore.consumeChallenge(body.challenge, body.agent_id)
       if (!valid) {
         setResponseStatus(event, 401)
         return { error: 'Invalid or expired challenge' }
       }
 
-      // Get SSH key and verify signature
       const keys = await stores.sshKeyStore.findByUser(body.agent_id)
       if (keys.length === 0) {
         setResponseStatus(event, 404)
         return { error: 'No SSH keys found' }
       }
 
-      // Verify signature against each key
       let verified = false
       for (const sshKey of keys) {
         try {
-          // Parse the ssh-ed25519 public key
           const parts = sshKey.publicKey.trim().split(/\s+/)
           const keyData = Buffer.from(parts[1]!, 'base64')
-          // SSH wire format: 4-byte type length + type + 4-byte key length + key
           const typeLen = keyData.readUInt32BE(0)
           const rawKey = keyData.subarray(4 + typeLen + 4)
 
@@ -238,7 +174,6 @@ describe('apes CLI integration with @openape/server', () => {
         return { error: 'Invalid signature' }
       }
 
-      // Issue auth token using the same signing infrastructure
       const signingKey = await stores.keyStore.getSigningKey()
       const token = await new SignJWT({
         sub: user.email,
@@ -286,24 +221,41 @@ describe('apes CLI integration with @openape/server', () => {
     }
   })
 
+  beforeEach(() => {
+    logOutput = []
+    stdoutOutput = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logOutput.push(args.map(String).join(' '))
+    })
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      stdoutOutput.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+      return true
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   afterAll(async () => {
+    delete process.env.APES_IDP
     await closeServer(server)
-    rmSync(tmpDir, { recursive: true, force: true })
+    rmSync(testHome, { recursive: true, force: true })
   })
 
   // ---------- 1. Login with SSH key ----------
   it('login: authenticates with SSH key challenge-response', async () => {
-    expect(existsSync(join(tmpDir, 'test_key'))).toBe(true)
+    const { loginCommand } = await import('../src/commands/auth/login')
+    expect(existsSync(join(testHome, 'test_key'))).toBe(true)
 
-    await apes([
-      'login',
-      '--idp', idpBase,
-      '--key', join(tmpDir, 'test_key'),
-      '--email', AGENT_EMAIL,
-    ])
+    await loginCommand.run!({ args: {
+      idp: idpBase,
+      key: join(testHome, 'test_key'),
+      email: AGENT_EMAIL,
+    } } as any)
 
     // Verify auth.json was written with correct data
-    const authFile = join(tmpDir, '.config', 'apes', 'auth.json')
+    const authFile = join(testHome, '.config', 'apes', 'auth.json')
     expect(existsSync(authFile)).toBe(true)
 
     const auth = JSON.parse(readFileSync(authFile, 'utf-8'))
@@ -315,36 +267,56 @@ describe('apes CLI integration with @openape/server', () => {
 
   // ---------- 2. Whoami ----------
   it('whoami: shows current identity after login', async () => {
-    const output = await apes(['whoami'])
+    const { whoamiCommand } = await import('../src/commands/auth/whoami')
 
+    whoamiCommand.run!({ args: {} } as any)
+
+    const output = logOutput.join('\n')
     expect(output).toContain(`Email: ${AGENT_EMAIL}`)
     expect(output).toContain('Type:  agent')
     expect(output).toContain(`IdP:   ${idpBase}`)
     expect(output).toContain('valid')
   })
 
-  // ---------- 3. Grants list ----------
+  // ---------- 3. Grants list (empty) ----------
   it('grants list: returns empty list when no grants exist', async () => {
-    const output = await apes(['grants', 'list'])
-    expect(output).toContain('No grants found')
+    const { listCommand } = await import('../src/commands/grants/list')
+
+    const infoSpy = vi.spyOn(consola, 'info')
+
+    await listCommand.run!({ args: { all: false, json: false } } as any)
+
+    // consola.info is called with "No grants found" message
+    expect(infoSpy).toHaveBeenCalled()
+    const infoMsg = infoSpy.mock.calls[0]![0] as string
+    expect(infoMsg).toContain('No grants found')
   })
 
-  // ---------- 4. Grant request + approval + token lifecycle ----------
-  it('grants: full lifecycle -- request, approve via HTTP, get token', async () => {
-    // 4a: Request a grant
-    const reqOutput = await apes([
-      'grants', 'request', 'ls -la',
-      '--audience', 'escapes',
-      '--reason', 'integration test',
-    ])
-    expect(reqOutput).toContain('Grant requested')
+  // ---------- 4. Grant lifecycle ----------
+  it('grants: full lifecycle -- request, approve, get token', async () => {
+    const { requestCommand } = await import('../src/commands/grants/request')
+    const { tokenCommand } = await import('../src/commands/grants/token')
+    const { listCommand } = await import('../src/commands/grants/list')
 
-    // Extract grant ID from output: "Grant requested: <id> (status: pending)"
-    const idMatch = reqOutput.match(/Grant requested:\s+(\S+)/)
+    // 4a: Request a grant
+    const successSpy = vi.spyOn(consola, 'success')
+
+    await requestCommand.run!({ args: {
+      command: 'ls -la',
+      audience: 'escapes',
+      reason: 'integration test',
+      approval: 'once',
+      wait: false,
+    } } as any)
+
+    // Extract grant ID from consola.success call
+    expect(successSpy).toHaveBeenCalled()
+    const successMsg = successSpy.mock.calls[0]![0] as string
+    const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
     expect(idMatch).toBeTruthy()
     const grantId = idMatch![1]!
 
-    // 4b: Approve the grant via management token (simulating human approval)
+    // 4b: Approve the grant via management token
     const approveRes = await fetch(`${idpBase}/api/grants/${grantId}/approve`, {
       method: 'POST',
       headers: {
@@ -353,16 +325,17 @@ describe('apes CLI integration with @openape/server', () => {
       },
       body: JSON.stringify({}),
     })
-    if (!approveRes.ok) {
-      const errBody = await approveRes.text()
-      throw new Error(`Approve failed: ${approveRes.status} ${errBody}`)
-    }
+    expect(approveRes.ok).toBe(true)
     const approveData = await approveRes.json() as { grant: { status: string } }
     expect(approveData.grant.status).toBe('approved')
 
-    // 4c: Get grant token via CLI
-    const tokenOutput = await apes(['grants', 'token', grantId])
-    // token command writes raw JWT to stdout
+    // 4c: Get grant token via command
+    successSpy.mockClear()
+    stdoutOutput = []
+
+    await tokenCommand.run!({ args: { id: grantId } } as any)
+
+    const tokenOutput = stdoutOutput.join('')
     expect(tokenOutput).toBeTruthy()
     // JWT has 3 parts separated by dots
     const jwtParts = tokenOutput.trim().split('.')
@@ -373,7 +346,11 @@ describe('apes CLI integration with @openape/server', () => {
     expect(payload.grant_id).toBe(grantId)
 
     // 4e: Verify grants list now shows the grant
-    const listOutput = await apes(['grants', 'list', '--all', '--json'])
+    logOutput = []
+
+    await listCommand.run!({ args: { all: true, json: true } } as any)
+
+    const listOutput = logOutput.join('\n')
     const listData = JSON.parse(listOutput)
     expect(listData.data.length).toBeGreaterThanOrEqual(1)
     const ourGrant = listData.data.find((g: { id: string }) => g.id === grantId)
@@ -383,13 +360,73 @@ describe('apes CLI integration with @openape/server', () => {
 
   // ---------- 5. Workflows ----------
   it('workflows: lists available workflow guides', async () => {
-    const output = await apes(['workflows'])
+    const { workflowsCommand } = await import('../src/commands/workflows')
+
+    workflowsCommand.run!({ args: { json: false } } as any)
+
+    const output = logOutput.join('\n')
     expect(output).toContain('Workflow Guides')
     expect(output).toContain('timed-session')
   })
 
   it('workflows: shows a specific guide', async () => {
-    const output = await apes(['workflows', 'timed-session'])
+    const { workflowsCommand } = await import('../src/commands/workflows')
+
+    workflowsCommand.run!({ args: { id: 'timed-session', json: false } } as any)
+
+    const output = logOutput.join('\n')
     expect(output).toContain('Timed maintenance session')
+  })
+
+  // ---------- 6. Error cases ----------
+  it('whoami: throws CliError when not logged in', async () => {
+    const { CliError } = await import('../src/errors')
+
+    // Clear auth file to simulate not logged in
+    const authFile = join(testHome, '.config', 'apes', 'auth.json')
+    const savedAuth = existsSync(authFile) ? readFileSync(authFile, 'utf-8') : null
+
+    try {
+      // Remove auth file
+      if (existsSync(authFile)) rmSync(authFile)
+
+      const { whoamiCommand } = await import('../src/commands/auth/whoami')
+
+      expect(() => whoamiCommand.run!({ args: {} } as any)).toThrow(CliError)
+    }
+    finally {
+      // Restore auth file
+      if (savedAuth) {
+        mkdirSync(join(testHome, '.config', 'apes'), { recursive: true })
+        writeFileSync(authFile, savedAuth, { mode: 0o600 })
+      }
+    }
+  })
+
+  it('login: throws CliError when no IdP specified', async () => {
+    const { CliError } = await import('../src/errors')
+    const { loginCommand } = await import('../src/commands/auth/login')
+
+    // Temporarily remove APES_IDP
+    const savedIdp = process.env.APES_IDP
+    delete process.env.APES_IDP
+
+    try {
+      await expect(
+        loginCommand.run!({ args: {} } as any),
+      ).rejects.toThrow(CliError)
+    }
+    finally {
+      process.env.APES_IDP = savedIdp
+    }
+  })
+
+  it('workflows: throws CliError for unknown guide', async () => {
+    const { CliError } = await import('../src/errors')
+    const { workflowsCommand } = await import('../src/commands/workflows')
+
+    expect(() =>
+      workflowsCommand.run!({ args: { id: 'nonexistent', json: false } } as any),
+    ).toThrow(CliError)
   })
 })
