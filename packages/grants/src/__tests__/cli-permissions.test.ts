@@ -33,6 +33,24 @@ describe('cli grant helpers', () => {
     expect(canonicalizeCliPermission(detail)).toBe('gh.owner[login=openape].repo[*]#list')
   })
 
+  it('canonicalizes selector with empty-string values as wildcard', () => {
+    const result = canonicalizeCliPermission({
+      cli_id: 'gh',
+      resource_chain: [{ resource: 'repo', selector: { name: '' } }],
+      action: 'list',
+    })
+    expect(result).toBe('gh.repo[*]#list')
+  })
+
+  it('canonicalizes selector with sorted keys', () => {
+    const result = canonicalizeCliPermission({
+      cli_id: 'gh',
+      resource_chain: [{ resource: 'repo', selector: { z: 'last', a: 'first' } }],
+      action: 'list',
+    })
+    expect(result).toBe('gh.repo[a=first,z=last]#list')
+  })
+
   it('validates canonical permission alignment', () => {
     expect(validateCliAuthorizationDetail(detail).valid).toBe(true)
     expect(validateCliAuthorizationDetail({ ...detail, permission: 'wrong' }).valid).toBe(false)
@@ -61,6 +79,106 @@ describe('cli grant helpers', () => {
       ...detail,
       constraints: { exact_command: true },
     })).toBe(true)
+  })
+
+  describe('validateCliAuthorizationDetail edge cases', () => {
+    it('rejects null input', () => {
+      const result = validateCliAuthorizationDetail(null)
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('detail must be an object')
+    })
+
+    it('rejects non-object input', () => {
+      const result = validateCliAuthorizationDetail('not-object')
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('detail must be an object')
+    })
+
+    it('collects all field-level errors', () => {
+      const result = validateCliAuthorizationDetail({
+        type: 'wrong',
+        cli_id: '',
+        operation_id: '',
+        action: '',
+        permission: '',
+        display: '',
+        risk: 'invalid',
+        resource_chain: [],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors).toContain('type must be "openape_cli"')
+      expect(result.errors).toContain('cli_id is required')
+      expect(result.errors).toContain('operation_id is required')
+      expect(result.errors).toContain('action is required')
+      expect(result.errors).toContain('permission is required')
+      expect(result.errors).toContain('display is required')
+      expect(result.errors).toContain('risk must be one of: low, medium, high, critical')
+      expect(result.errors).toContain('resource_chain must be a non-empty array')
+    })
+
+    it('rejects non-object resource_chain entry', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: ['not-an-object'],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('must be an object'))).toBe(true)
+    })
+
+    it('rejects resource_chain entry with missing resource name', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: [{ selector: { login: 'openape' } }],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('.resource is required'))).toBe(true)
+    })
+
+    it('rejects selector that is an array', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: [{ resource: 'owner', selector: ['bad'] }],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('selector must be an object'))).toBe(true)
+    })
+
+    it('rejects selector that is null', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: [{ resource: 'owner', selector: null }],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('selector must be an object'))).toBe(true)
+    })
+
+    it('rejects selector entry with empty key', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: [{ resource: 'owner', selector: { '': 'value' } }],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('selector entries must be non-empty strings'))).toBe(true)
+    })
+
+    it('rejects selector entry with non-string value', () => {
+      const result = validateCliAuthorizationDetail({
+        ...detail,
+        resource_chain: [{ resource: 'owner', selector: { login: 123 } }],
+      })
+      expect(result.valid).toBe(false)
+      expect(result.errors.some(e => e.includes('selector entries must be non-empty strings'))).toBe(true)
+    })
+  })
+
+  it('resourceRefCovers returns false for different resource names', () => {
+    const granted = makeDetail({
+      resource_chain: [{ resource: 'owner', selector: { login: 'openape' } }],
+    })
+    const required = makeDetail({
+      resource_chain: [{ resource: 'repo', selector: { login: 'openape' } }],
+    })
+    expect(cliAuthorizationDetailCovers(granted, required)).toBe(false)
   })
 
   // -- prefix coverage tests --
@@ -131,6 +249,29 @@ describe('cli grant helpers', () => {
         { resource: 'owner', selector: { login: 'other' } },
         { resource: 'repo' },
       ],
+    })
+    expect(cliAuthorizationDetailCovers(granted, required)).toBe(false)
+  })
+
+  it('cliAuthorizationDetailCovers returns false when type is not openape_cli', () => {
+    const granted = makeDetail({
+      resource_chain: [{ resource: 'owner' }],
+      type: 'other' as never,
+    })
+    const required = makeDetail({
+      resource_chain: [{ resource: 'owner' }],
+    })
+    expect(cliAuthorizationDetailCovers(granted, required)).toBe(false)
+  })
+
+  it('cliAuthorizationDetailCovers returns false for different cli_id', () => {
+    const granted = makeDetail({
+      cli_id: 'gh',
+      resource_chain: [{ resource: 'owner' }],
+    })
+    const required = makeDetail({
+      cli_id: 'npm',
+      resource_chain: [{ resource: 'owner' }],
     })
     expect(cliAuthorizationDetailCovers(granted, required)).toBe(false)
   })
@@ -237,6 +378,13 @@ describe('cli grant helpers', () => {
 
     it('returns true for same structure, different selectors', () => {
       expect(cliAuthorizationDetailIsSimilar(detailA, detailB)).toBe(true)
+    })
+
+    it('returns false when type is not openape_cli', () => {
+      expect(cliAuthorizationDetailIsSimilar(
+        makeDetail({ ...detailA, type: 'other' as never }),
+        detailB,
+      )).toBe(false)
     })
 
     it('returns false for different cli_id', () => {

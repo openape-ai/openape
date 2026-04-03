@@ -244,16 +244,10 @@ export function mergeCliAuthorizationDetails(
 
   for (const detail of all) {
     const key = canonicalizeCliPermission(detail)
-    const current = byPermission.get(key)
-    if (!current) {
+    // First-seen wins: entries with the same canonical form have equal specificity
+    // because normalizeSelector produces a deterministic output.
+    if (!byPermission.has(key)) {
       byPermission.set(key, { ...detail, permission: key })
-    }
-    else {
-      const currentSpecificity = current.resource_chain.filter(r => normalizeSelector(r.selector)).length
-      const newSpecificity = detail.resource_chain.filter(r => normalizeSelector(r.selector)).length
-      if (newSpecificity < currentSpecificity) {
-        byPermission.set(key, { ...detail, permission: key })
-      }
     }
   }
 
