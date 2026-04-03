@@ -24,9 +24,11 @@ export default defineEventHandler(() => {
 
     // DDISA extensions (REQUIRED per core.md §3.2)
     ddisa_version: '1.0',
-    ddisa_auth_methods_supported: ['webauthn', 'ed25519'],
+    ddisa_auth_methods_supported: ['webauthn', 'ed25519', 'ssh-key'],
     ddisa_agent_challenge_endpoint: `${issuer}/api/agent/challenge`,
     ddisa_agent_authenticate_endpoint: `${issuer}/api/agent/authenticate`,
+    ddisa_auth_challenge_endpoint: `${issuer}/api/auth/challenge`,
+    ddisa_auth_authenticate_endpoint: `${issuer}/api/auth/authenticate`,
 
     // OpenApe extensions
     openape_grants_endpoint: `${issuer}/api/grants`,

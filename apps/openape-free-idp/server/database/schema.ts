@@ -135,3 +135,16 @@ export const signingKeys = sqliteTable('signing_keys', {
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at').notNull(),
 })
+
+// --- Milestone 5: SSH Keys ---
+
+export const sshKeys = sqliteTable('ssh_keys', {
+  keyId: text('key_id').primaryKey(),
+  userEmail: text('user_email').notNull(),
+  publicKey: text('public_key').notNull(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_ssh_keys_user_email').on(table.userEmail),
+  index('idx_ssh_keys_public_key').on(table.publicKey),
+])
