@@ -26,6 +26,12 @@ import { enrollCommand } from './commands/enroll'
 import { dnsCheckCommand } from './commands/dns-check'
 import { ApiError } from './http'
 
+// Gracefully handle EPIPE when stdout is closed early (e.g. piped to `head`)
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') process.exit(0)
+  throw err
+})
+
 const debug = process.argv.includes('--debug')
 
 declare const __VERSION__: string
