@@ -99,7 +99,7 @@ export async function resolveDDISA(
 
   // Sort by priority (lowest = highest priority, like MX). Default priority = 10.
   parsed.sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10))
-  const best = parsed[0]
+  const best = parsed[0]!
 
   const ttl = options?.cacheTTL ?? DEFAULT_DNS_CACHE_TTL
   cache.set(domain, {
