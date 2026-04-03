@@ -76,7 +76,7 @@ export default defineDriver((options) => {
     };
     const listObjects = async (base) => {
         const listPrefix = [prefix, base ? normalizeKey(base, '/') : ''].filter(Boolean).join('/');
-        const listUrl = listPrefix ? `${baseURL}?prefix=${encodeURIComponent(listPrefix + '/')}` : baseURL;
+        const listUrl = listPrefix ? `${baseURL}?prefix=${encodeURIComponent(`${listPrefix}/`)}` : baseURL;
         const res = await awsFetch(listUrl).then(r => r?.text());
         if (!res)
             return null;

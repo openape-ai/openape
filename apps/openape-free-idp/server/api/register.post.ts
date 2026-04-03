@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string }>(event)
   const email = body?.email?.trim().toLowerCase()
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(email)) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid email' })
   }
 

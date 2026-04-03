@@ -14,7 +14,8 @@ onMounted(async () => {
   try {
     const providers = await $fetch('/api/federation/providers')
     federationProviders.value = providers
-  } catch {
+  }
+  catch {
   }
 })
 async function handleLogin() {
@@ -25,10 +26,12 @@ async function handleLogin() {
     const returnTo = route.query.returnTo
     if (returnTo) {
       await navigateTo(returnTo, { external: true })
-    } else {
+    }
+    else {
       await navigateTo('/')
     }
-  } catch {
+  }
+  catch {
     error.value = webauthnError.value
   }
 }

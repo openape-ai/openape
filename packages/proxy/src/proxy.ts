@@ -393,7 +393,8 @@ async function forwardRequest(originalReq: Request, targetUrl: string, cachedBod
       statusText: res.statusText,
       headers: responseHeaders,
     })
-  } catch (err) {
+  }
+  catch (err) {
     const msg = err instanceof Error ? err.message : 'Upstream error'
     return new Response(`Proxy error: ${msg}`, { status: 502 })
   }

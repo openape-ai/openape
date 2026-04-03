@@ -7,26 +7,26 @@ export interface DnsRecord {
 }
 
 export interface EmailTransport {
-  send(params: {
+  send: (params: {
     from: string
     to: string
     subject: string
     html?: string
     text?: string
-  }): Promise<{ id: string }>
+  }) => Promise<{ id: string }>
 
-  createDomain(domain: string): Promise<{
+  createDomain: (domain: string) => Promise<{
     id: string
     dnsRecords: DnsRecord[]
   }>
 
-  verifyDomain(domainId: string): Promise<{
+  verifyDomain: (domainId: string) => Promise<{
     status: 'verified' | 'pending' | 'failed'
   }>
 
-  deleteDomain(domainId: string): Promise<void>
+  deleteDomain: (domainId: string) => Promise<void>
 
-  getInboundMessage(emailId: string): Promise<{
+  getInboundMessage: (emailId: string) => Promise<{
     from: string
     to: string
     subject: string

@@ -6,7 +6,7 @@ import { useIdpAuth } from '../composables/useIdpAuth'
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 const activeTab = ref(
-  route.query.tab === 'agents' ? 'agents' : route.query.tab === 'registration' ? 'registration' : 'users'
+  route.query.tab === 'agents' ? 'agents' : route.query.tab === 'registration' ? 'registration' : 'users',
 )
 const enrolledAgentId = ref(route.query.enrolled || '')
 const users = ref([])
@@ -42,9 +42,11 @@ async function loadUsers() {
   usersLoading.value = true
   try {
     users.value = await $fetch('/api/admin/users')
-  } catch {
+  }
+  catch {
     users.value = []
-  } finally {
+  }
+  finally {
     usersLoading.value = false
   }
 }
@@ -56,7 +58,8 @@ async function createUser() {
     userSuccess.value = `User ${newUser.value.email} created`
     newUser.value = { name: '', email: '' }
     await loadUsers()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     userError.value = e.data?.statusMessage ?? 'Failed to create user'
   }
@@ -68,7 +71,8 @@ async function deleteUser(email) {
   try {
     await $fetch(`/api/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' })
     await loadUsers()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     userError.value = e.data?.statusMessage ?? 'Failed to delete user'
   }
@@ -77,9 +81,11 @@ async function loadAgents() {
   agentsLoading.value = true
   try {
     agents.value = await $fetch('/api/admin/agents')
-  } catch {
+  }
+  catch {
     agents.value = []
-  } finally {
+  }
+  finally {
     agentsLoading.value = false
   }
 }
@@ -91,7 +97,8 @@ async function createAgent() {
     agentSuccess.value = `Agent "${newAgent.value.name}" created`
     newAgent.value = { email: '', name: '', owner: '', approver: '', publicKey: '' }
     await loadAgents()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     agentError.value = e.data?.statusMessage ?? 'Failed to create agent'
   }
@@ -103,7 +110,8 @@ async function deleteAgent(id) {
   try {
     await $fetch(`/api/admin/agents/${id}`, { method: 'DELETE' })
     await loadAgents()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     agentError.value = e.data?.statusMessage ?? 'Failed to delete agent'
   }
@@ -113,10 +121,11 @@ async function toggleAgent(agent) {
   try {
     await $fetch(`/api/admin/agents/${agent.id}`, {
       method: 'PUT',
-      body: { isActive: !agent.isActive }
+      body: { isActive: !agent.isActive },
     })
     await loadAgents()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
   }
@@ -136,12 +145,13 @@ async function saveEditAgent() {
         name: editingAgent.value.name,
         owner: editingAgent.value.owner,
         approver: editingAgent.value.approver,
-        publicKey: editingAgent.value.publicKey
-      }
+        publicKey: editingAgent.value.publicKey,
+      },
     })
     editingAgent.value = null
     await loadAgents()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     agentError.value = e.data?.statusMessage ?? 'Failed to update agent'
   }
@@ -150,9 +160,11 @@ async function loadRegUrls() {
   regUrlsLoading.value = true
   try {
     regUrls.value = await $fetch('/api/admin/registration-urls')
-  } catch {
+  }
+  catch {
     regUrls.value = []
-  } finally {
+  }
+  finally {
     regUrlsLoading.value = false
   }
 }
@@ -162,12 +174,13 @@ async function createRegUrl() {
   try {
     const result = await $fetch('/api/admin/registration-urls', {
       method: 'POST',
-      body: newRegUrl.value
+      body: newRegUrl.value,
     })
     regUrlSuccess.value = result.registrationUrl
     newRegUrl.value = { email: '', name: '', expiresInHours: 24 }
     await loadRegUrls()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     regUrlError.value = e.data?.statusMessage ?? 'Failed to create registration URL'
   }
@@ -179,7 +192,8 @@ async function deleteRegUrl(token) {
   try {
     await $fetch(`/api/admin/registration-urls/${token}`, { method: 'DELETE' })
     await loadRegUrls()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     regUrlError.value = e.data?.statusMessage ?? 'Failed to delete registration URL'
   }
