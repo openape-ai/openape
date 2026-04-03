@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadConfig, saveConfig } from '../../config'
+import { CliError } from '../../errors'
 
 export const configSetCommand = defineCommand({
   meta: {
@@ -26,8 +27,7 @@ export const configSetCommand = defineCommand({
 
     const parts = key.split('.')
     if (parts.length !== 2) {
-      consola.error(`Invalid key: "${key}". Use: defaults.idp, defaults.approval, agent.key, agent.email`)
-      return process.exit(1)
+      throw new CliError(`Invalid key: "${key}". Use: defaults.idp, defaults.approval, agent.key, agent.email`)
     }
 
     const [section, field] = parts as [string, string]
@@ -41,8 +41,7 @@ export const configSetCommand = defineCommand({
       ;(config.agent as Record<string, string>)[field] = value
     }
     else {
-      consola.error(`Unknown section: "${section}". Use: defaults, agent`)
-      return process.exit(1)
+      throw new CliError(`Unknown section: "${section}". Use: defaults, agent`)
     }
 
     saveConfig(config)

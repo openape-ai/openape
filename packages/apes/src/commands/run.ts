@@ -15,6 +15,7 @@ import {
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
+import { CliError, CliExit } from '../errors'
 
 export const runCommand = defineCommand({
   meta: {
@@ -164,8 +165,7 @@ async function runAudienceMode(
 ) {
   const auth = loadAuth()
   if (!auth) {
-    consola.error('Not logged in. Run `apes login` first.')
-    return process.exit(1)
+    throw new CliError('Not logged in. Run `apes login` first.')
   }
 
   const idp = getIdpUrl(args.idp as string | undefined)!
@@ -202,8 +202,7 @@ async function runAudienceMode(
       break
     }
     if (status.status === 'denied' || status.status === 'revoked') {
-      consola.error(`Grant ${status.status}.`)
-      return process.exit(1)
+      throw new CliError(`Grant ${status.status}.`)
     }
     await new Promise(r => setTimeout(r, interval))
   }
@@ -224,7 +223,7 @@ async function runAudienceMode(
     }
     catch (err: unknown) {
       const exitCode = (err as { status?: number }).status || 1
-      process.exit(exitCode)
+      throw new CliExit(exitCode)
     }
   }
   else {

@@ -4,6 +4,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { parseDuration } from '../../duration'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 export const requestCommand = defineCommand({
   meta: {
@@ -51,8 +52,7 @@ export const requestCommand = defineCommand({
   async run({ args }) {
     const auth = loadAuth()
     if (!auth) {
-      consola.error('Not logged in. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('Not logged in. Run `apes login` first.')
     }
 
     const idp = getIdpUrl()!
@@ -98,17 +98,14 @@ async function waitForApproval(grantsUrl: string, grantId: string): Promise<void
       return
     }
     if (grant.status === 'denied') {
-      consola.error('Grant denied.')
-      return process.exit(1)
+      throw new CliError('Grant denied.')
     }
     if (grant.status === 'revoked') {
-      consola.error('Grant revoked.')
-      return process.exit(1)
+      throw new CliError('Grant revoked.')
     }
 
     await new Promise(r => setTimeout(r, interval))
   }
 
-  consola.error('Timed out waiting for approval.')
-  return process.exit(1)
+  throw new CliError('Timed out waiting for approval.')
 }

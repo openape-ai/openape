@@ -2,6 +2,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 interface Grant {
   id: string
@@ -44,14 +45,12 @@ export const inboxCommand = defineCommand({
   async run({ args }) {
     const idp = getIdpUrl()
     if (!idp) {
-      consola.error('No IdP URL configured. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('No IdP URL configured. Run `apes login` first.')
     }
 
     const auth = loadAuth()
     if (!auth) {
-      consola.error('Not logged in. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('Not logged in. Run `apes login` first.')
     }
 
     const grantsUrl = await getGrantsEndpoint(idp)

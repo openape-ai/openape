@@ -5,6 +5,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { parseDuration } from '../../duration'
 import { apiFetch, getGrantsEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 function parseCapabilityArgs(rawArgs: string[]): {
   cliId: string
@@ -134,18 +135,15 @@ async function waitForApproval(grantsUrl: string, grantId: string): Promise<void
       return
     }
     if (grant.status === 'denied') {
-      consola.error('Grant denied.')
-      process.exit(1)
+      throw new CliError('Grant denied.')
     }
     if (grant.status === 'revoked') {
-      consola.error('Grant revoked.')
-      process.exit(1)
+      throw new CliError('Grant revoked.')
     }
     await new Promise(resolve => setTimeout(resolve, interval))
   }
 
-  consola.error('Timed out waiting for approval.')
-  process.exit(1)
+  throw new CliError('Timed out waiting for approval.')
 }
 
 export const requestCapabilityCommand = defineCommand({
@@ -205,15 +203,13 @@ export const requestCapabilityCommand = defineCommand({
   async run({ rawArgs }) {
     const auth = loadAuth()
     if (!auth) {
-      consola.error('Not logged in. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('Not logged in. Run `apes login` first.')
     }
 
     const parsed = parseCapabilityArgs(rawArgs)
     const idp = getIdpUrl(parsed.idp)
     if (!idp) {
-      consola.error('No IdP URL configured. Use --idp or log in first.')
-      return process.exit(1)
+      throw new CliError('No IdP URL configured. Use --idp or log in first.')
     }
 
     const loaded = loadAdapter(parsed.cliId, parsed.adapter)

@@ -9,6 +9,7 @@ import consola from 'consola'
 import { loadEd25519PrivateKey } from '../ssh-key'
 import { getAgentChallengeEndpoint, getAgentAuthenticateEndpoint } from '../http'
 import { saveAuth, saveConfig, loadConfig } from '../config'
+import { CliError, CliExit } from '../errors'
 
 const DEFAULT_IDP_URL = 'https://id.openape.at'
 const DEFAULT_KEY_PATH = '~/.ssh/id_ed25519'
@@ -148,19 +149,18 @@ export const enrollCommand = defineCommand({
   async run({ args }) {
     // 1. Gather inputs
     const idp = args.idp
-      || await consola.prompt('IdP URL', { type: 'text', default: DEFAULT_IDP_URL, placeholder: DEFAULT_IDP_URL }).then(r => typeof r === 'symbol' ? process.exit(0) : r) as string
+      || await consola.prompt('IdP URL', { type: 'text', default: DEFAULT_IDP_URL, placeholder: DEFAULT_IDP_URL }).then((r) => { if (typeof r === 'symbol') throw new CliExit(0); return r }) as string
       || DEFAULT_IDP_URL
 
     const agentName = args.name
-      || await consola.prompt('Agent name', { type: 'text', placeholder: 'deploy-bot' }).then(r => typeof r === 'symbol' ? process.exit(0) : r) as string
+      || await consola.prompt('Agent name', { type: 'text', placeholder: 'deploy-bot' }).then((r) => { if (typeof r === 'symbol') throw new CliExit(0); return r }) as string
 
     if (!agentName) {
-      consola.error('Agent name is required.')
-      return process.exit(1)
+      throw new CliError('Agent name is required.')
     }
 
     const keyPath = args.key
-      || await consola.prompt('Ed25519 key', { type: 'text', default: DEFAULT_KEY_PATH, placeholder: DEFAULT_KEY_PATH }).then(r => typeof r === 'symbol' ? process.exit(0) : r) as string
+      || await consola.prompt('Ed25519 key', { type: 'text', default: DEFAULT_KEY_PATH, placeholder: DEFAULT_KEY_PATH }).then((r) => { if (typeof r === 'symbol') throw new CliExit(0); return r }) as string
       || DEFAULT_KEY_PATH
 
     // 2. Handle key
@@ -195,11 +195,10 @@ export const enrollCommand = defineCommand({
     const agentEmail = await consola.prompt(
       'Agent email (shown in browser after enrollment)',
       { type: 'text', placeholder: `agent+${agentName}@...` },
-    ).then(r => typeof r === 'symbol' ? process.exit(0) : r) as string
+    ).then((r) => { if (typeof r === 'symbol') throw new CliExit(0); return r }) as string
 
     if (!agentEmail) {
-      consola.error('Agent email is required to verify enrollment.')
-      return process.exit(1)
+      throw new CliError('Agent email is required to verify enrollment.')
     }
 
     // 5. Poll for enrollment confirmation via challenge endpoint

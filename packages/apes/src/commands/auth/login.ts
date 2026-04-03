@@ -6,6 +6,7 @@ import { generateCodeChallenge, generateCodeVerifier } from '@openape/core'
 import consola from 'consola'
 import { loadConfig, saveAuth } from '../../config'
 import { getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../../http'
+import { CliError } from '../../errors'
 
 const CALLBACK_PORT = 9876
 const CLIENT_ID = 'grapes-cli'
@@ -34,8 +35,7 @@ export const loginCommand = defineCommand({
     const idp = args.idp || process.env.APES_IDP || process.env.GRAPES_IDP || config.defaults?.idp
 
     if (!idp) {
-      consola.error('IdP URL required. Use --idp <url> or set APES_IDP.')
-      return process.exit(1)
+      throw new CliError('IdP URL required. Use --idp <url> or set APES_IDP.')
     }
 
     if (args.key) {
@@ -131,8 +131,7 @@ async function loginWithPKCE(idp: string) {
 
   if (!tokenResponse.ok) {
     const text = await tokenResponse.text()
-    consola.error(`Token exchange failed: ${text}`)
-    return process.exit(1)
+    throw new CliError(`Token exchange failed: ${text}`)
   }
 
   const tokens = await tokenResponse.json() as {
@@ -145,8 +144,7 @@ async function loginWithPKCE(idp: string) {
 
   const accessToken = tokens.access_token || tokens.id_token || tokens.assertion
   if (!accessToken) {
-    consola.error('No access token received')
-    return process.exit(1)
+    throw new CliError('No access token received')
   }
 
   // Decode JWT to get email
@@ -170,8 +168,7 @@ async function loginWithKey(idp: string, keyPath: string, email?: string) {
 
   const agentEmail = email
   if (!agentEmail) {
-    consola.error('Agent email required for key-based login. Use --email <agent-email>')
-    return process.exit(1)
+    throw new CliError('Agent email required for key-based login. Use --email <agent-email>')
   }
 
   // Use challenge-response auth (endpoint resolved via OIDC discovery)
@@ -183,8 +180,7 @@ async function loginWithKey(idp: string, keyPath: string, email?: string) {
   })
 
   if (!challengeResp.ok) {
-    consola.error(`Challenge failed: ${await challengeResp.text()}`)
-    return process.exit(1)
+    throw new CliError(`Challenge failed: ${await challengeResp.text()}`)
   }
 
   const { challenge } = await challengeResp.json() as { challenge: string }
@@ -207,8 +203,7 @@ async function loginWithKey(idp: string, keyPath: string, email?: string) {
   })
 
   if (!authResp.ok) {
-    consola.error(`Authentication failed: ${await authResp.text()}`)
-    return process.exit(1)
+    throw new CliError(`Authentication failed: ${await authResp.text()}`)
   }
 
   const { token, expires_in } = await authResp.json() as { token: string, expires_in: number }

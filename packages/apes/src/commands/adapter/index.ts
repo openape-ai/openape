@@ -11,6 +11,7 @@ import {
   removeAdapter,
   searchAdapters,
 } from '@openape/shapes'
+import { CliError } from '../../errors'
 
 export const adapterCommand = defineCommand({
   meta: {
@@ -167,7 +168,7 @@ export const adapterCommand = defineCommand({
         }
 
         if (failed)
-          process.exit(1)
+          throw new CliError('Some adapters could not be removed')
       },
     }),
 
@@ -359,10 +360,9 @@ export const adapterCommand = defineCommand({
           consola.success(`${id}: digest matches registry`)
         }
         else {
-          consola.error(`${id}: digest mismatch`)
           console.log(`  Local:    ${localDigest}`)
           console.log(`  Registry: ${entry.digest}`)
-          process.exit(1)
+          throw new CliError(`${id}: digest mismatch`)
         }
       },
     }),
