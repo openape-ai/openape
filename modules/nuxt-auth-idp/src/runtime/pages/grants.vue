@@ -21,12 +21,12 @@ const DURATION_PRESETS = [
   { label: '4 hours', value: '14400' },
   { label: '1 day', value: '86400' },
   { label: '1 week', value: '604800' },
-  { label: 'Custom', value: 'custom' }
+  { label: 'Custom', value: 'custom' },
 ]
 const GRANT_TYPE_OPTIONS = [
   { label: 'Once', value: 'once', description: 'Single use only' },
   { label: 'Timed', value: 'timed', description: 'Time-limited' },
-  { label: 'Always', value: 'always', description: 'Until revoked' }
+  { label: 'Always', value: 'always', description: 'Until revoked' },
 ]
 const EXTEND_MODE_OPTIONS = [
   { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards' },
@@ -43,7 +43,8 @@ async function loadSimilarGrants(grantId) {
         extendModeSelections.value[grantId] = 'separate'
       }
     }
-  } catch {
+  }
+  catch {
     // ignore
   }
 }
@@ -86,10 +87,12 @@ async function loadGrants() {
         }
       }
     }
-  } catch {
+  }
+  catch {
     activeAndPending.value = []
     historyGrants.value = []
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -101,9 +104,11 @@ async function loadMoreHistory() {
     historyGrants.value = [...historyGrants.value, ...res.data]
     historyCursor.value = res.pagination?.cursor ?? null
     historyHasMore.value = res.pagination?.has_more ?? false
-  } catch {
+  }
+  catch {
     // ignore
-  } finally {
+  }
+  finally {
     loadingHistory.value = false
   }
 }
@@ -125,10 +130,11 @@ async function approveGrant(id) {
         grant_type: grantType,
         ...grantType === 'timed' ? { duration: getEffectiveDuration(id) } : {},
         ...extendBody,
-      }
+      },
     })
     await loadGrants()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     actionError.value = e.data?.statusMessage ?? 'Failed to approve grant'
   }
@@ -138,7 +144,8 @@ async function denyGrant(id) {
   try {
     await $fetch(`/api/grants/${id}/deny`, { method: 'POST' })
     await loadGrants()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     actionError.value = e.data?.statusMessage ?? 'Failed to deny grant'
   }
@@ -158,7 +165,8 @@ async function confirmRevoke() {
   try {
     await $fetch(`/api/grants/${id}/revoke`, { method: 'POST' })
     await loadGrants()
-  } catch (err) {
+  }
+  catch (err) {
     const e = err
     actionError.value = e.data?.statusMessage ?? 'Failed to revoke grant'
   }

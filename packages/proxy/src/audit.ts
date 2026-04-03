@@ -15,6 +15,6 @@ export function writeAudit(entry: AuditEntry): void {
 
   // Write to file if configured
   if (auditPath) {
-    appendFileSync(auditPath, line + '\n')
+    appendFileSync(auditPath, `${line}\n`)
   }
 }

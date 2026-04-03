@@ -168,7 +168,7 @@ async function initIdP(targetDir?: string) {
     `NUXT_OPENAPE_RP_ORIGIN=${origin}`,
   ].join('\n')
 
-  writeFileSync(join(dir, '.env'), envContent + '\n', { mode: 0o600 })
+  writeFileSync(join(dir, '.env'), `${envContent}\n`, { mode: 0o600 })
   consola.success('.env created')
 
   console.log('')

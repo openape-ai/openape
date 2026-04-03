@@ -27,7 +27,7 @@ export async function verifyAgentAuth(
     return null
   }
 
-  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  const match = authHeader.match(/^Bearer (.+)$/i)
   if (!match) {
     if (mandatory) throw new AuthError('Invalid authorization header')
     return null

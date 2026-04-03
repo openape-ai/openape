@@ -19,7 +19,7 @@ export class GrantsClient {
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
     if (this.agentToken) {
-      h['Authorization'] = `Bearer ${this.agentToken}`
+      h.Authorization = `Bearer ${this.agentToken}`
     }
     return h
   }
