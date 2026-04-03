@@ -24,6 +24,7 @@ import { mcpCommand } from './commands/mcp/index'
 import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
 import { dnsCheckCommand } from './commands/dns-check'
+import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
 
 // Gracefully handle EPIPE when stdout is closed early (e.g. piped to `head`)
@@ -87,6 +88,7 @@ const main = defineCommand({
     config: configCommand,
     fetch: fetchCommand,
     mcp: mcpCommand,
+    workflows: workflowsCommand,
   },
 })
 
