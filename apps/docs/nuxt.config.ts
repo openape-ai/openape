@@ -7,11 +7,11 @@ export default defineNuxtConfig({
     '@nuxt/content',
     'nuxt-og-image',
     'nuxt-llms',
-    '@nuxtjs/mcp-toolkit'
+    '@nuxtjs/mcp-toolkit',
   ],
 
   devtools: {
-    enabled: true
+    enabled: true,
   },
 
   css: ['~/assets/css/main.css'],
@@ -20,14 +20,14 @@ export default defineNuxtConfig({
     build: {
       markdown: {
         toc: {
-          searchDepth: 1
-        }
-      }
-    }
+          searchDepth: 1,
+        },
+      },
+    },
   },
 
   experimental: {
-    asyncContext: true
+    asyncContext: true,
   },
 
   compatibilityDate: '2024-07-11',
@@ -35,24 +35,24 @@ export default defineNuxtConfig({
   nitro: {
     prerender: {
       routes: [
-        '/'
+        '/',
       ],
       crawlLinks: true,
-      autoSubfolderIndex: false
-    }
+      autoSubfolderIndex: false,
+    },
   },
 
   eslint: {
     config: {
       stylistic: {
         commaDangle: 'never',
-        braceStyle: '1tbs'
-      }
-    }
+        braceStyle: '1tbs',
+      },
+    },
   },
 
   icon: {
-    provider: 'iconify'
+    provider: 'iconify',
   },
 
   llms: {
@@ -61,34 +61,34 @@ export default defineNuxtConfig({
     description: 'The security layer for the Agentic Web. DNS-based identity and human-in-the-loop permissions.',
     full: {
       title: 'OpenApe - Full Documentation',
-      description: 'Complete documentation for OpenApe Auth, Grants, and the DDISA protocol.'
+      description: 'Complete documentation for OpenApe Auth, Grants, and the DDISA protocol.',
     },
     sections: [
       {
         title: 'Getting Started',
         contentCollection: 'docs',
         contentFilters: [
-          { field: 'path', operator: 'LIKE', value: '/getting-started%' }
-        ]
+          { field: 'path', operator: 'LIKE', value: '/getting-started%' },
+        ],
       },
       {
         title: 'Ecosystem',
         contentCollection: 'docs',
         contentFilters: [
-          { field: 'path', operator: 'LIKE', value: '/ecosystem%' }
-        ]
+          { field: 'path', operator: 'LIKE', value: '/ecosystem%' },
+        ],
       },
       {
         title: 'Security',
         contentCollection: 'docs',
         contentFilters: [
-          { field: 'path', operator: 'LIKE', value: '/security%' }
-        ]
-      }
-    ]
+          { field: 'path', operator: 'LIKE', value: '/security%' },
+        ],
+      },
+    ],
   },
 
   mcp: {
-    name: 'OpenApe Docs'
-  }
+    name: 'OpenApe Docs',
+  },
 })

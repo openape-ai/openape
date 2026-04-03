@@ -2,17 +2,17 @@ export default defineAppConfig({
   ui: {
     colors: {
       primary: 'orange',
-      neutral: 'zinc'
+      neutral: 'zinc',
     },
     footer: {
       slots: {
         root: 'border-t border-default',
-        left: 'text-sm text-muted'
-      }
-    }
+        left: 'text-sm text-muted',
+      },
+    },
   },
   seo: {
-    siteName: 'OpenApe Docs'
+    siteName: 'OpenApe Docs',
   },
   header: {
     title: 'OpenApe',
@@ -20,7 +20,7 @@ export default defineAppConfig({
     logo: {
       alt: 'OpenApe',
       light: '',
-      dark: ''
+      dark: '',
     },
     search: true,
     colorMode: true,
@@ -28,8 +28,8 @@ export default defineAppConfig({
       'icon': 'i-simple-icons-github',
       'to': 'https://github.com/patrick-hofmann/dns-id',
       'target': '_blank',
-      'aria-label': 'GitHub'
-    }]
+      'aria-label': 'GitHub',
+    }],
   },
   footer: {
     credits: `🐾 OpenApe — we wash stinky paws with cryptography • © ${new Date().getFullYear()}`,
@@ -38,13 +38,13 @@ export default defineAppConfig({
       'icon': 'i-heroicons-globe-alt',
       'to': 'https://openape.at',
       'target': '_blank',
-      'aria-label': 'OpenApe Website'
+      'aria-label': 'OpenApe Website',
     }, {
       'icon': 'i-simple-icons-github',
       'to': 'https://github.com/patrick-hofmann/dns-id',
       'target': '_blank',
-      'aria-label': 'OpenApe on GitHub'
-    }]
+      'aria-label': 'OpenApe on GitHub',
+    }],
   },
   toc: {
     title: 'Table of Contents',
@@ -55,13 +55,13 @@ export default defineAppConfig({
         icon: 'i-lucide-star',
         label: 'Star on GitHub',
         to: 'https://github.com/patrick-hofmann/dns-id',
-        target: '_blank'
+        target: '_blank',
       }, {
         icon: 'i-heroicons-globe-alt',
         label: 'openape.at',
         to: 'https://openape.at',
-        target: '_blank'
-      }]
-    }
-  }
+        target: '_blank',
+      }],
+    },
+  },
 })
