@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { guides } from '../guides'
+import { CliError } from '../errors'
 
 export const workflowsCommand = defineCommand({
   meta: {
@@ -23,9 +24,8 @@ export const workflowsCommand = defineCommand({
     if (args.id) {
       const guide = guides.find(g => g.id === String(args.id))
       if (!guide) {
-        consola.error(`Guide not found: ${args.id}`)
         consola.info(`Available: ${guides.map(g => g.id).join(', ')}`)
-        return process.exit(1)
+        throw new CliError(`Guide not found: ${args.id}`)
       }
 
       if (args.json) {

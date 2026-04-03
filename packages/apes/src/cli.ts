@@ -26,6 +26,7 @@ import { enrollCommand } from './commands/enroll'
 import { dnsCheckCommand } from './commands/dns-check'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
+import { CliError, CliExit } from './errors'
 
 // Gracefully handle EPIPE when stdout is closed early (e.g. piped to `head`)
 process.stdout.on('error', (err: NodeJS.ErrnoException) => {
@@ -93,6 +94,13 @@ const main = defineCommand({
 })
 
 runMain(main).catch((err) => {
+  if (err instanceof CliExit) {
+    process.exit(err.exitCode)
+  }
+  if (err instanceof CliError) {
+    consola.error(err.message)
+    process.exit(err.exitCode)
+  }
   if (debug) {
     consola.error(err)
   }

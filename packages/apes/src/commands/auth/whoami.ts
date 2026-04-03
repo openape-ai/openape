@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadAuth } from '../../config'
+import { CliError } from '../../errors'
 
 export const whoamiCommand = defineCommand({
   meta: {
@@ -10,8 +11,7 @@ export const whoamiCommand = defineCommand({
   run() {
     const auth = loadAuth()
     if (!auth) {
-      consola.error('Not logged in. Run `apes login` first.')
-      return process.exit(1)
+      throw new CliError('Not logged in. Run `apes login` first.')
     }
 
     const isAgent = auth.email.includes('agent+')
