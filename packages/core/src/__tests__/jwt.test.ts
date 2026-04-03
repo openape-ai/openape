@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exportPublicKeyJWK, generateKeyPair, importJWK, signJWT, verifyJWT } from '../crypto/jwt.js'
+import { createRemoteJWKS, exportPublicKeyJWK, generateKeyPair, importJWK, signJWT, verifyJWT } from '../crypto/jwt.js'
 
 describe('JWT sign and verify', () => {
   it('signs and verifies a JWT with EdDSA', async () => {
@@ -41,6 +41,10 @@ describe('JWT sign and verify', () => {
     const token = await signJWT({ iss: 'test', sub: 'test', aud: 'test' }, privateKey)
     const { payload } = await verifyJWT(token, async () => publicKey)
     expect(payload.sub).toBe('test')
+  })
+
+  it('creates a JWKS fetch function from a URI', () => {
+    expect(typeof createRemoteJWKS('https://example.com/.well-known/jwks.json')).toBe('function')
   })
 
   it('exports and re-imports a public key via JWK', async () => {
