@@ -7,11 +7,15 @@ export {
   type CodeStore,
   type ConsentEntry,
   type ConsentStore,
+  type GrantChallengeStore,
   InMemoryCodeStore,
   InMemoryConsentStore,
+  InMemoryGrantChallengeStore,
   InMemoryJtiStore,
   InMemoryKeyStore,
   InMemoryRefreshTokenStore,
+  InMemorySshKeyStore,
+  InMemoryUserStore,
   type JtiStore,
   type KeyEntry,
   type KeyStore,
@@ -19,6 +23,10 @@ export {
   type RefreshTokenFamily,
   type RefreshTokenResult,
   type RefreshTokenStore,
+  type SshKey,
+  type SshKeyStore,
+  type User,
+  type UserStore,
 } from './stores.js'
 export { handleTokenExchange, issueAssertion, type TokenExchangeParams, type TokenExchangeResult, type UserClaimsResolver } from './token.js'
 export {

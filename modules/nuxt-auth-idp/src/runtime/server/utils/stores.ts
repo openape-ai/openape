@@ -1,3 +1,4 @@
+// TODO: Migrate to unified UserStore from @openape/auth (see openape-server plan, Milestone 5)
 import type { H3Event } from 'h3'
 import type { ChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
