@@ -83,6 +83,36 @@ describe('resolveDDISA with env-based mock records', () => {
   })
 })
 
+describe('resolveIdP via env mock', () => {
+  it('resolves IdP from env mock', async () => {
+    process.env.DDISA_MOCK_RECORDS = JSON.stringify({
+      'test.com': { idp: 'https://idp.test.com', mode: 'open' },
+    })
+    try {
+      const url = await resolveIdP('test.com')
+      expect(url).toBe('https://idp.test.com')
+    }
+    finally {
+      delete process.env.DDISA_MOCK_RECORDS
+    }
+  })
+
+  it('resolves env mock without mode field', async () => {
+    process.env.DDISA_MOCK_RECORDS = JSON.stringify({
+      'nomode.com': { idp: 'https://idp.nomode.com' },
+    })
+    try {
+      const record = await resolveDDISA('nomode.com')
+      expect(record?.idp).toBe('https://idp.nomode.com')
+      expect(record?.raw).toBe('v=ddisa1 idp=https://idp.nomode.com')
+      expect(record?.raw).not.toContain('mode=')
+    }
+    finally {
+      delete process.env.DDISA_MOCK_RECORDS
+    }
+  })
+})
+
 describe('dns cache', () => {
   it('clears cache without error', () => {
     expect(() => clearDNSCache()).not.toThrow()
