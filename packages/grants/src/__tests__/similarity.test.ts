@@ -151,6 +151,73 @@ describe('findSimilarCliGrants', () => {
     expect(findSimilarCliGrants(nonCliRequest, [existingGrant])).toBeNull()
   })
 
+  it('excludes grants with different target_host', () => {
+    const differentTargetHost = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: { ...existingGrant.request, target_host: 'other-host' },
+    })
+    expect(findSimilarCliGrants(baseRequest, [differentTargetHost])).toBeNull()
+  })
+
+  it('excludes grants with different run_as', () => {
+    const withRunAs = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: { ...existingGrant.request, run_as: 'some-user' },
+    })
+    expect(findSimilarCliGrants(baseRequest, [withRunAs])).toBeNull()
+  })
+
+  it('excludes grants with different delegator', () => {
+    const withDelegator = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: { ...existingGrant.request, delegator: 'someone@example.com' },
+    })
+    expect(findSimilarCliGrants(baseRequest, [withDelegator])).toBeNull()
+  })
+
+  it('excludes grants with different delegate', () => {
+    const withDelegate = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: { ...existingGrant.request, delegate: 'agent@example.com' },
+    })
+    expect(findSimilarCliGrants(baseRequest, [withDelegate])).toBeNull()
+  })
+
+  it('excludes grants with different adapter_digest', () => {
+    const withAdapterDigest = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: {
+        ...existingGrant.request,
+        execution_context: {
+          argv: ['gh'],
+          argv_hash: 'SHA-256:abc',
+          adapter_id: 'gh',
+          adapter_version: '1',
+          adapter_digest: 'SHA-256:different',
+          resolved_executable: 'gh',
+        },
+      },
+    })
+    expect(findSimilarCliGrants(baseRequest, [withAdapterDigest])).toBeNull()
+  })
+
+  it('excludes grants with no CLI authorization details', () => {
+    const noCliDetails = makeGrant({
+      ...existingGrant,
+      id: crypto.randomUUID(),
+      request: {
+        ...existingGrant.request,
+        authorization_details: [],
+      },
+    })
+    expect(findSimilarCliGrants(baseRequest, [noCliDetails])).toBeNull()
+  })
+
   it('handles multiple similar grants', () => {
     const grant2 = makeGrant({
       id: crypto.randomUUID(),
