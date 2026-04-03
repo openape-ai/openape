@@ -1,4 +1,3 @@
 {
-  "framework": "nuxtjs",
-  "rootDirectory": "apps/openape-agent-proxy"
+  "framework": "nuxtjs"
 }
