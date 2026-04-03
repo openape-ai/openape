@@ -30,7 +30,8 @@
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@nuxt/kit": "^3.16.0",

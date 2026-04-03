@@ -3,6 +3,7 @@ dist/
 .output/
 .nuxt/
 .turbo/
+coverage/
 .data/
 *.log
 .env
