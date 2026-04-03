@@ -1,3 +1,4 @@
+// Canonical: @openape/server createEnrollHandler
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { requireAdmin } from '../../utils/admin'

@@ -1,3 +1,4 @@
+// Canonical: @openape/server createAuthorizeHandler
 import type { AuthorizeParams } from '@openape/auth'
 import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'

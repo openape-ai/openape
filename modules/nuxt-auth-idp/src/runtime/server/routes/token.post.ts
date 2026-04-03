@@ -1,3 +1,4 @@
+// Canonical: @openape/server createTokenHandler
 import type { H3Event } from 'h3'
 import type { TokenExchangeParams } from '@openape/auth'
 import { defineEventHandler, getRequestHeader, readRawBody, setResponseStatus } from 'h3'
