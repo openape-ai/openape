@@ -212,6 +212,146 @@ describe('validateAssertion', () => {
     expect(result.claims?.act).toEqual({ sub: 'agent+patrick@id.openape.at' })
     expect(result.claims?.delegation_grant).toBe('del-abc123')
   })
+
+  it('rejects assertion that is expired by our code (exp <= now but jose accepts)', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const realNow = Math.floor(Date.now() / 1000)
+
+    // exp is in the future from real clock perspective (jose accepts)
+    // but our 'now' parameter is set further in the future
+    const exp = realNow + 60 // 60s from now — jose will accept
+    const futureNow = realNow + 120 // our 'now' is 120s ahead — exp <= futureNow
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        act: 'human',
+        iat: realNow,
+        exp,
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now: futureNow,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('Assertion has expired')
+  })
+
+  it('rejects assertion with invalid act claim type (number)', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        act: 42 as unknown as string,
+        iat: now,
+        exp: now + 300,
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('Invalid act claim type')
+  })
+
+  it('rejects assertion with invalid delegation act claim (object without sub)', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        act: { name: 'not-a-valid-claim' } as unknown as string,
+        iat: now,
+        exp: now + 300,
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('Invalid delegation act claim')
+  })
+
+  it('rejects assertion with delegation act claim where sub is not a string', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        act: { sub: 123 } as unknown as string,
+        iat: now,
+        exp: now + 300,
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('Invalid delegation act claim')
+  })
+
+  it('rejects assertion with missing sub claim', async () => {
+    const { publicKey, privateKey } = await generateKeyPair()
+    const now = Math.floor(Date.now() / 1000)
+
+    // Create a JWT without sub
+    const token = await signJWT(
+      {
+        iss: 'https://idp.example.com',
+        sub: '',
+        aud: 'sp.example.com',
+        iat: now,
+        exp: now + 300,
+      },
+      privateKey,
+    )
+
+    const result = await validateAssertion(token, {
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      now,
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('Missing sub claim')
+  })
 })
 
 describe('computeCmdHash', () => {

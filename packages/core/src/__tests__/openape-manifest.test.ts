@@ -147,4 +147,115 @@ describe('validateOpenApeManifest', () => {
     })
     expect(result.valid).toBe(true)
   })
+
+  it('rejects scope with non-object value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      scopes: {
+        'bad:scope': 'not-an-object',
+      },
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('bad:scope') && e.includes('must be an object'))).toBe(true)
+  })
+
+  it('rejects scope with null value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      scopes: {
+        'null:scope': null,
+      },
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('null:scope') && e.includes('must be an object'))).toBe(true)
+  })
+
+  it('rejects policies with invalid delegation value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      policies: { delegation: 123 },
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('delegation'))).toBe(true)
+  })
+
+  it('rejects auth with non-object value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      auth: 'not-an-object',
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('auth must be an object'))).toBe(true)
+  })
+
+  it('rejects auth with null value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      auth: null,
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('auth must be an object'))).toBe(true)
+  })
+
+  it('rejects scopes with non-object value (top-level)', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      scopes: 'not-an-object',
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('scopes must be an object'))).toBe(true)
+  })
+
+  it('rejects scopes with null value (top-level)', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      scopes: null,
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('scopes must be an object'))).toBe(true)
+  })
+
+  it('rejects policies with non-object value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      policies: 'not-an-object',
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('policies must be an object'))).toBe(true)
+  })
+
+  it('rejects policies with null value', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      policies: null,
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('policies must be an object'))).toBe(true)
+  })
+
+  it('accepts policies without delegation field', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      policies: { agent_access: 'open' },
+    })
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects service with non-object value', () => {
+    const result = validateOpenApeManifest({
+      version: '1.0',
+      service: 'not-an-object',
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('service is required and must be an object'))).toBe(true)
+  })
+
+  it('rejects empty auth.supported_methods array', () => {
+    const result = validateOpenApeManifest({
+      ...validManifest(),
+      auth: { supported_methods: [] },
+    })
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('auth.supported_methods is required'))).toBe(true)
+  })
 })
