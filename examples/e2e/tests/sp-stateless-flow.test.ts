@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { bootstrapTestUser } from '../helpers/bootstrap.js'
-import { IDP_URL, SP_URL, TEST_USER } from '../helpers/constants.js'
+import { bootstrapTestUser, bootstrapTestUserSshKey } from '../helpers/bootstrap.js'
+import { IDP_URL, SP_URL, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY, TEST_USER } from '../helpers/constants.js'
 import { HttpClient } from '../helpers/http-client.js'
+import { loginWithSshKey } from '../helpers/key-auth.js'
 import { startServers, stopServers } from '../helpers/server-manager.js'
 
 describe('SP Stateless Cookie-based Flow', () => {
   beforeAll(async () => {
     await startServers()
     await bootstrapTestUser(TEST_USER)
+    await bootstrapTestUserSshKey(TEST_USER.email, TEST_SSH_PUBLIC_KEY)
   })
 
   afterAll(async () => {
@@ -43,29 +45,23 @@ describe('SP Stateless Cookie-based Flow', () => {
     const cookieHeader = client.jar.headerFor(SP_URL)
     expect(cookieHeader).toContain('openape-flow')
 
-    // Step 2: Follow authorize → login redirect
-    const step2 = await client.fetch(loginData.redirectUrl)
-    expect(step2.status).toBe(302)
+    // Step 2: Get JWT via SSH key challenge-response auth
+    const jwt = await loginWithSshKey(IDP_URL, TEST_USER.email, TEST_SSH_PRIVATE_KEY, TEST_SSH_PUBLIC_KEY)
 
-    // Step 3: Authenticate on IdP
-    const { data: idpLogin } = await client.postJSON<{ ok: boolean }>(
-      `${IDP_URL}/api/login`,
-      { email: TEST_USER.email, password: TEST_USER.password },
-    )
-    expect(idpLogin.ok).toBe(true)
-
-    // Step 4: Hit authorize again — get code
-    const step4 = await client.fetch(loginData.redirectUrl)
-    expect(step4.status).toBe(302)
-    const callbackUrl = step4.headers.get('Location')!
+    // Step 3: Hit /authorize with Bearer token — should issue code directly
+    const step3 = await client.fetch(loginData.redirectUrl, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    })
+    expect(step3.status).toBe(302)
+    const callbackUrl = step3.headers.get('Location')!
     expect(callbackUrl).toContain('code=')
 
-    // Step 5: Follow callback — SP exchanges code, clears flow cookie, sets session
-    const step5 = await client.fetch(callbackUrl)
-    expect(step5.status).toBe(302)
-    expect(step5.headers.get('Location')).toBe('/dashboard')
+    // Step 4: Follow callback — SP exchanges code, clears flow cookie, sets session
+    const step4 = await client.fetch(callbackUrl)
+    expect(step4.status).toBe(302)
+    expect(step4.headers.get('Location')).toBe('/dashboard')
 
-    // Step 6: Verify authenticated
+    // Step 5: Verify authenticated
     const { status: meStatus, data: claims } = await client.getJSON<{ sub: string }>(
       `${SP_URL}/api/me`,
     )
