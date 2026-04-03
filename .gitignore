@@ -16,3 +16,4 @@ modules/*/src/runtime/**/*.js
 modules/*/src/runtime/**/*.d.ts
 modules/*/src/runtime/**/*.d.vue.ts
 modules/*/src/runtime/**/*.vue.d.ts
+.DS_Store
