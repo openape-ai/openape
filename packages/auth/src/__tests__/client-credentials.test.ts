@@ -37,6 +37,18 @@ async function buildClientAssertion(
   return builder.sign(privateKey)
 }
 
+describe('InMemoryJtiStore cleanup', () => {
+  it('cleans up expired JTIs during hasBeenUsed check', async () => {
+    const jtiStore = new InMemoryJtiStore()
+    // Mark a JTI with 1ms TTL
+    await jtiStore.markUsed('expired-jti', 1)
+    // Wait for expiry
+    await new Promise(r => setTimeout(r, 10))
+    // hasBeenUsed should return false after cleanup
+    expect(await jtiStore.hasBeenUsed('expired-jti')).toBe(false)
+  })
+})
+
 describe('validateClientAssertion', () => {
   it('validates a correct client assertion', async () => {
     const { publicKey, privateKey } = await createAgentKeyPair()
@@ -142,6 +154,28 @@ describe('validateClientAssertion', () => {
       async () => null,
       jtiStore,
     )).rejects.toThrow('Unknown agent')
+  })
+
+  it('rejects assertion without iss', async () => {
+    const { publicKey, privateKey } = await createAgentKeyPair()
+    const jtiStore = new InMemoryJtiStore()
+
+    // Build manually without iss
+    const assertion = await new SignJWT({})
+      .setProtectedHeader({ alg: 'EdDSA' })
+      .setSubject(AGENT_EMAIL)
+      .setAudience(TOKEN_ENDPOINT)
+      .setExpirationTime('60s')
+      .setJti(crypto.randomUUID())
+      .setIssuedAt()
+      .sign(privateKey)
+
+    await expect(validateClientAssertion(
+      assertion,
+      TOKEN_ENDPOINT,
+      async () => publicKey,
+      jtiStore,
+    )).rejects.toThrow('Missing iss')
   })
 
   it('rejects assertion without jti', async () => {

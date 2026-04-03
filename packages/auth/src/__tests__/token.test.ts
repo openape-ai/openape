@@ -107,6 +107,114 @@ describe('handleTokenExchange', () => {
     )).rejects.toThrow('Invalid or expired')
   })
 
+  it('rejects expired code', async () => {
+    const codeStore = new InMemoryCodeStore()
+    const keyStore = new InMemoryKeyStore()
+    const verifier = generateCodeVerifier()
+    const challenge = await generateCodeChallenge(verifier)
+
+    await codeStore.save({
+      code: 'expired-code',
+      clientId: 'sp.example.com',
+      redirectUri: 'https://sp.example.com/callback',
+      codeChallenge: challenge,
+      userId: 'alice@example.com',
+      nonce: 'n',
+      expiresAt: Date.now() - 1000, // already expired
+    })
+
+    await expect(handleTokenExchange(
+      {
+        grant_type: 'authorization_code',
+        code: 'expired-code',
+        code_verifier: verifier,
+        redirect_uri: 'https://sp.example.com/callback',
+        client_id: 'sp.example.com',
+      },
+      codeStore,
+      keyStore,
+      'https://idp.example.com',
+    )).rejects.toThrow('Invalid or expired')
+  })
+
+  it('rejects unsupported grant_type', async () => {
+    const codeStore = new InMemoryCodeStore()
+    const keyStore = new InMemoryKeyStore()
+
+    await expect(handleTokenExchange(
+      {
+        grant_type: 'client_credentials',
+        code: 'test',
+        code_verifier: 'v',
+        redirect_uri: 'https://sp/cb',
+        client_id: 'sp',
+      },
+      codeStore,
+      keyStore,
+      'https://idp',
+    )).rejects.toThrow('Unsupported grant_type')
+  })
+
+  it('rejects client_id mismatch', async () => {
+    const codeStore = new InMemoryCodeStore()
+    const keyStore = new InMemoryKeyStore()
+    const verifier = generateCodeVerifier()
+    const challenge = await generateCodeChallenge(verifier)
+
+    await codeStore.save({
+      code: 'test-code',
+      clientId: 'sp.example.com',
+      redirectUri: 'https://sp.example.com/callback',
+      codeChallenge: challenge,
+      userId: 'alice@example.com',
+      nonce: 'n',
+      expiresAt: Date.now() + 60000,
+    })
+
+    await expect(handleTokenExchange(
+      {
+        grant_type: 'authorization_code',
+        code: 'test-code',
+        code_verifier: verifier,
+        redirect_uri: 'https://sp.example.com/callback',
+        client_id: 'wrong-client',
+      },
+      codeStore,
+      keyStore,
+      'https://idp',
+    )).rejects.toThrow('Client ID mismatch')
+  })
+
+  it('rejects redirect_uri mismatch', async () => {
+    const codeStore = new InMemoryCodeStore()
+    const keyStore = new InMemoryKeyStore()
+    const verifier = generateCodeVerifier()
+    const challenge = await generateCodeChallenge(verifier)
+
+    await codeStore.save({
+      code: 'test-code',
+      clientId: 'sp.example.com',
+      redirectUri: 'https://sp.example.com/callback',
+      codeChallenge: challenge,
+      userId: 'alice@example.com',
+      nonce: 'n',
+      expiresAt: Date.now() + 60000,
+    })
+
+    await expect(handleTokenExchange(
+      {
+        grant_type: 'authorization_code',
+        code: 'test-code',
+        code_verifier: verifier,
+        redirect_uri: 'https://wrong.example.com/callback',
+        client_id: 'sp.example.com',
+      },
+      codeStore,
+      keyStore,
+      'https://idp',
+    )).rejects.toThrow('Redirect URI mismatch')
+  })
+
   it('rejects wrong PKCE verifier', async () => {
     const codeStore = new InMemoryCodeStore()
     const keyStore = new InMemoryKeyStore()

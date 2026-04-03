@@ -79,6 +79,27 @@ describe('refresh token store', () => {
     expect(result.userId).toBe('bob@example.com')
   })
 
+  it('revokes family via revokeByToken', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    const { token } = await store.create('alice@example.com', 'sp.example.com')
+
+    await store.revokeByToken(token)
+
+    await expect(store.consume(token)).rejects.toThrow('revoked')
+  })
+
+  it('revokeByToken is a no-op for unknown token', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    // Should not throw
+    await store.revokeByToken('nonexistent-token')
+  })
+
+  it('revokeFamily is a no-op for unknown familyId', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    // Should not throw
+    await store.revokeFamily('nonexistent-family')
+  })
+
   it('lists active families', async () => {
     const store = new InMemoryRefreshTokenStore()
     await store.create('alice@example.com', 'sp1.example.com')
@@ -93,6 +114,15 @@ describe('refresh token store', () => {
 
     const bob = await store.listFamilies('bob@example.com')
     expect(bob).toHaveLength(1)
+  })
+
+  it('listFamilies excludes expired families', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    await store.create('alice@example.com', 'sp.example.com', 1) // 1ms TTL
+    await new Promise(r => setTimeout(r, 10))
+
+    const families = await store.listFamilies()
+    expect(families).toHaveLength(0)
   })
 })
 
@@ -199,6 +229,30 @@ describe('handleRefreshGrant', () => {
     expect(payload.sub).toBe('alice@example.com')
     expect(payload.aud).toBe('sp.example.com')
     expect(payload.iss).toBe('https://idp.example.com')
+  })
+
+  it('includes user claims when resolveUserClaims is provided', async () => {
+    const keyStore = new InMemoryKeyStore()
+    const refreshStore = new InMemoryRefreshTokenStore()
+    const { token } = await refreshStore.create('alice@example.com', 'sp.example.com')
+
+    const result = await handleRefreshGrant(
+      token,
+      'sp.example.com',
+      refreshStore,
+      keyStore,
+      'https://idp.example.com',
+      async (userId, scope) => {
+        expect(userId).toBe('alice@example.com')
+        expect(scope).toBe('openid email profile')
+        return { email: 'alice@example.com', name: 'Alice' }
+      },
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(result.id_token, key.publicKey)
+    expect(payload.email).toBe('alice@example.com')
+    expect(payload.name).toBe('Alice')
   })
 
   it('rejects expired refresh token', async () => {

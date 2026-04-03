@@ -27,6 +27,16 @@ describe('createAuthorizationURL', () => {
     expect(result.flowState.idpUrl).toBe('https://idp.example.com')
   })
 
+  it('includes login_hint when email is provided', async () => {
+    const result = await createAuthorizationURL(idpConfig, {
+      clientId: 'sp.example.com',
+      redirectUri: 'https://sp.example.com/callback',
+      email: 'alice@example.com',
+    })
+
+    expect(result.url).toContain('login_hint=alice%40example.com')
+  })
+
   it('generates unique state/nonce per call', async () => {
     const r1 = await createAuthorizationURL(idpConfig, { clientId: 'sp', redirectUri: 'https://sp/cb' })
     const r2 = await createAuthorizationURL(idpConfig, { clientId: 'sp', redirectUri: 'https://sp/cb' })
