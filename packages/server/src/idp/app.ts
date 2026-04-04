@@ -18,6 +18,7 @@ import {
   createBatchGrantHandler,
   createChallengeHandler,
   createConsumeGrantHandler,
+  createCreateDelegationHandler,
   createCreateGrantHandler,
   createCreateUserHandler,
   createDeleteSshKeyHandler,
@@ -27,10 +28,13 @@ import {
   createGetGrantHandler,
   createGrantTokenHandler,
   createJWKSHandler,
+  createListDelegationsHandler,
   createListGrantsHandler,
   createListSshKeysHandler,
+  createRevokeDelegationHandler,
   createRevokeGrantHandler,
   createTokenHandler,
+  createValidateDelegationHandler,
   createVerifyGrantHandler,
 } from './handlers/index.js'
 
@@ -74,6 +78,12 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.post('/api/grants/:id/revoke', createRevokeGrantHandler(resolvedStores, config))
   router.post('/api/grants/:id/token', createGrantTokenHandler(resolvedStores, config))
   router.post('/api/grants/:id/consume', createConsumeGrantHandler(resolvedStores))
+
+  // Delegations
+  router.post('/api/delegations', createCreateDelegationHandler(resolvedStores, config))
+  router.get('/api/delegations', createListDelegationsHandler(resolvedStores, config))
+  router.delete('/api/delegations/:id', createRevokeDelegationHandler(resolvedStores, config))
+  router.post('/api/delegations/:id/validate', createValidateDelegationHandler(resolvedStores, config))
 
   // Admin
   router.post('/api/admin/users', createCreateUserHandler(resolvedStores, config))
