@@ -21,7 +21,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Audit for critical vulnerabilities — non-blocking until transitive deps are resolvable
+      - name: Prepare Nuxt types
+        run: pnpm turbo run build --filter='./modules/*' --concurrency=2
       - name: Security audit
         run: pnpm audit --audit-level=critical || echo "::warning::Security audit found vulnerabilities. Run 'pnpm audit' locally for details."
       - run: pnpm turbo run lint typecheck test --filter='./packages/*' --filter='./modules/*' --filter='./apps/*' --concurrency=4
