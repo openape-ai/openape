@@ -2,6 +2,7 @@ export default defineNitroConfig({
   compatibilityDate: '2025-01-01',
   srcDir: 'server',
   preset: process.env.NITRO_PRESET || 'node-server',
+  serveStatic: true,
   runtimeConfig: {
     issuer: process.env.OPENAPE_ISSUER || 'http://localhost:3000',
     managementToken: process.env.OPENAPE_MANAGEMENT_TOKEN || '',
