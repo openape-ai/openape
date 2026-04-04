@@ -42,6 +42,9 @@ import {
   createValidateDelegationHandler,
   createVerifyGrantHandler,
 } from './handlers/index.js'
+import { createSecurityHeadersMiddleware } from './middleware/security-headers.js'
+import { createRateLimitMiddleware } from './middleware/rate-limit.js'
+import { createBodyLimitMiddleware } from './middleware/body-limit.js'
 
 function createDefaultStores(): IdPStores {
   return {
@@ -133,6 +136,11 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.get('/api/admin/users/:email/ssh-keys', createListSshKeysHandler(resolvedStores, config))
   router.delete('/api/admin/users/:email/ssh-keys/:keyId', createDeleteSshKeyHandler(resolvedStores, config))
 
+  app.use(createSecurityHeadersMiddleware())
+  app.use(createBodyLimitMiddleware())
+  if (config.rateLimitConfig) {
+    app.use(createRateLimitMiddleware(config.rateLimitConfig))
+  }
   app.use(createCorsMiddleware())
   app.use(router)
   return { app, stores: resolvedStores }

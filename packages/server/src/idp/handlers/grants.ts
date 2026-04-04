@@ -1,10 +1,11 @@
 import type { GrantStatus, GrantType, OpenApeGrantRequest, ProblemDetails } from '@openape/core'
 import type { ApproveGrantOverrides } from '@openape/grants'
 import { approveGrant, createGrant, denyGrant, introspectGrant, issueAuthzJWT, revokeGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
-import { defineEventHandler, getHeader, getQuery, getRouterParam, readBody, setResponseHeader, setResponseStatus, getRequestHeader } from 'h3'
+import { defineEventHandler, getHeader, getQuery, getRequestHeader, getRouterParam, readBody, setResponseHeader, setResponseStatus } from 'h3'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { createProblemError } from '../utils/problem.js'
 import { verifyBearerAuth } from '../utils/bearer-auth.js'
+import { hasManagementToken } from './admin.js'
 
 const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 
@@ -20,15 +21,8 @@ function requireManagementOrBearer(
   config: IdPConfig,
   bearerPayload: { sub: string } | null,
 ): string {
-  // Check management token first
-  if (config.managementToken) {
-    const authHeader = getRequestHeader(event, 'authorization')
-    if (authHeader) {
-      const token = authHeader.replace(/^Bearer\s+/i, '')
-      if (token === config.managementToken) {
-        return '_management_'
-      }
-    }
+  if (hasManagementToken(event, config)) {
+    return '_management_'
   }
   return requireBearerIdentity(bearerPayload)
 }
