@@ -20,7 +20,9 @@ export {
   createAddSshKeyHandler,
   createCreateUserHandler,
   createDeleteSshKeyHandler,
+  createDeleteUserHandler,
   createListSshKeysHandler,
+  createListUsersHandler,
   requireManagementToken,
 } from './admin.js'
 export {

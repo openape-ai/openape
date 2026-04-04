@@ -22,6 +22,7 @@ import {
   createCreateGrantHandler,
   createCreateUserHandler,
   createDeleteSshKeyHandler,
+  createDeleteUserHandler,
   createDenyGrantHandler,
   createDiscoveryHandler,
   createEnrollHandler,
@@ -31,6 +32,7 @@ import {
   createListDelegationsHandler,
   createListGrantsHandler,
   createListSshKeysHandler,
+  createListUsersHandler,
   createRevokeDelegationHandler,
   createRevokeGrantHandler,
   createTokenHandler,
@@ -86,7 +88,9 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.post('/api/delegations/:id/validate', createValidateDelegationHandler(resolvedStores, config))
 
   // Admin
+  router.get('/api/admin/users', createListUsersHandler(resolvedStores, config))
   router.post('/api/admin/users', createCreateUserHandler(resolvedStores, config))
+  router.delete('/api/admin/users/:email', createDeleteUserHandler(resolvedStores, config))
   router.post('/api/admin/users/:email/ssh-keys', createAddSshKeyHandler(resolvedStores, config))
   router.get('/api/admin/users/:email/ssh-keys', createListSshKeysHandler(resolvedStores, config))
   router.delete('/api/admin/users/:email/ssh-keys/:keyId', createDeleteSshKeyHandler(resolvedStores, config))
