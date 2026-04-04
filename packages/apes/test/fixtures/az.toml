@@ -1,0 +1,83 @@
+schema = "openape-shapes/v1"
+
+[cli]
+id = "az"
+executable = "az"
+audience = "shapes"
+version = "1"
+
+[[operation]]
+id = "repos.list"
+command = ["repos", "list"]
+required_options = ["org", "project"]
+display = "List repositories in Azure DevOps project {project}"
+action = "list"
+risk = "low"
+resource_chain = ["organization:url={org}", "project:name={project}", "repo:*"]
+
+[[operation]]
+id = "repos.show"
+command = ["repos", "show"]
+required_options = ["org", "project", "repository"]
+display = "Read Azure DevOps repository {repository} in project {project}"
+action = "read"
+risk = "low"
+resource_chain = ["organization:url={org}", "project:name={project}", "repo:name={repository}"]
+
+[[operation]]
+id = "repos.create"
+command = ["repos", "create"]
+required_options = ["org", "project", "name"]
+display = "Create Azure DevOps repository {name} in project {project}"
+action = "create"
+risk = "high"
+exact_command = true
+resource_chain = ["organization:url={org}", "project:name={project}", "repo:name={name}"]
+
+[[operation]]
+id = "repos.pr.list"
+command = ["repos", "pr", "list"]
+required_options = ["org", "project", "repository"]
+display = "List pull requests for repository {repository} in project {project}"
+action = "list"
+risk = "low"
+resource_chain = ["organization:url={org}", "project:name={project}", "repo:name={repository}", "pull-request:*"]
+
+[[operation]]
+id = "repos.pr.show"
+command = ["repos", "pr", "show"]
+required_options = ["org", "id"]
+display = "Read pull request {id} in organization {org}"
+action = "read"
+risk = "low"
+resource_chain = ["organization:url={org}", "pull-request:id={id}"]
+
+[[operation]]
+id = "repos.pr.create"
+command = ["repos", "pr", "create"]
+required_options = ["org", "project", "repository", "source-branch", "target-branch"]
+display = "Create pull request in repository {repository} from {source-branch} to {target-branch}"
+action = "create"
+risk = "high"
+exact_command = true
+resource_chain = ["organization:url={org}", "project:name={project}", "repo:name={repository}", "pull-request:*"]
+
+[[operation]]
+id = "repos.pr.reviewer.add"
+command = ["repos", "pr", "reviewer", "add"]
+required_options = ["org", "id", "reviewers"]
+display = "Add reviewers {reviewers} to pull request {id}"
+action = "reviewer-add"
+risk = "high"
+exact_command = true
+resource_chain = ["organization:url={org}", "pull-request:id={id}"]
+
+[[operation]]
+id = "repos.pr.update"
+command = ["repos", "pr", "update"]
+required_options = ["org", "id"]
+display = "Update pull request {id} in organization {org}"
+action = "update"
+risk = "high"
+exact_command = true
+resource_chain = ["organization:url={org}", "pull-request:id={id}"]

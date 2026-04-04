@@ -1,22 +1,13 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import {
-  fetchRegistry,
-  findAdapter,
-  findConflictingAdapters,
-  getInstalledDigest,
-  installAdapter,
-  isInstalled,
-  loadAdapter,
-  removeAdapter,
-  searchAdapters,
-} from '../../shapes/index.js'
-import { CliError } from '../../errors'
+import { fetchRegistry, findAdapter, searchAdapters } from '../registry.js'
+import { findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter } from '../installer.js'
+import { loadAdapter } from '../adapters.js'
 
 export const adapterCommand = defineCommand({
   meta: {
     name: 'adapter',
-    description: 'Manage CLI adapters',
+    description: 'Manage shapes adapters from the registry',
   },
   subCommands: {
     list: defineCommand({
@@ -57,6 +48,7 @@ export const adapterCommand = defineCommand({
           return
         }
 
+        // List locally available adapters by trying to load each known one
         const index = await fetchRegistry(forceRefresh)
         const local: { id: string, source: string, digest: string }[] = []
         for (const a of index.adapters) {
@@ -75,7 +67,7 @@ export const adapterCommand = defineCommand({
         }
 
         if (local.length === 0) {
-          consola.info('No adapters installed. Use `apes adapter list --remote` to see available adapters.')
+          consola.info('No adapters installed. Use `shapes adapter list --remote` to see available adapters.')
           return
         }
 
@@ -108,30 +100,27 @@ export const adapterCommand = defineCommand({
         },
       },
       async run({ args }) {
-        const ids = [String(args.id), ...args._].filter(Boolean)
+        const id = String(args.id)
         const local = Boolean(args.local)
         const index = await fetchRegistry(Boolean(args.refresh))
+        const entry = findAdapter(index, id)
+        if (!entry)
+          throw new Error(`Adapter "${id}" not found in registry. Use \`shapes adapter search ${id}\` to search.`)
 
-        for (const id of ids) {
-          const entry = findAdapter(index, id)
-          if (!entry) {
-            consola.error(`Adapter "${id}" not found in registry. Use \`apes adapter search ${id}\` to search.`)
-            continue
+        const conflicts = findConflictingAdapters(entry.executable, id)
+        if (conflicts.length > 0) {
+          for (const c of conflicts) {
+            consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
+            consola.warn(`  This adapter claims the same executable "${c.executable}" and will shadow the new one.`)
+            consola.warn(`  Remove it with: shapes adapter remove ${c.adapterId}`)
+            consola.warn(`  Or manually: rm ${c.path}`)
           }
-
-          const conflicts = findConflictingAdapters(entry.executable, id)
-          if (conflicts.length > 0) {
-            for (const c of conflicts) {
-              consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
-              consola.warn(`  Remove it with: apes adapter remove ${c.adapterId}`)
-            }
-          }
-
-          const result = await installAdapter(entry, { local })
-          const verb = result.updated ? 'Updated' : 'Installed'
-          consola.success(`${verb} ${result.id} → ${result.path}`)
-          consola.info(`Digest: ${result.digest}`)
         }
+
+        const result = await installAdapter(entry, { local })
+        const verb = result.updated ? 'Updated' : 'Installed'
+        consola.success(`${verb} ${result.id} → ${result.path}`)
+        consola.info(`Digest: ${result.digest}`)
       },
     }),
 
@@ -143,7 +132,7 @@ export const adapterCommand = defineCommand({
       args: {
         id: {
           type: 'positional',
-          description: 'Adapter ID to remove',
+          description: 'Adapter ID to remove (or filename without .toml)',
           required: true,
         },
         local: {
@@ -153,22 +142,15 @@ export const adapterCommand = defineCommand({
         },
       },
       async run({ args }) {
-        const ids = [String(args.id), ...args._].filter(Boolean)
+        const id = String(args.id)
         const local = Boolean(args.local)
-        let failed = false
-
-        for (const id of ids) {
-          if (removeAdapter(id, local)) {
-            consola.success(`Removed adapter: ${id}`)
-          }
-          else {
-            consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
-            failed = true
-          }
+        if (removeAdapter(id, local)) {
+          consola.success(`Removed adapter: ${id}`)
         }
-
-        if (failed)
-          throw new CliError('Some adapters could not be removed')
+        else {
+          consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
+          process.exit(1)
+        }
       },
     }),
 
@@ -265,7 +247,7 @@ export const adapterCommand = defineCommand({
     update: defineCommand({
       meta: {
         name: 'update',
-        description: 'Update installed adapters',
+        description: 'Update an installed adapter',
       },
       args: {
         id: {
@@ -360,9 +342,10 @@ export const adapterCommand = defineCommand({
           consola.success(`${id}: digest matches registry`)
         }
         else {
+          consola.error(`${id}: digest mismatch`)
           console.log(`  Local:    ${localDigest}`)
           console.log(`  Registry: ${entry.digest}`)
-          throw new CliError(`${id}: digest mismatch`)
+          process.exit(1)
         }
       },
     }),

@@ -1,8 +1,8 @@
 import { readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { loadAdapter } from '@openape/shapes'
-import type { ShapesOperation } from '@openape/shapes'
+import { loadAdapter } from '../../shapes/index.js'
+import type { ShapesOperation } from '../../shapes/index.js'
 
 export interface AdapterToolDef {
   name: string
