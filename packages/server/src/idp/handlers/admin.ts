@@ -19,7 +19,33 @@ export function requireManagementToken(event: H3Event, config: IdPConfig): void 
   }
 }
 
-// --- Add SSH Key ---
+// --- List Users ---
+export function createListUsersHandler(stores: IdPStores, config: IdPConfig) {
+  return defineEventHandler(async (event) => {
+    requireManagementToken(event, config)
+    const users = await stores.userStore.list()
+    return users.map(u => ({ email: u.email, name: u.name, isActive: u.isActive, owner: u.owner, createdAt: u.createdAt }))
+  })
+}
+
+// --- Delete User ---
+export function createDeleteUserHandler(stores: IdPStores, config: IdPConfig) {
+  return defineEventHandler(async (event) => {
+    requireManagementToken(event, config)
+
+    const email = decodeURIComponent(getRouterParam(event, 'email')!)
+    const user = await stores.userStore.findByEmail(email)
+    if (!user) {
+      throw createProblemError({ status: 404, title: 'User not found' })
+    }
+
+    // Delete user's SSH keys first
+    await stores.sshKeyStore.deleteAllForUser(email)
+    await stores.userStore.delete(email)
+    return { ok: true }
+  })
+}
+
 // --- Create User ---
 export function createCreateUserHandler(stores: IdPStores, config: IdPConfig) {
   return defineEventHandler(async (event) => {
