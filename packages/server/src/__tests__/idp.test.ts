@@ -284,6 +284,106 @@ describe('idp server', () => {
   })
 
   // =========================================================================
+  // Admin User Management (list + delete)
+  // =========================================================================
+
+  describe('admin users', () => {
+    it('lists users with management token', async () => {
+      // Create two dedicated users for this test
+      await stores.userStore.create({
+        email: 'listuser1@example.com',
+        name: 'List User 1',
+        isActive: true,
+        createdAt: Date.now(),
+      })
+      await stores.userStore.create({
+        email: 'listuser2@example.com',
+        name: 'List User 2',
+        isActive: true,
+        createdAt: Date.now(),
+      })
+
+      const res = await api('/api/admin/users', {
+        headers: { Authorization: `Bearer ${MGMT_TOKEN}` },
+      })
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      const emails = data.map((u: { email: string }) => u.email)
+      expect(emails).toContain('listuser1@example.com')
+      expect(emails).toContain('listuser2@example.com')
+      // Verify shape: only projected fields returned
+      for (const u of data) {
+        expect(u).toHaveProperty('email')
+        expect(u).toHaveProperty('name')
+        expect(u).toHaveProperty('isActive')
+        expect(u).toHaveProperty('createdAt')
+      }
+
+      // Clean up
+      await stores.userStore.delete('listuser1@example.com')
+      await stores.userStore.delete('listuser2@example.com')
+    })
+
+    it('list users requires management token', async () => {
+      const res = await api('/api/admin/users')
+      expect(res.status).toBe(401)
+    })
+
+    it('deletes a user and cleans up SSH keys', async () => {
+      // Create user + SSH key
+      const delKey = generateEd25519SshKey()
+      await stores.userStore.create({
+        email: 'deleteuser@example.com',
+        name: 'Delete Me',
+        isActive: true,
+        createdAt: Date.now(),
+      })
+      await stores.sshKeyStore.save({
+        keyId: 'del-user-key',
+        userEmail: 'deleteuser@example.com',
+        publicKey: delKey.publicKey,
+        name: 'Del Key',
+        createdAt: Math.floor(Date.now() / 1000),
+      })
+
+      // Verify user exists
+      const userBefore = await stores.userStore.findByEmail('deleteuser@example.com')
+      expect(userBefore).toBeDefined()
+      const keysBefore = await stores.sshKeyStore.findByUser('deleteuser@example.com')
+      expect(keysBefore.length).toBe(1)
+
+      const res = await api(`/api/admin/users/${encodeURIComponent('deleteuser@example.com')}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${MGMT_TOKEN}` },
+      })
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.ok).toBe(true)
+
+      // Verify user and keys are gone
+      const userAfter = await stores.userStore.findByEmail('deleteuser@example.com')
+      expect(userAfter).toBeFalsy()
+      const keysAfter = await stores.sshKeyStore.findByUser('deleteuser@example.com')
+      expect(keysAfter.length).toBe(0)
+    })
+
+    it('delete user returns 404 for non-existent user', async () => {
+      const res = await api(`/api/admin/users/${encodeURIComponent('nonexistent@example.com')}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${MGMT_TOKEN}` },
+      })
+      expect(res.status).toBe(404)
+    })
+
+    it('delete user requires management token', async () => {
+      const res = await api(`/api/admin/users/${encodeURIComponent('owner@example.com')}`, {
+        method: 'DELETE',
+      })
+      expect(res.status).toBe(401)
+    })
+  })
+
+  // =========================================================================
   // Enroll (agent creation)
   // =========================================================================
 
