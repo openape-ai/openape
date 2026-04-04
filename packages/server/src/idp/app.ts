@@ -1,4 +1,4 @@
-import { createApp, createRouter } from 'h3'
+import { createApp, createRouter, defineEventHandler, handleCors } from 'h3'
 import {
   InMemoryCodeStore,
   InMemoryGrantChallengeStore,
@@ -56,6 +56,36 @@ function createDefaultStores(): IdPStores {
   }
 }
 
+const CORS_PATH_PREFIXES = [
+  '/.well-known/',
+  '/token',
+  '/userinfo',
+  '/api/grants',
+  '/api/auth/',
+  '/api/agent/',
+  '/api/delegations',
+]
+
+function createCorsMiddleware() {
+  return defineEventHandler((event) => {
+    const path = event.path
+    const needsCors = CORS_PATH_PREFIXES.some(p => path.startsWith(p))
+
+    if (needsCors) {
+      const handled = handleCors(event, {
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        exposeHeaders: ['Content-Type'],
+        preflight: { statusCode: 204 },
+      })
+      if (handled) {
+        return ''
+      }
+    }
+  })
+}
+
 export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): IdPInstance {
   const resolvedStores: IdPStores = { ...createDefaultStores(), ...stores }
   const app = createApp()
@@ -103,6 +133,7 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.get('/api/admin/users/:email/ssh-keys', createListSshKeysHandler(resolvedStores, config))
   router.delete('/api/admin/users/:email/ssh-keys/:keyId', createDeleteSshKeyHandler(resolvedStores, config))
 
+  app.use(createCorsMiddleware())
   app.use(router)
   return { app, stores: resolvedStores }
 }
