@@ -282,6 +282,7 @@ export interface User {
   name: string
   owner?: string // undefined = self-registered, set = enrolled by another user
   approver?: string // undefined = defaults to owner or self
+  type?: 'human' | 'agent' // determines act claim. Default: 'human' if no owner, 'agent' if owner set
   isActive: boolean
   createdAt: number
 }

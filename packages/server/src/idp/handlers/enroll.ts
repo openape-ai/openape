@@ -3,22 +3,47 @@ import { defineEventHandler, readBody } from 'h3'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { createProblemError } from '../utils/problem.js'
 import { sshEd25519ToKeyObject } from '../utils/ed25519.js'
-import { requireManagementToken } from './admin.js'
+import { hasManagementToken } from './admin.js'
+import { verifyBearerAuth } from '../utils/bearer-auth.js'
 
 export function createEnrollHandler(stores: IdPStores, config: IdPConfig) {
   return defineEventHandler(async (event) => {
-    requireManagementToken(event, config)
+    // --- Determine auth method: management token or Bearer token ---
+    const isMgmt = hasManagementToken(event, config)
+
+    let callerEmail: string | undefined
+    if (!isMgmt) {
+      const payload = await verifyBearerAuth(event, stores.keyStore, config.issuer)
+      if (!payload) {
+        throw createProblemError({ status: 401, title: 'Authentication required (management token or Bearer token)' })
+      }
+      if (payload.act !== 'human') {
+        throw createProblemError({ status: 403, title: 'Only human users may enroll sub-users' })
+      }
+      callerEmail = payload.sub
+    }
 
     const body = await readBody<{
       email: string
       name: string
       publicKey: string
-      owner: string
+      owner?: string
       approver?: string
+      type?: 'human' | 'agent'
     }>(event)
 
-    if (!body.email || !body.name || !body.publicKey || !body.owner) {
-      throw createProblemError({ status: 400, title: 'Missing required fields: email, name, publicKey, owner' })
+    // --- Validate required fields ---
+    // For management token: owner is required in body
+    // For Bearer token: owner is automatically set to caller
+    if (isMgmt) {
+      if (!body.email || !body.name || !body.publicKey || !body.owner) {
+        throw createProblemError({ status: 400, title: 'Missing required fields: email, name, publicKey, owner' })
+      }
+    }
+    else {
+      if (!body.email || !body.name || !body.publicKey) {
+        throw createProblemError({ status: 400, title: 'Missing required fields: email, name, publicKey' })
+      }
     }
 
     if (!body.publicKey.startsWith('ssh-ed25519 ')) {
@@ -45,12 +70,18 @@ export function createEnrollHandler(stores: IdPStores, config: IdPConfig) {
       throw createProblemError({ status: 409, title: 'A user with this public key already exists' })
     }
 
-    // Create user with owner set (makes it an agent)
+    // --- Determine owner, approver, type ---
+    const owner = isMgmt ? body.owner! : callerEmail!
+    const approver = isMgmt ? (body.approver ?? owner) : callerEmail!
+    const type = body.type ?? 'agent'
+
+    // Create user
     const user = await stores.userStore.create({
       email: body.email,
       name: body.name,
-      owner: body.owner,
-      approver: body.approver ?? body.owner,
+      owner,
+      approver,
+      type,
       isActive: true,
       createdAt: Date.now(),
     })
@@ -74,6 +105,7 @@ export function createEnrollHandler(stores: IdPStores, config: IdPConfig) {
       name: user.name,
       owner: user.owner,
       approver: user.approver,
+      type,
       status: 'active',
     }
   })

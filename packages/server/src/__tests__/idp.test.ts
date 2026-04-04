@@ -488,6 +488,147 @@ describe('idp server', () => {
   })
 
   // =========================================================================
+  // User-initiated enroll (Bearer token)
+  // =========================================================================
+
+  describe('user-initiated enroll', () => {
+    it('human user enrolls a sub-user via Bearer token', async () => {
+      const ownerToken = await getAuthToken('owner@example.com', ownerKey.privateKey)
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'sub-user-bob@example.com',
+          name: 'Sub Bob',
+          publicKey: k.publicKey,
+        },
+        { Authorization: `Bearer ${ownerToken}` },
+      )
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.email).toBe('sub-user-bob@example.com')
+      expect(data.owner).toBe('owner@example.com')
+      expect(data.approver).toBe('owner@example.com')
+      expect(data.type).toBe('agent')
+      expect(data.status).toBe('active')
+    })
+
+    it('human user enrolls with explicit type: human', async () => {
+      const ownerToken = await getAuthToken('owner@example.com', ownerKey.privateKey)
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'sub-user-carol@example.com',
+          name: 'Sub Carol',
+          publicKey: k.publicKey,
+          type: 'human',
+        },
+        { Authorization: `Bearer ${ownerToken}` },
+      )
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.email).toBe('sub-user-carol@example.com')
+      expect(data.type).toBe('human')
+      expect(data.owner).toBe('owner@example.com')
+    })
+
+    it('enrolled sub-user with type: human has correct user record', async () => {
+      // Carol was enrolled with type: 'human', verify the user record
+      const carolKeys = await stores.sshKeyStore.findByUser('sub-user-carol@example.com')
+      expect(carolKeys.length).toBe(1)
+
+      // Verify challenge endpoint works (user is enrolled and active)
+      const challengeRes = await apiJson('/api/auth/challenge', { id: 'sub-user-carol@example.com' })
+      expect(challengeRes.status).toBe(200)
+
+      // Verify type is set correctly in store
+      const carol = await stores.userStore.findByEmail('sub-user-carol@example.com')
+      expect(carol).toBeTruthy()
+      expect(carol!.type).toBe('human')
+      expect(carol!.owner).toBe('owner@example.com')
+    })
+
+    it('agent user cannot enroll sub-users (403)', async () => {
+      const agentToken = await getAuthToken('agent@example.com', agentKey.privateKey)
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'should-fail@example.com',
+          name: 'Should Fail',
+          publicKey: k.publicKey,
+        },
+        { Authorization: `Bearer ${agentToken}` },
+      )
+      expect(res.status).toBe(403)
+    })
+
+    it('rejects unauthenticated request without mgmt token', async () => {
+      const k = generateEd25519SshKey()
+      const res = await apiJson('/api/auth/enroll', {
+        email: 'no-auth@example.com',
+        name: 'No Auth',
+        publicKey: k.publicKey,
+      })
+      expect(res.status).toBe(401)
+    })
+
+    it('rejects duplicate email via Bearer token', async () => {
+      const ownerToken = await getAuthToken('owner@example.com', ownerKey.privateKey)
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'sub-user-bob@example.com',
+          name: 'Dup Bob',
+          publicKey: k.publicKey,
+        },
+        { Authorization: `Bearer ${ownerToken}` },
+      )
+      expect(res.status).toBe(409)
+    })
+
+    it('Bearer token enroll ignores body.owner (uses caller)', async () => {
+      const ownerToken = await getAuthToken('owner@example.com', ownerKey.privateKey)
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'sub-user-dave@example.com',
+          name: 'Sub Dave',
+          publicKey: k.publicKey,
+          owner: 'someone-else@example.com',
+        },
+        { Authorization: `Bearer ${ownerToken}` },
+      )
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      // Owner should be the caller, not the body value
+      expect(data.owner).toBe('owner@example.com')
+    })
+
+    it('management token enroll still works with type field', async () => {
+      const k = generateEd25519SshKey()
+      const res = await apiJson(
+        '/api/auth/enroll',
+        {
+          email: 'mgmt-typed@example.com',
+          name: 'Mgmt Typed',
+          publicKey: k.publicKey,
+          owner: 'owner@example.com',
+          type: 'human',
+        },
+        { Authorization: `Bearer ${MGMT_TOKEN}` },
+      )
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.type).toBe('human')
+      expect(data.owner).toBe('owner@example.com')
+    })
+  })
+
+  // =========================================================================
   // Challenge + Authenticate
   // =========================================================================
 
@@ -1829,7 +1970,9 @@ describe('idp server', () => {
 
     afterAll(() => noMgmtServer.close())
 
-    it('returns 501 when management token not configured', async () => {
+    it('returns 401 when management token not configured and Bearer token invalid', async () => {
+      // Without management token configured, the enroll endpoint falls through
+      // to Bearer auth, which fails because 'any' is not a valid JWT.
       const k = generateEd25519SshKey()
       const res = await fetch(`${noMgmtUrl}/api/auth/enroll`, {
         method: 'POST',
@@ -1841,7 +1984,7 @@ describe('idp server', () => {
           owner: 'y@example.com',
         }),
       })
-      expect(res.status).toBe(501)
+      expect(res.status).toBe(401)
     })
   })
 })
