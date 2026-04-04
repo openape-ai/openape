@@ -10,7 +10,7 @@ import {
   loadAdapter,
   removeAdapter,
   searchAdapters,
-} from '@openape/shapes'
+} from '../../shapes/index.js'
 import { CliError } from '../../errors'
 
 export const adapterCommand = defineCommand({

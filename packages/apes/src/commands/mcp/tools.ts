@@ -6,7 +6,7 @@ import {
   loadAdapter,
   resolveCommand,
   verifyAndExecute,
-} from '@openape/shapes'
+} from '../../shapes/index.js'
 import { z } from 'zod'
 import { getAuthToken, getIdpUrl, getRequesterIdentity } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'

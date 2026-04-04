@@ -1,0 +1,27 @@
+schema = "openape-shapes/v1"
+
+[cli]
+id = "find"
+executable = "find"
+audience = "shapes"
+version = "1"
+
+[[operation]]
+id = "find.by-name"
+command = []
+positionals = ["path"]
+required_options = ["name"]
+display = "Find files in {path} matching name {name}"
+action = "read"
+risk = "low"
+resource_chain = ["filesystem:path={path}"]
+
+[[operation]]
+id = "find.by-type"
+command = []
+positionals = ["path"]
+required_options = ["type"]
+display = "Find files in {path} of type {type}"
+action = "read"
+risk = "low"
+resource_chain = ["filesystem:path={path}"]
