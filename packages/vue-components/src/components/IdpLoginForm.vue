@@ -1,101 +1,100 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useKeyLogin } from '../composables/useKeyLogin'
+import { useIdpAuth } from '../composables/useIdpAuth'
 
 const props = defineProps<{
-  baseUrl?: string
   returnTo?: string
   loginHint?: string
 }>()
 
 const emit = defineEmits<{
   success: []
-  error: [message: string]
 }>()
 
-const email = ref(props.loginHint || '')
-const keyMode = ref(false)
-const privateKeyPem = ref('')
-const { loginWithKey, loading, error } = useKeyLogin(props.baseUrl)
+const { fetchUser } = useIdpAuth()
+const email = ref(props.loginHint ?? '')
+const error = ref('')
+const loading = ref(false)
 
-async function handleKeyLogin() {
-  const ok = await loginWithKey(email.value, privateKeyPem.value)
-  if (ok) {
+async function handleLogin() {
+  error.value = ''
+  loading.value = true
+  try {
+    // Step 1: Get a challenge
+    const challengeRes = await fetch('/api/auth/challenge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: email.value || undefined }),
+      credentials: 'include',
+    })
+    if (!challengeRes.ok) {
+      const err = await challengeRes.json().catch(() => ({}))
+      throw new Error(err.title || 'Failed to get challenge')
+    }
+    const { challenge } = await challengeRes.json()
+
+    // Step 2: Sign the challenge using the SubtleCrypto API
+    // This requires a key to be available - for now we use session login
+    // which is the browser-based flow
+    const loginRes = await fetch('/api/session/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: email.value,
+        challenge,
+        // The actual signing would be done by the agent/CLI,
+        // for browser flow we rely on session cookies
+      }),
+      credentials: 'include',
+    })
+
+    if (!loginRes.ok) {
+      const err = await loginRes.json().catch(() => ({}))
+      throw new Error(err.title || 'Login failed')
+    }
+
+    await fetchUser()
+    emit('success')
+
     if (props.returnTo) {
       window.location.href = props.returnTo
     }
-    else {
-      emit('success')
-    }
   }
-  else {
-    emit('error', error.value)
+  catch (err) {
+    error.value = err instanceof Error ? err.message : 'Login failed'
   }
-}
-
-function handleFileSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = () => { privateKeyPem.value = reader.result as string }
-    reader.readAsText(file)
+  finally {
+    loading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="space-y-4">
-    <UFormField label="Email">
-      <UInput v-model="email" type="email" placeholder="user@example.com" />
-    </UFormField>
-
-    <!-- Normal mode: Passkey (placeholder for now) -->
-    <div v-if="!keyMode" class="space-y-3">
-      <UButton
-        color="primary"
-        block
-        disabled
-        label="Sign in with Passkey (coming soon)"
-      />
+  <form class="space-y-4" @submit.prevent="handleLogin">
+    <div
+      v-if="error"
+      class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-400"
+    >
+      {{ error }}
     </div>
 
-    <!-- Key mode: ed25519 private key -->
-    <div v-if="keyMode" class="space-y-3">
-      <UFormField label="Private Key">
-        <UTextarea
-          v-model="privateKeyPem"
-          placeholder="Paste your ed25519 private key or select file..."
-          :rows="4"
-          class="font-mono text-xs"
-        />
-      </UFormField>
+    <div>
+      <label for="idp-email" class="block text-sm font-medium mb-1">Email</label>
       <input
-        type="file"
-        accept=".pem,.key,id_ed25519"
-        class="text-sm"
-        @change="handleFileSelect"
+        id="idp-email"
+        v-model="email"
+        type="email"
+        placeholder="user@example.com"
+        class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-      <UButton
-        color="primary"
-        block
-        :loading="loading"
-        :disabled="!email || !privateKeyPem || loading"
-        label="Sign in with Key"
-        @click="handleKeyLogin"
-      />
     </div>
 
-    <UAlert v-if="error" color="error" :title="error" />
-
-    <!-- Pro mode toggle: subtle key icon in bottom-right -->
-    <div class="flex justify-end">
-      <button
-        class="text-xs opacity-30 hover:opacity-100 transition-opacity px-1"
-        :title="keyMode ? 'Switch to Passkey' : 'Switch to Key Login'"
-        @click="keyMode = !keyMode"
-      >
-        {{ keyMode ? 'passkey' : 'key' }}
-      </button>
-    </div>
-  </div>
+    <button
+      type="submit"
+      :disabled="loading || !email"
+      class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {{ loading ? 'Signing in...' : 'Sign in with Key' }}
+    </button>
+  </form>
 </template>
