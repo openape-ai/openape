@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty'
-import { extractOption, extractWrappedCommand, loadAdapter, resolveCommand } from '@openape/shapes'
+import { extractOption, extractWrappedCommand, loadAdapter, resolveCommand } from '../shapes/index.js'
 
 export const explainCommand = defineCommand({
   meta: {

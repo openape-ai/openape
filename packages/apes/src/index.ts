@@ -1,4 +1,4 @@
-// Re-export all shapes library functions
+// Re-export all shapes library functions (inlined from @openape/shapes)
 export {
   loadAdapter,
   resolveAdapterPath,
@@ -21,7 +21,7 @@ export {
   findExistingGrant,
   verifyAndExecute,
   waitForGrantStatus,
-} from '@openape/shapes'
+} from './shapes/index.js'
 
 export type {
   AdapterMeta,
@@ -34,7 +34,7 @@ export type {
   ResolvedCommand,
   ShapesAdapter,
   ShapesOperation,
-} from '@openape/shapes'
+} from './shapes/index.js'
 
 // Apes-specific exports
 export { loadAuth, saveAuth, clearAuth, loadConfig, saveConfig, getIdpUrl, getAuthToken, getRequesterIdentity } from './config'

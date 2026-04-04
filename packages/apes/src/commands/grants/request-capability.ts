@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { buildStructuredCliGrantRequest, loadAdapter, resolveCapabilityRequest } from '@openape/shapes'
+import { buildStructuredCliGrantRequest, loadAdapter, resolveCapabilityRequest } from '../../shapes/index.js'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
