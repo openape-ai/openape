@@ -23,3 +23,9 @@ export {
   createListSshKeysHandler,
   requireManagementToken,
 } from './admin.js'
+export {
+  createCreateDelegationHandler,
+  createListDelegationsHandler,
+  createRevokeDelegationHandler,
+  createValidateDelegationHandler,
+} from './delegations.js'
