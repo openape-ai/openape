@@ -5,6 +5,8 @@ export interface IdPConfig {
   issuer: string
   adminEmails?: string[]
   managementToken?: string
+  /** Secret for cookie session encryption (min 32 chars). */
+  sessionSecret?: string
 }
 
 export interface IdPStores {

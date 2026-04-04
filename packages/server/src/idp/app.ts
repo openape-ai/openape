@@ -33,8 +33,11 @@ import {
   createListGrantsHandler,
   createListSshKeysHandler,
   createListUsersHandler,
+  createLoginPageHandler,
   createRevokeDelegationHandler,
   createRevokeGrantHandler,
+  createSessionLoginHandler,
+  createSessionLogoutHandler,
   createTokenHandler,
   createValidateDelegationHandler,
   createVerifyGrantHandler,
@@ -62,6 +65,11 @@ export function createIdPApp(config: IdPConfig, stores?: Partial<IdPStores>): Id
   router.post('/api/auth/challenge', createChallengeHandler(resolvedStores, config))
   router.post('/api/auth/authenticate', createAuthenticateHandler(resolvedStores, config))
   router.post('/api/auth/enroll', createEnrollHandler(resolvedStores, config))
+
+  // Session (browser flow)
+  router.get('/login', createLoginPageHandler())
+  router.post('/api/session/login', createSessionLoginHandler(resolvedStores, config))
+  router.post('/api/session/logout', createSessionLogoutHandler(resolvedStores, config))
 
   // OIDC
   router.get('/authorize', createAuthorizeHandler(resolvedStores, config))

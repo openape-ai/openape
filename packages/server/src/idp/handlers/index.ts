@@ -32,3 +32,8 @@ export {
   createRevokeDelegationHandler,
   createValidateDelegationHandler,
 } from './delegations.js'
+export {
+  createLoginPageHandler,
+  createSessionLoginHandler,
+  createSessionLogoutHandler,
+} from './session.js'

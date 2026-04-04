@@ -1,11 +1,12 @@
 import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import type { AuthorizeParams } from '@openape/auth'
-import { defineEventHandler, getQuery, sendRedirect } from 'h3'
+import { defineEventHandler, getQuery, sendRedirect, useSession } from 'h3'
 import { validateAuthorizeRequest } from '@openape/auth'
 import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { createProblemError } from '../utils/problem.js'
 import { verifyBearerAuth } from '../utils/bearer-auth.js'
+import { getSessionConfig } from './session.js'
 
 function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizationDetail[] {
   if (!raw) return []
@@ -59,11 +60,8 @@ export function createAuthorizeHandler(stores: IdPStores, config: IdPConfig) {
       throw createProblemError({ status: 400, title: error })
     }
 
-    // Standalone server: Bearer token only (no cookie sessions)
+    // Try Bearer token first (CLI/agent flow)
     const bearerPayload = await verifyBearerAuth(event, stores.keyStore, config.issuer)
-    if (!bearerPayload) {
-      throw createProblemError({ status: 401, title: 'Bearer token required' })
-    }
 
     let userId: string
     let actorType: ActorType | undefined
@@ -72,21 +70,56 @@ export function createAuthorizeHandler(stores: IdPStores, config: IdPConfig) {
 
     const delegationGrantParam = String(query.delegation_grant ?? '')
 
-    if (delegationGrantParam) {
-      const grant = await validateDelegation(
-        delegationGrantParam,
-        bearerPayload.sub,
-        params.client_id,
-        stores.grantStore,
-      )
-      userId = grant.request.delegator!
-      delegationAct = { sub: bearerPayload.sub }
-      delegationGrantId = grant.id
-      await useGrant(grant.id, stores.grantStore)
+    if (bearerPayload) {
+      if (delegationGrantParam) {
+        const grant = await validateDelegation(
+          delegationGrantParam,
+          bearerPayload.sub,
+          params.client_id,
+          stores.grantStore,
+        )
+        userId = grant.request.delegator!
+        delegationAct = { sub: bearerPayload.sub }
+        delegationGrantId = grant.id
+        await useGrant(grant.id, stores.grantStore)
+      }
+      else {
+        userId = bearerPayload.sub
+        actorType = bearerPayload.act === 'agent' ? 'agent' : undefined
+      }
     }
     else {
-      userId = bearerPayload.sub
-      actorType = bearerPayload.act === 'agent' ? 'agent' : undefined
+      // Try session (browser flow)
+      const session = await useSession(event, getSessionConfig(config))
+
+      if (!session.data.userId) {
+        // No auth at all — redirect to login page
+        const returnTo = `/authorize?${new URLSearchParams(query as Record<string, string>).toString()}`
+        return sendRedirect(event, `/login?returnTo=${encodeURIComponent(returnTo)}`)
+      }
+
+      const sessionUserId = session.data.userId as string
+      const user = await stores.userStore.findByEmail(sessionUserId)
+      if (!user || !user.isActive) {
+        throw createProblemError({ status: 401, title: 'User not found or inactive' })
+      }
+
+      if (delegationGrantParam) {
+        const grant = await validateDelegation(
+          delegationGrantParam,
+          sessionUserId,
+          params.client_id,
+          stores.grantStore,
+        )
+        userId = grant.request.delegator!
+        delegationAct = { sub: sessionUserId }
+        delegationGrantId = grant.id
+        await useGrant(grant.id, stores.grantStore)
+      }
+      else {
+        userId = sessionUserId
+        actorType = user.type ?? (user.owner ? 'agent' : undefined)
+      }
     }
 
     // Parse and process authorization_details (RFC 9396)
@@ -98,7 +131,7 @@ export function createAuthorizeHandler(stores: IdPStores, config: IdPConfig) {
 
       for (const detail of authzDetails) {
         const grant = await createGrant({
-          requester: bearerPayload.sub,
+          requester: bearerPayload ? bearerPayload.sub : userId,
           target_host: params.client_id,
           audience: params.client_id,
           grant_type: detail.approval ?? 'once',
