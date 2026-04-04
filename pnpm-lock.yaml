@@ -465,9 +465,6 @@ importers:
       '@openape/grants':
         specifier: workspace:*
         version: link:../grants
-      '@openape/shapes':
-        specifier: workspace:*
-        version: link:../shapes
       citty:
         specifier: ^0.1.6
         version: 0.1.6

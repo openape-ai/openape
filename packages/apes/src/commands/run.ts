@@ -11,7 +11,7 @@ import {
   resolveCommand,
   verifyAndExecute,
   waitForGrantStatus,
-} from '@openape/shapes'
+} from '../shapes/index.js'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
