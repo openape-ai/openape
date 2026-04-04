@@ -19,6 +19,15 @@ export function requireManagementToken(event: H3Event, config: IdPConfig): void 
   }
 }
 
+/** Check if the request carries a valid management token (non-throwing). */
+export function hasManagementToken(event: H3Event, config: IdPConfig): boolean {
+  if (!config.managementToken) return false
+  const authHeader = getRequestHeader(event, 'authorization')
+  if (!authHeader) return false
+  const token = authHeader.replace(/^Bearer\s+/i, '')
+  return token === config.managementToken
+}
+
 // --- List Users ---
 export function createListUsersHandler(stores: IdPStores, config: IdPConfig) {
   return defineEventHandler(async (event) => {

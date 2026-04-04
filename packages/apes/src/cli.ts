@@ -25,6 +25,7 @@ import { fetchCommand } from './commands/fetch/index'
 import { mcpCommand } from './commands/mcp/index'
 import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
+import { registerUserCommand } from './commands/register-user'
 import { dnsCheckCommand } from './commands/dns-check'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
@@ -81,6 +82,7 @@ const main = defineCommand({
   subCommands: {
     init: initCommand,
     enroll: enrollCommand,
+    'register-user': registerUserCommand,
     'dns-check': dnsCheckCommand,
     login: loginCommand,
     logout: logoutCommand,
