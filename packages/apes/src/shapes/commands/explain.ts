@@ -1,10 +1,11 @@
 import { defineCommand } from 'citty'
-import { extractOption, extractWrappedCommand, loadAdapter, resolveCommand } from '../shapes/index.js'
+import { loadAdapter } from '../adapters.js'
+import { resolveCommand } from '../parser.js'
 
 export const explainCommand = defineCommand({
   meta: {
     name: 'explain',
-    description: 'Show what permission a command would need',
+    description: 'Show what permission a wrapped command would need',
   },
   args: {
     adapter: {
@@ -20,7 +21,7 @@ export const explainCommand = defineCommand({
   async run({ rawArgs }) {
     const command = extractWrappedCommand(rawArgs ?? [])
     if (command.length === 0)
-      throw new Error('Missing wrapped command. Usage: apes explain [--adapter <file>] -- <cli> ...')
+      throw new Error('Missing wrapped command. Usage: shapes explain [--adapter <file>] -- <cli> ...')
 
     const adapterOpt = extractOption(rawArgs ?? [], 'adapter')
     const loaded = loadAdapter(command[0]!, adapterOpt)
@@ -38,3 +39,17 @@ export const explainCommand = defineCommand({
     }, null, 2)}\n`)
   },
 })
+
+export function extractWrappedCommand(args: string[]): string[] {
+  const delimiter = args.indexOf('--')
+  return delimiter >= 0 ? args.slice(delimiter + 1) : []
+}
+
+export function extractOption(args: string[], name: string): string | undefined {
+  const delimiter = args.indexOf('--')
+  const optionArgs = delimiter >= 0 ? args.slice(0, delimiter) : args
+  const index = optionArgs.indexOf(`--${name}`)
+  if (index >= 0 && index + 1 < optionArgs.length)
+    return optionArgs[index + 1]
+  return undefined
+}
