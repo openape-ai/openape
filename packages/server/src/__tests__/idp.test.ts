@@ -812,11 +812,13 @@ describe('idp server', () => {
   // =========================================================================
 
   describe('authorize + token', () => {
-    it('rejects authorize without bearer token', async () => {
+    it('redirects to login when authorize called without bearer token or session', async () => {
       const res = await api('/authorize?response_type=code&client_id=sp.example.com&redirect_uri=http://sp.example.com/callback&state=s1&code_challenge=abc&code_challenge_method=S256', {
         redirect: 'manual',
       })
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(302)
+      const location = res.headers.get('location')!
+      expect(location).toContain('/login?returnTo=')
     })
 
     it('redirects with error for invalid response_type', async () => {
