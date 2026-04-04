@@ -9,7 +9,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.vue"]
 }
