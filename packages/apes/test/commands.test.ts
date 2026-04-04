@@ -690,14 +690,17 @@ describe('apes command tests', () => {
   })
 
   describe('grants delegations', () => {
-    // The delegations endpoint doesn't exist on the test IdP,
-    // so this will fail with an API error. We can test that it throws.
-    it('throws when delegation endpoint is unavailable', async () => {
+    // The delegations endpoint exists on the test IdP and returns
+    // an empty list for users with no delegations.
+    it('lists delegations without error', async () => {
       const { delegationsCommand } = await import('../src/commands/grants/delegations')
+      const infoSpy = vi.spyOn(consola, 'info')
 
-      await expect(
-        delegationsCommand.run!({ args: { json: false } } as any),
-      ).rejects.toThrow()
+      await delegationsCommand.run!({ args: { json: false } } as any)
+
+      expect(infoSpy).toHaveBeenCalled()
+      const msg = String(infoSpy.mock.calls[0]![0])
+      expect(msg).toContain('No delegations found')
     })
   })
 
