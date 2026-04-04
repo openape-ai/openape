@@ -1,9 +1,15 @@
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { defineEventHandler, getRequestHeader, getRouterParam, readBody } from 'h3'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { createProblemError } from '../utils/problem.js'
 import { sshEd25519ToKeyObject } from '../utils/ed25519.js'
+
+/** Timing-safe string comparison to prevent timing attacks on token validation. */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
 
 export function requireManagementToken(event: H3Event, config: IdPConfig): void {
   if (!config.managementToken) {
@@ -14,7 +20,7 @@ export function requireManagementToken(event: H3Event, config: IdPConfig): void 
     throw createProblemError({ status: 401, title: 'Authorization header required' })
   }
   const token = authHeader.replace(/^Bearer\s+/i, '')
-  if (token !== config.managementToken) {
+  if (!safeCompare(token, config.managementToken)) {
     throw createProblemError({ status: 403, title: 'Invalid management token' })
   }
 }
@@ -25,7 +31,7 @@ export function hasManagementToken(event: H3Event, config: IdPConfig): boolean {
   const authHeader = getRequestHeader(event, 'authorization')
   if (!authHeader) return false
   const token = authHeader.replace(/^Bearer\s+/i, '')
-  return token === config.managementToken
+  return safeCompare(token, config.managementToken)
 }
 
 // --- List Users ---
@@ -65,6 +71,14 @@ export function createCreateUserHandler(stores: IdPStores, config: IdPConfig) {
       throw createProblemError({ status: 400, title: 'Missing required fields: email, name' })
     }
 
+    // Input length validation
+    if (body.email.length > 255) {
+      throw createProblemError({ status: 400, title: 'Email must not exceed 255 characters' })
+    }
+    if (body.name.length > 255) {
+      throw createProblemError({ status: 400, title: 'Name must not exceed 255 characters' })
+    }
+
     const existing = await stores.userStore.findByEmail(body.email)
     if (existing) {
       throw createProblemError({ status: 409, title: 'User already exists' })
@@ -90,6 +104,14 @@ export function createAddSshKeyHandler(stores: IdPStores, config: IdPConfig) {
     const body = await readBody<{ publicKey: string, name?: string }>(event)
     if (!body.publicKey || typeof body.publicKey !== 'string') {
       throw createProblemError({ status: 400, title: 'Missing required field: publicKey' })
+    }
+
+    // Input length validation
+    if (body.publicKey.length > 1000) {
+      throw createProblemError({ status: 400, title: 'Public key must not exceed 1000 characters' })
+    }
+    if (body.name && body.name.length > 255) {
+      throw createProblemError({ status: 400, title: 'Name must not exceed 255 characters' })
     }
 
     const trimmedKey = body.publicKey.trim()
