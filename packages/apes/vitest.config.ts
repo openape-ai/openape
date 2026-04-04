@@ -9,9 +9,9 @@ export default defineConfig({
       exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
       thresholds: {
-        statements: 49,
-        functions: 50,
-        lines: 49,
+        statements: 52,
+        functions: 59,
+        lines: 52,
       },
     },
   },
