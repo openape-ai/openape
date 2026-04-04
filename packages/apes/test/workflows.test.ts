@@ -258,9 +258,10 @@ describe('multi-user workflow tests', () => {
         return { error: 'Invalid signature' }
       }
       const signingKey = await stores.keyStore.getSigningKey()
+      const act = (user as any).type ?? (user.owner ? 'agent' : 'human')
       const token = await new SignJWT({
         sub: user.email,
-        act: user.owner ? 'agent' : 'human',
+        act,
       })
         .setProtectedHeader({ alg: 'EdDSA', kid: signingKey.kid })
         .setIssuer(idpBase)
@@ -830,6 +831,89 @@ describe('multi-user workflow tests', () => {
       expect(resp.ok).toBe(true)
       const result = await resp.json() as { valid: boolean }
       expect(result.valid).toBe(false)
+    })
+  })
+
+  // ---------- Scenario 8: User-initiated enroll ----------
+  describe('scenario 8: user-initiated enroll via CLI', () => {
+    let newAgent: TestUser
+
+    it('Alice registers a sub-user via register-user command', async () => {
+      writeAuthAs(alice, idpBase)
+      newAgent = createTestUser('alice-sub-agent@example.com', 'Alice Sub Agent')
+
+      // Write the public key to a file
+      const pubKeyFile = join(testHome, 'sub_agent.pub')
+      writeFileSync(pubKeyFile, newAgent.publicKeySsh, { mode: 0o644 })
+
+      const { registerUserCommand } = await import('../src/commands/register-user')
+      const successSpy = vi.spyOn(consola, 'success')
+
+      await registerUserCommand.run!({ args: {
+        email: newAgent.email,
+        name: newAgent.name,
+        key: pubKeyFile,
+      } } as any)
+
+      expect(successSpy).toHaveBeenCalled()
+      const msg = successSpy.mock.calls[0]![0] as string
+      expect(msg).toContain(newAgent.email)
+      expect(msg).toContain('agent')
+      expect(msg).toContain(alice.email)
+    })
+
+    it('enrolled sub-user can authenticate', async () => {
+      newAgent.jwt = await getJwtFor(newAgent, idpBase)
+      expect(newAgent.jwt).toBeTruthy()
+    })
+
+    it('Alice registers a human sub-user with --type human', async () => {
+      writeAuthAs(alice, idpBase)
+      const humanSub = createTestUser('alice-human-sub@example.com', 'Human Sub')
+
+      const { registerUserCommand } = await import('../src/commands/register-user')
+      const successSpy = vi.spyOn(consola, 'success')
+
+      await registerUserCommand.run!({ args: {
+        email: humanSub.email,
+        name: humanSub.name,
+        key: humanSub.publicKeySsh,
+        type: 'human',
+      } } as any)
+
+      expect(successSpy).toHaveBeenCalled()
+      const msg = successSpy.mock.calls[0]![0] as string
+      expect(msg).toContain('human')
+    })
+
+    it('agent Bob cannot register sub-users (403)', async () => {
+      writeAuthAs(bob, idpBase)
+      const subUser = createTestUser('bob-sub@example.com', 'Bob Sub')
+
+      const { registerUserCommand } = await import('../src/commands/register-user')
+
+      await expect(
+        registerUserCommand.run!({ args: {
+          email: subUser.email,
+          name: subUser.name,
+          key: subUser.publicKeySsh,
+        } } as any),
+      ).rejects.toThrow()
+    })
+
+    it('duplicate email rejected', async () => {
+      writeAuthAs(alice, idpBase)
+      const dupKey = createTestUser('alice-sub-agent@example.com', 'Dup')
+
+      const { registerUserCommand } = await import('../src/commands/register-user')
+
+      await expect(
+        registerUserCommand.run!({ args: {
+          email: dupKey.email,
+          name: dupKey.name,
+          key: dupKey.publicKeySsh,
+        } } as any),
+      ).rejects.toThrow()
     })
   })
 })

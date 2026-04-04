@@ -83,8 +83,8 @@ export function createAuthenticateHandler(stores: IdPStores, config: IdPConfig) 
       throw createProblemError({ status: 401, title: 'Invalid signature', type: 'https://ddisa.org/errors/invalid_token' })
     }
 
-    // Determine act: user with owner → agent, without → human
-    const act = user.owner ? 'agent' as const : 'human' as const
+    // Determine act: explicit type > fallback (owner → agent, no owner → human)
+    const act = user.type ?? (user.owner ? 'agent' as const : 'human' as const)
 
     const signingKey = await stores.keyStore.getSigningKey()
     const token = await issueAuthToken(
