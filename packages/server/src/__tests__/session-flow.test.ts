@@ -355,6 +355,33 @@ describe('Browser OIDC redirect flow (session-based)', () => {
     expect(authRes2.headers.get('location')).toContain('/login?returnTo=')
   })
 
+  it('session cookie has correct security attributes', async () => {
+    const challengeRes = await fetch(`${idpBase}/api/auth/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'alice@example.com' }),
+    })
+    const { challenge } = await challengeRes.json() as { challenge: string }
+    const signature = signChallenge(challenge, userKey.privateKey)
+
+    const loginRes = await fetch(`${idpBase}/api/session/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'alice@example.com', challenge, signature }),
+    })
+    expect(loginRes.ok).toBe(true)
+
+    const setCookie = loginRes.headers.getSetCookie()
+    expect(setCookie.length).toBeGreaterThan(0)
+
+    const cookie = setCookie[0]!.toLowerCase()
+    expect(cookie).toContain('httponly')
+    expect(cookie).toContain('samesite=lax')
+    expect(cookie).toContain('max-age=')
+    // Secure flag only set for https issuers — our test uses http
+    expect(cookie).not.toContain('secure')
+  })
+
   it('existing Bearer token flow still works alongside session support', async () => {
     // Verify the existing Bearer token flow is unbroken
     // 1. Authenticate with Bearer token
