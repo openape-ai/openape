@@ -21,8 +21,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prepare Nuxt types
-        run: pnpm turbo run build --filter='./modules/*' --concurrency=2
+      - name: Build packages + modules, then prepare Nuxt app types
+        run: |
+          pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=4
+          for app in apps/openape-free-idp apps/openape-agent-mail apps/openape-agent-proxy apps/service; do
+            [ -f "$app/package.json" ] && (cd "$app" && npx nuxi prepare) || true
+          done
       - name: Security audit
         run: pnpm audit --audit-level=critical || echo "::warning::Security audit found vulnerabilities. Run 'pnpm audit' locally for details."
       - run: pnpm turbo run lint typecheck test --filter='./packages/*' --filter='./modules/*' --filter='./apps/*' --concurrency=4
