@@ -67,13 +67,16 @@ describe('additional coverage tests', () => {
   const MGMT_TOKEN = 'test-additional-mgmt'
   const AGENT_EMAIL = 'agent+additional@example.com'
   const OWNER_EMAIL = 'admin@example.com'
+  const HUMAN_EMAIL = 'human+additional@example.com'
   const keyPair = generateTestKeyPair()
+  const humanKeyPair = generateTestKeyPair()
 
   let logOutput: string[]
   let stdoutOutput: string[]
 
   beforeAll(async () => {
     writeFileSync(join(testHome, 'test_key'), keyPair.privateKeyPem, { mode: 0o600 })
+    writeFileSync(join(testHome, 'human_key'), humanKeyPair.privateKeyPem, { mode: 0o600 })
 
     const tempIdp = createIdPApp({ issuer: 'http://placeholder', managementToken: MGMT_TOKEN })
     const tempServer = createServer(toNodeListener(tempIdp.app))
@@ -202,7 +205,25 @@ describe('additional coverage tests', () => {
       }),
     })
     if (!enrollRes.ok) {
-      throw new Error(`Enroll failed: ${enrollRes.status} ${await enrollRes.text()}`)
+      throw new Error(`Enroll agent failed: ${enrollRes.status} ${await enrollRes.text()}`)
+    }
+
+    // Create human user (no owner -> act: 'human') via admin API + SSH key
+    const createUserRes = await fetch(`${idpBase}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MGMT_TOKEN}` },
+      body: JSON.stringify({ email: HUMAN_EMAIL, name: 'Test Human Additional' }),
+    })
+    if (!createUserRes.ok && createUserRes.status !== 409) {
+      throw new Error(`Create human failed: ${createUserRes.status} ${await createUserRes.text()}`)
+    }
+    const addKeyRes = await fetch(`${idpBase}/api/admin/users/${encodeURIComponent(HUMAN_EMAIL)}/ssh-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MGMT_TOKEN}` },
+      body: JSON.stringify({ publicKey: humanKeyPair.publicKeySsh, name: 'test' }),
+    })
+    if (!addKeyRes.ok && addKeyRes.status !== 409) {
+      throw new Error(`Add human key failed: ${addKeyRes.status} ${await addKeyRes.text()}`)
     }
 
     // Login
@@ -272,6 +293,27 @@ describe('additional coverage tests', () => {
   })
 
   describe('grants delegate (with mock endpoint)', () => {
+    let savedAgentAuth: string
+
+    beforeAll(async () => {
+      // Save agent auth, then login as human user (delegations require act: 'human')
+      const authFile = join(testHome, '.config', 'apes', 'auth.json')
+      savedAgentAuth = readFileSync(authFile, 'utf-8')
+
+      const { loginCommand } = await import('../src/commands/auth/login')
+      await loginCommand.run!({ args: {
+        idp: idpBase,
+        key: join(testHome, 'human_key'),
+        email: HUMAN_EMAIL,
+      } } as any)
+    })
+
+    afterAll(() => {
+      // Restore agent auth
+      const authFile = join(testHome, '.config', 'apes', 'auth.json')
+      writeFileSync(authFile, savedAgentAuth, { mode: 0o600 })
+    })
+
     it('creates a delegation', async () => {
       const { delegateCommand } = await import('../src/commands/grants/delegate')
       const successSpy = vi.spyOn(consola, 'success')
