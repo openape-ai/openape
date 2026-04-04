@@ -24,4 +24,4 @@ jobs:
       # Audit for critical vulnerabilities — non-blocking until transitive deps are resolvable
       - name: Security audit
         run: pnpm audit --audit-level=critical || echo "::warning::Security audit found vulnerabilities. Run 'pnpm audit' locally for details."
-      - run: pnpm turbo run lint typecheck test --filter='./packages/*' --filter='./modules/*' --filter='./apps/*'
+      - run: pnpm turbo run lint typecheck test --filter='./packages/*' --filter='./modules/*' --filter='./apps/*' --concurrency=4
