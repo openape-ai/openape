@@ -1,0 +1,4 @@
+.output
+.nitro
+*.db
+node_modules
