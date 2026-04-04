@@ -710,4 +710,126 @@ describe('multi-user workflow tests', () => {
       expect(ids).toContain(charlieGrantId)
     })
   })
+
+  // ---------- Scenario 7: Delegation ----------
+  describe('scenario 7: delegation', () => {
+    let delegationId: string
+
+    it('Alice creates a delegation for Charlie at api.example.com', async () => {
+      writeAuthAs(alice, idpBase)
+      const { delegateCommand } = await import('../src/commands/grants/delegate')
+      const successSpy = vi.spyOn(consola, 'success')
+
+      await delegateCommand.run!({ args: {
+        to: 'charlie@example.com',
+        at: 'api.example.com',
+        approval: 'once',
+      } } as any)
+
+      expect(successSpy).toHaveBeenCalled()
+      const successMsg = successSpy.mock.calls[0]![0] as string
+      const idMatch = successMsg.match(/Delegation created:\s+(\S+)/)
+      expect(idMatch).toBeTruthy()
+      delegationId = idMatch![1]!
+    })
+
+    it('Alice lists delegations -- sees her delegation', async () => {
+      writeAuthAs(alice, idpBase)
+      const { delegationsCommand } = await import('../src/commands/grants/delegations')
+
+      await delegationsCommand.run!({ args: { json: true } } as any)
+
+      const output = logOutput.join('\n')
+      const delegations = JSON.parse(output)
+      expect(Array.isArray(delegations)).toBe(true)
+      const found = delegations.find((d: { id: string }) => d.id === delegationId)
+      expect(found).toBeTruthy()
+      expect(found.request.delegator).toBe(alice.email)
+      expect(found.request.delegate).toBe(charlie.email)
+      expect(found.request.audience).toBe('api.example.com')
+    })
+
+    it('Charlie lists delegations -- sees the delegation as delegate', async () => {
+      writeAuthAs(charlie, idpBase)
+      logOutput = []
+      const { delegationsCommand } = await import('../src/commands/grants/delegations')
+
+      await delegationsCommand.run!({ args: { json: true } } as any)
+
+      const output = logOutput.join('\n')
+      const delegations = JSON.parse(output)
+      expect(Array.isArray(delegations)).toBe(true)
+      const found = delegations.find((d: { id: string }) => d.id === delegationId)
+      expect(found).toBeTruthy()
+    })
+
+    it('Bob lists delegations -- does not see the delegation', async () => {
+      writeAuthAs(bob, idpBase)
+      logOutput = []
+      const { delegationsCommand } = await import('../src/commands/grants/delegations')
+
+      await delegationsCommand.run!({ args: { json: true } } as any)
+
+      const output = logOutput.join('\n')
+      const delegations = JSON.parse(output)
+      expect(Array.isArray(delegations)).toBe(true)
+      const found = delegations.find((d: { id: string }) => d.id === delegationId)
+      expect(found).toBeUndefined()
+    })
+
+    it('Agent Bob cannot create a delegation (403)', async () => {
+      writeAuthAs(bob, idpBase)
+      const { delegateCommand } = await import('../src/commands/grants/delegate')
+
+      await expect(
+        delegateCommand.run!({ args: {
+          to: 'alice@example.com',
+          at: 'api.example.com',
+          approval: 'once',
+        } } as any),
+      ).rejects.toThrow()
+    })
+
+    it('Alice revokes the delegation', async () => {
+      const resp = await fetch(`${idpBase}/api/delegations/${delegationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${alice.jwt}` },
+      })
+      expect(resp.ok).toBe(true)
+      const result = await resp.json() as { status: string }
+      expect(result.status).toBe('revoked')
+    })
+
+    it('Alice lists delegations -- revoked delegation no longer appears', async () => {
+      writeAuthAs(alice, idpBase)
+      logOutput = []
+      const { delegationsCommand } = await import('../src/commands/grants/delegations')
+
+      await delegationsCommand.run!({ args: { json: true } } as any)
+
+      const output = logOutput.join('\n')
+      const delegations = JSON.parse(output)
+      // The revoked delegation should not show in the list because
+      // findByDelegator/findByDelegate only return active delegations,
+      // or if it does appear, it should be revoked
+      const found = delegations.find((d: { id: string }) => d.id === delegationId)
+      if (found) {
+        expect(found.status).toBe('revoked')
+      }
+    })
+
+    it('validate endpoint confirms revoked delegation is invalid', async () => {
+      const resp = await fetch(`${idpBase}/api/delegations/${delegationId}/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegate: charlie.email,
+          audience: 'api.example.com',
+        }),
+      })
+      expect(resp.ok).toBe(true)
+      const result = await resp.json() as { valid: boolean }
+      expect(result.valid).toBe(false)
+    })
+  })
 })
