@@ -152,3 +152,40 @@ OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Re
 5. Spec-Dokumente: `core.md`, `grants.md`, `delegation.md` im Repo `openape-ai/protocol`
 
 Keine stille Abweichung — jede Spec-Inkompatibilität muss explizit bestätigt werden.
+
+## Security Checklist
+
+Jedes sicherheitsrelevante Feature in `@openape/server` ist getestet. Bei Änderungen an Auth, Grants, Sessions oder Endpoints diese Liste prüfen:
+
+**Transport & Headers:**
+- [x] Security Headers (X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy) auf allen Responses
+- [x] Cache-Control: no-store auf Auth-Responses, public+max-age auf JWKS/Discovery
+- [x] CORS Boundaries: API-Endpoints ja, Admin/Session/Authorize nein
+- [x] Cookie Security: HttpOnly, SameSite=Lax, MaxAge=7d, Secure nur bei HTTPS
+
+**Authentication & Authorization:**
+- [x] Bearer Token Auth (JWT mit act-Claim)
+- [x] Session Cookie Auth (Browser-Flow)
+- [x] Management Token Auth (Admin-Endpoints, timing-safe Vergleich)
+- [x] act-Enforcement: nur act:'human' darf Delegations erstellen und Sub-User registrieren
+- [x] Delegation No-Chaining (max 1 Level)
+
+**Cryptography:**
+- [x] PKCE S256 Challenge
+- [x] JWT Signatur, Issuer, Audience Prüfung
+- [x] ed25519 Challenge-Response (32 Bytes, 60s TTL, Single-Use)
+- [x] Timing-Safe Token-Vergleich (crypto.timingSafeEqual)
+- [x] Code Replay Protection (Code nur 1x tauschbar)
+
+**Input Validation & Rate Limiting:**
+- [x] Body Size Limit (100KB)
+- [x] String Length Limits (Email/Name 255, PublicKey 1000)
+- [x] Rate Limiting auf Auth-Endpoints (konfigurierbar, per-IP)
+- [x] ReDoS-sichere Regexes (ESLint-Regel enforced)
+
+**Bei neuen Endpoints prüfen:**
+1. Braucht der Endpoint Auth? Welche Art (Bearer, Session, Management Token)?
+2. Braucht der Endpoint CORS? (API: ja, Admin/Session: nein)
+3. Akzeptiert der Endpoint User-Input? → Input Validation + Body Limit
+4. Ist der Endpoint Brute-Force-gefährdet? → Rate Limiting
+5. Gibt der Endpoint Secrets zurück? → Cache-Control: no-store
