@@ -1,8 +1,10 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, setResponseHeader } from 'h3'
 import type { IdPConfig } from '../config.js'
 
 export function createDiscoveryHandler(config: IdPConfig) {
-  return defineEventHandler(() => {
+  return defineEventHandler((event) => {
+    // Override the default no-store with a cacheable policy for discovery metadata
+    setResponseHeader(event, 'Cache-Control', 'public, max-age=3600')
     const issuer = config.issuer
 
     return {
