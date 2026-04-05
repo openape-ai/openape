@@ -26,6 +26,8 @@ export {
   type SshKey,
   type SshKeyStore,
   type User,
+  type UserListOptions,
+  type UserListResult,
   type UserStore,
 } from './stores.js'
 export { handleTokenExchange, issueAssertion, type TokenExchangeParams, type TokenExchangeResult, type UserClaimsResolver } from './token.js'

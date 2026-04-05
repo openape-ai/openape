@@ -20,6 +20,14 @@ function getManagementToken(): string {
   return token
 }
 
+interface UserListResponse {
+  data: AdminUser[]
+  pagination: {
+    cursor: string | null
+    has_more: boolean
+  }
+}
+
 export const usersListCommand = defineCommand({
   meta: {
     name: 'list',
@@ -31,6 +39,18 @@ export const usersListCommand = defineCommand({
       description: 'Output as JSON',
       default: false,
     },
+    limit: {
+      type: 'string',
+      description: 'Max number of users to return (1-100, default 50)',
+    },
+    cursor: {
+      type: 'string',
+      description: 'Pagination cursor (email of last item from previous page)',
+    },
+    search: {
+      type: 'string',
+      description: 'Filter by email or name (case-insensitive)',
+    },
   },
   async run({ args }) {
     const idp = getIdpUrl()
@@ -39,22 +59,33 @@ export const usersListCommand = defineCommand({
     }
 
     const token = getManagementToken()
-    const users = await apiFetch<AdminUser[]>(`${idp}/api/admin/users`, { token })
+    const params = new URLSearchParams()
+    if (args.limit) params.set('limit', args.limit)
+    if (args.cursor) params.set('cursor', args.cursor)
+    if (args.search) params.set('search', args.search)
+    const qs = params.toString()
+    const url = qs ? `${idp}/api/admin/users?${qs}` : `${idp}/api/admin/users`
+
+    const result = await apiFetch<UserListResponse>(url, { token })
 
     if (args.json) {
-      console.log(JSON.stringify(users, null, 2))
+      console.log(JSON.stringify(result, null, 2))
       return
     }
 
-    if (users.length === 0) {
+    if (result.data.length === 0) {
       consola.info('No users found.')
       return
     }
 
-    for (const u of users) {
+    for (const u of result.data) {
       const owner = u.owner ? ` (agent of ${u.owner})` : ''
       const active = u.isActive ? '' : ' [inactive]'
       console.log(`${u.email}  ${u.name}${owner}${active}`)
+    }
+
+    if (result.pagination.has_more) {
+      consola.info(`More results available. Use --cursor="${result.pagination.cursor}" to see next page.`)
     }
   },
 })
