@@ -4,6 +4,8 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { users } from '../database/schema'
 import type * as schema from '../database/schema'
 
+const CACHE_TTL = 30_000 // 30 seconds
+
 function rowToUser(row: typeof users.$inferSelect): User {
   return {
     email: row.email,
@@ -16,7 +18,22 @@ function rowToUser(row: typeof users.$inferSelect): User {
   }
 }
 
+/**
+ * Drizzle user store with in-memory cache.
+ * User lookups are hot during auth flows (challenge + authenticate both look up the same user).
+ * Cache TTL is 30s — short enough to pick up changes, long enough to avoid redundant round-trips.
+ */
 export function createDrizzleUserStore(db: LibSQLDatabase<typeof schema>): UserStore {
+  const cache = new Map<string, { user: User, cachedAt: number }>()
+
+  function invalidate(email: string) {
+    cache.delete(email)
+  }
+
+  function invalidateAll() {
+    cache.clear()
+  }
+
   return {
     async create(user) {
       await db.insert(users).values({
@@ -37,13 +54,24 @@ export function createDrizzleUserStore(db: LibSQLDatabase<typeof schema>): UserS
           isActive: user.isActive,
         },
       })
+      invalidate(user.email)
       return user
     },
 
     async findByEmail(email) {
+      const cached = cache.get(email)
+      if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
+        return cached.user
+      }
+
       const row = await db.select().from(users).where(eq(users.email, email)).get()
-      if (!row) return null
-      return rowToUser(row)
+      if (!row) {
+        cache.delete(email)
+        return null
+      }
+      const user = rowToUser(row)
+      cache.set(email, { user, cachedAt: Date.now() })
+      return user
     },
 
     async list() {
@@ -67,11 +95,13 @@ export function createDrizzleUserStore(db: LibSQLDatabase<typeof schema>): UserS
       }
 
       const updated = await db.select().from(users).where(eq(users.email, email)).get()
+      invalidate(email)
       return rowToUser(updated!)
     },
 
     async delete(email) {
       await db.delete(users).where(eq(users.email, email))
+      invalidate(email)
     },
 
     async findByOwner(owner) {

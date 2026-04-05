@@ -13,24 +13,16 @@ import { createDrizzleUserStore } from '../stores/user-store'
 export default defineNitroPlugin(async (nitroApp) => {
   const config = useRuntimeConfig()
   const db = useDb()
-
-  // Auto-create tables on startup
   await ensureTables(db)
 
   const adminEmailsRaw = config.adminEmails as string
-  const adminEmails = adminEmailsRaw
-    .split(',')
-    .map(e => e.trim())
-    .filter(Boolean)
-
-  const managementToken = config.managementToken as string
-  const sessionSecret = config.sessionSecret as string
+  const adminEmails = adminEmailsRaw.split(',').map(e => e.trim()).filter(Boolean)
 
   const { app } = createIdPApp(
     {
       issuer: config.issuer as string,
-      managementToken: managementToken || undefined,
-      sessionSecret: sessionSecret || undefined,
+      managementToken: (config.managementToken as string) || undefined,
+      sessionSecret: (config.sessionSecret as string) || undefined,
       adminEmails: adminEmails.length > 0 ? adminEmails : undefined,
     },
     {
@@ -45,14 +37,9 @@ export default defineNitroPlugin(async (nitroApp) => {
     },
   )
 
-  // Mount the @openape/server h3 app layers before Nitro's own router.
-  // Nitro's h3App stack contains [middleware..., router]. We insert the IdP
-  // app's layers (including its router) just before the last item (Nitro's
-  // router) so IdP routes are matched before Nitro's 404 catch-all.
-  const nitroStack = nitroApp.h3App.stack
-  const nitroRouter = nitroStack.pop()!
+  const stack = nitroApp.h3App.stack
+  const lastIdx = stack.length - 1
   for (const layer of app.stack) {
-    nitroStack.push(layer)
+    stack.splice(lastIdx, 0, layer)
   }
-  nitroStack.push(nitroRouter)
 })
