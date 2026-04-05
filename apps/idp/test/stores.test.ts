@@ -488,16 +488,17 @@ describe('RefreshTokenStore', () => {
 
   it('listFamilies returns active families', async () => {
     const { familyId } = await store.create('list-test@example.com', 'client-1')
-    const families = await store.listFamilies('list-test@example.com')
-    expect(families.length).toBeGreaterThanOrEqual(1)
-    expect(families.some(f => f.familyId === familyId)).toBe(true)
+    const result = await store.listFamilies({ userId: 'list-test@example.com' })
+    expect(result.data.length).toBeGreaterThanOrEqual(1)
+    expect(result.data.some(f => f.familyId === familyId)).toBe(true)
+    expect(result.pagination).toBeDefined()
   })
 
   it('listFamilies excludes revoked families', async () => {
     const { familyId } = await store.create('list-revoked@example.com', 'client-1')
     await store.revokeFamily(familyId)
-    const families = await store.listFamilies('list-revoked@example.com')
-    expect(families.every(f => f.familyId !== familyId)).toBe(true)
+    const result = await store.listFamilies({ userId: 'list-revoked@example.com' })
+    expect(result.data.every(f => f.familyId !== familyId)).toBe(true)
   })
 
   it('consume of invalid token throws', async () => {

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { RefreshConsumeResult, RefreshTokenFamily, RefreshTokenResult, RefreshTokenStore } from '@openape/auth'
-import { and, eq, gt } from 'drizzle-orm'
+import type { RefreshConsumeResult, RefreshTokenListOptions, RefreshTokenListResult, RefreshTokenResult, RefreshTokenStore } from '@openape/auth'
+import { and, desc, eq, gt, lt } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { refreshTokenFamilies, refreshTokens } from '../database/schema'
 
@@ -114,18 +114,30 @@ export function createDrizzleRefreshTokenStore(): RefreshTokenStore {
       )
     },
 
-    async listFamilies(userId?: string): Promise<RefreshTokenFamily[]> {
+    async listFamilies(options?: RefreshTokenListOptions | string): Promise<RefreshTokenListResult> {
+      const opts: RefreshTokenListOptions = typeof options === 'string' ? { userId: options } : (options ?? {})
       const now = Date.now()
+      const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100)
+
       const conditions = [
         eq(refreshTokenFamilies.revoked, false),
         gt(refreshTokenFamilies.expiresAt, now),
       ]
-      if (userId) {
-        conditions.push(eq(refreshTokenFamilies.userId, userId))
+      if (opts.userId) {
+        conditions.push(eq(refreshTokenFamilies.userId, opts.userId))
       }
 
-      const rows = await db.select().from(refreshTokenFamilies).where(and(...conditions))
-      return rows.map(row => ({
+      if (opts.cursor) {
+        const cursorFamily = await db.select({ createdAt: refreshTokenFamilies.createdAt }).from(refreshTokenFamilies).where(eq(refreshTokenFamilies.familyId, opts.cursor)).get()
+        if (cursorFamily) {
+          conditions.push(lt(refreshTokenFamilies.createdAt, cursorFamily.createdAt))
+        }
+      }
+
+      const rows = await db.select().from(refreshTokenFamilies).where(and(...conditions)).orderBy(desc(refreshTokenFamilies.createdAt)).limit(limit + 1)
+
+      const hasMore = rows.length > limit
+      const data = rows.slice(0, limit).map(row => ({
         familyId: row.familyId,
         userId: row.userId,
         clientId: row.clientId,
@@ -134,6 +146,14 @@ export function createDrizzleRefreshTokenStore(): RefreshTokenStore {
         expiresAt: row.expiresAt,
         revoked: row.revoked,
       }))
+
+      return {
+        data,
+        pagination: {
+          cursor: data.length > 0 ? data.at(-1)!.familyId : null,
+          has_more: hasMore,
+        },
+      }
     },
   }
 }

@@ -107,13 +107,23 @@ describe('refresh token store', () => {
     await store.create('bob@example.com', 'sp1.example.com')
 
     const all = await store.listFamilies()
-    expect(all).toHaveLength(3)
+    expect(all.data).toHaveLength(3)
+    expect(all.pagination).toBeDefined()
 
-    const alice = await store.listFamilies('alice@example.com')
-    expect(alice).toHaveLength(2)
+    const alice = await store.listFamilies({ userId: 'alice@example.com' })
+    expect(alice.data).toHaveLength(2)
 
-    const bob = await store.listFamilies('bob@example.com')
-    expect(bob).toHaveLength(1)
+    const bob = await store.listFamilies({ userId: 'bob@example.com' })
+    expect(bob.data).toHaveLength(1)
+  })
+
+  it('listFamilies supports legacy string argument', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    await store.create('alice@example.com', 'sp1.example.com')
+
+    const result = await store.listFamilies('alice@example.com')
+    expect(result.data).toHaveLength(1)
+    expect(result.pagination).toBeDefined()
   })
 
   it('listFamilies excludes expired families', async () => {
@@ -121,8 +131,29 @@ describe('refresh token store', () => {
     await store.create('alice@example.com', 'sp.example.com', 1) // 1ms TTL
     await new Promise(r => setTimeout(r, 10))
 
-    const families = await store.listFamilies()
-    expect(families).toHaveLength(0)
+    const result = await store.listFamilies()
+    expect(result.data).toHaveLength(0)
+  })
+
+  it('listFamilies supports cursor pagination', async () => {
+    const store = new InMemoryRefreshTokenStore()
+    await store.create('alice@example.com', 'sp1.example.com')
+    await store.create('alice@example.com', 'sp2.example.com')
+    await store.create('alice@example.com', 'sp3.example.com')
+
+    const page1 = await store.listFamilies({ limit: 1 })
+    expect(page1.data).toHaveLength(1)
+    expect(page1.pagination.has_more).toBe(true)
+    expect(page1.pagination.cursor).toBeDefined()
+
+    const page2 = await store.listFamilies({ limit: 1, cursor: page1.pagination.cursor! })
+    expect(page2.data).toHaveLength(1)
+    expect(page2.pagination.has_more).toBe(true)
+    expect(page2.data[0].familyId).not.toBe(page1.data[0].familyId)
+
+    const page3 = await store.listFamilies({ limit: 1, cursor: page2.pagination.cursor! })
+    expect(page3.data).toHaveLength(1)
+    expect(page3.pagination.has_more).toBe(false)
   })
 })
 
