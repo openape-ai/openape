@@ -37,6 +37,9 @@ export default defineNitroPlugin(async (nitroApp) => {
     },
   )
 
+  // Insert IdP handlers before Nitro's router in the h3 stack.
+  // In dev mode this works via stack manipulation. For production builds,
+  // Nitro needs a different approach (server handler file).
   const stack = nitroApp.h3App.stack
   const lastIdx = stack.length - 1
   for (const layer of app.stack) {
