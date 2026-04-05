@@ -281,9 +281,11 @@ describe('admin + delegation-revoke commands', () => {
       await usersListCommand.run!({ args: { json: true } } as any)
 
       const output = logOutput.join('\n')
-      const users = JSON.parse(output)
-      expect(Array.isArray(users)).toBe(true)
-      expect(users.find((u: { email: string }) => u.email === 'alice@example.com')).toBeTruthy()
+      const result = JSON.parse(output)
+      expect(result).toHaveProperty('data')
+      expect(result).toHaveProperty('pagination')
+      expect(Array.isArray(result.data)).toBe(true)
+      expect(result.data.find((u: { email: string }) => u.email === 'alice@example.com')).toBeTruthy()
     })
 
     it('creates a user', async () => {
@@ -304,8 +306,8 @@ describe('admin + delegation-revoke commands', () => {
       await usersListCommand.run!({ args: { json: true } } as any)
 
       const output = logOutput.join('\n')
-      const users = JSON.parse(output)
-      expect(users.find((u: { email: string }) => u.email === 'dave@example.com')).toBeTruthy()
+      const result = JSON.parse(output)
+      expect(result.data.find((u: { email: string }) => u.email === 'dave@example.com')).toBeTruthy()
     })
 
     it('deletes a user', async () => {
@@ -323,8 +325,8 @@ describe('admin + delegation-revoke commands', () => {
       await usersListCommand.run!({ args: { json: true } } as any)
 
       const output = logOutput.join('\n')
-      const users = JSON.parse(output)
-      expect(users.find((u: { email: string }) => u.email === 'dave@example.com')).toBeUndefined()
+      const result = JSON.parse(output)
+      expect(result.data.find((u: { email: string }) => u.email === 'dave@example.com')).toBeUndefined()
     })
 
     it('human-readable list output', async () => {

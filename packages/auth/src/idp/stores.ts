@@ -287,10 +287,24 @@ export interface User {
   createdAt: number
 }
 
+export interface UserListOptions {
+  limit?: number // default 50, max 100
+  cursor?: string // email of last item from previous page
+  search?: string // filter by email or name (case-insensitive contains)
+}
+
+export interface UserListResult {
+  data: User[]
+  pagination: {
+    cursor: string | null
+    has_more: boolean
+  }
+}
+
 export interface UserStore {
   create: (user: User) => Promise<User>
   findByEmail: (email: string) => Promise<User | null>
-  list: () => Promise<User[]>
+  list: (options?: UserListOptions) => Promise<UserListResult>
   update: (email: string, data: Partial<Omit<User, 'email' | 'createdAt'>>) => Promise<User>
   delete: (email: string) => Promise<void>
   findByOwner: (owner: string) => Promise<User[]>
@@ -336,8 +350,32 @@ export class InMemoryUserStore implements UserStore {
     return this.users.get(email) ?? null
   }
 
-  async list(): Promise<User[]> {
-    return [...this.users.values()].toSorted((a, b) => b.createdAt - a.createdAt)
+  async list(options?: UserListOptions): Promise<UserListResult> {
+    let users = [...this.users.values()].toSorted((a, b) => b.createdAt - a.createdAt)
+
+    // Search filter
+    if (options?.search) {
+      const q = options.search.toLowerCase()
+      users = users.filter(u => u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q))
+    }
+
+    // Cursor-based pagination (cursor = email)
+    if (options?.cursor) {
+      const idx = users.findIndex(u => u.email === options.cursor)
+      if (idx >= 0) users = users.slice(idx + 1)
+    }
+
+    const limit = Math.min(Math.max(options?.limit ?? 50, 1), 100)
+    const hasMore = users.length > limit
+    const data = users.slice(0, limit)
+
+    return {
+      data,
+      pagination: {
+        cursor: data.length > 0 ? data.at(-1)!.email : null,
+        has_more: hasMore,
+      },
+    }
   }
 
   async update(email: string, data: Partial<Omit<User, 'email' | 'createdAt'>>): Promise<User> {

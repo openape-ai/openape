@@ -1,5 +1,5 @@
-import type { User, UserStore } from '@openape/auth'
-import { desc, eq } from 'drizzle-orm'
+import type { User, UserListOptions, UserListResult, UserStore } from '@openape/auth'
+import { and, desc, eq, like, lt, or } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { users } from '../database/schema'
 import type * as schema from '../database/schema'
@@ -74,9 +74,39 @@ export function createDrizzleUserStore(db: LibSQLDatabase<typeof schema>): UserS
       return user
     },
 
-    async list() {
-      const rows = await db.select().from(users).orderBy(desc(users.createdAt))
-      return rows.map(rowToUser)
+    async list(options?: UserListOptions): Promise<UserListResult> {
+      const limit = Math.min(Math.max(options?.limit ?? 50, 1), 100)
+      const conditions = []
+
+      // Search
+      if (options?.search) {
+        const q = `%${options.search}%`
+        conditions.push(or(like(users.email, q), like(users.name, q))!)
+      }
+
+      // Cursor
+      if (options?.cursor) {
+        const cursorUser = await db.select().from(users).where(eq(users.email, options.cursor)).get()
+        if (cursorUser) {
+          conditions.push(lt(users.createdAt, cursorUser.createdAt))
+        }
+      }
+
+      const where = conditions.length > 0 ? and(...conditions) : undefined
+      const rows = where
+        ? await db.select().from(users).where(where).orderBy(desc(users.createdAt)).limit(limit + 1)
+        : await db.select().from(users).orderBy(desc(users.createdAt)).limit(limit + 1)
+
+      const hasMore = rows.length > limit
+      const data = rows.slice(0, limit).map(rowToUser)
+
+      return {
+        data,
+        pagination: {
+          cursor: data.length > 0 ? data.at(-1)!.email : null,
+          has_more: hasMore,
+        },
+      }
     },
 
     async update(email, data) {

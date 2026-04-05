@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
-import { defineEventHandler, getRequestHeader, getRouterParam, readBody } from 'h3'
+import { defineEventHandler, getQuery, getRequestHeader, getRouterParam, readBody } from 'h3'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { createProblemError } from '../utils/problem.js'
 import { sshEd25519ToKeyObject } from '../utils/ed25519.js'
@@ -38,8 +38,16 @@ export function hasManagementToken(event: H3Event, config: IdPConfig): boolean {
 export function createListUsersHandler(stores: IdPStores, config: IdPConfig) {
   return defineEventHandler(async (event) => {
     requireManagementToken(event, config)
-    const users = await stores.userStore.list()
-    return users.map(u => ({ email: u.email, name: u.name, isActive: u.isActive, owner: u.owner, createdAt: u.createdAt }))
+    const query = getQuery(event)
+    const result = await stores.userStore.list({
+      limit: query.limit ? Number(query.limit) : undefined,
+      cursor: query.cursor ? String(query.cursor) : undefined,
+      search: query.search ? String(query.search) : undefined,
+    })
+    return {
+      data: result.data.map(u => ({ email: u.email, name: u.name, isActive: u.isActive, owner: u.owner, createdAt: u.createdAt })),
+      pagination: result.pagination,
+    }
   })
 }
 

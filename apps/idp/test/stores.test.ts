@@ -68,9 +68,11 @@ describe('UserStore', () => {
   })
 
   it('list returns users sorted by createdAt desc', async () => {
-    const users = await store.list()
-    expect(users.length).toBeGreaterThanOrEqual(2)
-    expect(users[0].createdAt).toBeGreaterThanOrEqual(users[1].createdAt)
+    const result = await store.list()
+    expect(result.data.length).toBeGreaterThanOrEqual(2)
+    expect(result.data[0].createdAt).toBeGreaterThanOrEqual(result.data[1].createdAt)
+    expect(result.pagination).toBeDefined()
+    expect(typeof result.pagination.has_more).toBe('boolean')
   })
 
   it('update changes user fields', async () => {
