@@ -21,6 +21,8 @@ export {
   type KeyStore,
   type RefreshConsumeResult,
   type RefreshTokenFamily,
+  type RefreshTokenListOptions,
+  type RefreshTokenListResult,
   type RefreshTokenResult,
   type RefreshTokenStore,
   type SshKey,

@@ -75,13 +75,27 @@ export interface RefreshConsumeResult {
   familyId: string
 }
 
+export interface RefreshTokenListOptions {
+  userId?: string
+  limit?: number
+  cursor?: string
+}
+
+export interface RefreshTokenListResult {
+  data: RefreshTokenFamily[]
+  pagination: {
+    cursor: string | null
+    has_more: boolean
+  }
+}
+
 export interface RefreshTokenStore {
   create: (userId: string, clientId: string, ttlMs?: number) => Promise<RefreshTokenResult>
   consume: (token: string) => Promise<RefreshConsumeResult>
   revokeByToken: (token: string) => Promise<void>
   revokeFamily: (familyId: string) => Promise<void>
   revokeByUser: (userId: string) => Promise<void>
-  listFamilies: (userId?: string) => Promise<RefreshTokenFamily[]>
+  listFamilies: (options?: RefreshTokenListOptions | string) => Promise<RefreshTokenListResult>
 }
 
 // In-memory implementations
@@ -263,15 +277,37 @@ export class InMemoryRefreshTokenStore implements RefreshTokenStore {
     }
   }
 
-  async listFamilies(userId?: string): Promise<RefreshTokenFamily[]> {
+  async listFamilies(options?: RefreshTokenListOptions | string): Promise<RefreshTokenListResult> {
+    // Support legacy string argument (userId)
+    const opts: RefreshTokenListOptions = typeof options === 'string' ? { userId: options } : (options ?? {})
     const now = Date.now()
-    const result: RefreshTokenFamily[] = []
+    let result: RefreshTokenFamily[] = []
     for (const family of this.families.values()) {
       if (family.revoked || family.expiresAt < now) continue
-      if (userId && family.userId !== userId) continue
+      if (opts.userId && family.userId !== opts.userId) continue
       result.push({ ...family })
     }
-    return result
+
+    // Sort by createdAt DESC
+    result.sort((a, b) => b.createdAt - a.createdAt)
+
+    // Cursor pagination (cursor = familyId)
+    if (opts.cursor) {
+      const idx = result.findIndex(f => f.familyId === opts.cursor)
+      if (idx >= 0) result = result.slice(idx + 1)
+    }
+
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100)
+    const hasMore = result.length > limit
+    const data = result.slice(0, limit)
+
+    return {
+      data,
+      pagination: {
+        cursor: data.length > 0 ? data.at(-1)!.familyId : null,
+        has_more: hasMore,
+      },
+    }
   }
 }
 
