@@ -307,12 +307,15 @@ describe('idp server', () => {
         headers: { Authorization: `Bearer ${MGMT_TOKEN}` },
       })
       expect(res.status).toBe(200)
-      const data = await res.json()
-      const emails = data.map((u: { email: string }) => u.email)
+      const body = await res.json()
+      expect(body).toHaveProperty('data')
+      expect(body).toHaveProperty('pagination')
+      expect(Array.isArray(body.data)).toBe(true)
+      const emails = body.data.map((u: { email: string }) => u.email)
       expect(emails).toContain('listuser1@example.com')
       expect(emails).toContain('listuser2@example.com')
       // Verify shape: only projected fields returned
-      for (const u of data) {
+      for (const u of body.data) {
         expect(u).toHaveProperty('email')
         expect(u).toHaveProperty('name')
         expect(u).toHaveProperty('isActive')
