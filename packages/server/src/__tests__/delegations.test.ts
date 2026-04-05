@@ -264,10 +264,12 @@ describe('delegation endpoints', () => {
       })
 
       expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(Array.isArray(data)).toBe(true)
-      expect(data.length).toBeGreaterThan(0)
-      expect(data.every((g: { request: { delegator: string } }) => g.request.delegator === 'alice@example.com')).toBe(true)
+      const body = await res.json()
+      expect(body.data).toBeDefined()
+      expect(body.pagination).toBeDefined()
+      expect(Array.isArray(body.data)).toBe(true)
+      expect(body.data.length).toBeGreaterThan(0)
+      expect(body.data.every((g: { request: { delegator: string } }) => g.request.delegator === 'alice@example.com')).toBe(true)
     })
 
     it('Bob lists delegations as delegate', async () => {
@@ -278,10 +280,12 @@ describe('delegation endpoints', () => {
       })
 
       expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(Array.isArray(data)).toBe(true)
-      expect(data.length).toBeGreaterThan(0)
-      expect(data.every((g: { request: { delegate: string } }) => g.request.delegate === 'bob@example.com')).toBe(true)
+      const body = await res.json()
+      expect(body.data).toBeDefined()
+      expect(body.pagination).toBeDefined()
+      expect(Array.isArray(body.data)).toBe(true)
+      expect(body.data.length).toBeGreaterThan(0)
+      expect(body.data.every((g: { request: { delegate: string } }) => g.request.delegate === 'bob@example.com')).toBe(true)
     })
 
     it('lists all delegations without role filter', async () => {
@@ -292,9 +296,11 @@ describe('delegation endpoints', () => {
       })
 
       expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(Array.isArray(data)).toBe(true)
-      expect(data.length).toBeGreaterThan(0)
+      const body = await res.json()
+      expect(body.data).toBeDefined()
+      expect(body.pagination).toBeDefined()
+      expect(Array.isArray(body.data)).toBe(true)
+      expect(body.data.length).toBeGreaterThan(0)
     })
 
     it('rejects without bearer token', async () => {
@@ -309,10 +315,44 @@ describe('delegation endpoints', () => {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      const data = await res.json()
+      const body = await res.json()
+      const data = body.data
       for (let i = 1; i < data.length; i++) {
         expect(data[i - 1].created_at).toBeGreaterThanOrEqual(data[i].created_at)
       }
+    })
+
+    it('supports cursor pagination', async () => {
+      const token = await getAuthToken('alice@example.com', aliceKey.privateKey)
+
+      // Get first page with limit=1
+      const res1 = await api('/api/delegations?role=delegator&limit=1', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const page1 = await res1.json()
+      expect(page1.data).toHaveLength(1)
+      expect(page1.pagination.has_more).toBe(true)
+      expect(page1.pagination.cursor).toBeDefined()
+
+      // Get second page using cursor
+      const res2 = await api(`/api/delegations?role=delegator&limit=1&cursor=${page1.pagination.cursor}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const page2 = await res2.json()
+      expect(page2.data.length).toBeGreaterThanOrEqual(1)
+      // Pages should not overlap
+      expect(page2.data[0].id).not.toBe(page1.data[0].id)
+    })
+
+    it('supports search filter', async () => {
+      const token = await getAuthToken('alice@example.com', aliceKey.privateKey)
+
+      const res = await api('/api/delegations?search=list-test.example.com', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const body = await res.json()
+      expect(body.data.length).toBeGreaterThan(0)
+      expect(body.data.every((g: { request: { audience: string } }) => g.request.audience.includes('list-test.example.com'))).toBe(true)
     })
   })
 

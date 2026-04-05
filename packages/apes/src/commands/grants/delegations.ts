@@ -14,6 +14,11 @@ interface Delegation {
   expires_at?: string
 }
 
+interface PaginatedDelegations {
+  data: Delegation[]
+  pagination: { cursor: string | null, has_more: boolean }
+}
+
 export const delegationsCommand = defineCommand({
   meta: {
     name: 'delegations',
@@ -29,7 +34,10 @@ export const delegationsCommand = defineCommand({
   async run({ args }) {
     const idp = getIdpUrl()!
     const delegationsUrl = await getDelegationsEndpoint(idp)
-    const delegations = await apiFetch<Delegation[]>(delegationsUrl)
+    const response = await apiFetch<PaginatedDelegations>(delegationsUrl)
+
+    // Support both paginated and legacy plain-array responses
+    const delegations = Array.isArray(response) ? response : response.data
 
     if (args.json) {
       console.log(JSON.stringify(delegations, null, 2))

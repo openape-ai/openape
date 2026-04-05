@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { RefreshConsumeResult, RefreshTokenFamily, RefreshTokenResult, RefreshTokenStore } from '@openape/auth'
+import type { RefreshConsumeResult, RefreshTokenFamily, RefreshTokenListOptions, RefreshTokenListResult, RefreshTokenResult, RefreshTokenStore } from '@openape/auth'
 import { useIdpStorage } from './storage'
 
 function hashToken(token: string): string {
@@ -144,19 +144,39 @@ export function createRefreshTokenStore(): RefreshTokenStore {
       }
     },
 
-    async listFamilies(userId?: string): Promise<RefreshTokenFamily[]> {
+    async listFamilies(options?: RefreshTokenListOptions | string): Promise<RefreshTokenListResult> {
+      const opts: RefreshTokenListOptions = typeof options === 'string' ? { userId: options } : (options ?? {})
       const keys = await storage.getKeys('refresh-families:')
       const now = Date.now()
-      const result: RefreshTokenFamily[] = []
+      let result: RefreshTokenFamily[] = []
 
       for (const key of keys) {
         const family = await storage.getItem<StoredFamily>(key)
         if (!family || family.revoked || family.expiresAt < now) continue
-        if (userId && family.userId !== userId) continue
+        if (opts.userId && family.userId !== opts.userId) continue
         result.push(family)
       }
 
-      return result
+      // Sort by createdAt DESC
+      result.sort((a, b) => b.createdAt - a.createdAt)
+
+      // Cursor pagination (cursor = familyId)
+      if (opts.cursor) {
+        const idx = result.findIndex(f => f.familyId === opts.cursor)
+        if (idx >= 0) result = result.slice(idx + 1)
+      }
+
+      const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100)
+      const hasMore = result.length > limit
+      const data = result.slice(0, limit)
+
+      return {
+        data,
+        pagination: {
+          cursor: data.length > 0 ? data.at(-1)!.familyId : null,
+          has_more: hasMore,
+        },
+      }
     },
   }
 }
