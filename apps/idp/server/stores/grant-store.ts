@@ -1,6 +1,6 @@
 import type { OpenApeGrant, OpenApeGrantRequest, PaginatedResponse } from '@openape/core'
 import type { GrantListParams, GrantStore } from '@openape/grants'
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { grants } from '../database/schema'
 import type * as schema from '../database/schema'
@@ -119,8 +119,15 @@ export function createDrizzleGrantStore(db: LibSQLDatabase<typeof schema>): Gran
 
       if (params?.status)
         conditions.push(eq(grants.status, params.status))
-      if (params?.requester)
-        conditions.push(eq(grants.requester, params.requester))
+      if (params?.requester) {
+        const requesters = Array.isArray(params.requester) ? params.requester : [params.requester]
+        if (requesters.length === 1) {
+          conditions.push(eq(grants.requester, requesters[0]!))
+        }
+        else if (requesters.length > 1) {
+          conditions.push(inArray(grants.requester, requesters))
+        }
+      }
       if (params?.cursor) {
         const cursorTs = Number(params.cursor)
         conditions.push(lt(grants.createdAt, cursorTs))

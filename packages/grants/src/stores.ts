@@ -2,7 +2,7 @@ import type { GrantStatus, OpenApeGrant, PaginatedResponse, PaginationParams } f
 
 export interface GrantListParams extends PaginationParams {
   status?: GrantStatus
-  requester?: string
+  requester?: string | string[]
   role?: string
 }
 
@@ -92,7 +92,8 @@ export class InMemoryGrantStore implements GrantStore {
       grants = grants.filter(g => g.status === params.status)
     }
     if (params?.requester) {
-      grants = grants.filter(g => g.request.requester === params.requester)
+      const requesters = Array.isArray(params.requester) ? new Set(params.requester) : new Set([params.requester])
+      grants = grants.filter(g => requesters.has(g.request.requester))
     }
 
     // Sort by created_at DESC

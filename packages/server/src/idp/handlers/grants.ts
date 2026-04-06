@@ -39,45 +39,16 @@ export function createListGrantsHandler(stores: IdPStores, config: IdPConfig) {
     const requester = query.requester ? String(query.requester) : undefined
 
     if (requester) {
-      return await stores.grantStore.listGrants({ limit, cursor, status, requester })
+      return stores.grantStore.listGrants({ limit, cursor, status, requester })
     }
 
     const identity = requireBearerIdentity(bearerPayload)
 
-    // List grants where the user is the requester, or owned agents are requesters
+    // Get self + owned agents → single IN query
     const ownedUsers = await stores.userStore.findByOwner(identity)
-    const agentEmails = new Set(ownedUsers.map(u => u.email))
+    const requesters = [identity, ...ownedUsers.map(u => u.email)]
 
-    const allByRequester = await stores.grantStore.findByRequester(identity)
-    const agentGrants = await Promise.all(
-      Array.from(agentEmails, email => stores.grantStore.findByRequester(email)),
-    )
-    const allGrants = [...allByRequester, ...agentGrants.flat()]
-
-    let filtered = allGrants
-    if (status) {
-      filtered = filtered.filter(g => g.status === status)
-    }
-
-    // Sort by created_at DESC
-    filtered.sort((a, b) => b.created_at - a.created_at)
-
-    if (cursor) {
-      const cursorTs = Number(cursor)
-      const idx = filtered.findIndex(g => g.created_at < cursorTs)
-      filtered = idx >= 0 ? filtered.slice(idx) : []
-    }
-
-    const page = filtered.slice(0, limit)
-    const hasMore = filtered.length > limit
-
-    return {
-      data: page,
-      pagination: {
-        cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
-        has_more: hasMore,
-      },
-    }
+    return stores.grantStore.listGrants({ limit, cursor, status, requester: requesters })
   })
 }
 
