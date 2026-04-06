@@ -90,6 +90,16 @@ export async function ensureTables(db: LibSQLDatabase<typeof schema>) {
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_refresh_families_user_id ON refresh_token_families(user_id)`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_refresh_families_client_id ON refresh_token_families(client_id)`)
 
+  await db.run(sql`CREATE TABLE IF NOT EXISTS registration_urls (
+    token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_by TEXT NOT NULL,
+    consumed INTEGER NOT NULL DEFAULT 0
+  )`)
+
   await db.run(sql`CREATE TABLE IF NOT EXISTS refresh_tokens (
     token_hash TEXT PRIMARY KEY,
     family_id TEXT NOT NULL,

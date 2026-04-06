@@ -1,10 +1,10 @@
-import { requireManagementToken } from '../../../utils/admin-auth'
+import { requireAdmin } from '../../../utils/admin-auth'
 
 export default defineEventHandler(async (event) => {
   const stores = await getStores()
   const config = getIdPConfig()
 
-  requireManagementToken(event, config)
+  await requireAdmin(event, config)
 
   const body = await readBody<{ email: string, name: string, password?: string }>(event)
   if (!body.email || !body.name) {

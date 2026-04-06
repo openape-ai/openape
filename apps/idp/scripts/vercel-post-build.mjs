@@ -13,7 +13,7 @@ if (existsSync(CONFIG)) {
   const c = JSON.parse(readFileSync(CONFIG, 'utf8'))
   const idx = c.routes.findIndex(r => r.src === '/(.*)')
   if (idx >= 0) {
-    c.routes.splice(idx, 0, { src: '/(login|grant-approval|enroll)', dest: '/index.html' })
+    c.routes.splice(idx, 0, { src: '/(login|grant-approval|enroll|register|account|admin|grants)', dest: '/index.html' })
     writeFileSync(CONFIG, JSON.stringify(c, null, 2))
     console.log('[post-build] Added SPA rewrites')
   }

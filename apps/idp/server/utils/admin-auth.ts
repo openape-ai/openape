@@ -31,3 +31,30 @@ export function hasManagementToken(event: H3Event, config: IdPConfig): boolean {
   const token = authHeader.replace(/^Bearer\s+/i, '')
   return safeCompare(token, config.managementToken)
 }
+
+/**
+ * Require admin access: either management token or session-based admin user.
+ * Returns the admin email if session-based, or 'management' if management token.
+ */
+export async function requireAdmin(event: H3Event, config: IdPConfig): Promise<string> {
+  // First try management token
+  if (hasManagementToken(event, config)) {
+    return 'management'
+  }
+
+  // Fall back to session-based admin auth
+  const { useSession } = await import('h3')
+  const { getSessionConfig } = await import('./session')
+  const session = await useSession(event, getSessionConfig(config))
+  const userId = session.data.userId as string | undefined
+  if (!userId) {
+    throw createProblemError({ status: 401, title: 'Authentication required' })
+  }
+
+  const adminEmails = config.adminEmails ?? []
+  if (!adminEmails.includes(userId)) {
+    throw createProblemError({ status: 403, title: 'Admin access required' })
+  }
+
+  return userId
+}

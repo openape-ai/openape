@@ -10,6 +10,10 @@ const router = createRouter({
     { path: '/login', component: () => import('./pages/LoginPage.vue') },
     { path: '/grant-approval', component: () => import('./pages/GrantApprovalPage.vue') },
     { path: '/enroll', component: () => import('./pages/EnrollPage.vue') },
+    { path: '/register', component: () => import('./pages/RegisterPage.vue') },
+    { path: '/account', component: () => import('./pages/AccountPage.vue') },
+    { path: '/admin', component: () => import('./pages/AdminPage.vue') },
+    { path: '/grants', component: () => import('./pages/GrantsPage.vue') },
     { path: '/', component: () => import('./pages/HomePage.vue') },
   ],
 })

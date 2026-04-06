@@ -24,12 +24,33 @@ fetchUser()
         <p class="text-sm text-(--ui-text-muted)">
           Signed in as <span class="font-mono font-semibold">{{ user.email }}</span>
         </p>
-        <UButton
-          color="neutral"
-          variant="outline"
-          label="Sign out"
-          @click="logout"
-        />
+        <div class="flex flex-col gap-2">
+          <UButton
+            color="primary"
+            variant="soft"
+            label="Grants"
+            @click="router.push('/grants')"
+          />
+          <UButton
+            color="neutral"
+            variant="soft"
+            label="Account"
+            @click="router.push('/account')"
+          />
+          <UButton
+            v-if="user.isAdmin"
+            color="neutral"
+            variant="soft"
+            label="Admin"
+            @click="router.push('/admin')"
+          />
+          <UButton
+            color="neutral"
+            variant="outline"
+            label="Sign out"
+            @click="logout"
+          />
+        </div>
       </div>
 
       <div v-else class="text-center">
