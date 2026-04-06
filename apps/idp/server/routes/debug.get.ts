@@ -1,7 +1,7 @@
 export default defineEventHandler(async () => {
   try {
-    const config = useIdPConfig()
-    const stores = useIdPStores()
+    const config = getIdPConfig()
+    const stores = await getStores()
     return {
       ok: true,
       config: { issuer: config.issuer, hasMgmt: !!config.managementToken },

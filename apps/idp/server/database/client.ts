@@ -1,6 +1,6 @@
 // Use HTTP transport for Vercel compatibility (no native binary needed)
 import { createClient } from '@libsql/client/http'
-import { drizzle } from 'drizzle-orm/libsql'
+import { drizzle } from 'drizzle-orm/libsql/http'
 import * as schema from './schema'
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
