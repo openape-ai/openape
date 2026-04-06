@@ -1,65 +1,136 @@
 <script setup lang="ts">
-import { useIdpAuth } from '@openape/vue-components'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const { user, fetchUser, logout } = useIdpAuth()
-fetchUser()
+const user = ref<{ email: string } | null>(null)
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.email) user.value = data
+    }
+  }
+  catch {}
+  loading.value = false
+})
+
+async function handleLogout() {
+  loading.value = true
+  await fetch('/api/session/logout', { method: 'POST', credentials: 'include' })
+  user.value = null
+  loading.value = false
+  router.push('/login')
+}
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-md">
-      <template #header>
-        <h1 class="text-3xl font-bold text-center">
-          OpenApe IdP
-        </h1>
-      </template>
-
-      <p class="text-center text-(--ui-text-muted) mb-6">
-        Identity Provider for the DDISA protocol.
-      </p>
-
-      <div v-if="user" class="space-y-3 text-center">
-        <p class="text-sm text-(--ui-text-muted)">
-          Signed in as <span class="font-mono font-semibold">{{ user.email }}</span>
-        </p>
-        <div class="flex flex-col gap-2">
+    <!-- Logged in -->
+    <UCard v-if="user" class="w-full max-w-md">
+      <div class="flex flex-col items-center gap-4 py-4">
+        <span class="flex items-center gap-2 text-lg font-bold">
+          <span class="text-2xl">🦍</span>
+          <span>OpenApe</span>
+        </span>
+        <div class="text-center">
+          <p class="text-sm text-gray-400">
+            Signed in as
+          </p>
+          <p class="text-white font-medium mt-1">
+            {{ user.email }}
+          </p>
+        </div>
+        <div class="w-full space-y-2">
           <UButton
+            to="/account"
             color="primary"
-            variant="soft"
-            label="Grants"
-            @click="router.push('/grants')"
-          />
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-key-round"
+          >
+            Manage Keys
+          </UButton>
           <UButton
-            color="neutral"
-            variant="soft"
-            label="Account"
-            @click="router.push('/account')"
-          />
+            to="/grants"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-shield-check"
+          >
+            Grants
+          </UButton>
           <UButton
-            v-if="user.isAdmin"
-            color="neutral"
-            variant="soft"
-            label="Admin"
-            @click="router.push('/admin')"
-          />
+            to="/admin"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-settings"
+          >
+            Admin
+          </UButton>
           <UButton
             color="neutral"
             variant="outline"
-            label="Sign out"
-            @click="logout"
-          />
+            size="lg"
+            block
+            icon="i-lucide-log-out"
+            :loading="loading"
+            @click="handleLogout"
+          >
+            Sign out
+          </UButton>
         </div>
       </div>
-
-      <div v-else class="text-center">
-        <UButton
-          color="primary"
-          label="Sign in"
-          @click="router.push('/login')"
-        />
-      </div>
     </UCard>
+
+    <!-- Not logged in -->
+    <div v-else-if="!loading" class="w-full max-w-md flex flex-col items-center text-center">
+      <div class="text-6xl mb-6">
+        🦍
+      </div>
+
+      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        One login.<br>
+        <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
+      </h1>
+
+      <p class="text-lg text-gray-400 mb-8">
+        Free identity provider for the open web.
+      </p>
+
+      <div class="w-full space-y-3">
+        <UButton
+          to="/login"
+          color="primary"
+          size="xl"
+          block
+          icon="i-lucide-fingerprint"
+        >
+          Sign in
+        </UButton>
+
+        <UButton
+          to="/register"
+          color="neutral"
+          variant="outline"
+          size="xl"
+          block
+          icon="i-lucide-user-plus"
+        >
+          Create account
+        </UButton>
+      </div>
+
+      <p class="mt-8 text-sm text-gray-500">
+        Powered by <a href="https://openape.at" class="text-gray-400 hover:text-white transition-colors">OpenApe</a>
+      </p>
+    </div>
   </div>
 </template>
