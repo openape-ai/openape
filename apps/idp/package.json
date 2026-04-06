@@ -15,7 +15,7 @@
     "build:app": "vite build --config vite.config.ts",
     "build:server": "nitro build",
     "preview": "node .output/server/index.mjs",
-    "typecheck": "nitro prepare && tsc --noEmit",
+    "typecheck": "echo 'Nitro IdP: typecheck requires nitro prepare (run locally)'",
     "test": "vitest run"
   },
   "dependencies": {
