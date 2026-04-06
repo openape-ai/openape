@@ -18,3 +18,7 @@ modules/*/src/runtime/**/*.d.ts
 modules/*/src/runtime/**/*.d.vue.ts
 modules/*/src/runtime/**/*.vue.d.ts
 .DS_Store
+
+# unplugin auto-generated type declarations
+auto-imports.d.ts
+components.d.ts
