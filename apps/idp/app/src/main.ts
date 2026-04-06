@@ -16,5 +16,10 @@ const router = createRouter({
 
 const app = createApp(App)
 app.use(router)
-app.use(ui)
+app.use(ui, {
+  colors: {
+    primary: 'orange',
+    neutral: 'zinc',
+  },
+})
 app.mount('#app')
