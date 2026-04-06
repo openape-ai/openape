@@ -4,7 +4,17 @@ import ui from '@nuxt/ui/vite'
 
 export default defineConfig({
   root: 'app',
-  plugins: [vue(), ui()],
+  plugins: [
+    vue(),
+    ui({
+      ui: {
+        colors: {
+          primary: 'orange',
+          neutral: 'zinc',
+        },
+      },
+    }),
+  ],
   build: {
     outDir: '../public',
     emptyOutDir: true,
