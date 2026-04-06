@@ -103,6 +103,18 @@ export const refreshTokenFamilies = sqliteTable('refresh_token_families', {
   index('idx_refresh_families_client_id').on(table.clientId),
 ])
 
+// --- Registration URLs ---
+
+export const registrationUrls = sqliteTable('registration_urls', {
+  token: text('token').primaryKey(),
+  email: text('email').notNull(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  createdBy: text('created_by').notNull(),
+  consumed: integer('consumed', { mode: 'boolean' }).notNull().default(false),
+})
+
 export const refreshTokens = sqliteTable('refresh_tokens', {
   tokenHash: text('token_hash').primaryKey(),
   familyId: text('family_id').notNull(),
