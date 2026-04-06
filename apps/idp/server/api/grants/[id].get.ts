@@ -1,5 +1,5 @@
 import { createGetGrantHandler } from '@openape/server/handlers'
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   return createGetGrantHandler(useIdPStores())(event)
 })
