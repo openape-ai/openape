@@ -1,4 +1,5 @@
 {
-  "buildCommand": "NITRO_PRESET=vercel nitro build",
+  "buildCommand": "pnpm turbo run build --filter=@openape/server --filter=@openape/auth --filter=@openape/core --filter=@openape/grants && cd apps/idp && NITRO_PRESET=vercel npx nitropack build",
+  "installCommand": "pnpm install --frozen-lockfile",
   "framework": null
 }
