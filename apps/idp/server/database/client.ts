@@ -1,4 +1,5 @@
-import { createClient } from '@libsql/client'
+// Use HTTP transport for Vercel compatibility (no native binary needed)
+import { createClient } from '@libsql/client/http'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from './schema'
 
