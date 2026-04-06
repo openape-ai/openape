@@ -141,9 +141,6 @@ importers:
       '@openape/grants':
         specifier: workspace:*
         version: link:../../packages/grants
-      '@openape/server':
-        specifier: workspace:*
-        version: link:../../packages/server
       '@openape/vue-components':
         specifier: workspace:*
         version: link:../../packages/vue-components
