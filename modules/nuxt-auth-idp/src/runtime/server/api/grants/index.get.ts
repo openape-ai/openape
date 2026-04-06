@@ -1,5 +1,5 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
-import { defineEventHandler, getQuery } from 'h3'
+import { createError, defineEventHandler, getQuery } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -27,24 +27,27 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    return await grantStore.listGrants({ limit, cursor, status: status ?? 'pending' })
+    throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
   const email = session.data.userId as string
 
-  // All users (including admins) only see grants from their own agents
+  // Collect self + all owned/approved agent emails for a single IN query
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const agentEmails = new Set([
-    ...ownedAgents.map(a => a.email),
-    ...approvedAgents.map(a => a.email),
-  ])
+  const allRequesters = [
+    email,
+    ...new Set([
+      ...ownedAgents.map(a => a.email),
+      ...approvedAgents.map(a => a.email),
+    ]),
+  ]
 
-  const allGrants = await grantStore.findAll()
-  const owned = allGrants.filter((grant: OpenApeGrant) => {
-    if (grant.request.requester === email) return true
-    if (agentEmails.has(grant.request.requester)) return true
-    return false
+  // Single DB query with requester IN (...) — no findAll() needed
+  const sectionLimit = section ? 1000 : limit
+  const { data: owned } = await grantStore.listGrants({
+    requester: allRequesters,
+    limit: sectionLimit,
   })
 
   // section=active → all pending + approved timed/always (no pagination)
