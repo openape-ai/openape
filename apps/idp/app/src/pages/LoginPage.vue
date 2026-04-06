@@ -1,85 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useIdpAuth, useKeyLogin } from '@openape/vue-components'
+import { useKeyLogin } from '@openape/vue-components'
 
 const route = useRoute()
 const router = useRouter()
-const { fetchUser } = useIdpAuth()
 const { loginWithKey, loading: keyLoading, error: keyError } = useKeyLogin()
 
-const email = ref((route.query.login_hint as string) ?? '')
-const error = ref((route.query.error as string) ?? '')
-const loading = ref(false)
-const federationProviders = ref<Array<{ id: string, name: string }>>([])
-const showKeyMode = ref(false)
-const privateKey = ref('')
+const loginHint = (route.query.login_hint as string) || ''
+const returnTo = (route.query.returnTo as string) || ''
+const email = ref(loginHint)
+const error = ref('')
+const keyMode = ref(false)
+const privateKeyPem = ref('')
 
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/federation/providers', { credentials: 'include' })
-    if (res.ok) {
-      federationProviders.value = await res.json()
-    }
-  }
-  catch {
-  }
-})
-
-async function handleLogin() {
-  error.value = ''
-  loading.value = true
-  try {
-    const challengeRes = await fetch('/api/auth/challenge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: email.value || undefined }),
-      credentials: 'include',
-    })
-    if (!challengeRes.ok) {
-      const err = await challengeRes.json().catch(() => ({}))
-      throw new Error((err as Record<string, string>).title || 'Failed to get challenge')
-    }
-
-    const { challenge } = await challengeRes.json()
-    const loginRes = await fetch('/api/session/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: email.value, challenge }),
-      credentials: 'include',
-    })
-    if (!loginRes.ok) {
-      const err = await loginRes.json().catch(() => ({}))
-      throw new Error((err as Record<string, string>).title || 'Login failed')
-    }
-
-    await fetchUser()
-    const returnTo = route.query.returnTo as string
-    if (returnTo) {
-      window.location.href = returnTo
-    }
-    else {
-      router.push('/')
-    }
-  }
-  catch (err) {
-    error.value = err instanceof Error ? err.message : 'Login failed'
-  }
-  finally {
-    loading.value = false
-  }
+async function handlePasskeyLogin() {
+  error.value = 'Passkey login coming soon. Use "Sign in with private key" below.'
 }
 
 async function handleKeyLogin() {
   error.value = ''
-  if (!email.value) {
-    error.value = 'Email is required for key login'
-    return
-  }
-  const success = await loginWithKey(email.value, privateKey.value)
-  if (success) {
-    await fetchUser()
-    const returnTo = route.query.returnTo as string
+  const ok = await loginWithKey(email.value, privateKeyPem.value)
+  if (ok) {
     if (returnTo) {
       window.location.href = returnTo
     }
@@ -94,132 +36,111 @@ async function handleKeyLogin() {
 
 function handleFileSelect(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    privateKey.value = reader.result as string
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = () => { privateKeyPem.value = reader.result as string }
+    reader.readAsText(file)
   }
-  reader.readAsText(file)
-}
-
-function federationLogin(providerId: string) {
-  const returnTo = route.query.returnTo as string
-  let url = `/auth/federated/${providerId}`
-  if (returnTo) {
-    url += `?returnTo=${encodeURIComponent(returnTo)}`
-  }
-  window.location.href = url
 }
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-md">
-      <template #header>
-        <h1 class="text-2xl font-bold text-center">
-          Login
-        </h1>
-      </template>
+    <div class="w-full max-w-md flex flex-col items-center text-center">
+      <div class="text-6xl mb-6">
+        🦍
+      </div>
 
-      <UAlert
-        v-if="error"
-        color="error"
-        :title="error"
-        class="mb-4"
-      />
+      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+        One login.<br>
+        <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
+      </h1>
 
-      <div class="space-y-4">
-        <UFormField label="Email (optional)">
-          <UInput
-            id="email"
-            v-model="email"
-            type="email"
-            placeholder="user@example.com"
-          />
-        </UFormField>
+      <p class="text-lg text-gray-400 mb-8">
+        Passwordless authentication for the open web.
+      </p>
+
+      <!-- Passkey mode (default) -->
+      <form v-if="!keyMode" class="w-full space-y-4" @submit.prevent="handlePasskeyLogin">
+        <UInput
+          v-model="email"
+          type="email"
+          placeholder="you@example.com (optional)"
+          icon="i-lucide-mail"
+          size="xl"
+          class="w-full"
+        />
 
         <UButton
+          type="submit"
           color="primary"
+          size="xl"
           block
-          :loading="loading"
-          :disabled="loading"
-          :label="loading ? 'Authenticating...' : 'Sign in with Passkey'"
-          @click="handleLogin"
-        />
-      </div>
-
-      <div
-        v-if="federationProviders.length > 0"
-        class="mt-4"
-      >
-        <div class="relative my-4">
-          <div class="absolute inset-0 flex items-center">
-            <div class="w-full border-t" />
-          </div>
-          <div class="relative flex justify-center text-sm">
-            <span class="bg-(--ui-bg) px-2 text-(--ui-text-muted)">or</span>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <UButton
-            v-for="provider in federationProviders"
-            :key="provider.id"
-            block
-            variant="outline"
-            :label="`Sign in with ${provider.name}`"
-            @click="federationLogin(provider.id)"
-          />
-        </div>
-      </div>
-
-      <!-- Private key login (SPA-only feature) -->
-      <div class="mt-6">
-        <button
-          class="text-xs text-(--ui-text-muted) hover:underline cursor-pointer"
-          @click="showKeyMode = !showKeyMode"
+          icon="i-lucide-fingerprint"
         >
-          {{ showKeyMode ? 'Hide key login' : 'Sign in with private key instead' }}
-        </button>
+          Sign in with Passkey
+        </UButton>
+      </form>
 
-        <div v-if="showKeyMode" class="mt-3 space-y-3">
-          <UFormField label="Private Key (PEM)">
-            <UTextarea
-              v-model="privateKey"
-              placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
-              :rows="6"
-              class="font-mono text-xs"
-            />
-          </UFormField>
+      <!-- Key mode (pro mode) -->
+      <form v-else class="w-full space-y-4" @submit.prevent="handleKeyLogin">
+        <UInput
+          v-model="email"
+          type="email"
+          placeholder="you@example.com"
+          icon="i-lucide-mail"
+          size="xl"
+          class="w-full"
+        />
 
-          <input
-            type="file"
-            accept=".pem,.key,*"
-            class="text-xs text-(--ui-text-muted)"
-            @change="handleFileSelect"
-          >
+        <UTextarea
+          v-model="privateKeyPem"
+          placeholder="Paste your ed25519 private key..."
+          :rows="4"
+          class="w-full font-mono text-xs"
+        />
 
-          <UButton
-            color="primary"
-            variant="outline"
-            block
-            :loading="keyLoading"
-            :disabled="keyLoading || !email || !privateKey"
-            label="Sign in with Key"
-            @click="handleKeyLogin"
-          />
-        </div>
+        <input
+          type="file"
+          accept=".pem,.key,id_ed25519"
+          class="text-sm text-gray-400"
+          @change="handleFileSelect"
+        >
+
+        <UButton
+          type="submit"
+          color="primary"
+          size="xl"
+          block
+          :loading="keyLoading"
+          :disabled="!email || !privateKeyPem || keyLoading"
+          icon="i-lucide-key-round"
+        >
+          Sign in with Key
+        </UButton>
+      </form>
+
+      <p v-if="error || keyError" class="mt-3 text-sm text-red-400 text-center">
+        {{ error || keyError }}
+      </p>
+
+      <button
+        class="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+        @click="keyMode = !keyMode"
+      >
+        {{ keyMode ? 'Sign in with Passkey instead' : 'Sign in with private key instead' }}
+      </button>
+
+      <div class="mt-6 text-sm text-gray-500">
+        No account yet?
+        <router-link to="/register" class="text-primary hover:underline">
+          Register
+        </router-link>
       </div>
 
-      <template #footer>
-        <div class="text-center">
-          <UButton
-            variant="link"
-            label="Back to Home"
-            @click.prevent="router.push('/')"
-          />
-        </div>
-      </template>
-    </UCard>
+      <p class="mt-8 text-sm text-gray-500">
+        Powered by <a href="https://openape.at" class="text-gray-400 hover:text-white transition-colors">OpenApe</a>
+      </p>
+    </div>
   </div>
 </template>
