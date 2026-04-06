@@ -1,28 +1,23 @@
-import { createClient } from '@libsql/client/http'
-import crypto from 'node:crypto'
-
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  if (!body?.id) {
-    throw createError({ statusCode: 400, message: 'Missing id' })
+  const stores = await getStores()
+  const body = await readBody<{ id: string }>(event)
+
+  if (!body.id) {
+    throw createProblemError({ status: 400, title: 'Missing required field: id' })
   }
 
-  const rc = useRuntimeConfig()
-  const client = createClient({
-    url: (rc.tursoUrl as string).trim(),
-    authToken: (rc.tursoAuthToken as string)?.trim() || undefined,
-  })
-
-  const keys = await client.execute({ sql: 'SELECT key_id FROM ssh_keys WHERE user_email = ?', args: [body.id] })
-  if (keys.rows.length === 0) {
-    throw createError({ statusCode: 404, message: 'No user with SSH keys found' })
+  const user = await stores.userStore.findByEmail(body.id)
+  if (user && user.isActive) {
+    const challenge = await stores.challengeStore.createChallenge(user.email)
+    return { challenge }
   }
 
-  const challenge = crypto.randomBytes(32).toString('hex')
-  await client.execute({
-    sql: 'INSERT INTO grant_challenges (challenge, agent_id, expires_at) VALUES (?, ?, ?)',
-    args: [challenge, body.id, Date.now() + 60_000],
-  })
+  // Try user with SSH keys
+  const sshKeys = await stores.sshKeyStore.findByUser(body.id)
+  if (sshKeys.length > 0) {
+    const challenge = await stores.challengeStore.createChallenge(body.id)
+    return { challenge }
+  }
 
-  return { challenge }
+  throw createProblemError({ status: 404, title: 'No user with SSH keys found for this identity' })
 })

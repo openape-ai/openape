@@ -23,7 +23,6 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
-    "@openape/server": "workspace:*",
     "@openape/vue-components": "workspace:*",
     "drizzle-orm": "^0.44.7",
     "h3": "catalog:",
