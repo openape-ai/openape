@@ -88,7 +88,8 @@ async function createUser() {
 }
 
 async function deleteUser(email: string) {
-  if (!confirm(`Delete user ${email}?`)) return
+  if (!confirm(`Delete user ${email}?`))
+    return
   userError.value = ''
   try {
     const res = await fetch(`/api/admin/users/${encodeURIComponent(email)}`, {
@@ -127,7 +128,8 @@ async function loadSessions() {
 }
 
 async function revokeSession(familyId: string) {
-  if (!confirm('Revoke this session?')) return
+  if (!confirm('Revoke this session?'))
+    return
   sessionError.value = ''
   try {
     const res = await fetch(`/api/admin/sessions/${familyId}`, {
@@ -189,7 +191,8 @@ async function createRegUrl() {
 }
 
 async function deleteRegUrl(token: string) {
-  if (!confirm('Delete this registration URL?')) return
+  if (!confirm('Delete this registration URL?'))
+    return
   regUrlError.value = ''
   try {
     const res = await fetch(`/api/admin/registration-urls/${token}`, {
@@ -214,7 +217,9 @@ function registerUrl(token: string) {
 async function copyToClipboard(text: string, token: string) {
   await navigator.clipboard.writeText(text)
   copiedToken.value = token
-  setTimeout(() => { copiedToken.value = '' }, 2000)
+  setTimeout(() => {
+    copiedToken.value = ''
+  }, 2e3)
 }
 
 function formatDate(ts: number) {
@@ -242,7 +247,7 @@ function regUrlStatus(entry: any) {
           <h1 class="text-2xl font-bold">
             Admin Dashboard
           </h1>
-          <p class="text-sm text-(--ui-text-muted)">
+          <p class="text-sm text-muted">
             Manage users, sessions, and registration URLs
           </p>
         </div>
@@ -251,7 +256,7 @@ function regUrlStatus(entry: any) {
         </UButton>
       </div>
 
-      <div v-if="authLoading" class="text-center text-(--ui-text-muted) mt-10">
+      <div v-if="authLoading" class="text-center text-muted mt-10">
         Loading...
       </div>
 
@@ -295,28 +300,22 @@ function regUrlStatus(entry: any) {
               </UCard>
 
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="usersLoading" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-if="usersLoading" class="p-6 text-center text-muted">
                   Loading...
                 </div>
-                <div v-else-if="users.length === 0" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-else-if="users.length === 0" class="p-6 text-center text-muted">
                   No users found.
                 </div>
                 <table v-else class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Name
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Email
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
-                        Status
-                      </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
-                        Created
-                      </th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
                         Actions
                       </th>
                     </tr>
@@ -326,16 +325,8 @@ function regUrlStatus(entry: any) {
                       <td class="px-4 py-3 text-sm">
                         {{ u.name }}
                       </td>
-                      <td class="px-4 py-3 text-sm text-(--ui-text-muted) font-mono">
+                      <td class="px-4 py-3 text-sm text-muted font-mono">
                         {{ u.email }}
-                      </td>
-                      <td class="px-4 py-3">
-                        <UBadge :color="u.isActive ? 'success' : 'error'" variant="subtle">
-                          {{ u.isActive ? "Active" : "Inactive" }}
-                        </UBadge>
-                      </td>
-                      <td class="px-4 py-3 text-xs text-(--ui-text-muted)">
-                        {{ formatDate(u.createdAt) }}
                       </td>
                       <td class="px-4 py-3 text-right">
                         <UButton
@@ -347,7 +338,7 @@ function regUrlStatus(entry: any) {
                         >
                           Delete
                         </UButton>
-                        <span v-else class="text-xs text-(--ui-text-muted)">You</span>
+                        <span v-else class="text-xs text-muted">You</span>
                       </td>
                     </tr>
                   </tbody>
@@ -373,44 +364,44 @@ function regUrlStatus(entry: any) {
                   </div>
                 </template>
 
-                <div v-if="sessionsLoading" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-if="sessionsLoading" class="p-6 text-center text-muted">
                   Loading...
                 </div>
-                <div v-else-if="sessions.length === 0" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-else-if="sessions.length === 0" class="p-6 text-center text-muted">
                   No active sessions.
                 </div>
                 <table v-else class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         User
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Client
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Created
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Expires
                       </th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-(--ui-border)">
                     <tr v-for="s in sessions" :key="s.familyId" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
-                      <td class="px-4 py-3 text-sm font-mono text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-sm font-mono text-muted">
                         {{ s.userId }}
                       </td>
-                      <td class="px-4 py-3 text-sm text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-sm text-muted">
                         {{ s.clientId }}
                       </td>
-                      <td class="px-4 py-3 text-xs text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-xs text-muted">
                         {{ formatDateTime(s.createdAt) }}
                       </td>
-                      <td class="px-4 py-3 text-xs text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-xs text-muted">
                         {{ formatDateTime(s.expiresAt) }}
                       </td>
                       <td class="px-4 py-3 text-right">
@@ -442,18 +433,16 @@ function regUrlStatus(entry: any) {
 
                 <UAlert v-if="regUrlError" color="error" :title="regUrlError" class="mb-4" />
                 <UAlert v-if="regUrlSuccess" color="success" class="mb-4">
-                  <template #description>
-                    <div class="flex items-center gap-2">
-                      <code class="text-xs break-all flex-1">{{ regUrlSuccess }}</code>
-                      <UButton
-                        size="xs"
-                        variant="soft"
-                        @click="copyToClipboard(regUrlSuccess, 'success')"
-                      >
-                        {{ copiedToken === "success" ? "Copied!" : "Copy" }}
-                      </UButton>
-                    </div>
-                  </template>
+                  <div class="flex items-center gap-2">
+                    <code class="text-xs break-all flex-1">{{ regUrlSuccess }}</code>
+                    <UButton
+                      size="xs"
+                      variant="soft"
+                      @click="copyToClipboard(regUrlSuccess, 'success')"
+                    >
+                      {{ copiedToken === "success" ? "Copied!" : "Copy" }}
+                    </UButton>
+                  </div>
                 </UAlert>
 
                 <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createRegUrl">
@@ -479,35 +468,35 @@ function regUrlStatus(entry: any) {
               </UCard>
 
               <UCard :ui="{ body: 'p-0' }">
-                <div v-if="regUrlsLoading" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-if="regUrlsLoading" class="p-6 text-center text-muted">
                   Loading...
                 </div>
-                <div v-else-if="regUrls.length === 0" class="p-6 text-center text-(--ui-text-muted)">
+                <div v-else-if="regUrls.length === 0" class="p-6 text-center text-muted">
                   No registration URLs found.
                 </div>
                 <table v-else class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Email
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Name
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Status
                       </th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                         Expires
                       </th>
-                      <th class="text-right px-4 py-3 text-xs font-medium text-(--ui-text-muted) uppercase">
+                      <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-(--ui-border)">
                     <tr v-for="r in regUrls" :key="r.token" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
-                      <td class="px-4 py-3 text-sm font-mono text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-sm font-mono text-muted">
                         {{ r.email }}
                       </td>
                       <td class="px-4 py-3 text-sm">
@@ -518,7 +507,7 @@ function regUrlStatus(entry: any) {
                           {{ regUrlStatus(r).label }}
                         </UBadge>
                       </td>
-                      <td class="px-4 py-3 text-xs text-(--ui-text-muted)">
+                      <td class="px-4 py-3 text-xs text-muted">
                         {{ formatDateTime(r.expiresAt) }}
                       </td>
                       <td class="px-4 py-3 text-right space-x-1">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useIdpAuth, useKeyLogin } from '@openape/vue-components'
 
@@ -8,18 +8,28 @@ const router = useRouter()
 const { fetchUser } = useIdpAuth()
 const { loginWithKey, loading: keyLoading, error: keyError } = useKeyLogin()
 
-const returnTo = (route.query.returnTo as string) || '/'
-const email = ref((route.query.login_hint as string) || '')
-const error = ref((route.query.error as string) || '')
+const email = ref((route.query.login_hint as string) ?? '')
+const error = ref((route.query.error as string) ?? '')
 const loading = ref(false)
+const federationProviders = ref<Array<{ id: string, name: string }>>([])
 const showKeyMode = ref(false)
 const privateKey = ref('')
 
-async function handlePasskeyLogin() {
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/federation/providers', { credentials: 'include' })
+    if (res.ok) {
+      federationProviders.value = await res.json()
+    }
+  }
+  catch {
+  }
+})
+
+async function handleLogin() {
   error.value = ''
   loading.value = true
   try {
-    // Passkey flow: request challenge, then use WebAuthn
     const challengeRes = await fetch('/api/auth/challenge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,7 +54,13 @@ async function handlePasskeyLogin() {
     }
 
     await fetchUser()
-    navigateAfterLogin()
+    const returnTo = route.query.returnTo as string
+    if (returnTo) {
+      window.location.href = returnTo
+    }
+    else {
+      router.push('/')
+    }
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : 'Login failed'
@@ -63,7 +79,13 @@ async function handleKeyLogin() {
   const success = await loginWithKey(email.value, privateKey.value)
   if (success) {
     await fetchUser()
-    navigateAfterLogin()
+    const returnTo = route.query.returnTo as string
+    if (returnTo) {
+      window.location.href = returnTo
+    }
+    else {
+      router.push('/')
+    }
   }
   else {
     error.value = keyError.value
@@ -80,13 +102,13 @@ function handleFileSelect(event: Event) {
   reader.readAsText(file)
 }
 
-function navigateAfterLogin() {
-  if (returnTo && returnTo !== '/') {
-    window.location.href = returnTo
+function federationLogin(providerId: string) {
+  const returnTo = route.query.returnTo as string
+  let url = `/auth/federated/${providerId}`
+  if (returnTo) {
+    url += `?returnTo=${encodeURIComponent(returnTo)}`
   }
-  else {
-    router.push('/')
-  }
+  window.location.href = url
 }
 </script>
 
@@ -122,10 +144,36 @@ function navigateAfterLogin() {
           :loading="loading"
           :disabled="loading"
           :label="loading ? 'Authenticating...' : 'Sign in with Passkey'"
-          @click="handlePasskeyLogin"
+          @click="handleLogin"
         />
       </div>
 
+      <div
+        v-if="federationProviders.length > 0"
+        class="mt-4"
+      >
+        <div class="relative my-4">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t" />
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="bg-(--ui-bg) px-2 text-(--ui-text-muted)">or</span>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <UButton
+            v-for="provider in federationProviders"
+            :key="provider.id"
+            block
+            variant="outline"
+            :label="`Sign in with ${provider.name}`"
+            @click="federationLogin(provider.id)"
+          />
+        </div>
+      </div>
+
+      <!-- Private key login (SPA-only feature) -->
       <div class="mt-6">
         <button
           class="text-xs text-(--ui-text-muted) hover:underline cursor-pointer"
@@ -166,7 +214,6 @@ function navigateAfterLogin() {
       <template #footer>
         <div class="text-center">
           <UButton
-            to="/"
             variant="link"
             label="Back to Home"
             @click.prevent="router.push('/')"

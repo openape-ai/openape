@@ -47,10 +47,10 @@ async function handleEnroll() {
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      throw new Error((err as Record<string, string>).title || 'Enrollment failed')
+      throw new Error((err as Record<string, string>).title || (err as Record<string, string>).statusMessage || 'Enrollment failed')
     }
     const data = await res.json()
-    router.push(`/?enrolled=${data.agent_id}`)
+    router.push(`/admin?tab=agents&enrolled=${data.agent_id}`)
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : 'Enrollment failed'

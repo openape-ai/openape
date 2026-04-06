@@ -5,49 +5,43 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const token = route.query.token as string
-const error = ref(!token ? 'No registration token provided' : '')
-const success = ref(false)
+const deviceName = ref('')
+const publicKey = ref('')
+const error = ref('')
+const registered = ref(false)
 const loading = ref(false)
 
-// Registration with SSH key (no WebAuthn in this IdP)
-const publicKey = ref('')
-const deviceName = ref('')
+if (!token) {
+  error.value = 'No registration token provided'
+}
 
 async function handleRegister() {
   error.value = ''
   loading.value = true
   try {
-    // First, validate the token
-    const validateRes = await fetch(`/api/admin/registration-urls`, {
-      credentials: 'include',
-    })
-    // The registration URL token is validated server-side during enrollment
-    // For now, provide a form to submit an SSH key
-
     if (!publicKey.value) {
       error.value = 'Please provide an SSH public key'
       return
     }
 
-    // We don't need to call the registration URL validation endpoint;
-    // the token just identifies who is being registered.
-    // For the standalone IdP, registration means adding the SSH key.
-    const tokenRes = await fetch(`/api/register`, {
+    const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
-        token: token,
+        token,
         publicKey: publicKey.value.trim(),
         name: deviceName.value || undefined,
       }),
     })
 
-    if (!tokenRes.ok) {
-      const err = await tokenRes.json().catch(() => ({}))
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
       throw new Error((err as Record<string, string>).title || (err as Record<string, string>).statusMessage || 'Registration failed')
     }
 
-    success.value = true
+    registered.value = true
+    router.push('/')
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : 'Registration failed'
@@ -65,7 +59,7 @@ async function handleRegister() {
         <h1 class="text-2xl font-bold text-center">
           Welcome
         </h1>
-        <p class="text-sm text-(--ui-text-muted) text-center mt-1">
+        <p class="text-sm text-muted text-center mt-1">
           Register your SSH key to get started
         </p>
       </template>
@@ -77,19 +71,11 @@ async function handleRegister() {
         class="mb-4"
       />
 
-      <UAlert
-        v-if="success"
-        color="success"
-        title="Registration successful!"
-        description="You can now sign in."
-        class="mb-4"
-      />
-
-      <div v-if="!success && token" class="space-y-4">
+      <div v-if="(!error || token) && !registered" class="space-y-4">
         <UFormField label="Device Name (optional)">
           <UInput
             v-model="deviceName"
-            placeholder="e.g. MacBook, Work Laptop"
+            placeholder="e.g. MacBook, iPhone"
           />
         </UFormField>
 
