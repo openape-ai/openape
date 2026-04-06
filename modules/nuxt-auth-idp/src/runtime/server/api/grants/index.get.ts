@@ -1,5 +1,5 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
-import { createError, defineEventHandler, getQuery } from 'h3'
+import { defineEventHandler, getQuery } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -27,26 +27,24 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    throw createError({ statusCode: 401, message: 'Authentication required' })
+    return await grantStore.listGrants({ limit, cursor, status: status ?? 'pending' })
   }
 
   const email = session.data.userId as string
 
-  // Collect all relevant requester identities in one array
+  // All users (including admins) only see grants from their own agents
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const allRequesters = [
-    email,
+  const agentEmails = new Set([
     ...ownedAgents.map(a => a.email),
     ...approvedAgents.map(a => a.email),
-  ]
+  ])
 
-  // Single query instead of findAll() + in-memory filter
-  // Use high limit for section queries (need all active/pending to display correctly)
-  const sectionLimit = section ? 1000 : limit
-  const { data: owned } = await grantStore.listGrants({
-    requester: allRequesters,
-    limit: sectionLimit,
+  const allGrants = await grantStore.findAll()
+  const owned = allGrants.filter((grant: OpenApeGrant) => {
+    if (grant.request.requester === email) return true
+    if (agentEmails.has(grant.request.requester)) return true
+    return false
   })
 
   // section=active → all pending + approved timed/always (no pagination)
