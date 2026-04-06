@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useKeyLogin } from '@openape/vue-components'
 
 useSeoMeta({ title: 'Login' })
 
@@ -7,11 +8,14 @@ const route = useRoute()
 const loginHint = (route.query.login_hint as string) || ''
 
 const email = ref(loginHint)
-const { login, error: webauthnError, loading } = useWebAuthn()
+const keyMode = ref(false)
+const privateKeyPem = ref('')
 
+const { login, error: webauthnError, loading } = useWebAuthn()
+const { loginWithKey, loading: keyLoading, error: keyError } = useKeyLogin()
 const { fetchUser } = useIdpAuth()
 
-async function handleLogin() {
+async function handlePasskeyLogin() {
   const success = await login(email.value || undefined)
   if (success) {
     await fetchUser()
@@ -22,6 +26,29 @@ async function handleLogin() {
     else {
       await navigateTo('/')
     }
+  }
+}
+
+async function handleKeyLogin() {
+  const ok = await loginWithKey(email.value, privateKeyPem.value)
+  if (ok) {
+    await fetchUser()
+    const returnTo = route.query.returnTo as string
+    if (returnTo) {
+      await navigateTo(returnTo, { external: true })
+    }
+    else {
+      await navigateTo('/')
+    }
+  }
+}
+
+function handleFileSelect(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = () => { privateKeyPem.value = reader.result as string }
+    reader.readAsText(file)
   }
 }
 </script>
@@ -42,7 +69,8 @@ async function handleLogin() {
         Passwordless authentication for the open web.
       </p>
 
-      <form class="w-full space-y-4" @submit.prevent="handleLogin">
+      <!-- Passkey mode (default) -->
+      <form v-if="!keyMode" class="w-full space-y-4" @submit.prevent="handlePasskeyLogin">
         <UInput
           v-model="email"
           type="email"
@@ -64,9 +92,54 @@ async function handleLogin() {
         </UButton>
       </form>
 
-      <p v-if="webauthnError" class="mt-3 text-sm text-red-400 text-center">
-        {{ webauthnError }}
+      <!-- Key mode (pro mode) -->
+      <form v-else class="w-full space-y-4" @submit.prevent="handleKeyLogin">
+        <UInput
+          v-model="email"
+          type="email"
+          placeholder="you@example.com"
+          icon="i-lucide-mail"
+          size="xl"
+          class="w-full"
+        />
+
+        <UTextarea
+          v-model="privateKeyPem"
+          placeholder="Paste your ed25519 private key..."
+          :rows="4"
+          class="w-full font-mono text-xs"
+        />
+
+        <input
+          type="file"
+          accept=".pem,.key,id_ed25519"
+          class="text-sm text-gray-400"
+          @change="handleFileSelect"
+        >
+
+        <UButton
+          type="submit"
+          color="primary"
+          size="xl"
+          block
+          :loading="keyLoading"
+          :disabled="!email || !privateKeyPem || keyLoading"
+          icon="i-lucide-key-round"
+        >
+          Sign in with Key
+        </UButton>
+      </form>
+
+      <p v-if="webauthnError || keyError" class="mt-3 text-sm text-red-400 text-center">
+        {{ webauthnError || keyError }}
       </p>
+
+      <button
+        class="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+        @click="keyMode = !keyMode"
+      >
+        {{ keyMode ? 'Sign in with Passkey instead' : 'Sign in with private key instead' }}
+      </button>
 
       <div class="mt-6 text-sm text-gray-500">
         Noch keinen Account?
