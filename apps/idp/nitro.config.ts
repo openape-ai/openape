@@ -11,4 +11,11 @@ export default defineNitroConfig({
     tursoUrl: process.env.TURSO_DATABASE_URL || 'file:local.db',
     tursoAuthToken: process.env.TURSO_AUTH_TOKEN || '',
   },
+  routeRules: {
+    '/api/auth/**': { cors: true },
+    '/api/grants/**': { cors: true },
+    '/api/delegations/**': { cors: true },
+    '/.well-known/**': { cors: true },
+    '/token': { cors: true },
+  },
 })
