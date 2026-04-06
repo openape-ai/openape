@@ -1,35 +1,489 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { IdpGrantApproval } from '@openape/vue-components'
+import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant, useIdpAuth } from '@openape/vue-components'
 
 const route = useRoute()
 const router = useRouter()
-const grantId = route.query.grant_id as string
-const callback = route.query.callback as string
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
 
-function handleDone(result: { status: string, authzJwt?: string }) {
-  if (callback) {
-    const url = new URL(callback)
-    url.searchParams.set('grant_id', grantId)
-    url.searchParams.set('status', result.status)
-    if (result.authzJwt) {
-      url.searchParams.set('authz_jwt', result.authzJwt)
+const grant = ref<any>(null)
+const loading = ref(true)
+const error = ref('')
+const processing = ref(false)
+const selectedExtendMode = ref('separate')
+
+const grantId = computed(() => route.query.grant_id as string)
+const callbackUrl = computed(() => route.query.callback as string)
+const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
+const hasSimilarGrants = computed(() => grant.value?.similar_grants?.similar_grants?.length > 0)
+const similarGrants = computed(() => grant.value?.similar_grants?.similar_grants ?? [])
+const widenedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.widened_details ?? []))
+const mergedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.merged_details ?? []))
+
+const EXTEND_MODE_OPTIONS = [
+  { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards (replaces existing grant)' },
+  { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
+  { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
+]
+
+const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
+const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
+
+const delegateDuration = computed(() => {
+  const req = grant.value?.request
+  if (!req?.duration) return null
+  const h = Math.floor(req.duration / 3600)
+  const m = Math.floor(req.duration % 3600 / 60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+})
+
+const selectedGrantType = ref('once')
+const selectedDurationPreset = ref('3600')
+const customDuration = ref(3600)
+
+const DURATION_PRESETS = [
+  { label: '1 hour', value: '3600' },
+  { label: '4 hours', value: '14400' },
+  { label: '1 day', value: '86400' },
+  { label: '1 week', value: '604800' },
+  { label: 'Custom', value: 'custom' },
+]
+
+const asRequestedOption = computed(() => {
+  if (!grant.value?.request) return null
+  const req = grant.value.request
+  const type = req.grant_type || 'once'
+  let desc = `${type}`
+  if (type === 'timed' && req.duration) {
+    const mins = Math.round(req.duration / 60)
+    desc = mins >= 60 ? `timed (${Math.round(mins / 60)}h)` : `timed (${mins}m)`
+  }
+  return { label: 'As requested', value: 'as_requested', description: desc }
+})
+
+const grantTypeOptions = computed(() => {
+  const base = [
+    { label: 'Once', value: 'once', description: 'Single use only' },
+    { label: 'Timed', value: 'timed', description: 'Time-limited' },
+    { label: 'Always', value: 'always', description: 'Until revoked' },
+  ]
+  const asReq = asRequestedOption.value
+  return asReq ? [asReq, ...base] : base
+})
+
+const effectiveDuration = computed(() => {
+  if (selectedGrantType.value === 'as_requested')
+    return grant.value?.request?.duration
+  if (selectedGrantType.value !== 'timed')
+    return undefined
+  return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
+})
+
+onMounted(async () => {
+  await fetchUser()
+  if (!user.value) {
+    const returnTo = `/grant-approval?${new URLSearchParams(route.query as Record<string, string>).toString()}`
+    router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+    return
+  }
+  if (!grantId.value) {
+    error.value = 'Missing grant_id parameter'
+    loading.value = false
+    return
+  }
+  try {
+    const res = await fetch(`/api/grants/${grantId.value}`, { credentials: 'include' })
+    if (!res.ok) throw new Error('Grant not found')
+    grant.value = await res.json()
+  }
+  catch {
+    error.value = 'Grant not found'
+  }
+  finally {
+    loading.value = false
+  }
+})
+
+async function handleApprove() {
+  processing.value = true
+  try {
+    const extendBody = hasSimilarGrants.value && selectedExtendMode.value !== 'separate'
+      ? {
+          extend_mode: selectedExtendMode.value,
+          extend_grant_ids: similarGrants.value.map((s: any) => s.grant.id),
+        }
+      : {}
+    const resolvedGrantType = selectedGrantType.value === 'as_requested'
+      ? (grant.value?.request?.grant_type || 'once')
+      : selectedGrantType.value
+    const resolvedDuration = selectedGrantType.value === 'as_requested'
+      ? grant.value?.request?.duration
+      : effectiveDuration.value
+
+    const res = await fetch(`/api/grants/${grantId.value}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        grant_type: resolvedGrantType,
+        ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
+        ...extendBody,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error((err as Record<string, string>).statusMessage ?? (err as Record<string, string>).title ?? 'Approval failed')
     }
-    window.location.href = url.toString()
+    const result = await res.json()
+
+    if (callbackUrl.value) {
+      const url = new URL(callbackUrl.value)
+      url.searchParams.set('grant_id', grantId.value)
+      url.searchParams.set('authz_jwt', result.authz_jwt)
+      url.searchParams.set('status', 'approved')
+      window.location.href = url.toString()
+    }
+    else {
+      grant.value = result.grant
+    }
   }
-  else {
-    router.push('/')
+  catch (err) {
+    error.value = err instanceof Error ? err.message : 'Approval failed'
   }
+  finally {
+    processing.value = false
+  }
+}
+
+async function handleDeny() {
+  processing.value = true
+  try {
+    const res = await fetch(`/api/grants/${grantId.value}/deny`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error('Denial failed')
+
+    if (callbackUrl.value) {
+      const url = new URL(callbackUrl.value)
+      url.searchParams.set('grant_id', grantId.value)
+      url.searchParams.set('status', 'denied')
+      window.location.href = url.toString()
+    }
+    else {
+      grant.value = { ...grant.value, status: 'denied' }
+    }
+  }
+  catch (err) {
+    error.value = err instanceof Error ? err.message : 'Denial failed'
+  }
+  finally {
+    processing.value = false
+  }
+}
+
+function isExactCommand(detail: any) {
+  return detail.constraints?.exact_command === true
 }
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-lg">
-      <IdpGrantApproval
-        :grant-id="grantId"
-        @done="handleDone"
-      />
-    </div>
+    <UCard class="w-full max-w-lg">
+      <template #header>
+        <h1 class="text-2xl font-bold text-center">
+          Permission Request
+        </h1>
+      </template>
+
+      <div v-if="loading || authLoading" class="text-center text-muted">
+        Loading...
+      </div>
+
+      <UAlert v-else-if="error" color="error" :title="error" />
+
+      <template v-else-if="grant">
+        <div v-if="grant.status === 'pending'" class="space-y-4">
+          <UAlert
+            v-if="isDelegate"
+            color="error"
+            title="Identity Delegation Request"
+          >
+            <template #description>
+              <p class="font-semibold">
+                {{ grant.request?.requester }} is requesting to act <strong>as you</strong> at {{ grant.request?.target_host }}.
+              </p>
+              <p v-if="delegateDuration" class="mt-1 text-sm">
+                Duration: {{ delegateDuration }}
+              </p>
+              <p v-else-if="grant.request?.grant_type === 'once'" class="mt-1 text-sm">
+                Single use only.
+              </p>
+              <p v-else-if="grant.request?.grant_type === 'always'" class="mt-1 text-sm">
+                Permanent — until revoked.
+              </p>
+            </template>
+          </UAlert>
+
+          <UAlert :color="isDelegate ? 'error' : 'warning'" title="An application is requesting permission:">
+            <template #description>
+              <dl class="text-sm space-y-2 mt-2">
+                <div>
+                  <dt class="text-muted">
+                    Requester
+                  </dt>
+                  <dd class="font-mono text-sm break-all">
+                    {{ grant.request?.requester }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted">
+                    Target
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request?.target_host }}
+                  </dd>
+                </div>
+                <div v-if="cliSummary">
+                  <dt class="text-muted">
+                    Request
+                  </dt>
+                  <dd class="text-sm">
+                    {{ cliSummary }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted">
+                    Type
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request?.grant_type }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.run_as">
+                  <dt class="text-muted">
+                    Run as
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request.run_as }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.command?.length">
+                  <dt class="text-muted mb-1">
+                    Command
+                  </dt>
+                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words">
+                    {{ grant.request.command.join(" ") }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.cmd_hash">
+                  <dt class="text-muted">
+                    Hash
+                  </dt>
+                  <dd class="font-mono text-xs text-dimmed break-all">
+                    {{ grant.request.cmd_hash }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.reason">
+                  <dt class="text-muted">
+                    Reason
+                  </dt>
+                  <dd>{{ grant.request?.reason }}</dd>
+                </div>
+                <div v-if="grant.request?.permissions?.length">
+                  <dt class="text-muted">
+                    Permissions
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request?.permissions?.join(", ") }}
+                  </dd>
+                </div>
+                <div v-if="cliDetails.length" class="space-y-2">
+                  <dt class="text-muted">
+                    Structured Permissions
+                  </dt>
+                  <dd class="space-y-2">
+                    <div
+                      v-for="detail in cliDetails"
+                      :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
+                      class="rounded border border-gray-700 bg-gray-950/50 px-3 py-2"
+                    >
+                      <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <UBadge color="primary" variant="soft" :label="detail.cli_id" />
+                        <UBadge color="neutral" variant="soft" :label="detail.action" />
+                        <UBadge color="secondary" variant="soft" :label="detail.risk" />
+                        <UBadge :color="isExactCommand(detail) ? 'warning' : 'success'" variant="soft" :label="isExactCommand(detail) ? 'exact-only' : 'reusable'" />
+                      </div>
+                      <p class="text-sm">
+                        {{ detail.display }}
+                      </p>
+                      <p class="font-mono text-xs text-dimmed break-all">
+                        {{ detail.permission }}
+                      </p>
+                      <p class="font-mono text-xs text-dimmed">
+                        {{ formatCliResourceChain(detail) }}
+                      </p>
+                    </div>
+                  </dd>
+                </div>
+              </dl>
+            </template>
+          </UAlert>
+
+          <UAlert
+            v-if="hasSimilarGrants"
+            color="info"
+            title="Similar grant(s) exist"
+          >
+            <template #description>
+              <div class="text-sm space-y-2 mt-2">
+                <div v-for="similar in similarGrants" :key="similar.grant.id">
+                  <p class="text-muted">
+                    Existing grant: <span class="font-mono text-xs">{{ similar.grant.id.slice(0, 8) }}...</span>
+                  </p>
+                  <div
+                    v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
+                    :key="detail.permission"
+                    class="font-mono text-xs text-dimmed break-all"
+                  >
+                    {{ detail.permission }}
+                  </div>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <p class="text-muted font-medium">
+                    Extension options:
+                  </p>
+                  <URadioGroup
+                    v-model="selectedExtendMode"
+                    :items="EXTEND_MODE_OPTIONS"
+                  />
+                  <div v-if="selectedExtendMode === 'widen'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p v-for="perm in widenedPreview" :key="perm" class="font-mono text-xs text-green-400">
+                      {{ perm }}
+                    </p>
+                  </div>
+                  <div v-if="selectedExtendMode === 'merge'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p v-for="perm in mergedPreview" :key="perm" class="font-mono text-xs text-blue-400">
+                      {{ perm }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </UAlert>
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm font-medium text-muted block mb-2">Approval Type</label>
+              <p v-if="grant.request?.grant_type" class="text-xs text-dimmed mb-2">
+                Requested: {{ grant.request.grant_type }}
+              </p>
+              <URadioGroup
+                v-model="selectedGrantType"
+                :items="grantTypeOptions"
+              />
+            </div>
+            <div v-if="selectedGrantType === 'timed'" class="space-y-2">
+              <label class="text-sm font-medium text-muted block">Duration</label>
+              <USelect
+                v-model="selectedDurationPreset"
+                :items="DURATION_PRESETS"
+              />
+              <UInput
+                v-if="selectedDurationPreset === 'custom'"
+                v-model.number="customDuration"
+                type="number"
+                :min="60"
+                placeholder="Duration in seconds"
+              />
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <UButton
+              color="success"
+              :loading="processing"
+              block
+              class="flex-1"
+              @click="handleApprove"
+            >
+              Approve
+            </UButton>
+            <UButton
+              color="error"
+              :loading="processing"
+              block
+              class="flex-1"
+              @click="handleDeny"
+            >
+              Deny
+            </UButton>
+          </div>
+        </div>
+
+        <div v-else class="space-y-4">
+          <UAlert
+            :color="grant.status === 'approved' ? 'success' : grant.status === 'denied' ? 'error' : 'neutral'"
+            :title="`Grant ${grant.status}`"
+          >
+            <template #description>
+              <dl class="text-sm space-y-2 mt-2">
+                <div>
+                  <dt class="text-muted">
+                    Requester
+                  </dt>
+                  <dd class="font-mono text-sm break-all">
+                    {{ grant.request?.requester }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-muted">
+                    Target
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request?.target }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.run_as">
+                  <dt class="text-muted">
+                    Run as
+                  </dt>
+                  <dd class="font-mono text-sm">
+                    {{ grant.request.run_as }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.command?.length">
+                  <dt class="text-muted">
+                    Command
+                  </dt>
+                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">
+                    {{ grant.request.command.join(" ") }}
+                  </dd>
+                </div>
+                <div v-if="grant.request?.reason">
+                  <dt class="text-muted">
+                    Reason
+                  </dt>
+                  <dd>{{ grant.request?.reason }}</dd>
+                </div>
+                <div v-if="grant.decided_by">
+                  <dt class="text-muted">
+                    Decided by
+                  </dt>
+                  <dd>{{ grant.decided_by }}</dd>
+                </div>
+              </dl>
+            </template>
+          </UAlert>
+        </div>
+      </template>
+    </UCard>
   </div>
 </template>
