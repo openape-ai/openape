@@ -27,27 +27,22 @@ export const grantChallenges = sqliteTable('grant_challenges', {
   expiresAt: integer('expires_at').notNull(),
 })
 
-// --- Milestone 1: User & Agent ---
+// --- Milestone 1: Unified Users (humans + agents) ---
 
 export const users = sqliteTable('users', {
   email: text('email').primaryKey(),
+  id: text('id'),
   name: text('name').notNull(),
-  createdAt: integer('created_at').notNull(),
-})
-
-export const agents = sqliteTable('agents', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull(),
-  name: text('name').notNull(),
-  owner: text('owner').notNull(),
-  approver: text('approver').notNull(),
-  publicKey: text('public_key').notNull(),
-  createdAt: integer('created_at').notNull(),
+  owner: text('owner'),
+  approver: text('approver'),
+  type: text('type'),
+  publicKey: text('public_key'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
 }, table => [
-  index('idx_agents_email').on(table.email),
-  index('idx_agents_owner').on(table.owner),
-  index('idx_agents_approver').on(table.approver),
+  index('idx_users_id').on(table.id),
+  index('idx_users_owner').on(table.owner),
+  index('idx_users_approver').on(table.approver),
 ])
 
 // --- Milestone 2: Auth Tokens ---

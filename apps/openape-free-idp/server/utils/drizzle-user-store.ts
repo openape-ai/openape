@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { users } from '../database/schema'
 
@@ -32,12 +32,12 @@ export function createDrizzleUserStore(): UserStore {
 
     async findByEmail(email) {
       const row = await db.select().from(users).where(eq(users.email, email)).get()
-      if (!row) return null
+      if (!row || row.owner) return null
       return { email: row.email, name: row.name }
     },
 
     async listUsers() {
-      const rows = await db.select().from(users)
+      const rows = await db.select().from(users).where(isNull(users.owner))
       return rows.map(row => ({ email: row.email, name: row.name }))
     },
 

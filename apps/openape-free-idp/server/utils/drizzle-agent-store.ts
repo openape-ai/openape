@@ -1,6 +1,6 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, isNotNull } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
-import { agents } from '../database/schema'
+import { users } from '../database/schema'
 
 interface Agent {
   id: string
@@ -24,16 +24,16 @@ interface AgentStore {
   findByApprover: (approver: string) => Promise<Agent[]>
 }
 
-type AgentRow = typeof agents.$inferSelect
+type UserRow = typeof users.$inferSelect
 
-function rowToAgent(row: AgentRow): Agent {
+function rowToAgent(row: UserRow): Agent {
   return {
-    id: row.id,
+    id: row.id!,
     email: row.email,
     name: row.name,
-    owner: row.owner,
-    approver: row.approver,
-    publicKey: row.publicKey,
+    owner: row.owner!,
+    approver: row.approver!,
+    publicKey: row.publicKey!,
     createdAt: row.createdAt,
     isActive: row.isActive,
   }
@@ -44,32 +44,35 @@ export function createDrizzleAgentStore(): AgentStore {
 
   return {
     async create(agent) {
-      await db.insert(agents).values({
-        id: agent.id,
+      await db.insert(users).values({
         email: agent.email,
+        id: agent.id,
         name: agent.name,
         owner: agent.owner,
         approver: agent.approver,
+        type: 'agent',
         publicKey: agent.publicKey,
-        createdAt: agent.createdAt,
         isActive: agent.isActive,
+        createdAt: agent.createdAt,
       })
       return agent
     },
 
     async findById(id) {
-      const row = await db.select().from(agents).where(eq(agents.id, id)).get()
-      return row ? rowToAgent(row) : null
+      const row = await db.select().from(users).where(eq(users.id, id)).get()
+      if (!row || !row.owner) return null
+      return rowToAgent(row)
     },
 
     async findByEmail(email) {
-      const row = await db.select().from(agents).where(eq(agents.email, email)).get()
-      return row ? rowToAgent(row) : null
+      const row = await db.select().from(users).where(eq(users.email, email)).get()
+      if (!row || !row.owner) return null
+      return rowToAgent(row)
     },
 
     async update(id, data) {
-      const existing = await db.select().from(agents).where(eq(agents.id, id)).get()
-      if (!existing) throw new Error(`Agent not found: ${id}`)
+      const existing = await db.select().from(users).where(eq(users.id, id)).get()
+      if (!existing || !existing.owner) throw new Error(`Agent not found: ${id}`)
 
       const updates: Record<string, unknown> = {}
       if (data.email !== undefined) updates.email = data.email
@@ -79,28 +82,28 @@ export function createDrizzleAgentStore(): AgentStore {
       if (data.publicKey !== undefined) updates.publicKey = data.publicKey
       if (data.isActive !== undefined) updates.isActive = data.isActive
 
-      await db.update(agents).set(updates).where(eq(agents.id, id))
+      await db.update(users).set(updates).where(eq(users.id, id))
 
-      const updated = await db.select().from(agents).where(eq(agents.id, id)).get()
+      const updated = await db.select().from(users).where(eq(users.id, id)).get()
       return rowToAgent(updated!)
     },
 
     async delete(id) {
-      await db.delete(agents).where(eq(agents.id, id))
+      await db.delete(users).where(eq(users.id, id))
     },
 
     async listAll() {
-      const rows = await db.select().from(agents).orderBy(desc(agents.createdAt))
+      const rows = await db.select().from(users).where(isNotNull(users.owner)).orderBy(desc(users.createdAt))
       return rows.map(rowToAgent)
     },
 
     async findByOwner(owner) {
-      const rows = await db.select().from(agents).where(eq(agents.owner, owner)).orderBy(desc(agents.createdAt))
+      const rows = await db.select().from(users).where(eq(users.owner, owner)).orderBy(desc(users.createdAt))
       return rows.map(rowToAgent)
     },
 
     async findByApprover(approver) {
-      const rows = await db.select().from(agents).where(eq(agents.approver, approver)).orderBy(desc(agents.createdAt))
+      const rows = await db.select().from(users).where(eq(users.approver, approver)).orderBy(desc(users.createdAt))
       return rows.map(rowToAgent)
     },
   }
