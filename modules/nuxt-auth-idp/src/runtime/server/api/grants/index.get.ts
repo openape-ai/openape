@@ -1,5 +1,5 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
-import { defineEventHandler, getQuery } from 'h3'
+import { createError, defineEventHandler, getQuery } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAppSession(event)
   if (!session.data.userId) {
-    return await grantStore.listGrants({ limit, cursor, status: status ?? 'pending' })
+    throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
   const email = session.data.userId as string
@@ -42,9 +42,11 @@ export default defineEventHandler(async (event) => {
   ]
 
   // Single query instead of findAll() + in-memory filter
+  // Use high limit for section queries (need all active/pending to display correctly)
+  const sectionLimit = section ? 1000 : limit
   const { data: owned } = await grantStore.listGrants({
     requester: allRequesters,
-    limit: 100,
+    limit: sectionLimit,
   })
 
   // section=active → all pending + approved timed/always (no pagination)
