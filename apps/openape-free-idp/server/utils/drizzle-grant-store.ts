@@ -127,7 +127,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
     },
 
     async listGrants(params?: GrantListParams): Promise<PaginatedResponse<OpenApeGrant>> {
-      const limit = Math.min(Math.max(params?.limit ?? 20, 1), 100)
+      const limit = Math.min(Math.max(params?.limit ?? 20, 1), 1000)
       const conditions = []
 
       if (params?.status)
