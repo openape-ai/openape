@@ -32,19 +32,19 @@ export default defineEventHandler(async (event) => {
 
   const email = session.data.userId as string
 
-  // All users (including admins) only see grants from their own agents
+  // Collect all relevant requester identities in one array
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const agentEmails = new Set([
+  const allRequesters = [
+    email,
     ...ownedAgents.map(a => a.email),
     ...approvedAgents.map(a => a.email),
-  ])
+  ]
 
-  const allGrants = await grantStore.findAll()
-  const owned = allGrants.filter((grant: OpenApeGrant) => {
-    if (grant.request.requester === email) return true
-    if (agentEmails.has(grant.request.requester)) return true
-    return false
+  // Single query instead of findAll() + in-memory filter
+  const { data: owned } = await grantStore.listGrants({
+    requester: allRequesters,
+    limit: 100,
   })
 
   // section=active → all pending + approved timed/always (no pagination)
