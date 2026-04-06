@@ -43,18 +43,12 @@ export default defineEventHandler(async (event) => {
     ]),
   ]
 
-  console.log('[grants] user:', email, 'owned:', ownedAgents.length, 'approved:', approvedAgents.length, 'requesters:', allRequesters)
-
   // Single DB query with requester IN (...) — no findAll() needed
   const sectionLimit = section ? 1000 : limit
-  const result = await grantStore.listGrants({
+  const { data: owned } = await grantStore.listGrants({
     requester: allRequesters,
     limit: sectionLimit,
   })
-
-  console.log('[grants] found:', result.data.length, 'has_more:', result.pagination.has_more)
-
-  const owned = result.data
 
   // section=active → all pending + approved timed/always (no pagination)
   if (section === 'active') {
