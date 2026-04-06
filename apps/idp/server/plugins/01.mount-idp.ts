@@ -12,8 +12,16 @@ import { createDrizzleUserStore } from '../stores/user-store'
 
 export default defineNitroPlugin(async (nitroApp) => {
   const config = useRuntimeConfig()
+
+  console.log('[idp-mount] issuer:', config.issuer)
+  console.log('[idp-mount] tursoUrl:', config.tursoUrl ? 'SET' : 'MISSING')
+  console.log('[idp-mount] managementToken:', config.managementToken ? 'SET' : 'MISSING')
+
   const db = useDb()
+  console.log('[idp-mount] DB client created')
+
   await ensureTables(db)
+  console.log('[idp-mount] Tables ensured')
 
   const adminEmailsRaw = config.adminEmails as string
   const adminEmails = adminEmailsRaw.split(',').map(e => e.trim()).filter(Boolean)
