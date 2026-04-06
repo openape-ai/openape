@@ -282,6 +282,9 @@ importers:
       '@openape/nuxt-auth-idp':
         specifier: workspace:*
         version: link:../../modules/nuxt-auth-idp
+      '@openape/vue-components':
+        specifier: workspace:*
+        version: link:../../packages/vue-components
       db0:
         specifier: ^0.3.0
         version: 0.3.4(@libsql/client@0.14.0)(better-sqlite3@12.6.2)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.2)(bun-types@1.3.10)(gel@2.2.0))

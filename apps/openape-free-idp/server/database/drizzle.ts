@@ -1,5 +1,5 @@
-import { createClient } from '@libsql/client'
-import { drizzle } from 'drizzle-orm/libsql'
+import { createClient } from '@libsql/client/http'
+import { drizzle } from 'drizzle-orm/libsql/http'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import * as schema from './schema'
 
