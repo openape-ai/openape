@@ -13,9 +13,12 @@ export default defineNitroConfig({
   },
   routeRules: {
     '/api/auth/**': { cors: true },
+    '/api/agent/**': { cors: true },
     '/api/grants/**': { cors: true },
     '/api/delegations/**': { cors: true },
     '/.well-known/**': { cors: true },
     '/token': { cors: true },
+    '/userinfo': { cors: true },
+    '/revoke': { cors: true },
   },
 })
