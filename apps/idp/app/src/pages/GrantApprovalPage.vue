@@ -73,10 +73,10 @@ const grantTypeOptions = computed(() => {
 })
 
 const effectiveDuration = computed(() => {
-  if (selectedGrantType.value === 'as_requested')
+  if (selectedGrantType.value === 'as_requested') {
     return grant.value?.request?.duration
-  if (selectedGrantType.value !== 'timed')
-    return undefined
+  }
+  if (selectedGrantType.value !== 'timed') return undefined
   return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
 })
 
@@ -121,16 +121,19 @@ async function handleApprove() {
       ? grant.value?.request?.duration
       : effectiveDuration.value
 
-    const res = await fetch(`/api/grants/${grantId.value}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        grant_type: resolvedGrantType,
-        ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
-        ...extendBody,
-      }),
-    })
+    const res = await fetch(
+      `/api/grants/${grantId.value}/approve`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          grant_type: resolvedGrantType,
+          ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
+          ...extendBody,
+        }),
+      },
+    )
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error((err as Record<string, string>).statusMessage ?? (err as Record<string, string>).title ?? 'Approval failed')
@@ -172,7 +175,7 @@ async function handleDeny() {
       window.location.href = url.toString()
     }
     else {
-      grant.value = { ...grant.value, status: 'denied' }
+      grant.value = { ...grant.value ?? {}, status: 'denied' }
     }
   }
   catch (err) {
