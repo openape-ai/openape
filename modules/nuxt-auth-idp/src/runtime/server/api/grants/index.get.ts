@@ -46,12 +46,20 @@ export default defineEventHandler(async (event) => {
   }
 
   // Collect emails of owned/approved users
-  const ownedUsers = await userStore.findByOwner(email)
-  const approvedUsers = await userStore.findByApprover(email)
+  let ownedUsers, approvedUsers
+  try {
+    ownedUsers = await userStore.findByOwner(email)
+    approvedUsers = await userStore.findByApprover(email)
+  }
+  catch (err) {
+    console.error('[grants] findByOwner/findByApprover failed:', err)
+    ownedUsers = []
+    approvedUsers = []
+  }
   const requesters = [
     email,
-    ...ownedUsers.map(u => u.email),
-    ...approvedUsers.map(u => u.email),
+    ...ownedUsers.map((u: { email: string }) => u.email),
+    ...approvedUsers.map((u: { email: string }) => u.email),
   ]
 
   // Default paginated case: delegate to DB-level query with IN clause
@@ -60,7 +68,15 @@ export default defineEventHandler(async (event) => {
   }
 
   // Section queries need all user grants, then filter in-memory
-  const { data: owned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
+  let owned: OpenApeGrant[]
+  try {
+    const result = await grantStore.listGrants({ requester: requesters, limit: 10000 })
+    owned = result.data
+  }
+  catch (err) {
+    console.error('[grants] listGrants failed:', err)
+    owned = []
+  }
 
   // section=active
   if (section === 'active') {
