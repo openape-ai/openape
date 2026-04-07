@@ -5,14 +5,5 @@ import { useIdpStores } from '../../../utils/stores'
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
   const { userStore } = useIdpStores()
-  const users = await userStore.listUsers()
-
-  return {
-    data: users,
-    pagination: {
-      total: users.length,
-      page: 1,
-      pageSize: users.length,
-    },
-  }
+  return await userStore.list({ limit: 100 })
 })

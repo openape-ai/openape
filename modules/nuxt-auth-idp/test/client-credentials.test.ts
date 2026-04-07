@@ -29,8 +29,13 @@ vi.mock('h3', () => ({
 }))
 
 // Mock stores
-const mockAgentStore = {
+const mockUserStore = {
   findByEmail: vi.fn(),
+}
+
+const mockSshKeyStore = {
+  findByUser: vi.fn(),
+  findByPublicKey: vi.fn(),
 }
 
 const mockKeyStore = {
@@ -44,16 +49,15 @@ const mockJtiStore = {
 }
 
 const mockCodeStore = { find: vi.fn(), save: vi.fn(), delete: vi.fn() }
-const mockUserStore = { findByEmail: vi.fn() }
 
 vi.mock('../src/runtime/server/utils/stores', () => ({
   getIdpIssuer: () => ISSUER,
   useIdpStores: () => ({
-    agentStore: mockAgentStore,
+    userStore: mockUserStore,
+    sshKeyStore: mockSshKeyStore,
     keyStore: mockKeyStore,
     jtiStore: mockJtiStore,
     codeStore: mockCodeStore,
-    userStore: mockUserStore,
   }),
 }))
 
@@ -96,13 +100,20 @@ describe('client_credentials grant', () => {
   it('issues agent token for valid client assertion', async () => {
     await setup()
 
-    mockAgentStore.findByEmail.mockResolvedValue({
-      id: 'agent-1',
+    mockUserStore.findByEmail.mockResolvedValue({
       email: AGENT_EMAIL,
       name: 'Test Agent',
       isActive: true,
-      publicKey: 'ssh-ed25519 mock',
+      owner: 'admin@test.com',
+      createdAt: 1000,
     })
+    mockSshKeyStore.findByUser.mockResolvedValue([{
+      keyId: 'k1',
+      userEmail: AGENT_EMAIL,
+      publicKey: 'ssh-ed25519 mock',
+      name: 'test',
+      createdAt: 1000,
+    }])
 
     mockKeyStore.getSigningKey.mockResolvedValue(idpSigningKey)
 
@@ -133,7 +144,7 @@ describe('client_credentials grant', () => {
 
   it('rejects unknown agent', async () => {
     await setup()
-    mockAgentStore.findByEmail.mockResolvedValue(null)
+    mockUserStore.findByEmail.mockResolvedValue(null)
 
     const assertion = await buildClientAssertion()
     const { readRawBody } = await import('h3')
@@ -152,11 +163,12 @@ describe('client_credentials grant', () => {
 
   it('rejects inactive agent', async () => {
     await setup()
-    mockAgentStore.findByEmail.mockResolvedValue({
-      id: 'agent-1',
+    mockUserStore.findByEmail.mockResolvedValue({
       email: AGENT_EMAIL,
+      name: 'Test Agent',
       isActive: false,
-      publicKey: 'ssh-ed25519 mock',
+      owner: 'admin@test.com',
+      createdAt: 1000,
     })
 
     const assertion = await buildClientAssertion()
@@ -176,12 +188,20 @@ describe('client_credentials grant', () => {
 
   it('rejects replay (same jti)', async () => {
     await setup()
-    mockAgentStore.findByEmail.mockResolvedValue({
-      id: 'agent-1',
+    mockUserStore.findByEmail.mockResolvedValue({
       email: AGENT_EMAIL,
+      name: 'Test Agent',
       isActive: true,
-      publicKey: 'ssh-ed25519 mock',
+      owner: 'admin@test.com',
+      createdAt: 1000,
     })
+    mockSshKeyStore.findByUser.mockResolvedValue([{
+      keyId: 'k1',
+      userEmail: AGENT_EMAIL,
+      publicKey: 'ssh-ed25519 mock',
+      name: 'test',
+      createdAt: 1000,
+    }])
     mockKeyStore.getSigningKey.mockResolvedValue(idpSigningKey)
     mockJtiStore.hasBeenUsed.mockResolvedValue(true) // JTI already used
 
@@ -202,12 +222,20 @@ describe('client_credentials grant', () => {
 
   it('rejects wrong audience', async () => {
     await setup()
-    mockAgentStore.findByEmail.mockResolvedValue({
-      id: 'agent-1',
+    mockUserStore.findByEmail.mockResolvedValue({
       email: AGENT_EMAIL,
+      name: 'Test Agent',
       isActive: true,
-      publicKey: 'ssh-ed25519 mock',
+      owner: 'admin@test.com',
+      createdAt: 1000,
     })
+    mockSshKeyStore.findByUser.mockResolvedValue([{
+      keyId: 'k1',
+      userEmail: AGENT_EMAIL,
+      publicKey: 'ssh-ed25519 mock',
+      name: 'test',
+      createdAt: 1000,
+    }])
     mockJtiStore.hasBeenUsed.mockResolvedValue(false)
 
     const assertion = await buildClientAssertion({ aud: 'https://wrong.example.com/token' })

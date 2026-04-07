@@ -24,6 +24,11 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 409, title: 'User already exists' })
   }
 
-  const user = await userStore.create(body.email, body.name)
+  const user = await userStore.create({
+    email: body.email,
+    name: body.name,
+    isActive: true,
+    createdAt: Math.floor(Date.now() / 1000),
+  })
   return { ok: true, email: user.email, name: user.name }
 })

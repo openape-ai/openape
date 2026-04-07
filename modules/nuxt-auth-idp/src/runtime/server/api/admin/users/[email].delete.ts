@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'User not found' })
   }
 
-  await userStore.deleteUser(decoded)
+  await userStore.delete(decoded)
   await sshKeyStore.deleteAllForUser(decoded)
   return { ok: true }
 })

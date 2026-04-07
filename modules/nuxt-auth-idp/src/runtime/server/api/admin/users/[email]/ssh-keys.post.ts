@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
   // Ensure user exists — create if not
   const user = await userStore.findByEmail(email)
   if (!user) {
-    await userStore.create(email, name)
+    await userStore.create({ email, name, isActive: true, createdAt: Math.floor(Date.now() / 1000) })
   }
 
   const sshKey = {

@@ -32,7 +32,7 @@ const mockRefreshTokenStore = {
 const mockCodeStore = { find: vi.fn(), save: vi.fn(), delete: vi.fn() }
 const mockKeyStore = { getSigningKey: vi.fn(), getAllPublicKeys: vi.fn() }
 const mockUserStore = { findByEmail: vi.fn() }
-const mockAgentStore = { findByEmail: vi.fn() }
+const mockSshKeyStore = { findByUser: vi.fn(), findByPublicKey: vi.fn() }
 const mockJtiStore = { hasBeenUsed: vi.fn().mockResolvedValue(false), markUsed: vi.fn() }
 
 vi.mock('../src/runtime/server/utils/stores', () => ({
@@ -41,7 +41,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
     codeStore: mockCodeStore,
     keyStore: mockKeyStore,
     userStore: mockUserStore,
-    agentStore: mockAgentStore,
+    sshKeyStore: mockSshKeyStore,
     jtiStore: mockJtiStore,
     refreshTokenStore: mockRefreshTokenStore,
   }),
