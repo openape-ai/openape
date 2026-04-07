@@ -25,6 +25,7 @@
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/vue-components": "workspace:*",
+    "@sentry/nuxt": "^10.47.0",
     "db0": "^0.3.0",
     "drizzle-orm": "^0.44.7",
     "nuxt": "^4.0.0",
