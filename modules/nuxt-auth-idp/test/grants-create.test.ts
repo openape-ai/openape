@@ -15,6 +15,8 @@ vi.mock('h3', () => ({
 
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryAgentAuth: vi.fn(async () => null),
+  tryBearerAuth: vi.fn(async () => null),
+  requireAgent: vi.fn(async () => { throw new Error('not authenticated') }),
 }))
 
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({
