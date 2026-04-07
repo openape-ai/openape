@@ -1,3 +1,4 @@
+// Legacy alias — maps agent_id to id, delegates to /api/auth/challenge
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { useGrantStores } from '../../utils/grant-stores'
@@ -10,16 +11,15 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required field: agent_id' })
   }
 
-  const { agentStore } = useIdpStores()
+  const { sshKeyStore } = useIdpStores()
   const { challengeStore } = useGrantStores()
 
-  const agent = body.agent_id.includes('@')
-    ? await agentStore.findByEmail(body.agent_id)
-    : await agentStore.findById(body.agent_id)
-  if (!agent || !agent.isActive) {
-    throw createProblemError({ status: 404, title: 'Agent not found or inactive' })
+  const id = body.agent_id
+  const sshKeys = await sshKeyStore.findByUser(id)
+  if (sshKeys.length === 0) {
+    throw createProblemError({ status: 404, title: 'User not found or has no SSH keys' })
   }
 
-  const challenge = await challengeStore.createChallenge(agent.id)
+  const challenge = await challengeStore.createChallenge(id)
   return { challenge }
 })

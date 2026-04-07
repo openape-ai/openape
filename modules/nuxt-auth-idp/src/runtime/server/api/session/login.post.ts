@@ -17,33 +17,10 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required fields: id, challenge, signature' })
   }
 
-  const { agentStore, sshKeyStore, userStore } = useIdpStores()
+  const { sshKeyStore, userStore } = useIdpStores()
   const { challengeStore } = useGrantStores()
 
-  // Try agent first (by email or UUID)
-  const agent = body.id.includes('@')
-    ? await agentStore.findByEmail(body.id)
-    : await agentStore.findById(body.id)
-
-  if (agent && agent.isActive) {
-    const valid = await challengeStore.consumeChallenge(body.challenge, agent.id)
-    if (!valid) {
-      throw createProblemError({ status: 401, title: 'Invalid, expired, or already used challenge' })
-    }
-
-    const signatureBuffer = Buffer.from(body.signature, 'base64')
-    const isValid = verifyEd25519Signature(agent.publicKey, body.challenge, signatureBuffer)
-    if (!isValid) {
-      throw createProblemError({ status: 401, title: 'Invalid signature', type: 'https://ddisa.org/errors/invalid_token' })
-    }
-
-    const session = await getAppSession(event)
-    await session.update({ userId: agent.email })
-
-    return { ok: true }
-  }
-
-  // Try human with SSH key
+  // Find SSH key to verify against
   let sshKey
   if (body.public_key) {
     sshKey = await sshKeyStore.findByPublicKey(body.public_key)
@@ -54,7 +31,7 @@ export default defineEventHandler(async (event) => {
   else {
     const keys = await sshKeyStore.findByUser(body.id)
     if (keys.length === 0) {
-      throw createProblemError({ status: 404, title: 'No agent or user with SSH keys found' })
+      throw createProblemError({ status: 404, title: 'No user with SSH keys found' })
     }
     if (keys.length > 1) {
       throw createProblemError({ status: 400, title: 'Multiple SSH keys registered. Specify public_key to identify which key to use.' })

@@ -5,15 +5,15 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
 
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing agent ID' })
+    throw createError({ statusCode: 400, statusMessage: 'Missing user ID' })
   }
 
-  const { agentStore } = useIdpStores()
-  const agent = await agentStore.findById(id)
+  const { userStore } = useIdpStores()
+  const user = await userStore.findByEmail(decodeURIComponent(id))
 
-  if (!agent || agent.owner !== email) {
-    throw createError({ statusCode: 404, statusMessage: 'Agent not found' })
+  if (!user || user.owner !== email) {
+    throw createError({ statusCode: 404, statusMessage: 'User not found' })
   }
 
-  return agent
+  return user
 })

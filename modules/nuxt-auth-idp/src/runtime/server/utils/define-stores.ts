@@ -1,9 +1,7 @@
 import type { H3Event } from 'h3'
-import type { ChallengeStore as WebAuthnChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore } from '@openape/auth'
+import type { ChallengeStore as WebAuthnChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
-import type { UserStore } from './user-store'
-import type { AgentStore } from './agent-store'
 import type { SshKeyStore } from './ssh-key-store'
 import { registerStoreFactory } from './store-registry'
 
@@ -29,10 +27,6 @@ export function defineCodeStore(factory: (event: H3Event) => CodeStore) {
 
 export function defineKeyStore(factory: (event: H3Event) => KeyStore) {
   registerStoreFactory('keyStore', factory)
-}
-
-export function defineAgentStore(factory: (event: H3Event) => AgentStore) {
-  registerStoreFactory('agentStore', factory)
 }
 
 export function defineCredentialStore(factory: (event: H3Event) => CredentialStore) {

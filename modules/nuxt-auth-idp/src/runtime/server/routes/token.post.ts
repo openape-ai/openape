@@ -94,17 +94,19 @@ async function handleClientCredentialsGrant(event: H3Event, body: Record<string,
     return oauthError(event, 400, 'invalid_request', 'Missing client_assertion')
   }
 
-  const { agentStore, keyStore, jtiStore } = useIdpStores()
+  const { userStore, sshKeyStore, keyStore, jtiStore } = useIdpStores()
   const issuer = getIdpIssuer()
 
   try {
     const { sub } = await validateClientAssertion(
       assertion,
       `${issuer}/token`,
-      async (agentEmail) => {
-        const agent = await agentStore.findByEmail(agentEmail)
-        if (!agent || !agent.isActive) return null
-        return sshEd25519ToKeyObject(agent.publicKey)
+      async (userEmail) => {
+        const user = await userStore.findByEmail(userEmail)
+        if (!user || !user.isActive) return null
+        const keys = await sshKeyStore.findByUser(userEmail)
+        if (keys.length === 0) return null
+        return sshEd25519ToKeyObject(keys[0]!.publicKey)
       },
       jtiStore,
     )

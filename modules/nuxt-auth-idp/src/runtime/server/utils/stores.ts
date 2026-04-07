@@ -1,9 +1,6 @@
-// TODO: Migrate to unified UserStore from @openape/auth (see openape-server plan, Milestone 5)
 import type { H3Event } from 'h3'
-import type { ChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore } from '@openape/auth'
+import type { ChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
-import { createAgentStore } from './agent-store'
-import type { AgentStore } from './agent-store'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
 import { createCredentialStore } from './credential-store'
@@ -14,14 +11,12 @@ import { createRegistrationUrlStore } from './registration-url-store'
 import { createSshKeyStore } from './ssh-key-store'
 import type { SshKeyStore } from './ssh-key-store'
 import { createUserStore } from './user-store'
-import type { UserStore } from './user-store'
 import { getStoreFactory } from './store-registry'
 
 interface IdpStores {
   userStore: UserStore
   codeStore: CodeStore
   keyStore: KeyStore
-  agentStore: AgentStore
   credentialStore: CredentialStore
   challengeStore: ChallengeStore
   registrationUrlStore: RegistrationUrlStore
@@ -37,7 +32,6 @@ function initDefaultStores(): IdpStores {
     userStore: createUserStore(),
     codeStore: createCodeStore(),
     keyStore: createKeyStore(),
-    agentStore: createAgentStore(),
     credentialStore: createCredentialStore(),
     challengeStore: createChallengeStore(),
     registrationUrlStore: createRegistrationUrlStore(),
@@ -52,7 +46,6 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     userStore: getStoreFactory<UserStore>('userStore')?.(event) ?? createUserStore(),
     codeStore: getStoreFactory<CodeStore>('codeStore')?.(event) ?? createCodeStore(),
     keyStore: getStoreFactory<KeyStore>('keyStore')?.(event) ?? createKeyStore(),
-    agentStore: getStoreFactory<AgentStore>('agentStore')?.(event) ?? createAgentStore(),
     credentialStore: getStoreFactory<CredentialStore>('credentialStore')?.(event) ?? createCredentialStore(),
     challengeStore: getStoreFactory<ChallengeStore>('challengeStore')?.(event) ?? createChallengeStore(),
     registrationUrlStore: getStoreFactory<RegistrationUrlStore>('registrationUrlStore')?.(event) ?? createRegistrationUrlStore(),

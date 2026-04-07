@@ -215,5 +215,5 @@ async function loginWithKey(idp: string, keyPath: string, email?: string) {
     expires_at: Math.floor(Date.now() / 1000) + (expires_in || 3600),
   })
 
-  consola.success(`Logged in as ${agentEmail} (agent)`)
+  consola.success(`Logged in as ${agentEmail}`)
 }

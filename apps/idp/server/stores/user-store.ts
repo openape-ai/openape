@@ -138,5 +138,10 @@ export function createDrizzleUserStore(db: LibSQLDatabase<typeof schema>): UserS
       const rows = await db.select().from(users).where(eq(users.owner, owner))
       return rows.map(rowToUser)
     },
+
+    async findByApprover(approver) {
+      const rows = await db.select().from(users).where(eq(users.approver, approver))
+      return rows.map(rowToUser)
+    },
   }
 }

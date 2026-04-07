@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { defineEventHandler, readBody } from 'h3'
 import { requireAdmin } from '../../../utils/admin'
 import { useIdpStores } from '../../../utils/stores'
@@ -5,7 +6,7 @@ import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
-  const { agentStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
 
   const body = await readBody<{
     email: string
@@ -23,21 +24,32 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }
 
-  const duplicate = await agentStore.findByEmail(body.email)
+  const duplicate = await userStore.findByEmail(body.email)
   if (duplicate) {
-    throw createProblemError({ status: 409, title: 'An agent with this email already exists' })
+    throw createProblemError({ status: 409, title: 'A user with this email already exists' })
   }
 
-  const agent = await agentStore.create({
-    id: crypto.randomUUID(),
+  const user = await userStore.create({
     email: body.email,
     name: body.name,
     owner: body.owner,
     approver: body.approver,
-    publicKey: body.publicKey,
-    createdAt: Date.now(),
+    type: 'agent',
     isActive: true,
+    createdAt: Math.floor(Date.now() / 1000),
   })
 
-  return agent
+  // Create SSH key
+  const parts = body.publicKey.trim().split(/\s+/)
+  const keyData = parts[1]!
+  const keyId = createHash('sha256').update(Buffer.from(keyData, 'base64')).digest('hex')
+  await sshKeyStore.save({
+    keyId,
+    userEmail: body.email,
+    publicKey: body.publicKey.trim(),
+    name: body.name,
+    createdAt: Math.floor(Date.now() / 1000),
+  })
+
+  return user
 })

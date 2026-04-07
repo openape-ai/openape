@@ -4,6 +4,7 @@ import { useIdpStores } from '../../../utils/stores'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
-  const { agentStore } = useIdpStores()
-  return await agentStore.listAll()
+  const { userStore } = useIdpStores()
+  const { data } = await userStore.list({ limit: 100 })
+  return data.filter(u => u.owner)
 })

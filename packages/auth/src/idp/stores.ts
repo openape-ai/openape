@@ -344,6 +344,7 @@ export interface UserStore {
   update: (email: string, data: Partial<Omit<User, 'email' | 'createdAt'>>) => Promise<User>
   delete: (email: string) => Promise<void>
   findByOwner: (owner: string) => Promise<User[]>
+  findByApprover: (approver: string) => Promise<User[]>
 }
 
 // --- SSH Keys ---
@@ -428,6 +429,10 @@ export class InMemoryUserStore implements UserStore {
 
   async findByOwner(owner: string): Promise<User[]> {
     return [...this.users.values()].filter(u => u.owner === owner)
+  }
+
+  async findByApprover(approver: string): Promise<User[]> {
+    return [...this.users.values()].filter(u => u.approver === approver)
   }
 }
 

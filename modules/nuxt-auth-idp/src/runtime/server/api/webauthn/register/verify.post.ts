@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   // Create user if not exists
   const existingUser = await userStore.findByEmail(regUrl.email)
   if (!existingUser) {
-    await userStore.create(regUrl.email, regUrl.name)
+    await userStore.create({ email: regUrl.email, name: regUrl.name, isActive: true, createdAt: Math.floor(Date.now() / 1000) })
   }
 
   await credentialStore.save(credential)
