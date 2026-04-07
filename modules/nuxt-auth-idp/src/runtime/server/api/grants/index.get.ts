@@ -1,5 +1,6 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery } from 'h3'
+import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -25,12 +26,24 @@ export default defineEventHandler(async (event) => {
     return await grantStore.listGrants({ limit, cursor, status, requester })
   }
 
-  const session = await getAppSession(event)
-  if (!session.data.userId) {
+  // Try Bearer token first, then fall back to session cookie
+  let email: string | undefined
+  const bearerPayload = await tryBearerAuth(event)
+  if (bearerPayload) {
+    email = bearerPayload.sub
+  }
+  else {
+    try {
+      const session = await getAppSession(event)
+      email = session.data.userId as string | undefined
+    }
+    catch {
+      // Session may fail if secret is not configured
+    }
+  }
+  if (!email) {
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
-
-  const email = session.data.userId as string
 
   // Collect agent emails owned/approved by this user
   const ownedAgents = await agentStore.findByOwner(email)

@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { getHeader } from 'h3'
 import { useEvent, useRuntimeConfig } from 'nitropack/runtime'
+import { tryBearerAuth } from './agent-auth'
 import { getAppSession } from './session'
 import { createProblemError } from './problem'
 
@@ -27,24 +28,45 @@ export function isAdmin(email: string): boolean {
 
 const RE_BEARER_PREFIX = /^Bearer\s+/i
 
-function hasManagementToken(event: H3Event): boolean {
+/**
+ * Check management token.
+ * Returns 'valid' | 'invalid' | 'none'.
+ * - 'valid': token matches
+ * - 'invalid': Authorization header present but token does not match
+ * - 'none': no Authorization header
+ */
+function checkManagementToken(event: H3Event): 'valid' | 'invalid' | 'none' {
   const config = useRuntimeConfig()
   const expected = config.openapeIdp.managementToken as string
-  if (!expected) return false
   const auth = getHeader(event, 'Authorization')
-  if (!auth) return false
+  if (!auth) return 'none'
+  if (!expected) return 'invalid'
   const token = auth.replace(RE_BEARER_PREFIX, '')
   // Timing-safe comparison to prevent timing attacks
   const tokenBuf = Buffer.from(token)
   const expectedBuf = Buffer.from(expected)
-  if (tokenBuf.length !== expectedBuf.length) return false
-  return timingSafeEqual(tokenBuf, expectedBuf)
+  if (tokenBuf.length !== expectedBuf.length) return 'invalid'
+  return timingSafeEqual(tokenBuf, expectedBuf) ? 'valid' : 'invalid'
 }
 
 export async function requireAuth(event: H3Event): Promise<string> {
-  if (hasManagementToken(event)) return '_management_'
+  const tokenCheck = checkManagementToken(event)
+  if (tokenCheck === 'valid') return '_management_'
 
-  const session = await getAppSession(event)
+  // If a Bearer token is present but not the management token, try JWT auth
+  if (tokenCheck === 'invalid') {
+    const bearerPayload = await tryBearerAuth(event)
+    if (bearerPayload) return bearerPayload.sub
+    throw createProblemError({ status: 403, title: 'Invalid token' })
+  }
+
+  let session
+  try {
+    session = await getAppSession(event)
+  }
+  catch {
+    throw createProblemError({ status: 401, title: 'Authentication required' })
+  }
   if (!session.data.userId) {
     throw createProblemError({ status: 401, title: 'Authentication required' })
   }
@@ -52,9 +74,19 @@ export async function requireAuth(event: H3Event): Promise<string> {
 }
 
 export async function requireAdmin(event: H3Event): Promise<string> {
-  if (hasManagementToken(event)) return '_management_'
+  const tokenCheck = checkManagementToken(event)
+  if (tokenCheck === 'valid') return '_management_'
+  if (tokenCheck === 'invalid') {
+    throw createProblemError({ status: 403, title: 'Invalid management token' })
+  }
 
-  const session = await getAppSession(event)
+  let session
+  try {
+    session = await getAppSession(event)
+  }
+  catch {
+    throw createProblemError({ status: 401, title: 'Authentication required' })
+  }
   if (!session.data.userId) {
     throw createProblemError({ status: 401, title: 'Authentication required' })
   }

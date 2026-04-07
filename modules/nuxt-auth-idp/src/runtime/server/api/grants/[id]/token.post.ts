@@ -1,16 +1,24 @@
 import { introspectGrant, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
-import { tryAgentAuth } from '../../../utils/agent-auth'
+import { tryBearerAuth } from '../../../utils/agent-auth'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { getAppSession } from '../../../utils/session'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
-  // Accept both agent token and session auth
-  const agentPayload = await tryAgentAuth(event)
-  const session = !agentPayload ? await getAppSession(event) : null
-  const identity = agentPayload?.sub || (session?.data.userId as string | undefined)
+  // Accept both bearer token and session auth
+  const bearerPayload = await tryBearerAuth(event)
+  let identity: string | undefined = bearerPayload?.sub
+  if (!identity) {
+    try {
+      const session = await getAppSession(event)
+      identity = session?.data.userId as string | undefined
+    }
+    catch {
+      // Session may fail if secret is not configured
+    }
+  }
 
   if (!identity) {
     throw createProblemError({ status: 401, title: 'Authentication required (agent token or session)' })

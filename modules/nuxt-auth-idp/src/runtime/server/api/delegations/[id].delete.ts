@@ -1,21 +1,16 @@
 import { defineEventHandler, getRouterParam } from 'h3'
 import { revokeGrant } from '@openape/grants'
 import { useGrantStores } from '../../utils/grant-stores'
-import { getAppSession } from '../../utils/session'
+import { requireAuth } from '../../utils/admin'
 import { createProblemError } from '../../utils/problem'
 
 export default defineEventHandler(async (event) => {
-  const session = await getAppSession(event)
-  if (!session.data.userId) {
-    throw createProblemError({ status: 401, title: 'Not authenticated' })
-  }
+  const email = await requireAuth(event)
 
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createProblemError({ status: 400, title: 'Missing delegation ID' })
   }
-
-  const email = session.data.userId as string
   const { grantStore } = useGrantStores()
   const grant = await grantStore.findById(id)
 

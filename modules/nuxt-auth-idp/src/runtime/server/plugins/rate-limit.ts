@@ -29,6 +29,9 @@ function cleanup() {
 }
 
 export default (nitroApp: NitroApp) => {
+  // Skip rate limiting entirely in E2E test mode
+  if (process.env.OPENAPE_E2E === '1') return
+
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
     if (!RE_AUTH_PATHS.test(path)) return

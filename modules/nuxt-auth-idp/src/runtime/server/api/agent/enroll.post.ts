@@ -1,4 +1,5 @@
 // Canonical: @openape/server createEnrollHandler
+import { createHash } from 'node:crypto'
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { requireAdmin } from '../../utils/admin'
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
     publicKey: string
     owner?: string
     approver?: string
+    type?: 'human' | 'agent'
   }>(event)
 
   if (!body.email || !body.name || !body.publicKey) {
@@ -34,6 +36,40 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }
 
+  // Human enrollment: create user + SSH key (authenticates as act=human)
+  if (body.type === 'human') {
+    const { userStore, sshKeyStore } = useIdpStores()
+
+    const existingUser = await userStore.findByEmail(body.email)
+    if (!existingUser) {
+      await userStore.create(body.email, body.name)
+    }
+
+    // Compute keyId from public key
+    const parts = body.publicKey.trim().split(/\s+/)
+    const keyData = parts[1]!
+    const keyId = createHash('sha256').update(Buffer.from(keyData, 'base64')).digest('hex')
+
+    const existingKey = await sshKeyStore.findByPublicKey(body.publicKey.trim())
+    if (!existingKey) {
+      await sshKeyStore.save({
+        keyId,
+        userEmail: body.email,
+        publicKey: body.publicKey.trim(),
+        name: body.name,
+        createdAt: Math.floor(Date.now() / 1000),
+      })
+    }
+
+    return {
+      email: body.email,
+      name: body.name,
+      owner: body.owner || body.email,
+      status: 'active',
+    }
+  }
+
+  // Agent enrollment (default)
   const { agentStore } = useIdpStores()
 
   const duplicateEmail = await agentStore.findByEmail(body.email)
