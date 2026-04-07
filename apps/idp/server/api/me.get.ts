@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const session = await useSession(event, getSessionConfig(config))
 
   if (!session.data.userId) {
-    throw createProblemError({ status: 401, title: 'Not authenticated' })
+    throw createError({ statusCode: 401, message: 'Not authenticated' })
   }
 
   const stores = await getStores()

@@ -8,7 +8,11 @@ export default defineNitroPlugin((nitroApp) => {
   })
 
   nitroApp.hooks.hook('error', (error) => {
-    Sentry.captureException(error)
+    // Skip expected HTTP errors (4xx) — only capture server errors (5xx)
+    const statusCode = (error as any)?.statusCode ?? (error as any)?.status ?? 500
+    if (statusCode >= 500) {
+      Sentry.captureException(error)
+    }
   })
 
   console.log('[sentry] Initialized')
