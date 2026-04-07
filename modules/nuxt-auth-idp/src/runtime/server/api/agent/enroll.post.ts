@@ -20,6 +20,16 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required fields: email, name, publicKey' })
   }
 
+  if (body.email.length > 255) {
+    throw createProblemError({ status: 400, title: 'Email must not exceed 255 characters' })
+  }
+  if (body.name.length > 255) {
+    throw createProblemError({ status: 400, title: 'Name must not exceed 255 characters' })
+  }
+  if (body.publicKey.length > 1000) {
+    throw createProblemError({ status: 400, title: 'Public key must not exceed 1000 characters' })
+  }
+
   if (!body.publicKey.startsWith('ssh-ed25519 ')) {
     throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }

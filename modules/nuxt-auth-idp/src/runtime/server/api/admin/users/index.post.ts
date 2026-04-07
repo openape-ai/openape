@@ -12,6 +12,13 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required fields: email, name' })
   }
 
+  if (body.email.length > 255) {
+    throw createProblemError({ status: 400, title: 'Email must not exceed 255 characters' })
+  }
+  if (body.name.length > 255) {
+    throw createProblemError({ status: 400, title: 'Name must not exceed 255 characters' })
+  }
+
   const existing = await userStore.findByEmail(body.email)
   if (existing) {
     throw createProblemError({ status: 409, title: 'User already exists' })
