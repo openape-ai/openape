@@ -112,11 +112,27 @@ export default defineNuxtModule<ModuleOptions>({
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Content-Security-Policy': 'frame-ancestors \'none\'',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+    }
+
+    const noCacheHeaders: Record<string, string> = {
+      ...securityHeaders,
+      'Cache-Control': 'no-store',
     }
 
     // CORS rules
     const corsRules: Record<string, { cors?: boolean, headers?: Record<string, string> }> = {
       '/**': { headers: securityHeaders },
+      '/api/session/**': { headers: noCacheHeaders },
+      '/api/logout': { headers: noCacheHeaders },
+      '/api/me': { headers: noCacheHeaders },
+      '/api/webauthn/**': { headers: noCacheHeaders },
+      '/authorize': { headers: noCacheHeaders },
+      '/token': { headers: noCacheHeaders },
+      '/userinfo': { headers: noCacheHeaders },
+      '/api/auth/**': { headers: noCacheHeaders },
+      '/api/agent/**': { headers: noCacheHeaders },
+      '/api/admin/**': { headers: noCacheHeaders },
     }
     if (routeConfig.oauth) {
       corsRules['/.well-known/**'] = { cors: true }
@@ -157,9 +173,14 @@ export default defineNuxtModule<ModuleOptions>({
       })
     }
 
+    // Rate limiting plugin
+    addServerPlugin(resolve('./runtime/server/plugins/rate-limit'))
+
     // Server route handlers — Auth
     if (routeConfig.auth) {
       addServerHandler({ route: '/api/logout', method: 'post', handler: resolve('./runtime/server/api/logout.post') })
+      addServerHandler({ route: '/api/session/login', method: 'post', handler: resolve('./runtime/server/api/session/login.post') })
+      addServerHandler({ route: '/api/session/logout', method: 'post', handler: resolve('./runtime/server/api/session/logout.post') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
 
       // WebAuthn Registration

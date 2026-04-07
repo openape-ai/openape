@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
 import { getHeader } from 'h3'
 import { useEvent, useRuntimeConfig } from 'nitropack/runtime'
@@ -28,11 +29,16 @@ const RE_BEARER_PREFIX = /^Bearer\s+/i
 
 function hasManagementToken(event: H3Event): boolean {
   const config = useRuntimeConfig()
-  if (!config.openapeIdp.managementToken) return false
+  const expected = config.openapeIdp.managementToken as string
+  if (!expected) return false
   const auth = getHeader(event, 'Authorization')
   if (!auth) return false
   const token = auth.replace(RE_BEARER_PREFIX, '')
-  return token === config.openapeIdp.managementToken
+  // Timing-safe comparison to prevent timing attacks
+  const tokenBuf = Buffer.from(token)
+  const expectedBuf = Buffer.from(expected)
+  if (tokenBuf.length !== expectedBuf.length) return false
+  return timingSafeEqual(tokenBuf, expectedBuf)
 }
 
 export async function requireAuth(event: H3Event): Promise<string> {
