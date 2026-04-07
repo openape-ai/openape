@@ -8,7 +8,7 @@ import { createProblemError } from '../../../utils/problem'
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const { grantStore } = useGrantStores()
-  const { agentStore } = useIdpStores()
+  const { userStore } = useIdpStores()
 
   if (!id) {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
@@ -24,13 +24,13 @@ export default defineEventHandler(async (event) => {
   // Allow if the logged-in user is the requester themselves
   const isRequester = grant.request.requester === email
   if (!isRequester) {
-    const agent = await agentStore.findByEmail(grant.request.requester)
-    if (!agent) {
-      throw createProblemError({ status: 403, title: 'Agent not found for this grant' })
+    const requesterUser = await userStore.findByEmail(grant.request.requester)
+    if (!requesterUser) {
+      throw createProblemError({ status: 403, title: 'Requester not found for this grant' })
     }
-    const isOwnerOrApprover = agent.owner === email || agent.approver === email
+    const isOwnerOrApprover = requesterUser.owner === email || requesterUser.approver === email
     if (!isOwnerOrApprover) {
-      throw createProblemError({ status: 403, title: 'Only the agent owner or approver can deny this grant' })
+      throw createProblemError({ status: 403, title: 'Only the owner or approver can deny this grant' })
     }
   }
 

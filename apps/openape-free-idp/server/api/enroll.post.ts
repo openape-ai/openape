@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { createError, defineEventHandler, readBody } from 'h3'
 
 function sanitizeName(name: string): string {
@@ -16,7 +17,6 @@ export default defineEventHandler(async (event) => {
   const maxAgents = config.public.maxAgentsPerUser
 
   const body = await readBody<{
-    id?: string
     name: string
     publicKey: string
   }>(event)
@@ -29,37 +29,48 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Public key must be in ssh-ed25519 format' })
   }
 
-  const { agentStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
 
-  const existingAgents = await agentStore.findByOwner(email)
-  if (existingAgents.length >= maxAgents) {
+  const existingOwned = await userStore.findByOwner(email)
+  if (existingOwned.length >= maxAgents) {
     throw createError({ statusCode: 409, statusMessage: `Agent limit reached (${maxAgents}). Delete an existing agent first.` })
   }
 
   const agentEmail = deriveAgentEmail(email, body.name)
 
-  const existingByEmail = await agentStore.findByEmail(agentEmail)
+  const existingByEmail = await userStore.findByEmail(agentEmail)
   if (existingByEmail) {
     throw createError({ statusCode: 409, statusMessage: 'An agent with this name already exists. Choose a different name.' })
   }
 
-  const agent = await agentStore.create({
-    id: body.id || crypto.randomUUID(),
+  // Create user
+  const user = await userStore.create({
     email: agentEmail,
     name: body.name,
     owner: email,
     approver: email,
-    publicKey: body.publicKey,
-    createdAt: Date.now(),
+    type: 'agent',
     isActive: true,
+    createdAt: Math.floor(Date.now() / 1000),
+  })
+
+  // Create SSH key
+  const parts = body.publicKey.trim().split(/\s+/)
+  const keyData = parts[1]!
+  const keyId = createHash('sha256').update(Buffer.from(keyData, 'base64')).digest('hex')
+  await sshKeyStore.save({
+    keyId,
+    userEmail: agentEmail,
+    publicKey: body.publicKey.trim(),
+    name: body.name,
+    createdAt: Math.floor(Date.now() / 1000),
   })
 
   return {
-    agent_id: agent.id,
-    email: agent.email,
-    name: agent.name,
-    owner: agent.owner,
-    approver: agent.approver,
+    email: user.email,
+    name: user.name,
+    owner: user.owner,
+    approver: user.approver,
     status: 'active',
   }
 })

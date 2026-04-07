@@ -11,7 +11,7 @@ function isActiveGrant(g: OpenApeGrant): boolean {
 
 export default defineEventHandler(async (event) => {
   const { grantStore } = useGrantStores()
-  const { agentStore } = useIdpStores()
+  const { userStore } = useIdpStores()
   const query = getQuery(event)
 
   const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100)
@@ -45,13 +45,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  // Collect agent emails owned/approved by this user
-  const ownedAgents = await agentStore.findByOwner(email)
-  const approvedAgents = await agentStore.findByApprover(email)
+  // Collect emails of owned/approved users
+  const ownedUsers = await userStore.findByOwner(email)
+  const approvedUsers = await userStore.findByApprover(email)
   const requesters = [
     email,
-    ...ownedAgents.map(a => a.email),
-    ...approvedAgents.map(a => a.email),
+    ...ownedUsers.map(u => u.email),
+    ...approvedUsers.map(u => u.email),
   ]
 
   // Default paginated case: delegate to DB-level query with IN clause

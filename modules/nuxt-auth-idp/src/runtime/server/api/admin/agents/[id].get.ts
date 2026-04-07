@@ -5,17 +5,17 @@ import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
-  const { agentStore } = useIdpStores()
+  const { userStore } = useIdpStores()
 
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createProblemError({ status: 400, title: 'Agent ID is required' })
+    throw createProblemError({ status: 400, title: 'User ID is required' })
   }
 
-  const agent = await agentStore.findById(id)
-  if (!agent) {
-    throw createProblemError({ status: 404, title: 'Agent not found' })
+  const user = await userStore.findByEmail(decodeURIComponent(id))
+  if (!user) {
+    throw createProblemError({ status: 404, title: 'User not found' })
   }
 
-  return agent
+  return user
 })

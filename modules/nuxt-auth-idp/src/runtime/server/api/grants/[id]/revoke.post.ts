@@ -9,7 +9,7 @@ import { createProblemError } from '../../../utils/problem'
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const { grantStore } = useGrantStores()
-  const { agentStore } = useIdpStores()
+  const { userStore } = useIdpStores()
 
   if (!id) {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
@@ -26,10 +26,10 @@ export default defineEventHandler(async (event) => {
 
   // Authorize: requester, approver, or admin
   const isRequester = grant.request.requester === identity
-  const agent = await agentStore.findByEmail(grant.request.requester)
-  const isApprover = agent && agent.approver === identity
+  const requesterUser = await userStore.findByEmail(grant.request.requester)
+  const isApprover = requesterUser && requesterUser.approver === identity
   if (!isRequester && !isApprover && !isAdmin(identity)) {
-    throw createProblemError({ status: 403, title: 'Only the requester, agent approver, or admin can revoke this grant' })
+    throw createProblemError({ status: 403, title: 'Only the requester, approver, or admin can revoke this grant' })
   }
 
   try {

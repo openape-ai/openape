@@ -36,70 +36,54 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Public key must be in ssh-ed25519 format' })
   }
 
-  // Human enrollment: create user + SSH key (authenticates as act=human)
-  if (body.type === 'human') {
-    const { userStore, sshKeyStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
 
-    const existingUser = await userStore.findByEmail(body.email)
-    if (!existingUser) {
-      await userStore.create(body.email, body.name)
-    }
-
-    // Compute keyId from public key
-    const parts = body.publicKey.trim().split(/\s+/)
-    const keyData = parts[1]!
-    const keyId = createHash('sha256').update(Buffer.from(keyData, 'base64')).digest('hex')
-
-    const existingKey = await sshKeyStore.findByPublicKey(body.publicKey.trim())
-    if (!existingKey) {
-      await sshKeyStore.save({
-        keyId,
-        userEmail: body.email,
-        publicKey: body.publicKey.trim(),
-        name: body.name,
-        createdAt: Math.floor(Date.now() / 1000),
-      })
-    }
-
-    return {
-      email: body.email,
-      name: body.name,
-      owner: body.owner || body.email,
-      status: 'active',
-    }
+  // Check for duplicate
+  const existing = await userStore.findByEmail(body.email)
+  if (existing) {
+    throw createProblemError({ status: 409, title: 'A user with this email already exists' })
   }
 
-  // Agent enrollment (default)
-  const { agentStore } = useIdpStores()
+  // Compute keyId from public key
+  const parts = body.publicKey.trim().split(/\s+/)
+  const keyData = parts[1]!
+  const keyId = createHash('sha256').update(Buffer.from(keyData, 'base64')).digest('hex')
 
-  const duplicateEmail = await agentStore.findByEmail(body.email)
-  if (duplicateEmail) {
-    throw createProblemError({ status: 409, title: 'An agent with this email already exists' })
+  // Check for duplicate key
+  const existingKey = await sshKeyStore.findByPublicKey(body.publicKey.trim())
+  if (existingKey) {
+    throw createProblemError({ status: 409, title: 'A user with this public key already exists' })
   }
 
-  const existingAgents = await agentStore.listAll()
-  const duplicateKey = existingAgents.find(a => a.publicKey === body.publicKey)
-  if (duplicateKey) {
-    throw createProblemError({ status: 409, title: 'An agent with this public key already exists' })
-  }
+  // Determine if this is a human or agent enrollment
+  const isHuman = body.type === 'human' || !body.owner
+  const owner = isHuman ? undefined : (body.owner || adminEmail)
+  const approver = isHuman ? undefined : (body.approver || adminEmail)
 
-  const agent = await agentStore.create({
-    id: body.id || crypto.randomUUID(),
+  // Create user
+  await userStore.create({
     email: body.email,
     name: body.name,
-    owner: body.owner || adminEmail,
-    approver: body.approver || adminEmail,
-    publicKey: body.publicKey,
-    createdAt: Date.now(),
+    owner,
+    approver,
+    type: isHuman ? 'human' : 'agent',
     isActive: true,
+    createdAt: Math.floor(Date.now() / 1000),
+  })
+
+  // Create SSH key
+  await sshKeyStore.save({
+    keyId,
+    userEmail: body.email,
+    publicKey: body.publicKey.trim(),
+    name: body.name,
+    createdAt: Math.floor(Date.now() / 1000),
   })
 
   return {
-    agent_id: agent.id,
-    email: agent.email,
-    name: agent.name,
-    owner: agent.owner,
-    approver: agent.approver,
+    email: body.email,
+    name: body.name,
+    owner: owner || body.email,
     status: 'active',
   }
 })

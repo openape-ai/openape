@@ -11,25 +11,26 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required field: id' })
   }
 
-  const { agentStore, sshKeyStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
   const { challengeStore } = useGrantStores()
 
-  // Try agent first (by email or UUID)
-  const agent = body.id.includes('@')
-    ? await agentStore.findByEmail(body.id)
-    : await agentStore.findById(body.id)
-
-  if (agent && agent.isActive) {
-    const challenge = await challengeStore.createChallenge(agent.id)
-    return { challenge }
+  // Look up user
+  const user = await userStore.findByEmail(body.id)
+  if (user && user.isActive) {
+    // Check if user has SSH keys
+    const sshKeys = await sshKeyStore.findByUser(body.id)
+    if (sshKeys.length > 0) {
+      const challenge = await challengeStore.createChallenge(body.id)
+      return { challenge }
+    }
   }
 
-  // Try human user with SSH keys
+  // Try SSH keys directly (covers case where user exists in sshKeyStore but not userStore)
   const sshKeys = await sshKeyStore.findByUser(body.id)
   if (sshKeys.length > 0) {
     const challenge = await challengeStore.createChallenge(body.id)
     return { challenge }
   }
 
-  throw createProblemError({ status: 404, title: 'No agent or user with SSH keys found for this identity' })
+  throw createProblemError({ status: 404, title: 'No user with SSH keys found for this identity' })
 })
