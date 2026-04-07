@@ -307,6 +307,20 @@ describe('GrantStore', () => {
       expect(g.request.requester).toBe('agent@example.com')
     }
   })
+
+  it('listGrants filters by requester array (inArray)', async () => {
+    const result = await store.listGrants({ requester: ['agent@example.com', 'alice@example.com'] })
+    expect(result.data.length).toBe(2)
+    const requesters = result.data.map(g => g.request.requester)
+    expect(requesters).toContain('agent@example.com')
+    expect(requesters).toContain('alice@example.com')
+  })
+
+  it('listGrants with requester array excludes non-matching', async () => {
+    const result = await store.listGrants({ requester: ['agent@example.com', 'nobody@example.com'] })
+    expect(result.data.length).toBe(1)
+    expect(result.data[0].request.requester).toBe('agent@example.com')
+  })
 })
 
 // ---------------------------------------------------------------------------

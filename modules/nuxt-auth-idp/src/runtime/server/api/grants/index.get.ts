@@ -48,18 +48,19 @@ export default defineEventHandler(async (event) => {
   // Collect agent emails owned/approved by this user
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const agentEmails = new Set([
+  const requesters = [
+    email,
     ...ownedAgents.map(a => a.email),
     ...approvedAgents.map(a => a.email),
-  ])
+  ]
 
-  // Use findAll + in-memory filter (reliable, works with all store backends)
-  const allGrants = await grantStore.findAll()
-  const owned = allGrants.filter((grant: OpenApeGrant) => {
-    if (grant.request.requester === email) return true
-    if (agentEmails.has(grant.request.requester)) return true
-    return false
-  })
+  // Default paginated case: delegate to DB-level query with IN clause
+  if (!section) {
+    return await grantStore.listGrants({ limit, cursor, status, requester: requesters })
+  }
+
+  // Section queries need all user grants, then filter in-memory
+  const { data: owned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
 
   // section=active
   if (section === 'active') {
@@ -68,44 +69,20 @@ export default defineEventHandler(async (event) => {
   }
 
   // section=history
-  if (section === 'history') {
-    const cutoff = Math.floor(Date.now() / 1000) - days * 86400
-    let history = owned.filter(g => !isActiveGrant(g) && g.created_at >= cutoff)
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400
+  let history = owned.filter(g => !isActiveGrant(g) && g.created_at >= cutoff)
 
-    if (status) {
-      history = history.filter(g => g.status === status)
-    }
-    if (cursor) {
-      const cursorTs = Number(cursor)
-      const idx = history.findIndex(g => g.created_at < cursorTs)
-      history = idx >= 0 ? history.slice(idx) : []
-    }
-
-    const page = history.slice(0, limit)
-    const hasMore = history.length > limit
-
-    return {
-      data: page,
-      pagination: {
-        cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
-        has_more: hasMore,
-      },
-    }
-  }
-
-  // Default: paginated
-  let filtered = owned
   if (status) {
-    filtered = filtered.filter(g => g.status === status)
+    history = history.filter(g => g.status === status)
   }
   if (cursor) {
     const cursorTs = Number(cursor)
-    const idx = filtered.findIndex(g => g.created_at < cursorTs)
-    filtered = idx >= 0 ? filtered.slice(idx) : []
+    const idx = history.findIndex(g => g.created_at < cursorTs)
+    history = idx >= 0 ? history.slice(idx) : []
   }
 
-  const page = filtered.slice(0, limit)
-  const hasMore = filtered.length > limit
+  const page = history.slice(0, limit)
+  const hasMore = history.length > limit
 
   return {
     data: page,
