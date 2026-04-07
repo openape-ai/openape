@@ -37,9 +37,11 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
+  // Management token bypasses authorization check
+  const isManagement = email === '_management_'
   // Allow if the logged-in user is the requester themselves
   const isRequester = grant.request.requester === email
-  if (!isRequester) {
+  if (!isManagement && !isRequester) {
     const agent = await agentStore.findByEmail(grant.request.requester)
     if (!agent) {
       throw createProblemError({ status: 403, title: 'Agent not found for this grant' })
