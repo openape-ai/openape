@@ -48,24 +48,19 @@ export default defineEventHandler(async (event) => {
   // Collect agent emails owned/approved by this user
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const agentEmails = new Set([
+  const requesters = [
+    email,
     ...ownedAgents.map(a => a.email),
     ...approvedAgents.map(a => a.email),
-  ])
+  ]
 
   // Default paginated case: delegate to DB-level query with IN clause
   if (!section) {
-    const requesters = [email, ...agentEmails]
     return await grantStore.listGrants({ limit, cursor, status, requester: requesters })
   }
 
-  // Section queries: load all user grants, filter in-memory
-  const allGrants = await grantStore.findAll()
-  const owned = allGrants.filter((g: OpenApeGrant) => {
-    if (g.request.requester === email) return true
-    if (agentEmails.has(g.request.requester)) return true
-    return false
-  })
+  // Section queries need all user grants, then filter in-memory
+  const { data: owned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
 
   // section=active
   if (section === 'active') {

@@ -76,7 +76,10 @@ export function createGrantStore(): ExtendedGrantStore {
       const allGrants = await getAllGrants()
       let grants = allGrants.filter((grant) => {
         if (params?.status && grant.status !== params.status) return false
-        if (params?.requester && grant.request.requester !== params.requester) return false
+        if (params?.requester) {
+          const requesters = Array.isArray(params.requester) ? params.requester : [params.requester]
+          if (!requesters.includes(grant.request.requester)) return false
+        }
         return true
       })
 
