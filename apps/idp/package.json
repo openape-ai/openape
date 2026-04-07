@@ -25,6 +25,7 @@
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/vue-components": "workspace:*",
+    "@sentry/node": "^10.47.0",
     "drizzle-orm": "^0.44.7",
     "h3": "catalog:",
     "jose": "catalog:",
