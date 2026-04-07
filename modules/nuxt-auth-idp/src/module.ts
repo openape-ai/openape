@@ -135,15 +135,17 @@ export default defineNuxtModule<ModuleOptions>({
       '/api/admin/**': { headers: noCacheHeaders },
     }
     if (routeConfig.oauth) {
-      corsRules['/.well-known/**'] = { cors: true }
+      corsRules['/.well-known/**'] = { cors: true, headers: { ...securityHeaders, 'Cache-Control': 'public, max-age=3600' } }
       corsRules['/token'] = { cors: true }
       corsRules['/userinfo'] = { cors: true }
     }
-    if (routeConfig.grants)
+    if (routeConfig.grants) {
       corsRules['/api/grants/**'] = { cors: true }
+      corsRules['/api/delegations/**'] = { cors: true }
+    }
     if (routeConfig.agent) {
       corsRules['/api/agent/**'] = { cors: true }
-      corsRules['/api/auth/**'] = { cors: true }
+      corsRules['/api/auth/**'] = { cors: true, headers: noCacheHeaders }
     }
     nuxt.options.routeRules = defu(nuxt.options.routeRules || {}, corsRules)
 
@@ -172,6 +174,12 @@ export default defineNuxtModule<ModuleOptions>({
         }
       })
     }
+
+    // CORS preflight handling for OPTIONS requests
+    addServerPlugin(resolve('./runtime/server/plugins/cors-preflight'))
+
+    // Signing key initialization (ensure JWKS is never empty)
+    addServerPlugin(resolve('./runtime/server/plugins/init-signing-key'))
 
     // Rate limiting plugin
     addServerPlugin(resolve('./runtime/server/plugins/rate-limit'))
@@ -270,6 +278,7 @@ export default defineNuxtModule<ModuleOptions>({
       // Unified auth endpoints (agents + humans with SSH keys)
       addServerHandler({ route: '/api/auth/challenge', method: 'post', handler: resolve('./runtime/server/api/auth/challenge.post') })
       addServerHandler({ route: '/api/auth/authenticate', method: 'post', handler: resolve('./runtime/server/api/auth/authenticate.post') })
+      addServerHandler({ route: '/api/auth/enroll', method: 'post', handler: resolve('./runtime/server/api/agent/enroll.post') })
     }
 
     // Server route handlers — Federation

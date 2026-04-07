@@ -2,7 +2,7 @@ import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDeta
 import { computeCmdHash } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
-import { tryAgentAuth } from '../../utils/agent-auth'
+import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
 
@@ -67,9 +67,9 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<OpenApeGrantRequest>(event)
   const { grantStore } = useGrantStores()
 
-  const agentPayload = await tryAgentAuth(event)
-  if (agentPayload) {
-    body.requester = agentPayload.sub
+  const bearerPayload = await tryBearerAuth(event)
+  if (bearerPayload) {
+    body.requester = bearerPayload.sub
   }
 
   if (!body.requester || !body.target_host || !body.audience) {

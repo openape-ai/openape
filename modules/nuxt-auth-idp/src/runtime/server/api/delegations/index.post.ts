@@ -1,10 +1,16 @@
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { createDelegation } from '@openape/grants'
+import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { requireAuth } from '../../utils/admin'
 import { createProblemError } from '../../utils/problem'
 
 export default defineEventHandler(async (event) => {
+  // Check act claim — only humans can create delegations
+  const bearerPayload = await tryBearerAuth(event)
+  if (bearerPayload && bearerPayload.act !== 'human') {
+    throw createProblemError({ status: 403, title: 'Only humans can create delegations' })
+  }
   const delegator = await requireAuth(event)
   const body = await readBody(event)
 
