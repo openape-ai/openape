@@ -24,7 +24,8 @@ export async function verifyBearerAuth(
   try {
     return await verifyAuthToken(token, issuer, signingKey.publicKey)
   }
-  catch {
+  catch (err) {
+    console.warn('[bearer-auth] Token verification failed:', err instanceof Error ? err.message : String(err))
     return null
   }
 }

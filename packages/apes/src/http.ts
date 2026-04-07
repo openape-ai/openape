@@ -179,7 +179,7 @@ export async function apiFetch<T = unknown>(
     if (contentType.includes('application/problem+json') || contentType.includes('application/json')) {
       try {
         const problem = await response.json() as Record<string, unknown>
-        const message = (problem.detail as string) || (problem.title as string) || `${response.status} ${response.statusText}`
+        const message = (problem.detail as string) || (problem.title as string) || (problem.statusMessage as string) || (problem.message as string) || `${response.status} ${response.statusText}`
         throw new ApiError(response.status, message, problem)
       }
       catch (e) {
