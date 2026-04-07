@@ -32,31 +32,29 @@ export default defineEventHandler(async (event) => {
 
   const email = session.data.userId as string
 
-  // Collect self + all owned/approved agent emails for a single IN query
+  // Collect agent emails owned/approved by this user
   const ownedAgents = await agentStore.findByOwner(email)
   const approvedAgents = await agentStore.findByApprover(email)
-  const allRequesters = [
-    email,
-    ...new Set([
-      ...ownedAgents.map(a => a.email),
-      ...approvedAgents.map(a => a.email),
-    ]),
-  ]
+  const agentEmails = new Set([
+    ...ownedAgents.map(a => a.email),
+    ...approvedAgents.map(a => a.email),
+  ])
 
-  // Single DB query with requester IN (...) — no findAll() needed
-  const sectionLimit = section ? 1000 : limit
-  const { data: owned } = await grantStore.listGrants({
-    requester: allRequesters,
-    limit: sectionLimit,
+  // Use findAll + in-memory filter (reliable, works with all store backends)
+  const allGrants = await grantStore.findAll()
+  const owned = allGrants.filter((grant: OpenApeGrant) => {
+    if (grant.request.requester === email) return true
+    if (agentEmails.has(grant.request.requester)) return true
+    return false
   })
 
-  // section=active → all pending + approved timed/always (no pagination)
+  // section=active
   if (section === 'active') {
     const active = owned.filter(isActiveGrant)
     return { data: active, pagination: { cursor: null, has_more: false } }
   }
 
-  // section=history → non-active grants, last N days, paginated
+  // section=history
   if (section === 'history') {
     const cutoff = Math.floor(Date.now() / 1000) - days * 86400
     let history = owned.filter(g => !isActiveGrant(g) && g.created_at >= cutoff)
@@ -82,7 +80,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Default: backward-compatible — paginated all grants
+  // Default: paginated
   let filtered = owned
   if (status) {
     filtered = filtered.filter(g => g.status === status)
