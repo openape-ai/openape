@@ -291,9 +291,6 @@ importers:
       '@sentry/nuxt':
         specifier: ^10.47.0
         version: 10.47.0(7aed8207d6b1feafbea1b7d4ec43e3d7)
-      db0:
-        specifier: ^0.3.0
-        version: 0.3.4(@libsql/client@0.14.0)(better-sqlite3@12.6.2)(drizzle-orm@0.44.7(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.6.2)(bun-types@1.3.10)(gel@2.2.0))
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.6.2)(bun-types@1.3.10)(gel@2.2.0)
