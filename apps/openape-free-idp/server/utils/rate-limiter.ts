@@ -1,5 +1,4 @@
 import { createError } from 'h3'
-import { useStorage } from 'nitropack/runtime'
 
 interface RateLimitEntry {
   count: number
@@ -17,15 +16,14 @@ const LIMITS = {
   global: { maxRequests: 500, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig,
 }
 
-async function checkLimit(key: string, config: RateLimitConfig): Promise<boolean> {
-  const storage = useStorage('idp')
-  const storageKey = `rate-limits:${key}`
-  const now = Date.now()
+const entries = new Map<string, RateLimitEntry>()
 
-  const entry = await storage.getItem<RateLimitEntry>(storageKey)
+function checkLimit(key: string, config: RateLimitConfig): boolean {
+  const now = Date.now()
+  const entry = entries.get(key)
 
   if (!entry || now - entry.windowStart > config.windowMs) {
-    await storage.setItem(storageKey, { count: 1, windowStart: now })
+    entries.set(key, { count: 1, windowStart: now })
     return true
   }
 
@@ -33,14 +31,14 @@ async function checkLimit(key: string, config: RateLimitConfig): Promise<boolean
     return false
   }
 
-  await storage.setItem(storageKey, { count: entry.count + 1, windowStart: entry.windowStart })
+  entry.count++
   return true
 }
 
-export async function checkRateLimit(email: string, ip: string): Promise<void> {
-  const emailOk = await checkLimit(`email:${email}`, LIMITS.email)
-  const ipOk = await checkLimit(`ip:${ip}`, LIMITS.ip)
-  const globalOk = await checkLimit('global', LIMITS.global)
+export function checkRateLimit(email: string, ip: string): void {
+  const emailOk = checkLimit(`email:${email}`, LIMITS.email)
+  const ipOk = checkLimit(`ip:${ip}`, LIMITS.ip)
+  const globalOk = checkLimit('global', LIMITS.global)
 
   if (!emailOk || !ipOk || !globalOk) {
     throw createError({ statusCode: 429, statusMessage: 'Too many requests' })
