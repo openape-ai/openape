@@ -3,6 +3,7 @@ const localIssuer = process.env.OPENAPE_ISSUER || 'https://id.openape.at'
 
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
+  nitro: { experimental: { asyncContext: true } },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-idp', '@sentry/nuxt/module'],
   css: ['~/assets/css/main.css'],
   colorMode: { preference: 'dark' },
