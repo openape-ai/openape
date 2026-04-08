@@ -1,45 +1,43 @@
 import { sql } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
+import { useEvent } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 
 export default defineEventHandler(async (event) => {
   const results: Record<string, unknown> = {}
-  const db = useDb()
 
-  // Direct SQL check
+  // 1. Does useEvent() work?
   try {
+    const ev = useEvent()
+    results.useEvent = ev ? 'OK' : 'null'
+    results.eventContext = Object.keys(ev?.context ?? {})
+  }
+  catch (e: any) { results.useEvent = `error: ${e.message}` }
+
+  // 2. Direct DB query
+  try {
+    const db = useDb()
     const row = await db.all(sql`SELECT COUNT(*) as n FROM credentials WHERE user_email = 'patrick@hofmann.eco'`)
-    results.directSQL = `${(row[0] as any).n} credentials in DB`
+    results.directSQL = `${(row[0] as any).n} credentials`
   }
   catch (e: any) { results.directSQL = `error: ${e.message}` }
 
-  // Store check
-  const { userStore, credentialStore, sshKeyStore } = useIdpStores()
-
+  // 3. Try manually creating a Drizzle credential store
   try {
-    const user = await userStore.findByEmail('patrick@hofmann.eco')
-    results.userStore = user ? `found: ${user.email} (has owner: ${!!user.owner})` : 'not found'
+    const { createDrizzleCredentialStore } = await import('../utils/drizzle-credential-store')
+    const store = createDrizzleCredentialStore()
+    const creds = await store.findByUser('patrick@hofmann.eco')
+    results.manualDrizzleStore = `${creds.length} credentials`
   }
-  catch (e: any) { results.userStore = `error: ${e.message}` }
+  catch (e: any) { results.manualDrizzleStore = `error: ${e.message}` }
 
+  // 4. Check useIdpStores result
   try {
-    const creds = await credentialStore.findByUser('patrick@hofmann.eco')
-    results.credentialStore = `${creds.length} credentials via store`
+    const stores = useIdpStores()
+    const creds = await stores.credentialStore.findByUser('patrick@hofmann.eco')
+    results.viaUseIdpStores = `${creds.length} credentials`
   }
-  catch (e: any) { results.credentialStore = `error: ${e.message}` }
-
-  try {
-    const keys = await sshKeyStore.findByUser('patrick@hofmann.eco')
-    results.sshKeyStore = `${keys.length} keys via store`
-  }
-  catch (e: any) { results.sshKeyStore = `error: ${e.message}` }
-
-  // Check if store uses Drizzle (indirect: try a query that only works with Drizzle schema)
-  try {
-    const owned = await userStore.findByOwner('patrick@hofmann.eco')
-    results.findByOwner = `${owned.length} owned users`
-  }
-  catch (e: any) { results.findByOwner = `error: ${e.message}` }
+  catch (e: any) { results.viaUseIdpStores = `error: ${e.message}` }
 
   return results
 })
