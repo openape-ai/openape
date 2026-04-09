@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   approveGrant,
   approveGrantWithExtension,
+  approveGrantWithWidening,
   createDelegation,
   createGrant,
   denyGrant,
@@ -873,6 +874,217 @@ describe('grant lifecycle', () => {
 
       expect((await store.findById(oldGrant1.id))!.status).toBe('revoked')
       expect((await store.findById(oldGrant2.id))!.status).toBe('revoked')
+    })
+  })
+
+  describe('approveGrantWithWidening', () => {
+    function fsDetail(path: string): OpenApeCliAuthorizationDetail {
+      const base = {
+        type: 'openape_cli' as const,
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem', selector: { path } }],
+        action: 'delete',
+        display: `Remove ${path}`,
+        risk: 'medium' as const,
+      }
+      return {
+        ...base,
+        permission: `rm.filesystem[path=${path}]#delete`,
+      }
+    }
+
+    function wildcardDetail(path: string): OpenApeCliAuthorizationDetail {
+      // widened variant — caller sets cli_id, action, operation_id identical
+      return {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem', selector: { path } }],
+        action: 'delete',
+        display: `Remove anything matching ${path}`,
+        risk: 'medium',
+        permission: `rm.filesystem[path=${path}]#delete`,
+      }
+    }
+
+    const originalRequest = (path: string): OpenApeGrantRequest => ({
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'shapes',
+      grant_type: 'once',
+      authorization_details: [fsDetail(path)],
+      command: ['rm', path],
+      cmd_hash: 'SHA-256:dummy',
+    })
+
+    it('replaces the pending grant details with the widened ones and approves', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+
+      // Widen to /tmp/** — a valid superset of /tmp/foo.txt? Actually
+      // cliAuthorizationDetailCovers checks literal equality of selector values,
+      // so /tmp/** does not cover /tmp/foo.txt at the selector level. The
+      // expected semantic widening is "drop the selector key entirely" for the
+      // widest scope, and the UI picks that as wildcard. Validate with wildcard.
+      const wild: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem' }],
+        action: 'delete',
+        display: 'Remove any file',
+        risk: 'medium',
+        permission: 'rm.filesystem[*]#delete',
+      }
+
+      const approved = await approveGrantWithWidening(pending.id, 'admin@example.com', store, [wild])
+
+      expect(approved.status).toBe('approved')
+      const detail = approved.request.authorization_details![0] as OpenApeCliAuthorizationDetail
+      expect(detail.resource_chain[0]!.selector).toBeUndefined()
+      expect(detail.permission).toBe('rm.filesystem[*]#delete')
+      expect(approved.request.command).toBeUndefined()
+      expect(approved.request.cmd_hash).toBeUndefined()
+      expect(approved.request.permissions).toEqual(['rm.filesystem[*]#delete'])
+    })
+
+    it('accepts exact widening (caller chose "exact" scope — no widening)', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const exact = fsDetail('/tmp/foo.txt')
+      const approved = await approveGrantWithWidening(pending.id, 'admin@example.com', store, [exact])
+      expect(approved.status).toBe('approved')
+      const detail = approved.request.authorization_details![0] as OpenApeCliAuthorizationDetail
+      expect(detail.resource_chain[0]!.selector).toEqual({ path: '/tmp/foo.txt' })
+    })
+
+    it('rejects when pending grant not found', async () => {
+      await expect(
+        approveGrantWithWidening('nonexistent', 'admin@example.com', store, [wildcardDetail('/tmp/*')]),
+      ).rejects.toThrow('Grant not found')
+    })
+
+    it('rejects when grant is not pending', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      await approveGrant(pending.id, 'admin@example.com', store)
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [fsDetail('/tmp/foo.txt')]),
+      ).rejects.toThrow('Grant is not pending')
+    })
+
+    it('rejects when pending grant has no cli details', async () => {
+      const pending = await createGrant({
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'once',
+      }, store)
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [fsDetail('/tmp/foo.txt')]),
+      ).rejects.toThrow('no CLI authorization details')
+    })
+
+    it('rejects when widened_details length mismatches', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [fsDetail('/tmp/foo.txt'), fsDetail('/tmp/bar.txt')]),
+      ).rejects.toThrow('length mismatch')
+    })
+
+    it('rejects widened_detail with wrong type', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const bad = { ...fsDetail('/tmp/foo.txt'), type: 'openape_grant' as unknown as 'openape_cli' }
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('type must be')
+    })
+
+    it('rejects widened_detail with wrong cli_id', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const bad: OpenApeCliAuthorizationDetail = { ...fsDetail('/tmp/foo.txt'), cli_id: 'ls' }
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('cli_id mismatch')
+    })
+
+    it('rejects widened_detail with wrong action', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const bad: OpenApeCliAuthorizationDetail = { ...fsDetail('/tmp/foo.txt'), action: 'read' }
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('action mismatch')
+    })
+
+    it('rejects widened_detail with wrong operation_id', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const bad: OpenApeCliAuthorizationDetail = { ...fsDetail('/tmp/foo.txt'), operation_id: 'rm.force' }
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('operation_id mismatch')
+    })
+
+    it('rejects widened_detail with mismatched resource_chain structure', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const bad: OpenApeCliAuthorizationDetail = {
+        ...fsDetail('/tmp/foo.txt'),
+        resource_chain: [
+          { resource: 'host', selector: { hostname: 'x' } },
+          { resource: 'filesystem', selector: { path: '/tmp/foo.txt' } },
+        ],
+      }
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('resource_chain structure mismatch')
+    })
+
+    it('rejects widened_detail that does not cover the original', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      // A different concrete path is NOT a widening — must be rejected.
+      const bad = fsDetail('/etc/passwd')
+      await expect(
+        approveGrantWithWidening(pending.id, 'admin@example.com', store, [bad]),
+      ).rejects.toThrow('does not cover original')
+    })
+
+    it('recomputes canonical permission server-side (ignores client-provided value)', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const wild: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem' }],
+        action: 'delete',
+        display: 'Wildcard',
+        risk: 'medium',
+        // Client tries to forge a different permission — server must ignore and recompute
+        permission: 'rm.filesystem[path=pwned]#delete',
+      }
+      const approved = await approveGrantWithWidening(pending.id, 'admin@example.com', store, [wild])
+      const detail = approved.request.authorization_details![0] as OpenApeCliAuthorizationDetail
+      expect(detail.permission).toBe('rm.filesystem[*]#delete')
+    })
+
+    it('passes through grant_type and duration overrides', async () => {
+      const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
+      const wild: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem' }],
+        action: 'delete',
+        display: 'Wildcard',
+        risk: 'medium',
+        permission: 'rm.filesystem[*]#delete',
+      }
+      const approved = await approveGrantWithWidening(
+        pending.id,
+        'admin@example.com',
+        store,
+        [wild],
+        { grant_type: 'timed', duration: 3600 },
+      )
+      expect(approved.request.grant_type).toBe('timed')
+      expect(approved.request.duration).toBe(3600)
+      expect(approved.expires_at).toBeDefined()
     })
   })
 })
