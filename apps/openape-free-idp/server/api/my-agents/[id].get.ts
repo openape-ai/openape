@@ -8,12 +8,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Missing user ID' })
   }
 
-  const { userStore } = useIdpStores()
-  const user = await userStore.findByEmail(decodeURIComponent(id))
+  const { userStore, sshKeyStore } = useIdpStores()
+  const userEmail = decodeURIComponent(id)
+  const user = await userStore.findByEmail(userEmail)
 
   if (!user || user.owner !== email) {
     throw createError({ statusCode: 404, statusMessage: 'User not found' })
   }
 
-  return user
+  const keys = await sshKeyStore.findByUser(userEmail)
+  const publicKey = keys[0]?.publicKey ?? ''
+
+  return { ...user, publicKey }
 })
