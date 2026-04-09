@@ -28,7 +28,7 @@
     "build": "nuxt-module-build build",
     "dev": "nuxt-module-build build --stub",
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
-    "typecheck": "nuxi prepare playground && vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage"

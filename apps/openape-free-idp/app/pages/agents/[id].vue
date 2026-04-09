@@ -6,12 +6,11 @@ const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 
 interface Agent {
-  id: string
   email: string
   name: string
   publicKey: string
-  owner: string
-  approver: string
+  owner?: string
+  approver?: string
   isActive: boolean
   createdAt: number
 }
@@ -28,7 +27,7 @@ await fetchUser()
 async function loadAgent() {
   loading.value = true
   try {
-    agent.value = await ($fetch as any)(`/api/my-agents/${route.params.id}`)
+    agent.value = await ($fetch as any)(`/api/my-agents/${encodeURIComponent(String(route.params.id))}`)
   }
   catch {
     agent.value = null
@@ -109,7 +108,7 @@ async function saveKey() {
   savingKey.value = true
   keyError.value = ''
   try {
-    await $fetch(`/api/my-agents/${agent.value.id}`, { method: 'PATCH', body: { publicKey: editKeyValue.value } })
+    await $fetch(`/api/my-agents/${encodeURIComponent(agent.value.email)}`, { method: 'PATCH', body: { publicKey: editKeyValue.value } })
     await loadAgent()
     editingKey.value = false
   }
@@ -135,7 +134,7 @@ async function handleDelete() {
   deleting.value = true
   deleteError.value = ''
   try {
-    await $fetch(`/api/my-agents/${agent.value.id}`, { method: 'DELETE' })
+    await $fetch(`/api/my-agents/${encodeURIComponent(agent.value.email)}`, { method: 'DELETE' })
     await navigateTo('/agents')
   }
   catch (err: unknown) {
