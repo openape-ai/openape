@@ -1,5 +1,5 @@
 import type { OpenApeCliAuthorizationDetail } from '@openape/core'
-import { findSimilarCliGrants, introspectGrant } from '@openape/grants'
+import { buildWideningSuggestionsForGrant, findSimilarCliGrants, introspectGrant } from '@openape/grants'
 import { defineEventHandler, getRequestHeader, getRouterParam, setResponseHeader, setResponseStatus } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
@@ -33,12 +33,21 @@ export default defineEventHandler(async (event) => {
     return ''
   }
 
-  // Attach similar grants for pending CLI grants
+  // Attach similar grants + widening suggestions for pending CLI grants
   if (grant.status === 'pending' && hasStructuredCliGrant(grant.request.authorization_details)) {
     const existingGrants = await grantStore.findByRequester(grant.request.requester)
     const similarResult = findSimilarCliGrants(grant.request, existingGrants)
-    if (similarResult) {
-      return { ...grant, similar_grants: similarResult }
+
+    const cliDetails = (grant.request.authorization_details ?? [])
+      .filter((d): d is OpenApeCliAuthorizationDetail => d.type === 'openape_cli')
+    const wideningSuggestions = cliDetails.length > 0
+      ? buildWideningSuggestionsForGrant(cliDetails)
+      : undefined
+
+    return {
+      ...grant,
+      ...(similarResult ? { similar_grants: similarResult } : {}),
+      ...(wideningSuggestions ? { widening_suggestions: wideningSuggestions } : {}),
     }
   }
 

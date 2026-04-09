@@ -1,6 +1,6 @@
-import type { GrantType } from '@openape/core'
+import type { GrantType, OpenApeCliAuthorizationDetail } from '@openape/core'
 import type { ApproveGrantOverrides, ExtendMode } from '@openape/grants'
-import { approveGrant, approveGrantWithExtension, issueAuthzJWT } from '@openape/grants'
+import { approveGrant, approveGrantWithExtension, approveGrantWithWidening, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireAuth } from '../../../utils/admin'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -52,10 +52,20 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // widened_details and extend_mode are mutually exclusive
+  const hasWidenedDetails = Array.isArray(body.widened_details) && body.widened_details.length > 0
+  const hasExtend = !!body.extend_mode && Array.isArray(body.extend_grant_ids) && body.extend_grant_ids.length > 0
+  if (hasWidenedDetails && hasExtend) {
+    throw createProblemError({
+      status: 400,
+      title: 'widened_details and extend_mode are mutually exclusive',
+    })
+  }
+
   try {
     let approved
 
-    if (body.extend_mode && Array.isArray(body.extend_grant_ids) && body.extend_grant_ids.length > 0) {
+    if (hasExtend) {
       const validModes: ExtendMode[] = ['widen', 'merge']
       if (!validModes.includes(body.extend_mode as ExtendMode)) {
         throw createProblemError({ status: 400, title: 'Invalid extend_mode. Must be "widen" or "merge"' })
@@ -67,6 +77,18 @@ export default defineEventHandler(async (event) => {
         extend_mode: body.extend_mode as ExtendMode,
         extend_grant_ids: body.extend_grant_ids as string[],
       })
+    }
+    else if (hasWidenedDetails) {
+      approved = await approveGrantWithWidening(
+        id,
+        email,
+        grantStore,
+        body.widened_details as OpenApeCliAuthorizationDetail[],
+        {
+          grant_type: body.grant_type as GrantType | undefined,
+          duration: body.duration as number | undefined,
+        },
+      )
     }
     else {
       const overrides: ApproveGrantOverrides | undefined = body.grant_type

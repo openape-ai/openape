@@ -17,6 +17,10 @@ const hasSimilarGrants = computed(() => grant.value?.similar_grants?.similar_gra
 const similarGrants = computed(() => grant.value?.similar_grants?.similar_grants ?? [])
 const widenedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.widened_details ?? []))
 const mergedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.merged_details ?? []))
+const wideningSuggestions = computed(() => grant.value?.widening_suggestions ?? [])
+const hasWideningSuggestions = computed(() => wideningSuggestions.value.length > 0)
+// One selected scope index per detail; defaults to 0 (exact) for conservative behavior.
+const selectedWideningByIndex = ref({})
 const EXTEND_MODE_OPTIONS = [
   { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards (replaces existing grant)' },
   { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
@@ -82,6 +86,15 @@ onMounted(async () => {
   }
   try {
     grant.value = await $fetch(`/api/grants/${grantId.value}`)
+    // Initialize widening selection to exact (0) for every detail so the
+    // conservative default is always preselected before the user acts.
+    if (Array.isArray(grant.value?.widening_suggestions)) {
+      const init = {}
+      grant.value.widening_suggestions.forEach((_, idx) => {
+        init[idx] = '0'
+      })
+      selectedWideningByIndex.value = init
+    }
   }
   catch {
     error.value = 'Grant not found'
@@ -99,6 +112,22 @@ async function handleApprove() {
           extend_grant_ids: similarGrants.value.map(s => s.grant.id),
         }
       : {}
+    // Build widened_details only when the user actually chose a non-exact scope
+    // and the similar-grants extend flow is NOT in play (mutually exclusive).
+    let wideningBody = {}
+    if (hasWideningSuggestions.value && !hasSimilarGrants.value) {
+      const chosen = wideningSuggestions.value.map((suggestions, idx) => {
+        const selectedIdx = Number(selectedWideningByIndex.value[idx] ?? '0')
+        return suggestions[selectedIdx]?.detail
+      }).filter(Boolean)
+      const originalDetails = cliDetails.value
+      const hasAnyNonExact = chosen.some((detail, idx) => {
+        return detail.permission !== originalDetails[idx]?.permission
+      })
+      if (hasAnyNonExact) {
+        wideningBody = { widened_details: chosen }
+      }
+    }
     const resolvedGrantType = selectedGrantType.value === 'as_requested'
       ? (grant.value?.request?.grant_type || 'once')
       : selectedGrantType.value
@@ -113,6 +142,7 @@ async function handleApprove() {
           grant_type: resolvedGrantType,
           ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
           ...extendBody,
+          ...wideningBody,
         },
       },
     )
@@ -302,6 +332,33 @@ function isExactCommand(detail) {
                   </dd>
                 </div>
               </dl>
+            </template>
+          </UAlert>
+
+          <UAlert
+            v-if="hasWideningSuggestions && !hasSimilarGrants"
+            color="primary"
+            title="Approve scope"
+          >
+            <template #description>
+              <div class="text-sm space-y-3 mt-2">
+                <p class="text-muted">
+                  Choose how broad this grant should be. Conservative default is exact.
+                </p>
+                <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-1">
+                  <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
+                    For: <span class="font-mono text-xs break-all">{{ cliDetails[detailIdx].display }}</span>
+                  </p>
+                  <URadioGroup
+                    v-model="selectedWideningByIndex[detailIdx]"
+                    :items="suggestions.map((s, i) => ({
+                      label: s.label,
+                      value: String(i),
+                      description: s.permission,
+                    }))"
+                  />
+                </div>
+              </div>
             </template>
           </UAlert>
 

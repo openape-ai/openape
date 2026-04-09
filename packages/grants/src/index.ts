@@ -20,6 +20,7 @@ export {
 export {
   approveGrant,
   approveGrantWithExtension,
+  approveGrantWithWidening,
   type ApproveGrantOverrides,
   createDelegation,
   createGrant,
@@ -32,3 +33,9 @@ export {
 } from './grants.js'
 export { findSimilarCliGrants, type SimilarGrantMatch, type SimilarGrantsResult } from './similarity.js'
 export { type GrantListParams, type GrantStore, InMemoryGrantStore } from './stores.js'
+export {
+  buildWideningSuggestionsForGrant,
+  suggestWideningsForDetail,
+  type WideningScope,
+  type WideningSuggestion,
+} from './widening-suggestions.js'
