@@ -122,7 +122,8 @@ async function runShellMode(
     // Fall through to creating a new grant
   }
 
-  // No session grant found — request one
+  // No session grant found — request one. Default: 'once', but the approver
+  // can upgrade to 'timed' or 'always' during approval to enable reuse.
   consola.info(`Requesting ape-shell session grant on ${targetHost}`)
   const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
     method: 'POST',
@@ -130,7 +131,7 @@ async function runShellMode(
       requester: auth.email,
       target_host: targetHost,
       audience: 'ape-shell',
-      grant_type: 'timed',
+      grant_type: 'once',
       command: command.slice(0, 3),
       reason: `Shell session: ${command.join(' ').slice(0, 100)}`,
     },
