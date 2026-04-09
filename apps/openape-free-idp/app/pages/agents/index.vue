@@ -8,12 +8,10 @@ const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 
 interface Agent {
-  id: string
   email: string
   name: string
-  publicKey: string
-  owner: string
-  approver: string
+  owner?: string
+  approver?: string
   isActive: boolean
   createdAt: number
 }
@@ -120,8 +118,8 @@ function copyText(text: string) {
         <div v-if="agents.length > 0" class="space-y-3 mb-4">
           <NuxtLink
             v-for="agent in agents"
-            :key="agent.id"
-            :to="`/agents/${agent.id}`"
+            :key="agent.email"
+            :to="`/agents/${encodeURIComponent(agent.email)}`"
             class="block bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-gray-600 transition-colors"
           >
             <div class="flex items-center justify-between">
