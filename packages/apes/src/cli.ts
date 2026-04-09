@@ -1,3 +1,4 @@
+import path from 'node:path'
 import consola from 'consola'
 import { defineCommand, runMain } from 'citty'
 import { loginCommand } from './commands/auth/login'
@@ -36,6 +37,28 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EPIPE') process.exit(0)
   throw err
 })
+
+// ape-shell mode: when invoked as "ape-shell -c <command>", rewrite to "apes run --shell -- bash -c <command>"
+const invokedAs = path.basename(process.argv[1] ?? '')
+if (invokedAs === 'ape-shell' || invokedAs === 'ape-shell.js') {
+  const shellArgs = process.argv.slice(2)
+  if (shellArgs[0] === '-c' && shellArgs.length > 1) {
+    process.argv = [process.argv[0]!, process.argv[1]!, 'run', '--shell', '--', 'bash', '-c', ...shellArgs.slice(1)]
+  }
+  else if (shellArgs[0] === '--version') {
+    console.log(`ape-shell (OpenApe DDISA shell wrapper)`)
+    process.exit(0)
+  }
+  else if (shellArgs[0] === '--help' || shellArgs[0] === '-h') {
+    console.log('Usage: ape-shell -c <command>')
+    console.log('Routes all commands through apes run for grant-based authorization.')
+    process.exit(0)
+  }
+  else {
+    console.error('ape-shell: only -c <command> mode is supported')
+    process.exit(1)
+  }
+}
 
 const debug = process.argv.includes('--debug')
 

@@ -9,7 +9,8 @@
   "description": "Unified CLI + MCP Server for OpenApe",
   "type": "module",
   "bin": {
-    "apes": "./dist/cli.js"
+    "apes": "./dist/cli.js",
+    "ape-shell": "./dist/cli.js"
   },
   "exports": {
     ".": {

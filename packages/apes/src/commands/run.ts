@@ -53,6 +53,11 @@ export const runCommand = defineCommand({
       type: 'string',
       description: 'IdP URL',
     },
+    'shell': {
+      type: 'boolean',
+      description: 'Shell mode: use session grant with audience ape-shell',
+      default: false,
+    },
     '_': {
       type: 'positional',
       description: 'Command to execute (after --)',
@@ -61,6 +66,12 @@ export const runCommand = defineCommand({
   },
   async run({ rawArgs, args }) {
     const wrappedCommand = extractWrappedCommand(rawArgs ?? [])
+
+    if (args.shell && wrappedCommand.length > 0) {
+      // Shell mode: ape-shell -c "command" → apes run --shell -- bash -c "command"
+      await runShellMode(wrappedCommand, args)
+      return
+    }
 
     if (wrappedCommand.length > 0) {
       // Adapter mode: apes run [options] -- <cli> <args...>
@@ -76,6 +87,86 @@ export const runCommand = defineCommand({
     }
   },
 })
+
+async function runShellMode(
+  command: string[],
+  args: Record<string, unknown>,
+) {
+  const auth = loadAuth()
+  if (!auth)
+    throw new CliError('Not logged in. Run `apes login` first.')
+
+  const idp = getIdpUrl(args.idp as string | undefined)
+  if (!idp)
+    throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
+
+  const grantsUrl = await getGrantsEndpoint(idp)
+  const targetHost = (args.host as string) || hostname()
+
+  // Try to find an existing timed/always session grant for ape-shell
+  try {
+    const grants = await apiFetch<{ data: Array<{ id: string, status: string, request: { audience: string, target_host: string, grant_type: string } }> }>(
+      `${grantsUrl}?requester=${encodeURIComponent(auth.email)}&status=approved&limit=20`,
+    )
+    const sessionGrant = grants.data.find(g =>
+      g.request.audience === 'ape-shell'
+      && g.request.target_host === targetHost
+      && g.request.grant_type !== 'once',
+    )
+    if (sessionGrant) {
+      execShellCommand(command)
+      return
+    }
+  }
+  catch {
+    // Fall through to creating a new grant
+  }
+
+  // No session grant found — request one
+  consola.info(`Requesting ape-shell session grant on ${targetHost}`)
+  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+    method: 'POST',
+    body: {
+      requester: auth.email,
+      target_host: targetHost,
+      audience: 'ape-shell',
+      grant_type: 'timed',
+      command: command.slice(0, 3),
+      reason: `Shell session: ${command.join(' ').slice(0, 100)}`,
+    },
+  })
+
+  consola.info(`Grant requested: ${grant.id}`)
+  consola.info('Waiting for approval...')
+
+  const maxWait = 300_000
+  const interval = 3_000
+  const start = Date.now()
+
+  while (Date.now() - start < maxWait) {
+    const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
+    if (status.status === 'approved')
+      break
+    if (status.status === 'denied' || status.status === 'revoked')
+      throw new CliError(`Grant ${status.status}.`)
+    await new Promise(r => setTimeout(r, interval))
+  }
+
+  execShellCommand(command)
+}
+
+/** Execute a shell command as [shell, '-c', command_string] via execFileSync */
+function execShellCommand(command: string[]): void {
+  if (command.length === 0)
+    throw new CliError('No command to execute')
+  try {
+    execFileSync(command[0]!, command.slice(1), { stdio: 'inherit' })
+  }
+  catch (err: unknown) {
+    const exitCode = (err as { status?: number }).status || 1
+    throw new CliExit(exitCode)
+  }
+}
 
 function extractPositionals(rawArgs: string[]): string[] {
   const positionals: string[] = []
