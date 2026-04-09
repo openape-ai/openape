@@ -192,15 +192,18 @@
 
 ## Progress
 
-- [ ] `[2026-04-07]` Milestone 1: Pending
-- [ ] `[2026-04-07]` Milestone 2: Pending
-- [ ] `[2026-04-07]` Milestone 3: Pending
-- [ ] `[2026-04-07]` Milestone 4: Pending
-- [ ] `[2026-04-07]` Milestone 5: Pending
+- [x] `[2026-04-07]` Milestone 1: UserStore Interface erweitert (findByApprover)
+- [x] `[2026-04-07]` Milestone 2: nuxt-auth-idp migriert (15+ Endpoints, AgentStore gelöscht)
+- [x] `[2026-04-07]` Milestone 3: Free-IdP migriert (Drizzle UserStore, drizzle-agent-store gelöscht)
+- [x] `[2026-04-07]` Milestone 4: CLI "(agent)" Label entfernt
+- [x] `[2026-04-08]` Milestone 5: Deployed & verifiziert auf id.openape.at
 
 ## Surprises & Discoveries
 
-(wird laufend aktualisiert)
+- `[2026-04-08]` Unstorage db0-Driver kollidierte mit Drizzle `grants` Tabelle (gleicher Tabellenname). Fix: unstorage komplett entfernt, in-memory Rate-Limiter.
+- `[2026-04-08]` `useEvent()` wirft auf Vercel Serverless ohne `nitro.experimental.asyncContext: true`. Ohne dieses Flag fällt `useIdpStores()` still auf Default-unstorage-Stores zurück.
+- `[2026-04-08]` Async Nitro-Plugins (02.database.ts) können bei Turso Cold-Start-Timeouts unhandled rejections werfen die nachfolgende Plugin-Registrierungen blockieren. Fix: try/catch.
+- `[2026-04-08]` WebAuthn Credentials, Registration URLs und Agent SSH Keys mussten manuell von der `unstorage` Tabelle in eigene Drizzle-Tabellen migriert werden.
 
 ## Decision Log
 
