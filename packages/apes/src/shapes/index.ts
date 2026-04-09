@@ -1,4 +1,6 @@
-export { loadAdapter, resolveAdapterPath } from './adapters.js'
+export { loadAdapter, resolveAdapterPath, tryLoadAdapter } from './adapters.js'
+export { appendAuditLog, type AuditEntry } from './audit.js'
+export { extractShellCommandString, loadOrInstallAdapter, parseShellCommand, type ParsedShellCommand } from './shell-parser.js'
 export { resolveCapabilityRequest } from './capabilities.js'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
 export { createShapesGrant, fetchGrantToken, findExistingGrant, verifyAndExecute, waitForGrantStatus } from './grants.js'

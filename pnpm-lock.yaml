@@ -519,6 +519,9 @@ importers:
       giget:
         specifier: ^2.0.0
         version: 2.0.0
+      shell-quote:
+        specifier: ^1.8.3
+        version: 1.8.3
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -529,6 +532,9 @@ importers:
       '@types/node':
         specifier: ^25.3.5
         version: 25.5.0
+      '@types/shell-quote':
+        specifier: ^1.7.5
+        version: 1.7.5
       '@vitest/coverage-istanbul':
         specifier: ^2.1.9
         version: 2.1.9(vitest@3.2.4(@types/debug@4.1.12)(@types/node@25.5.0)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
@@ -4356,6 +4362,9 @@ packages:
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
+
+  '@types/shell-quote@1.7.5':
+    resolution: {integrity: sha512-+UE8GAGRPbJVQDdxi16dgadcBfQ+KG2vgZhV1+3A1XmHbmwcdwhCUwIdy+d3pAGrbvgRoVSjeI9vOWyq376Yzw==}
 
   '@types/tedious@4.0.14':
     resolution: {integrity: sha512-KHPsfX/FoVbUGbyYvk1q9MMQHLPeRZhRJZdO45Q4YjvFkv4hMNghCWTvy7rdKessBsmtz4euWCWAB6/tVpI1Iw==}
@@ -14783,6 +14792,8 @@ snapshots:
       pg-types: 2.2.0
 
   '@types/resolve@1.20.2': {}
+
+  '@types/shell-quote@1.7.5': {}
 
   '@types/tedious@4.0.14':
     dependencies:
