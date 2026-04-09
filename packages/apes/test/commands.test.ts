@@ -1110,13 +1110,33 @@ describe('apes command tests', () => {
   // =========================================================================
 
   describe('login (additional)', () => {
-    it('throws CliError when key login without email', async () => {
+    it('throws CliError when key login without email and no resolvable source', async () => {
       const { CliError } = await import('../src/errors')
       const { loginCommand } = await import('../src/commands/auth/login')
+      const { loadConfig, saveConfig } = await import('../src/config')
 
-      await expect(
-        loginCommand.run!({ args: { idp: idpBase, key: join(testHome, 'test_key') } } as any),
-      ).rejects.toThrow(CliError)
+      // Clear agent.email from config (an earlier test sets it via `apes config set`)
+      const cfg = loadConfig()
+      const savedEmail = cfg.agent?.email
+      if (cfg.agent) {
+        const { email: _email, ...rest } = cfg.agent
+        cfg.agent = rest
+      }
+      saveConfig(cfg)
+
+      try {
+        await expect(
+          loginCommand.run!({ args: { idp: idpBase, key: join(testHome, 'test_key') } } as any),
+        ).rejects.toThrow(CliError)
+      }
+      finally {
+        // Restore so subsequent tests are unaffected
+        if (savedEmail) {
+          const restored = loadConfig()
+          restored.agent = { ...restored.agent, email: savedEmail }
+          saveConfig(restored)
+        }
+      }
     })
   })
 })
