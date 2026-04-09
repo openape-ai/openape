@@ -1,5 +1,5 @@
-import path from 'node:path'
 import consola from 'consola'
+import { rewriteApeShellArgs } from './ape-shell'
 import { defineCommand, runMain } from 'citty'
 import { loginCommand } from './commands/auth/login'
 import { logoutCommand } from './commands/auth/logout'
@@ -39,17 +39,16 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 })
 
 // ape-shell mode: when invoked as "ape-shell -c <command>", rewrite to "apes run --shell -- bash -c <command>"
-const invokedAs = path.basename(process.argv[1] ?? '')
-if (invokedAs === 'ape-shell' || invokedAs === 'ape-shell.js') {
-  const shellArgs = process.argv.slice(2)
-  if (shellArgs[0] === '-c' && shellArgs.length > 1) {
-    process.argv = [process.argv[0]!, process.argv[1]!, 'run', '--shell', '--', 'bash', '-c', ...shellArgs.slice(1)]
+const shellRewrite = rewriteApeShellArgs(process.argv)
+if (shellRewrite) {
+  if (shellRewrite.action === 'rewrite') {
+    process.argv = shellRewrite.argv
   }
-  else if (shellArgs[0] === '--version') {
+  else if (shellRewrite.action === 'version') {
     console.log(`ape-shell (OpenApe DDISA shell wrapper)`)
     process.exit(0)
   }
-  else if (shellArgs[0] === '--help' || shellArgs[0] === '-h') {
+  else if (shellRewrite.action === 'help') {
     console.log('Usage: ape-shell -c <command>')
     console.log('Routes all commands through apes run for grant-based authorization.')
     process.exit(0)
