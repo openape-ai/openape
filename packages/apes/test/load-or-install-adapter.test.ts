@@ -135,4 +135,62 @@ describe('loadOrInstallAdapter', () => {
     const result = await loadOrInstallAdapter('rm')
     expect(result).toBeNull()
   })
+
+  it('normalizes absolute binary paths to basename before lookup', async () => {
+    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
+    const { findAdapter } = await import('../src/shapes/registry.js')
+    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+
+    vi.mocked(tryLoadAdapter).mockReturnValueOnce(null)
+    // No registry entry — we only care that the lookup key was normalized
+    const { fetchRegistry } = await import('../src/shapes/registry.js')
+    vi.mocked(fetchRegistry).mockResolvedValueOnce({ adapters: [] } as any)
+    vi.mocked(findAdapter).mockReturnValueOnce(undefined)
+
+    await loadOrInstallAdapter('/usr/local/bin/o365-cli')
+
+    expect(tryLoadAdapter).toHaveBeenCalledWith('o365-cli')
+    expect(findAdapter).toHaveBeenCalledWith(expect.anything(), 'o365-cli')
+  })
+
+  it('reloads the installed adapter by registry id, not by the requested executable', async () => {
+    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
+    const { fetchRegistry, findAdapter } = await import('../src/shapes/registry.js')
+    const { installAdapter } = await import('../src/shapes/installer.js')
+    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+
+    const installedAdapter = {
+      adapter: { cli: { id: 'o365', executable: 'o365-cli' }, operations: [], schema: 'openape-shapes/v1' },
+      source: '/home/user/.openape/shapes/adapters/o365.toml',
+      digest: 'sha256:xyz',
+    }
+    // Registry entry whose id ("o365") differs from the requested executable ("o365-cli")
+    const fakeEntry = {
+      id: 'o365',
+      name: 'o365',
+      description: 'Microsoft 365 CLI',
+      category: 'productivity',
+      tags: [],
+      author: 'delta-mind',
+      executable: 'o365-cli',
+      min_shapes_version: 'v1',
+      digest: 'sha256:xyz',
+      download_url: 'https://example.com/o365.toml',
+    }
+
+    vi.mocked(tryLoadAdapter)
+      .mockReturnValueOnce(null) // first attempt with 'o365-cli' — not yet installed
+      .mockReturnValueOnce(installedAdapter as any) // after install, reloaded by entry.id 'o365'
+    vi.mocked(fetchRegistry).mockResolvedValueOnce({ adapters: [fakeEntry] } as any)
+    vi.mocked(findAdapter).mockReturnValueOnce(fakeEntry as any)
+    vi.mocked(installAdapter).mockResolvedValueOnce({ id: 'o365', path: '/tmp/o365.toml', digest: 'sha256:xyz', updated: false } as any)
+
+    const result = await loadOrInstallAdapter('o365-cli')
+
+    expect(result).toBe(installedAdapter)
+    // First lookup is with the executable name
+    expect(tryLoadAdapter).toHaveBeenNthCalledWith(1, 'o365-cli')
+    // Second lookup is with the registry id after install
+    expect(tryLoadAdapter).toHaveBeenNthCalledWith(2, 'o365')
+  })
 })
