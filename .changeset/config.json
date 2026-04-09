@@ -11,7 +11,6 @@
     "openape-free-idp",
     "openape-agent-mail",
     "openape-agent-proxy",
-    "@openape/cloud",
     "docs",
     "openape-idp-example",
     "openape-sp-example",
