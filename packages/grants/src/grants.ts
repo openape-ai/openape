@@ -1,5 +1,5 @@
 import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, widenCliAuthorizationDetail } from './cli-permissions.js'
+import { canonicalizeCliPermission, cliAuthorizationDetailCovers, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, resourceChainsStructurallyMatch, widenCliAuthorizationDetail } from './cli-permissions.js'
 import type { GrantStore } from './stores.js'
 
 export type ExtendMode = 'widen' | 'merge'
@@ -293,6 +293,71 @@ export async function approveGrantWithExtension(
     grant_type: overrides.grant_type,
     duration: overrides.duration,
   })
+}
+
+/**
+ * Approve a grant after replacing its CLI authorization details with approver-chosen
+ * widened versions. Validates that each widened detail still structurally matches and
+ * covers the original request so the UI cannot upgrade into an entirely different grant.
+ */
+export async function approveGrantWithWidening(
+  grantId: string,
+  approver: string,
+  store: GrantStore,
+  widenedDetails: OpenApeCliAuthorizationDetail[],
+  overrides?: Pick<ApproveGrantOverrides, 'grant_type' | 'duration'>,
+): Promise<OpenApeGrant> {
+  const pendingGrant = await store.findById(grantId)
+  if (!pendingGrant)
+    throw new Error(`Grant not found: ${grantId}`)
+  if (pendingGrant.status !== 'pending')
+    throw new Error(`Grant is not pending: ${pendingGrant.status}`)
+
+  const originalDetails = cliDetails(pendingGrant.request.authorization_details)
+  if (originalDetails.length === 0)
+    throw new Error('Grant has no CLI authorization details to widen')
+  if (widenedDetails.length !== originalDetails.length)
+    throw new Error(`widened_details length mismatch: expected ${originalDetails.length}, got ${widenedDetails.length}`)
+
+  // Validate each widened detail against the original at the same index.
+  const normalized: OpenApeCliAuthorizationDetail[] = widenedDetails.map((widened, idx) => {
+    const original = originalDetails[idx]!
+    if (widened.type !== 'openape_cli')
+      throw new Error(`widened_details[${idx}]: type must be 'openape_cli'`)
+    if (widened.cli_id !== original.cli_id)
+      throw new Error(`widened_details[${idx}]: cli_id mismatch (expected ${original.cli_id})`)
+    if (widened.action !== original.action)
+      throw new Error(`widened_details[${idx}]: action mismatch (expected ${original.action})`)
+    if (widened.operation_id !== original.operation_id)
+      throw new Error(`widened_details[${idx}]: operation_id mismatch (expected ${original.operation_id})`)
+    if (!resourceChainsStructurallyMatch(widened.resource_chain, original.resource_chain))
+      throw new Error(`widened_details[${idx}]: resource_chain structure mismatch`)
+    // The widened detail MUST cover the original — otherwise it is not a widening
+    // but a different grant altogether.
+    if (!cliAuthorizationDetailCovers(widened, original))
+      throw new Error(`widened_details[${idx}]: does not cover original — not a valid widening`)
+
+    // Recompute the canonical permission server-side so the client cannot forge one.
+    const permission = canonicalizeCliPermission(widened)
+    return {
+      ...original,
+      resource_chain: widened.resource_chain,
+      permission,
+      display: widened.display || original.display,
+    }
+  })
+
+  const modifiedRequest: OpenApeGrantRequest = {
+    ...pendingGrant.request,
+    authorization_details: normalized,
+    permissions: normalized.map(d => d.permission),
+    // The narrow command/argv no longer characterizes the widened scope.
+    command: undefined,
+    cmd_hash: undefined,
+  }
+  await store.updateStatus(grantId, 'pending', { request: modifiedRequest })
+
+  return approveGrant(grantId, approver, store, overrides)
 }
 
 /**

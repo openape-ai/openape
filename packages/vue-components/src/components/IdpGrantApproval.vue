@@ -83,6 +83,11 @@ const EXTEND_MODE_OPTIONS = [
   { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
 ]
 
+// Widening suggestions (server-provided proactive scope suggestions on the first approve)
+const wideningSuggestions = computed<any[][]>(() => grant.value?.widening_suggestions ?? [])
+const hasWideningSuggestions = computed(() => wideningSuggestions.value.length > 0)
+const selectedWideningByIndex = ref<Record<number, string>>({})
+
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
@@ -99,6 +104,13 @@ onMounted(async () => {
     const res = await fetch(`/api/grants/${props.grantId}`, { credentials: 'include' })
     if (!res.ok) throw new Error('Grant not found')
     grant.value = await res.json()
+    if (Array.isArray(grant.value?.widening_suggestions)) {
+      const init: Record<number, string> = {}
+      grant.value.widening_suggestions.forEach((_: any, idx: number) => {
+        init[idx] = '0'
+      })
+      selectedWideningByIndex.value = init
+    }
   }
   catch {
     error.value = 'Grant not found'
@@ -117,6 +129,21 @@ async function handleApprove() {
           extend_grant_ids: similarGrants.value.map((s: any) => s.grant.id),
         }
       : {}
+    // Build widened_details only when the user chose a non-exact scope and the
+    // similar-grants extend flow is NOT in play (mutually exclusive on the server).
+    let wideningBody: { widened_details?: any[] } = {}
+    if (hasWideningSuggestions.value && !hasSimilarGrants.value) {
+      const chosen = wideningSuggestions.value.map((suggestions, idx) => {
+        const selectedIdx = Number(selectedWideningByIndex.value[idx] ?? '0')
+        return suggestions[selectedIdx]?.detail
+      }).filter(Boolean)
+      const originalDetails = cliDetails.value
+      const hasAnyNonExact = chosen.some((detail, idx) => {
+        return detail.permission !== originalDetails[idx]?.permission
+      })
+      if (hasAnyNonExact)
+        wideningBody = { widened_details: chosen }
+    }
     const resolvedGrantType = selectedGrantType.value === 'as_requested'
       ? (grant.value?.request?.grant_type || 'once')
       : selectedGrantType.value
@@ -132,6 +159,7 @@ async function handleApprove() {
         grant_type: resolvedGrantType,
         ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
         ...extendBody,
+        ...wideningBody,
       }),
     })
     if (!res.ok) {
@@ -335,6 +363,37 @@ function isExactCommand(detail: any) {
               </dd>
             </div>
           </dl>
+        </div>
+
+        <!-- Widening suggestions (only when no similar grants exist) -->
+        <div
+          v-if="hasWideningSuggestions && !hasSimilarGrants"
+          class="rounded-md bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800 p-4"
+        >
+          <h3 class="font-semibold text-sm text-indigo-700 dark:text-indigo-300 mb-2">
+            Approve scope
+          </h3>
+          <p class="text-xs text-gray-500 mb-3">
+            Choose how broad this grant should be. Conservative default is exact.
+          </p>
+          <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-2 mb-3">
+            <p v-if="cliDetails[detailIdx]" class="text-xs text-gray-500">
+              For: <span class="font-mono text-xs break-all">{{ cliDetails[detailIdx].display }}</span>
+            </p>
+            <div v-for="(s, i) in suggestions" :key="i" class="flex items-start gap-2">
+              <input
+                :id="`widen-${detailIdx}-${i}`"
+                v-model="selectedWideningByIndex[detailIdx]"
+                type="radio"
+                :value="String(i)"
+                class="mt-1"
+              >
+              <label :for="`widen-${detailIdx}-${i}`" class="text-sm">
+                <span class="font-medium">{{ s.label }}</span>
+                <span class="block font-mono text-xs text-gray-500 break-all">{{ s.permission }}</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Similar grants -->
