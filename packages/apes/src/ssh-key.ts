@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import type { KeyObject } from 'node:crypto'
 import { createPrivateKey } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 
 const OPENSSH_MAGIC = 'openssh-key-v1\0'
 
@@ -15,6 +16,23 @@ export function loadEd25519PrivateKey(pem: string): KeyObject {
   }
   // PKCS8 PEM — Node.js handles this natively
   return createPrivateKey(pem)
+}
+
+/**
+ * Read the comment field from an OpenSSH public key file.
+ * Format: "<type> <base64> [comment...]"
+ * Returns null if the file does not exist or has no comment.
+ */
+export function readPublicKeyComment(pubPath: string): string | null {
+  if (!existsSync(pubPath))
+    return null
+  const content = readFileSync(pubPath, 'utf-8').trim()
+  const parts = content.split(/\s+/)
+  if (parts.length < 3)
+    return null
+  // Comment may contain spaces — rejoin everything after type + base64
+  const comment = parts.slice(2).join(' ').trim()
+  return comment || null
 }
 
 function parseOpenSSHEd25519(pem: string): KeyObject {
