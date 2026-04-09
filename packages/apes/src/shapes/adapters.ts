@@ -77,3 +77,13 @@ export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter
     digest: digest(content),
   }
 }
+
+/** Try to load an adapter locally, return null instead of throwing when not found. */
+export function tryLoadAdapter(cliId: string, explicitPath?: string): LoadedAdapter | null {
+  try {
+    return loadAdapter(cliId, explicitPath)
+  }
+  catch {
+    return null
+  }
+}

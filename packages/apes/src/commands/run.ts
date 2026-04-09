@@ -4,10 +4,13 @@ import { defineCommand } from 'citty'
 import {
   createShapesGrant,
   extractOption,
+  extractShellCommandString,
   extractWrappedCommand,
   fetchGrantToken,
   findExistingGrant,
   loadAdapter,
+  loadOrInstallAdapter,
+  parseShellCommand,
   resolveCommand,
   verifyAndExecute,
   waitForGrantStatus,
@@ -100,6 +103,12 @@ async function runShellMode(
   if (!idp)
     throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
 
+  // Try to handle this command via the shapes adapter system first.
+  // This gives us structured grants with resource chains (e.g. "rm file:/tmp/foo.txt")
+  // instead of opaque "bash -c …" grants.
+  const adapterHandled = await tryAdapterModeFromShell(command, idp, args)
+  if (adapterHandled) return
+
   const grantsUrl = await getGrantsEndpoint(idp)
   const targetHost = (args.host as string) || hostname()
 
@@ -154,6 +163,84 @@ async function runShellMode(
   }
 
   execShellCommand(command)
+}
+
+/**
+ * Try to handle a shell command via the shapes adapter system.
+ *
+ * Flow:
+ * 1. Extract the command string from `bash -c "…"` argv
+ * 2. Parse into executable + argv (bail out on compound commands)
+ * 3. Load adapter locally, or auto-install from registry
+ * 4. Resolve the command against adapter operations → structured CLI grant detail
+ * 5. Reuse an existing matching grant, or request a new one and execute
+ *
+ * Returns true when the command was handled (executed or failed hard).
+ * Returns false for any reason — caller should fall back to the generic session grant.
+ */
+async function tryAdapterModeFromShell(
+  command: string[],
+  idp: string,
+  args: Record<string, unknown>,
+): Promise<boolean> {
+  const cmdString = extractShellCommandString(command)
+  if (!cmdString) return false
+
+  const parsed = parseShellCommand(cmdString)
+  if (!parsed) return false
+  if (parsed.isCompound) return false
+
+  const loaded = await loadOrInstallAdapter(parsed.executable)
+  if (!loaded) return false
+
+  let resolved
+  try {
+    resolved = await resolveCommand(loaded, [parsed.executable, ...parsed.argv])
+  }
+  catch (err) {
+    consola.debug(`ape-shell: adapter resolve failed for "${parsed.raw}":`, err)
+    return false
+  }
+
+  // Try to reuse an existing matching grant (with widening support)
+  try {
+    const existingGrantId = await findExistingGrant(resolved, idp)
+    if (existingGrantId) {
+      consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
+      const token = await fetchGrantToken(idp, existingGrantId)
+      await verifyAndExecute(token, resolved)
+      return true
+    }
+  }
+  catch {
+    // Fall through to request a new grant
+  }
+
+  // Request a new grant for this specific command
+  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
+  consola.info(`Requesting grant for: ${resolved.detail.display}`)
+  const grant = await createShapesGrant(resolved, {
+    idp,
+    approval,
+    reason: (args.reason as string) || `ape-shell: ${resolved.detail.display}`,
+  })
+
+  consola.info(`Grant requested: ${grant.id}`)
+  consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+
+  if (grant.similar_grants?.similar_grants?.length) {
+    const n = grant.similar_grants.similar_grants.length
+    consola.info('')
+    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
+  }
+
+  const status = await waitForGrantStatus(idp, grant.id)
+  if (status !== 'approved')
+    throw new CliError(`Grant ${status}`)
+
+  const token = await fetchGrantToken(idp, grant.id)
+  await verifyAndExecute(token, resolved)
+  return true
 }
 
 /** Execute a shell command as [shell, '-c', command_string] via execFileSync */
