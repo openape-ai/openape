@@ -4,9 +4,10 @@ import { createServer } from 'node:http'
 import { defineCommand } from 'citty'
 import { generateCodeChallenge, generateCodeVerifier } from '@openape/core'
 import consola from 'consola'
-import { loadConfig, saveAuth } from '../../config'
+import { saveAuth } from '../../config'
 import { getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../../http'
 import { CliError } from '../../errors'
+import { resolveLoginInputs } from './resolve-login'
 
 const CALLBACK_PORT = 9876
 const CLIENT_ID = 'grapes-cli'
@@ -19,30 +20,50 @@ export const loginCommand = defineCommand({
   args: {
     idp: {
       type: 'string',
-      description: 'IdP URL (e.g. https://id.openape.at)',
+      description: 'IdP URL (e.g. https://id.openape.at). Auto-discovered via DDISA DNS if omitted.',
     },
     key: {
       type: 'string',
-      description: 'Path to agent private key (agent mode)',
+      description: 'Path to agent private key. Defaults to ~/.ssh/id_ed25519 if present.',
     },
     email: {
       type: 'string',
-      description: 'Agent email (for DNS discovery)',
+      description: 'Agent email. Extracted from <key>.pub comment if omitted.',
+    },
+    browser: {
+      type: 'boolean',
+      description: 'Force browser (PKCE) login even if an SSH key exists',
     },
   },
   async run({ args }) {
-    const config = loadConfig()
-    const idp = args.idp || process.env.APES_IDP || process.env.GRAPES_IDP || config.defaults?.idp
+    const resolved = await resolveLoginInputs({
+      key: args.key,
+      idp: args.idp,
+      email: args.email,
+      browser: args.browser,
+    })
 
-    if (!idp) {
-      throw new CliError('IdP URL required. Use --idp <url> or set APES_IDP.')
-    }
-
-    if (args.key) {
-      await loginWithKey(idp, args.key, args.email)
+    if (resolved.keyPath) {
+      if (!resolved.email) {
+        throw new CliError(
+          `Agent email required for key-based login. Add an email comment to `
+          + `${resolved.keyPath}.pub (ssh-keygen -C <email>) or pass --email <agent-email>.`,
+        )
+      }
+      if (!resolved.idp) {
+        const domain = resolved.email.split('@')[1]
+        throw new CliError(
+          `Could not discover IdP for ${resolved.email}. `
+          + `Pass --idp <url>, set APES_IDP, or add a DDISA TXT record for ${domain}.`,
+        )
+      }
+      await loginWithKey(resolved.idp, resolved.keyPath, resolved.email)
     }
     else {
-      await loginWithPKCE(idp)
+      if (!resolved.idp) {
+        throw new CliError('IdP URL required for browser login. Use --idp <url> or set APES_IDP.')
+      }
+      await loginWithPKCE(resolved.idp)
     }
   },
 })
@@ -161,15 +182,10 @@ async function loginWithPKCE(idp: string) {
   consola.success(`Logged in as ${payload.email || payload.sub}`)
 }
 
-async function loginWithKey(idp: string, keyPath: string, email?: string) {
+async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
   const { readFileSync } = await import('node:fs')
   const { sign } = await import('node:crypto')
   const { loadEd25519PrivateKey } = await import('../../ssh-key.js')
-
-  const agentEmail = email
-  if (!agentEmail) {
-    throw new CliError('Agent email required for key-based login. Use --email <agent-email>')
-  }
 
   // Use challenge-response auth (endpoint resolved via OIDC discovery)
   const challengeUrl = await getAgentChallengeEndpoint(idp)
