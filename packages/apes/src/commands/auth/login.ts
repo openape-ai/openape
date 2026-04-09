@@ -53,8 +53,15 @@ export const loginCommand = defineCommand({
       if (!resolved.idp) {
         const domain = resolved.email.split('@')[1]
         throw new CliError(
-          `Could not discover IdP for ${resolved.email}. `
-          + `Pass --idp <url>, set APES_IDP, or add a DDISA TXT record for ${domain}.`,
+          `No IdP found for ${resolved.email}.\n\n`
+          + `There is no DDISA TXT record for ${domain} and no --idp was provided.\n\n`
+          + `Options:\n`
+          + `  • Run your own IdP (recommended for production)\n`
+          + `    See: https://docs.openape.at\n`
+          + `  • Publish a DDISA TXT record for your domain:\n`
+          + `    _ddisa.${domain} TXT "v=ddisa1 idp=https://your-idp.example"\n`
+          + `  • Use OpenApe's free hosted IdP for testing:\n`
+          + `    apes login --idp https://id.openape.at`,
         )
       }
       await loginWithKey(resolved.idp, resolved.keyPath, resolved.email)
