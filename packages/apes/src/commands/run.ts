@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
+import { basename } from 'node:path'
 import { defineCommand } from 'citty'
 import {
   createShapesGrant,
@@ -193,9 +194,14 @@ async function tryAdapterModeFromShell(
   const loaded = await loadOrInstallAdapter(parsed.executable)
   if (!loaded) return false
 
+  // resolveCommand does a strict comparison against `adapter.cli.executable`,
+  // which is always the bare binary name. When the user typed an absolute
+  // path we must pass the basename, not the full path.
+  const normalizedExecutable = basename(parsed.executable)
+
   let resolved
   try {
-    resolved = await resolveCommand(loaded, [parsed.executable, ...parsed.argv])
+    resolved = await resolveCommand(loaded, [normalizedExecutable, ...parsed.argv])
   }
   catch (err) {
     consola.debug(`ape-shell: adapter resolve failed for "${parsed.raw}":`, err)
