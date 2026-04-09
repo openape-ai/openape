@@ -68,6 +68,13 @@ export function searchAdapters(index: RegistryIndex, query: string): RegistryEnt
   )
 }
 
-export function findAdapter(index: RegistryIndex, id: string): RegistryEntry | undefined {
-  return index.adapters.find(a => a.id === id)
+/**
+ * Look up a registry entry by its id or its executable field. This lets callers
+ * pass either the registry id ("o365") or the binary name ("o365-cli"); most
+ * adapters have id === executable, but the two can diverge.
+ */
+export function findAdapter(index: RegistryIndex, idOrExecutable: string): RegistryEntry | undefined {
+  return index.adapters.find(
+    a => a.id === idOrExecutable || a.executable === idOrExecutable,
+  )
 }
