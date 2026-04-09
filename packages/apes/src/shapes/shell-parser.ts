@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import consola from 'consola'
 import { parse as shellParse } from 'shell-quote'
 import { loadAdapter, tryLoadAdapter } from './adapters.js'
@@ -90,29 +91,38 @@ export function extractShellCommandString(command: string[]): string | null {
  * Failures are logged but never thrown — callers should fall back to the generic flow.
  */
 export async function loadOrInstallAdapter(cliId: string): Promise<LoadedAdapter | null> {
+  // Absolute or relative paths like `/usr/local/bin/o365-cli` must be reduced
+  // to the binary name before any lookup — neither the local file scan nor the
+  // registry knows how to match a path.
+  const lookupId = basename(cliId)
+
   // 1. Try local
-  const local = tryLoadAdapter(cliId)
+  const local = tryLoadAdapter(lookupId)
   if (local) return local
 
-  // 2. Remote registry lookup + auto-install
+  // 2. Remote registry lookup + auto-install.
+  // findAdapter matches both `id` and `executable`, so a bare binary name
+  // like `o365-cli` resolves to a registry entry whose id is `o365`.
   try {
     const index = await fetchRegistry()
-    const entry = findAdapter(index, cliId)
+    const entry = findAdapter(index, lookupId)
     if (!entry) return null
 
-    consola.info(`Installing shapes adapter for ${cliId} from registry...`)
+    consola.info(`Installing shapes adapter for ${entry.id} from registry...`)
     await installAdapter(entry, { local: false })
     appendAuditLog({
       action: 'adapter-auto-install',
-      cli_id: cliId,
+      cli_id: entry.id,
       digest: entry.digest,
       source: 'ape-shell',
     })
 
-    return tryLoadAdapter(cliId)
+    // Adapters are installed under their registry `id` — always reload by id
+    // even if the caller passed the executable name.
+    return tryLoadAdapter(entry.id)
   }
   catch (err) {
-    consola.debug(`ape-shell adapter auto-install failed for ${cliId}:`, err)
+    consola.debug(`ape-shell adapter auto-install failed for ${lookupId}:`, err)
     return null
   }
 }
