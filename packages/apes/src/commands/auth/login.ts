@@ -132,7 +132,15 @@ async function loginWithPKCE(idp: string) {
     })
 
     server.listen(CALLBACK_PORT, () => {
-      consola.info(`Opening browser for login at ${idp}...`)
+      // Always print the URL so the user can copy it manually — headless SSH
+      // sessions, containers, and restricted-user shells cannot open a browser.
+      // The `open` attempt below is fire-and-forget convenience only.
+      console.log('')
+      console.log('Visit the following URL in a browser to authenticate:')
+      console.log('')
+      console.log(`  ${authUrl.toString()}`)
+      console.log('')
+      consola.info(`Waiting for authentication callback on ${redirectUri} ...`)
       openBrowser(authUrl.toString())
     })
 
