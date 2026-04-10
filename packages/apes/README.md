@@ -35,9 +35,12 @@ apes grants list
 
 ## ape-shell: Grant-Secured Shell Wrapper
 
-`ape-shell` is a drop-in shell replacement that routes every command through a DDISA grant. Useful for sandboxing AI coding agents (OpenClaw, Claude Code, etc.) so they can only execute pre-approved commands.
+`ape-shell` is a drop-in shell that routes every command through a DDISA grant. It has two modes:
 
-### How it works
+1. **One-shot mode** (`ape-shell -c "<command>"`) — the historical wrapper. Runs a single command through the grant flow and exits. Used by `$SHELL -c` patterns (e.g. `openclaw tui`, `xargs`, git hooks, sshd non-interactive sessions, etc.).
+2. **Interactive mode** (`ape-shell` with no args, or as a login shell) — a full interactive REPL with a persistent bash backend. Every line the user types is routed through the grant flow **before** bash sees it, and executed in bash's persistent state (so `cd`, `export`, aliases, functions, pipes, TUI apps like `vim`/`less`/`top` all work natively).
+
+### How the one-shot mode works
 
 ```
 $SHELL -c "git status"
@@ -51,16 +54,50 @@ apes run --shell -- bash -c "git status"
 3. No grant → request + wait for human approval → execute
 ```
 
-### Setup for an AI agent session
+### How the interactive mode works
+
+```
+ape-shell
+  ↓
+┌─ PROMPT ─────────────────────────────────────────┐
+│ apes$ <user types here>                          │
+│   → multi-line detection via `bash -n` dry-parse │
+│   → grant dispatch (adapter or ape-shell session)│
+│   → on approval: write line to persistent bash   │
+│   → stream output, detect prompt marker          │
+└──────────────────────────────────────────────────┘
+```
+
+Every line is audited in `~/.config/apes/audit.jsonl` (session id, line, grant id, exit code).
+
+### Setup for an AI agent session (one-shot mode)
 
 ```bash
-# Point the agent's SHELL at ape-shell
-SHELL=$(which ape-shell) openclaw
+# Point the agent's SHELL at ape-shell — each spawned command
+# goes through the one-shot grant flow.
+SHELL=$(which ape-shell) openclaw tui
 ```
 
 The first command requests a session grant. After the human approves it (with `grant_type: timed, duration: 8h`), all subsequent commands reuse the same grant without interaction.
 
-### Example
+### Setup as a login shell (interactive mode)
+
+```bash
+# 1. Register ape-shell as a valid login shell (once per host)
+echo "$(which ape-shell)" | sudo tee -a /etc/shells
+
+# 2. Set it as the login shell for a user (e.g. openclaw)
+sudo chsh -s "$(which ape-shell)" openclaw
+```
+
+After this:
+
+- `ssh openclaw@host` — sshd starts ape-shell as an interactive REPL (sshd passes the login shell with a `-` prefix on argv[0], which ape-shell detects)
+- `ssh openclaw@host "ls"` — sshd invokes `ape-shell -c "ls"`, which still flows through the **one-shot** path (no regression)
+- `su - openclaw` — drops into the interactive REPL
+- Terminal / console login — same as SSH interactive
+
+### Example (one-shot)
 
 ```bash
 $ apes login
@@ -76,6 +113,31 @@ $ ape-shell -c "git log --oneline -5"
 abc123 Latest commit
 def456 Previous commit
 ...
+```
+
+### Example (interactive)
+
+```bash
+$ ape-shell
+apes interactive shell
+Ctrl-D to exit.
+
+apes$ cd /tmp
+# (grant approved, reused for free)
+
+apes$ ls
+# structured adapter grant for `ls` → approve → output
+
+apes$ for i in 1 2 3; do
+>   echo $i
+> done
+# single grant for the whole compound, bash runs it natively
+
+apes$ vim notes.md
+# grant approved → full TUI vim, raw-mode passthrough
+
+apes$ ^D
+Goodbye.
 ```
 
 ## Commands
