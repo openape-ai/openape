@@ -46,6 +46,31 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_ssh_keys_user_email ON ssh_keys(user_email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_ssh_keys_public_key ON ssh_keys(public_key)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS codes (
+      code TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL,
+      code_challenge TEXT NOT NULL, user_id TEXT NOT NULL, nonce TEXT,
+      expires_at INTEGER NOT NULL, extra_data TEXT
+    )`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS refresh_token_families (
+      family_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, client_id TEXT NOT NULL,
+      current_token_hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_refresh_families_user_id ON refresh_token_families(user_id)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_refresh_families_client_id ON refresh_token_families(client_id)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS refresh_tokens (
+      token_hash TEXT PRIMARY KEY, family_id TEXT NOT NULL, user_id TEXT NOT NULL,
+      client_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS jtis (
+      jti TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
+    )`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
