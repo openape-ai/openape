@@ -1,4 +1,6 @@
+import { hostname } from 'node:os'
 import consola from 'consola'
+import { requestGrantForShellLine } from './grant-dispatch.js'
 import { PtyBridge } from './pty-bridge.js'
 import { ShellRepl } from './repl.js'
 
@@ -63,12 +65,23 @@ export async function runInteractiveShell(): Promise<void> {
 
   await bridge.waitForReady()
 
+  const targetHost = hostname()
+
   repl = new ShellRepl(
     {
       onLine: async (line) => {
-        // Switch stdin to raw mode so interactive TUI apps work. We route
-        // raw bytes from process.stdin directly into bash's pty.
-        // We also stop readline from consuming input during this window.
+        // --- 1. Gate the line through the grant flow BEFORE bash sees it ---
+        const grant = await requestGrantForShellLine(line, {
+          targetHost,
+          approval: 'once',
+        })
+
+        if (grant.kind === 'denied') {
+          consola.error(grant.reason)
+          return
+        }
+
+        // --- 2. Raw-mode stdin passthrough while bash runs the line ---
         const wasRaw = process.stdin.isTTY && (process.stdin as NodeJS.ReadStream).isRaw
         if (process.stdin.isTTY && !wasRaw)
           (process.stdin as NodeJS.ReadStream).setRawMode(true)
@@ -76,15 +89,11 @@ export async function runInteractiveShell(): Promise<void> {
         const forward = (chunk: Buffer) => {
           bridge.writeRaw(chunk.toString())
         }
-        // Pause readline so it doesn't steal input during execution
-        // (node's readline auto-buffers; pause() is how we disable it).
-        // We listen for raw bytes instead and forward them.
         const rawInputAvailable = process.stdin.isTTY === true
         if (rawInputAvailable)
           process.stdin.on('data', forward)
 
         try {
-          // Wait for bash to finish the line — onLineDone resolves this.
           await new Promise<void>((resolve) => {
             pendingResolve = resolve
             bridge.writeLine(line)
@@ -99,8 +108,6 @@ export async function runInteractiveShell(): Promise<void> {
         }
 
         if (lastExitCode !== 0) {
-          // Non-zero exit codes are informational only — the next prompt
-          // comes up regardless. Surface them dimly so users notice.
           consola.debug(`(exit ${lastExitCode})`)
         }
       },
