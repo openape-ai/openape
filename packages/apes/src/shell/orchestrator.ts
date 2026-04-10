@@ -13,16 +13,24 @@ import { ShellSession } from './session.js'
  *
  * Flow per user-entered line:
  *   1. ShellRepl emits onLine with the completed (possibly multi-line) buffer
- *   2. We switch the REPL into "output mode" (pauses readline, turns on raw
- *      stdin forwarding so TUI apps like vim receive raw keystrokes)
- *   3. The line is written to the bash pty
+ *   2. Line goes through the grant flow. If denied: session logs the denial,
+ *      we surface the reason, and return without touching bash.
+ *   3. On approval we enter "output mode" (raw stdin passthrough so TUI apps
+ *      like vim/less/top receive raw keystrokes) and write the line to bash.
  *   4. bash output streams back to stdout live via PtyBridge.onOutput
- *   5. When the marker-bearing PS1 reappears we fire a resolve() that lets
- *      the REPL's onLine promise settle → readline takes back the terminal
- *      and shows the next prompt
+ *   5. When the marker-bearing PS1 reappears we resolve the pending promise,
+ *      readline takes back the terminal, and the next prompt is drawn.
  *
- * M3 does NOT yet integrate the grant flow — every line is executed
- * unconditionally. M4 inserts grant-dispatch before the pty.write call.
+ * The orchestrator also owns the lifecycle niceties:
+ *   - SIGWINCH is forwarded to the pty so TUI apps re-render at the right size
+ *   - SIGTERM / SIGHUP trigger a clean shutdown (kill bash, restore TTY mode,
+ *     close the audit session)
+ *   - An emergency process.on('exit') handler restores the terminal out of
+ *     raw mode in case a crash left it there
+ *
+ * Every line is recorded in the audit log via the ShellSession — granted,
+ * denied, and done events with seq numbers correlating each event to its
+ * parent line within the session.
  */
 export async function runInteractiveShell(): Promise<void> {
   /**
@@ -149,10 +157,50 @@ export async function runInteractiveShell(): Promise<void> {
   }
   process.stdout.on('resize', onResize)
 
+  // Emergency TTY restore — if a crash leaves stdin in raw mode, subsequent
+  // terminal input becomes unusable until the user manually runs `reset`.
+  // This handler fires on clean exit and on uncaught exceptions.
+  const restoreTty = () => {
+    if (process.stdin.isTTY && (process.stdin as NodeJS.ReadStream).isRaw) {
+      try {
+        (process.stdin as NodeJS.ReadStream).setRawMode(false)
+      }
+      catch {}
+    }
+  }
+  process.on('exit', restoreTty)
+
+  // Clean shutdown on termination signals. kill() is idempotent in node-pty,
+  // and session.close() swallows audit-log errors internally, so this is safe
+  // to call even if already shutting down.
+  const gracefulShutdown = () => {
+    if (shuttingDown)
+      return
+    shuttingDown = true
+    restoreTty()
+    try {
+      session.close()
+    }
+    catch {}
+    try {
+      bridge.kill()
+    }
+    catch {}
+    try {
+      repl?.stop()
+    }
+    catch {}
+  }
+  process.on('SIGTERM', gracefulShutdown)
+  process.on('SIGHUP', gracefulShutdown)
+
   try {
     await repl.run()
   }
   finally {
     process.stdout.off('resize', onResize)
+    process.off('exit', restoreTty)
+    process.off('SIGTERM', gracefulShutdown)
+    process.off('SIGHUP', gracefulShutdown)
   }
 }
