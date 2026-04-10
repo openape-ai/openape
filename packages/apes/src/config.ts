@@ -51,6 +51,15 @@ export function clearAuth(): void {
   if (existsSync(AUTH_FILE)) {
     writeFileSync(AUTH_FILE, '', { mode: 0o600 })
   }
+  // Also wipe the [agent] section from config.toml so logout disables
+  // auto-refresh. Preserves [defaults] so the IdP URL stays configured.
+  if (existsSync(CONFIG_FILE)) {
+    const existing = loadConfig()
+    if (existing.agent) {
+      const { agent: _removed, ...rest } = existing
+      saveConfig(rest)
+    }
+  }
 }
 
 export function loadConfig(): ApesConfig {

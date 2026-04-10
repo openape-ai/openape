@@ -120,6 +120,86 @@ async function refreshAgentToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Refresh an OAuth2 access token using a stored refresh_token. Used for
+ * PKCE/browser login sessions where no Ed25519 agent key is configured.
+ *
+ * Serialized via a file lock so concurrent apes/ape-shell invocations don't
+ * both consume the same rotating refresh token (which would revoke the
+ * entire family server-side).
+ */
+async function refreshOAuthToken(): Promise<string | null> {
+  const auth = loadAuth()
+  if (!auth?.refresh_token)
+    return null
+
+  const { acquireAuthLock, releaseAuthLock } = await import('./auth-lock.js')
+  const lock = await acquireAuthLock({ timeoutMs: 5000 })
+  if (!lock) {
+    // Another process is refreshing. It should have updated auth.json by now;
+    // re-read and return whatever fresh token is there (may still be null).
+    return getAuthToken()
+  }
+
+  try {
+    // Re-read auth.json inside the lock — another holder may already have
+    // refreshed while we were waiting, in which case we reuse the new token.
+    const latest = loadAuth()
+    if (latest?.expires_at && Date.now() / 1000 < latest.expires_at - 30)
+      return latest.access_token
+
+    const activeRefreshToken = latest?.refresh_token ?? auth.refresh_token
+    if (!activeRefreshToken)
+      return null
+
+    const disco = await discoverEndpoints(auth.idp)
+    const tokenEndpoint = (disco.token_endpoint as string) || `${auth.idp}/token`
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: activeRefreshToken,
+    })
+
+    const resp = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    })
+
+    if (!resp.ok) {
+      // Family may have been revoked server-side — clear refresh_token to
+      // prevent an infinite retry loop on every subsequent apes invocation.
+      if (resp.status === 400 || resp.status === 401) {
+        const base = latest ?? auth
+        saveAuth({ ...base, refresh_token: undefined })
+      }
+      return null
+    }
+
+    const tokens = await resp.json() as {
+      access_token: string
+      refresh_token?: string
+      expires_in?: number
+    }
+
+    const base = latest ?? auth
+    saveAuth({
+      ...base,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token ?? base.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) + (tokens.expires_in || 300),
+    })
+
+    if (debug)
+      consola.debug('Token refreshed via OAuth refresh_token')
+
+    return tokens.access_token
+  }
+  finally {
+    await releaseAuthLock(lock)
+  }
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: {
@@ -131,9 +211,13 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   let token = options.token || getAuthToken()
 
-  // Auto-refresh expired agent tokens
+  // Auto-refresh: priority (1) ed25519 agent key, (2) OAuth refresh_token.
+  // Agent-key first because it is concurrency-safe — every challenge is
+  // independent server-side, so parallel ape-shell spawns don't race.
   if (!token) {
     token = await refreshAgentToken()
+    if (!token)
+      token = await refreshOAuthToken()
   }
 
   if (!token) {
