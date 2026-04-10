@@ -105,7 +105,7 @@ export class ShellRepl {
     if (!this.quiet)
       this.writeBanner()
 
-    this.rl.prompt()
+    this.safePrompt(PS1)
 
     return new Promise<void>((resolve) => {
       this.rl!.on('line', async (line) => {
@@ -116,8 +116,7 @@ export class ShellRepl {
           const msg = err instanceof Error ? err.message : String(err)
           consola.error(`Shell error: ${msg}`)
           this.resetBuffer()
-          this.rl!.setPrompt(PS1)
-          this.rl!.prompt()
+          this.safePrompt(PS1)
         }
       })
 
@@ -126,8 +125,7 @@ export class ShellRepl {
         if (this.buffer.length > 0)
           this.output.write('\n')
         this.resetBuffer()
-        this.rl!.setPrompt(PS1)
-        this.rl!.prompt()
+        this.safePrompt(PS1)
       })
 
       this.rl!.on('close', async () => {
@@ -166,16 +164,14 @@ export class ShellRepl {
     const status = checkMultiLineStatus(this.buffer)
 
     if (status.kind === 'continue') {
-      this.rl!.setPrompt(PS2)
-      this.rl!.prompt()
+      this.safePrompt(PS2)
       return
     }
 
     if (status.kind === 'error') {
       this.output.write(`${status.message}\n`)
       this.resetBuffer()
-      this.rl!.setPrompt(PS1)
-      this.rl!.prompt()
+      this.safePrompt(PS1)
       return
     }
 
@@ -185,8 +181,7 @@ export class ShellRepl {
 
     // If the buffer was pure whitespace, skip the callback and re-prompt.
     if (completeLine.trim().length === 0) {
-      this.rl!.setPrompt(PS1)
-      this.rl!.prompt()
+      this.safePrompt(PS1)
       return
     }
 
@@ -194,30 +189,32 @@ export class ShellRepl {
 
     // Back to prompt mode. Owners of onLine can await and drive their own
     // output before we show the next prompt.
-    this.rl!.setPrompt(PS1)
-    this.rl!.prompt()
+    this.safePrompt(PS1)
+  }
+
+  /**
+   * Draw a prompt, but only if the readline interface is still alive.
+   * The onLine callback may have triggered `stop()` (e.g., bash exited),
+   * in which case setPrompt/prompt would throw ERR_USE_AFTER_CLOSE.
+   */
+  private safePrompt(prompt: string): void {
+    if (this.stopped || !this.rl)
+      return
+    try {
+      this.rl.setPrompt(prompt)
+      this.rl.prompt()
+    }
+    catch (err) {
+      // Swallow ERR_USE_AFTER_CLOSE which races with shutdown.
+      const code = (err as NodeJS.ErrnoException)?.code
+      if (code !== 'ERR_USE_AFTER_CLOSE')
+        throw err
+    }
   }
 
   private resetBuffer(): void {
     this.buffer = ''
   }
-}
-
-/**
- * Convenience entry point used by the CLI dispatcher. Spins up a REPL that
- * logs every accepted line (M2 stub). Later milestones replace the `onLine`
- * handler with the real grant dispatch + pty write path.
- */
-export async function runInteractiveShellM2Stub(): Promise<void> {
-  const repl = new ShellRepl({
-    onLine: (line) => {
-      consola.info(`[M2 stub] would execute: ${line}`)
-    },
-    onExit: () => {
-      consola.info('Goodbye.')
-    },
-  })
-  await repl.run()
 }
 
 export { HISTORY_FILE }
