@@ -1,10 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { createServer } from 'node:http'
+import { homedir } from 'node:os'
+import { resolve as resolvePath } from 'node:path'
 import { defineCommand } from 'citty'
 import { generateCodeChallenge, generateCodeVerifier } from '@openape/core'
 import consola from 'consola'
-import { saveAuth } from '../../config'
+import { loadConfig, saveAuth, saveConfig } from '../../config'
 import { getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../../http'
 import { CliError } from '../../errors'
 import { resolveLoginInputs } from './resolve-login'
@@ -246,5 +248,20 @@ async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
     expires_at: Math.floor(Date.now() / 1000) + (expires_in || 3600),
   })
 
+  // Persist the resolved key path + email to config.toml so future apes/ape-shell
+  // invocations can auto-refresh via Ed25519 challenge-response without a new
+  // `apes login`. Merge with existing config so [defaults] is preserved.
+  const absoluteKeyPath = resolvePath(keyPath.replace(/^~/, homedir()))
+  const existingConfig = loadConfig()
+  saveConfig({
+    ...existingConfig,
+    agent: {
+      ...existingConfig.agent,
+      key: absoluteKeyPath,
+      email: agentEmail,
+    },
+  })
+
   consola.success(`Logged in as ${agentEmail}`)
+  consola.info(`Auto-refresh enabled (key path saved to ~/.config/apes/config.toml)`)
 }

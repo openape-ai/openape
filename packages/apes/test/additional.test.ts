@@ -294,11 +294,17 @@ describe('additional coverage tests', () => {
 
   describe('grants delegate (with mock endpoint)', () => {
     let savedAgentAuth: string
+    let savedAgentConfig: string
 
     beforeAll(async () => {
-      // Save agent auth, then login as human user (delegations require act: 'human')
+      // Save agent auth + config.toml, then login as human user (delegations
+      // require act: 'human'). loginCommand now also persists the agent.key
+      // path to config.toml, so we must save/restore both to avoid clobbering
+      // the agent-auto-refresh state that later tests depend on.
       const authFile = join(testHome, '.config', 'apes', 'auth.json')
+      const configFile = join(testHome, '.config', 'apes', 'config.toml')
       savedAgentAuth = readFileSync(authFile, 'utf-8')
+      savedAgentConfig = readFileSync(configFile, 'utf-8')
 
       const { loginCommand } = await import('../src/commands/auth/login')
       await loginCommand.run!({ args: {
@@ -309,9 +315,11 @@ describe('additional coverage tests', () => {
     })
 
     afterAll(() => {
-      // Restore agent auth
+      // Restore agent auth + config.toml
       const authFile = join(testHome, '.config', 'apes', 'auth.json')
+      const configFile = join(testHome, '.config', 'apes', 'config.toml')
       writeFileSync(authFile, savedAgentAuth, { mode: 0o600 })
+      writeFileSync(configFile, savedAgentConfig, { mode: 0o600 })
     })
 
     it('creates a delegation', async () => {
@@ -412,7 +420,12 @@ describe('additional coverage tests', () => {
     it('clearAuth clears auth data', async () => {
       const { clearAuth, loadAuth } = await import('../src/config')
       const authFile = join(testHome, '.config', 'apes', 'auth.json')
-      const saved = readFileSync(authFile, 'utf-8')
+      const configFile = join(testHome, '.config', 'apes', 'config.toml')
+      const savedAuth = readFileSync(authFile, 'utf-8')
+      // clearAuth() also wipes the [agent] section in config.toml, so save
+      // both and restore both so later tests still have their agent refresh
+      // config available.
+      const savedConfig = existsSync(configFile) ? readFileSync(configFile, 'utf-8') : null
 
       try {
         clearAuth()
@@ -420,7 +433,9 @@ describe('additional coverage tests', () => {
         expect(auth).toBeNull()
       }
       finally {
-        writeFileSync(authFile, saved, { mode: 0o600 })
+        writeFileSync(authFile, savedAuth, { mode: 0o600 })
+        if (savedConfig !== null)
+          writeFileSync(configFile, savedConfig, { mode: 0o600 })
       }
     })
 
