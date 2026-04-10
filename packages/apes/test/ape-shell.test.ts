@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rewriteApeShellArgs } from '../src/ape-shell'
 
 describe('ape-shell argv rewriting', () => {
@@ -72,5 +72,60 @@ describe('ape-shell argv rewriting', () => {
     // through the existing one-shot rewrite, not the interactive REPL.
     const result = rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-c', 'echo hello'])
     expect(result?.action).toBe('rewrite')
+  })
+
+  describe('wrapper-script invocation (APES_SHELL_WRAPPER env var)', () => {
+    const savedEnv = process.env.APES_SHELL_WRAPPER
+
+    beforeEach(() => {
+      process.env.APES_SHELL_WRAPPER = '1'
+    })
+
+    afterEach(() => {
+      if (savedEnv === undefined) delete process.env.APES_SHELL_WRAPPER
+      else process.env.APES_SHELL_WRAPPER = savedEnv
+    })
+
+    it('recognizes wrapper invocation with no args as interactive', () => {
+      // Wrapper execs node cli.js with no trailing args — argv[1] becomes
+      // the cli.js path. Without the wrapper env var we would return null
+      // (not recognized as ape-shell). With it, we should enter the REPL.
+      const result = rewriteApeShellArgs([
+        '/opt/homebrew/bin/node',
+        '/Users/someone/openape/packages/apes/dist/cli.js',
+      ])
+      expect(result).toEqual({ action: 'interactive' })
+    })
+
+    it('recognizes wrapper invocation with -c as one-shot rewrite', () => {
+      const result = rewriteApeShellArgs([
+        '/opt/homebrew/bin/node',
+        '/Users/someone/openape/packages/apes/dist/cli.js',
+        '-c',
+        'echo hi',
+      ])
+      expect(result?.action).toBe('rewrite')
+    })
+
+    it('detects login-shell convention via argv0 (wrapper preserves it via exec -a)', () => {
+      // When the wrapper script does `exec -a "$0" node cli.js`, the node
+      // process's argv0 becomes "-ape-shell" (dash-prefixed from login).
+      // argv[1] is cli.js. Detection needs to see the dash via the argv0
+      // parameter.
+      const result = rewriteApeShellArgs(
+        ['/opt/homebrew/bin/node', '/Users/someone/openape/packages/apes/dist/cli.js'],
+        '-ape-shell',
+      )
+      expect(result).toEqual({ action: 'interactive' })
+    })
+
+    it('returns null when wrapper env var is unset and argv does not match', () => {
+      delete process.env.APES_SHELL_WRAPPER
+      const result = rewriteApeShellArgs([
+        '/opt/homebrew/bin/node',
+        '/Users/someone/openape/packages/apes/dist/cli.js',
+      ])
+      expect(result).toBeNull()
+    })
   })
 })
