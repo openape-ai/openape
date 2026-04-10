@@ -13,9 +13,9 @@
     "dev": "nuxt dev --port 3002",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxi prepare && nuxt typecheck",
+    "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "nuxi prepare && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",

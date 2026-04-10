@@ -13,10 +13,10 @@
     "dev": "nuxt dev --port 3003",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxi prepare && nuxt typecheck",
+    "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "nuxi prepare && vitest --config vitest.config.ts",
-    "test:run": "nuxi prepare && vitest run --config vitest.config.ts",
+    "test": "vitest --config vitest.config.ts",
+    "test:run": "vitest run --config vitest.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"
