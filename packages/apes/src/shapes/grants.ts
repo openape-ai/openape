@@ -90,7 +90,17 @@ function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
   return grantedCliDetails(claims).length > 0
 }
 
-export async function verifyAndExecute(token: string, resolved: ResolvedCommand): Promise<void> {
+/**
+ * Verifies a grant token against the resolved command and marks the grant
+ * as consumed on the IdP. Does NOT execute anything — callers that want
+ * the one-shot behavior should use `verifyAndExecute`, callers that want
+ * to run the command themselves (e.g. the interactive REPL piping through
+ * a persistent bash pty) should call this and then do their own execution.
+ *
+ * Split out so the interactive shell can re-use the verify + consume path
+ * without being forced into the `execFileSync`-based one-shot execution.
+ */
+export async function verifyAndConsume(token: string, resolved: ResolvedCommand): Promise<void> {
   const payload = decodePayload(token)
   const issuer = String(payload.iss ?? '')
   if (!issuer)
@@ -164,9 +174,25 @@ export async function verifyAndExecute(token: string, resolved: ResolvedCommand)
   if (consumeResult.error) {
     throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
   }
+}
 
+/**
+ * Execute a verified + consumed resolved command directly via execFileSync,
+ * inheriting stdio so the caller's terminal is handed to the child. Used by
+ * the one-shot `apes run --shell` path.
+ */
+export function executeResolvedViaExec(resolved: ResolvedCommand): void {
   consola.info(`Executing ${(resolved.executionContext.argv ?? [resolved.executable, ...resolved.commandArgv]).join(' ')}`)
   execFileSync(resolved.executable, resolved.commandArgv, { stdio: 'inherit' })
+}
+
+/**
+ * One-shot verify + consume + execute. Preserves the legacy behavior of
+ * the `apes run --shell` path so existing callers keep working unchanged.
+ */
+export async function verifyAndExecute(token: string, resolved: ResolvedCommand): Promise<void> {
+  await verifyAndConsume(token, resolved)
+  executeResolvedViaExec(resolved)
 }
 
 export async function findExistingGrant(
