@@ -69,10 +69,11 @@ if (shellRewrite) {
     process.exit(0)
   }
   else if (shellRewrite.action === 'interactive') {
-    // Hand control to the REPL. Never returns to citty dispatch.
-    // Dynamic import so the startup path for `ape-shell -c` stays lean.
-    const { runInteractiveShellM2Stub } = await import('./shell/repl.js')
-    await runInteractiveShellM2Stub()
+    // Hand control to the interactive REPL orchestrator. Never returns to
+    // citty dispatch. Dynamic import so the startup path for `ape-shell -c`
+    // stays lean (node-pty native module is only loaded when needed).
+    const { runInteractiveShell } = await import('./shell/orchestrator.js')
+    await runInteractiveShell()
     process.exit(0)
   }
   else {
