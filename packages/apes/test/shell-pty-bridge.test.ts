@@ -75,11 +75,31 @@ describe('PtyBridge', () => {
 
     expect(h.completedLines).toHaveLength(1)
     expect(h.completedLines[0]!.exitCode).toBe(0)
-    // Output should contain the expected line. PTY echoes the input too, so
-    // the output contains both the typed line and its result.
     expect(h.completedLines[0]!.output).toContain('hello-from-bash')
     // Marker must never appear in the output we hand to the consumer
     expect(h.completedLines[0]!.output).not.toContain('__APES_')
+  })
+
+  it('does not echo the written line back into the output stream', async () => {
+    // The pty line discipline echoes input by default (canonical mode), so
+    // without `stty -echo` the bash pty would reflect every line the
+    // frontend writes. Real shells only echo once (their own readline),
+    // ours already handles display in the REPL frontend, so the pty echo
+    // is redundant and surprising. Verify PROMPT_COMMAND turns it off.
+    const h = createHarness()
+    harnesses.push(h)
+
+    await h.bridge.waitForReady()
+    // Use a command whose input and output differ so we can tell them
+    // apart. `whoami` prints one word, the input is another literal word.
+    h.bridge.writeLine('APES_ECHO_PROBE_INPUT=1 printf "result\\n"')
+    await waitUntil(() => h.completedLines.length >= 1)
+
+    const out = h.completedLines[0]!.output
+    // The command's actual output must be present.
+    expect(out).toContain('result')
+    // The literal input we wrote must NOT appear (no pty echo).
+    expect(out).not.toContain('APES_ECHO_PROBE_INPUT')
   })
 
   it('persists shell state across lines (cd then pwd)', async () => {
