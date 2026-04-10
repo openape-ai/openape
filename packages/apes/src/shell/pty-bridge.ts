@@ -75,6 +75,15 @@ export class PtyBridge {
     // runs and they get their aliases/functions. Trade-off: if the user
     // overrides PS1 in their rcfile, our marker detection breaks. We protect
     // against that by re-exporting PS1 via PROMPT_COMMAND on every prompt.
+    //
+    // PROMPT_COMMAND also runs `stty -echo` so the pty line discipline stops
+    // echoing user input back to us. Without this, every line the frontend
+    // writes to the pty gets echoed into the output stream — causing the
+    // command to appear twice in the user's terminal (once from readline,
+    // once from the pty echo). The frontend already owns its own display of
+    // what the user typed; the pty echo is redundant and surprising.
+    // Interactive TUI apps (vim/less/top) set their own termios when they
+    // start, so they are unaffected.
     this.term = pty.spawn('bash', ['--login', '-i'], {
       name: 'xterm-256color',
       cols,
@@ -82,8 +91,10 @@ export class PtyBridge {
       cwd: options.cwd ?? process.cwd(),
       env: {
         ...process.env,
-        // Force our marker PS1 on every prompt — survives .bashrc overrides.
-        PROMPT_COMMAND: `PS1='__APES_${this.marker}__:$?:__END__'`,
+        // Force our marker PS1 on every prompt and keep pty echo off —
+        // both survive .bashrc overrides because PROMPT_COMMAND runs
+        // before each prompt.
+        PROMPT_COMMAND: `stty -echo 2>/dev/null; PS1='__APES_${this.marker}__:$?:__END__'`,
         // Also set it initially so the very first prompt carries the marker.
         PS1: `__APES_${this.marker}__:$?:__END__`,
         PS2: '> ',
