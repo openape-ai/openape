@@ -60,8 +60,24 @@ fi
 # relative path (assumes the wrapper lives in packages/apes/scripts). Can be
 # overridden via APES_SHELL_CLI_JS for production installs where the paths
 # might differ.
+#
+# Symlink resolution: when the wrapper is installed as a symlink (e.g.
+# /usr/local/bin/ape-shell → /path/to/packages/apes/scripts/ape-shell-wrapper.sh)
+# BASH_SOURCE[0] points at the symlink, not the real file. We must walk the
+# symlink chain before computing the relative `../dist/cli.js` path, otherwise
+# it ends up as `/usr/local/bin/../dist/cli.js` = `/usr/local/dist/cli.js`
+# which doesn't exist. macOS's readlink lacks `-f`, so use the portable
+# loop idiom.
 if [ -z "${APES_SHELL_CLI_JS:-}" ]; then
-  _wrapper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _source="${BASH_SOURCE[0]}"
+  while [ -L "$_source" ]; do
+    _target="$(readlink "$_source")"
+    case "$_target" in
+      /*) _source="$_target" ;;
+      *) _source="$(cd -P "$(dirname "$_source")" >/dev/null && pwd)/$_target" ;;
+    esac
+  done
+  _wrapper_dir="$(cd -P "$(dirname "$_source")" >/dev/null && pwd)"
   _cli_js="$_wrapper_dir/../dist/cli.js"
 else
   _cli_js="$APES_SHELL_CLI_JS"
