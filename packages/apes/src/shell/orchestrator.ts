@@ -1,8 +1,10 @@
 import { hostname } from 'node:os'
 import consola from 'consola'
+import { loadAuth } from '../config.js'
 import { requestGrantForShellLine } from './grant-dispatch.js'
 import { PtyBridge } from './pty-bridge.js'
 import { ShellRepl } from './repl.js'
+import { ShellSession } from './session.js'
 
 /**
  * Orchestrates the interactive ape-shell session by wiring the user-facing
@@ -66,6 +68,11 @@ export async function runInteractiveShell(): Promise<void> {
   await bridge.waitForReady()
 
   const targetHost = hostname()
+  const auth = loadAuth()
+  const session = new ShellSession({
+    host: targetHost,
+    requester: auth?.email ?? 'unknown',
+  })
 
   repl = new ShellRepl(
     {
@@ -77,9 +84,16 @@ export async function runInteractiveShell(): Promise<void> {
         })
 
         if (grant.kind === 'denied') {
+          session.logLineDenied({ line, reason: grant.reason })
           consola.error(grant.reason)
           return
         }
+
+        const seq = session.logLineGranted({
+          line,
+          grantId: grant.grantId,
+          grantMode: grant.mode,
+        })
 
         // --- 2. Raw-mode stdin passthrough while bash runs the line ---
         const wasRaw = process.stdin.isTTY && (process.stdin as NodeJS.ReadStream).isRaw
@@ -107,12 +121,15 @@ export async function runInteractiveShell(): Promise<void> {
           }
         }
 
+        session.logLineDone({ seq, exitCode: lastExitCode })
+
         if (lastExitCode !== 0) {
           consola.debug(`(exit ${lastExitCode})`)
         }
       },
       onExit: () => {
         shuttingDown = true
+        session.close()
         try {
           bridge.kill()
         }
