@@ -43,7 +43,11 @@ declare const __VERSION__: string
 // ape-shell mode:
 // • `ape-shell -c <command>` rewrites to `apes run --shell -- bash -c <command>` (one-shot)
 // • `ape-shell` (no args), `-i`, `-l`, or invoked as a login shell → interactive REPL
-const shellRewrite = rewriteApeShellArgs(process.argv)
+// Pass `process.argv0` explicitly so the wrapper script path (which uses
+// bash's `exec -a "$0"` to preserve the original argv[0] from login/sshd)
+// still benefits from login-shell detection when the cli.js is invoked
+// indirectly via the ape-shell-wrapper.sh shim.
+const shellRewrite = rewriteApeShellArgs(process.argv, process.argv0)
 if (shellRewrite) {
   if (shellRewrite.action === 'rewrite') {
     process.argv = shellRewrite.argv

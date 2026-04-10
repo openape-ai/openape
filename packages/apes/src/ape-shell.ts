@@ -20,23 +20,46 @@ export type ApeShellAction =
  * keeps the historical rewrite behavior so `SHELL=$(which ape-shell) <prog>`
  * patterns (e.g. `SHELL=ape-shell openclaw tui`) continue to work.
  *
- * Detection rules (first match wins):
- *   • basename != ape-shell → not an ape-shell invocation, returns null.
+ * Detection strategy:
+ *   1. `process.env.APES_SHELL_WRAPPER === '1'` is the strongest signal —
+ *      it means we were invoked via the ape-shell-wrapper.sh shell script,
+ *      which hoists node onto PATH before exec-ing cli.js. In that case
+ *      argv[1] becomes `cli.js` (or some dist/chunk file) and the old
+ *      basename check fails, so we trust the wrapper's declaration.
+ *   2. Otherwise fall back to `argv[1]` basename matching literal
+ *      `ape-shell` / `ape-shell.js` (the direct-symlink invocation path).
+ *
+ * After detection, the rest of the rules decide the action (first match):
  *   • `-c <command>` → rewrite to `apes run --shell -- bash -c <command>`.
  *   • `--version` / `-v` → version action.
  *   • `--help` / `-h` → help action.
- *   • no args, `-i`, `-l`, `--login`, or argv[0] starts with `-`
- *     (login-shell convention from sshd/login) → interactive REPL.
+ *   • no args, `-i`, `-l`, `--login`, or a login-shell convention dash
+ *     prefix (on argv[1] or argv0) → interactive REPL.
  *   • anything else → error action.
  */
-export function rewriteApeShellArgs(argv: string[]): ApeShellAction | null {
+export function rewriteApeShellArgs(argv: string[], argv0?: string): ApeShellAction | null {
   const rawInvokedAs = argv[1] ?? ''
   // sshd/login use a leading dash on argv[0] to signal "login shell".
-  // Strip it for the basename comparison, but remember the flag.
-  const looksLikeLoginShell = rawInvokedAs.startsWith('-')
-  const normalizedInvokedAs = looksLikeLoginShell ? rawInvokedAs.slice(1) : rawInvokedAs
+  // Strip it for the basename comparison, but remember the flag. The dash
+  // may appear on argv[1] (direct invocation) or on the separately-passed
+  // argv0 parameter (wrapper invocation — shell `exec -a "$0"` sets node's
+  // actual argv[0] / `process.argv0` independently from argv[1]).
+  const dashFromArgv1 = rawInvokedAs.startsWith('-')
+  const dashFromArgv0 = typeof argv0 === 'string' && argv0.startsWith('-')
+  const looksLikeLoginShell = dashFromArgv1 || dashFromArgv0
+  const normalizedInvokedAs = dashFromArgv1 ? rawInvokedAs.slice(1) : rawInvokedAs
   const invokedAs = path.basename(normalizedInvokedAs)
-  if (invokedAs !== 'ape-shell' && invokedAs !== 'ape-shell.js')
+
+  // Primary detection: explicit wrapper signal via env var. Takes
+  // precedence because argv-based detection gets clobbered when the
+  // wrapper execs node directly and argv[1] becomes cli.js.
+  const wrapperEnv = typeof process !== 'undefined' && process.env?.APES_SHELL_WRAPPER === '1'
+
+  // Secondary detection: argv[1] basename matches literal `ape-shell` or
+  // `ape-shell.js` — the direct-symlink invocation path.
+  const argvMatch = invokedAs === 'ape-shell' || invokedAs === 'ape-shell.js'
+
+  if (!wrapperEnv && !argvMatch)
     return null
 
   const shellArgs = argv.slice(2)
