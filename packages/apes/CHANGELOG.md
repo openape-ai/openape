@@ -1,5 +1,14 @@
 # @openape/apes
 
+## 0.7.2
+
+### Patch Changes
+
+- [#78](https://github.com/openape-ai/openape/pull/78) [`05d46e2`](https://github.com/openape-ai/openape/commit/05d46e2573c3676744ec63bb67b1aa622d32156f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Ship `scripts/` directory in the published npm package so the `postinstall`
+  script `scripts/fix-node-pty-perms.mjs` actually exists after `npm install -g`.
+  Previously the `files` field only included `dist` and `README.md`, which made
+  global install fail with `Cannot find module fix-node-pty-perms.mjs`.
+
 ## 0.7.1
 
 ### Patch Changes
