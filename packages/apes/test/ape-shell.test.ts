@@ -40,12 +40,37 @@ describe('ape-shell argv rewriting', () => {
     expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-h'])).toEqual({ action: 'help' })
   })
 
-  it('returns error for unsupported mode', () => {
-    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-i'])).toEqual({ action: 'error' })
-    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell'])).toEqual({ action: 'error' })
+  it('returns interactive action when invoked with no args', () => {
+    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell'])).toEqual({ action: 'interactive' })
+  })
+
+  it('returns interactive action for explicit -i flag', () => {
+    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-i'])).toEqual({ action: 'interactive' })
+  })
+
+  it('returns interactive action for -l / --login flag', () => {
+    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-l'])).toEqual({ action: 'interactive' })
+    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '--login'])).toEqual({ action: 'interactive' })
+  })
+
+  it('returns interactive action when argv[1] starts with a dash (sshd login-shell convention)', () => {
+    // sshd prepends `-` to argv[0] to signal "this is a login shell"
+    expect(rewriteApeShellArgs(['/usr/bin/node', '-ape-shell'])).toEqual({ action: 'interactive' })
   })
 
   it('returns error for -c without command', () => {
     expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-c'])).toEqual({ action: 'error' })
+  })
+
+  it('returns error for unsupported mode (positional script file)', () => {
+    expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', 'script.sh'])).toEqual({ action: 'error' })
+  })
+
+  it('keeps the -c one-shot path even when SHELL=ape-shell is used (non-regression)', () => {
+    // Simulate `SHELL=/usr/local/bin/ape-shell openclaw tui` which
+    // eventually spawns `/usr/local/bin/ape-shell -c "<cmd>"` — must route
+    // through the existing one-shot rewrite, not the interactive REPL.
+    const result = rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/ape-shell', '-c', 'echo hello'])
+    expect(result?.action).toBe('rewrite')
   })
 })
