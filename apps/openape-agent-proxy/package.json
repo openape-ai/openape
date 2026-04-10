@@ -13,7 +13,7 @@
     "dev": "nuxt dev --port 3004",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxi prepare && nuxt typecheck",
+    "typecheck": "nuxt typecheck",
     "lint": "eslint ."
   },
   "dependencies": {
