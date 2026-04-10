@@ -38,30 +38,50 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
   throw err
 })
 
-// ape-shell mode: when invoked as "ape-shell -c <command>", rewrite to "apes run --shell -- bash -c <command>"
+declare const __VERSION__: string
+
+// ape-shell mode:
+// • `ape-shell -c <command>` rewrites to `apes run --shell -- bash -c <command>` (one-shot)
+// • `ape-shell` (no args), `-i`, `-l`, or invoked as a login shell → interactive REPL
 const shellRewrite = rewriteApeShellArgs(process.argv)
 if (shellRewrite) {
   if (shellRewrite.action === 'rewrite') {
     process.argv = shellRewrite.argv
   }
   else if (shellRewrite.action === 'version') {
-    console.log(`ape-shell (OpenApe DDISA shell wrapper)`)
+    console.log(`ape-shell ${__VERSION__} (OpenApe DDISA shell wrapper)`)
     process.exit(0)
   }
   else if (shellRewrite.action === 'help') {
-    console.log('Usage: ape-shell -c <command>')
-    console.log('Routes all commands through apes run for grant-based authorization.')
+    console.log(`ape-shell ${__VERSION__} — OpenApe DDISA shell wrapper`)
+    console.log('')
+    console.log('Usage:')
+    console.log('  ape-shell                 Start interactive grant-mediated REPL')
+    console.log('  ape-shell -c <command>    Run a single command through the grant flow')
+    console.log('  ape-shell -i | -l         Force interactive mode')
+    console.log('')
+    console.log('Options:')
+    console.log('  -c <command>    Execute <command> via the apes grant flow and exit')
+    console.log('  -i              Interactive REPL (default when no args are given)')
+    console.log('  -l, --login     Login shell semantics — currently same as -i')
+    console.log('  --version, -v   Show ape-shell version')
+    console.log('  --help, -h      Show this help message')
+    process.exit(0)
+  }
+  else if (shellRewrite.action === 'interactive') {
+    // Hand control to the REPL. Never returns to citty dispatch.
+    // Dynamic import so the startup path for `ape-shell -c` stays lean.
+    const { runInteractiveShellM2Stub } = await import('./shell/repl.js')
+    await runInteractiveShellM2Stub()
     process.exit(0)
   }
   else {
-    console.error('ape-shell: only -c <command> mode is supported')
+    console.error('ape-shell: unsupported invocation. Try `ape-shell --help`.')
     process.exit(1)
   }
 }
 
 const debug = process.argv.includes('--debug')
-
-declare const __VERSION__: string
 
 const grantsCommand = defineCommand({
   meta: {
