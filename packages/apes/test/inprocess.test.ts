@@ -265,6 +265,42 @@ describe('apes CLI in-process tests', () => {
     expect(auth.expires_at).toBeGreaterThan(Date.now() / 1000)
   })
 
+  // ---------- 1b. Login persists agent key path to config.toml ----------
+  it('login: persists absolute key path and email to config.toml for auto-refresh', async () => {
+    const { loginCommand } = await import('../src/commands/auth/login')
+
+    const configFile = join(testHome, '.config', 'apes', 'config.toml')
+    // Pre-seed an existing [defaults] section so we verify the merge.
+    // Use `approval` (not `idp`) to avoid poisoning later "no IdP configured" tests.
+    writeFileSync(configFile, '[defaults]\napproval = "once"\n', { mode: 0o600 })
+
+    await loginCommand.run!({ args: {
+      idp: idpBase,
+      key: join(testHome, 'test_key'),
+      email: AGENT_EMAIL,
+    } } as any)
+
+    expect(existsSync(configFile)).toBe(true)
+    const tomlContent = readFileSync(configFile, 'utf-8')
+
+    // [agent] section must exist with an ABSOLUTE key path + the email
+    expect(tomlContent).toContain('[agent]')
+    const expectedKeyPath = join(testHome, 'test_key')
+    expect(tomlContent).toContain(`key = "${expectedKeyPath}"`)
+    expect(tomlContent).toContain(`email = "${AGENT_EMAIL}"`)
+
+    // Existing [defaults] must be preserved (merge, not replace)
+    expect(tomlContent).toContain('[defaults]')
+    expect(tomlContent).toContain('approval = "once"')
+
+    // And the loaded config should reflect both
+    const { loadConfig } = await import('../src/config')
+    const loaded = loadConfig()
+    expect(loaded.agent?.key).toBe(expectedKeyPath)
+    expect(loaded.agent?.email).toBe(AGENT_EMAIL)
+    expect(loaded.defaults?.approval).toBe('once')
+  })
+
   // ---------- 2. Whoami ----------
   it('whoami: shows current identity after login', async () => {
     const { whoamiCommand } = await import('../src/commands/auth/whoami')
@@ -428,5 +464,24 @@ describe('apes CLI in-process tests', () => {
     expect(() =>
       workflowsCommand.run!({ args: { id: 'nonexistent', json: false } } as any),
     ).toThrow(CliError)
+  })
+
+  // NOTE: This test MUST remain the last test in this describe block because
+  // it wipes the auth.json and [agent] section, leaving no valid login state.
+  it('logout: wipes [agent] section from config.toml but keeps [defaults]', async () => {
+    const { logoutCommand } = await import('../src/commands/auth/logout')
+
+    const configFile = join(testHome, '.config', 'apes', 'config.toml')
+    // Sanity: after earlier tests, [agent] section should already be present.
+    const beforeLogout = readFileSync(configFile, 'utf-8')
+    expect(beforeLogout).toContain('[agent]')
+
+    logoutCommand.run!({ args: {} } as any)
+
+    const afterLogout = readFileSync(configFile, 'utf-8')
+    expect(afterLogout).not.toContain('[agent]')
+    expect(afterLogout).not.toMatch(/^key = /m)
+    // [defaults] that was pre-seeded in test 1b must survive.
+    expect(afterLogout).toContain('[defaults]')
   })
 })
