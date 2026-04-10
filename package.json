@@ -25,6 +25,7 @@
       "@parcel/watcher",
       "better-sqlite3",
       "esbuild",
+      "node-pty",
       "sharp",
       "unrs-resolver",
       "vue-demi"
