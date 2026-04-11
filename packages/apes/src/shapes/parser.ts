@@ -126,9 +126,16 @@ function matchOperation(operation: ShapesOperation, argv: string[]): Record<stri
   }
 
   const bindings: Record<string, string> = { ...options }
-  expectedPositionals.forEach((name, index) => {
-    bindings[name] = positionals[index]!
-  })
+  for (let index = 0; index < expectedPositionals.length; index += 1) {
+    const name = expectedPositionals[index]!
+    const value = positionals[index]!
+    if (name.startsWith('=')) {
+      if (value !== name.slice(1))
+        return null
+      continue
+    }
+    bindings[name] = value
+  }
   return bindings
 }
 
