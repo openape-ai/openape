@@ -15,8 +15,14 @@ AI agents are getting powerful. They send emails, move money, deploy code. OpenA
   ::card{title="OpenApe Grants" icon="i-heroicons-shield-check" to="/ecosystem/grants"}
   Human-in-the-loop permission system. Agents request, humans approve — once, time-limited, or standing.
   ::
+  ::card{title="apes CLI & ape-shell" icon="i-heroicons-command-line" to="/getting-started/cli"}
+  Authentication, grant management, and grant-secured command execution. `ape-shell` validates every command through the grant system.
+  ::
   ::card{title="Ecosystem" icon="i-heroicons-cube" to="/ecosystem"}
-  Small, focused packages you compose as needed. Core, Auth, Grants, Nuxt modules, and `escapes` CLI.
+  Small, focused packages you compose as needed. Core, Auth, Grants, Nuxt modules, proxy, browser, and `escapes`.
+  ::
+  ::card{title="Free IdP" icon="i-heroicons-cloud" to="/getting-started/free-idp"}
+  Get started without infrastructure. Hosted IdP at id.openape.at — free, zero-setup.
   ::
   ::card{title="Compliance" icon="i-heroicons-document-check" to="/security/compliance"}
   NIS2 and NIST CSF 2.0 compliant by design. Passkeys-only, phishing-proof, no bolt-on MFA.
