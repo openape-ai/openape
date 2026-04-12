@@ -41,10 +41,11 @@ describe('PtyBridge', () => {
   const harnesses: Array<ReturnType<typeof createHarness>> = []
 
   afterEach(() => {
-    // Clean up all bash children spawned during tests
+    // Clean up all bash children spawned during tests. Use SIGKILL for
+    // reliable cleanup in CI where default signals may be handled slowly.
     for (const h of harnesses) {
       try {
-        h.bridge.kill()
+        h.bridge.kill('SIGKILL')
       }
       catch {}
     }
@@ -148,8 +149,11 @@ describe('PtyBridge', () => {
     harnesses.push(h)
 
     await h.bridge.waitForReady()
-    h.bridge.kill()
-    await waitUntil(() => h.exitInfo !== null)
+    // Use SIGKILL for reliable termination in CI environments where the
+    // default signal (SIGHUP) may be handled slowly by bash or delayed
+    // by resource contention on shared runners.
+    h.bridge.kill('SIGKILL')
+    await waitUntil(() => h.exitInfo !== null, 10_000)
 
     expect(h.exitInfo).not.toBeNull()
   })

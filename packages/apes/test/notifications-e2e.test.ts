@@ -70,9 +70,11 @@ describe('grant-pending notification E2E (file-based)', () => {
 
   it('appends multiple notifications to the same file', async () => {
     notifyGrantPending({ ...sampleInfo, grantId: 'grant-first' })
+    // Wait for the first spawn to complete before firing the second so
+    // their file appends don't race on slow CI runners.
+    await new Promise(r => setTimeout(r, 800))
     notifyGrantPending({ ...sampleInfo, grantId: 'grant-second' })
-
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise(r => setTimeout(r, 800))
 
     const content = readFileSync(NOTIFY_FILE, 'utf-8')
     const lines = content.trim().split('\n')
