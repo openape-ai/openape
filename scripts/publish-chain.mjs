@@ -30,7 +30,6 @@ const PACKAGES = [
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/server', dir: 'packages/server' },
   { name: '@openape/browser', dir: 'packages/browser' },
-  { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },

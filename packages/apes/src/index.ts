@@ -1,4 +1,4 @@
-// Re-export all shapes library functions (inlined from @openape/shapes)
+// Re-export all shapes subsystem library functions
 export {
   appendAuditLog,
   buildExactCommandGrantRequest,

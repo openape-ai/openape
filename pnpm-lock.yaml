@@ -769,34 +769,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.15)(happy-dom@18.0.1)(lightningcss@1.32.0)(terser@5.46.0)
 
-  packages/shapes:
-    dependencies:
-      '@openape/core':
-        specifier: workspace:*
-        version: link:../core
-      '@openape/grants':
-        specifier: workspace:*
-        version: link:../grants
-      citty:
-        specifier: ^0.1.6
-        version: 0.1.6
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
-    devDependencies:
-      '@types/node':
-        specifier: ^25.3.5
-        version: 25.5.0
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(@microsoft/api-extractor@7.58.1(@types/node@25.5.0))(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      typescript:
-        specifier: ^5.8.2
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/debug@4.1.12)(@types/node@25.5.0)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-
   packages/vue-components:
     dependencies:
       '@openape/core':
