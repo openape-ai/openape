@@ -19,6 +19,9 @@ export interface ApesConfig {
     key?: string
     email?: string
   }
+  notifications?: {
+    pending_command?: string
+  }
 }
 
 const CONFIG_DIR = join(homedir(), '.config', 'apes')
@@ -99,6 +102,10 @@ function parseTOML(content: string): ApesConfig {
         config.agent = config.agent || {}
         ;(config.agent as Record<string, string>)[key!] = value!
       }
+      else if (section === 'notifications') {
+        config.notifications = config.notifications || {}
+        ;(config.notifications as Record<string, string>)[key!] = value!
+      }
     }
   }
 
@@ -121,6 +128,15 @@ export function saveConfig(config: ApesConfig): void {
   if (config.agent) {
     lines.push('[agent]')
     for (const [key, value] of Object.entries(config.agent)) {
+      if (value)
+        lines.push(`${key} = "${value}"`)
+    }
+    lines.push('')
+  }
+
+  if (config.notifications) {
+    lines.push('[notifications]')
+    for (const [key, value] of Object.entries(config.notifications)) {
       if (value)
         lines.push(`${key} = "${value}"`)
     }

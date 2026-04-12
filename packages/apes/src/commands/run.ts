@@ -20,6 +20,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
+import { notifyGrantPending } from '../notifications'
 
 export const runCommand = defineCommand({
   meta: {
@@ -150,6 +151,14 @@ async function runShellMode(
   consola.info(`Grant requested: ${grant.id}`)
   consola.info('Waiting for approval...')
 
+  notifyGrantPending({
+    grantId: grant.id,
+    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+    command: command.join(' ').slice(0, 200),
+    audience: 'ape-shell',
+    host: targetHost,
+  })
+
   const maxWait = 300_000
   const interval = 3_000
   const start = Date.now()
@@ -239,6 +248,14 @@ async function tryAdapterModeFromShell(
     consola.info('')
     consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
   }
+
+  notifyGrantPending({
+    grantId: grant.id,
+    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+    command: resolved.detail?.display || parsed?.raw || 'unknown',
+    audience: resolved.adapter?.cli?.audience ?? 'shapes',
+    host: (args.host as string) || hostname(),
+  })
 
   const status = await waitForGrantStatus(idp, grant.id)
   if (status !== 'approved')
