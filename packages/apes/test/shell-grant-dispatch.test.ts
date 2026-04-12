@@ -23,6 +23,9 @@ vi.mock('../src/shapes/index.js', () => ({
   verifyAndConsume: vi.fn(),
   waitForGrantStatus: vi.fn(),
 }))
+vi.mock('../src/notifications.js', () => ({
+  notifyGrantPending: vi.fn(),
+}))
 
 const fakeAuth = { email: 'alice@example.com', idp: 'http://idp.test' }
 
