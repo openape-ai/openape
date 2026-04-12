@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
 import { apiFetch, getGrantsEndpoint } from '../http.js'
+import { notifyGrantPending } from '../notifications.js'
 import {
   createShapesGrant,
   fetchGrantToken,
@@ -96,6 +97,14 @@ export async function requestGrantForShellLine(
         })
         consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
+        notifyGrantPending({
+          grantId: grant.id,
+          approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+          command: resolved.detail?.display ?? line,
+          audience: resolved.adapter?.cli?.audience ?? 'shapes',
+          host: options.targetHost,
+        })
+
         const status = await waitForGrantStatus(idp, grant.id)
         if (status !== 'approved') {
           return { kind: 'denied', reason: `Grant ${status}` }
@@ -149,6 +158,14 @@ export async function requestGrantForShellLine(
       },
     })
     consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: line.slice(0, 200),
+      audience: 'ape-shell',
+      host: options.targetHost,
+    })
 
     const maxWait = 300_000
     const interval = 3_000
