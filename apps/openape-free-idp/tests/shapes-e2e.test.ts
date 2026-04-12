@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const testFile = fileURLToPath(import.meta.url)
 const appDir = dirname(dirname(testFile))
 const monorepoRoot = dirname(dirname(appDir))
-const shapesCli = join(monorepoRoot, 'packages', 'shapes', 'dist', 'cli.js')
+const apesCli = join(monorepoRoot, 'packages', 'apes', 'dist', 'cli.js')
 
 const MANAGEMENT_TOKEN = 'openape-e2e-management-token'
 const SESSION_SECRET = 'openape-e2e-session-secret-1234567890123456'
@@ -144,7 +144,7 @@ describe('free-idp + shapes end-to-end', () => {
     const port = 3311 + Math.floor(Math.random() * 200)
     const baseUrl = `http://127.0.0.1:${port}`
 
-    const build = spawnSync('pnpm', ['--filter', '@openape/shapes', 'build'], {
+    const build = spawnSync('pnpm', ['--filter', '@openape/apes', 'build'], {
       cwd: monorepoRoot,
       encoding: 'utf-8',
     })
@@ -202,7 +202,7 @@ describe('free-idp + shapes end-to-end', () => {
 
     const adaptersDir = join(sandboxDir, '.openape', 'shapes', 'adapters')
     mkdirSync(adaptersDir, { recursive: true })
-    const exoFixture = join(monorepoRoot, 'packages', 'shapes', 'test', 'fixtures', 'exo.toml')
+    const exoFixture = join(monorepoRoot, 'packages', 'apes', 'test', 'fixtures', 'exo.toml')
     writeFileSync(join(adaptersDir, 'exo.toml'), readFileSync(exoFixture, 'utf-8'))
 
     const binDir = join(sandboxDir, 'bin')
@@ -212,7 +212,7 @@ describe('free-idp + shapes end-to-end', () => {
     writeFileSync(exoScript, `#!/bin/sh\nprintf '%s\\n' \"$@\" > \"${executionLog}\"\n`)
     spawnSync('chmod', ['+x', exoScript], { encoding: 'utf-8' })
 
-    const shapes = spawn('node', [shapesCli, 'request', '--idp', baseUrl, '--approval', 'once', '--', 'exo', 'dns', 'show', 'example.com'], {
+    const apes = spawn('node', [apesCli, 'run', '--idp', baseUrl, '--approval', 'once', '--', 'exo', 'dns', 'show', 'example.com'], {
       cwd: monorepoRoot,
       env: {
         ...process.env,
@@ -222,24 +222,24 @@ describe('free-idp + shapes end-to-end', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
-    let shapesStdout = ''
-    let shapesStderr = ''
-    shapes.stdout?.on('data', (chunk) => { shapesStdout += chunk.toString() })
-    shapes.stderr?.on('data', (chunk) => { shapesStderr += chunk.toString() })
+    let apesStdout = ''
+    let apesStderr = ''
+    apes.stdout?.on('data', (chunk) => { apesStdout += chunk.toString() })
+    apes.stderr?.on('data', (chunk) => { apesStderr += chunk.toString() })
 
-    let shapesExited = false
-    let shapesExitCode: number | null = null
-    shapes.once('exit', (code) => {
-      shapesExited = true
-      shapesExitCode = code
+    let apesExited = false
+    let apesExitCode: number | null = null
+    apes.once('exit', (code) => {
+      apesExited = true
+      apesExitCode = code
     })
 
     const grantId = await waitForGrantId(baseUrl, AGENT_EMAIL, 60_000, () => {
-      if (shapesExited) {
+      if (apesExited) {
         throw new Error([
-          `shapes exited before creating a grant (code: ${shapesExitCode})`,
-          `stdout:\n${shapesStdout}`,
-          `stderr:\n${shapesStderr}`,
+          `apes exited before creating a grant (code: ${apesExitCode})`,
+          `stdout:\n${apesStdout}`,
+          `stderr:\n${apesStderr}`,
           `server:\n${serverLogs}`,
         ].join('\n\n'))
       }
@@ -267,7 +267,7 @@ describe('free-idp + shapes end-to-end', () => {
     })
     expect(approveResponse.status).toBe(200)
 
-    const result = await waitForProcess(shapes, 30_000)
+    const result = await waitForProcess(apes, 30_000)
     expect(result.code).toBe(0)
     expect(readFileSync(executionLog, 'utf-8')).toBe('dns\nshow\nexample.com\n')
 

@@ -41,7 +41,7 @@ sync_skill() {
 
 # Monorepo skills
 sync_skill "$MONOREPO_DIR/packages/grapes/skills/openape-grapes" "openape-grapes"
-sync_skill "$MONOREPO_DIR/packages/shapes/skills/openape-shapes" "openape-shapes"
+sync_skill "$MONOREPO_DIR/packages/apes/skills/openape-shapes" "openape-shapes"
 sync_skill "$MONOREPO_DIR/modules/nuxt-auth-idp/skills/openape-idp" "openape-idp"
 sync_skill "$MONOREPO_DIR/modules/nuxt-auth-sp/skills/openape-sp" "openape-sp"
 

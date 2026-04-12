@@ -14,6 +14,12 @@ export interface ShapesAdapter {
 export interface ShapesOperation {
   id: string
   command: string[]
+  /**
+   * Positional argument names. Entries prefixed with `=` are literal matchers:
+   * the corresponding argv token must equal the suffix (not bound as a variable).
+   * Enables interleaved-literal command shapes like
+   * `iurio project <id> workspace <id> task <id> archive`.
+   */
   positionals?: string[]
   required_options?: string[]
   display: string
