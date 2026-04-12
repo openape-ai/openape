@@ -70,4 +70,57 @@ describe('@openape/shapes adapters', () => {
 
     expect(resolved.detail.operation_id).toBe('find.by-type')
   })
+
+  describe('literal positionals (interleaved keywords)', () => {
+    it('disambiguates iurio task show vs archive vs remove', async () => {
+      const loaded = loadAdapter('iurio', join(fixturesDir, 'iurio.toml'))
+
+      const show = await resolveCommand(loaded, ['iurio', 'project', '42', 'workspace', '7', 'task', '123', 'show'])
+      const archive = await resolveCommand(loaded, ['iurio', 'project', '42', 'workspace', '7', 'task', '123', 'archive'])
+      const remove = await resolveCommand(loaded, ['iurio', 'project', '42', 'workspace', '7', 'task', '123', 'remove'])
+
+      expect(show.detail.operation_id).toBe('task.show')
+      expect(archive.detail.operation_id).toBe('task.archive')
+      expect(remove.detail.operation_id).toBe('task.remove')
+      expect(show.permission).not.toBe(archive.permission)
+      expect(archive.permission).not.toBe(remove.permission)
+    })
+
+    it('binds only non-literal positionals', async () => {
+      const loaded = loadAdapter('iurio', join(fixturesDir, 'iurio.toml'))
+      const resolved = await resolveCommand(loaded, ['iurio', 'project', '42', 'workspace', '7', 'task', '123', 'archive'])
+
+      expect(resolved.bindings).toEqual({
+        project_id: '42',
+        workspace_id: '7',
+        task_id: '123',
+      })
+    })
+
+    it('rejects argv whose literal slot does not match', async () => {
+      const loaded = loadAdapter('iurio', join(fixturesDir, 'iurio.toml'))
+
+      const wrongWorkspace = resolveCommand(loaded, ['iurio', 'project', '42', 'foo', '7', 'task', '123', 'show'])
+      const wrongTask = resolveCommand(loaded, ['iurio', 'project', '42', 'workspace', '7', 'bogus', '123', 'show'])
+
+      await expect(wrongWorkspace).rejects.toThrow(/No adapter operation matched/)
+      await expect(wrongTask).rejects.toThrow(/No adapter operation matched/)
+    })
+
+    it('still resolves plain-positional adapters (backward compat)', async () => {
+      const loaded = loadAdapter('gh', join(fixturesDir, 'gh.toml'))
+      const resolved = await resolveCommand(loaded, ['gh', 'repo', 'list', 'openape'])
+
+      expect(resolved.detail.operation_id).toBe('repo.list')
+      expect(resolved.bindings.owner).toBe('openape')
+    })
+
+    it('resolves iurio workspaces list with literal trailing tokens', async () => {
+      const loaded = loadAdapter('iurio', join(fixturesDir, 'iurio.toml'))
+      const resolved = await resolveCommand(loaded, ['iurio', 'project', '42', 'workspaces', 'list'])
+
+      expect(resolved.detail.operation_id).toBe('workspaces.list')
+      expect(resolved.bindings).toEqual({ project_id: '42' })
+    })
+  })
 })
