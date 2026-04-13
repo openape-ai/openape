@@ -28,6 +28,7 @@ import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
 import { registerUserCommand } from './commands/register-user'
 import { dnsCheckCommand } from './commands/dns-check'
+import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
 import { CliError, CliExit } from './errors'
@@ -134,6 +135,7 @@ const main = defineCommand({
     login: loginCommand,
     logout: logoutCommand,
     whoami: whoamiCommand,
+    health: healthCommand,
     grants: grantsCommand,
     admin: adminCommand,
     run: runCommand,
