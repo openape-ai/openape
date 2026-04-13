@@ -1,5 +1,133 @@
 # @openape/apes
 
+## 0.8.0
+
+### Minor Changes
+
+- [#84](https://github.com/openape-ai/openape/pull/84) [`366478f`](https://github.com/openape-ai/openape/commit/366478ffc75bbea77839e3a26ac1c1d018c8b087) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat(apes): configurable notification command when grant approval is pending
+
+  When `ape-shell` (or `apes run --shell`) enters the grant approval wait loop, it now optionally runs a user-configured notification command so the user knows they need to approve. This is especially important when an AI agent (e.g., openclaw) spawns `ape-shell -c "<cmd>"` and the user is only reachable via Telegram, a TUI, or another out-of-band channel — previously the agent just silently blocked.
+
+  **Only fires when actually waiting.** Reused timed/always grants that don't require new approval do NOT trigger a notification.
+
+  Configuration via `~/.config/apes/config.toml`:
+
+  ```toml
+  [notifications]
+  pending_command = "curl -sS 'https://api.telegram.org/bot$TOKEN/sendMessage' -d chat_id=$CHAT -d text='⏸ {command}\n{approve_url}'"
+  ```
+
+  Or per-invocation via env var (takes precedence):
+
+  ```bash
+  APES_NOTIFY_PENDING_COMMAND="osascript -e 'display notification \"{command}\" with title \"apes\"'" ape-shell -c "ls"
+  ```
+
+  Template variables: `{grant_id}`, `{command}`, `{approve_url}`, `{audience}`, `{host}`. All values are shell-escaped via `shell-quote` to prevent injection.
+
+  The notification subprocess runs fire-and-forget (detached, unref'd, 10-second kill timeout) so it never blocks the grant flow.
+
+- [#80](https://github.com/openape-ai/openape/pull/80) [`66214c3`](https://github.com/openape-ai/openape/commit/66214c333b0f45165237ef9d5a0962d2c6333a2e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Support literal tokens in adapter positionals and remove the deprecated
+  `@openape/shapes` package.
+
+  The shapes adapter parser (`packages/apes/src/shapes/parser.ts`) now accepts
+  positional names prefixed with `=` as literal matchers — the corresponding argv
+  token must exactly equal the suffix and is not bound as a variable. This
+  enables adapters for CLIs whose command shape interleaves fixed keywords with
+  positional IDs, e.g.
+
+  ```toml
+  [[operation]]
+  id = "task.archive"
+  command = ["project"]
+  positionals = ["project_id", "=workspace", "workspace_id", "=task", "task_id", "=archive"]
+  ```
+
+  matches `iurio project 42 workspace 7 task 123 archive` and binds
+  `{project_id: '42', workspace_id: '7', task_id: '123'}`.
+
+  The standalone `@openape/shapes` package has been removed from the monorepo.
+  All shapes functionality has lived inside `@openape/apes` for some time and
+  nothing inside the workspace imported `@openape/shapes` anymore. The
+  `openape-free-idp` E2E test was ported to drive `apes run` instead of the
+  retired `shapes request` CLI, and the `openape-shapes` SKILL moved from
+  `packages/shapes/skills/` to `packages/apes/skills/`.
+
+- [#90](https://github.com/openape-ai/openape/pull/90) [`8495c25`](https://github.com/openape-ai/openape/commit/8495c25785128d0e5c3b47792dbef2719eaeefd3) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat(apes): new `apes health` subcommand — external diagnostic probe
+
+  A standalone read-only diagnostic that reports the current state of the CLI without entering the REPL or touching the pty layer. Designed to work even when the interactive shell is in a broken state.
+
+  ```bash
+  $ apes health
+  apes 0.4.2
+
+  Config: /Users/you/.config/apes
+  Auth:   /Users/you/.config/apes/auth.json
+          alice@example.com (human)
+          IdP: https://id.openape.at
+          Token: valid until 2026-05-14T14:25:31.000Z (local: 5/14/2026, 4:25:31 PM)
+
+  IdP: reachable
+  Grants: 12
+  ape-shell: /usr/local/bin/ape-shell
+  ```
+
+  Reports:
+
+  - `apes` binary version
+  - Config dir and auth file locations
+  - Auth identity, type (human/agent), IdP, token expiry (UTC + local)
+  - IdP reachability (3s HEAD probe)
+  - Grant count (best-effort — reported as unreachable if the API call fails, but does NOT fail the probe)
+  - Resolved `ape-shell` binary path
+
+  Exit codes: `0` if auth is valid AND IdP is reachable; `1` otherwise (not logged in, token expired, or IdP unreachable). A failed grants lookup alone does not fail the probe.
+
+  `--json` emits the full report as machine-readable JSON with an `ok` field for single-check consumption.
+
+- [#91](https://github.com/openape-ai/openape/pull/91) [`2584aac`](https://github.com/openape-ai/openape/commit/2584aacd62f861ccd4eb9e367a37f0f35757a569) Thanks [@alice@example.com](https://github.com/alice@example.com)! - feat(apes): REPL meta-commands (`:help`, `:status`, `:reset`)
+
+  The `ape-shell` interactive REPL now recognizes three meta-commands that are dispatched before the grant flow and the bash pty. They only fire from an empty input buffer (never mid-multiline) and can never be confused with shell commands that happen to start with a colon.
+
+  ### `:help`
+
+  Lists available meta-commands with one-line descriptions.
+
+  ### `:status`
+
+  Prints the current session state — session id, uptime, host, bash child pid, requester identity, IdP URL, and token validity. Auth is re-read at invocation time so external token refreshes are visible immediately. Supports expired and not-logged-in states without throwing.
+
+  ```
+  Session: 3f7a9e2c1b8d4f05 (uptime 12m 34s)
+  Host:    lappy.local
+  Bash:    pid 54321
+
+  IdP:     https://id.openape.at
+  Token:   valid until 2026-05-14T14:25:31.000Z
+  ```
+
+  ### `:reset`
+
+  Kills the current bash pty child and spawns a fresh one. This is the recovery lever when bash gets into a weird state (stuck subshell, leftover environment, unexpected prompt). The session audit log is **preserved** (same session id, continuous event stream) so `:reset` does not look like a new shell to downstream consumers. Grants do not need resetting — they are re-fetched server-side on every line anyway.
+
+  `:reset` refuses while a command is in flight (`Cannot reset while a command is running. Wait or press Ctrl-C.`) to avoid orphaning an in-flight promise.
+
+  Together with `apes health` (shipped alongside), these give the user observability into and recovery from the grant-gated shell without having to exit and restart.
+
+### Patch Changes
+
+- [#89](https://github.com/openape-ai/openape/pull/89) [`b924c30`](https://github.com/openape-ai/openape/commit/b924c30530accfe88c0cc01d5354e418cc5f1daa) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(apes): grant-shell UX — visible cache/approval state and `apes` subcommand routing from the REPL
+
+  Three related fixes that make the ape-shell grant flow observable and self-consistent.
+
+  1. **`apes <subcommand>` inside the interactive REPL no longer errors with "unsupported invocation".** Root cause was that the `ape-shell` wrapper script exports `APES_SHELL_WRAPPER=1` into its node process env so `rewriteApeShellArgs` can detect wrapper invocation — but that env var was then leaked, unfiltered, into the bash pty child spawned by `PtyBridge`. Any `apes` subcommand the user typed inside that bash re-read the var from its inherited env, self-detected as ape-shell mode, and rejected its argv. `PtyBridge` now strips `APES_SHELL_WRAPPER` from the env it passes to `pty.spawn`.
+
+  2. **Grant cache hits now emit a visible reuse line**, so the user can tell that a command was allowed because a pre-approved grant was reused rather than because the gating layer was bypassed. Both the adapter-grant path (which already logged a reuse line) and the session-grant path (which was silent) now print `Reusing ...`. Both lines can be suppressed by exporting `APES_QUIET_GRANT_REUSE=1` for power users who want a clean stream.
+
+  3. **Pending grants now emit an approval acknowledgment line** when the wait loop resolves as approved. Previously the wait loop returned silently — the user only saw the command's output and could not distinguish a live approval round-trip from an instant cache hit. Both the adapter wait path (using `waitForGrantStatus`) and the session-grant inline polling loop now print `Grant <id> approved — continuing` before returning.
+
+  Together these make it possible to watch the grant state from inside the interactive shell without leaving it: cache hits are visible, approval round-trips are visible, and `apes grants list` / `apes whoami` work again from the REPL prompt.
+
 ## 0.7.2
 
 ### Patch Changes
