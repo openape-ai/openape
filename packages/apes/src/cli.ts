@@ -12,6 +12,7 @@ import { requestCapabilityCommand } from './commands/grants/request-capability'
 import { approveCommand } from './commands/grants/approve'
 import { denyCommand } from './commands/grants/deny'
 import { revokeCommand } from './commands/grants/revoke'
+import { runGrantCommand } from './commands/grants/run'
 import { tokenCommand } from './commands/grants/token'
 import { delegateCommand } from './commands/grants/delegate'
 import { delegationsCommand } from './commands/grants/delegations'
@@ -103,6 +104,7 @@ const grantsCommand = defineCommand({
     approve: approveCommand,
     deny: denyCommand,
     revoke: revokeCommand,
+    run: runGrantCommand,
     token: tokenCommand,
     delegate: delegateCommand,
     delegations: delegationsCommand,
