@@ -38,6 +38,14 @@ export interface ReplEvents {
    * `stop`). Gives owners a chance to tear down resources.
    */
   onExit: () => void | Promise<void>
+
+  /**
+   * Called when the user enters a line starting with `:` while not in the
+   * middle of a multi-line buffer. Return true if handled (REPL skips shell
+   * dispatch and redraws the prompt). Return false/undefined to fall through
+   * to normal shell dispatch.
+   */
+  onMetaCommand?: (line: string) => boolean | Promise<boolean>
 }
 
 /**
@@ -155,6 +163,21 @@ export class ShellRepl {
   }
 
   private async handleLine(rawLine: string): Promise<void> {
+    // Meta-commands are single-line, bypass multi-line + grant + shell
+    // entirely. Only fire from an empty buffer (never mid-multiline) so
+    // `:foo` inside a heredoc/for-loop body is still treated as bash input.
+    if (
+      this.buffer.length === 0
+      && rawLine.trim().startsWith(':')
+      && this.events.onMetaCommand
+    ) {
+      const handled = await this.events.onMetaCommand(rawLine.trim())
+      if (handled) {
+        this.safePrompt(PS1)
+        return
+      }
+    }
+
     // Append the new line to the existing buffer. Use a literal newline so
     // bash sees the multi-line structure correctly on `bash -n`.
     this.buffer = this.buffer.length === 0
