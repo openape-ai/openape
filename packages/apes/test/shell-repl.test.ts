@@ -8,19 +8,28 @@ import { ShellRepl } from '../src/shell/repl.js'
  * `input.write(...)` simulates the user typing; `output` captures
  * everything the REPL prints (prompt, banners, echoes).
  */
-function buildHarness() {
+function buildHarness(options: {
+  onMetaCommand?: (line: string) => boolean | Promise<boolean>
+} = {}) {
   const input = new PassThrough()
   const output = new PassThrough()
   const collectedOutput: string[] = []
   output.on('data', chunk => collectedOutput.push(chunk.toString()))
 
   const onLineCalls: string[] = []
+  const onMetaCommandCalls: string[] = []
   let exitCalls = 0
 
   const repl = new ShellRepl(
     {
       onLine: (line) => { onLineCalls.push(line) },
       onExit: () => { exitCalls++ },
+      onMetaCommand: options.onMetaCommand
+        ? async (line) => {
+          onMetaCommandCalls.push(line)
+          return await options.onMetaCommand!(line)
+        }
+        : undefined,
     },
     {
       input,
@@ -35,6 +44,7 @@ function buildHarness() {
     output,
     collectedOutput,
     onLineCalls,
+    onMetaCommandCalls,
     get exitCalls() { return exitCalls },
   }
 }
@@ -201,5 +211,74 @@ describe('ShellRepl', () => {
     input.end()
     await runPromise
     errorSpy.mockRestore()
+  })
+
+  it('dispatches to onMetaCommand when a line starts with ":"', async () => {
+    const h = buildHarness({ onMetaCommand: () => true })
+    harnesses.push(h)
+    const runPromise = h.repl.run()
+
+    h.input.write(':help\n')
+    await waitUntil(() => h.onMetaCommandCalls.length >= 1)
+
+    expect(h.onMetaCommandCalls).toEqual([':help'])
+    expect(h.onLineCalls).toEqual([])
+
+    h.input.end()
+    await runPromise
+  })
+
+  it('does not dispatch to onMetaCommand for regular shell lines', async () => {
+    const h = buildHarness({ onMetaCommand: () => true })
+    harnesses.push(h)
+    const runPromise = h.repl.run()
+
+    h.input.write('ls -la\n')
+    await waitUntil(() => h.onLineCalls.length >= 1)
+
+    expect(h.onMetaCommandCalls).toEqual([])
+    expect(h.onLineCalls).toEqual(['ls -la'])
+
+    h.input.end()
+    await runPromise
+  })
+
+  it('falls through to onLine when onMetaCommand returns false', async () => {
+    const h = buildHarness({ onMetaCommand: () => false })
+    harnesses.push(h)
+    const runPromise = h.repl.run()
+
+    h.input.write(':something\n')
+    await waitUntil(() => h.onLineCalls.length >= 1)
+
+    expect(h.onMetaCommandCalls).toEqual([':something'])
+    expect(h.onLineCalls).toEqual([':something'])
+
+    h.input.end()
+    await runPromise
+  })
+
+  it('ignores meta-command prefix when mid-multiline buffer', async () => {
+    const h = buildHarness({ onMetaCommand: () => true })
+    harnesses.push(h)
+    const runPromise = h.repl.run()
+
+    // Open an incomplete for-loop so the buffer is non-empty.
+    h.input.write('for i in 1 2 3; do\n')
+    await new Promise(r => setTimeout(r, 50))
+    expect(h.onLineCalls).toEqual([])
+
+    // A ":help" line while mid-multiline must NOT go to onMetaCommand.
+    // bash will treat ":help" as a command within the for-loop body.
+    h.input.write(':help\n')
+    await new Promise(r => setTimeout(r, 50))
+    expect(h.onMetaCommandCalls).toEqual([])
+
+    h.input.write('done\n')
+    await waitUntil(() => h.onLineCalls.length >= 1)
+    expect(h.onLineCalls[0]).toContain(':help')
+
+    h.input.end()
+    await runPromise
   })
 })
