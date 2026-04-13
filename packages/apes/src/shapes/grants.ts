@@ -5,6 +5,8 @@ import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import consola from 'consola'
 import { getRequesterIdentity } from './config.js'
+import { resolveCommand } from './parser.js'
+import { loadOrInstallAdapter } from './shell-parser.js'
 import type { ResolvedCommand } from './types.js'
 import { apiFetch, discoverEndpoints, getGrantsEndpoint } from './http.js'
 
@@ -193,6 +195,45 @@ export function executeResolvedViaExec(resolved: ResolvedCommand): void {
 export async function verifyAndExecute(token: string, resolved: ResolvedCommand): Promise<void> {
   await verifyAndConsume(token, resolved)
   executeResolvedViaExec(resolved)
+}
+
+/**
+ * Re-resolve a ResolvedCommand from a previously-created grant's recorded
+ * request (argv + adapter digest). Used by `apes grants run <id>` to replay
+ * an approved grant locally after the async approval step.
+ *
+ * Throws when the grant is missing argv, when the adapter cannot be loaded,
+ * or when the locally installed adapter's digest no longer matches what the
+ * grant was issued against.
+ */
+export async function resolveFromGrant(
+  grant: {
+    request: {
+      command?: string[]
+      execution_context?: { adapter_digest?: string, argv_hash?: string }
+      authorization_details?: Array<{ type?: string, permission?: string }>
+    }
+  },
+): Promise<ResolvedCommand> {
+  const argv = grant.request?.command
+  if (!argv || argv.length === 0)
+    throw new Error('Grant request is missing command argv')
+
+  const executable = argv[0]
+  const adapter = await loadOrInstallAdapter(executable)
+  if (!adapter)
+    throw new Error(`No shapes adapter found for ${executable}`)
+
+  const resolved = await resolveCommand(adapter, argv)
+
+  const grantDigest = grant.request.execution_context?.adapter_digest
+  if (grantDigest && grantDigest !== resolved.digest) {
+    throw new Error(
+      `Adapter digest mismatch: grant was created against adapter ${grantDigest}, but local adapter is ${resolved.digest}. Reinstall or revert the adapter.`,
+    )
+  }
+
+  return resolved
 }
 
 export async function findExistingGrant(
