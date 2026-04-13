@@ -110,6 +110,7 @@ export async function requestGrantForShellLine(
         if (status !== 'approved') {
           return { kind: 'denied', reason: `Grant ${status}` }
         }
+        consola.info(`Grant ${grant.id} approved — continuing`)
 
         const token = await fetchGrantToken(idp, grant.id)
         await verifyAndConsume(token, resolved)
@@ -176,8 +177,10 @@ export async function requestGrantForShellLine(
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
-      if (status.status === 'approved')
+      if (status.status === 'approved') {
+        consola.info(`Grant ${grant.id} approved — continuing`)
         return { kind: 'approved', grantId: grant.id, mode: 'session' }
+      }
       if (status.status === 'denied' || status.status === 'revoked')
         return { kind: 'denied', reason: `Grant ${status.status}` }
       await new Promise(r => setTimeout(r, interval))
