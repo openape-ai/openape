@@ -2,6 +2,7 @@ import { hostname } from 'node:os'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
 import { requestGrantForShellLine } from './grant-dispatch.js'
+import { createMetaCommandHandler } from './meta-commands.js'
 import { PtyBridge } from './pty-bridge.js'
 import { ShellRepl } from './repl.js'
 import { ShellSession } from './session.js'
@@ -40,13 +41,21 @@ export async function runInteractiveShell(): Promise<void> {
   let pendingResolve: (() => void) | null = null
   let lastExitCode = 0
   let shuttingDown = false
+  // Set to true while `:reset` is tearing down the current bash child and
+  // spinning up a replacement. The old bridge's `onExit` callback checks
+  // this and returns early so the user does not see a spurious
+  // "bash exited" message or have the REPL torn down mid-reset.
+  let resetting = false
   // Forward reference to the REPL so the bridge's onExit can stop it when
   // bash dies. Assigned after construction below.
   let repl: ShellRepl | null = null
 
-  // Spawn the bash child up-front so the REPL can write to it as soon as the
-  // first line is accepted. Output from bash goes straight to the terminal.
-  const bridge = new PtyBridge(
+  /**
+   * Build a fresh PtyBridge with the standard lifecycle callbacks. Extracted
+   * into a factory so `:reset` can spawn a replacement child without
+   * duplicating the callback wiring.
+   */
+  const createBridge = (): PtyBridge => new PtyBridge(
     {
       onOutput: (chunk) => {
         // Live streaming to the user's terminal. Always written straight
@@ -63,6 +72,10 @@ export async function runInteractiveShell(): Promise<void> {
         }
       },
       onExit: (exitCode) => {
+        // `:reset` is intentionally killing this bridge; the replacement
+        // will own the user-facing lifecycle from here.
+        if (resetting)
+          return
         // bash itself died — typically because the user ran `exit`.
         // Tear down the REPL so run() returns cleanly.
         if (!shuttingDown) {
@@ -73,6 +86,11 @@ export async function runInteractiveShell(): Promise<void> {
     },
   )
 
+  // Spawn the bash child up-front so the REPL can write to it as soon as the
+  // first line is accepted. Output from bash goes straight to the terminal.
+  // `bridge` is `let` because `:reset` swaps in a replacement.
+  let bridge = createBridge()
+
   await bridge.waitForReady()
 
   const targetHost = hostname()
@@ -82,8 +100,28 @@ export async function runInteractiveShell(): Promise<void> {
     requester: auth?.email ?? 'unknown',
   })
 
+  const handleMetaCommand = createMetaCommandHandler({
+    getBridge: () => bridge,
+    resetBridge: async () => {
+      resetting = true
+      try {
+        bridge.kill('SIGKILL')
+      }
+      catch {}
+      bridge = createBridge()
+      await bridge.waitForReady()
+      resetting = false
+    },
+    session,
+    getAuth: loadAuth,
+    targetHost,
+    isPending: () => pendingResolve !== null,
+    write: s => process.stdout.write(s),
+  })
+
   repl = new ShellRepl(
     {
+      onMetaCommand: handleMetaCommand,
       onLine: async (line) => {
         // --- 1. Gate the line through the grant flow BEFORE bash sees it ---
         const grant = await requestGrantForShellLine(line, {
