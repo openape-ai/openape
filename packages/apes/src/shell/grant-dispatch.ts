@@ -78,7 +78,8 @@ export async function requestGrantForShellLine(
         try {
           const existingGrantId = await findExistingGrant(resolved, idp)
           if (existingGrantId) {
-            consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
+            if (process.env.APES_QUIET_GRANT_REUSE !== '1')
+              consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
             const token = await fetchGrantToken(idp, existingGrantId)
             await verifyAndConsume(token, resolved)
             return { kind: 'approved', grantId: existingGrantId, mode: 'adapter' }
@@ -109,6 +110,7 @@ export async function requestGrantForShellLine(
         if (status !== 'approved') {
           return { kind: 'denied', reason: `Grant ${status}` }
         }
+        consola.info(`Grant ${grant.id} approved — continuing`)
 
         const token = await fetchGrantToken(idp, grant.id)
         await verifyAndConsume(token, resolved)
@@ -136,6 +138,8 @@ export async function requestGrantForShellLine(
       && g.request.grant_type !== 'once',
     )
     if (sessionGrant) {
+      if (process.env.APES_QUIET_GRANT_REUSE !== '1')
+        consola.info(`Reusing ape-shell session grant ${sessionGrant.id} on ${options.targetHost}`)
       return { kind: 'approved', grantId: sessionGrant.id, mode: 'session' }
     }
   }
@@ -173,8 +177,10 @@ export async function requestGrantForShellLine(
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
-      if (status.status === 'approved')
+      if (status.status === 'approved') {
+        consola.info(`Grant ${grant.id} approved — continuing`)
         return { kind: 'approved', grantId: grant.id, mode: 'session' }
+      }
       if (status.status === 'denied' || status.status === 'revoked')
         return { kind: 'denied', reason: `Grant ${status.status}` }
       await new Promise(r => setTimeout(r, interval))

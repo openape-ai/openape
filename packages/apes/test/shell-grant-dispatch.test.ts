@@ -1,3 +1,4 @@
+import consola from 'consola'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // We mock every dependency of the grant-dispatch module so tests run
@@ -30,13 +31,18 @@ vi.mock('../src/notifications.js', () => ({
 const fakeAuth = { email: 'alice@example.com', idp: 'http://idp.test' }
 
 describe('requestGrantForShellLine', () => {
+  let infoSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(async () => {
     vi.clearAllMocks()
     const { loadAuth } = await import('../src/config.js')
     vi.mocked(loadAuth).mockReturnValue(fakeAuth as any)
+    infoSpy = vi.spyOn(consola, 'info').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    infoSpy.mockRestore()
+    delete process.env.APES_QUIET_GRANT_REUSE
     vi.resetModules()
   })
 
@@ -161,5 +167,199 @@ describe('requestGrantForShellLine', () => {
     const result = await requestGrantForShellLine('obscure-tool --foo', { targetHost: 'host.test' })
 
     expect(result).toEqual({ kind: 'approved', grantId: 'fallback-grant', mode: 'session' })
+  })
+
+  it('logs a reuse line when a session grant cache hit occurs', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      data: [
+        {
+          id: 'existing-session',
+          status: 'approved',
+          request: { audience: 'ape-shell', target_host: 'host.test', grant_type: 'timed' },
+        },
+      ],
+    } as any)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+    const reuseCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && call[0].includes('Reusing') && call[0].includes('existing-session'),
+    )
+    expect(reuseCall).toBeDefined()
+  })
+
+  it('suppresses session grant reuse line when APES_QUIET_GRANT_REUSE=1', async () => {
+    process.env.APES_QUIET_GRANT_REUSE = '1'
+    try {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+      vi.mocked(apiFetch).mockResolvedValueOnce({
+        data: [
+          {
+            id: 'existing-session',
+            status: 'approved',
+            request: { audience: 'ape-shell', target_host: 'host.test', grant_type: 'timed' },
+          },
+        ],
+      } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+      const reuseCall = infoSpy.mock.calls.find(call =>
+        typeof call[0] === 'string' && call[0].includes('Reusing'),
+      )
+      expect(reuseCall).toBeUndefined()
+    }
+    finally {
+      delete process.env.APES_QUIET_GRANT_REUSE
+    }
+  })
+
+  it('suppresses adapter grant reuse line when APES_QUIET_GRANT_REUSE=1', async () => {
+    process.env.APES_QUIET_GRANT_REUSE = '1'
+    try {
+      const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['-la'], isCompound: false, raw: 'ls -la' })
+      vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'ls', executable: 'ls', audience: 'shapes' }, operations: [] }, source: '/tmp/ls.toml', digest: 'sha' } as any)
+      vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'ls -la' } } as any)
+      vi.mocked(findExistingGrant).mockResolvedValue('reused-grant-id')
+      vi.mocked(fetchGrantToken).mockResolvedValue('token123')
+      vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
+
+      const reuseCall = infoSpy.mock.calls.find(call =>
+        typeof call[0] === 'string' && call[0].includes('Reusing'),
+      )
+      expect(reuseCall).toBeUndefined()
+    }
+    finally {
+      delete process.env.APES_QUIET_GRANT_REUSE
+    }
+  })
+
+  it('logs an approval ack line after session grant poll resolves approved', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({ data: [] } as any) // list grants
+      .mockResolvedValueOnce({ id: 'session-grant-id', status: 'pending' } as any) // create
+      .mockResolvedValueOnce({ status: 'approved' } as any) // poll
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+    const requestingCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'),
+    )
+    expect(requestingCall).toBeDefined()
+
+    const approvalCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && /Grant .* approved/.test(call[0]),
+    )
+    expect(approvalCall).toBeDefined()
+  })
+
+  it('logs an approval ack line after adapter grant waitForGrantStatus resolves approved', async () => {
+    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'curl', argv: ['https://example.com'], isCompound: false, raw: 'curl https://example.com' })
+    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'curl', executable: 'curl', audience: 'shapes' }, operations: [] }, source: '/tmp/curl.toml', digest: 'sha' } as any)
+    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'curl https://example.com' } } as any)
+    vi.mocked(findExistingGrant).mockResolvedValue(null)
+    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'new-grant-id', status: 'pending' } as any)
+    vi.mocked(waitForGrantStatus).mockResolvedValue('approved')
+    vi.mocked(fetchGrantToken).mockResolvedValue('token456')
+    vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('curl https://example.com', { targetHost: 'host.test' })
+
+    const approvalCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && /Grant .* approved/.test(call[0]),
+    )
+    expect(approvalCall).toBeDefined()
+  })
+
+  it('does not log an approval ack line when adapter grant is denied', async () => {
+    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus } = await import('../src/shapes/index.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'rm', argv: ['-rf', '/'], isCompound: false, raw: 'rm -rf /' })
+    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'rm', executable: 'rm', audience: 'shapes' }, operations: [] }, source: '/tmp/rm.toml', digest: 'sha' } as any)
+    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'rm -rf /' } } as any)
+    vi.mocked(findExistingGrant).mockResolvedValue(null)
+    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'scary-grant-id', status: 'pending' } as any)
+    vi.mocked(waitForGrantStatus).mockResolvedValue('denied')
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('rm -rf /', { targetHost: 'host.test' })
+
+    const approvalCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && call[0].includes('approved — continuing'),
+    )
+    expect(approvalCall).toBeUndefined()
+  })
+
+  it('does not log an approval ack line on session grant cache hit', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      data: [
+        {
+          id: 'existing-session',
+          status: 'approved',
+          request: { audience: 'ape-shell', target_host: 'host.test', grant_type: 'timed' },
+        },
+      ],
+    } as any)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+    const reuseCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && /Reusing/.test(call[0]),
+    )
+    expect(reuseCall).toBeDefined()
+
+    const approvalCall = infoSpy.mock.calls.find(call =>
+      typeof call[0] === 'string' && call[0].includes('approved — continuing'),
+    )
+    expect(approvalCall).toBeUndefined()
+  })
+
+  it('still logs fresh session grant request line when APES_QUIET_GRANT_REUSE=1', async () => {
+    process.env.APES_QUIET_GRANT_REUSE = '1'
+    try {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // no existing grant
+        .mockResolvedValueOnce({ id: 'new-session', status: 'pending' } as any) // create
+        .mockResolvedValueOnce({ status: 'approved' } as any) // poll
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+      const requestCall = infoSpy.mock.calls.find(call =>
+        typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'),
+      )
+      expect(requestCall).toBeDefined()
+    }
+    finally {
+      delete process.env.APES_QUIET_GRANT_REUSE
+    }
   })
 })
