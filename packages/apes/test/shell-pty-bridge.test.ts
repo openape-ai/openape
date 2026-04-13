@@ -157,4 +157,28 @@ describe('PtyBridge', () => {
 
     expect(h.exitInfo).not.toBeNull()
   })
+
+  it('does not leak APES_SHELL_WRAPPER into the bash child env', async () => {
+    const saved = process.env.APES_SHELL_WRAPPER
+    process.env.APES_SHELL_WRAPPER = '1'
+    try {
+      const h = createHarness()
+      harnesses.push(h)
+      await h.bridge.waitForReady()
+      // Print the var; bash emits an empty value if unset. Use `$VAR` (not
+      // `${VAR}`) so the JS lint rule no-template-curly-in-string isn't
+      // triggered by the bash-side parameter expansion.
+      h.bridge.writeLine('printf "WRAPPER=[%s]\\n" "$APES_SHELL_WRAPPER"')
+      await waitUntil(() => h.completedLines.length >= 1)
+      const out = h.completedLines[0]!.output
+      expect(out).toContain('WRAPPER=[]')
+      expect(out).not.toContain('WRAPPER=[1]')
+    }
+    finally {
+      if (saved === undefined)
+        delete process.env.APES_SHELL_WRAPPER
+      else
+        process.env.APES_SHELL_WRAPPER = saved
+    }
+  })
 })

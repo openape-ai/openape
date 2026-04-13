@@ -84,13 +84,19 @@ export class PtyBridge {
     // what the user typed; the pty echo is redundant and surprising.
     // Interactive TUI apps (vim/less/top) set their own termios when they
     // start, so they are unaffected.
+    // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside the pty
+    // don't self-detect as ape-shell mode and reject their argv. The wrapper
+    // script sets this marker on the parent ape-shell process; leaking it
+    // into bash would cause `apes <subcommand>` at the REPL prompt to print
+    // "unsupported invocation" instead of running.
+    const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
     this.term = pty.spawn('bash', ['--login', '-i'], {
       name: 'xterm-256color',
       cols,
       rows,
       cwd: options.cwd ?? process.cwd(),
       env: {
-        ...process.env,
+        ...inheritedEnv,
         // Force our marker PS1 on every prompt and keep pty echo off —
         // both survive .bashrc overrides because PROMPT_COMMAND runs
         // before each prompt.
