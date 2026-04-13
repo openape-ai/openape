@@ -212,7 +212,11 @@ describe('free-idp + shapes end-to-end', () => {
     writeFileSync(exoScript, `#!/bin/sh\nprintf '%s\\n' \"$@\" > \"${executionLog}\"\n`)
     spawnSync('chmod', ['+x', exoScript], { encoding: 'utf-8' })
 
-    const apes = spawn('node', [apesCli, 'run', '--idp', baseUrl, '--approval', 'once', '--', 'exo', 'dns', 'show', 'example.com'], {
+    // Legacy blocking flow: `--wait` keeps the caller attached to the grant
+    // approval polling loop so this E2E can drive the approve → token-fetch →
+    // exec sequence end-to-end. Without `--wait`, `apes run` exits 0 after
+    // printing the async grant-info block (the new default as of 0.9.0).
+    const apes = spawn('node', [apesCli, 'run', '--wait', '--idp', baseUrl, '--approval', 'once', '--', 'exo', 'dns', 'show', 'example.com'], {
       cwd: monorepoRoot,
       env: {
         ...process.env,
