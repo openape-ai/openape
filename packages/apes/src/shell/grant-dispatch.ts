@@ -78,7 +78,8 @@ export async function requestGrantForShellLine(
         try {
           const existingGrantId = await findExistingGrant(resolved, idp)
           if (existingGrantId) {
-            consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
+            if (process.env.APES_QUIET_GRANT_REUSE !== '1')
+              consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
             const token = await fetchGrantToken(idp, existingGrantId)
             await verifyAndConsume(token, resolved)
             return { kind: 'approved', grantId: existingGrantId, mode: 'adapter' }
@@ -136,6 +137,8 @@ export async function requestGrantForShellLine(
       && g.request.grant_type !== 'once',
     )
     if (sessionGrant) {
+      if (process.env.APES_QUIET_GRANT_REUSE !== '1')
+        consola.info(`Reusing ape-shell session grant ${sessionGrant.id} on ${options.targetHost}`)
       return { kind: 'approved', grantId: sessionGrant.id, mode: 'session' }
     }
   }
