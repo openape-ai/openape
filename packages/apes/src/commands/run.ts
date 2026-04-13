@@ -22,6 +22,29 @@ import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 
+/**
+ * Returns true when the caller asked for the legacy blocking path via
+ * `--wait` or `APE_WAIT=1`. Default is non-blocking (async exit).
+ */
+function shouldWaitForGrant(args: Record<string, unknown>): boolean {
+  return args.wait === true || process.env.APE_WAIT === '1'
+}
+
+/**
+ * Print the async info block for a freshly created pending grant. This is
+ * what the user sees when the non-blocking default path is taken: the grant
+ * id, the approval URL, the `grants status` and `grants run` commands.
+ */
+function printPendingGrantInfo(grant: { id: string }, idp: string): void {
+  consola.success(`Grant ${grant.id} erstellt`)
+  console.log(`  Approve:   ${idp}/grant-approval?grant_id=${grant.id}`)
+  console.log(`  Status:    apes grants status ${grant.id}`)
+  console.log(`  Ausführen: apes grants run ${grant.id}`)
+  console.log('')
+  console.log('  Tipp: Im Browser "als timed/always approven" wählen, um das')
+  console.log('  Kommando ohne erneuten Approval wiederzuverwenden.')
+}
+
 export const runCommand = defineCommand({
   meta: {
     name: 'run',
@@ -61,6 +84,11 @@ export const runCommand = defineCommand({
     'shell': {
       type: 'boolean',
       description: 'Shell mode: use session grant with audience ape-shell',
+      default: false,
+    },
+    'wait': {
+      type: 'boolean',
+      description: 'Block until grant is approved (default: async, print grant info and exit 0). Equivalent to APE_WAIT=1.',
       default: false,
     },
     '_': {
@@ -148,9 +176,6 @@ async function runShellMode(
     },
   })
 
-  consola.info(`Grant requested: ${grant.id}`)
-  consola.info('Waiting for approval...')
-
   notifyGrantPending({
     grantId: grant.id,
     approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
@@ -159,20 +184,28 @@ async function runShellMode(
     host: targetHost,
   })
 
-  const maxWait = 300_000
-  const interval = 3_000
-  const start = Date.now()
+  if (shouldWaitForGrant(args)) {
+    consola.info(`Grant requested: ${grant.id}`)
+    consola.info('Waiting for approval...')
 
-  while (Date.now() - start < maxWait) {
-    const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
-    if (status.status === 'approved')
-      break
-    if (status.status === 'denied' || status.status === 'revoked')
-      throw new CliError(`Grant ${status.status}.`)
-    await new Promise(r => setTimeout(r, interval))
+    const maxWait = 300_000
+    const interval = 3_000
+    const start = Date.now()
+
+    while (Date.now() - start < maxWait) {
+      const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
+      if (status.status === 'approved')
+        break
+      if (status.status === 'denied' || status.status === 'revoked')
+        throw new CliError(`Grant ${status.status}.`)
+      await new Promise(r => setTimeout(r, interval))
+    }
+
+    execShellCommand(command)
+    return
   }
 
-  execShellCommand(command)
+  printPendingGrantInfo(grant, idp)
 }
 
 /**
@@ -240,9 +273,6 @@ async function tryAdapterModeFromShell(
     reason: (args.reason as string) || `ape-shell: ${resolved.detail.display}`,
   })
 
-  consola.info(`Grant requested: ${grant.id}`)
-  consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
   if (grant.similar_grants?.similar_grants?.length) {
     const n = grant.similar_grants.similar_grants.length
     consola.info('')
@@ -257,12 +287,20 @@ async function tryAdapterModeFromShell(
     host: (args.host as string) || hostname(),
   })
 
-  const status = await waitForGrantStatus(idp, grant.id)
-  if (status !== 'approved')
-    throw new CliError(`Grant ${status}`)
+  if (shouldWaitForGrant(args)) {
+    consola.info(`Grant requested: ${grant.id}`)
+    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
-  const token = await fetchGrantToken(idp, grant.id)
-  await verifyAndExecute(token, resolved)
+    const status = await waitForGrantStatus(idp, grant.id)
+    if (status !== 'approved')
+      throw new CliError(`Grant ${status}`)
+
+    const token = await fetchGrantToken(idp, grant.id)
+    await verifyAndExecute(token, resolved)
+    return true
+  }
+
+  printPendingGrantInfo(grant, idp)
   return true
 }
 
@@ -338,9 +376,6 @@ async function runAdapterMode(
     ...(args.reason ? { reason: args.reason as string } : {}),
   })
 
-  consola.info(`Grant requested: ${grant.id}`)
-  consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
   if (grant.similar_grants?.similar_grants?.length) {
     const n = grant.similar_grants.similar_grants.length
     consola.info('')
@@ -352,12 +387,20 @@ async function runAdapterMode(
     consola.info('')
   }
 
-  const status = await waitForGrantStatus(idp, grant.id)
-  if (status !== 'approved')
-    throw new Error(`Grant ${status}`)
+  if (shouldWaitForGrant(args)) {
+    consola.info(`Grant requested: ${grant.id}`)
+    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
-  const token = await fetchGrantToken(idp, grant.id)
-  await verifyAndExecute(token, resolved)
+    const status = await waitForGrantStatus(idp, grant.id)
+    if (status !== 'approved')
+      throw new Error(`Grant ${status}`)
+
+    const token = await fetchGrantToken(idp, grant.id)
+    await verifyAndExecute(token, resolved)
+    return
+  }
+
+  printPendingGrantInfo(grant, idp)
 }
 
 async function runAudienceMode(
@@ -389,6 +432,11 @@ async function runAudienceMode(
       ...(args.as ? { run_as: args.as } : {}),
     },
   })
+  if (!shouldWaitForGrant(args)) {
+    printPendingGrantInfo(grant, idp)
+    return
+  }
+
   consola.success(`Grant requested: ${grant.id}`)
 
   // Step 2: Wait for approval
