@@ -17,7 +17,7 @@ import {
   waitForGrantStatus,
 } from '../shapes/index.js'
 import consola from 'consola'
-import { getIdpUrl, loadAuth } from '../config'
+import { getIdpUrl, loadAuth, loadConfig } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
@@ -31,18 +31,115 @@ function shouldWaitForGrant(args: Record<string, unknown>): boolean {
 }
 
 /**
- * Print the async info block for a freshly created pending grant. This is
- * what the user sees when the non-blocking default path is taken: the grant
- * id, the approval URL, the `grants status` and `grants run` commands.
+ * Audience of the `apes run` async info block. Drives whether the output
+ * targets a human reader (short, friendly) or an AI agent (verbose, with
+ * explicit polling protocol).
+ *
+ * Default is `'agent'` — zero-config for agent ecosystems (openclaw, Claude,
+ * etc.), and humans who want brevity just set `APES_USER=human` once in
+ * their shell rc. Env var wins over config.toml; unknown values fall back
+ * to the agent default.
+ */
+type ApesUserMode = 'agent' | 'human'
+
+function getUserMode(): ApesUserMode {
+  const envValue = process.env.APES_USER
+  if (envValue === 'human')
+    return 'human'
+  if (envValue === 'agent')
+    return 'agent'
+  const cfg = loadConfig()
+  if (cfg.defaults?.user === 'human')
+    return 'human'
+  return 'agent'
+}
+
+/** Poll interval (seconds) embedded in the agent-mode instructions. */
+function getPollIntervalSeconds(): number {
+  const envValue = process.env.APES_GRANT_POLL_INTERVAL
+  if (envValue) {
+    const n = Number(envValue)
+    if (Number.isFinite(n) && n > 0)
+      return Math.floor(n)
+  }
+  const cfg = loadConfig()
+  const cfgValue = cfg.defaults?.grant_poll_interval_seconds
+  if (cfgValue) {
+    const n = Number(cfgValue)
+    if (Number.isFinite(n) && n > 0)
+      return Math.floor(n)
+  }
+  return 10
+}
+
+/** Poll max minutes embedded in the agent-mode instructions. */
+function getPollMaxMinutes(): number {
+  const envValue = process.env.APES_GRANT_POLL_MAX_MINUTES
+  if (envValue) {
+    const n = Number(envValue)
+    if (Number.isFinite(n) && n > 0)
+      return Math.floor(n)
+  }
+  const cfg = loadConfig()
+  const cfgValue = cfg.defaults?.grant_poll_max_minutes
+  if (cfgValue) {
+    const n = Number(cfgValue)
+    if (Number.isFinite(n) && n > 0)
+      return Math.floor(n)
+  }
+  return 5
+}
+
+/**
+ * Print the async info block for a freshly created pending grant. Two
+ * output modes:
+ *
+ * - **agent** (default): verbose, with an explicit polling protocol so
+ *   the consuming LLM knows exactly what to do next. Tells the agent to
+ *   poll `apes grants status <id> --json` every N seconds for up to M
+ *   minutes, handle each terminal status, and run `apes grants run <id>`
+ *   once approved. Every agent in every ecosystem sees the same text
+ *   without needing a per-tool skill integration.
+ *
+ * - **human** (opt-in via `APES_USER=human` or `config.toml` defaults.user):
+ *   short, friendly, no polling block. Humans at a terminal know to wait
+ *   for approval and then come back.
+ *
+ * Both modes keep the same core Approve / Status / Execute lines so
+ * external scripts that grep for those labels keep working.
  */
 function printPendingGrantInfo(grant: { id: string }, idp: string): void {
-  consola.success(`Grant ${grant.id} erstellt`)
-  console.log(`  Approve:   ${idp}/grant-approval?grant_id=${grant.id}`)
-  console.log(`  Status:    apes grants status ${grant.id}`)
-  console.log(`  Ausführen: apes grants run ${grant.id}`)
+  const mode = getUserMode()
+  const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
+  const statusCmd = `apes grants status ${grant.id}`
+  const executeCmd = `apes grants run ${grant.id}`
+
+  if (mode === 'human') {
+    consola.success(`Grant ${grant.id} created — awaiting your approval`)
+    console.log(`  Approve in browser:  ${approveUrl}`)
+    console.log(`  Check status:        ${statusCmd}`)
+    console.log(`  Run after approval:  ${executeCmd}`)
+    console.log('')
+    console.log('  Tip: Approve as "timed" or "always" in the browser to reuse')
+    console.log('  this grant without re-approval on the next invocation.')
+    return
+  }
+
+  // agent mode (default)
+  const pollSec = getPollIntervalSeconds()
+  const maxMin = getPollMaxMinutes()
+  consola.success(`Grant ${grant.id} created (pending approval)`)
+  console.log(`  Approve:   ${approveUrl}`)
+  console.log(`  Status:    ${statusCmd} [--json]`)
+  console.log(`  Execute:   ${executeCmd}`)
   console.log('')
-  console.log('  Tipp: Im Browser "als timed/always approven" wählen, um das')
-  console.log('  Kommando ohne erneuten Approval wiederzuverwenden.')
+  console.log(`  For agents: poll \`${statusCmd} --json\` every ${pollSec}s, wait up to ${maxMin} minutes.`)
+  console.log(`  When .status == "approved", run \`${executeCmd}\` to execute.`)
+  console.log(`  On "denied" or "revoked", stop and report to the user.`)
+  console.log(`  On timeout, stop and notify the user that approval has not happened.`)
+  console.log('')
+  console.log('  Tip: Approve as "timed" or "always" in the browser to let this')
+  console.log('  grant be reused on subsequent invocations without re-approval.')
 }
 
 export const runCommand = defineCommand({

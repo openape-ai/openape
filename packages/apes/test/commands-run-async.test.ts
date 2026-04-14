@@ -14,6 +14,12 @@ vi.mock('../src/config.js', () => ({
     expires_at: Date.now() / 1000 + 3600,
   })),
   getIdpUrl: vi.fn(() => 'http://idp.test'),
+  // Async info block helpers in run.ts call loadConfig() to resolve
+  // APES_USER / poll interval / poll max minutes from config.toml when
+  // the matching env vars aren't set. Return an empty config by default
+  // so tests get the baked-in defaults; individual tests can override
+  // via `vi.mocked(loadConfig).mockReturnValueOnce(...)`.
+  loadConfig: vi.fn(() => ({})),
 }))
 
 vi.mock('../src/http.js', () => ({
@@ -61,8 +67,14 @@ describe('commands/run async default', () => {
   let infoSpy: ReturnType<typeof vi.spyOn>
   let successSpy: ReturnType<typeof vi.spyOn>
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    // Reset loadConfig to an empty default so a prior test's
+    // mockReturnValue doesn't leak through the describe block. Individual
+    // tests that need a config override use `vi.mocked(loadConfig)
+    // .mockReturnValue(...)` inside the test body.
+    const { loadConfig } = await import('../src/config.js')
+    vi.mocked(loadConfig).mockReturnValue({})
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     infoSpy = vi.spyOn(consola, 'info').mockImplementation(() => {})
     successSpy = vi.spyOn(consola, 'success').mockImplementation(() => {})
@@ -330,6 +342,174 @@ describe('commands/run async default', () => {
         ['--grant', 'jwt-tok', '--', 'mount-nfs'],
         expect.objectContaining({ stdio: 'inherit' }),
       )
+    })
+  })
+
+  // ------------------------------------------------------------------------
+  // Async info block audience: agent (default) vs human
+  //
+  // The output of printPendingGrantInfo switches between two flavours:
+  //   - agent (default): verbose, with an explicit polling protocol
+  //   - human (opt-in via APES_USER=human or config.toml defaults.user)
+  //
+  // APES_USER env var wins over config.toml. Numeric knobs
+  // (APES_GRANT_POLL_INTERVAL, APES_GRANT_POLL_MAX_MINUTES) flow into the
+  // agent-mode text so different environments can tune the polling policy.
+  // ------------------------------------------------------------------------
+  describe('async info block audience mode', () => {
+    // All cases below go through the simplest exit path we have — the
+    // runAudienceMode async branch — to avoid re-mocking the shapes
+    // adapter chain. printPendingGrantInfo is the same helper in every
+    // call site, so one driving path is representative.
+    async function driveRun() {
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'grant-mode-test', status: 'pending' } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await runCommand.run!({
+        rawArgs: ['run', 'escapes', 'mount-nfs'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any)
+    }
+
+    function collectedLog(): string {
+      return consoleLogSpy.mock.calls.map(c => c.join(' ')).join('\n')
+    }
+
+    function collectedSuccess(): string {
+      return successSpy.mock.calls.map(c => c.join(' ')).join('\n')
+    }
+
+    afterEach(() => {
+      delete process.env.APES_USER
+      delete process.env.APES_GRANT_POLL_INTERVAL
+      delete process.env.APES_GRANT_POLL_MAX_MINUTES
+    })
+
+    it('default (no env, no config): agent mode with polling protocol', async () => {
+      await driveRun()
+
+      const out = collectedLog()
+      const success = collectedSuccess()
+
+      expect(success).toContain('Grant grant-mode-test created (pending approval)')
+      expect(out).toContain('For agents: poll `apes grants status grant-mode-test --json` every 10s')
+      expect(out).toContain('up to 5 minutes')
+      expect(out).toContain('apes grants run grant-mode-test')
+      // Must NOT include the human-mode label wording
+      expect(out).not.toContain('Approve in browser:')
+      expect(out).not.toContain('Run after approval:')
+    })
+
+    it('APES_USER=human: short block, no polling protocol', async () => {
+      process.env.APES_USER = 'human'
+      await driveRun()
+
+      const out = collectedLog()
+      const success = collectedSuccess()
+
+      expect(success).toContain('Grant grant-mode-test created — awaiting your approval')
+      expect(out).toContain('Approve in browser:')
+      expect(out).toContain('Check status:')
+      expect(out).toContain('Run after approval:')
+      // Agent-only blocks must NOT appear in human mode
+      expect(out).not.toContain('For agents:')
+      expect(out).not.toContain('every 10s')
+      expect(out).not.toContain('If .status is')
+    })
+
+    it('APES_USER=agent: same as default', async () => {
+      process.env.APES_USER = 'agent'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('For agents:')
+      expect(out).toContain('every 10s')
+    })
+
+    it('APES_USER=invalid: falls back to agent default', async () => {
+      process.env.APES_USER = 'random-garbage-xxxxxxx'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('For agents:')
+    })
+
+    it('config.toml defaults.user=human overrides the agent default', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({ defaults: { user: 'human' } })
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('Approve in browser:')
+      expect(out).not.toContain('For agents:')
+    })
+
+    it('APES_USER env wins over config.toml defaults.user', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({ defaults: { user: 'human' } })
+      process.env.APES_USER = 'agent'
+      await driveRun()
+
+      const out = collectedLog()
+      // Env said agent → agent wins even though config said human
+      expect(out).toContain('For agents:')
+      expect(out).not.toContain('Approve in browser:')
+    })
+
+    it('APES_GRANT_POLL_INTERVAL=30 flows into the agent text', async () => {
+      process.env.APES_GRANT_POLL_INTERVAL = '30'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('every 30s')
+      // Default max still 5 minutes
+      expect(out).toContain('up to 5 minutes')
+    })
+
+    it('APES_GRANT_POLL_MAX_MINUTES=10 flows into the agent text', async () => {
+      process.env.APES_GRANT_POLL_MAX_MINUTES = '10'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('every 10s')
+      expect(out).toContain('up to 10 minutes')
+    })
+
+    it('config fallback for poll interval when env unset', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({
+        defaults: { grant_poll_interval_seconds: '20', grant_poll_max_minutes: '15' },
+      })
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('every 20s')
+      expect(out).toContain('up to 15 minutes')
+    })
+
+    it('env wins over config for numeric knobs', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({
+        defaults: { grant_poll_interval_seconds: '20', grant_poll_max_minutes: '15' },
+      })
+      process.env.APES_GRANT_POLL_INTERVAL = '30'
+      process.env.APES_GRANT_POLL_MAX_MINUTES = '10'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('every 30s')
+      expect(out).toContain('up to 10 minutes')
+    })
+
+    it('bogus env values are ignored, defaults apply', async () => {
+      process.env.APES_GRANT_POLL_INTERVAL = 'not-a-number'
+      process.env.APES_GRANT_POLL_MAX_MINUTES = '-5'
+      await driveRun()
+
+      const out = collectedLog()
+      expect(out).toContain('every 10s')
+      expect(out).toContain('up to 5 minutes')
     })
   })
 })

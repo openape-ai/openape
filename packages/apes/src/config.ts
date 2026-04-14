@@ -14,6 +14,24 @@ export interface ApesConfig {
   defaults?: {
     idp?: string
     approval?: string
+    /**
+     * Audience for the `apes run` async info block. `agent` (default)
+     * emits verbose agent-facing instructions with a polling protocol;
+     * `human` emits a short friendly block. Env var `APES_USER` wins.
+     */
+    user?: 'agent' | 'human'
+    /**
+     * Poll interval (seconds) embedded in the agent-mode instructions.
+     * Default 10. Env var `APES_GRANT_POLL_INTERVAL` wins. Stored as a
+     * string in TOML because the hand-rolled parser only handles quoted
+     * values — casting to number happens at read time.
+     */
+    grant_poll_interval_seconds?: string
+    /**
+     * Maximum poll duration (minutes) embedded in the agent-mode
+     * instructions. Default 5. Env var `APES_GRANT_POLL_MAX_MINUTES` wins.
+     */
+    grant_poll_max_minutes?: string
   }
   agent?: {
     key?: string
