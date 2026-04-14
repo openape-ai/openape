@@ -92,6 +92,49 @@ function getPollMaxMinutes(): number {
 }
 
 /**
+ * Exit code for the async-default pending-grant path.
+ *
+ * Default is **75** (`EX_TEMPFAIL` from `sysexits.h`, semantically "temporary
+ * failure — try again later"). This is the clearest POSIX-adjacent signal
+ * that the command was accepted but the target action has not yet been
+ * performed and needs a retry. Unlike exit 1 (general error) or exit 2
+ * (usage error), 75 does not collide with common shell conventions, and
+ * it happens to be the same code `sendmail` and other mail delivery agents
+ * have used for decades to signal "defer and retry".
+ *
+ * The non-zero exit has a very practical effect on AI-agent consumers:
+ * openclaw's exec-runtime (and most similar frameworks) maps non-zero
+ * exits to a `failed` / `error` tool-result status, which LLMs attend
+ * to much more carefully than a `success` result with the same text in
+ * stdout. In 0.9.3 we added explicit agent-facing instructions to the
+ * async info block; in practice agents still ignored them because the
+ * wrapping tool-result looked like a success. The non-zero exit is the
+ * structural attention anchor that the text alone couldn't provide.
+ *
+ * Overridable via `APES_ASYNC_EXIT_CODE` env var or `config.toml`
+ * `defaults.async_exit_code`. Set to `0` to restore the legacy exit-0
+ * behaviour (for CI scripts that rely on it, or humans who find the
+ * non-zero exit noisy). Valid range is 0–255 (POSIX exit code space);
+ * bogus values fall back to the default 75.
+ */
+function getAsyncExitCode(): number {
+  const envValue = process.env.APES_ASYNC_EXIT_CODE
+  if (envValue !== undefined && envValue !== '') {
+    const n = Number(envValue)
+    if (Number.isFinite(n) && n >= 0 && n <= 255)
+      return Math.floor(n)
+  }
+  const cfg = loadConfig()
+  const cfgValue = cfg.defaults?.async_exit_code
+  if (cfgValue !== undefined && cfgValue !== '') {
+    const n = Number(cfgValue)
+    if (Number.isFinite(n) && n >= 0 && n <= 255)
+      return Math.floor(n)
+  }
+  return 75 // EX_TEMPFAIL
+}
+
+/**
  * Print the async info block for a freshly created pending grant. Two
  * output modes:
  *
@@ -322,6 +365,7 @@ async function runShellMode(
   }
 
   printPendingGrantInfo(grant, idp)
+  throw new CliExit(getAsyncExitCode())
 }
 
 /**
@@ -417,7 +461,7 @@ async function tryAdapterModeFromShell(
   }
 
   printPendingGrantInfo(grant, idp)
-  return true
+  throw new CliExit(getAsyncExitCode())
 }
 
 /**
@@ -531,6 +575,7 @@ async function runAdapterMode(
   }
 
   printPendingGrantInfo(grant, idp)
+  throw new CliExit(getAsyncExitCode())
 }
 
 async function runAudienceMode(
@@ -564,7 +609,7 @@ async function runAudienceMode(
   })
   if (!shouldWaitForGrant(args)) {
     printPendingGrantInfo(grant, idp)
-    return
+    throw new CliExit(getAsyncExitCode())
   }
 
   consola.success(`Grant requested: ${grant.id}`)
