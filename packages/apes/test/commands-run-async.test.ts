@@ -512,4 +512,297 @@ describe('commands/run async default', () => {
       expect(out).toContain('up to 5 minutes')
     })
   })
+
+  // ------------------------------------------------------------------------
+  // one-shot `ape-shell -c "apes <subcmd>"` self-dispatch shortcut.
+  //
+  // The 0.9.2 exemption lived only in shell/grant-dispatch.ts (interactive
+  // REPL). This suite verifies that runShellMode in commands/run.ts — the
+  // code path for `ape-shell -c "<cmd>"` after `rewriteApeShellArgs` has
+  // rewritten it to `apes run --shell -- bash -c "<cmd>"` — also short-
+  // circuits apes self-invocations without creating a grant.
+  //
+  // Regression guard for the openclaw polling cascade: without this fix,
+  // `ape-shell -c "apes grants status <id> --json"` creates a new grant
+  // itself, and every poll of the resulting pending grant creates yet
+  // another grant, cascading indefinitely.
+  // ------------------------------------------------------------------------
+  describe('runShellMode apes self-dispatch shortcut', () => {
+    async function driveShellMode(inner: string) {
+      const shapes = await import('../src/shapes/index.js')
+      // extractShellCommandString pulls out the inner bash -c payload.
+      // The default mock returns command.at(-1), which is exactly the
+      // inner string when command = ['bash', '-c', inner].
+      vi.mocked(shapes.extractShellCommandString).mockReturnValue(inner)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', inner],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any)
+    }
+
+    it('`ape-shell -c "apes grants status <id>"` bypasses grant flow, execs directly', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['grants', 'status', 'abc-123', '--json'],
+        isCompound: false,
+        raw: 'apes grants status abc-123 --json',
+      } as any)
+
+      const { apiFetch } = await import('../src/http.js')
+
+      await driveShellMode('apes grants status abc-123 --json')
+
+      // Must NOT hit the adapter flow
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(shapes.createShapesGrant).not.toHaveBeenCalled()
+      // Must NOT hit the session-grant API calls
+      expect(apiFetch).not.toHaveBeenCalled()
+      // Must NOT print the async info block
+      expect(successSpy.mock.calls.map(c => c.join(' ')).join('\n')).not.toContain('created (pending approval)')
+
+      // Must directly exec bash -c <line>
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalledWith(
+        'bash',
+        ['-c', 'apes grants status abc-123 --json'],
+        expect.objectContaining({ stdio: 'inherit' }),
+      )
+    })
+
+    it('`ape-shell -c "apes grants run <id>"` bypasses grant flow (the bootstrap case)', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['grants', 'run', 'xyz-grant-id'],
+        isCompound: false,
+        raw: 'apes grants run xyz-grant-id',
+      } as any)
+
+      const { apiFetch } = await import('../src/http.js')
+
+      await driveShellMode('apes grants run xyz-grant-id')
+
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalledWith(
+        'bash',
+        ['-c', 'apes grants run xyz-grant-id'],
+        expect.objectContaining({ stdio: 'inherit' }),
+      )
+    })
+
+    it('`ape-shell -c "apes whoami"` bypasses grant flow', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['whoami'],
+        isCompound: false,
+        raw: 'apes whoami',
+      } as any)
+
+      const { apiFetch } = await import('../src/http.js')
+
+      await driveShellMode('apes whoami')
+
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "apes adapter install curl"` bypasses grant flow', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['adapter', 'install', 'curl'],
+        isCompound: false,
+        raw: 'apes adapter install curl',
+      } as any)
+
+      const { apiFetch } = await import('../src/http.js')
+
+      await driveShellMode('apes adapter install curl')
+
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "apes run -- echo hi"` STAYS gated (run is in blocklist)', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      // The parseShellCommand for `apes run -- echo hi` returns executable=apes,
+      // argv starting with 'run'. `run` is in APES_GATED_SUBCOMMANDS → falls
+      // through to the normal flow.
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['run', '--', 'echo', 'hi'],
+        isCompound: false,
+        raw: 'apes run -- echo hi',
+      } as any)
+      // No adapter for `apes` registered → adapter path returns false
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // session grant lookup
+        .mockResolvedValueOnce({ id: 'gated-grant', status: 'pending' } as any) // create
+
+      await driveShellMode('apes run -- echo hi')
+
+      // Should NOT have short-circuited — adapter path was attempted
+      expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
+      // Session-grant path was taken, pending info printed
+      expect(apiFetch).toHaveBeenCalled()
+      const out = successSpy.mock.calls.map(c => c.join(' ')).join('\n')
+      expect(out).toContain('gated-grant')
+    })
+
+    it('`ape-shell -c "apes fetch https://example.com"` STAYS gated', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['fetch', 'https://example.com'],
+        isCompound: false,
+        raw: 'apes fetch https://example.com',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'gated-fetch', status: 'pending' } as any)
+
+      await driveShellMode('apes fetch https://example.com')
+
+      expect(apiFetch).toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "apes mcp server"` STAYS gated', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['mcp', 'server'],
+        isCompound: false,
+        raw: 'apes mcp server',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'gated-mcp', status: 'pending' } as any)
+
+      await driveShellMode('apes mcp server')
+
+      expect(apiFetch).toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "apes whoami | grep alice"` (compound) does NOT self-dispatch', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['whoami', '|', 'grep', 'alice'],
+        isCompound: true, // the key signal
+        raw: 'apes whoami | grep alice',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'compound-grant', status: 'pending' } as any)
+
+      await driveShellMode('apes whoami | grep alice')
+
+      // Compound short-circuits the self-dispatch, falls through to
+      // the normal session-grant path
+      expect(apiFetch).toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "curl example.com"` (non-apes) does NOT self-dispatch', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'curl',
+        argv: ['example.com'],
+        isCompound: false,
+        raw: 'curl example.com',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
+      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('curl example.com'))
+      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
+      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'curl-grant' } as any)
+
+      await driveShellMode('curl example.com')
+
+      // Adapter flow was attempted (not short-circuited)
+      expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
+      expect(shapes.createShapesGrant).toHaveBeenCalled()
+    })
+  })
+
+  // ------------------------------------------------------------------------
+  // execShellCommand env strip — mirrors the Finding 4 fix from pty-bridge.ts
+  // for the one-shot `ape-shell -c` path. Without this, nested `apes` in the
+  // bash child inherits APES_SHELL_WRAPPER=1 and hits "unsupported invocation".
+  // ------------------------------------------------------------------------
+  describe('execShellCommand APES_SHELL_WRAPPER env strip', () => {
+    afterEach(() => {
+      delete process.env.APES_SHELL_WRAPPER
+    })
+
+    it('strips APES_SHELL_WRAPPER from the bash child env when self-dispatching', async () => {
+      process.env.APES_SHELL_WRAPPER = '1'
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['whoami'],
+        isCompound: false,
+        raw: 'apes whoami',
+      } as any)
+      vi.mocked(shapes.extractShellCommandString).mockReturnValue('apes whoami')
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'apes whoami'],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any)
+
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalled()
+      const callArgs = vi.mocked(execFileSync).mock.calls[0]!
+      const opts = callArgs[2] as { env?: Record<string, string | undefined> }
+      expect(opts.env).toBeDefined()
+      expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+      // Other env vars still there
+      expect(opts.env!.PATH).toBeDefined()
+    })
+
+    it('strips APES_SHELL_WRAPPER from escapes pipe in runAudienceMode --wait mode', async () => {
+      process.env.APES_SHELL_WRAPPER = '1'
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ id: 'escapes-grant', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+        .mockResolvedValueOnce({ authz_jwt: 'jwt-tok' } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await runCommand.run!({
+        rawArgs: ['run', 'escapes', 'mount-nfs', '--wait'],
+        args: { shell: false, wait: true, approval: 'once', 'escapes-path': 'escapes' } as any,
+      } as any)
+
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalledWith(
+        'escapes',
+        ['--grant', 'jwt-tok', '--', 'mount-nfs'],
+        expect.objectContaining({ stdio: 'inherit' }),
+      )
+      const callArgs = vi.mocked(execFileSync).mock.calls[0]!
+      const opts = callArgs[2] as { env?: Record<string, string | undefined> }
+      expect(opts.env).toBeDefined()
+      expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+    })
+  })
 })
