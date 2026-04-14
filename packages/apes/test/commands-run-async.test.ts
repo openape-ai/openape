@@ -62,6 +62,32 @@ function makeResolved(display = 'curl https://example.com') {
   } as any
 }
 
+/**
+ * Wait for a promise that should throw `CliExit(expectedCode)`. As of
+ * 0.10.0 every async-default exit path in `runCommand` throws CliExit
+ * with the configured exit code (default 75 = EX_TEMPFAIL) instead of
+ * returning 0. Tests that exercise those paths use this helper to catch
+ * the throw while still running their post-hoc assertions on the spies
+ * (which were populated during the print BEFORE the throw).
+ *
+ * The legacy sync path (--wait / APE_WAIT=1) still returns normally,
+ * so --wait tests continue to `await runCommand.run!(...)` directly.
+ */
+async function expectCliExit(promise: Promise<unknown>, expectedCode: number = 75): Promise<void> {
+  const { CliExit } = await import('../src/errors.js')
+  try {
+    await promise
+  }
+  catch (err) {
+    if (err instanceof CliExit) {
+      expect(err.exitCode).toBe(expectedCode)
+      return
+    }
+    throw err
+  }
+  throw new Error(`Expected CliExit(${expectedCode}) but promise resolved normally`)
+}
+
 describe('commands/run async default', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>
   let infoSpy: ReturnType<typeof vi.spyOn>
@@ -114,10 +140,10 @@ describe('commands/run async default', () => {
       vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-abc' } as any)
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
+      await expectCliExit(runCommand.run!({
         rawArgs: ['run', '--shell', '--', 'bash', '-c', 'curl https://example.com'],
         args: { shell: true, wait: false, approval: 'once' } as any,
-      } as any)
+      } as any))
 
       expect(shapes.waitForGrantStatus).not.toHaveBeenCalled()
       expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
@@ -224,10 +250,10 @@ describe('commands/run async default', () => {
       const { execFileSync } = await import('node:child_process')
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
+      await expectCliExit(runCommand.run!({
         rawArgs: ['run', '--shell', '--', 'bash', '-c', 'echo a | echo b'],
         args: { shell: true, wait: false, approval: 'once' } as any,
-      } as any)
+      } as any))
 
       expect(execFileSync).not.toHaveBeenCalled()
       assertAsyncInfoBlock('sess-1')
@@ -267,10 +293,10 @@ describe('commands/run async default', () => {
       vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-xyz' } as any)
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
+      await expectCliExit(runCommand.run!({
         rawArgs: ['run', '--', 'whoami'],
         args: { shell: false, wait: false, approval: 'once' } as any,
-      } as any)
+      } as any))
 
       expect(shapes.waitForGrantStatus).not.toHaveBeenCalled()
       expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
@@ -309,10 +335,10 @@ describe('commands/run async default', () => {
       const { execFileSync } = await import('node:child_process')
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
+      await expectCliExit(runCommand.run!({
         rawArgs: ['run', 'escapes', 'mount-nfs'],
         args: { shell: false, wait: false, approval: 'once', 'escapes-path': 'escapes' } as any,
-      } as any)
+      } as any))
 
       // Only the grant-create call; no poll, no token fetch
       expect(apiFetch).toHaveBeenCalledTimes(1)
@@ -361,15 +387,18 @@ describe('commands/run async default', () => {
     // runAudienceMode async branch — to avoid re-mocking the shapes
     // adapter chain. printPendingGrantInfo is the same helper in every
     // call site, so one driving path is representative.
-    async function driveRun() {
+    async function driveRun(expectedExitCode: number = 75) {
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'grant-mode-test', status: 'pending' } as any)
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
-        rawArgs: ['run', 'escapes', 'mount-nfs'],
-        args: { shell: false, wait: false, approval: 'once' } as any,
-      } as any)
+      await expectCliExit(
+        runCommand.run!({
+          rawArgs: ['run', 'escapes', 'mount-nfs'],
+          args: { shell: false, wait: false, approval: 'once' } as any,
+        } as any),
+        expectedExitCode,
+      )
     }
 
     function collectedLog(): string {
@@ -528,7 +557,21 @@ describe('commands/run async default', () => {
   // another grant, cascading indefinitely.
   // ------------------------------------------------------------------------
   describe('runShellMode apes self-dispatch shortcut', () => {
-    async function driveShellMode(inner: string) {
+    /**
+     * Drive runShellMode with a given inner command. Two termination paths:
+     *
+     * - `expectedExit === 'none'`: the call returns normally. Used by the
+     *   self-dispatch tests where `execShellCommand` is called directly and
+     *   the helper (a mock) returns normally without throwing.
+     * - `expectedExit === <number>`: the call is expected to throw
+     *   `CliExit(<number>)`. Used by the "stays gated" tests where the
+     *   command falls through to the normal grant flow and exits with the
+     *   async exit code.
+     */
+    async function driveShellMode(
+      inner: string,
+      expectedExit: number | 'none' = 'none',
+    ) {
       const shapes = await import('../src/shapes/index.js')
       // extractShellCommandString pulls out the inner bash -c payload.
       // The default mock returns command.at(-1), which is exactly the
@@ -536,10 +579,15 @@ describe('commands/run async default', () => {
       vi.mocked(shapes.extractShellCommandString).mockReturnValue(inner)
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
+      const promise = runCommand.run!({
         rawArgs: ['run', '--shell', '--', 'bash', '-c', inner],
         args: { shell: true, wait: false, approval: 'once' } as any,
       } as any)
+
+      if (expectedExit === 'none')
+        await promise
+      else
+        await expectCliExit(promise, expectedExit)
     }
 
     it('`ape-shell -c "apes grants status <id>"` bypasses grant flow, execs directly', async () => {
@@ -649,7 +697,7 @@ describe('commands/run async default', () => {
         .mockResolvedValueOnce({ data: [] } as any) // session grant lookup
         .mockResolvedValueOnce({ id: 'gated-grant', status: 'pending' } as any) // create
 
-      await driveShellMode('apes run -- echo hi')
+      await driveShellMode('apes run -- echo hi', 75)
 
       // Should NOT have short-circuited — adapter path was attempted
       expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
@@ -674,7 +722,7 @@ describe('commands/run async default', () => {
         .mockResolvedValueOnce({ data: [] } as any)
         .mockResolvedValueOnce({ id: 'gated-fetch', status: 'pending' } as any)
 
-      await driveShellMode('apes fetch https://example.com')
+      await driveShellMode('apes fetch https://example.com', 75)
 
       expect(apiFetch).toHaveBeenCalled()
     })
@@ -694,7 +742,7 @@ describe('commands/run async default', () => {
         .mockResolvedValueOnce({ data: [] } as any)
         .mockResolvedValueOnce({ id: 'gated-mcp', status: 'pending' } as any)
 
-      await driveShellMode('apes mcp server')
+      await driveShellMode('apes mcp server', 75)
 
       expect(apiFetch).toHaveBeenCalled()
     })
@@ -714,7 +762,7 @@ describe('commands/run async default', () => {
         .mockResolvedValueOnce({ data: [] } as any)
         .mockResolvedValueOnce({ id: 'compound-grant', status: 'pending' } as any)
 
-      await driveShellMode('apes whoami | grep alice')
+      await driveShellMode('apes whoami | grep alice', 75)
 
       // Compound short-circuits the self-dispatch, falls through to
       // the normal session-grant path
@@ -734,7 +782,7 @@ describe('commands/run async default', () => {
       vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
       vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'curl-grant' } as any)
 
-      await driveShellMode('curl example.com')
+      await driveShellMode('curl example.com', 75)
 
       // Adapter flow was attempted (not short-circuited)
       expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
@@ -803,6 +851,113 @@ describe('commands/run async default', () => {
       const opts = callArgs[2] as { env?: Record<string, string | undefined> }
       expect(opts.env).toBeDefined()
       expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+    })
+  })
+
+  // ------------------------------------------------------------------------
+  // Async-default exit code — 0.10.0 changed the default from 0 to 75
+  // (EX_TEMPFAIL from sysexits.h) so AI agent wrappers receive the pending
+  // state as a structural `failed` tool-result status instead of success.
+  //
+  // Override via APES_ASYNC_EXIT_CODE env var or config.toml
+  // `defaults.async_exit_code`. Set to 0 to restore pre-0.10.0 behaviour.
+  // Bogus values (non-numeric, out of 0–255 range) fall back to 75.
+  //
+  // --wait mode is unaffected — the blocking path always returns 0 on
+  // successful exec, regardless of APES_ASYNC_EXIT_CODE.
+  // ------------------------------------------------------------------------
+  describe('async exit code (APES_ASYNC_EXIT_CODE)', () => {
+    async function driveAsyncExit(expectedCode: number) {
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'exit-test', status: 'pending' } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(
+        runCommand.run!({
+          rawArgs: ['run', 'escapes', 'mount-nfs'],
+          args: { shell: false, wait: false, approval: 'once' } as any,
+        } as any),
+        expectedCode,
+      )
+    }
+
+    afterEach(() => {
+      delete process.env.APES_ASYNC_EXIT_CODE
+    })
+
+    it('default: throws CliExit(75) = EX_TEMPFAIL', async () => {
+      await driveAsyncExit(75)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=0 restores legacy exit-0 behaviour', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '0'
+      await driveAsyncExit(0)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=2 respects a custom numeric override', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '2'
+      await driveAsyncExit(2)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=255 accepts the maximum POSIX exit code', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '255'
+      await driveAsyncExit(255)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=256 (out of range) falls back to 75', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '256'
+      await driveAsyncExit(75)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=-1 (negative) falls back to 75', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '-1'
+      await driveAsyncExit(75)
+    })
+
+    it('APES_ASYNC_EXIT_CODE=not-a-number (bogus) falls back to 75', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = 'not-a-number'
+      await driveAsyncExit(75)
+    })
+
+    it('APES_ASYNC_EXIT_CODE empty string falls back to 75', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = ''
+      await driveAsyncExit(75)
+    })
+
+    it('config.toml defaults.async_exit_code override respected when env unset', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({ defaults: { async_exit_code: '42' } })
+      await driveAsyncExit(42)
+    })
+
+    it('APES_ASYNC_EXIT_CODE env wins over config.toml async_exit_code', async () => {
+      const { loadConfig } = await import('../src/config.js')
+      vi.mocked(loadConfig).mockReturnValue({ defaults: { async_exit_code: '42' } })
+      process.env.APES_ASYNC_EXIT_CODE = '7'
+      await driveAsyncExit(7)
+    })
+
+    it('--wait mode is unaffected — returns 0 on successful exec even with APES_ASYNC_EXIT_CODE=99', async () => {
+      process.env.APES_ASYNC_EXIT_CODE = '99'
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ id: 'sync-test', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+        .mockResolvedValueOnce({ authz_jwt: 'jwt-sync' } as any)
+
+      const { execFileSync } = await import('node:child_process')
+      vi.mocked(execFileSync).mockReturnValue(Buffer.from(''))
+
+      const { runCommand } = await import('../src/commands/run.js')
+      // --wait mode: runCommand.run returns normally (no CliExit thrown)
+      // because the blocking path runs execFileSync to completion and the
+      // async exit code is never consulted.
+      await runCommand.run!({
+        rawArgs: ['run', 'escapes', 'mount-nfs', '--wait'],
+        args: { shell: false, wait: true, approval: 'once', 'escapes-path': 'escapes' } as any,
+      } as any)
+
+      expect(execFileSync).toHaveBeenCalled()
     })
   })
 })
