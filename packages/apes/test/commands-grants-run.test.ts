@@ -19,6 +19,15 @@ vi.mock('../src/shapes/index.js', () => ({
   fetchGrantToken: vi.fn(),
   verifyAndExecute: vi.fn(),
 }))
+vi.mock('../src/grant-poll.js', () => ({
+  // Mock the entire grant-poll module so the --wait tests can control
+  // the polling outcome deterministically instead of actually polling
+  // against a fake IdP. The real helper lives in src/grant-poll.ts and
+  // has its own unit tests elsewhere.
+  pollGrantUntilResolved: vi.fn(),
+  getPollIntervalSeconds: vi.fn(() => 10),
+  getPollMaxMinutes: vi.fn(() => 5),
+}))
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }))
@@ -203,5 +212,150 @@ describe('apes grants run <id>', () => {
     } as any)
 
     await expectCliError(invoke('grant-weird'), 'unsupported audience')
+  })
+
+  // --------------------------------------------------------------------
+  // --wait flag — CLI-side polling loop that keeps the subprocess alive
+  // until the grant resolves. This is the pattern 0.10.1 agent-mode text
+  // recommends: one tool call, the CLI handles the wait, the agent only
+  // sees the final state.
+  // --------------------------------------------------------------------
+  describe('--wait flag', () => {
+    function pendingGrant(id: string) {
+      return {
+        id,
+        type: 'cli',
+        status: 'pending',
+        requester: 'alice@example.com',
+        owner: 'alice@example.com',
+        request: {
+          command: ['curl', 'https://example.com'],
+          audience: 'shapes',
+          authorization_details: [{ type: 'openape_cli' }],
+          execution_context: { adapter_digest: 'sha-local' },
+        },
+      }
+    }
+
+    function approvedGrant(id: string) {
+      return { ...pendingGrant(id), status: 'approved' }
+    }
+
+    it('without --wait: pending grant still errors immediately (regression guard)', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+      vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-pending') as any)
+
+      await expectCliError(invoke('grant-pending'), /still pending.*grant-approval/)
+      // pollGrantUntilResolved must NOT have been called without --wait
+      expect(pollGrantUntilResolved).not.toHaveBeenCalled()
+    })
+
+    it('with --wait: pending → poll → approved → dispatch shapes grant', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+      const { resolveFromGrant, fetchGrantToken, verifyAndExecute } = await import('../src/shapes/index.js')
+
+      // First fetch: pending. Second fetch (after poll): approved.
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce(pendingGrant('grant-wait-1') as any)
+        .mockResolvedValueOnce(approvedGrant('grant-wait-1') as any)
+
+      vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'approved' })
+      vi.mocked(resolveFromGrant).mockResolvedValueOnce({ executable: 'curl' } as any)
+      vi.mocked(fetchGrantToken).mockResolvedValueOnce('jwt-tok')
+      vi.mocked(verifyAndExecute).mockResolvedValueOnce(undefined)
+
+      await invoke('grant-wait-1', { wait: true })
+
+      expect(pollGrantUntilResolved).toHaveBeenCalledWith('http://idp.test', 'grant-wait-1')
+      expect(verifyAndExecute).toHaveBeenCalledWith('jwt-tok', { executable: 'curl' })
+    })
+
+    it('with --wait: pending → poll → denied → CliError', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+      const { verifyAndExecute } = await import('../src/shapes/index.js')
+
+      vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-denied') as any)
+      vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'terminal', status: 'denied' })
+
+      await expectCliError(invoke('grant-wait-denied', { wait: true }), /resolved to denied/)
+      expect(verifyAndExecute).not.toHaveBeenCalled()
+    })
+
+    it('with --wait: pending → poll → revoked → CliError', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+      const { verifyAndExecute } = await import('../src/shapes/index.js')
+
+      vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-revoked') as any)
+      vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'terminal', status: 'revoked' })
+
+      await expectCliError(invoke('grant-wait-revoked', { wait: true }), /resolved to revoked/)
+      expect(verifyAndExecute).not.toHaveBeenCalled()
+    })
+
+    it('with --wait: pending → poll → timeout → CliError mentioning max minutes', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved, getPollMaxMinutes } = await import('../src/grant-poll.js')
+      const { verifyAndExecute } = await import('../src/shapes/index.js')
+
+      vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-timeout') as any)
+      vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'timeout' })
+      vi.mocked(getPollMaxMinutes).mockReturnValue(5)
+
+      await expectCliError(invoke('grant-wait-timeout', { wait: true }), /timed out after 5 minutes/)
+      expect(verifyAndExecute).not.toHaveBeenCalled()
+    })
+
+    it('with --wait: already-approved grant dispatches immediately, no poll', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+      const { resolveFromGrant, fetchGrantToken, verifyAndExecute } = await import('../src/shapes/index.js')
+
+      vi.mocked(apiFetch).mockResolvedValueOnce(approvedGrant('grant-already-approved') as any)
+      vi.mocked(resolveFromGrant).mockResolvedValueOnce({ executable: 'curl' } as any)
+      vi.mocked(fetchGrantToken).mockResolvedValueOnce('jwt-tok')
+      vi.mocked(verifyAndExecute).mockResolvedValueOnce(undefined)
+
+      await invoke('grant-already-approved', { wait: true })
+
+      // --wait is harmless on an already-approved grant: it only triggers
+      // the poll loop on pending status, not on approved.
+      expect(pollGrantUntilResolved).not.toHaveBeenCalled()
+      expect(verifyAndExecute).toHaveBeenCalled()
+    })
+
+    it('with --wait: pending → approved → dispatch escapes audience', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
+
+      const pending = {
+        id: 'grant-esc',
+        type: 'cli',
+        status: 'pending',
+        requester: 'a',
+        owner: 'a',
+        request: { audience: 'escapes', command: ['mount-nfs'], authorization_details: [] },
+      }
+      const approved = { ...pending, status: 'approved' }
+
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce(pending as any) // initial fetch
+        .mockResolvedValueOnce(approved as any) // re-fetch after poll
+        .mockResolvedValueOnce({ authz_jwt: 'jwt-esc' } as any) // token
+
+      vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'approved' })
+
+      await invoke('grant-esc', { wait: true })
+
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalledWith(
+        'escapes',
+        ['--grant', 'jwt-esc', '--', 'mount-nfs'],
+        expect.objectContaining({ stdio: 'inherit' }),
+      )
+    })
   })
 })
