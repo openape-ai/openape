@@ -12,7 +12,12 @@ import { CliError } from '../../errors'
 import { resolveLoginInputs } from './resolve-login'
 
 const CALLBACK_PORT = 9876
-const CLIENT_ID = 'grapes-cli'
+// OAuth client ID registered with IdPs. Historically `grapes-cli`;
+// renamed to `apes-cli` as part of the apes/escapes naming alignment.
+// IdP operators must register this client id (free-idp already does;
+// third-party IdPs need a coordinated rollout with a transitional
+// period accepting both).
+const CLIENT_ID = 'apes-cli'
 
 export const loginCommand = defineCommand({
   meta: {

@@ -56,6 +56,56 @@ describe('requestGrantForShellLine', () => {
     expect(result).toEqual({ kind: 'denied', reason: expect.stringContaining('Not logged in') })
   })
 
+  it('rejects `sudo <cmd>` with a hint to use `apes run --as root -- <cmd>`', async () => {
+    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'sudo', argv: ['apt', 'install', 'ffmpeg'], isCompound: false, raw: 'sudo apt install ffmpeg' })
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('sudo apt install ffmpeg', { targetHost: 'host.test' })
+
+    expect(result).toEqual({
+      kind: 'denied',
+      reason: expect.stringContaining('apes run --as root -- apt install ffmpeg'),
+    })
+    // Must short-circuit before any adapter work.
+    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+  })
+
+  it('rejects bare `sudo` with a generic hint', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'sudo', argv: [], isCompound: false, raw: 'sudo' })
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('sudo', { targetHost: 'host.test' })
+
+    expect(result).toEqual({
+      kind: 'denied',
+      reason: expect.stringContaining('apes run --as root -- <cmd>'),
+    })
+  })
+
+  it('does not short-circuit `sudo` when the leading token is not sudo', async () => {
+    // We only short-circuit the simple leading-`sudo` case which is the
+    // agent footgun we care about. Compound lines and lines where sudo
+    // appears later fall through to the generic session-grant path so
+    // the REPL can still negotiate a grant and bash surfaces the real
+    // error. Set up a minimal session-grant mock chain and assert the
+    // result is approved via the session path, not denied with our sudo
+    // message.
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'echo', argv: ['foo', '|', 'sudo', 'tee'], isCompound: true, raw: 'echo foo | sudo tee /etc/x' })
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({ data: [] } as any)
+      .mockResolvedValueOnce({ id: 'fallthrough-grant', status: 'pending' } as any)
+      .mockResolvedValueOnce({ status: 'approved' } as any)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('echo foo | sudo tee /etc/x', { targetHost: 'host.test' })
+
+    expect(result).toEqual({ kind: 'approved', grantId: 'fallthrough-grant', mode: 'session' })
+  })
+
   it('reuses an existing adapter grant when findExistingGrant returns one', async () => {
     const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, fetchGrantToken, verifyAndConsume, createShapesGrant } = await import('../src/shapes/index.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['-la'], isCompound: false, raw: 'ls -la' })
