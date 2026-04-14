@@ -415,22 +415,31 @@ describe('commands/run async default', () => {
       delete process.env.APES_GRANT_POLL_MAX_MINUTES
     })
 
-    it('default (no env, no config): agent mode with polling protocol', async () => {
+    it('default (no env, no config): agent mode with "call --wait" instruction', async () => {
       await driveRun()
 
       const out = collectedLog()
       const success = collectedSuccess()
 
       expect(success).toContain('Grant grant-mode-test created (pending approval)')
-      expect(out).toContain('For agents: poll `apes grants status grant-mode-test --json` every 10s')
+      // Core instruction: call `apes grants run <id> --wait`, CLI handles polling.
+      expect(out).toContain('For agents:')
+      expect(out).toContain('apes grants run grant-mode-test --wait')
       expect(out).toContain('up to 5 minutes')
-      expect(out).toContain('apes grants run grant-mode-test')
+      // Exit 75 explanation is critical so agent frameworks don't abort.
+      expect(out).toContain('exit code 75')
+      expect(out).toContain('EX_TEMPFAIL')
       // Must NOT include the human-mode label wording
       expect(out).not.toContain('Approve in browser:')
       expect(out).not.toContain('Run after approval:')
+      // The old "poll every 10s" instruction must NOT leak through — it
+      // was replaced by the CLI-side --wait pattern and agent frameworks
+      // should not see a mix of both.
+      expect(out).not.toContain('poll `apes grants status')
+      expect(out).not.toContain('every 10s')
     })
 
-    it('APES_USER=human: short block, no polling protocol', async () => {
+    it('APES_USER=human: short block, no agent protocol', async () => {
       process.env.APES_USER = 'human'
       await driveRun()
 
@@ -443,8 +452,8 @@ describe('commands/run async default', () => {
       expect(out).toContain('Run after approval:')
       // Agent-only blocks must NOT appear in human mode
       expect(out).not.toContain('For agents:')
-      expect(out).not.toContain('every 10s')
-      expect(out).not.toContain('If .status is')
+      expect(out).not.toContain('--wait')
+      expect(out).not.toContain('EX_TEMPFAIL')
     })
 
     it('APES_USER=agent: same as default', async () => {
@@ -453,7 +462,7 @@ describe('commands/run async default', () => {
 
       const out = collectedLog()
       expect(out).toContain('For agents:')
-      expect(out).toContain('every 10s')
+      expect(out).toContain('apes grants run grant-mode-test --wait')
     })
 
     it('APES_USER=invalid: falls back to agent default', async () => {
@@ -486,13 +495,19 @@ describe('commands/run async default', () => {
       expect(out).not.toContain('Approve in browser:')
     })
 
-    it('APES_GRANT_POLL_INTERVAL=30 flows into the agent text', async () => {
+    it('APES_GRANT_POLL_INTERVAL no longer leaks into the agent text', async () => {
+      // 0.10.1: the poll interval is now an internal CLI detail — `apes
+      // grants run --wait` polls at APES_GRANT_POLL_INTERVAL internally,
+      // and the agent text no longer mentions it. Regression guard that
+      // setting the env var does NOT produce any "every Xs" string.
       process.env.APES_GRANT_POLL_INTERVAL = '30'
       await driveRun()
 
       const out = collectedLog()
-      expect(out).toContain('every 30s')
-      // Default max still 5 minutes
+      expect(out).not.toContain('every 30s')
+      expect(out).not.toContain('every 10s')
+      // Default max still 5 minutes; the max IS still surfaced because
+      // it informs the user how long they have to approve.
       expect(out).toContain('up to 5 minutes')
     })
 
@@ -501,43 +516,39 @@ describe('commands/run async default', () => {
       await driveRun()
 
       const out = collectedLog()
-      expect(out).toContain('every 10s')
       expect(out).toContain('up to 10 minutes')
+      expect(out).not.toContain('up to 5 minutes')
     })
 
-    it('config fallback for poll interval when env unset', async () => {
+    it('config fallback for grant_poll_max_minutes when env unset', async () => {
       const { loadConfig } = await import('../src/config.js')
       vi.mocked(loadConfig).mockReturnValue({
-        defaults: { grant_poll_interval_seconds: '20', grant_poll_max_minutes: '15' },
+        defaults: { grant_poll_max_minutes: '15' },
       })
       await driveRun()
 
       const out = collectedLog()
-      expect(out).toContain('every 20s')
       expect(out).toContain('up to 15 minutes')
     })
 
-    it('env wins over config for numeric knobs', async () => {
+    it('env wins over config for max minutes', async () => {
       const { loadConfig } = await import('../src/config.js')
       vi.mocked(loadConfig).mockReturnValue({
-        defaults: { grant_poll_interval_seconds: '20', grant_poll_max_minutes: '15' },
+        defaults: { grant_poll_max_minutes: '15' },
       })
-      process.env.APES_GRANT_POLL_INTERVAL = '30'
       process.env.APES_GRANT_POLL_MAX_MINUTES = '10'
       await driveRun()
 
       const out = collectedLog()
-      expect(out).toContain('every 30s')
       expect(out).toContain('up to 10 minutes')
+      expect(out).not.toContain('up to 15 minutes')
     })
 
-    it('bogus env values are ignored, defaults apply', async () => {
-      process.env.APES_GRANT_POLL_INTERVAL = 'not-a-number'
+    it('bogus max-minutes env values are ignored, default 5 applies', async () => {
       process.env.APES_GRANT_POLL_MAX_MINUTES = '-5'
       await driveRun()
 
       const out = collectedLog()
-      expect(out).toContain('every 10s')
       expect(out).toContain('up to 5 minutes')
     })
   })
