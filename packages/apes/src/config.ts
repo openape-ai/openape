@@ -32,6 +32,14 @@ export interface ApesConfig {
      * instructions. Default 5. Env var `APES_GRANT_POLL_MAX_MINUTES` wins.
      */
     grant_poll_max_minutes?: string
+    /**
+     * Exit code emitted by `apes run` / `ape-shell -c` when the async
+     * default path creates a pending grant. Default `75` (`EX_TEMPFAIL`
+     * from sysexits.h — "temporary failure, retry later"). Set to `0`
+     * to restore the pre-0.10.0 exit-0 behaviour. Env var
+     * `APES_ASYNC_EXIT_CODE` wins. Valid range 0–255.
+     */
+    async_exit_code?: string
   }
   agent?: {
     key?: string
