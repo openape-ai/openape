@@ -18,6 +18,7 @@ import {
 } from '../shapes/index.js'
 import consola from 'consola'
 import { getIdpUrl, loadAuth, loadConfig } from '../config'
+import { getPollMaxMinutes } from '../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
@@ -55,41 +56,10 @@ function getUserMode(): ApesUserMode {
   return 'agent'
 }
 
-/** Poll interval (seconds) embedded in the agent-mode instructions. */
-function getPollIntervalSeconds(): number {
-  const envValue = process.env.APES_GRANT_POLL_INTERVAL
-  if (envValue) {
-    const n = Number(envValue)
-    if (Number.isFinite(n) && n > 0)
-      return Math.floor(n)
-  }
-  const cfg = loadConfig()
-  const cfgValue = cfg.defaults?.grant_poll_interval_seconds
-  if (cfgValue) {
-    const n = Number(cfgValue)
-    if (Number.isFinite(n) && n > 0)
-      return Math.floor(n)
-  }
-  return 10
-}
-
-/** Poll max minutes embedded in the agent-mode instructions. */
-function getPollMaxMinutes(): number {
-  const envValue = process.env.APES_GRANT_POLL_MAX_MINUTES
-  if (envValue) {
-    const n = Number(envValue)
-    if (Number.isFinite(n) && n > 0)
-      return Math.floor(n)
-  }
-  const cfg = loadConfig()
-  const cfgValue = cfg.defaults?.grant_poll_max_minutes
-  if (cfgValue) {
-    const n = Number(cfgValue)
-    if (Number.isFinite(n) && n > 0)
-      return Math.floor(n)
-  }
-  return 5
-}
+// Poll interval + max-minutes helpers live in `../grant-poll.ts` so they
+// are shared with the CLI-side wait loop in `commands/grants/run.ts --wait`.
+// See that module for the full rationale; in this file we only need the
+// max-minutes value for the agent-facing text block.
 
 /**
  * Exit code for the async-default pending-grant path.
@@ -170,17 +140,25 @@ function printPendingGrantInfo(grant: { id: string }, idp: string): void {
   }
 
   // agent mode (default)
-  const pollSec = getPollIntervalSeconds()
   const maxMin = getPollMaxMinutes()
   consola.success(`Grant ${grant.id} created (pending approval)`)
   console.log(`  Approve:   ${approveUrl}`)
   console.log(`  Status:    ${statusCmd} [--json]`)
-  console.log(`  Execute:   ${executeCmd}`)
+  console.log(`  Execute:   ${executeCmd} --wait`)
   console.log('')
-  console.log(`  For agents: poll \`${statusCmd} --json\` every ${pollSec}s, wait up to ${maxMin} minutes.`)
-  console.log(`  When .status == "approved", run \`${executeCmd}\` to execute.`)
-  console.log(`  On "denied" or "revoked", stop and report to the user.`)
-  console.log(`  On timeout, stop and notify the user that approval has not happened.`)
+  console.log('  For agents:')
+  console.log(`    1. Tell the user about the pending grant and the approve URL above.`)
+  console.log(`    2. Run \`${executeCmd} --wait\`. This blocks up to ${maxMin} minutes`)
+  console.log(`       until the user approves (or denies/timeout) and then executes`)
+  console.log(`       the command in a single step. The CLI handles the polling loop`)
+  console.log(`       internally — you do not need to poll the status yourself.`)
+  console.log(`    3. Exit 0 means approved + executed; stdout is the command output.`)
+  console.log(`       Exit 75 (pending) only appears if you accidentally call this`)
+  console.log(`       without --wait. Any other non-zero exit means denied, revoked,`)
+  console.log(`       used, or timeout — report the reason to the user.`)
+  console.log('')
+  console.log('  Note: exit code 75 (EX_TEMPFAIL) from this command means "pending,')
+  console.log('  retry later" — do not abort your workflow, follow the steps above.')
   console.log('')
   console.log('  Tip: Approve as "timed" or "always" in the browser to let this')
   console.log('  grant be reused on subsequent invocations without re-approval.')
