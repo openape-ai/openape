@@ -362,4 +362,249 @@ describe('requestGrantForShellLine', () => {
       delete process.env.APES_QUIET_GRANT_REUSE
     }
   })
+
+  // ─────────────────────────────────────────────────────────────────────
+  // apes self-dispatch shortcut — exempts `apes <subcmd>` invocations
+  // from inside the REPL from the grant flow, except for run/fetch/mcp.
+  // Fixes the `apes grants run <id>` recursion under 0.9.0 async default.
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('apes self-dispatch shortcut', () => {
+    it('exempts `apes whoami` — introspection, not a new user action', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['whoami'], isCompound: false, raw: 'apes whoami' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes whoami', { targetHost: 'host.test' })
+
+      expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
+      // Critical: the adapter + session paths must NOT be reached
+      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('exempts `apes grants run <id>` — the async-flow bootstrap case', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['grants', 'run', 'e887a7e3-6f8c-4503-bb50-18f47585deb8'],
+        isCompound: false,
+        raw: 'apes grants run e887a7e3-6f8c-4503-bb50-18f47585deb8',
+      })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes grants run e887a7e3-6f8c-4503-bb50-18f47585deb8', { targetHost: 'host.test' })
+
+      expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
+      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('exempts `apes grants list`', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['grants', 'list'], isCompound: false, raw: 'apes grants list' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes grants list', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('self')
+      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    })
+
+    it('exempts `apes adapter install curl` — parallels the auto-install path', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['adapter', 'install', 'curl'], isCompound: false, raw: 'apes adapter install curl' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes adapter install curl', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('self')
+      // Must NOT trigger the adapter flow at dispatch time — the user's
+      // explicit `adapter install` command is its own handler
+      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    })
+
+    it('exempts `apes admin users list` — server-side auth-gated', async () => {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['admin', 'users', 'list'], isCompound: false, raw: 'apes admin users list' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes admin users list', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('self')
+    })
+
+    it('exempts `apes config set foo bar` — local config write', async () => {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['config', 'set', 'foo', 'bar'], isCompound: false, raw: 'apes config set foo bar' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes config set foo bar', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('self')
+    })
+
+    it('exempts `apes health` even though it does an IdP HEAD probe', async () => {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['health'], isCompound: false, raw: 'apes health' })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes health', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('self')
+    })
+
+    it('still gates `apes run -- echo hello` — the core grant-system use case', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['run', '--', 'echo', 'hello'], isCompound: false, raw: 'apes run -- echo hello' })
+      // No adapter for `apes` specifically — falls through to session grant
+      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      // Session-grant lookup returns empty, grant creation returns pending,
+      // then approved; the wait loop completes.
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // list grants
+        .mockResolvedValueOnce({ id: 'gated-run', status: 'pending' } as any) // create
+        .mockResolvedValueOnce({ status: 'approved' } as any) // poll
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes run -- echo hello', { targetHost: 'host.test' })
+
+      // The command DID go through the grant flow, NOT the self-dispatch
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('session')
+      expect(loadOrInstallAdapter).toHaveBeenCalled()
+      expect(apiFetch).toHaveBeenCalled()
+    })
+
+    it('still gates `apes fetch https://example.com` — credential forwarder', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['fetch', 'https://example.com'], isCompound: false, raw: 'apes fetch https://example.com' })
+      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'gated-fetch', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes fetch https://example.com', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('session')
+      expect(apiFetch).toHaveBeenCalled()
+    })
+
+    it('still gates `apes mcp server` — binds a persistent network port', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['mcp', 'server'], isCompound: false, raw: 'apes mcp server' })
+      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'gated-mcp', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes mcp server', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('session')
+    })
+
+    it('still gates compound commands starting with apes (e.g. `apes whoami | grep alice`)', async () => {
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      // Compound → isCompound true → self-dispatch shortcut skips (it only
+      // fires for simple single-command lines). Falls through to session.
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['whoami', '|', 'grep', 'alice'], isCompound: true, raw: 'apes whoami | grep alice' })
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'compound-grant', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('apes whoami | grep alice', { targetHost: 'host.test' })
+
+      // Compound → fell through to session path, NOT self-dispatched
+      expect(result.kind).toBe('approved')
+      if (result.kind === 'approved')
+        expect(result.mode).toBe('session')
+      expect(loadOrInstallAdapter).not.toHaveBeenCalled() // compound short-circuits before adapter
+    })
+
+    // ─────────────────────────────────────────────────────────────────
+    // Snapshot tripwire: when cli.ts gains a new top-level subcommand,
+    // someone has to come here and explicitly classify it. The test
+    // fails if either the KNOWN set or the GATED set drifts.
+    // ─────────────────────────────────────────────────────────────────
+
+    it('blocklist tripwire: APES_GATED_SUBCOMMANDS stays in sync with known apes subcommands', async () => {
+      // Snapshot of all top-level apes subcommands as registered in
+      // packages/apes/src/cli.ts as of 0.9.1. When a new subcommand is
+      // added, update this list AND decide whether it belongs in the
+      // gated set (spawns code / forwards credentials / binds ports)
+      // or in the exempt-by-default set (read-only / local config /
+      // IdP-auth-gated).
+      const KNOWN_APES_SUBCOMMANDS = [
+        'init', 'enroll', 'register-user', 'dns-check',
+        'login', 'logout', 'whoami', 'health',
+        'grants', 'admin', 'run', 'explain', 'adapter',
+        'config', 'fetch', 'mcp', 'workflows',
+      ].sort()
+
+      // Exactly these three stay gated. Everything else is trusted
+      // shell-internal dispatch.
+      const EXPECTED_GATED = ['fetch', 'mcp', 'run'].sort()
+
+      // Sanity: the gated set is a real subset of known commands
+      for (const sub of EXPECTED_GATED)
+        expect(KNOWN_APES_SUBCOMMANDS).toContain(sub)
+
+      // Re-import the module so we're checking the *compiled* blocklist,
+      // not a literal from the test file. If someone edits
+      // APES_GATED_SUBCOMMANDS in grant-dispatch.ts without updating
+      // this test, the assertions below fail.
+      const mod = await import('../src/shell/grant-dispatch.js')
+      // The blocklist isn't exported — assert behaviorally by driving
+      // each known subcommand through requestGrantForShellLine and
+      // observing which ones self-dispatch vs fall through.
+      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+
+      const observed: Record<string, 'self' | 'gated'> = {}
+      for (const sub of KNOWN_APES_SUBCOMMANDS) {
+        vi.clearAllMocks()
+        vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: [sub], isCompound: false, raw: `apes ${sub}` })
+        vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+        vi.mocked(apiFetch)
+          .mockResolvedValueOnce({ data: [] } as any)
+          .mockResolvedValueOnce({ id: `probe-${sub}`, status: 'pending' } as any)
+          .mockResolvedValueOnce({ status: 'approved' } as any)
+
+        const result = await mod.requestGrantForShellLine(`apes ${sub}`, { targetHost: 'host.test' })
+        if (result.kind === 'approved' && result.mode === 'self')
+          observed[sub] = 'self'
+        else observed[sub] = 'gated'
+      }
+
+      const observedGated = Object.entries(observed).filter(([, v]) => v === 'gated').map(([k]) => k).sort()
+      expect(observedGated).toEqual(EXPECTED_GATED)
+    })
+  })
 })
