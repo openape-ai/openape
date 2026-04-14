@@ -31,7 +31,7 @@ export class ShellSession {
   logLineGranted(params: {
     line: string
     grantId: string
-    grantMode: 'adapter' | 'session'
+    grantMode: 'adapter' | 'session' | 'self'
   }): number {
     const seq = ++this.lineSeq
     appendAuditLog({
