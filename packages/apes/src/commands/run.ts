@@ -21,6 +21,7 @@ import { getIdpUrl, loadAuth, loadConfig } from '../config'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
+import { isApesSelfDispatch } from '../shell/apes-self-dispatch'
 
 /**
  * Returns true when the caller asked for the legacy blocking path via
@@ -230,6 +231,24 @@ async function runShellMode(
   if (!idp)
     throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
 
+  // --- 0. apes self-dispatch shortcut (pre-adapter) ---
+  // If `ape-shell -c "apes <subcmd>"` was rewritten into this shell-mode
+  // invocation, the inner command is a trusted apes self-call and should
+  // bypass the grant flow entirely. Same trust-root reasoning as the
+  // interactive REPL path in `shell/grant-dispatch.ts` — see
+  // `shell/apes-self-dispatch.ts` for the full rationale. Without this,
+  // polling flows like openclaw's `ape-shell -c "apes grants status <id>"`
+  // cascade infinitely: every poll creates a new pending grant, every
+  // grant needs approval, turtles all the way down.
+  const innerLine = extractShellCommandString(command)
+  if (innerLine) {
+    const parsedInner = parseShellCommand(innerLine)
+    if (isApesSelfDispatch(parsedInner)) {
+      execShellCommand(command)
+      return
+    }
+  }
+
   // Try to handle this command via the shapes adapter system first.
   // This gives us structured grants with resource chains (e.g. "rm file:/tmp/foo.txt")
   // instead of opaque "bash -c …" grants.
@@ -401,12 +420,26 @@ async function tryAdapterModeFromShell(
   return true
 }
 
-/** Execute a shell command as [shell, '-c', command_string] via execFileSync */
+/**
+ * Execute a shell command as [shell, '-c', command_string] via execFileSync.
+ *
+ * Strips `APES_SHELL_WRAPPER` from the env so any nested `apes` process
+ * spawned by the bash child runs in normal citty-dispatch mode instead
+ * of self-detecting as ape-shell and rejecting its argv. This mirrors
+ * the pty-bridge.ts fix from 0.8.0 (Finding 4) for the one-shot path —
+ * openclaw's polling flow `ape-shell -c "apes grants status <id>"` would
+ * hit this leak on the nested `apes` call inside bash, manifesting as
+ * "ape-shell: unsupported invocation" and breaking the async-grant loop.
+ */
 function execShellCommand(command: string[]): void {
   if (command.length === 0)
     throw new CliError('No command to execute')
   try {
-    execFileSync(command[0]!, command.slice(1), { stdio: 'inherit' })
+    const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+    execFileSync(command[0]!, command.slice(1), {
+      stdio: 'inherit',
+      env: inheritedEnv,
+    })
   }
   catch (err: unknown) {
     const exitCode = (err as { status?: number }).status || 1
@@ -564,8 +597,13 @@ async function runAudienceMode(
   if (audience === 'escapes') {
     consola.info(`Executing: ${command.join(' ')}`)
     try {
+      // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside
+      // the escapes pipe don't self-detect as ape-shell mode. Same
+      // rationale as execShellCommand above.
+      const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
       execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', authz_jwt, '--', ...command], {
         stdio: 'inherit',
+        env: inheritedEnv,
       })
     }
     catch (err: unknown) {

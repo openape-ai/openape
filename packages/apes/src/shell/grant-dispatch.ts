@@ -13,6 +13,7 @@ import {
   verifyAndConsume,
   waitForGrantStatus,
 } from '../shapes/index.js'
+import { isApesSelfDispatch } from './apes-self-dispatch.js'
 
 /**
  * Result of attempting to obtain a grant for a shell line. On success the
@@ -28,28 +29,10 @@ export type GrantLineResult =
   | { kind: 'approved', grantId: string, mode: 'adapter' | 'session' | 'self' }
   | { kind: 'denied', reason: string }
 
-/**
- * Subset of `apes` subcommands that the REPL still routes through the
- * normal grant flow, even after the self-dispatch shortcut below. These
- * are the three categories where the shell-grant layer adds real security
- * value that isn't duplicated by server-side auth gates or local-only
- * config-file semantics:
- *
- *   - `run`   — spawns arbitrary executables, the core of the grant system
- *   - `fetch` — forwards the bearer token to a user-specified URL
- *   - `mcp`   — binds a network port and serves a persistent API
- *
- * Every other `apes <subcmd>` either reads state, mutates the user's own
- * local config, or talks to the IdP through endpoints that are already
- * scoped by the auth token — so gating them in the shell is redundant
- * friction, and breaks `apes grants run <id>` recursively once 0.9.0's
- * async-default grant flow is in play.
- *
- * Keep this list in sync with the blocklist snapshot test in
- * `shell-grant-dispatch.test.ts` — that test is the tripwire that forces
- * a review decision whenever a new top-level apes subcommand is added.
- */
-const APES_GATED_SUBCOMMANDS = new Set(['run', 'fetch', 'mcp'])
+// The APES_GATED_SUBCOMMANDS blocklist + `isApesSelfDispatch` helper
+// live in `./apes-self-dispatch.ts` so the same rule is shared with the
+// one-shot `ape-shell -c` path in `commands/run.ts runShellMode`. See
+// that module for the full rationale.
 
 /**
  * Options the orchestrator passes to `requestGrantForShellLine`. They
@@ -98,24 +81,10 @@ export async function requestGrantForShellLine(
   // --- 0. apes self-dispatch shortcut ---
   // `apes <subcmd>` invocations from inside the ape-shell REPL are the
   // shell's own control surface — not a new user-authored action that
-  // needs approval. The REPL is already authenticated as an apes agent;
-  // its subcommands either talk to IdP endpoints that are scoped by the
-  // same auth token (grants, admin, register-user, ...), mutate local
-  // config files in the user's own $HOME (login, logout, config,
-  // adapter, enroll, init), or are strictly read-only (whoami, health,
-  // explain, dns-check, workflows). Gating them in the shell is
-  // redundant friction and, more importantly, makes `apes grants run
-  // <id>` recursively unusable under the 0.9.0 async-default grant
-  // flow. Only the three genuinely-dangerous subcommands in
-  // APES_GATED_SUBCOMMANDS (run/fetch/mcp) stay on the grant path.
-  if (parsed && !parsed.isCompound) {
-    const invokedName = basename(parsed.executable)
-    if (invokedName === 'apes' || invokedName === 'apes.js') {
-      const subCommand = parsed.argv[0]
-      if (subCommand && !APES_GATED_SUBCOMMANDS.has(subCommand)) {
-        return { kind: 'approved', grantId: 'shell-internal', mode: 'self' }
-      }
-    }
+  // needs approval. See `apes-self-dispatch.ts` for the full rationale.
+  // Only `run`, `fetch`, `mcp` remain on the grant path.
+  if (isApesSelfDispatch(parsed)) {
+    return { kind: 'approved', grantId: 'shell-internal', mode: 'self' }
   }
 
   // --- 1. Adapter path ---
