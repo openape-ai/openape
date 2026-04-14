@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import consola from 'consola'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Isolate HOME so config.ts and resolveLoginInputs see an empty world by default.
@@ -167,11 +168,30 @@ describe('resolveLoginInputs', () => {
 
   it('GRAPES_IDP is honored as a fallback alias for APES_IDP', async () => {
     process.env.GRAPES_IDP = 'https://grapes-idp.example.test'
+    const warnSpy = vi.spyOn(consola, 'warn').mockImplementation(() => {})
 
     const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
     const result = await resolveLoginInputs({})
 
     expect(result.idp).toBe('https://grapes-idp.example.test')
+    // Deprecation hint must fire when the fallback is actually used.
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/GRAPES_IDP is deprecated/)
+    warnSpy.mockRestore()
+  })
+
+  it('APES_IDP wins over GRAPES_IDP and emits a duplicate warning', async () => {
+    process.env.APES_IDP = 'https://apes-idp.example.test'
+    process.env.GRAPES_IDP = 'https://grapes-idp.example.test'
+    const warnSpy = vi.spyOn(consola, 'warn').mockImplementation(() => {})
+
+    const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
+    const result = await resolveLoginInputs({})
+
+    expect(result.idp).toBe('https://apes-idp.example.test')
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0]?.[0]).toMatch(/Both APES_IDP and GRAPES_IDP/)
+    warnSpy.mockRestore()
   })
 })
 
