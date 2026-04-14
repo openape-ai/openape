@@ -87,6 +87,25 @@ export async function requestGrantForShellLine(
     return { kind: 'approved', grantId: 'shell-internal', mode: 'self' }
   }
 
+  // --- 0b. sudo reject ---
+  // `sudo` is not available inside ape-shell: the wrapper user is not in
+  // /etc/sudoers by design. Agents and humans should use the explicit
+  // `apes run --as root -- <cmd>` flow which routes through escapes and
+  // requires a fresh grant per invocation. We detect the literal `sudo`
+  // token at the line start (after trim) and return a denied result with
+  // a clear migration hint instead of silently handing the line to bash
+  // where it would fail with a less helpful error.
+  if (parsed && !parsed.isCompound && basename(parsed.executable) === 'sudo') {
+    const rest = parsed.argv.join(' ').trim()
+    const hint = rest.length > 0
+      ? `apes run --as root -- ${rest}`
+      : 'apes run --as root -- <cmd>'
+    return {
+      kind: 'denied',
+      reason: `sudo is not available in ape-shell. Use \`${hint}\` for privileged commands.`,
+    }
+  }
+
   // --- 1. Adapter path ---
   if (parsed && !parsed.isCompound) {
     try {
