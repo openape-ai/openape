@@ -13,7 +13,7 @@ import {
   verifyAndConsume,
   waitForGrantStatus,
 } from '../shapes/index.js'
-import { isApesSelfDispatch } from './apes-self-dispatch.js'
+import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
 
 /**
  * Result of attempting to obtain a grant for a shell line. On success the
@@ -88,22 +88,11 @@ export async function requestGrantForShellLine(
   }
 
   // --- 0b. sudo reject ---
-  // `sudo` is not available inside ape-shell: the wrapper user is not in
-  // /etc/sudoers by design. Agents and humans should use the explicit
-  // `apes run --as root -- <cmd>` flow which routes through escapes and
-  // requires a fresh grant per invocation. We detect the literal `sudo`
-  // token at the line start (after trim) and return a denied result with
-  // a clear migration hint instead of silently handing the line to bash
-  // where it would fail with a less helpful error.
-  if (parsed && !parsed.isCompound && basename(parsed.executable) === 'sudo') {
-    const rest = parsed.argv.join(' ').trim()
-    const hint = rest.length > 0
-      ? `apes run --as root -- ${rest}`
-      : 'apes run --as root -- <cmd>'
-    return {
-      kind: 'denied',
-      reason: `sudo is not available in ape-shell. Use \`${hint}\` for privileged commands.`,
-    }
+  // Shared logic lives in `apes-self-dispatch.ts` so the one-shot path
+  // in `commands/run.ts runShellMode` emits the same message.
+  const sudoRejection = checkSudoRejection(parsed)
+  if (sudoRejection) {
+    return { kind: 'denied', reason: sudoRejection.reason }
   }
 
   // --- 1. Adapter path ---

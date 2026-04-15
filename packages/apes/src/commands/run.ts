@@ -22,7 +22,7 @@ import { getPollMaxMinutes } from '../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
-import { isApesSelfDispatch } from '../shell/apes-self-dispatch'
+import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 
 /**
  * Returns true when the caller asked for the legacy blocking path via
@@ -268,6 +268,15 @@ async function runShellMode(
       execShellCommand(command)
       return
     }
+    // --- 0b. sudo reject ---
+    // Parallels the REPL path in `shell/grant-dispatch.ts`. Agents that
+    // habitually prefix commands with `sudo` inside `ape-shell -c "…"`
+    // would otherwise silently fall through to the generic session-grant
+    // path and ultimately hit a bash error with no guidance. Short-circuit
+    // with an explicit migration hint to `apes run --as root -- <cmd>`.
+    const sudoRejection = checkSudoRejection(parsedInner)
+    if (sudoRejection)
+      throw new CliError(sudoRejection.reason)
   }
 
   // Try to handle this command via the shapes adapter system first.

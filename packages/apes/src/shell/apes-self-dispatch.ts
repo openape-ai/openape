@@ -53,3 +53,41 @@ export function isApesSelfDispatch(parsed: ParsedShellCommand | null | undefined
     return false
   return !APES_GATED_SUBCOMMANDS.has(subCommand)
 }
+
+/**
+ * Result of checking a parsed shell command for a leading `sudo` token.
+ * The `reason` doubles as a ready-to-print error message so the REPL
+ * and one-shot paths emit byte-identical text.
+ */
+export interface SudoRejection {
+  reason: string
+}
+
+/**
+ * Returns a rejection hint if the parsed line is a simple, non-compound
+ * command whose leading executable is `sudo`. `sudo` is not available
+ * inside ape-shell (the wrapper user is not in /etc/sudoers by design),
+ * so agents and humans should use the explicit
+ * `apes run --as root -- <cmd>` flow which routes through the escapes
+ * setuid binary.
+ *
+ * Compound lines (pipes, &&, etc.) return null so the downstream
+ * session-grant path can still negotiate a grant and bash surfaces the
+ * real sudo error. We only short-circuit the leading-sudo case which is
+ * the agent footgun.
+ *
+ * Shared by both dispatch paths:
+ *   - Interactive REPL: `shell/grant-dispatch.ts` → `requestGrantForShellLine`
+ *   - One-shot `ape-shell -c`: `commands/run.ts` → `runShellMode`
+ */
+export function checkSudoRejection(parsed: ParsedShellCommand | null | undefined): SudoRejection | null {
+  if (!parsed || parsed.isCompound) return null
+  if (basename(parsed.executable) !== 'sudo') return null
+  const rest = parsed.argv.join(' ').trim()
+  const hint = rest.length > 0
+    ? `apes run --as root -- ${rest}`
+    : 'apes run --as root -- <cmd>'
+  return {
+    reason: `sudo is not available in ape-shell. Use \`${hint}\` for privileged commands.`,
+  }
+}
