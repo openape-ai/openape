@@ -338,32 +338,33 @@ function isExactCommand(detail) {
             </template>
           </UAlert>
 
-          <UAlert
+          <div
             v-if="hasWideningSuggestions && !hasSimilarGrants"
-            color="primary"
-            title="Approve scope"
+            class="rounded-lg border border-default p-4 space-y-3"
           >
-            <template #description>
-              <div class="text-sm space-y-3 mt-2">
-                <p class="text-muted">
-                  Choose how broad this grant should be. Conservative default is exact.
-                </p>
-                <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-1">
-                  <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
-                    For: <span class="font-mono text-xs break-all">{{ cliDetails[detailIdx].display }}</span>
-                  </p>
-                  <URadioGroup
-                    v-model="selectedWideningByIndex[detailIdx]"
-                    :items="suggestions.map((s, i) => ({
-                      label: s.label,
-                      value: String(i),
-                      description: s.permission,
-                    }))"
-                  />
-                </div>
-              </div>
-            </template>
-          </UAlert>
+            <div>
+              <h3 class="text-sm font-semibold">
+                Approve scope
+              </h3>
+              <p class="text-xs text-muted mt-1">
+                Choose how broad this grant should be. Conservative default is exact.
+              </p>
+            </div>
+            <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-2">
+              <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
+                For: <span class="font-mono break-all">{{ cliDetails[detailIdx].display }}</span>
+              </p>
+              <URadioGroup
+                v-model="selectedWideningByIndex[detailIdx]"
+                :items="suggestions.map((s, i) => ({
+                  label: s.label,
+                  value: String(i),
+                  description: s.permission,
+                }))"
+                :ui="{ description: 'font-mono text-xs break-all' }"
+              />
+            </div>
+          </div>
 
           <UAlert
             v-if="hasSimilarGrants"
