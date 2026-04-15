@@ -802,6 +802,88 @@ describe('commands/run async default', () => {
   })
 
   // ------------------------------------------------------------------------
+  // one-shot `ape-shell -c "sudo <cmd>"` sudo rejection.
+  //
+  // The REPL path in shell/grant-dispatch.ts already short-circuits leading
+  // sudo with a hint to `apes run --as root -- <cmd>`. The one-shot path
+  // through runShellMode in commands/run.ts — which is what openclaw's
+  // bash-tools.exec hits when it has SHELL=ape-shell — missed the check and
+  // fell through to the generic session-grant flow, producing an opaque
+  // "sudo: a password is required" error with no guidance.
+  //
+  // These tests lock the symmetric behavior in: `apes run --shell --
+  // bash -c "sudo <cmd>"` throws a CliError with the same hint the REPL
+  // produces.
+  // ------------------------------------------------------------------------
+  describe('runShellMode sudo rejection', () => {
+    async function driveShellModeExpectError(inner: string, pattern: RegExp) {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.extractShellCommandString).mockReturnValue(inner)
+      const { runCommand } = await import('../src/commands/run.js')
+      await expect(runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', inner],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any)).rejects.toThrow(pattern)
+    }
+
+    it('`ape-shell -c "sudo chown root:wheel /tmp/x"` throws with apes run --as root hint', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'sudo',
+        argv: ['chown', 'root:wheel', '/tmp/x'],
+        isCompound: false,
+        raw: 'sudo chown root:wheel /tmp/x',
+      } as any)
+
+      await driveShellModeExpectError(
+        'sudo chown root:wheel /tmp/x',
+        /apes run --as root -- chown root:wheel \/tmp\/x/,
+      )
+
+      // Must short-circuit before the adapter or session-grant path.
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+    })
+
+    it('`ape-shell -c "sudo"` (bare) throws with the generic hint', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'sudo',
+        argv: [],
+        isCompound: false,
+        raw: 'sudo',
+      } as any)
+
+      await driveShellModeExpectError('sudo', /apes run --as root -- <cmd>/)
+    })
+
+    it('`ape-shell -c "echo foo | sudo tee /etc/x"` (compound) does NOT short-circuit', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.extractShellCommandString).mockReturnValue('echo foo | sudo tee /etc/x')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'echo',
+        argv: ['foo', '|', 'sudo', 'tee', '/etc/x'],
+        isCompound: true,
+        raw: 'echo foo | sudo tee /etc/x',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'compound-sudo-grant', status: 'pending' } as any)
+
+      // Compound lines fall through to the normal session-grant path.
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'echo foo | sudo tee /etc/x'],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any), 75)
+
+      expect(apiFetch).toHaveBeenCalled()
+    })
+  })
+
+  // ------------------------------------------------------------------------
   // execShellCommand env strip — mirrors the Finding 4 fix from pty-bridge.ts
   // for the one-shot `ape-shell -c` path. Without this, nested `apes` in the
   // bash child inherits APES_SHELL_WRAPPER=1 and hits "unsupported invocation".
