@@ -277,7 +277,10 @@ function isExactCommand(detail) {
                   <dt class="text-muted mb-1">
                     Command
                   </dt>
-                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 overflow-x-auto whitespace-pre-wrap break-words">
+                  <dd
+                    class="font-mono text-sm rounded px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words"
+                    style="background-color: #0b1220; color: #4ade80;"
+                  >
                     {{ grant.request.command.join(" ") }}
                   </dd>
                 </div>
@@ -494,7 +497,10 @@ function isExactCommand(detail) {
                   <dt class="text-muted">
                     Command
                   </dt>
-                  <dd class="font-mono text-xs bg-gray-900 text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">
+                  <dd
+                    class="font-mono text-sm rounded px-3 py-2 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words"
+                    style="background-color: #0b1220; color: #4ade80;"
+                  >
                     {{ grant.request.command.join(" ") }}
                   </dd>
                 </div>
@@ -513,6 +519,15 @@ function isExactCommand(detail) {
               </dl>
             </template>
           </UAlert>
+
+          <div class="flex gap-3">
+            <UButton to="/grants" variant="soft" color="primary" block class="flex-1">
+              All grants
+            </UButton>
+            <UButton to="/" variant="soft" color="neutral" block class="flex-1">
+              Home
+            </UButton>
+          </div>
         </div>
       </template>
     </UCard>
