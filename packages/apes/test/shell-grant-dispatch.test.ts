@@ -106,6 +106,44 @@ describe('requestGrantForShellLine', () => {
     expect(result).toEqual({ kind: 'approved', grantId: 'fallthrough-grant', mode: 'session' })
   })
 
+  it('`apes run --as root -- brew services restart ollama` self-dispatches (escapes flow)', async () => {
+    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    vi.mocked(parseShellCommand).mockReturnValue({
+      executable: 'apes',
+      argv: ['run', '--as', 'root', '--', 'brew', 'services', 'restart', 'ollama'],
+      isCompound: false,
+      raw: 'apes run --as root -- brew services restart ollama',
+    })
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('apes run --as root -- brew services restart ollama', { targetHost: 'host.test' })
+
+    expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
+    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+  })
+
+  it('`apes run -- echo hi` without --as STAYS gated', async () => {
+    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(parseShellCommand).mockReturnValue({
+      executable: 'apes',
+      argv: ['run', '--', 'echo', 'hi'],
+      isCompound: false,
+      raw: 'apes run -- echo hi',
+    })
+    vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({ data: [] } as any)
+      .mockResolvedValueOnce({ id: 'gated-run', status: 'pending' } as any)
+      .mockResolvedValueOnce({ status: 'approved' } as any)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('apes run -- echo hi', { targetHost: 'host.test' })
+
+    // Must NOT self-dispatch — no --as flag
+    expect(result).toEqual({ kind: 'approved', grantId: 'gated-run', mode: 'session' })
+  })
+
   it('reuses an existing adapter grant when findExistingGrant returns one', async () => {
     const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, fetchGrantToken, verifyAndConsume, createShapesGrant } = await import('../src/shapes/index.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['-la'], isCompound: false, raw: 'ls -la' })

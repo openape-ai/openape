@@ -718,6 +718,32 @@ describe('commands/run async default', () => {
       expect(out).toContain('gated-grant')
     })
 
+    it('`ape-shell -c "apes run --as root -- brew services restart ollama"` self-dispatches (has its own escapes grant flow)', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'apes',
+        argv: ['run', '--as', 'root', '--', 'brew', 'services', 'restart', 'ollama'],
+        isCompound: false,
+        raw: 'apes run --as root -- brew services restart ollama',
+      } as any)
+
+      const { apiFetch } = await import('../src/http.js')
+
+      await driveShellMode('apes run --as root -- brew services restart ollama')
+
+      // Must self-dispatch — no adapter or session-grant path
+      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(apiFetch).not.toHaveBeenCalled()
+
+      // Must exec the inner command directly
+      const { execFileSync } = await import('node:child_process')
+      expect(execFileSync).toHaveBeenCalledWith(
+        'bash',
+        ['-c', 'apes run --as root -- brew services restart ollama'],
+        expect.objectContaining({ stdio: 'inherit' }),
+      )
+    })
+
     it('`ape-shell -c "apes fetch https://example.com"` STAYS gated', async () => {
       const shapes = await import('../src/shapes/index.js')
       vi.mocked(shapes.parseShellCommand).mockReturnValue({
