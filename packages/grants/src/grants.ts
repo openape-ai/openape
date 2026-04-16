@@ -339,11 +339,19 @@ export async function approveGrantWithWidening(
 
     // Recompute the canonical permission server-side so the client cannot forge one.
     const permission = canonicalizeCliPermission(widened)
+    // If any selector was removed (widened to wildcard), drop exact_command
+    // constraint — it would force argv-hash enforcement at runtime, which
+    // cannot pass when the grant no longer binds a specific command.
+    const selectorRemoved = original.resource_chain.some((ref, i) =>
+      ref.selector && !widened.resource_chain[i]?.selector,
+    )
+    const constraints = selectorRemoved ? undefined : original.constraints
     return {
       ...original,
       resource_chain: widened.resource_chain,
       permission,
       display: widened.display || original.display,
+      constraints,
     }
   })
 
