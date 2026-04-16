@@ -21,7 +21,7 @@ export function createGrantChallengeStore(): ChallengeStore {
       await storage.setItem<StoredChallenge>(`challenges:${challenge}`, {
         challenge,
         agentId,
-        expiresAt: Date.now() + 60_000,
+        expiresAt: Date.now() + 300_000,
       })
       return challenge
     },
