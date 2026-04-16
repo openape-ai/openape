@@ -51,7 +51,16 @@ export function isApesSelfDispatch(parsed: ParsedShellCommand | null | undefined
   const subCommand = parsed.argv[0]
   if (!subCommand)
     return false
-  return !APES_GATED_SUBCOMMANDS.has(subCommand)
+  if (!APES_GATED_SUBCOMMANDS.has(subCommand))
+    return true
+  // `apes run --as <user>` has its own internal escapes-audience grant
+  // flow (runAdapterMode delegates to runAudienceMode('escapes', ...)).
+  // Double-gating it through the ape-shell session-grant layer would
+  // fall through to a generic session grant that never reaches escapes.
+  // Let it self-dispatch so the inner apes process handles elevation.
+  if (subCommand === 'run' && parsed.argv.includes('--as'))
+    return true
+  return false
 }
 
 /**
