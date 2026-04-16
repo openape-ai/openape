@@ -33,6 +33,17 @@ export interface ModuleOptions {
   pages: boolean
   /** Federation providers as JSON string (parsed at runtime) */
   federationProviders: string
+  /**
+   * Space-separated list of origins allowed to embed this IdP in an iframe.
+   * When empty (default), the IdP sends `X-Frame-Options: DENY` and
+   * `Content-Security-Policy: frame-ancestors 'none'`.
+   * When set (e.g. `"https://arrival.space https://app.example.com"`),
+   * it sends `frame-ancestors 'self' <origins>` and drops X-Frame-Options
+   * (which cannot express multiple origins).
+   *
+   * Env: `NUXT_OPENAPE_IDP_ALLOWED_FRAME_ANCESTORS`
+   */
+  allowedFrameAncestors: string
 }
 
 function resolveRoutes(routes: boolean | Partial<RoutesOptions> | undefined): RoutesOptions {
@@ -74,6 +85,7 @@ export default defineNuxtModule<ModuleOptions>({
     routes: true,
     pages: true,
     federationProviders: '',
+    allowedFrameAncestors: '',
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
@@ -108,11 +120,20 @@ export default defineNuxtModule<ModuleOptions>({
     addImportsDir(resolve('./runtime/composables'))
 
     // Security headers
+    const frameAncestors = options.allowedFrameAncestors.trim()
     const securityHeaders: Record<string, string> = {
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Content-Security-Policy': 'frame-ancestors \'none\'',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
+    }
+    if (frameAncestors) {
+      // When specific origins are allowed, use CSP frame-ancestors only.
+      // X-Frame-Options is dropped because it cannot express multiple
+      // origins and is superseded by CSP frame-ancestors in modern browsers.
+      securityHeaders['Content-Security-Policy'] = `frame-ancestors 'self' ${frameAncestors}`
+    }
+    else {
+      securityHeaders['X-Frame-Options'] = 'DENY'
+      securityHeaders['Content-Security-Policy'] = 'frame-ancestors \'none\''
     }
 
     const noCacheHeaders: Record<string, string> = {
