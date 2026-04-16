@@ -120,7 +120,10 @@ export default defineNuxtModule<ModuleOptions>({
     addImportsDir(resolve('./runtime/composables'))
 
     // Security headers
-    const frameAncestors = options.allowedFrameAncestors.trim()
+    // routeRules are build-time config, so we read the env var directly
+    // (Nuxt's NUXT_OPENAPE_IDP_* → runtimeConfig mapping only applies at
+    // request time, which is too late for static route headers).
+    const frameAncestors = (process.env.NUXT_OPENAPE_IDP_ALLOWED_FRAME_ANCESTORS || options.allowedFrameAncestors).trim()
     const securityHeaders: Record<string, string> = {
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
