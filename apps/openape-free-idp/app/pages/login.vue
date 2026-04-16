@@ -54,8 +54,8 @@ async function requestChallenge() {
     challenge.value = res.challenge
     signCommand.value = `echo -n "${res.challenge}" | ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n openape`
 
-    // Start 60s countdown
-    countdown.value = 60
+    // Start 5min countdown (matches server-side challenge TTL)
+    countdown.value = 300
     if (countdownTimer) clearInterval(countdownTimer)
     countdownTimer = setInterval(() => {
       countdown.value--
