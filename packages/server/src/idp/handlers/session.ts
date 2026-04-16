@@ -47,23 +47,20 @@ export function createSessionLoginHandler(stores: IdPStores, config: IdPConfig) 
       throw createProblemError({ status: 403, title: 'User is inactive' })
     }
 
-    // Determine which SSH key to use for verification
-    let sshKey
+    // Determine which SSH key(s) to verify against
+    let keys
     if (body.public_key) {
-      sshKey = await stores.sshKeyStore.findByPublicKey(body.public_key)
+      const sshKey = await stores.sshKeyStore.findByPublicKey(body.public_key)
       if (!sshKey || sshKey.userEmail !== body.id) {
         throw createProblemError({ status: 404, title: 'SSH key not found for this user' })
       }
+      keys = [sshKey]
     }
     else {
-      const keys = await stores.sshKeyStore.findByUser(body.id)
+      keys = await stores.sshKeyStore.findByUser(body.id)
       if (keys.length === 0) {
         throw createProblemError({ status: 404, title: 'No SSH keys found for this user' })
       }
-      if (keys.length > 1) {
-        throw createProblemError({ status: 400, title: 'Multiple SSH keys registered. Specify public_key to identify which key to use.' })
-      }
-      sshKey = keys[0]!
     }
 
     // Consume challenge
@@ -72,9 +69,15 @@ export function createSessionLoginHandler(stores: IdPStores, config: IdPConfig) 
       throw createProblemError({ status: 401, title: 'Invalid, expired, or already used challenge' })
     }
 
-    // Verify signature
+    // Try each registered key until one verifies
     const signatureBuffer = Buffer.from(body.signature, 'base64')
-    const isValid = verifyEd25519Signature(sshKey.publicKey, body.challenge, signatureBuffer)
+    let isValid = false
+    for (const key of keys) {
+      if (verifyEd25519Signature(key.publicKey, body.challenge, signatureBuffer)) {
+        isValid = true
+        break
+      }
+    }
     if (!isValid) {
       throw createProblemError({ status: 401, title: 'Invalid signature', type: 'https://ddisa.org/errors/invalid_token' })
     }
