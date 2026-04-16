@@ -2,6 +2,7 @@ import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
 import { useGrantStores } from '../../utils/grant-stores'
 import { verifyEd25519Signature } from '../../utils/ed25519'
+import { verifySSHSignature } from '../../utils/sshsig'
 import { getAppSession } from '../../utils/session'
 import { createProblemError } from '../../utils/problem'
 
@@ -50,8 +51,17 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 401, title: 'Invalid, expired, or already used challenge' })
   }
 
-  const signatureBuffer = Buffer.from(body.signature, 'base64')
-  const isValid = verifyEd25519Signature(sshKey.publicKey, body.challenge, signatureBuffer)
+  const signatureStr = body.signature.trim()
+  let isValid: boolean
+  if (signatureStr.startsWith('-----BEGIN SSH SIGNATURE-----')) {
+    // SSHSIG format from `ssh-keygen -Y sign -n openape`
+    isValid = verifySSHSignature(sshKey.publicKey, body.challenge, signatureStr, 'openape')
+  }
+  else {
+    // Raw base64 Ed25519 signature (from apes login / Web Crypto / openssl)
+    const signatureBuffer = Buffer.from(signatureStr, 'base64')
+    isValid = verifyEd25519Signature(sshKey.publicKey, body.challenge, signatureBuffer)
+  }
   if (!isValid) {
     throw createProblemError({ status: 401, title: 'Invalid signature', type: 'https://ddisa.org/errors/invalid_token' })
   }
