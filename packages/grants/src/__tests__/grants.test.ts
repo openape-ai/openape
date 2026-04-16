@@ -1063,6 +1063,70 @@ describe('grant lifecycle', () => {
       expect(detail.permission).toBe('rm.filesystem[*]#delete')
     })
 
+    it('drops exact_command constraint when selector is removed (wildcard widening)', async () => {
+      const exactDetail: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem', selector: { path: '/tmp/foo.txt' } }],
+        action: 'delete',
+        display: 'Remove /tmp/foo.txt',
+        risk: 'medium',
+        permission: 'rm.filesystem[path=/tmp/foo.txt]#delete',
+        constraints: { exact_command: true },
+      }
+      const pending = await createGrant({
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'once',
+        authorization_details: [exactDetail],
+        command: ['rm', '/tmp/foo.txt'],
+        cmd_hash: 'SHA-256:dummy',
+      }, store)
+
+      const wild: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem' }],
+        action: 'delete',
+        display: 'Remove any file',
+        risk: 'medium',
+        permission: 'rm.filesystem[*]#delete',
+      }
+      const approved = await approveGrantWithWidening(pending.id, 'admin@example.com', store, [wild])
+      const detail = approved.request.authorization_details![0] as OpenApeCliAuthorizationDetail
+      expect(detail.constraints).toBeUndefined()
+    })
+
+    it('preserves constraints when widening keeps selectors', async () => {
+      const exactDetail: OpenApeCliAuthorizationDetail = {
+        type: 'openape_cli',
+        cli_id: 'rm',
+        operation_id: 'rm.delete',
+        resource_chain: [{ resource: 'filesystem', selector: { path: '/tmp/foo.txt' } }],
+        action: 'delete',
+        display: 'Remove /tmp/foo.txt',
+        risk: 'medium',
+        permission: 'rm.filesystem[path=/tmp/foo.txt]#delete',
+        constraints: { exact_command: true },
+      }
+      const pending = await createGrant({
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'once',
+        authorization_details: [exactDetail],
+        command: ['rm', '/tmp/foo.txt'],
+        cmd_hash: 'SHA-256:dummy',
+      }, store)
+
+      const approved = await approveGrantWithWidening(pending.id, 'admin@example.com', store, [exactDetail])
+      const detail = approved.request.authorization_details![0] as OpenApeCliAuthorizationDetail
+      expect(detail.constraints).toEqual({ exact_command: true })
+    })
+
     it('passes through grant_type and duration overrides', async () => {
       const pending = await createGrant(originalRequest('/tmp/foo.txt'), store)
       const wild: OpenApeCliAuthorizationDetail = {
