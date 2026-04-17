@@ -785,7 +785,12 @@ describe('idp server', () => {
       await stores.userStore.update('agent@example.com', { isActive: true })
     })
 
-    it('requires public_key disambiguation with multiple keys', async () => {
+    it('auto-detects the matching key when multiple are registered', async () => {
+      // Previously this test expected a 400 error demanding public_key
+      // disambiguation. Since #119 the server tries every registered key
+      // until one verifies, mirroring SSH agent behaviour. A signature
+      // from any registered key should now succeed without the caller
+      // needing to identify which key it used.
       const secondKey = generateEd25519SshKey()
       await stores.sshKeyStore.save({
         keyId: 'owner-key-2',
@@ -804,7 +809,7 @@ describe('idp server', () => {
         challenge,
         signature,
       })
-      expect(authRes.status).toBe(400)
+      expect(authRes.status).toBe(200)
 
       await stores.sshKeyStore.delete('owner-key-2')
     })
