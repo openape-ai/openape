@@ -6,6 +6,7 @@ import { CliError, CliExit } from '../../errors'
 import { getPollMaxMinutes, pollGrantUntilResolved } from '../../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../../http'
 import { fetchGrantToken, resolveFromGrant, verifyAndExecute } from '../../shapes/index.js'
+import { buildGenericResolved, GENERIC_OPERATION_ID } from '../../shapes/generic.js'
 
 interface GrantDetail {
   id: string
@@ -19,7 +20,7 @@ interface GrantDetail {
     grant_type?: string
     target_host?: string
     execution_context?: { adapter_digest?: string, argv_hash?: string }
-    authorization_details?: Array<{ type?: string, permission?: string }>
+    authorization_details?: Array<{ type?: string, permission?: string, operation_id?: string, cli_id?: string }>
   }
 }
 
@@ -99,17 +100,31 @@ export const runGrantCommand = defineCommand({
     const isShapesGrant = hasOpenApeCliDetail || audience === 'shapes'
 
     if (isShapesGrant) {
-      // Re-resolve locally from the recorded command + adapter digest.
+      // Generic-fallback grants have no adapter to re-resolve against —
+      // their command is self-describing (argv + cli_id). Rebuild the
+      // ResolvedCommand in memory via buildGenericResolved instead of
+      // calling resolveFromGrant (which would try to loadOrInstallAdapter
+      // and fail with "No shapes adapter found").
+      const isGenericGrant = authDetails.some(d => d?.operation_id === GENERIC_OPERATION_ID)
       let resolved
-      try {
-        resolved = await resolveFromGrant(grant)
+      if (isGenericGrant) {
+        const argv = grant.request?.command ?? []
+        if (argv.length === 0)
+          throw new CliError(`Generic grant ${grant.id} is missing command argv`)
+        const cliId = authDetails.find(d => d?.operation_id === GENERIC_OPERATION_ID)?.cli_id ?? argv[0]!
+        resolved = await buildGenericResolved(cliId, argv)
       }
-      catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        throw new CliError(`Cannot re-resolve grant: ${msg}`)
+      else {
+        try {
+          resolved = await resolveFromGrant(grant)
+        }
+        catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          throw new CliError(`Cannot re-resolve grant: ${msg}`)
+        }
       }
       const token = await fetchGrantToken(idp, grant.id)
-      await verifyAndExecute(token, resolved)
+      await verifyAndExecute(token, resolved, grant.id)
       return
     }
 

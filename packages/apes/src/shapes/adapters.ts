@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import type { LoadedAdapter } from './types.js'
+import type { LoadedAdapter, ResolvedCommand } from './types.js'
 import { parseAdapterToml } from './toml.js'
+import { buildGenericResolved } from './generic.js'
 
 function digest(content: string): string {
   return `SHA-256:${createHash('sha256').update(content).digest('hex')}`
@@ -76,6 +77,27 @@ export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter
     source,
     digest: digest(content),
   }
+}
+
+/**
+ * Called by `run.ts` when `loadAdapter(cliId)` has already failed with
+ * "No adapter found". If generic-fallback mode is enabled in config,
+ * return a synthetic `ResolvedCommand` that bypasses the parser. If
+ * disabled, re-throw the original error (restoring legacy behaviour).
+ *
+ * @param cliId     The CLI that had no registered shape
+ * @param fullArgv  Argv to execute (including the executable itself)
+ * @param opts      `genericEnabled: true` → return synthetic resolved;
+ *                  `false` → throw `"No adapter found for <cliId>"`.
+ */
+export async function resolveGenericOrReject(
+  cliId: string,
+  fullArgv: string[],
+  opts: { genericEnabled: boolean },
+): Promise<ResolvedCommand> {
+  if (!opts.genericEnabled)
+    throw new Error(`No adapter found for ${cliId}`)
+  return await buildGenericResolved(cliId, fullArgv)
 }
 
 /** Try to load an adapter locally, return null instead of throwing when not found. */
