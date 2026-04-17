@@ -20,6 +20,10 @@ vi.mock('../src/config.js', () => ({
   // so tests get the baked-in defaults; individual tests can override
   // via `vi.mocked(loadConfig).mockReturnValueOnce(...)`.
   loadConfig: vi.fn(() => ({})),
+  // Generic-fallback mode is permissive-default; individual tests override
+  // to `false` to verify the opt-out path.
+  isGenericFallbackEnabled: vi.fn(() => true),
+  getGenericAuditLogPath: vi.fn(() => '/tmp/test-generic-calls.log'),
 }))
 
 vi.mock('../src/http.js', () => ({
@@ -28,24 +32,34 @@ vi.mock('../src/http.js', () => ({
   ApiError: class extends Error {},
 }))
 
-vi.mock('../src/shapes/index.js', () => ({
-  createShapesGrant: vi.fn(),
-  fetchGrantToken: vi.fn(),
-  findExistingGrant: vi.fn(),
-  loadOrInstallAdapter: vi.fn(),
-  loadAdapter: vi.fn(),
-  parseShellCommand: vi.fn(),
-  resolveCommand: vi.fn(),
-  verifyAndExecute: vi.fn(),
-  verifyAndConsume: vi.fn(),
-  waitForGrantStatus: vi.fn(),
-  extractOption: vi.fn(() => undefined),
-  extractShellCommandString: vi.fn((cmd: string[]) => cmd.at(-1) ?? ''),
-  extractWrappedCommand: vi.fn((argv: string[]) => {
-    const idx = argv.indexOf('--')
-    return idx >= 0 ? argv.slice(idx + 1) : []
-  }),
-}))
+vi.mock('../src/shapes/index.js', async () => {
+  // Import the real generic helpers so resolveGenericOrReject produces
+  // real ResolvedCommand shapes in fallback tests. Everything else is
+  // mocked as a jest-style fn for per-test control.
+  const generic = await import('../src/shapes/generic.js')
+  return {
+    createShapesGrant: vi.fn(),
+    fetchGrantToken: vi.fn(),
+    findExistingGrant: vi.fn(),
+    loadOrInstallAdapter: vi.fn(),
+    loadAdapter: vi.fn(),
+    parseShellCommand: vi.fn(),
+    resolveCommand: vi.fn(),
+    resolveGenericOrReject: vi.fn((cliId: string, argv: string[], opts: { genericEnabled: boolean }) => {
+      if (!opts.genericEnabled) throw new Error(`No adapter found for ${cliId}`)
+      return generic.buildGenericResolved(cliId, argv)
+    }),
+    verifyAndExecute: vi.fn(),
+    verifyAndConsume: vi.fn(),
+    waitForGrantStatus: vi.fn(),
+    extractOption: vi.fn(() => undefined),
+    extractShellCommandString: vi.fn((cmd: string[]) => cmd.at(-1) ?? ''),
+    extractWrappedCommand: vi.fn((argv: string[]) => {
+      const idx = argv.indexOf('--')
+      return idx >= 0 ? argv.slice(idx + 1) : []
+    }),
+  }
+})
 
 vi.mock('../src/notifications.js', () => ({
   notifyGrantPending: vi.fn(),
@@ -227,7 +241,7 @@ describe('commands/run async default', () => {
       } as any)
 
       expect(shapes.createShapesGrant).not.toHaveBeenCalled()
-      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything())
+      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything(), expect.any(String))
       const allOutput = consoleLogSpy.mock.calls.map(c => c.join(' ')).join('\n')
       expect(allOutput).not.toContain('apes grants run')
     })
@@ -320,7 +334,53 @@ describe('commands/run async default', () => {
       } as any)
 
       expect(shapes.waitForGrantStatus).toHaveBeenCalledWith('http://idp.test', 'grant-xyz')
-      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything())
+      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything(), expect.any(String))
+    })
+
+    it('generic fallback: unshaped CLI falls through to synthetic resolved + stderr warning', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.loadAdapter).mockImplementation(() => {
+        throw new Error('No adapter found for kubectl')
+      })
+      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-generic' } as any)
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--', 'kubectl', 'get', 'pods'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any))
+
+      const stderrOut = stderrSpy.mock.calls.map(c => String(c[0])).join('')
+      expect(stderrOut).toContain('No shape registered for `kubectl`')
+      expect(stderrOut).toContain('Generic mode active')
+      expect(shapes.createShapesGrant).toHaveBeenCalled()
+      const resolvedArg = vi.mocked(shapes.createShapesGrant).mock.calls[0]?.[0]
+      expect(resolvedArg?.detail.operation_id).toBe('_generic.exec')
+      expect(resolvedArg?.detail.risk).toBe('high')
+      stderrSpy.mockRestore()
+    })
+
+    it('generic fallback disabled via config: legacy No-adapter-found error', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.loadAdapter).mockImplementation(() => {
+        throw new Error('No adapter found for kubectl')
+      })
+      // Override the config mock to disable generic fallback for this test.
+      const configModule = await import('../src/config.js')
+      const origGen = vi.mocked(configModule.isGenericFallbackEnabled).getMockImplementation?.()
+      vi.mocked(configModule.isGenericFallbackEnabled).mockReturnValue(false)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expect(runCommand.run!({
+        rawArgs: ['run', '--', 'kubectl', 'get', 'pods'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any)).rejects.toThrow(/No adapter found for kubectl/)
+
+      expect(shapes.createShapesGrant).not.toHaveBeenCalled()
+      // restore mock
+      if (origGen) vi.mocked(configModule.isGenericFallbackEnabled).mockImplementation(origGen)
+      else vi.mocked(configModule.isGenericFallbackEnabled).mockReset()
     })
   })
 

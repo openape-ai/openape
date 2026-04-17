@@ -48,6 +48,22 @@ export interface ApesConfig {
   notifications?: {
     pending_command?: string
   }
+  /**
+   * Generic-fallback mode: when `apes run -- <cli>` is called with a CLI
+   * that has no registered shape, fall through to a synthetic adapter that
+   * requests a single-use, forced-high-risk grant for the exact argv.
+   * See `shapes/generic.ts`.
+   */
+  generic?: {
+    /**
+     * Master switch. Default `true` (permissive). Set to `false` to restore
+     * the legacy "No adapter found" hard-fail. Stored as string in TOML
+     * (hand-parser limitation) and parsed as `value !== 'false'` at read time.
+     */
+    enabled?: string
+    /** Override the audit-log location. Default `~/.config/apes/generic-calls.log`. Tilde-expanded at read time. */
+    audit_log?: string
+  }
 }
 
 const CONFIG_DIR = join(homedir(), '.config', 'apes')
@@ -117,7 +133,12 @@ function parseTOML(content: string): ApesConfig {
       continue
     }
 
-    const kvMatch = trimmed.match(/^(\w+)\s*=\s*"(.+)"$/)
+    // Accept quoted strings and bare booleans/tokens — the generic section
+    // uses `enabled = false` (no quotes) which the quoted-only match would
+    // silently drop.
+    const kvQuoted = trimmed.match(/^(\w+)\s*=\s*"(.*)"$/)
+    const kvBare = trimmed.match(/^(\w+)\s*=\s*([^"\s]\S*)$/)
+    const kvMatch = kvQuoted ?? kvBare
     if (kvMatch) {
       const [, key, value] = kvMatch
       if (section === 'defaults') {
@@ -131,6 +152,10 @@ function parseTOML(content: string): ApesConfig {
       else if (section === 'notifications') {
         config.notifications = config.notifications || {}
         ;(config.notifications as Record<string, string>)[key!] = value!
+      }
+      else if (section === 'generic') {
+        config.generic = config.generic || {}
+        ;(config.generic as Record<string, string>)[key!] = value!
       }
     }
   }
@@ -169,7 +194,41 @@ export function saveConfig(config: ApesConfig): void {
     lines.push('')
   }
 
+  if (config.generic) {
+    lines.push('[generic]')
+    for (const [key, value] of Object.entries(config.generic)) {
+      if (value)
+        lines.push(`${key} = "${value}"`)
+    }
+    lines.push('')
+  }
+
   writeFileSync(CONFIG_FILE, lines.join('\n'), { mode: 0o600 })
+}
+
+/**
+ * Is generic-fallback enabled? Permissive default: `true` unless the user
+ * explicitly sets `[generic] enabled = false`.
+ */
+export function isGenericFallbackEnabled(config?: ApesConfig): boolean {
+  const cfg = config ?? loadConfig()
+  const raw = cfg.generic?.enabled
+  if (raw === undefined) return true
+  return raw !== 'false'
+}
+
+/**
+ * Resolve the audit-log path for generic calls, expanding `~` to `$HOME`.
+ */
+export function getGenericAuditLogPath(config?: ApesConfig): string {
+  const cfg = config ?? loadConfig()
+  const raw = cfg.generic?.audit_log
+  const path = raw && raw.length > 0
+    ? raw
+    : join(homedir(), '.config', 'apes', 'generic-calls.log')
+  return path.startsWith('~/')
+    ? join(homedir(), path.slice(2))
+    : path
 }
 
 export function getIdpUrl(explicit?: string): string | null {
