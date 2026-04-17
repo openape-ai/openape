@@ -5,10 +5,13 @@ import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import consola from 'consola'
 import { getRequesterIdentity } from './config.js'
+import { getGenericAuditLogPath } from '../config.js'
 import { resolveCommand } from './parser.js'
 import { loadOrInstallAdapter } from './shell-parser.js'
 import type { ResolvedCommand } from './types.js'
 import { apiFetch, discoverEndpoints, getGrantsEndpoint } from './http.js'
+import { appendGenericCallLog } from '../audit/generic-log.js'
+import { isGenericResolved } from './generic.js'
 
 function decodePayload(token: string): Record<string, unknown> {
   const [, payload] = token.split('.')
@@ -191,10 +194,57 @@ export function executeResolvedViaExec(resolved: ResolvedCommand): void {
 /**
  * One-shot verify + consume + execute. Preserves the legacy behavior of
  * the `apes run --shell` path so existing callers keep working unchanged.
+ *
+ * When `resolved` carries the generic-fallback operation id
+ * (`_generic.exec`), a JSONL audit entry is appended to the generic-calls
+ * log after the child process exits. `grantId` is needed to write the
+ * entry — callers that know the grant id should pass it; if omitted, the
+ * log entry is skipped (the audit hook is best-effort, not a hard gate).
+ *
+ * This is the central exec path for sync (`--wait`), async-default
+ * (`apes grants run <id> --wait`), and REPL one-shot, so a hook here
+ * covers all three flows without duplicating logic in each caller.
  */
-export async function verifyAndExecute(token: string, resolved: ResolvedCommand): Promise<void> {
+export async function verifyAndExecute(
+  token: string,
+  resolved: ResolvedCommand,
+  grantId?: string,
+): Promise<void> {
   await verifyAndConsume(token, resolved)
-  executeResolvedViaExec(resolved)
+
+  const isGeneric = isGenericResolved(resolved)
+  const start = Date.now()
+  let exitCode = 0
+  try {
+    executeResolvedViaExec(resolved)
+  }
+  catch (err) {
+    exitCode = (err as { status?: number })?.status ?? 1
+    throw err
+  }
+  finally {
+    if (isGeneric && grantId) {
+      // Best-effort: swallow log errors so a broken audit file never
+      // blocks a successful command.
+      try {
+        await appendGenericCallLog(
+          {
+            ts: new Date().toISOString(),
+            cli: resolved.detail.cli_id,
+            argv: resolved.executionContext.argv ?? [resolved.executable, ...resolved.commandArgv],
+            argv_hash: resolved.executionContext.argv_hash ?? '',
+            grant_id: grantId,
+            exit_code: exitCode,
+            duration_ms: Date.now() - start,
+          },
+          getGenericAuditLogPath(),
+        )
+      }
+      catch (logErr) {
+        consola.debug('Failed to append generic-call audit entry:', logErr)
+      }
+    }
+  }
 }
 
 /**

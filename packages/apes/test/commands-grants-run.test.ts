@@ -88,7 +88,7 @@ describe('apes grants run <id>', () => {
 
     expect(resolveFromGrant).toHaveBeenCalledWith(grant)
     expect(fetchGrantToken).toHaveBeenCalledWith('http://idp.test', 'grant-abc')
-    expect(verifyAndExecute).toHaveBeenCalledWith('jwt-token', fakeResolved)
+    expect(verifyAndExecute).toHaveBeenCalledWith('jwt-token', fakeResolved, 'grant-abc')
   })
 
   it('executes an approved escapes grant via the escapes binary', async () => {
@@ -269,7 +269,7 @@ describe('apes grants run <id>', () => {
       await invoke('grant-wait-1', { wait: true })
 
       expect(pollGrantUntilResolved).toHaveBeenCalledWith('http://idp.test', 'grant-wait-1')
-      expect(verifyAndExecute).toHaveBeenCalledWith('jwt-tok', { executable: 'curl' })
+      expect(verifyAndExecute).toHaveBeenCalledWith('jwt-tok', { executable: 'curl' }, 'grant-wait-1')
     })
 
     it('with --wait: pending → poll → denied → CliError', async () => {
