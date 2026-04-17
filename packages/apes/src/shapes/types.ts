@@ -33,6 +33,13 @@ export interface LoadedAdapter {
   adapter: ShapesAdapter
   source: string
   digest: string
+  /**
+   * True when this adapter was synthesized in-memory for a CLI that has no
+   * registered shape. Synthetic adapters bypass `resolveCommand()` and are
+   * fed into the grant pipeline via `buildGenericResolved()` directly.
+   * See `shapes/generic.ts`.
+   */
+  synthetic?: boolean
 }
 
 export interface ResolvedCommand {

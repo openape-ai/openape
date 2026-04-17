@@ -13,11 +13,13 @@ import {
   loadOrInstallAdapter,
   parseShellCommand,
   resolveCommand,
+  resolveGenericOrReject,
   verifyAndExecute,
   waitForGrantStatus,
 } from '../shapes/index.js'
+import type { ResolvedCommand } from '../shapes/index.js'
 import consola from 'consola'
-import { getIdpUrl, loadAuth, loadConfig } from '../config'
+import { getIdpUrl, isGenericFallbackEnabled, loadAuth, loadConfig } from '../config'
 import { getPollMaxMinutes } from '../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
@@ -388,7 +390,7 @@ async function tryAdapterModeFromShell(
   // path we must pass the basename, not the full path.
   const normalizedExecutable = basename(parsed.executable)
 
-  let resolved
+  let resolved: ResolvedCommand
   try {
     resolved = await resolveCommand(loaded, [normalizedExecutable, ...parsed.argv])
   }
@@ -403,7 +405,7 @@ async function tryAdapterModeFromShell(
     if (existingGrantId) {
       consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
       const token = await fetchGrantToken(idp, existingGrantId)
-      await verifyAndExecute(token, resolved)
+      await verifyAndExecute(token, resolved, existingGrantId)
       return true
     }
   }
@@ -443,7 +445,7 @@ async function tryAdapterModeFromShell(
       throw new CliError(`Grant ${status}`)
 
     const token = await fetchGrantToken(idp, grant.id)
-    await verifyAndExecute(token, resolved)
+    await verifyAndExecute(token, resolved, grant.id)
     return true
   }
 
@@ -496,6 +498,16 @@ function extractPositionals(rawArgs: string[]): string[] {
   return positionals
 }
 
+/**
+ * Print a stderr warning when an unshaped CLI is being run through the
+ * generic-fallback path. Written to stderr (not stdout) so shell pipelines
+ * capturing stdout see the command output, not the warning.
+ */
+function printGenericWarning(cliId: string): void {
+  process.stderr.write(`⚠ No shape registered for \`${cliId}\`.\n`)
+  process.stderr.write('Generic mode active — single-use grant will be required.\n')
+}
+
 async function runAdapterMode(
   command: string[],
   rawArgs: string[],
@@ -513,8 +525,23 @@ async function runAdapterMode(
   }
 
   const adapterOpt = extractOption(rawArgs, 'adapter')
-  const loaded = loadAdapter(command[0]!, adapterOpt)
-  const resolved = await resolveCommand(loaded, command)
+  const cliId = command[0]!
+  let resolved: ResolvedCommand
+  try {
+    const loaded = loadAdapter(cliId, adapterOpt)
+    resolved = await resolveCommand(loaded, command)
+  }
+  catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const isNoAdapter = message.startsWith('No adapter found for ')
+    if (!isNoAdapter)
+      throw err
+    // Fallback to generic synthetic adapter (opt-out via [generic] enabled = false)
+    resolved = await resolveGenericOrReject(cliId, command, {
+      genericEnabled: isGenericFallbackEnabled(),
+    })
+    printGenericWarning(cliId)
+  }
   const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
 
   // Try reusing an existing timed/always grant (findExistingGrant skips once grants)
@@ -523,7 +550,7 @@ async function runAdapterMode(
     if (existingGrantId) {
       consola.info(`Reusing existing grant: ${existingGrantId}`)
       const token = await fetchGrantToken(idp, existingGrantId)
-      await verifyAndExecute(token, resolved)
+      await verifyAndExecute(token, resolved, existingGrantId)
       return
     }
   }
@@ -557,7 +584,7 @@ async function runAdapterMode(
       throw new Error(`Grant ${status}`)
 
     const token = await fetchGrantToken(idp, grant.id)
-    await verifyAndExecute(token, resolved)
+    await verifyAndExecute(token, resolved, grant.id)
     return
   }
 

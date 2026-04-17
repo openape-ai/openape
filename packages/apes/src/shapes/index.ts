@@ -1,4 +1,5 @@
-export { loadAdapter, resolveAdapterPath, tryLoadAdapter } from './adapters.js'
+export { loadAdapter, resolveAdapterPath, resolveGenericOrReject, tryLoadAdapter } from './adapters.js'
+export { GENERIC_OPERATION_ID, buildGenericAdapter, buildGenericResolved, isGenericResolved } from './generic.js'
 export { appendAuditLog, type AuditEntry } from './audit.js'
 export { extractShellCommandString, loadOrInstallAdapter, parseShellCommand, type ParsedShellCommand } from './shell-parser.js'
 export { resolveCapabilityRequest } from './capabilities.js'

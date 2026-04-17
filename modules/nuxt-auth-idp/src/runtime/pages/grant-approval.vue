@@ -28,6 +28,15 @@ const EXTEND_MODE_OPTIONS = [
 ]
 const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
+/**
+ * True when this grant was requested via the `apes` generic-fallback path.
+ * Such CLIs have no registered shape — the approver should see a prominent
+ * banner explaining the lack of structured validation and the single-use
+ * nature of the grant.
+ */
+const isGenericGrant = computed(() =>
+  cliDetails.value.some(d => d?.operation_id === '_generic.exec'),
+)
 const delegateDuration = computed(() => {
   const req = grant.value?.request
   if (!req?.duration) return null
@@ -227,6 +236,20 @@ function isExactCommand(detail) {
               <p v-else-if="grant.request?.grant_type === 'always'" class="mt-1 text-sm">
                 Permanent — until revoked.
               </p>
+            </template>
+          </UAlert>
+
+          <UAlert
+            v-if="isGenericGrant"
+            color="error"
+            icon="i-lucide-alert-triangle"
+            title="⚠ Unshaped CLI"
+            class="mb-4"
+          >
+            <template #description>
+              This command has no registered shape. Approving grants
+              <strong>single-use</strong> access to execute the exact command shown below.
+              No structured validation is possible — review carefully.
             </template>
           </UAlert>
 
