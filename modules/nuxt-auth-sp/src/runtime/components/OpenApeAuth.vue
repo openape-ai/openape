@@ -1,39 +1,40 @@
 <script setup>
 defineProps({
-  title: { type: String, required: false, default: "Sign in" },
-  subtitle: { type: String, required: false, default: "Enter your email to continue" },
-  buttonText: { type: String, required: false, default: "Continue" },
-  placeholder: { type: String, required: false, default: "you@example.com" }
-});
-const emit = defineEmits(["error"]);
-const { user, loading, fetchUser, login } = useOpenApeAuth();
-const email = ref("");
-const error = ref("");
-const submitting = ref(false);
-const route = useRoute();
+  title: { type: String, required: false, default: 'Sign in' },
+  subtitle: { type: String, required: false, default: 'Enter your email to continue' },
+  buttonText: { type: String, required: false, default: 'Continue' },
+  placeholder: { type: String, required: false, default: 'you@example.com' },
+})
+const emit = defineEmits(['error'])
+const { user, loading, fetchUser, login } = useOpenApeAuth()
+const email = ref('')
+const error = ref('')
+const submitting = ref(false)
+const route = useRoute()
 onMounted(async () => {
-  await fetchUser();
+  await fetchUser()
   if (user.value) {
-    navigateTo("/dashboard");
+    navigateTo('/dashboard')
   }
   if (route.query.error) {
-    error.value = String(route.query.error);
+    error.value = String(route.query.error)
   }
-});
+})
 async function handleSubmit() {
-  error.value = "";
-  if (!email.value || !email.value.includes("@")) {
-    error.value = "Please enter a valid email address";
-    return;
+  error.value = ''
+  if (!email.value || !email.value.includes('@')) {
+    error.value = 'Please enter a valid email address'
+    return
   }
-  submitting.value = true;
+  submitting.value = true
   try {
-    await login(email.value);
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error("Login failed");
-    error.value = e?.data?.message || err.message;
-    emit("error", err);
-    submitting.value = false;
+    await login(email.value)
+  }
+  catch (e) {
+    const err = e instanceof Error ? e : new Error('Login failed')
+    error.value = e?.data?.message || err.message
+    emit('error', err)
+    submitting.value = false
   }
 }
 </script>
