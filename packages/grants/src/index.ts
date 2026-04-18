@@ -31,6 +31,12 @@ export {
   useGrant,
   validateDelegation,
 } from './grants.js'
+export {
+  createInMemoryShapeStore,
+  type ServerShape,
+  type ServerShapeOperation,
+  type ShapeStore,
+} from './shape-registry.js'
 export { findSimilarCliGrants, type SimilarGrantMatch, type SimilarGrantsResult } from './similarity.js'
 export { type GrantListParams, type GrantStore, InMemoryGrantStore } from './stores.js'
 export {
