@@ -1,4 +1,4 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeCliResourceRef, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeCliResourceRef, OpenApeGrantRequest } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailCovers } from './cli-permissions.js'
 import type { GrantStore } from './stores.js'
 
@@ -43,8 +43,10 @@ export interface StandingGrantRequest {
 /** What `evaluateStandingGrants` returns on a match. */
 export interface StandingGrantMatch {
   standing_grant_id: string
-  /** The original incoming authorization_details — unchanged. The match
-   *  itself is the proof that the standing grant covers them. */
+  /**
+   * The original incoming authorization_details — unchanged. The match
+   *  itself is the proof that the standing grant covers them.
+   */
   derived_authorization_details: OpenApeCliAuthorizationDetail[]
 }
 

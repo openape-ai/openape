@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createInMemoryShapeStore, type ServerShape } from '../src/shape-registry.js'
+import { createInMemoryShapeStore  } from '../src/shape-registry.js'
+import type { ServerShape } from '../src/shape-registry.js'
 import { GENERIC_OPERATION_ID, resolveServerShape } from '../src/server-resolver.js'
 
 const gitShape: ServerShape = {

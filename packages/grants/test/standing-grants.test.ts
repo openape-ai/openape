@@ -5,8 +5,9 @@ import { canonicalizeCliPermission } from '../src/cli-permissions.js'
 import {
   evaluateStandingGrants,
   isStandingGrantRequest,
-  type StandingGrantRequest,
+
 } from '../src/standing-grants.js'
+import type { StandingGrantRequest } from '../src/standing-grants.js'
 
 function makeStandingGrant(
   overrides: Partial<StandingGrantRequest> & Pick<StandingGrantRequest, 'owner' | 'delegate' | 'resource_chain_template'>,

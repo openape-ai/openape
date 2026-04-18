@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   }
   const grantType = body.grant_type ?? 'always'
   if (grantType !== 'timed' && grantType !== 'always') {
-    throw createProblemError({ status: 400, title: "grant_type must be 'timed' or 'always'" })
+    throw createProblemError({ status: 400, title: 'grant_type must be \'timed\' or \'always\'' })
   }
   if (grantType === 'timed' && typeof body.duration !== 'number') {
     throw createProblemError({ status: 400, title: 'duration (seconds) required for timed standing grants' })
