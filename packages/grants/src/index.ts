@@ -37,6 +37,11 @@ export {
   type ServerShapeOperation,
   type ShapeStore,
 } from './shape-registry.js'
+export {
+  GENERIC_OPERATION_ID,
+  resolveServerShape,
+  type ServerResolvedCommand,
+} from './server-resolver.js'
 export { findSimilarCliGrants, type SimilarGrantMatch, type SimilarGrantsResult } from './similarity.js'
 export { type GrantListParams, type GrantStore, InMemoryGrantStore } from './stores.js'
 export {
