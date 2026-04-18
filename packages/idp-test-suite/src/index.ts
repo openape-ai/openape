@@ -7,6 +7,7 @@ import { discoveryTests } from './suites/discovery.js'
 import { grantsTests } from './suites/grants.js'
 import { oidcFlowTests } from './suites/oidc-flow.js'
 import { securityTests } from './suites/security.js'
+import { serverPolicyShiftTests } from './suites/server-policy-shift.js'
 import { sessionTests } from './suites/session.js'
 import { sshKeyTests } from './suites/ssh-keys.js'
 
@@ -25,5 +26,6 @@ export function runIdPTestSuite(config: IdPTestConfig) {
   if (!skip.has('oidc-flow')) oidcFlowTests(resolved)
   if (!skip.has('grants')) grantsTests(resolved)
   if (!skip.has('delegations')) delegationsTests(resolved)
+  if (!skip.has('server-policy-shift')) serverPolicyShiftTests(resolved)
   if (!skip.has('security')) securityTests(resolved)
 }
