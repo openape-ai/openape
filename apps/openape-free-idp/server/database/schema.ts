@@ -14,11 +14,36 @@ export const grants = sqliteTable('grants', {
   decidedBy: text('decided_by'),
   expiresAt: integer('expires_at'),
   usedAt: integer('used_at'),
+  // When this grant was auto-approved by matching a standing grant, this
+  // column records the standing grant's id for audit-trail purposes.
+  // Null for grants decided via the normal manual approval path.
+  decidedByStandingGrant: text('decided_by_standing_grant'),
 }, table => [
   index('idx_grants_status').on(table.status),
   index('idx_grants_requester').on(table.requester),
   index('idx_grants_created_at').on(table.createdAt),
   index('idx_grants_type').on(table.type),
+])
+
+// --- Server-side shape registry ---
+// Replaces client-side ~/.openape/shapes/adapters/*.toml — the IdP is the
+// canonical source of CLI operation definitions. Populated via the seed
+// script (scripts/seed-shapes.ts) and eventually user uploads.
+export const shapes = sqliteTable('shapes', {
+  cliId: text('cli_id').primaryKey(),
+  executable: text('executable').notNull(),
+  description: text('description').notNull(),
+  // JSON-encoded ServerShapeOperation[]; see packages/grants/src/shape-registry.ts
+  operations: text('operations', { mode: 'json' }).notNull(),
+  // 'builtin' (seeded from monorepo) or 'custom' (uploaded by user)
+  source: text('source').notNull(),
+  // sha256:<hex> of the serialized shape for drift detection
+  digest: text('digest').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  index('idx_shapes_source').on(table.source),
+  index('idx_shapes_executable').on(table.executable),
 ])
 
 export const grantChallenges = sqliteTable('grant_challenges', {

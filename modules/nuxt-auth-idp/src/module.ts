@@ -294,6 +294,23 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/delegations', method: 'post', handler: resolve('./runtime/server/api/delegations/index.post') })
       addServerHandler({ route: '/api/delegations/:id', method: 'delete', handler: resolve('./runtime/server/api/delegations/[id].delete') })
       addServerHandler({ route: '/api/delegations/:id/validate', method: 'post', handler: resolve('./runtime/server/api/delegations/[id]/validate.post') })
+
+      // Server-side shape registry (Phase 1 of policy-shift). Gated with
+      // `grants` because shapes drive the grant-creation pipeline (argv
+      // resolution, risk scoring, display strings).
+      addServerHandler({ route: '/api/shapes', handler: resolve('./runtime/server/api/shapes/index.get') })
+      addServerHandler({ route: '/api/shapes/:cliId', handler: resolve('./runtime/server/api/shapes/[cliId].get') })
+      addServerHandler({ route: '/api/shapes/resolve', method: 'post', handler: resolve('./runtime/server/api/shapes/resolve.post') })
+
+      // Standing grants — user-created pre-authorizations that auto-approve
+      // matching agent grant requests. Phase 1 Milestone 5.
+      addServerHandler({ route: '/api/standing-grants', handler: resolve('./runtime/server/api/standing-grants/index.get') })
+      addServerHandler({ route: '/api/standing-grants', method: 'post', handler: resolve('./runtime/server/api/standing-grants/index.post') })
+      addServerHandler({ route: '/api/standing-grants/:id', method: 'delete', handler: resolve('./runtime/server/api/standing-grants/[id].delete') })
+
+      // Agent-view aggregate (per-agent standing grants + recent activity).
+      // Phase 1 Milestone 7. Self-service only (requireAuth + caller == email).
+      addServerHandler({ route: '/api/users/:email/agents', handler: resolve('./runtime/server/api/users/[email]/agents.get') })
     }
 
     // Server route handlers — Agent

@@ -1,6 +1,6 @@
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
@@ -168,6 +168,28 @@ export default defineEventHandler(async (event) => {
     })
     if (reusable) {
       return reusable
+    }
+
+    // Standing-grant auto-approval: if any of the requester's (=delegate's)
+    // standing grants covers the incoming authorization_details, create
+    // the grant with status='approved' directly and record the standing
+    // grant's id for audit trail. This is the Phase 1 policy-shift hook.
+    const standingMatch = await evaluateStandingGrants(body, grantStore)
+    if (standingMatch) {
+      const pendingGrant = await createGrant(body, grantStore)
+      const now = Math.floor(Date.now() / 1000)
+      const approvedExtra = {
+        status: 'approved' as const,
+        decided_at: now,
+        // decided_by = the standing grant's owner (the user who pre-authorized).
+        // We derive it from the standing grant via its id — look up once.
+        decided_by: (await grantStore.findById(standingMatch.standing_grant_id))?.decided_by ?? undefined,
+        decided_by_standing_grant: standingMatch.standing_grant_id,
+      }
+      await grantStore.updateStatus(pendingGrant.id, 'approved', approvedExtra)
+      const approvedGrant = await grantStore.findById(pendingGrant.id)
+      setResponseStatus(event, 201)
+      return { ...approvedGrant, approved_automatically: true }
     }
 
     // Similarity check: find approved CLI grants that overlap but don't cover
