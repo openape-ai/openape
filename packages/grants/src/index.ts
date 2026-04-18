@@ -43,6 +43,13 @@ export {
   type ServerResolvedCommand,
 } from './server-resolver.js'
 export { findSimilarCliGrants, type SimilarGrantMatch, type SimilarGrantsResult } from './similarity.js'
+export {
+  buildCoverageDetailFromStandingGrant,
+  evaluateStandingGrants,
+  isStandingGrantRequest,
+  type StandingGrantMatch,
+  type StandingGrantRequest,
+} from './standing-grants.js'
 export { type GrantListParams, type GrantStore, InMemoryGrantStore } from './stores.js'
 export {
   buildWideningSuggestionsForGrant,

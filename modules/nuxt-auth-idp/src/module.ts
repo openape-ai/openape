@@ -301,6 +301,12 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/shapes', handler: resolve('./runtime/server/api/shapes/index.get') })
       addServerHandler({ route: '/api/shapes/:cliId', handler: resolve('./runtime/server/api/shapes/[cliId].get') })
       addServerHandler({ route: '/api/shapes/resolve', method: 'post', handler: resolve('./runtime/server/api/shapes/resolve.post') })
+
+      // Standing grants — user-created pre-authorizations that auto-approve
+      // matching agent grant requests. Phase 1 Milestone 5.
+      addServerHandler({ route: '/api/standing-grants', handler: resolve('./runtime/server/api/standing-grants/index.get') })
+      addServerHandler({ route: '/api/standing-grants', method: 'post', handler: resolve('./runtime/server/api/standing-grants/index.post') })
+      addServerHandler({ route: '/api/standing-grants/:id', method: 'delete', handler: resolve('./runtime/server/api/standing-grants/[id].delete') })
     }
 
     // Server route handlers — Agent

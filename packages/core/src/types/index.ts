@@ -184,8 +184,8 @@ export interface OpenApeGrantRequest {
   scopes?: string[]
 }
 
-/** Grant category */
-export type GrantCategory = 'command' | 'delegation'
+/** Grant category. `standing` = user pre-authorization pattern that auto-approves matching incoming grants (Phase 1 of policy-shift). */
+export type GrantCategory = 'command' | 'delegation' | 'standing'
 
 /** OpenApe grant */
 export interface OpenApeGrant {
