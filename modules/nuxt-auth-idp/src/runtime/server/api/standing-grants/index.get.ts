@@ -13,6 +13,9 @@ import { requireAuth } from '../../utils/admin'
 export default defineEventHandler(async (event) => {
   const owner = await requireAuth(event)
   const { grantStore } = useGrantStores()
+  // Standing grants are stored with requester=delegate, so listGrants
+  // with a status filter + type=standing + owner-check in JS is the
+  // cheapest way to get a user's own pre-auths.
   const all = await grantStore.listGrants({})
   return all.data.filter((g) => {
     if (g.type !== 'standing') return false

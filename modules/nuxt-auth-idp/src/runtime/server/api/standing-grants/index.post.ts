@@ -60,13 +60,24 @@ export default defineEventHandler(async (event) => {
 
   const { grantStore } = useGrantStores()
   const now = Math.floor(Date.now() / 1000)
+
+  // Store requester = delegate so findByRequester(agent) returns the
+  // standing grants that apply to this agent — enables the fast path
+  // in evaluateStandingGrants(). target_host/audience/grant_type use
+  // values that satisfy the grants-table NOT NULL columns.
+  const storedRequest = {
+    ...request,
+    requester: request.delegate,
+    target_host: request.target_host ?? '*',
+    audience: request.audience,
+    grant_type: grantType,
+  } as unknown as OpenApeGrant['request']
+
   const grant: OpenApeGrant = {
     id: crypto.randomUUID(),
     status: 'approved',
     type: 'standing',
-    // request is typed as OpenApeGrantRequest but stored verbatim — the
-    // store is JSON-backed and the evaluator reads via isStandingGrantRequest.
-    request: request as unknown as OpenApeGrant['request'],
+    request: storedRequest,
     created_at: now,
     decided_at: now,
     decided_by: owner,

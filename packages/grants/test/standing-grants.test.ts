@@ -17,12 +17,20 @@ function makeStandingGrant(
     grant_type: 'always',
     ...overrides,
   }
+  // The store normalizes standing grants to have requester=delegate so
+  // findByRequester(agent) returns them. Mirror that here.
+  const storedRequest = {
+    ...req,
+    requester: req.delegate,
+    target_host: req.target_host ?? '*',
+    audience: req.audience,
+    grant_type: req.grant_type,
+  } as unknown as OpenApeGrant['request']
   return {
     id: `sg-${Math.random().toString(36).slice(2, 10)}`,
     status: 'approved',
-    // @ts-expect-error — OpenApeGrant.request is typed as OpenApeGrantRequest but
-    // standing grants use StandingGrantRequest; the DB stores it verbatim.
-    request: req,
+    type: 'standing',
+    request: storedRequest,
     created_at: Math.floor(Date.now() / 1000) - 60,
     decided_at: Math.floor(Date.now() / 1000) - 30,
     decided_by: overrides.owner,

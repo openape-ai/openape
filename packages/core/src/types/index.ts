@@ -207,6 +207,12 @@ export interface OpenApeGrant {
   expires_at?: number
   /** When the grant was used (for 'once' grants) */
   used_at?: number
+  /**
+   * Audit-trail marker when this grant was auto-approved by matching a
+   * standing grant (Phase 1 policy-shift). Holds the standing grant's id.
+   * Null/undefined for grants decided via the normal manual approval flow.
+   */
+  decided_by_standing_grant?: string
 }
 
 /** OpenApe AuthZ-JWT claims */

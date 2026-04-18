@@ -130,23 +130,23 @@ export async function evaluateStandingGrants(
     .filter((d): d is OpenApeCliAuthorizationDetail => d.type === 'openape_cli')
   if (incomingCli.length === 0) return null
 
-  // Fetch candidate standing grants. Minimal filter here — the caller
-  // should pre-filter by delegate if the store supports it, but we still
-  // redo the checks below for correctness.
-  //
-  // Standing grants have requester=owner (the user creating the pre-auth)
-  // and delegate=agent. Incoming grant.requester is the agent, so we
-  // search all approved grants and narrow by request.delegate below.
-  const approved = await grantStore.listGrants({ status: 'approved' })
-  const candidates = approved.data
+  // Standing grants are stored with `requester = delegate`, so
+  // findByRequester(agent) returns the full candidate set directly —
+  // no monorepo-wide scan. See standing-grants/index.post.ts for the
+  // normalization rationale.
+  const candidates = await grantStore.findByRequester(incoming.requester)
 
   const now = Math.floor(Date.now() / 1000)
   for (const grant of candidates) {
+    if (grant.status !== 'approved') continue
     const req = grant.request as unknown
     if (!isStandingGrantRequest(req)) continue
     if (req.delegate !== incoming.requester) continue
     if (req.audience !== incoming.audience) continue
-    if (req.target_host && req.target_host !== incoming.target_host) continue
+    // target_host: undefined or '*' means "any host"; specific value must match.
+    // '*' is the stored sentinel because the grants table has target_host
+    // as NOT NULL — see standing-grants/index.post.ts normalization.
+    if (req.target_host && req.target_host !== '*' && req.target_host !== incoming.target_host) continue
     if (grant.expires_at && grant.expires_at < now) continue
 
     const maxRisk = req.max_risk ? RISK_ORDER[req.max_risk] : Number.POSITIVE_INFINITY

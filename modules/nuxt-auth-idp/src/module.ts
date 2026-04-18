@@ -307,6 +307,10 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/standing-grants', handler: resolve('./runtime/server/api/standing-grants/index.get') })
       addServerHandler({ route: '/api/standing-grants', method: 'post', handler: resolve('./runtime/server/api/standing-grants/index.post') })
       addServerHandler({ route: '/api/standing-grants/:id', method: 'delete', handler: resolve('./runtime/server/api/standing-grants/[id].delete') })
+
+      // Agent-view aggregate (per-agent standing grants + recent activity).
+      // Phase 1 Milestone 7. Self-service only (requireAuth + caller == email).
+      addServerHandler({ route: '/api/users/:email/agents', handler: resolve('./runtime/server/api/users/[email]/agents.get') })
     }
 
     // Server route handlers — Agent
