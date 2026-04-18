@@ -188,6 +188,9 @@ export default defineNuxtModule<ModuleOptions>({
             { name: 'openape-grant-approval', path: '/grant-approval', file: resolve('./runtime/pages/grant-approval.vue') },
             { name: 'openape-grants', path: '/grants', file: resolve('./runtime/pages/grants.vue') },
             { name: 'openape-enroll', path: '/enroll', file: resolve('./runtime/pages/enroll.vue') },
+            // Phase 2: Agents view + standing-grant management
+            { name: 'openape-agents', path: '/agents', file: resolve('./runtime/pages/agents.vue') },
+            { name: 'openape-agents-detail', path: '/agents/:email', file: resolve('./runtime/pages/agents/[email].vue') },
           )
         }
 
