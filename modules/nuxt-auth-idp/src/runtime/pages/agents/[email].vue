@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { SAFE_COMMAND_DEFAULTS, isSafeCommandGrant } from '@openape/grants'
 import { navigateTo, useRoute } from '#imports'
 import { useIdpAuth } from '../../composables/useIdpAuth'
+import { isSafeCommandGrant, SAFE_COMMAND_DEFAULTS } from '../../utils/safe-commands'
 import {
   formatRelativeTime,
   formatStandingGrantScope,
