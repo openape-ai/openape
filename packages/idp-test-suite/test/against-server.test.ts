@@ -31,8 +31,9 @@ afterAll(() => {
 runIdPTestSuite({
   baseUrl: () => `http://localhost:${port}`,
   managementToken: MGMT,
-  // server-policy-shift needs the shape + standing-grants endpoints that
-  // live in @openape/nuxt-auth-idp; they're not exposed by @openape/server.
-  // Runs instead via against-free-idp.test.ts when FREE_IDP_MGMT_TOKEN is set.
-  skip: ['server-policy-shift'],
+  // server-policy-shift + safe-commands need the shape + standing-grants
+  // endpoints that live in @openape/nuxt-auth-idp; they're not exposed by
+  // @openape/server. These run via against-free-idp.test.ts when
+  // FREE_IDP_MGMT_TOKEN is set.
+  skip: ['server-policy-shift', 'safe-commands'],
 })
