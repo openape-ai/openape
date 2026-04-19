@@ -1,5 +1,12 @@
 # openape-idp
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`d8e1516`](https://github.com/openape-ai/openape/commit/d8e15161d7edda67139633ec18c959a2cc8a57bd)]:
+  - @openape/grants@0.10.0
+
 ## 0.1.2
 
 ### Patch Changes
