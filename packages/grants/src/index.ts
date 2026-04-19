@@ -9,6 +9,7 @@ export {
   isCliAuthorizationDetailExact,
   mergeCliAuthorizationDetails,
   resourceChainsStructurallyMatch,
+  selectorValueMatches,
   validateCliAuthorizationDetail,
   widenCliAuthorizationDetail,
 } from './cli-permissions.js'

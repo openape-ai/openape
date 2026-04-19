@@ -227,5 +227,109 @@ export function safeCommandsTests(config: ResolvedConfig) {
         expect(status).toBe(401)
       })
     })
+
+    describe('Glob coverage (Phase 5)', () => {
+      const humanEmail = `glob-human-${Date.now()}@example.com`
+      const agentEmail = `glob-agent-${Date.now()}@example.com`
+      const humanKey = generateEd25519Key()
+      const agentKey = generateEd25519Key()
+      let globSgId: string | undefined
+
+      it('setup: enroll human + agent', async () => {
+        await post(
+          config.baseUrl,
+          '/api/auth/enroll',
+          { email: humanEmail, name: 'Glob H', publicKey: humanKey.publicKeySsh, owner: humanEmail, type: 'human' },
+          config.managementToken,
+        )
+        await post(
+          config.baseUrl,
+          '/api/auth/enroll',
+          { email: agentEmail, name: 'Glob A', publicKey: agentKey.publicKeySsh, owner: humanEmail },
+          config.managementToken,
+        )
+      })
+
+      it('owner creates a prefix-glob standing grant', async () => {
+        const token = await loginWithKey(config.baseUrl, humanEmail, humanKey.privateKey)
+        const { status, data } = await post(
+          config.baseUrl,
+          '/api/standing-grants',
+          {
+            delegate: agentEmail,
+            audience: 'shapes',
+            cli_id: 'ls',
+            action: 'read',
+            max_risk: 'low',
+            resource_chain_template: [
+              { resource: 'fs', selector: { path: '/tmp/agent-scratch/*' } },
+            ],
+            grant_type: 'always',
+            reason: 'phase-5 glob E2E',
+          },
+          token,
+        )
+        expect(status).toBe(201)
+        expect(data.status).toBe('approved')
+        globSgId = data.id
+      })
+
+      it('agent request within the globbed prefix auto-approves via the SG', async () => {
+        expect(globSgId).toBeDefined()
+        const agentToken = await loginWithKey(config.baseUrl, agentEmail, agentKey.privateKey)
+        const { status, data } = await post(
+          config.baseUrl,
+          '/api/grants',
+          {
+            requester: agentEmail,
+            target_host: 'hostA',
+            audience: 'shapes',
+            grant_type: 'once',
+            command: ['ls', '/tmp/agent-scratch/foo'],
+            authorization_details: [{
+              type: 'openape_cli',
+              cli_id: 'ls',
+              operation_id: 'ls.list',
+              action: 'read',
+              risk: 'low',
+              resource_chain: [{ resource: 'fs', selector: { path: '/tmp/agent-scratch/foo' } }],
+              permission: 'ls.fs[path=/tmp/agent-scratch/foo]#read',
+              display: 'ls /tmp/agent-scratch/foo',
+            }],
+          },
+          agentToken,
+        )
+        expect(status).toBe(201)
+        expect(data.status).toBe('approved')
+        expect(data.decided_by_standing_grant).toBe(globSgId)
+      })
+
+      it('agent request outside the globbed prefix falls through to pending', async () => {
+        const agentToken = await loginWithKey(config.baseUrl, agentEmail, agentKey.privateKey)
+        const { data } = await post(
+          config.baseUrl,
+          '/api/grants',
+          {
+            requester: agentEmail,
+            target_host: 'hostA',
+            audience: 'shapes',
+            grant_type: 'once',
+            command: ['ls', '/tmp/other/foo'],
+            authorization_details: [{
+              type: 'openape_cli',
+              cli_id: 'ls',
+              operation_id: 'ls.list',
+              action: 'read',
+              risk: 'low',
+              resource_chain: [{ resource: 'fs', selector: { path: '/tmp/other/foo' } }],
+              permission: 'ls.fs[path=/tmp/other/foo]#read',
+              display: 'ls /tmp/other/foo',
+            }],
+          },
+          agentToken,
+        )
+        expect(data.status).toBe('pending')
+      })
+    })
   })
 }
