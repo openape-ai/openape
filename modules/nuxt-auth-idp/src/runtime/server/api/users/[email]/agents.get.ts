@@ -1,5 +1,5 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
-import { isStandingGrantRequest } from '@openape/grants'
+import { isSafeCommandGrant, isStandingGrantRequest } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAuth } from '../../../utils/admin'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -59,11 +59,34 @@ export default defineEventHandler(async (event) => {
     }
     const recent = nonStanding.toSorted((a, b) => b.created_at - a.created_at).slice(0, 20)
 
+    // Resolve each referenced standing grant once so the UI can render a
+    // distinct "Safe Command auto-approve" badge vs. a scoped-SG badge.
+    // N+1 is fine here: recent is bounded to 20 and distinct ids are cached.
+    const sgReasonCache = new Map<string, string | null>()
+    async function lookupSgReason(id: string): Promise<string | null> {
+      if (sgReasonCache.has(id)) return sgReasonCache.get(id) ?? null
+      const sg = await grantStore.findById(id)
+      const reason = (sg?.request as { reason?: unknown } | undefined)?.reason
+      const resolved = typeof reason === 'string' ? reason : null
+      sgReasonCache.set(id, resolved)
+      return resolved
+    }
+    const recentAnnotated = await Promise.all(recent.map(async (g) => {
+      if (!g.decided_by_standing_grant) return g
+      const reason = await lookupSgReason(g.decided_by_standing_grant)
+      const isSafe = reason ? isSafeCommandGrant({ request: { reason } }) : false
+      return {
+        ...g,
+        decided_by_standing_grant_reason: reason,
+        decided_by_safe_command: isSafe,
+      }
+    }))
+
     return {
       email: agent.email,
       display_name: agent.name,
       standing_grants: standingForAgent,
-      recent_grants: recent,
+      recent_grants: recentAnnotated,
       grant_counts: counts,
     }
   }))

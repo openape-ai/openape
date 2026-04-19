@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { SAFE_COMMAND_DEFAULTS, isSafeCommandGrant } from '@openape/grants'
 import { navigateTo, useRoute } from '#imports'
 import { useIdpAuth } from '../../composables/useIdpAuth'
 import {
@@ -35,6 +36,30 @@ const formError = ref('')
 // Revoke dialog state
 const revokeTarget = ref(null) // the SG object being revoked
 const revoking = ref(false)
+
+// Safe Commands state
+const safeCommandsBusy = ref(null) // cli_id currently being toggled/added
+const customInput = ref('')
+const safeCommandError = ref('')
+
+// Partition standing grants: safe-commands vs. "rich" custom grants
+const safeCommandGrants = computed(() =>
+  agent.value ? agent.value.standing_grants.filter(isSafeCommandGrant) : [],
+)
+const richStandingGrants = computed(() =>
+  agent.value ? agent.value.standing_grants.filter(g => !isSafeCommandGrant(g)) : [],
+)
+const safeCommandByCliId = computed(() => {
+  const map = new Map()
+  for (const g of safeCommandGrants.value) {
+    const cliId = g.request?.cli_id
+    if (typeof cliId === 'string') map.set(cliId, g)
+  }
+  return map
+})
+const customSafeCommands = computed(() =>
+  safeCommandGrants.value.filter(g => g.request?.reason === 'safe-command:custom'),
+)
 
 onMounted(async () => {
   await fetchUser()
@@ -169,6 +194,87 @@ async function confirmRevoke() {
 function cancelRevoke() {
   revokeTarget.value = null
 }
+
+async function toggleSafeCommand(cliId, action) {
+  safeCommandError.value = ''
+  safeCommandsBusy.value = cliId
+  try {
+    const existing = safeCommandByCliId.value.get(cliId)
+    if (existing) {
+      await $fetch(`/api/standing-grants/${encodeURIComponent(existing.id)}`, { method: 'DELETE' })
+    }
+    else {
+      await $fetch('/api/standing-grants', {
+        method: 'POST',
+        body: {
+          delegate: targetEmail.value,
+          audience: 'shapes',
+          target_host: '*',
+          cli_id: cliId,
+          resource_chain_template: [],
+          action,
+          max_risk: 'low',
+          grant_type: 'always',
+          reason: 'safe-command:default',
+        },
+      })
+    }
+    await loadAgent()
+  }
+  catch (err) {
+    safeCommandError.value = err?.data?.title || `Failed to toggle ${cliId}`
+  }
+  finally {
+    safeCommandsBusy.value = null
+  }
+}
+
+async function addCustomSafeCommand() {
+  const cliId = customInput.value.trim()
+  if (!cliId) return
+  safeCommandError.value = ''
+  safeCommandsBusy.value = cliId
+  try {
+    await $fetch('/api/standing-grants', {
+      method: 'POST',
+      body: {
+        delegate: targetEmail.value,
+        audience: 'shapes',
+        target_host: '*',
+        cli_id: cliId,
+        resource_chain_template: [],
+        action: 'exec',
+        max_risk: 'low',
+        grant_type: 'always',
+        reason: 'safe-command:custom',
+      },
+    })
+    customInput.value = ''
+    await loadAgent()
+  }
+  catch (err) {
+    safeCommandError.value = err?.data?.title || `Failed to add ${cliId}`
+  }
+  finally {
+    safeCommandsBusy.value = null
+  }
+}
+
+async function removeCustomSafeCommand(grant) {
+  safeCommandError.value = ''
+  const cliId = grant?.request?.cli_id
+  safeCommandsBusy.value = cliId || grant.id
+  try {
+    await $fetch(`/api/standing-grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' })
+    await loadAgent()
+  }
+  catch (err) {
+    safeCommandError.value = err?.data?.title || 'Failed to remove custom safe command'
+  }
+  finally {
+    safeCommandsBusy.value = null
+  }
+}
 </script>
 
 <template>
@@ -197,6 +303,91 @@ function cancelRevoke() {
       <template v-else-if="agent">
         <UAlert v-if="success" color="success" :title="success" class="mb-4" @close="success = ''" />
 
+        <!-- Safe Commands Section -->
+        <UCard class="mb-6">
+          <template #header>
+            <h2 class="text-lg font-semibold">
+              Safe commands
+            </h2>
+            <p class="text-sm text-muted mt-1">
+              Low-risk read-only CLIs that auto-approve without a prompt.
+            </p>
+          </template>
+
+          <UAlert
+            v-if="safeCommandError"
+            color="error"
+            :title="safeCommandError"
+            class="mb-3"
+            @close="safeCommandError = ''"
+          />
+
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            <label
+              v-for="def in SAFE_COMMAND_DEFAULTS"
+              :key="def.cli_id"
+              class="flex items-start gap-2 p-2 rounded-md border border-(--ui-border) hover:bg-(--ui-bg-elevated)/60 cursor-pointer"
+              :title="def.description"
+            >
+              <UCheckbox
+                :model-value="safeCommandByCliId.has(def.cli_id)"
+                :disabled="safeCommandsBusy === def.cli_id"
+                @update:model-value="toggleSafeCommand(def.cli_id, def.action)"
+              />
+              <div class="text-xs">
+                <div class="font-mono font-semibold">{{ def.cli_id }}</div>
+                <div class="text-muted">{{ def.display }}</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="mt-4">
+            <div class="text-sm font-semibold mb-2">
+              Custom safe commands
+            </div>
+            <div v-if="customSafeCommands.length === 0" class="text-xs text-muted mb-2">
+              None yet. Add any CLI below to auto-approve low-risk invocations.
+            </div>
+            <div v-else class="flex flex-wrap gap-2 mb-3">
+              <UBadge
+                v-for="g in customSafeCommands"
+                :key="g.id"
+                color="neutral"
+                variant="soft"
+                class="font-mono text-xs"
+              >
+                {{ g.request?.cli_id }}
+                <UButton
+                  variant="link"
+                  size="xs"
+                  color="error"
+                  icon="i-lucide-x"
+                  class="!p-0 ml-1"
+                  :disabled="safeCommandsBusy === (g.request?.cli_id || g.id)"
+                  @click="removeCustomSafeCommand(g)"
+                />
+              </UBadge>
+            </div>
+            <div class="flex gap-2">
+              <UInput
+                v-model="customInput"
+                placeholder="e.g. jq"
+                size="sm"
+                class="font-mono"
+                @keydown.enter="addCustomSafeCommand"
+              />
+              <UButton
+                size="sm"
+                :disabled="!customInput.trim() || safeCommandsBusy !== null"
+                icon="i-lucide-plus"
+                @click="addCustomSafeCommand"
+              >
+                Add
+              </UButton>
+            </div>
+          </div>
+        </UCard>
+
         <!-- Standing Grants Section -->
         <UCard :ui="{ body: 'p-0' }" class="mb-6">
           <template #header>
@@ -204,12 +395,12 @@ function cancelRevoke() {
               Standing grants
             </h2>
             <p class="text-sm text-muted mt-1">
-              Pre-authorized patterns that auto-approve matching agent requests.
+              Pre-authorized scoped patterns (beyond the safe-command defaults).
             </p>
           </template>
 
-          <div v-if="agent.standing_grants.length === 0" class="p-6 text-center text-muted text-sm">
-            No standing grants yet.
+          <div v-if="richStandingGrants.length === 0" class="p-6 text-center text-muted text-sm">
+            No scoped standing grants yet.
           </div>
           <table v-else class="w-full">
             <thead class="border-b border-(--ui-border)">
@@ -227,7 +418,7 @@ function cancelRevoke() {
             </thead>
             <tbody class="divide-y divide-(--ui-border)">
               <tr
-                v-for="sg in agent.standing_grants"
+                v-for="sg in richStandingGrants"
                 :key="sg.id"
                 class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg)"
               >
@@ -373,8 +564,18 @@ function cancelRevoke() {
                   {{ formatRelativeTime(g.created_at) }}
                 </td>
                 <td class="px-4 py-3 text-right">
+                  <UBadge
+                    v-if="g.decided_by_safe_command"
+                    color="success"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    title="Auto-approved via Safe Command"
+                  >
+                    Safe cmd
+                  </UBadge>
                   <UIcon
-                    v-if="g.decided_by_standing_grant"
+                    v-else-if="g.decided_by_standing_grant"
                     name="i-lucide-zap"
                     class="text-primary inline-block"
                     :title="`Auto-approved by standing grant ${g.decided_by_standing_grant}`"

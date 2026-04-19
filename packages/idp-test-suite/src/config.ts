@@ -2,7 +2,7 @@ export interface IdPTestConfig {
   /** Base URL or a function returning the base URL (resolved at test time). */
   baseUrl: string | (() => string)
   managementToken: string
-  skip?: string[] // suite names to skip: 'discovery', 'admin-users', 'ssh-keys', 'auth', 'session', 'oidc-flow', 'grants', 'delegations', 'server-policy-shift', 'security'
+  skip?: string[] // suite names to skip: 'discovery', 'admin-users', 'ssh-keys', 'auth', 'session', 'oidc-flow', 'grants', 'delegations', 'server-policy-shift', 'safe-commands', 'security'
 }
 
 /** Resolved config where baseUrl is always a string. Used inside test functions. */
