@@ -65,6 +65,55 @@ function copyText(text: string) {
   copied.value = 'text'
   setTimeout(() => copied.value = '', 2000)
 }
+
+// Bulk-apply safe commands
+const bulkOpen = ref(false)
+const bulkSelected = ref<Set<string>>(new Set())
+const bulkBusy = ref(false)
+const bulkResults = ref<Array<{ delegate: string, created: number, skipped: number }> | null>(null)
+const bulkError = ref('')
+
+function openBulk() {
+  bulkSelected.value = new Set(agents.value.map(a => a.email))
+  bulkResults.value = null
+  bulkError.value = ''
+  bulkOpen.value = true
+}
+
+function toggleBulkSelect(email: string, checked: boolean) {
+  const next = new Set(bulkSelected.value)
+  if (checked) next.add(email)
+  else next.delete(email)
+  bulkSelected.value = next
+}
+
+async function applyBulk() {
+  bulkBusy.value = true
+  bulkError.value = ''
+  try {
+    const res = await ($fetch as any)('/api/standing-grants/bulk-seed', {
+      method: 'POST',
+      body: { delegates: [...bulkSelected.value] },
+    }) as { results: Array<{ delegate: string, created: number, skipped: number }> }
+    bulkResults.value = res.results
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { detail?: string, title?: string } }
+    bulkError.value = e.data?.detail ?? e.data?.title ?? 'Bulk-apply fehlgeschlagen'
+  }
+  finally {
+    bulkBusy.value = false
+  }
+}
+
+function closeBulk() {
+  if (bulkBusy.value) return
+  bulkOpen.value = false
+}
+
+const bulkTotalCreated = computed(() =>
+  bulkResults.value ? bulkResults.value.reduce((s, r) => s + r.created, 0) : 0,
+)
 </script>
 
 <template>
@@ -79,6 +128,16 @@ function copyText(text: string) {
             <UBadge color="neutral" variant="subtle">
               {{ agents.length }}/{{ maxAgents }}
             </UBadge>
+            <UButton
+              v-if="agents.length > 0"
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-shield-check"
+              @click="openBulk"
+            >
+              Safe Commands
+            </UButton>
             <UButton
               to="/"
               color="neutral"
@@ -236,5 +295,78 @@ function copyText(text: string) {
         </template>
       </template>
     </UCard>
+
+    <UModal v-model:open="bulkOpen" :dismissible="!bulkBusy">
+      <template #content>
+        <UCard class="bg-gray-900 border border-gray-800">
+          <template #header>
+            <h3 class="text-lg font-semibold text-white">
+              Safe Commands auf alle Agents anwenden
+            </h3>
+            <p class="text-sm text-gray-400 mt-1">
+              Jeder ausgewählte Agent erhält die 14 Default-Safe-Command-Standing-Grants. Bereits vorhandene Einträge werden übersprungen.
+            </p>
+          </template>
+
+          <UAlert
+            v-if="bulkError"
+            color="error"
+            :title="bulkError"
+            class="mb-3"
+            @close="bulkError = ''"
+          />
+
+          <div v-if="!bulkResults" class="space-y-2 max-h-80 overflow-y-auto">
+            <label
+              v-for="a in agents"
+              :key="a.email"
+              class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-800 cursor-pointer"
+            >
+              <UCheckbox
+                :model-value="bulkSelected.has(a.email)"
+                @update:model-value="(v: boolean | 'indeterminate') => toggleBulkSelect(a.email, v === true)"
+              />
+              <div class="text-sm min-w-0">
+                <div class="font-medium text-white truncate">{{ a.name }}</div>
+                <div class="text-xs text-gray-400 font-mono truncate">{{ a.email }}</div>
+              </div>
+            </label>
+          </div>
+
+          <div v-else class="space-y-2 text-sm">
+            <div class="text-xs text-gray-400 mb-2">
+              {{ bulkTotalCreated }} neue Standing Grant{{ bulkTotalCreated === 1 ? '' : 's' }} über {{ bulkResults.length }} Agent{{ bulkResults.length === 1 ? '' : 's' }} erzeugt.
+            </div>
+            <div
+              v-for="r in bulkResults"
+              :key="r.delegate"
+              class="flex items-center justify-between px-2 py-1 border-b border-gray-700"
+            >
+              <code class="text-xs font-mono text-gray-200 break-all">{{ r.delegate }}</code>
+              <span class="text-xs text-gray-500 shrink-0 ml-2">
+                +{{ r.created }} · {{ r.skipped }} skipped
+              </span>
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" :disabled="bulkBusy" @click="closeBulk">
+                {{ bulkResults ? 'Schließen' : 'Abbrechen' }}
+              </UButton>
+              <UButton
+                v-if="!bulkResults"
+                color="primary"
+                :loading="bulkBusy"
+                :disabled="bulkBusy || bulkSelected.size === 0"
+                @click="applyBulk"
+              >
+                Anwenden
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
   </div>
 </template>
