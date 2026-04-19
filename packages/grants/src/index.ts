@@ -42,6 +42,16 @@ export {
   resolveServerShape,
   type ServerResolvedCommand,
 } from './server-resolver.js'
+export {
+  buildSafeCommandRequest,
+  type BuildSafeCommandRequestParams,
+  isDefaultSafeCommandGrant,
+  isSafeCommandGrant,
+  SAFE_COMMAND_DEFAULTS,
+  SAFE_COMMAND_REASON_CUSTOM,
+  SAFE_COMMAND_REASON_DEFAULT,
+  type SafeCommandDefinition,
+} from './safe-commands.js'
 export { findSimilarCliGrants, type SimilarGrantMatch, type SimilarGrantsResult } from './similarity.js'
 export {
   buildCoverageDetailFromStandingGrant,

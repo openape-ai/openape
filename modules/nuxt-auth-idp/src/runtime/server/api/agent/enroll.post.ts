@@ -2,8 +2,10 @@
 import { createHash } from 'node:crypto'
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
+import { useGrantStores } from '../../utils/grant-stores'
 import { requireAdmin } from '../../utils/admin'
 import { createProblemError } from '../../utils/problem'
+import { seedDefaultSafeCommands } from '../../utils/seed-safe-commands'
 
 export default defineEventHandler(async (event) => {
   const adminEmail = await requireAdmin(event)
@@ -80,10 +82,25 @@ export default defineEventHandler(async (event) => {
     createdAt: Math.floor(Date.now() / 1000),
   })
 
+  // Seed default safe-command standing grants for agents. Non-fatal on failure:
+  // enrollment already succeeded, the user can still use the bulk-apply flow later.
+  let seededSafeCommands = 0
+  if (!isHuman && owner) {
+    try {
+      const { grantStore } = useGrantStores()
+      const seeded = await seedDefaultSafeCommands(body.email, owner, grantStore)
+      seededSafeCommands = seeded.created
+    }
+    catch (err) {
+      console.error('[enroll] failed to seed safe commands for', body.email, err)
+    }
+  }
+
   return {
     email: body.email,
     name: body.name,
     owner: owner || body.email,
     status: 'active',
+    seeded_safe_commands: seededSafeCommands,
   }
 })

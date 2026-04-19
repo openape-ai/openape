@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { navigateTo } from '#imports'
 import { useIdpAuth } from '../composables/useIdpAuth'
 
@@ -7,6 +7,13 @@ const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const agents = ref([])
 const loading = ref(true)
 const error = ref('')
+
+// Bulk-apply modal state
+const bulkOpen = ref(false)
+const bulkSelected = ref(new Set())
+const bulkBusy = ref(false)
+const bulkResults = ref(null)
+const bulkError = ref('')
 
 onMounted(async () => {
   await fetchUser()
@@ -35,6 +42,48 @@ async function loadAgents() {
 function standingCount(agent) {
   return (agent.standing_grants ?? []).length
 }
+
+function openBulk() {
+  bulkSelected.value = new Set(agents.value.map(a => a.email))
+  bulkResults.value = null
+  bulkError.value = ''
+  bulkOpen.value = true
+}
+
+function toggleBulkSelect(email, checked) {
+  const next = new Set(bulkSelected.value)
+  if (checked) next.add(email)
+  else next.delete(email)
+  bulkSelected.value = next
+}
+
+async function applyBulk() {
+  bulkBusy.value = true
+  bulkError.value = ''
+  try {
+    const res = await $fetch('/api/standing-grants/bulk-seed', {
+      method: 'POST',
+      body: { delegates: [...bulkSelected.value] },
+    })
+    bulkResults.value = res.results
+    await loadAgents()
+  }
+  catch (err) {
+    bulkError.value = err?.data?.title || 'Bulk-apply failed'
+  }
+  finally {
+    bulkBusy.value = false
+  }
+}
+
+function closeBulk() {
+  if (bulkBusy.value) return
+  bulkOpen.value = false
+}
+
+const bulkTotalCreated = computed(() =>
+  bulkResults.value ? bulkResults.value.reduce((s, r) => s + r.created, 0) : 0,
+)
 </script>
 
 <template>
@@ -49,9 +98,21 @@ function standingCount(agent) {
             {{ user.email }}
           </p>
         </div>
-        <UButton to="/account" color="neutral" variant="soft" size="sm">
-          Account
-        </UButton>
+        <div class="flex gap-2">
+          <UButton
+            v-if="agents.length > 0"
+            color="primary"
+            variant="soft"
+            size="sm"
+            icon="i-lucide-shield-check"
+            @click="openBulk"
+          >
+            Apply safe commands
+          </UButton>
+          <UButton to="/account" color="neutral" variant="soft" size="sm">
+            Account
+          </UButton>
+        </div>
       </div>
 
       <div v-if="authLoading || loading" class="text-center text-muted mt-10">
@@ -151,5 +212,72 @@ function standingCount(agent) {
         </UCard>
       </template>
     </div>
+
+    <UModal v-model:open="bulkOpen" :dismissible="!bulkBusy">
+      <template #content>
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold">
+              Apply safe commands to all agents
+            </h3>
+            <p class="text-sm text-muted mt-1">
+              Each selected agent will receive the default safe-command standing grants. Already-present entries are skipped.
+            </p>
+          </template>
+
+          <UAlert v-if="bulkError" color="error" :title="bulkError" class="mb-3" @close="bulkError = ''" />
+
+          <div v-if="!bulkResults" class="space-y-2 max-h-80 overflow-y-auto">
+            <label
+              v-for="a in agents"
+              :key="a.email"
+              class="flex items-center gap-2 p-2 rounded-md hover:bg-(--ui-bg-elevated)/60 cursor-pointer"
+            >
+              <UCheckbox
+                :model-value="bulkSelected.has(a.email)"
+                @update:model-value="(v) => toggleBulkSelect(a.email, v)"
+              />
+              <div class="text-sm">
+                <div class="font-medium">{{ a.display_name || a.email }}</div>
+                <div class="text-xs text-muted font-mono">{{ a.email }}</div>
+              </div>
+            </label>
+          </div>
+
+          <div v-else class="space-y-2 text-sm">
+            <div class="text-xs text-muted mb-2">
+              Created {{ bulkTotalCreated }} new standing grant{{ bulkTotalCreated === 1 ? '' : 's' }} across {{ bulkResults.length }} agent{{ bulkResults.length === 1 ? '' : 's' }}.
+            </div>
+            <div
+              v-for="r in bulkResults"
+              :key="r.delegate"
+              class="flex items-center justify-between px-2 py-1 border-b border-(--ui-border)"
+            >
+              <code class="text-xs font-mono break-all">{{ r.delegate }}</code>
+              <span class="text-xs text-muted">
+                +{{ r.created }} · {{ r.skipped }} skipped
+              </span>
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton variant="ghost" :disabled="bulkBusy" @click="closeBulk">
+                {{ bulkResults ? 'Close' : 'Cancel' }}
+              </UButton>
+              <UButton
+                v-if="!bulkResults"
+                color="primary"
+                :loading="bulkBusy"
+                :disabled="bulkBusy || bulkSelected.size === 0"
+                @click="applyBulk"
+              >
+                Apply
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
   </div>
 </template>
