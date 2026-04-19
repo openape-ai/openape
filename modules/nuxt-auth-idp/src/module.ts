@@ -309,6 +309,7 @@ export default defineNuxtModule<ModuleOptions>({
       // matching agent grant requests. Phase 1 Milestone 5.
       addServerHandler({ route: '/api/standing-grants', handler: resolve('./runtime/server/api/standing-grants/index.get') })
       addServerHandler({ route: '/api/standing-grants', method: 'post', handler: resolve('./runtime/server/api/standing-grants/index.post') })
+      addServerHandler({ route: '/api/standing-grants/bulk-seed', method: 'post', handler: resolve('./runtime/server/api/standing-grants/bulk-seed.post') })
       addServerHandler({ route: '/api/standing-grants/:id', method: 'delete', handler: resolve('./runtime/server/api/standing-grants/[id].delete') })
 
       // Agent-view aggregate (per-agent standing grants + recent activity).
