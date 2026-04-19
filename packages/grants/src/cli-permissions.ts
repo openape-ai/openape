@@ -108,6 +108,22 @@ export function validateCliAuthorizationDetail(detail: unknown): CliAuthorizatio
   return { valid: true, errors: [] }
 }
 
+/**
+ * Compare a granted selector value against a required one. Without '*' this is
+ * literal equality (fast-path, preserves pre-Phase-5 behavior). With '*' the
+ * value is interpreted as a POSIX-shell-style glob: '*' matches any chars
+ * including '/'. Regex metachars other than '*' are escaped; the pattern is
+ * anchored. Length capped at 256 chars to bound compiled regex complexity.
+ */
+export function selectorValueMatches(granted: string, required: string): boolean {
+  if (!granted.includes('*')) return granted === required
+  if (granted.length > 256) return false
+  const escaped = granted
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+  return new RegExp(`^${escaped}$`).test(required)
+}
+
 function resourceRefCovers(granted: OpenApeCliResourceRef, required: OpenApeCliResourceRef): boolean {
   if (granted.resource !== required.resource)
     return false
@@ -120,7 +136,10 @@ function resourceRefCovers(granted: OpenApeCliResourceRef, required: OpenApeCliR
   if (!requiredSelector)
     return false
 
-  return Object.entries(grantedSelector).every(([key, value]) => requiredSelector[key] === value)
+  return Object.entries(grantedSelector).every(([key, value]) => {
+    const req = requiredSelector[key]
+    return typeof req === 'string' && selectorValueMatches(value, req)
+  })
 }
 
 export function isCliAuthorizationDetailExact(detail: Pick<OpenApeCliAuthorizationDetail, 'constraints'>): boolean {
