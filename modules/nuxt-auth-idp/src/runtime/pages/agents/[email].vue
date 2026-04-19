@@ -564,8 +564,18 @@ async function removeCustomSafeCommand(grant) {
                   {{ formatRelativeTime(g.created_at) }}
                 </td>
                 <td class="px-4 py-3 text-right">
+                  <UBadge
+                    v-if="g.decided_by_safe_command"
+                    color="success"
+                    variant="subtle"
+                    size="xs"
+                    icon="i-lucide-shield-check"
+                    title="Auto-approved via Safe Command"
+                  >
+                    Safe cmd
+                  </UBadge>
                   <UIcon
-                    v-if="g.decided_by_standing_grant"
+                    v-else-if="g.decided_by_standing_grant"
                     name="i-lucide-zap"
                     class="text-primary inline-block"
                     :title="`Auto-approved by standing grant ${g.decided_by_standing_grant}`"
