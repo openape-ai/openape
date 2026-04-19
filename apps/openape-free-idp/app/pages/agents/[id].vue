@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useIdpAuth } from '#imports'
-import { isSafeCommandGrant, SAFE_COMMAND_DEFAULTS } from '../../utils/safe-commands'
+import AllowedCommandsList from '../../components/AllowedCommandsList.vue'
+import ScopedCommandWizard from '../../components/ScopedCommandWizard.vue'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -25,6 +26,7 @@ interface StandingGrant {
     cli_id?: string
     action?: string
     delegate?: string
+    resource_chain_template?: Array<{ resource: string, selector?: Record<string, string> }>
     [key: string]: unknown
   }
   created_at: number
@@ -36,9 +38,7 @@ const deleting = ref(false)
 const deleteError = ref('')
 
 const standingGrants = ref<StandingGrant[]>([])
-const safeCommandsBusy = ref<string | null>(null)
-const customInput = ref('')
-const safeCommandError = ref('')
+const wizardOpen = ref(false)
 
 useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 'Agent') })
 
@@ -77,107 +77,12 @@ watch(user, (u) => {
   if (u) loadAll()
 }, { immediate: true })
 
-// Safe-command helpers
-const safeCommandByCliId = computed(() => {
-  const map = new Map<string, StandingGrant>()
-  for (const g of standingGrants.value) {
-    if (!isSafeCommandGrant(g)) continue
-    const cliId = g.request?.cli_id
-    if (typeof cliId === 'string') map.set(cliId, g)
-  }
-  return map
-})
-const customSafeCommands = computed(() =>
-  standingGrants.value.filter(g => g.request?.reason === 'safe-command:custom'),
-)
-const scopedStandingGrants = computed(() =>
-  standingGrants.value.filter(g => !isSafeCommandGrant(g)),
-)
-
-async function toggleSafeCommand(cliId: string, action: 'exec' | 'read') {
-  if (!agent.value) return
-  safeCommandError.value = ''
-  safeCommandsBusy.value = cliId
-  try {
-    const existing = safeCommandByCliId.value.get(cliId)
-    if (existing) {
-      await $fetch(`/api/standing-grants/${encodeURIComponent(existing.id)}`, { method: 'DELETE' })
-    }
-    else {
-      await $fetch('/api/standing-grants', {
-        method: 'POST',
-        body: {
-          delegate: agent.value.email,
-          audience: 'shapes',
-          target_host: '*',
-          cli_id: cliId,
-          resource_chain_template: [],
-          action,
-          max_risk: 'low',
-          grant_type: 'always',
-          reason: 'safe-command:default',
-        },
-      })
-    }
-    await loadStandingGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { detail?: string, title?: string } }
-    safeCommandError.value = e.data?.detail ?? e.data?.title ?? `Toggle ${cliId} failed`
-  }
-  finally {
-    safeCommandsBusy.value = null
-  }
+function openWizard() {
+  wizardOpen.value = true
 }
 
-async function addCustomSafeCommand() {
-  if (!agent.value) return
-  const cliId = customInput.value.trim()
-  if (!cliId) return
-  safeCommandError.value = ''
-  safeCommandsBusy.value = cliId
-  try {
-    await $fetch('/api/standing-grants', {
-      method: 'POST',
-      body: {
-        delegate: agent.value.email,
-        audience: 'shapes',
-        target_host: '*',
-        cli_id: cliId,
-        resource_chain_template: [],
-        action: 'exec',
-        max_risk: 'low',
-        grant_type: 'always',
-        reason: 'safe-command:custom',
-      },
-    })
-    customInput.value = ''
-    await loadStandingGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { detail?: string, title?: string } }
-    safeCommandError.value = e.data?.detail ?? e.data?.title ?? `Add ${cliId} failed`
-  }
-  finally {
-    safeCommandsBusy.value = null
-  }
-}
-
-async function removeCustomSafeCommand(grant: StandingGrant) {
-  safeCommandError.value = ''
-  const cliId = grant.request?.cli_id || grant.id
-  safeCommandsBusy.value = cliId
-  try {
-    await $fetch(`/api/standing-grants/${encodeURIComponent(grant.id)}`, { method: 'DELETE' })
-    await loadStandingGrants()
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { detail?: string, title?: string } }
-    safeCommandError.value = e.data?.detail ?? e.data?.title ?? 'Remove failed'
-  }
-  finally {
-    safeCommandsBusy.value = null
-  }
+async function onWizardCreated() {
+  await loadStandingGrants()
 }
 
 const authInstructions = computed(() => {
@@ -478,119 +383,13 @@ async function handleDelete() {
             </div>
           </div>
 
-          <!-- Safe Commands section -->
-          <div>
-            <p class="text-sm text-gray-400 mb-2">
-              Safe Commands
-            </p>
-            <p class="text-xs text-gray-500 mb-3">
-              Niedrigrisiko-CLIs, die ohne Rückfrage auto-approved werden.
-            </p>
-
-            <UAlert
-              v-if="safeCommandError"
-              color="error"
-              :title="safeCommandError"
-              class="mb-3"
-              @close="safeCommandError = ''"
-            />
-
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <label
-                v-for="def in SAFE_COMMAND_DEFAULTS"
-                :key="def.cli_id"
-                class="flex items-start gap-2 p-2 rounded-md border border-gray-700 bg-gray-800/50 hover:bg-gray-800 cursor-pointer"
-                :title="def.description"
-              >
-                <UCheckbox
-                  :model-value="safeCommandByCliId.has(def.cli_id)"
-                  :disabled="safeCommandsBusy === def.cli_id"
-                  @update:model-value="toggleSafeCommand(def.cli_id, def.action)"
-                />
-                <div class="text-xs min-w-0">
-                  <div class="font-mono font-semibold text-gray-100">{{ def.cli_id }}</div>
-                  <div class="text-gray-400 truncate">{{ def.display }}</div>
-                </div>
-              </label>
-            </div>
-
-            <div class="mt-3">
-              <p class="text-xs text-gray-500 mb-2">
-                Custom safe commands
-              </p>
-              <div v-if="customSafeCommands.length === 0" class="text-xs text-gray-500 mb-2">
-                Keine. Füge eine beliebige CLI hinzu, um Low-Risk-Aufrufe zu auto-approven.
-              </div>
-              <div v-else class="flex flex-wrap gap-2 mb-2">
-                <UBadge
-                  v-for="g in customSafeCommands"
-                  :key="g.id"
-                  color="neutral"
-                  variant="soft"
-                  class="font-mono text-xs"
-                >
-                  {{ g.request?.cli_id }}
-                  <UButton
-                    variant="link"
-                    size="xs"
-                    color="error"
-                    icon="i-lucide-x"
-                    class="!p-0 ml-1"
-                    :disabled="safeCommandsBusy === (g.request?.cli_id || g.id)"
-                    @click="removeCustomSafeCommand(g)"
-                  />
-                </UBadge>
-              </div>
-              <div class="flex gap-2">
-                <UInput
-                  v-model="customInput"
-                  placeholder="e.g. jq"
-                  size="sm"
-                  class="font-mono flex-1"
-                  @keydown.enter="addCustomSafeCommand"
-                />
-                <UButton
-                  size="sm"
-                  :disabled="!customInput.trim() || safeCommandsBusy !== null"
-                  icon="i-lucide-plus"
-                  @click="addCustomSafeCommand"
-                >
-                  Add
-                </UButton>
-              </div>
-            </div>
-          </div>
-
-          <!-- Scoped standing grants -->
-          <div v-if="scopedStandingGrants.length > 0">
-            <p class="text-sm text-gray-400 mb-2">
-              Scoped Standing Grants
-            </p>
-            <div class="space-y-2">
-              <div
-                v-for="g in scopedStandingGrants"
-                :key="g.id"
-                class="flex items-center justify-between p-2 rounded-md border border-gray-700 bg-gray-800/50"
-              >
-                <div class="min-w-0 flex-1">
-                  <code class="text-xs font-mono text-gray-200 break-all">
-                    {{ g.request?.cli_id ?? '*' }} · {{ g.request?.action ?? 'any' }}
-                  </code>
-                  <div v-if="g.request?.reason" class="text-xs text-gray-500 mt-0.5">
-                    {{ g.request.reason }}
-                  </div>
-                </div>
-                <UButton
-                  variant="ghost"
-                  size="xs"
-                  color="error"
-                  icon="i-lucide-trash-2"
-                  :disabled="safeCommandsBusy === g.id"
-                  @click="removeCustomSafeCommand(g)"
-                />
-              </div>
-            </div>
-          </div>
+          <AllowedCommandsList
+            :agent-email="agent.email"
+            :owner="agent.owner ?? user?.email ?? ''"
+            :standing-grants="standingGrants"
+            @refresh="loadStandingGrants"
+            @add-scoped="openWizard"
+          />
 
           <UAlert
             v-if="deleteError"
@@ -611,5 +410,12 @@ async function handleDelete() {
         </div>
       </template>
     </UCard>
+
+    <ScopedCommandWizard
+      v-if="agent"
+      v-model:open="wizardOpen"
+      :agent-email="agent.email"
+      @created="onWizardCreated"
+    />
   </div>
 </template>

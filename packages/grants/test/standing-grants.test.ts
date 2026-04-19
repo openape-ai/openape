@@ -249,4 +249,68 @@ describe('evaluateStandingGrants', () => {
     )
     expect(match).toBeNull()
   })
+
+  describe('glob selectors (Phase 5)', () => {
+    it('matches when template uses a prefix-glob path selector', async () => {
+      const store = await withStandingGrants([
+        makeStandingGrant({
+          owner: 'patrick@',
+          delegate: 'claude@example.com',
+          cli_id: 'ls',
+          action: 'read',
+          max_risk: 'low',
+          resource_chain_template: [
+            { resource: 'fs', selector: { path: '/Users/patrickhofmann/*' } },
+          ],
+        }),
+      ])
+      const lsDetail = {
+        type: 'openape_cli' as const,
+        cli_id: 'ls',
+        operation_id: 'ls.list',
+        action: 'read',
+        risk: 'low' as const,
+        resource_chain: [{ resource: 'fs', selector: { path: '/Users/patrickhofmann/Documents' } }],
+        permission: '',
+        display: 'ls /Users/patrickhofmann/Documents',
+      }
+      lsDetail.permission = canonicalizeCliPermission(lsDetail)
+      const match = await evaluateStandingGrants(
+        makeIncomingGrantRequest({ authorization_details: [lsDetail] }),
+        store,
+      )
+      expect(match).not.toBeNull()
+    })
+
+    it('does not match when the required path is outside the globbed prefix', async () => {
+      const store = await withStandingGrants([
+        makeStandingGrant({
+          owner: 'patrick@',
+          delegate: 'claude@example.com',
+          cli_id: 'ls',
+          action: 'read',
+          max_risk: 'low',
+          resource_chain_template: [
+            { resource: 'fs', selector: { path: '/Users/patrickhofmann/*' } },
+          ],
+        }),
+      ])
+      const lsDetail = {
+        type: 'openape_cli' as const,
+        cli_id: 'ls',
+        operation_id: 'ls.list',
+        action: 'read',
+        risk: 'low' as const,
+        resource_chain: [{ resource: 'fs', selector: { path: '/Users/other/foo' } }],
+        permission: '',
+        display: 'ls /Users/other/foo',
+      }
+      lsDetail.permission = canonicalizeCliPermission(lsDetail)
+      const match = await evaluateStandingGrants(
+        makeIncomingGrantRequest({ authorization_details: [lsDetail] }),
+        store,
+      )
+      expect(match).toBeNull()
+    })
+  })
 })
