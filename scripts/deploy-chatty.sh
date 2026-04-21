@@ -5,13 +5,17 @@
 # Usage: ./scripts/deploy-chatty.sh
 #
 # Requires:
-#   - SSH access to chatty.delta-mind.at (ssh alias in ~/.ssh/config)
-#   - sudo on chatty for systemctl restart
-#   - Local node/pnpm, run from the monorepo root
+#   - SSH access to chatty.delta-mind.at as the service user (default: openape).
+#     Configure via ~/.ssh/config "Host chatty" with "User openape", or override
+#     via CHATTY_HOST. The GitHub Actions deploy-chatty workflow sets that up
+#     from repo secrets.
+#   - Passwordless sudo on chatty for `systemctl restart openape-free-idp.service`
+#     (installed in /etc/sudoers.d/openape-free-idp, scoped to user openape).
+#   - Local node/pnpm, run from the monorepo root.
 #
 # Release layout on chatty:
-#   ~/projects/openape-free-idp/
-#     ├─ releases/<TS>/        timestamped, kept for rollback
+#   /home/openape/projects/openape-free-idp/
+#     ├─ releases/<TS>/        timestamped, kept for rollback (last 3)
 #     ├─ current -> releases/<TS>/
 #     └─ shared/.env           chmod 600, persistent across deploys
 #
@@ -21,7 +25,7 @@
 set -euo pipefail
 
 HOST="${CHATTY_HOST:-chatty.delta-mind.at}"
-BASE="${CHATTY_BASE:-/home/ubuntu/projects/openape-free-idp}"
+BASE="${CHATTY_BASE:-/home/openape/projects/openape-free-idp}"
 TS=$(date -u +%Y-%m-%dT%H-%M-%S)
 
 echo "→ Build .output locally"
@@ -30,10 +34,10 @@ pnpm turbo run build --filter openape-free-idp
 echo "→ Rsync release to ${HOST}:${BASE}/releases/${TS}/"
 rsync -az --delete \
   apps/openape-free-idp/.output/ \
-  "${HOST}:${BASE}/releases/${TS}/"
+  "${CHATTY_USER:-openape}@${HOST}:${BASE}/releases/${TS}/"
 
 echo "→ Pin matching linux-x64-gnu native binding (0.4.7)"
-ssh "${HOST}" bash -s <<REMOTE
+ssh -l "${CHATTY_USER:-openape}" "${HOST}" bash -s <<REMOTE
 set -euo pipefail
 cd /tmp
 rm -rf libsql-pkg && mkdir libsql-pkg && cd libsql-pkg
@@ -44,13 +48,13 @@ cp package/* ${BASE}/releases/${TS}/server/node_modules/@libsql/linux-x64-gnu/
 REMOTE
 
 echo "→ Swap current symlink"
-ssh "${HOST}" "ln -sfn ${BASE}/releases/${TS} ${BASE}/current"
+ssh -l "${CHATTY_USER:-openape}" "${HOST}" "ln -sfn ${BASE}/releases/${TS} ${BASE}/current"
 
 echo "→ Restart systemd service"
-ssh "${HOST}" "sudo systemctl restart openape-free-idp.service"
+ssh -l "${CHATTY_USER:-openape}" "${HOST}" "sudo systemctl restart openape-free-idp.service"
 
 echo "→ Wait for socket + health"
-ssh "${HOST}" "
+ssh -l "${CHATTY_USER:-openape}" "${HOST}" "
   for i in 1 2 3 4 5 6 7 8 9 10; do
     if curl -fsS -o /dev/null http://127.0.0.1:3003/api/shapes; then echo 'up after '\$i's'; exit 0; fi
     sleep 1
@@ -61,7 +65,7 @@ ssh "${HOST}" "
 "
 
 echo "→ Prune old releases (keep last 3)"
-ssh "${HOST}" "ls -1t ${BASE}/releases/ | tail -n +4 | xargs -r -I{} rm -rf ${BASE}/releases/{}"
+ssh -l "${CHATTY_USER:-openape}" "${HOST}" "ls -1t ${BASE}/releases/ | tail -n +4 | xargs -r -I{} rm -rf ${BASE}/releases/{}"
 
 echo
 echo "✓ Deployed ${TS} to https://id.openape.ai"
