@@ -1,5 +1,5 @@
 const e2e = process.env.OPENAPE_E2E === '1'
-const localIssuer = process.env.OPENAPE_ISSUER || 'https://id.openape.at'
+const localIssuer = process.env.OPENAPE_ISSUER || 'https://id.openape.ai'
 
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
