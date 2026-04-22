@@ -46,6 +46,26 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_ssh_keys_user_email ON ssh_keys(user_email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_ssh_keys_public_key ON ssh_keys(public_key)`)
+
+    // Schema evolved past migration 0000: extra user columns + shapes table
+    // are declared in schema.ts but were never added here. Without these the
+    // very first login/register on a fresh DB fails with "no such table".
+    await db.run(sql`CREATE TABLE IF NOT EXISTS users (
+      email TEXT PRIMARY KEY NOT NULL, id TEXT, name TEXT NOT NULL,
+      owner TEXT, approver TEXT, type TEXT, public_key TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_id ON users(id)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_approver ON users(approver)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS shapes (
+      cli_id TEXT PRIMARY KEY, executable TEXT NOT NULL, description TEXT NOT NULL,
+      operations TEXT NOT NULL, source TEXT NOT NULL, digest TEXT NOT NULL,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_source ON shapes(source)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_executable ON shapes(executable)`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
