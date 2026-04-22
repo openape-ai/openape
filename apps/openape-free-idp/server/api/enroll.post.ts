@@ -8,7 +8,7 @@ function sanitizeName(name: string): string {
 function deriveAgentEmail(ownerEmail: string, agentName: string): string {
   const [local, domain] = ownerEmail.split('@')
   const safeName = sanitizeName(agentName)
-  return `${safeName}+${local}+${domain!.replace(/\./g, '_')}@id.openape.at`
+  return `${safeName}+${local}+${domain!.replace(/\./g, '_')}@id.openape.ai`
 }
 
 export default defineEventHandler(async (event) => {

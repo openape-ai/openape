@@ -23,7 +23,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     resendApiKey: '',
-    resendFrom: 'auth@openape.at',
+    resendFrom: 'auth@openape.ai',
     tursoUrl: '',
     tursoAuthToken: '',
     public: {
