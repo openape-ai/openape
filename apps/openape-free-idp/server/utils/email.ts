@@ -1,3 +1,4 @@
+import { createError } from 'h3'
 import { Resend } from 'resend'
 import { useRuntimeConfig } from '#imports'
 
@@ -15,7 +16,10 @@ export async function sendRegistrationEmail(email: string, registerUrl: string) 
   const config = useRuntimeConfig()
   const resend = getResend()
 
-  await resend.emails.send({
+  // The Resend SDK returns { data, error } and does NOT throw on API failures
+  // (invalid key, unverified sender domain, rate limit, etc.). Without checking
+  // `error` we'd return 200 to the caller while the email is silently dropped.
+  const { data, error } = await resend.emails.send({
     from: config.resendFrom,
     to: email,
     subject: 'Dein Account — OpenApe',
@@ -42,4 +46,14 @@ export async function sendRegistrationEmail(email: string, registerUrl: string) 
       </div>
     `,
   })
+
+  if (error) {
+    console.error('[email] resend failed for', email, 'from', config.resendFrom, error)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Email delivery failed',
+      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
+    })
+  }
+  console.info(`[email] registration email queued id=${data?.id ?? 'unknown'} to=${email}`)
 }
