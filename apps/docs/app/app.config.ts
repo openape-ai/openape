@@ -36,7 +36,7 @@ export default defineAppConfig({
     colorMode: false,
     links: [{
       'icon': 'i-heroicons-globe-alt',
-      'to': 'https://openape.at',
+      'to': 'https://openape.ai',
       'target': '_blank',
       'aria-label': 'OpenApe Website',
     }, {
@@ -58,8 +58,8 @@ export default defineAppConfig({
         target: '_blank',
       }, {
         icon: 'i-heroicons-globe-alt',
-        label: 'openape.at',
-        to: 'https://openape.at',
+        label: 'openape.ai',
+        to: 'https://openape.ai',
         target: '_blank',
       }],
     },
