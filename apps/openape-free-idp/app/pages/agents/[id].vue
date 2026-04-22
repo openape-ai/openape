@@ -88,7 +88,7 @@ async function onWizardCreated() {
 const authInstructions = computed(() => {
   if (!agent.value) return ''
   const email = agent.value.email
-  const base = 'https://id.openape.at'
+  const base = 'https://id.openape.ai'
   return `You can authenticate at ${base} using Ed25519 challenge-response:
 
 Agent email: ${email}
@@ -114,11 +114,11 @@ const escapesCommands = computed(() => {
   return [
     {
       label: 'Enroll (neuer Server)',
-      cmd: `sudo escapes enroll --server https://id.openape.at --agent-email "${email}" --agent-name "${name}" --key /etc/openape/agent.key --existing`,
+      cmd: `sudo escapes enroll --server https://id.openape.ai --agent-email "${email}" --agent-name "${name}" --key /etc/openape/agent.key --existing`,
     },
     {
       label: 'Server-URL ändern',
-      cmd: `sudo escapes update --email "${email}" --server https://id.openape.at`,
+      cmd: `sudo escapes update --email "${email}" --server https://id.openape.ai`,
     },
     {
       label: 'Agent entfernen (nur lokal)',
