@@ -266,7 +266,7 @@ onUnmounted(() => {
       </div>
 
       <p class="mt-8 text-sm text-gray-500">
-        Powered by <NuxtLink to="https://openape.at" external class="text-gray-400 hover:text-white transition-colors">
+        Powered by <NuxtLink to="https://openape.ai" external class="text-gray-400 hover:text-white transition-colors">
           OpenApe
         </NuxtLink>
       </p>
