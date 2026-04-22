@@ -56,7 +56,7 @@ export default defineNuxtConfig({
   },
 
   llms: {
-    domain: 'https://docs.openape.at/',
+    domain: 'https://docs.openape.ai/',
     title: 'OpenApe Documentation',
     description: 'The security layer for the Agentic Web. DNS-based identity and human-in-the-loop permissions.',
     full: {
