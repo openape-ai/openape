@@ -1,6 +1,6 @@
 # OpenApe Docs
 
-Documentation site for the OpenApe ecosystem — [docs.openape.at](https://docs.openape.at)
+Documentation site for the OpenApe ecosystem — [docs.openape.ai](https://docs.openape.ai)
 
 Built with [Nuxt Content](https://content.nuxt.com/) and [Nuxt UI](https://ui.nuxt.com/).
 
@@ -40,7 +40,7 @@ pnpm build
 npx vercel deploy --prebuilt --prod
 ```
 
-Deployed at [docs.openape.at](https://docs.openape.at).
+Deployed at [docs.openape.ai](https://docs.openape.ai).
 
 ## License
 
