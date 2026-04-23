@@ -45,7 +45,6 @@ async function loadSimilarGrants(grantId) {
     }
   }
   catch {
-    // ignore
   }
 }
 function hasSimilar(grantId) {
@@ -106,7 +105,6 @@ async function loadMoreHistory() {
     historyHasMore.value = res.pagination?.has_more ?? false
   }
   catch {
-    // ignore
   }
   finally {
     loadingHistory.value = false
@@ -417,8 +415,24 @@ function isExactCommand(detail) {
                   <p v-if="grant.request.reason">
                     <span class="text-muted">Reason:</span> {{ grant.request.reason }}
                   </p>
-                  <p v-if="grant.decided_by" class="text-xs text-dimmed">
-                    Approved by: {{ grant.decided_by }}
+                  <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
+                    <span>Approved by: {{ grant.decided_by }}</span>
+                    <UBadge
+                      v-if="grant.auto_approval_kind === 'yolo'"
+                      color="warning"
+                      variant="subtle"
+                      size="xs"
+                    >
+                      YOLO
+                    </UBadge>
+                    <UBadge
+                      v-else-if="grant.auto_approval_kind === 'standing'"
+                      color="info"
+                      variant="subtle"
+                      size="xs"
+                    >
+                      Standing
+                    </UBadge>
                   </p>
                   <p v-if="grant.expires_at" class="text-xs text-dimmed">
                     Expires: {{ formatTime(grant.expires_at) }}
@@ -491,8 +505,24 @@ function isExactCommand(detail) {
                 <p v-if="grant.request.reason">
                   <span class="text-muted">Reason:</span> {{ grant.request.reason }}
                 </p>
-                <p v-if="grant.decided_by" class="text-xs text-dimmed">
-                  Decided by: {{ grant.decided_by }}
+                <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
+                  <span>Decided by: {{ grant.decided_by }}</span>
+                  <UBadge
+                    v-if="grant.auto_approval_kind === 'yolo'"
+                    color="warning"
+                    variant="subtle"
+                    size="xs"
+                  >
+                    YOLO
+                  </UBadge>
+                  <UBadge
+                    v-else-if="grant.auto_approval_kind === 'standing'"
+                    color="info"
+                    variant="subtle"
+                    size="xs"
+                  >
+                    Standing
+                  </UBadge>
                 </p>
                 <p class="text-xs text-dimmed">
                   Created: {{ formatTime(grant.created_at) }}

@@ -18,6 +18,9 @@ export const grants = sqliteTable('grants', {
   // column records the standing grant's id for audit-trail purposes.
   // Null for grants decided via the normal manual approval path.
   decidedByStandingGrant: text('decided_by_standing_grant'),
+  // Which auto-approval path decided this grant. Null = human decision,
+  // 'standing' = standing-grant match, 'yolo' = per-agent YOLO policy.
+  autoApprovalKind: text('auto_approval_kind'),
 }, table => [
   index('idx_grants_status').on(table.status),
   index('idx_grants_requester').on(table.requester),
@@ -157,6 +160,19 @@ export const signingKeys = sqliteTable('signing_keys', {
   publicKeyJwk: text('public_key_jwk', { mode: 'json' }).notNull(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at').notNull(),
+})
+
+// --- Milestone 6: YOLO auto-approval policies ---
+// One row per agent. Presence = enabled. Deny rules mark the subset of
+// grant requests that fall back to the normal (human) approval flow.
+export const yoloPolicies = sqliteTable('yolo_policies', {
+  agentEmail: text('agent_email').primaryKey(),
+  enabledBy: text('enabled_by').notNull(),
+  denyRiskThreshold: text('deny_risk_threshold'),
+  denyPatterns: text('deny_patterns', { mode: 'json' }).notNull().default('[]'),
+  enabledAt: integer('enabled_at').notNull(),
+  expiresAt: integer('expires_at'),
+  updatedAt: integer('updated_at').notNull(),
 })
 
 // --- Milestone 5: SSH Keys ---

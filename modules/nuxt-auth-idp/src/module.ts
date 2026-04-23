@@ -317,6 +317,11 @@ export default defineNuxtModule<ModuleOptions>({
       // Agent-view aggregate (per-agent standing grants + recent activity).
       // Phase 1 Milestone 7. Self-service only (requireAuth + caller == email).
       addServerHandler({ route: '/api/users/:email/agents', handler: resolve('./runtime/server/api/users/[email]/agents.get') })
+
+      // YOLO auto-approval policy (per-agent)
+      addServerHandler({ route: '/api/users/:email/yolo-policy', handler: resolve('./runtime/server/api/users/[email]/yolo-policy.get') })
+      addServerHandler({ route: '/api/users/:email/yolo-policy', method: 'put', handler: resolve('./runtime/server/api/users/[email]/yolo-policy.put') })
+      addServerHandler({ route: '/api/users/:email/yolo-policy', method: 'delete', handler: resolve('./runtime/server/api/users/[email]/yolo-policy.delete') })
     }
 
     // Server route handlers — Agent
