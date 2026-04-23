@@ -18,15 +18,19 @@ export default defineEventHandler(async (event) => {
   if (!challenge) {
     throw createProblemError({ status: 400, title: 'Invalid or expired challenge' })
   }
+  if (challenge.rpId && challenge.rpId !== rpConfig.rpID) {
+    throw createProblemError({ status: 400, title: 'Challenge was issued for a different RP' })
+  }
 
-  // Find the credential that was used
   const credentialId = body.response.id
   const credential = await credentialStore.findById(credentialId)
   if (!credential) {
     throw createProblemError({ status: 400, title: 'Unknown credential' })
   }
+  if (credential.rpId && credential.rpId !== rpConfig.rpID) {
+    throw createProblemError({ status: 400, title: 'Credential belongs to a different RP' })
+  }
 
-  // If email was specified during options, verify it matches
   if (challenge.userEmail && credential.userEmail !== challenge.userEmail) {
     throw createProblemError({ status: 400, title: 'Credential does not belong to specified user' })
   }

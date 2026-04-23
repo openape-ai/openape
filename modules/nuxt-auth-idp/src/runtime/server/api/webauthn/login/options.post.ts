@@ -12,7 +12,9 @@ export default defineEventHandler(async (event) => {
 
   let credentials
   if (body.email) {
-    credentials = await credentialStore.findByUser(body.email)
+    credentials = credentialStore.findByUserAndRp
+      ? await credentialStore.findByUserAndRp(body.email, rpConfig.rpID)
+      : (await credentialStore.findByUser(body.email)).filter(c => !c.rpId || c.rpId === rpConfig.rpID)
     if (credentials.length === 0) {
       throw createProblemError({ status: 404, title: 'No passkeys found for this email' })
     }
@@ -26,6 +28,7 @@ export default defineEventHandler(async (event) => {
     userEmail: body.email,
     type: 'authentication',
     expiresAt: Date.now() + 5 * 60 * 1000,
+    rpId: rpConfig.rpID,
   })
 
   return { options, challengeToken }
