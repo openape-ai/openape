@@ -9,7 +9,6 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "openape-free-idp",
-    "openape-agent-mail",
     "openape-agent-proxy",
     "docs",
     "openape-idp-example",
