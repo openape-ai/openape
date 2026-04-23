@@ -213,6 +213,14 @@ export interface OpenApeGrant {
    * Null/undefined for grants decided via the normal manual approval flow.
    */
   decided_by_standing_grant?: string
+  /**
+   * Which auto-approval path decided this grant.
+   *   undefined — human decision (default)
+   *   'standing' — matched a standing grant
+   *   'yolo' — matched a per-agent YOLO auto-approval policy
+   * Purely informational; consumers that don't know the field simply ignore it.
+   */
+  auto_approval_kind?: 'standing' | 'yolo'
 }
 
 /** OpenApe AuthZ-JWT claims */

@@ -116,6 +116,21 @@ export default defineNitroPlugin(async () => {
     }
     if (!defaultRp) defaultRp = 'id.openape.ai'
     await db.run(sql`UPDATE credentials SET rp_id = ${defaultRp} WHERE rp_id IS NULL`)
+
+    // YOLO auto-approval policies (one per agent; presence = enabled).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS yolo_policies (
+      agent_email TEXT PRIMARY KEY,
+      enabled_by TEXT NOT NULL,
+      deny_risk_threshold TEXT,
+      deny_patterns TEXT NOT NULL DEFAULT '[]',
+      enabled_at INTEGER NOT NULL,
+      expires_at INTEGER,
+      updated_at INTEGER NOT NULL
+    )`)
+
+    // auto_approval_kind column on grants — null = human, 'standing' or 'yolo'.
+    try { await db.run(sql`ALTER TABLE grants ADD COLUMN auto_approval_kind TEXT`) }
+    catch { /* already present */ }
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)

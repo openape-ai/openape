@@ -25,6 +25,27 @@ vi.mock('../src/runtime/server/utils/grant-stores', () => ({
   }),
 }))
 
+vi.mock('../src/runtime/server/utils/stores', () => ({
+  useIdpStores: () => ({
+    yoloPolicyStore: {
+      get: async () => null,
+      put: async () => {},
+      delete: async () => {},
+      list: async () => [],
+    },
+  }),
+  getIdpIssuer: () => 'http://localhost:3000',
+}))
+
+vi.mock('../src/runtime/server/utils/shape-store', () => ({
+  useShapeStore: () => ({
+    getShape: async () => null,
+    saveShape: async () => {},
+    listShapes: async () => [],
+    deleteShape: async () => {},
+  }),
+}))
+
 function shapesDetail(overrides: Partial<{
   operation_id: string
   resource_chain: Array<{ resource: string, selector?: Record<string, string> }>
