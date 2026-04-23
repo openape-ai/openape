@@ -27,7 +27,7 @@ jobs:
           for mod in modules/nuxt-auth-idp modules/nuxt-auth-sp; do
             [ -d "$mod/playground" ] && (cd "$mod" && npx nuxi prepare playground) || true
           done
-          for app in apps/openape-free-idp apps/openape-agent-mail apps/openape-agent-proxy; do
+          for app in apps/openape-free-idp apps/openape-agent-proxy; do
             [ -f "$app/package.json" ] && (cd "$app" && npx nuxi prepare) || true
           done
       - name: Security audit
