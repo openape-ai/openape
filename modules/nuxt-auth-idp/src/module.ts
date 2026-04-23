@@ -25,6 +25,7 @@ export interface ModuleOptions {
   rpName: string
   rpID: string
   rpOrigin: string
+  rpHostAllowList: string
   requireUserVerification: boolean
   residentKey: 'preferred' | 'required' | 'discouraged'
   attestationType: 'none' | 'indirect' | 'direct' | 'enterprise'
@@ -75,6 +76,7 @@ export default defineNuxtModule<ModuleOptions>({
     rpName: '',
     rpID: '',
     rpOrigin: '',
+    rpHostAllowList: '',
     requireUserVerification: false,
     residentKey: 'preferred',
     attestationType: 'none',

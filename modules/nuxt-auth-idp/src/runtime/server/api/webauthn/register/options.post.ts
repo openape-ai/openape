@@ -18,7 +18,9 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Invalid or expired registration URL' })
   }
 
-  const existingCredentials = await credentialStore.findByUser(regUrl.email)
+  const existingCredentials = credentialStore.findByUserAndRp
+    ? await credentialStore.findByUserAndRp(regUrl.email, rpConfig.rpID)
+    : (await credentialStore.findByUser(regUrl.email)).filter(c => !c.rpId || c.rpId === rpConfig.rpID)
   const { options, challenge } = await createRegistrationOptions(rpConfig, regUrl.email, regUrl.name, existingCredentials)
 
   const challengeToken = crypto.randomUUID()
@@ -27,6 +29,7 @@ export default defineEventHandler(async (event) => {
     userEmail: regUrl.email,
     type: 'registration',
     expiresAt: Date.now() + 5 * 60 * 1000,
+    rpId: rpConfig.rpID,
   })
 
   return { options, challengeToken }
