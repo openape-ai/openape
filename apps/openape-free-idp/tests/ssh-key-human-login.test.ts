@@ -47,6 +47,7 @@ describe('SSH-key login for humans', () => {
   beforeAll(async () => {
     server = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: appDir,
+      detached: true,
       env: {
         ...process.env,
         OPENAPE_E2E: '1',
@@ -74,8 +75,14 @@ describe('SSH-key login for humans', () => {
     }
   }, 90_000)
 
-  afterAll(() => {
-    if (server) { server.kill('SIGTERM'); server = null }
+  afterAll(async () => {
+    if (server?.pid) {
+      // Kill the process group so the nuxt child dies with the pnpm wrapper
+      try { process.kill(-server.pid, 'SIGKILL') }
+      catch { /* already gone */ }
+    }
+    server = null
+    await wait(200)
   })
 
   it('issues a JWT with act:"human" after a successful SSH-key challenge/response', async () => {
