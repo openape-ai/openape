@@ -10,6 +10,7 @@ export interface WebAuthnCredential {
   backedUp: boolean
   createdAt: number
   name?: string
+  rpId?: string
 }
 
 export interface WebAuthnChallenge {
@@ -17,6 +18,7 @@ export interface WebAuthnChallenge {
   userEmail?: string
   type: 'registration' | 'authentication'
   expiresAt: number
+  rpId?: string
 }
 
 export interface RegistrationUrl {
@@ -33,6 +35,7 @@ export interface CredentialStore {
   save: (credential: WebAuthnCredential) => Promise<void>
   findById: (credentialId: string) => Promise<WebAuthnCredential | null>
   findByUser: (email: string) => Promise<WebAuthnCredential[]>
+  findByUserAndRp?: (email: string, rpId: string) => Promise<WebAuthnCredential[]>
   delete: (credentialId: string) => Promise<void>
   deleteAllForUser: (email: string) => Promise<void>
   updateCounter: (credentialId: string, counter: number) => Promise<void>

@@ -1,5 +1,5 @@
 import type { CredentialStore, WebAuthnCredential } from '@openape/auth'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { credentials } from '../database/schema'
 
@@ -16,6 +16,7 @@ function rowToCredential(row: CredentialRow): WebAuthnCredential {
     backedUp: row.backedUp,
     createdAt: row.createdAt,
     name: row.name ?? undefined,
+    rpId: row.rpId ?? undefined,
   }
 }
 
@@ -34,6 +35,7 @@ export function createDrizzleCredentialStore(): CredentialStore {
         backedUp: credential.backedUp,
         createdAt: credential.createdAt,
         name: credential.name ?? null,
+        rpId: credential.rpId ?? null,
       }).onConflictDoUpdate({
         target: credentials.credentialId,
         set: {
@@ -50,6 +52,14 @@ export function createDrizzleCredentialStore(): CredentialStore {
 
     async findByUser(email) {
       const rows = await db.select().from(credentials).where(eq(credentials.userEmail, email))
+      return rows.map(rowToCredential)
+    },
+
+    async findByUserAndRp(email, rpId) {
+      const rows = await db
+        .select()
+        .from(credentials)
+        .where(and(eq(credentials.userEmail, email), eq(credentials.rpId, rpId)))
       return rows.map(rowToCredential)
     },
 

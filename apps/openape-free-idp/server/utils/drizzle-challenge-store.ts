@@ -3,6 +3,16 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { webauthnChallenges } from '../database/schema'
 
+function rowToChallenge(row: typeof webauthnChallenges.$inferSelect): WebAuthnChallenge {
+  return {
+    challenge: row.challenge,
+    userEmail: row.userEmail ?? undefined,
+    type: row.type as WebAuthnChallenge['type'],
+    expiresAt: row.expiresAt,
+    rpId: row.rpId ?? undefined,
+  }
+}
+
 export function createDrizzleChallengeStore(): ChallengeStore {
   const db = useDb()
 
@@ -14,6 +24,7 @@ export function createDrizzleChallengeStore(): ChallengeStore {
         userEmail: challenge.userEmail ?? null,
         type: challenge.type,
         expiresAt: challenge.expiresAt,
+        rpId: challenge.rpId ?? null,
       }).onConflictDoUpdate({
         target: webauthnChallenges.token,
         set: {
@@ -21,6 +32,7 @@ export function createDrizzleChallengeStore(): ChallengeStore {
           userEmail: challenge.userEmail ?? null,
           type: challenge.type,
           expiresAt: challenge.expiresAt,
+          rpId: challenge.rpId ?? null,
         },
       })
     },
@@ -32,12 +44,7 @@ export function createDrizzleChallengeStore(): ChallengeStore {
         await db.delete(webauthnChallenges).where(eq(webauthnChallenges.token, token))
         return null
       }
-      return {
-        challenge: row.challenge,
-        userEmail: row.userEmail ?? undefined,
-        type: row.type as WebAuthnChallenge['type'],
-        expiresAt: row.expiresAt,
-      }
+      return rowToChallenge(row)
     },
 
     async consume(token) {
@@ -48,12 +55,7 @@ export function createDrizzleChallengeStore(): ChallengeStore {
         return null
       }
       await db.delete(webauthnChallenges).where(eq(webauthnChallenges.token, token))
-      return {
-        challenge: row.challenge,
-        userEmail: row.userEmail ?? undefined,
-        type: row.type as WebAuthnChallenge['type'],
-        expiresAt: row.expiresAt,
-      }
+      return rowToChallenge(row)
     },
   }
 }

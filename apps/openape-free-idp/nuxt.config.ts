@@ -17,6 +17,7 @@ export default defineNuxtConfig({
     rpName: process.env.OPENAPE_RP_NAME || 'OpenApe Free IdP',
     rpID: process.env.OPENAPE_RP_ID || new URL(localIssuer).hostname,
     rpOrigin: process.env.OPENAPE_RP_ORIGIN || localIssuer,
+    rpHostAllowList: process.env.OPENAPE_RP_HOST_ALLOWLIST || 'id.openape.ai,id.openape.at',
     grants: { enablePages: true, storageKey: 'grants' },
     routes: { admin: e2e },
   },

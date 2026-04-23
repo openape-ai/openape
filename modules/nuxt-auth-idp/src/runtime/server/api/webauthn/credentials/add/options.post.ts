@@ -15,7 +15,9 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'User not found' })
   }
 
-  const existingCredentials = await credentialStore.findByUser(userId)
+  const existingCredentials = credentialStore.findByUserAndRp
+    ? await credentialStore.findByUserAndRp(userId, rpConfig.rpID)
+    : (await credentialStore.findByUser(userId)).filter(c => !c.rpId || c.rpId === rpConfig.rpID)
   const { options, challenge } = await createRegistrationOptions(rpConfig, userId, user.name, existingCredentials)
 
   const challengeToken = crypto.randomUUID()
@@ -24,6 +26,7 @@ export default defineEventHandler(async (event) => {
     userEmail: userId,
     type: 'registration',
     expiresAt: Date.now() + 5 * 60 * 1000,
+    rpId: rpConfig.rpID,
   })
 
   return { options, challengeToken }
