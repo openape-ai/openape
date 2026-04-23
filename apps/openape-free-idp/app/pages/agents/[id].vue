@@ -36,6 +36,8 @@ const agent = ref<Agent | null>(null)
 const loading = ref(true)
 const deleting = ref(false)
 const deleteError = ref('')
+const statusToggling = ref(false)
+const statusError = ref('')
 
 const standingGrants = ref<StandingGrant[]>([])
 const wizardOpen = ref(false)
@@ -56,9 +58,14 @@ const yoloLoading = ref(false)
 const yoloError = ref('')
 const yoloEditing = ref(false)
 const yoloSubmitting = ref(false)
-const yoloForm = ref<{ denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | '', denyPatterns: string }>({
+const yoloForm = ref<{
+  denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
+  denyPatterns: string
+  duration: string // seconds, or '' for unbefristet
+}>({
   denyRiskThreshold: 'high',
   denyPatterns: '',
+  duration: '3600', // 1 hour default
 })
 const yoloRiskOptions = [
   { label: 'Kein Schwellwert', value: '' },
@@ -66,6 +73,15 @@ const yoloRiskOptions = [
   { label: 'Medium', value: 'medium' },
   { label: 'High (empfohlen)', value: 'high' },
   { label: 'Critical', value: 'critical' },
+]
+const yoloDurationOptions = [
+  { label: '1 Stunde (Standard)', value: '3600' },
+  { label: '4 Stunden', value: '14400' },
+  { label: '8 Stunden', value: '28800' },
+  { label: '1 Tag', value: '86400' },
+  { label: '7 Tage', value: '604800' },
+  { label: '30 Tage', value: '2592000' },
+  { label: 'Unbefristet', value: '' },
 ]
 const yoloExpiryLabel = computed(() => {
   const ts = yoloPolicy.value?.expiresAt
@@ -109,9 +125,12 @@ async function loadYoloPolicy() {
     const res = await ($fetch as any)(`/api/users/${encodeURIComponent(agent.value.email)}/yolo-policy`) as { policy: YoloPolicy | null }
     yoloPolicy.value = res?.policy ?? null
     if (yoloPolicy.value) {
+      // When re-opening the form, preselect "unbefristet" when there's
+      // already an active policy so we don't silently shorten its expiry.
       yoloForm.value = {
         denyRiskThreshold: (yoloPolicy.value.denyRiskThreshold ?? 'high') as typeof yoloForm.value.denyRiskThreshold,
         denyPatterns: (yoloPolicy.value.denyPatterns ?? []).join('\n'),
+        duration: yoloPolicy.value.expiresAt ? '' : '',
       }
     }
   }
@@ -133,9 +152,14 @@ async function saveYoloPolicy() {
       .split(/\r?\n/)
       .map(s => s.trim())
       .filter(Boolean)
+    const durationSec = Number(yoloForm.value.duration)
+    const expiresAt = Number.isFinite(durationSec) && durationSec > 0
+      ? Math.floor(Date.now() / 1000) + durationSec
+      : null
     const body = {
       denyRiskThreshold: yoloForm.value.denyRiskThreshold || null,
       denyPatterns: patterns,
+      expiresAt,
     }
     const res = await ($fetch as any)(
       `/api/users/${encodeURIComponent(agent.value.email)}/yolo-policy`,
@@ -165,7 +189,7 @@ async function disableYoloPolicy() {
     )
     yoloPolicy.value = null
     yoloEditing.value = false
-    yoloForm.value = { denyRiskThreshold: 'high', denyPatterns: '' }
+    yoloForm.value = { denyRiskThreshold: 'high', denyPatterns: '', duration: '3600' }
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -215,30 +239,6 @@ Agent email: ${email}
 Use the token as: Authorization: Bearer <token>`
 })
 
-const escapesCommands = computed(() => {
-  if (!agent.value) return []
-  const email = agent.value.email
-  const name = agent.value.name
-  return [
-    {
-      label: 'Enroll (neuer Server)',
-      cmd: `sudo escapes enroll --server https://id.openape.ai --agent-email "${email}" --agent-name "${name}" --key /etc/openape/agent.key --existing`,
-    },
-    {
-      label: 'Server-URL ändern',
-      cmd: `sudo escapes update --email "${email}" --server https://id.openape.ai`,
-    },
-    {
-      label: 'Agent entfernen (nur lokal)',
-      cmd: `sudo escapes remove --email "${email}"`,
-    },
-    {
-      label: 'Agent entfernen (lokal + remote)',
-      cmd: `sudo escapes remove --email "${email}" --remote`,
-    },
-  ]
-})
-
 const editingKey = ref(false)
 const editKeyValue = ref('')
 const savingKey = ref(false)
@@ -279,6 +279,26 @@ function copyField(field: string, text: string) {
   navigator.clipboard.writeText(text)
   copied.value = field
   setTimeout(() => copied.value = '', 2000)
+}
+
+async function toggleActive() {
+  if (!agent.value) return
+  statusToggling.value = true
+  statusError.value = ''
+  try {
+    await $fetch(`/api/my-agents/${encodeURIComponent(agent.value.email)}`, {
+      method: 'PATCH',
+      body: { isActive: !agent.value.isActive },
+    })
+    await loadAgent()
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string, title?: string }, message?: string }
+    statusError.value = e.data?.statusMessage ?? e.data?.title ?? e.message ?? 'Status-Update fehlgeschlagen'
+  }
+  finally {
+    statusToggling.value = false
+  }
 }
 
 async function handleDelete() {
@@ -442,62 +462,95 @@ async function handleDelete() {
             <p class="text-sm text-gray-400 mb-1">
               Status
             </p>
-            <UBadge :color="agent.isActive ? 'success' : 'error'">
-              {{ agent.isActive ? 'Aktiv' : 'Inaktiv' }}
-            </UBadge>
-          </div>
-
-          <div>
-            <p class="text-sm text-gray-400 mb-1">
-              Authentication
-            </p>
-            <div class="relative">
-              <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ authInstructions }}</pre>
+            <div class="flex items-center gap-3">
+              <UBadge :color="agent.isActive ? 'success' : 'error'">
+                {{ agent.isActive ? 'Aktiv' : 'Inaktiv' }}
+              </UBadge>
               <UButton
-                color="neutral"
-                variant="ghost"
                 size="xs"
-                :icon="copied === 'auth' ? 'i-lucide-check' : 'i-lucide-copy'"
-                class="absolute top-2 right-2"
-                @click="copyField('auth', authInstructions)"
+                variant="outline"
+                :loading="statusToggling"
+                :icon="agent.isActive ? 'i-lucide-pause' : 'i-lucide-play'"
+                :label="agent.isActive ? 'Deaktivieren' : 'Aktivieren'"
+                @click="toggleActive"
               />
             </div>
+            <UAlert v-if="statusError" color="error" :title="statusError" class="mt-2" @close="statusError = ''" />
+            <p class="text-xs text-gray-500 mt-1">
+              Inaktive Agents können nicht mehr authentifizieren.
+            </p>
           </div>
 
-          <div v-if="escapesCommands.length">
-            <p class="text-sm text-gray-400 mb-2">
-              Server-Befehle (escapes)
-            </p>
-            <div class="space-y-2">
-              <div
-                v-for="item in escapesCommands"
-                :key="item.label"
-              >
-                <p class="text-xs text-gray-500 mb-1">
-                  {{ item.label }}
-                </p>
-                <div class="relative">
-                  <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ item.cmd }}</pre>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    :icon="copied === item.label ? 'i-lucide-check' : 'i-lucide-copy'"
-                    class="absolute top-2 right-2"
-                    @click="copyField(item.label, item.cmd)"
-                  />
-                </div>
+          <details class="bg-gray-800/40 border border-gray-700 rounded-lg">
+            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
+              Authentication
+            </summary>
+            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-2">
+              <p>
+                Der Agent authentifiziert sich über Ed25519 Challenge/Response
+                gegen <span class="font-mono text-xs">id.openape.ai</span>.
+              </p>
+              <p class="text-xs text-gray-400">
+                Für eingerichtete OpenApe-Clients übernimmt das die CLI transparent
+                — Details + Endpunkte siehe
+                <a
+                  href="https://docs.openape.ai/getting-started/quickstart-agent"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-orange-400 underline"
+                >Quickstart: Agent</a>.
+              </p>
+              <div class="relative">
+                <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ authInstructions }}</pre>
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :icon="copied === 'auth' ? 'i-lucide-check' : 'i-lucide-copy'"
+                  class="absolute top-2 right-2"
+                  @click="copyField('auth', authInstructions)"
+                />
               </div>
             </div>
-          </div>
+          </details>
 
-          <AllowedCommandsList
-            :agent-email="agent.email"
-            :owner="agent.owner ?? user?.email ?? ''"
-            :standing-grants="standingGrants"
-            @refresh="loadStandingGrants"
-            @add-scoped="openWizard"
-          />
+          <details class="bg-gray-800/40 border border-gray-700 rounded-lg">
+            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
+              Server-seitige Ausführung
+            </summary>
+            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-2">
+              <p>
+                Ein Agent führt Root-Kommandos auf einem Server nicht direkt aus —
+                er fordert einen Grant über <span class="font-mono text-xs">apes</span> an.
+              </p>
+              <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono overflow-x-auto">apes run --as root -- &lt;command&gt;</pre>
+              <p class="text-xs text-gray-400">
+                Der darunter liegende <span class="font-mono">escapes</span>-Binary-Flow wird von
+                <span class="font-mono">apes</span> orchestriert. Setup + CLI-Referenz in der
+                <a
+                  href="https://docs.openape.ai/ecosystem/escapes"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-orange-400 underline"
+                >Escapes-Doku</a>.
+              </p>
+            </div>
+          </details>
+
+          <details class="bg-gray-800/40 border border-gray-700 rounded-lg" open>
+            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
+              Erlaubte Commands
+            </summary>
+            <div class="px-3 pb-3">
+              <AllowedCommandsList
+                :agent-email="agent.email"
+                :owner="agent.owner ?? user?.email ?? ''"
+                :standing-grants="standingGrants"
+                @refresh="loadStandingGrants"
+                @add-scoped="openWizard"
+              />
+            </div>
+          </details>
 
           <!-- YOLO-Modus: Auto-approval für alle Grants dieses Agents -->
           <div class="border border-gray-700 rounded-lg p-4 space-y-3 bg-gray-900/40">
@@ -581,6 +634,12 @@ async function handleDelete() {
             </div>
 
             <div v-else class="space-y-3">
+              <UFormField label="Dauer" help="Nach Ablauf wird wieder jeder Request manuell bestätigt.">
+                <USelect
+                  v-model="yoloForm.duration"
+                  :items="yoloDurationOptions"
+                />
+              </UFormField>
               <UFormField label="Risiko-Schwelle" help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt.">
                 <USelect
                   v-model="yoloForm.denyRiskThreshold"
