@@ -27,6 +27,8 @@ function grantToRow(grant: OpenApeGrant) {
     decidedBy: grant.decided_by ?? null,
     expiresAt: grant.expires_at ?? null,
     usedAt: grant.used_at ?? null,
+    decidedByStandingGrant: grant.decided_by_standing_grant ?? null,
+    autoApprovalKind: grant.auto_approval_kind ?? null,
   }
 }
 
@@ -48,6 +50,8 @@ function rowToGrant(row: GrantRow): OpenApeGrant {
     decided_by: row.decidedBy ?? undefined,
     expires_at: row.expiresAt ?? undefined,
     used_at: row.usedAt ?? undefined,
+    decided_by_standing_grant: row.decidedByStandingGrant ?? undefined,
+    auto_approval_kind: (row.autoApprovalKind as OpenApeGrant['auto_approval_kind']) ?? undefined,
   }
 }
 
@@ -72,6 +76,8 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
           decidedBy: row.decidedBy,
           expiresAt: row.expiresAt,
           usedAt: row.usedAt,
+          decidedByStandingGrant: row.decidedByStandingGrant,
+          autoApprovalKind: row.autoApprovalKind,
         },
       })
     },
@@ -91,6 +97,12 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
       if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
       if (extra?.expires_at !== undefined) updates.expiresAt = extra.expires_at
       if (extra?.used_at !== undefined) updates.usedAt = extra.used_at
+      if ((extra as Record<string, unknown> | undefined)?.decided_by_standing_grant !== undefined) {
+        updates.decidedByStandingGrant = (extra as Record<string, unknown>).decided_by_standing_grant
+      }
+      if ((extra as Record<string, unknown> | undefined)?.auto_approval_kind !== undefined) {
+        updates.autoApprovalKind = (extra as Record<string, unknown>).auto_approval_kind
+      }
       if (extra?.request !== undefined) {
         updates.request = extra.request as unknown as Record<string, unknown>
         updates.grantType = (extra.request as OpenApeGrantRequest).grant_type ?? 'once'
