@@ -101,21 +101,14 @@ export default defineNitroPlugin(async () => {
       is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
     )`)
 
-    // WebAuthn RP isolation: credentials + challenges track the RP ID they
-    // belong to so a single IdP instance can host multiple origins without
-    // cross-origin passkey confusion. Idempotent ALTER on existing rows;
-    // backfill treats everything already there as the canonical primary
-    // origin (OPENAPE_DEFAULT_RP_ID env, fallback to issuer host).
     try { await db.run(sql`ALTER TABLE credentials ADD COLUMN rp_id TEXT`) }
     catch { /* already present */ }
     try { await db.run(sql`ALTER TABLE webauthn_challenges ADD COLUMN rp_id TEXT`) }
     catch { /* already present */ }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_credentials_rp_id ON credentials(rp_id)`)
 
-    // Backfill any pre-rp_id credentials to the default RP — conservative
-    // default so existing users aren't orphaned when the tenant filter
-    // lands. The default comes from OPENAPE_DEFAULT_RP_ID, else parsed from
-    // OPENAPE_ISSUER, else 'id.openape.ai' (the canonical prod host).
+    // Pre-rp_id rows are backfilled to the canonical primary RP, otherwise
+    // the upcoming tenant filter would orphan existing users.
     let defaultRp = process.env.OPENAPE_DEFAULT_RP_ID?.trim() || ''
     if (!defaultRp && process.env.OPENAPE_ISSUER) {
       try { defaultRp = new URL(process.env.OPENAPE_ISSUER).hostname }
