@@ -217,26 +217,15 @@ async function onWizardCreated() {
   await loadStandingGrants()
 }
 
-const authInstructions = computed(() => {
+const apesLoginCmd = computed(() => {
   if (!agent.value) return ''
-  const email = agent.value.email
-  const base = 'https://id.openape.ai'
-  return `You can authenticate at ${base} using Ed25519 challenge-response:
+  return `apes login --email "${agent.value.email}" --key ~/.ssh/id_ed25519`
+})
 
-Agent email: ${email}
-
-1. POST ${base}/api/agent/challenge
-   Body: { "agent_id": "${email}" }
-   Response: { "challenge": "<hex-string>" }
-
-2. Sign the challenge (UTF-8 bytes) with your Ed25519 private key.
-   Encode the signature as base64.
-
-3. POST ${base}/api/agent/authenticate
-   Body: { "agent_id": "${email}", "challenge": "<from-step-1>", "signature": "<base64>" }
-   Response: { "token": "<jwt>", "expires_in": 3600 }
-
-Use the token as: Authorization: Bearer <token>`
+const ddisaDomain = computed(() => {
+  if (!agent.value) return ''
+  const at = agent.value.email.indexOf('@')
+  return at >= 0 ? agent.value.email.slice(at + 1) : ''
 })
 
 const editingKey = ref(false)
@@ -483,57 +472,71 @@ async function handleDelete() {
 
           <details class="bg-gray-800/40 border border-gray-700 rounded-lg">
             <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
-              Authentication
+              Authentifizierung
             </summary>
-            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-2">
-              <p>
-                Der Agent authentifiziert sich über Ed25519 Challenge/Response
-                gegen <span class="font-mono text-xs">id.openape.ai</span>.
-              </p>
-              <p class="text-xs text-gray-400">
-                Für eingerichtete OpenApe-Clients übernimmt das die CLI transparent
-                — Details + Endpunkte siehe
-                <a
-                  href="https://docs.openape.ai/getting-started/quickstart-agent"
-                  target="_blank"
-                  rel="noopener"
-                  class="text-orange-400 underline"
-                >Quickstart: Agent</a>.
-              </p>
-              <div class="relative">
-                <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto whitespace-pre-wrap break-all">{{ authInstructions }}</pre>
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :icon="copied === 'auth' ? 'i-lucide-check' : 'i-lucide-copy'"
-                  class="absolute top-2 right-2"
-                  @click="copyField('auth', authInstructions)"
-                />
+            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-4">
+              <div class="space-y-2">
+                <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                  1) Bei OpenApe anmelden — für Grant-Anfragen
+                </h4>
+                <p class="text-xs text-gray-400">
+                  Der Agent holt sich einen JWT über Ed25519-Challenge/Response mit seinem
+                  privaten Schlüssel. Danach kann er Grants anfordern und Kommandos ausführen
+                  (inkl. <span class="font-mono">apes run --as root</span> für privilegierte
+                  Commands — Details siehe
+                  <a
+                    href="https://docs.openape.ai/getting-started/quickstart-agent"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-orange-400 underline"
+                  >Quickstart: Agent</a>).
+                </p>
+                <div class="relative">
+                  <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto">{{ apesLoginCmd }}</pre>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :icon="copied === 'apesLogin' ? 'i-lucide-check' : 'i-lucide-copy'"
+                    class="absolute top-2 right-2"
+                    @click="copyField('apesLogin', apesLoginCmd)"
+                  />
+                </div>
+                <p class="text-xs text-gray-500">
+                  <span class="font-mono">apes</span> erledigt Challenge/Response + Token-Caching
+                  transparent. Rohe Endpunkte:
+                  <span class="font-mono">POST /api/agent/challenge</span> &rarr;
+                  <span class="font-mono">POST /api/agent/authenticate</span> (siehe
+                  <a
+                    href="https://docs.openape.ai/ecosystem/auth"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-orange-400 underline"
+                  >Auth-Overview</a>).
+                </p>
               </div>
-            </div>
-          </details>
 
-          <details class="bg-gray-800/40 border border-gray-700 rounded-lg">
-            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
-              Server-seitige Ausführung
-            </summary>
-            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-2">
-              <p>
-                Ein Agent führt Root-Kommandos auf einem Server nicht direkt aus —
-                er fordert einen Grant über <span class="font-mono text-xs">apes</span> an.
-              </p>
-              <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 font-mono overflow-x-auto">apes run --as root -- &lt;command&gt;</pre>
-              <p class="text-xs text-gray-400">
-                Der darunter liegende <span class="font-mono">escapes</span>-Binary-Flow wird von
-                <span class="font-mono">apes</span> orchestriert. Setup + CLI-Referenz in der
-                <a
-                  href="https://docs.openape.ai/ecosystem/escapes"
-                  target="_blank"
-                  rel="noopener"
-                  class="text-orange-400 underline"
-                >Escapes-Doku</a>.
-              </p>
+              <div class="space-y-2">
+                <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                  2) Auf anderen Websites anmelden — via DDISA
+                </h4>
+                <p class="text-xs text-gray-400">
+                  Jede Website, die DDISA unterstützt, erkennt diesen Agent über seine
+                  Email-Domain
+                  <span class="font-mono text-gray-300">{{ ddisaDomain }}</span>. Der SP
+                  löst
+                  <span class="font-mono">_ddisa.{{ ddisaDomain }}</span> per DNS auf, folgt
+                  dem OAuth-Redirect hierher, und der Agent signt den Login mit demselben
+                  Schlüssel wie in (1). Kein separater Account, keine zusätzliche Registrierung.
+                  Flow-Details:
+                  <a
+                    href="https://docs.openape.ai/getting-started/how-it-works"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-orange-400 underline"
+                  >How DDISA works</a>.
+                </p>
+              </div>
             </div>
           </details>
 
