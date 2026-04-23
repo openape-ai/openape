@@ -418,20 +418,12 @@ function isExactCommand(detail) {
                   <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
                     <span>Approved by: {{ grant.decided_by }}</span>
                     <UBadge
-                      v-if="grant.auto_approval_kind === 'yolo'"
-                      color="warning"
+                      v-if="grant.auto_approval_kind"
+                      :color="grant.auto_approval_kind === 'standing' ? 'info' : 'warning'"
                       variant="subtle"
                       size="xs"
                     >
-                      YOLO
-                    </UBadge>
-                    <UBadge
-                      v-else-if="grant.auto_approval_kind === 'standing'"
-                      color="info"
-                      variant="subtle"
-                      size="xs"
-                    >
-                      Standing
+                      {{ grant.auto_approval_kind }}
                     </UBadge>
                   </p>
                   <p v-if="grant.expires_at" class="text-xs text-dimmed">

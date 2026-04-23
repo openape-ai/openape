@@ -4,7 +4,6 @@ import type { ShapeStore } from '@openape/grants'
 import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
 import type { SshKeyStore } from './ssh-key-store'
-import type { YoloPolicyStore } from './yolo-policy-store'
 import { registerStoreFactory } from './store-registry'
 
 // Grant Stores (Gruppe B)
@@ -61,10 +60,4 @@ export function defineSshKeyStore(factory: (event: H3Event) => SshKeyStore) {
 
 export function defineShapeStore(factory: (event: H3Event) => ShapeStore) {
   registerStoreFactory('shapeStore', factory)
-}
-
-// YOLO Policy Store (per-agent auto-approval)
-
-export function defineYoloPolicyStore(factory: (event: H3Event) => YoloPolicyStore) {
-  registerStoreFactory('yoloPolicyStore', factory)
 }

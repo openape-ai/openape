@@ -11,8 +11,6 @@ import { createRegistrationUrlStore } from './registration-url-store'
 import { createSshKeyStore } from './ssh-key-store'
 import type { SshKeyStore } from './ssh-key-store'
 import { createUserStore } from './user-store'
-import { createYoloPolicyStore } from './yolo-policy-store'
-import type { YoloPolicyStore } from './yolo-policy-store'
 import { getStoreFactory } from './store-registry'
 
 interface IdpStores {
@@ -25,7 +23,6 @@ interface IdpStores {
   jtiStore: JtiStore
   refreshTokenStore: RefreshTokenStore
   sshKeyStore: SshKeyStore
-  yoloPolicyStore: YoloPolicyStore
 }
 
 let _stores: IdpStores | null = null
@@ -41,7 +38,6 @@ function initDefaultStores(): IdpStores {
     jtiStore: createJtiStore(),
     refreshTokenStore: createRefreshTokenStore(),
     sshKeyStore: createSshKeyStore(),
-    yoloPolicyStore: createYoloPolicyStore(),
   }
 }
 
@@ -56,7 +52,6 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     jtiStore: getStoreFactory<JtiStore>('jtiStore')?.(event) ?? createJtiStore(),
     refreshTokenStore: getStoreFactory<RefreshTokenStore>('refreshTokenStore')?.(event) ?? createRefreshTokenStore(),
     sshKeyStore: getStoreFactory<SshKeyStore>('sshKeyStore')?.(event) ?? createSshKeyStore(),
-    yoloPolicyStore: getStoreFactory<YoloPolicyStore>('yoloPolicyStore')?.(event) ?? createYoloPolicyStore(),
   }
 }
 

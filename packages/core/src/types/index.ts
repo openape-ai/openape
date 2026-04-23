@@ -214,13 +214,15 @@ export interface OpenApeGrant {
    */
   decided_by_standing_grant?: string
   /**
-   * Which auto-approval path decided this grant.
+   * Which auto-approval path decided this grant. Free-form string so that
+   * consuming apps can plug in custom auto-approval mechanisms via the IdP
+   * module's pre-approval hook seam.
    *   undefined — human decision (default)
    *   'standing' — matched a standing grant
-   *   'yolo' — matched a per-agent YOLO auto-approval policy
-   * Purely informational; consumers that don't know the field simply ignore it.
+   *   'yolo'     — matched a per-agent YOLO policy (registered by openape-free-idp)
+   * Consumers that don't know a specific value simply ignore it.
    */
-  auto_approval_kind?: 'standing' | 'yolo'
+  auto_approval_kind?: string
 }
 
 /** OpenApe AuthZ-JWT claims */

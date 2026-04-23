@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-// The evaluator lives in @openape/nuxt-auth-idp. Import via the workspace
-// src path; no need to spawn a server for these pure-logic tests.
-import { evaluateYoloPolicy, matchesGlob } from '../../../modules/nuxt-auth-idp/src/runtime/server/utils/grant-auto-approval'
+// Pure-logic tests — no server spawn needed.
+import { evaluateYoloPolicy, matchesGlob } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 

@@ -1,13 +1,10 @@
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, isCliAuthorizationDetailExact, resolveServerShape, validateCliAuthorizationDetail } from '@openape/grants'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
-import { useIdpStores } from '../../utils/stores'
-import { useShapeStore } from '../../utils/shape-store'
-import { commandFromRequest, evaluateYoloPolicy } from '../../utils/grant-auto-approval'
-import type { RiskLevel } from '../../utils/yolo-policy-store'
+import { runPreApprovalHooks } from '../../utils/pre-approval-hooks'
 import { createProblemError } from '../../utils/problem'
 
 const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
@@ -197,39 +194,19 @@ export default defineEventHandler(async (event) => {
       return { ...approvedGrant, approved_automatically: true }
     }
 
-    // YOLO auto-approval — per-agent policy. Runs after standing-grant
-    // miss, so standing grants stay the more specific match.
+    // Generic pre-approval hook. Runs after standing-grant miss so standing
+    // grants stay the more specific match. Consuming apps register hooks via
+    // `definePreApprovalHook` (see e.g. openape-free-idp's YOLO plugin).
     {
-      const { yoloPolicyStore } = useIdpStores()
-      const policy = await yoloPolicyStore.get(body.requester)
-      const cmd = commandFromRequest(body)
-      let resolvedRisk: RiskLevel | null = null
-      if (policy?.denyRiskThreshold && cmd && cmd.length > 0) {
-        // Unresolved / unknown shapes fall back to 'high' so an agent
-        // can't sneak a sensitive op past the threshold by not shipping
-        // a shape for it.
-        try {
-          const shapeStore = useShapeStore()
-          const resolved = await resolveServerShape(shapeStore, cmd[0]!, cmd)
-          resolvedRisk = (resolved.synthetic ? 'high' : resolved.detail.risk) as RiskLevel
-        }
-        catch {
-          resolvedRisk = 'high'
-        }
-      }
-      const yolo = evaluateYoloPolicy({
-        policy,
-        command: cmd,
-        resolvedRisk,
-      })
-      if (yolo) {
+      const preApproval = await runPreApprovalHooks(event, body)
+      if (preApproval) {
         const pendingGrant = await createGrant(body, grantStore)
         const now = Math.floor(Date.now() / 1000)
         await grantStore.updateStatus(pendingGrant.id, 'approved', {
           status: 'approved' as const,
           decided_at: now,
-          decided_by: yolo.decidedBy,
-          auto_approval_kind: 'yolo' as const,
+          decided_by: preApproval.decidedBy,
+          auto_approval_kind: preApproval.kind,
         } as Record<string, unknown>)
         const approvedGrant = await grantStore.findById(pendingGrant.id)
         setResponseStatus(event, 201)

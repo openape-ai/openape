@@ -7,7 +7,6 @@ import { createDrizzleChallengeStore } from '../utils/drizzle-challenge-store'
 import { createDrizzleRegistrationUrlStore } from '../utils/drizzle-registration-url-store'
 import { createDrizzleKeyStore } from '../utils/drizzle-key-store'
 import { createDrizzleSshKeyStore } from '../utils/drizzle-ssh-key-store'
-import { createDrizzleYoloPolicyStore } from '../utils/drizzle-yolo-store'
 
 export default defineNitroPlugin(() => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -30,7 +29,4 @@ export default defineNitroPlugin(() => {
 
   // Milestone 5: SSH Keys
   defineSshKeyStore(() => createDrizzleSshKeyStore())
-
-  // Milestone 6: YOLO auto-approval policies
-  defineYoloPolicyStore(() => createDrizzleYoloPolicyStore())
 })
