@@ -1,8 +1,30 @@
-// YoloPolicyStore + YoloPolicy are auto-imported from @openape/nuxt-auth-idp
-// via addServerImportsDir.
+// App-level YOLO-Policy store. Drizzle-backed; consumed by the YOLO
+// Nitro plugin + API handlers.
 import { eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { yoloPolicies } from '../database/schema'
+
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+export interface YoloPolicy {
+  agentEmail: string
+  enabledBy: string
+  /** Auto-approval stops when the resolved shape risk meets or exceeds this. */
+  denyRiskThreshold: RiskLevel | null
+  /** Glob patterns that drop the request back to the normal approval flow. */
+  denyPatterns: string[]
+  enabledAt: number
+  /** Unix seconds; null = no expiry. */
+  expiresAt: number | null
+  updatedAt: number
+}
+
+export interface YoloPolicyStore {
+  get: (agentEmail: string) => Promise<YoloPolicy | null>
+  put: (policy: YoloPolicy) => Promise<void>
+  delete: (agentEmail: string) => Promise<void>
+  list: () => Promise<YoloPolicy[]>
+}
 
 type Row = typeof yoloPolicies.$inferSelect
 
@@ -74,4 +96,10 @@ export function createDrizzleYoloPolicyStore(): YoloPolicyStore {
       return rows.map(mapRow)
     },
   }
+}
+
+let _singleton: YoloPolicyStore | null = null
+export function useYoloPolicyStore(): YoloPolicyStore {
+  if (!_singleton) _singleton = createDrizzleYoloPolicyStore()
+  return _singleton
 }
