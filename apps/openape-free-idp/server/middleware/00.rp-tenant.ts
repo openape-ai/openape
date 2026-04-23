@@ -14,12 +14,14 @@ export default defineEventHandler((event) => {
   const host = getRequestHost(event, { xForwardedHost: true })?.split(':')[0]
   if (!host || !allow.includes(host)) return
 
+  const origin = `https://${host}`
   event.context.openapeRpConfig = {
     rpName: (idpCfg.rpName as string | undefined) || 'OpenApe Identity Server',
     rpID: host,
-    origin: `https://${host}`,
+    origin,
     requireUserVerification: idpCfg.requireUserVerification ?? false,
     residentKey: idpCfg.residentKey ?? 'preferred',
     attestationType: idpCfg.attestationType ?? 'none',
   }
+  event.context.openapeIssuer = origin
 })
