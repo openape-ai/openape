@@ -62,8 +62,8 @@ describe('SSH-key login for humans', () => {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    server.stdout?.on('data', chunk => { serverLogs += chunk.toString() })
-    server.stderr?.on('data', chunk => { serverLogs += chunk.toString() })
+    server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
+    server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
 
     try {
       await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 60_000)
