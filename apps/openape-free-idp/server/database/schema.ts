@@ -124,8 +124,15 @@ export const credentials = sqliteTable('credentials', {
   backedUp: integer('backed_up', { mode: 'boolean' }).notNull(),
   createdAt: integer('created_at').notNull(),
   name: text('name'),
+  // WebAuthn RP ID this credential was registered against. Nullable only
+  // because the column was added after the credentials table existed; every
+  // new insert MUST populate it. Reads should filter by rp_id matching the
+  // current request host so browsers and server stay in sync about which
+  // passkey belongs to which origin.
+  rpId: text('rp_id'),
 }, table => [
   index('idx_credentials_user_email').on(table.userEmail),
+  index('idx_credentials_rp_id').on(table.rpId),
 ])
 
 export const webauthnChallenges = sqliteTable('webauthn_challenges', {
@@ -134,6 +141,9 @@ export const webauthnChallenges = sqliteTable('webauthn_challenges', {
   userEmail: text('user_email'),
   type: text('type').notNull(),
   expiresAt: integer('expires_at').notNull(),
+  // RP ID this challenge was minted for. A challenge minted on id.openape.ai
+  // must never be verifiable against an assertion from id.openape.at.
+  rpId: text('rp_id'),
 })
 
 export const registrationUrls = sqliteTable('registration_urls', {
