@@ -1,0 +1,90 @@
+name: Deploy mail.openape.ai
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/openape-agent-mail/**'
+      - 'modules/nuxt-auth-sp/**'
+      - 'packages/auth/**'
+      - 'packages/core/**'
+      - 'packages/grants/**'
+      - 'scripts/deploy-chatty-mail.sh'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-chatty-mail.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-chatty-mail
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHATTY_HOST: chatty
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.CHATTY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CHATTY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/chatty
+          chmod 600 ~/.ssh/chatty
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<'EOF'
+          Host chatty
+            HostName chatty.delta-mind.at
+            User openape
+            IdentityFile ~/.ssh/chatty
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Capture previous release (for rollback)
+        id: prev
+        run: |
+          PREV=$(ssh chatty "readlink /home/openape/projects/openape-agent-mail/current 2>/dev/null" || echo "")
+          echo "release=$PREV" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        run: ./scripts/deploy-chatty-mail.sh
+
+      - name: Public HTTPS health check
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' https://mail.openape.ai/ || echo 000)
+            case $status in 200|301|302|401|403)
+              echo "https://mail.openape.ai/ returned $status"
+              exit 0 ;;
+            esac
+            sleep 3
+          done
+          exit 1
+
+      - name: Rollback on failure
+        if: failure() && steps.prev.outputs.release != ''
+        env:
+          PREV_RELEASE: ${{ steps.prev.outputs.release }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-agent-mail/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "refusing to roll back to unexpected path: $PREV_RELEASE"
+            exit 1
+          fi
+          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-agent-mail/current && sudo systemctl restart openape-agent-mail.service"
