@@ -45,6 +45,13 @@ export interface ModuleOptions {
   clientId: string
   spName: string
   sessionSecret: string
+  /**
+   * Logged-in session cookie lifetime in seconds. Default: 7 days.
+   * iOS Safari aggressively evicts session cookies (no explicit expiry),
+   * so an explicit `maxAge` is what keeps users signed in on mobile.
+   * Env: `NUXT_OPENAPE_SP_SESSION_MAX_AGE`.
+   */
+  sessionMaxAge: number
   openapeUrl: string
   fallbackIdpUrl: string
   routes: boolean
@@ -62,6 +69,7 @@ export default defineNuxtModule<ModuleOptions>({
     clientId: '',
     spName: 'OpenApe Service Provider',
     sessionSecret: 'change-me-sp-secret-at-least-32-chars-long',
+    sessionMaxAge: 60 * 60 * 24 * 7, // 7 days
     openapeUrl: '',
     fallbackIdpUrl: 'https://id.openape.at',
     routes: true,
