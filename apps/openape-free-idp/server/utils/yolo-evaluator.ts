@@ -1,5 +1,6 @@
+// YOLO evaluator + minimal glob matcher. Pure functions; no side effects.
 import type { OpenApeGrantRequest } from '@openape/core'
-import type { YoloPolicy, RiskLevel } from './yolo-policy-store'
+import type { RiskLevel, YoloPolicy } from './yolo-policy-store'
 
 const RISK_ORDER: Record<RiskLevel, number> = {
   low: 1,
@@ -8,7 +9,7 @@ const RISK_ORDER: Record<RiskLevel, number> = {
   critical: 4,
 }
 
-export interface YoloEvaluation {
+export interface YoloDecision {
   kind: 'yolo'
   decidedBy: string
 }
@@ -20,18 +21,7 @@ export interface YoloDecisionContext {
   now?: number
 }
 
-/**
- * Decide whether a grant request should be auto-approved by the agent's
- * YOLO policy. Returns the approval marker on match, null on miss (caller
- * falls back to the normal manual approval flow).
- *
- * Contract:
- *  - No policy, expired policy, or no command → miss.
- *  - Resolved-risk meets or exceeds policy.denyRiskThreshold → miss.
- *  - Command matches any deny-pattern (glob) → miss.
- *  - Otherwise → match with decidedBy = policy.enabledBy.
- */
-export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloEvaluation | null {
+export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | null {
   const now = ctx.now ?? Math.floor(Date.now() / 1000)
   const p = ctx.policy
   if (!p) return null
@@ -53,8 +43,7 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloEvaluation | n
 
 /**
  * Minimal glob matcher — `*` matches any run of characters (greedy),
- * `?` matches exactly one. Case-sensitive; no character classes. Kept
- * local to avoid pulling a dependency for a handful of patterns.
+ * `?` matches exactly one. Case-sensitive; no character classes.
  */
 export function matchesGlob(input: string, pattern: string): boolean {
   const escaped = pattern.replace(/[\\^$.+(){}[\]|]/g, ch => `\\${ch}`)

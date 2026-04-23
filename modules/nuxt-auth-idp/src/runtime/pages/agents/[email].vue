@@ -12,11 +12,16 @@ import {
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
 const targetEmail = computed(() => decodeURIComponent(route.params.email))
+
 const agent = ref(null)
 const loading = ref(true)
 const error = ref('')
 const success = ref('')
+
+// Shapes for CLI picker
 const shapes = ref([])
+
+// Add-SG form state
 const form = ref({
   cli_id: '',
   resource_chain_text: '',
@@ -27,120 +32,44 @@ const form = ref({
 })
 const formSubmitting = ref(false)
 const formError = ref('')
-const revokeTarget = ref(null)
+
+// Revoke dialog state
+const revokeTarget = ref(null) // the SG object being revoked
 const revoking = ref(false)
-const safeCommandsBusy = ref(null)
+
+// Safe Commands state
+const safeCommandsBusy = ref(null) // cli_id currently being toggled/added
 const customInput = ref('')
 const safeCommandError = ref('')
-// YOLO-Modus state
-const yoloPolicy = ref(null)
-const yoloLoading = ref(false)
-const yoloError = ref('')
-const yoloForm = ref({
-  denyRiskThreshold: 'high',
-  denyPatterns: '',
-})
-const yoloSubmitting = ref(false)
-const yoloEditing = ref(false)
-const yoloExpiryInfo = computed(() => {
-  const ts = yoloPolicy.value?.expiresAt
-  if (!ts) return null
-  const date = new Date(ts * 1000)
-  return date.toLocaleString()
-})
-const safeCommandGrants = computed(
-  () => agent.value ? agent.value.standing_grants.filter(isSafeCommandGrant) : [],
+
+// Partition standing grants: safe-commands vs. "rich" custom grants
+const safeCommandGrants = computed(() =>
+  agent.value ? agent.value.standing_grants.filter(isSafeCommandGrant) : [],
 )
-const richStandingGrants = computed(
-  () => agent.value ? agent.value.standing_grants.filter(g => !isSafeCommandGrant(g)) : [],
+const richStandingGrants = computed(() =>
+  agent.value ? agent.value.standing_grants.filter(g => !isSafeCommandGrant(g)) : [],
 )
 const safeCommandByCliId = computed(() => {
-  const map = /* @__PURE__ */ new Map()
+  const map = new Map()
   for (const g of safeCommandGrants.value) {
     const cliId = g.request?.cli_id
     if (typeof cliId === 'string') map.set(cliId, g)
   }
   return map
 })
-const customSafeCommands = computed(
-  () => safeCommandGrants.value.filter(g => g.request?.reason === 'safe-command:custom'),
+const customSafeCommands = computed(() =>
+  safeCommandGrants.value.filter(g => g.request?.reason === 'safe-command:custom'),
 )
+
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
     await navigateTo('/login')
     return
   }
-  await Promise.all([loadAgent(), loadShapes(), loadYoloPolicy()])
+  await Promise.all([loadAgent(), loadShapes()])
 })
-async function loadYoloPolicy() {
-  yoloLoading.value = true
-  yoloError.value = ''
-  try {
-    const res = await $fetch(`/api/users/${encodeURIComponent(targetEmail.value)}/yolo-policy`)
-    yoloPolicy.value = res?.policy ?? null
-    if (yoloPolicy.value) {
-      yoloForm.value = {
-        denyRiskThreshold: yoloPolicy.value.denyRiskThreshold ?? 'high',
-        denyPatterns: (yoloPolicy.value.denyPatterns ?? []).join('\n'),
-      }
-    }
-  }
-  catch (err) {
-    yoloError.value = err?.data?.title || 'Failed to load YOLO policy'
-  }
-  finally {
-    yoloLoading.value = false
-  }
-}
-async function saveYoloPolicy() {
-  yoloSubmitting.value = true
-  yoloError.value = ''
-  try {
-    const patterns = yoloForm.value.denyPatterns
-      .split(/\r?\n/)
-      .map(s => s.trim())
-      .filter(Boolean)
-    const body = {
-      denyRiskThreshold: yoloForm.value.denyRiskThreshold || null,
-      denyPatterns: patterns,
-    }
-    const res = await $fetch(`/api/users/${encodeURIComponent(targetEmail.value)}/yolo-policy`, {
-      method: 'PUT',
-      body,
-    })
-    yoloPolicy.value = res?.policy ?? null
-    yoloEditing.value = false
-    success.value = 'YOLO-Modus gespeichert'
-  }
-  catch (err) {
-    yoloError.value = err?.data?.title || err?.message || 'Speichern fehlgeschlagen'
-  }
-  finally {
-    yoloSubmitting.value = false
-  }
-}
-async function disableYoloPolicy() {
-  if (!confirm('YOLO-Modus wirklich deaktivieren?')) return
-  yoloSubmitting.value = true
-  yoloError.value = ''
-  try {
-    await $fetch(`/api/users/${encodeURIComponent(targetEmail.value)}/yolo-policy`, { method: 'DELETE' })
-    yoloPolicy.value = null
-    yoloEditing.value = false
-    yoloForm.value = { denyRiskThreshold: 'high', denyPatterns: '' }
-    success.value = 'YOLO-Modus deaktiviert'
-  }
-  catch (err) {
-    yoloError.value = err?.data?.title || 'Deaktivieren fehlgeschlagen'
-  }
-  finally {
-    yoloSubmitting.value = false
-  }
-}
-function startYoloEditing() {
-  yoloEditing.value = true
-}
+
 async function loadAgent() {
   loading.value = true
   error.value = ''
@@ -158,6 +87,7 @@ async function loadAgent() {
     loading.value = false
   }
 }
+
 async function loadShapes() {
   try {
     shapes.value = await $fetch('/api/shapes')
@@ -166,39 +96,41 @@ async function loadShapes() {
     shapes.value = []
   }
 }
+
 const cliOptions = computed(() => [
   { label: 'Any CLI (wildcard)', value: '' },
   ...shapes.value.map(s => ({ label: s.cli_id, value: s.cli_id })),
 ])
+
 const riskOptions = [
   { label: 'Low', value: 'low' },
   { label: 'Medium', value: 'medium' },
   { label: 'High', value: 'high' },
   { label: 'Critical', value: 'critical' },
 ]
+
 const grantTypeOptions = [
   { label: 'Always', value: 'always' },
   { label: 'Timed', value: 'timed' },
 ]
+
 function commandCell(g) {
   const cmd = g.request?.command
-  if (!cmd || cmd.length === 0) return '\u2014'
+  if (!cmd || cmd.length === 0) return '—'
   return cmd.join(' ')
 }
+
 function statusColor(status) {
   switch (status) {
-    case 'approved':
-      return 'success'
-    case 'pending':
-      return 'warning'
+    case 'approved': return 'success'
+    case 'pending': return 'warning'
     case 'denied':
     case 'revoked':
-    case 'expired':
-      return 'error'
-    default:
-      return 'neutral'
+    case 'expired': return 'error'
+    default: return 'neutral'
   }
 }
+
 async function handleAddSg() {
   formError.value = ''
   formSubmitting.value = true
@@ -210,9 +142,9 @@ async function handleAddSg() {
       resource_chain_template,
       max_risk: form.value.max_risk,
       grant_type: form.value.grant_type,
-      ...form.value.cli_id ? { cli_id: form.value.cli_id } : {},
-      ...form.value.grant_type === 'timed' ? { duration: Number(form.value.duration) } : {},
-      ...form.value.reason ? { reason: form.value.reason } : {},
+      ...(form.value.cli_id ? { cli_id: form.value.cli_id } : {}),
+      ...(form.value.grant_type === 'timed' ? { duration: Number(form.value.duration) } : {}),
+      ...(form.value.reason ? { reason: form.value.reason } : {}),
     }
     await $fetch('/api/standing-grants', { method: 'POST', body })
     success.value = 'Standing grant created'
@@ -226,6 +158,7 @@ async function handleAddSg() {
     formSubmitting.value = false
   }
 }
+
 function resetForm() {
   form.value = {
     cli_id: '',
@@ -236,9 +169,11 @@ function resetForm() {
     reason: '',
   }
 }
+
 function askRevoke(sg) {
   revokeTarget.value = sg
 }
+
 async function confirmRevoke() {
   if (!revokeTarget.value) return
   revoking.value = true
@@ -255,9 +190,11 @@ async function confirmRevoke() {
     revoking.value = false
   }
 }
+
 function cancelRevoke() {
   revokeTarget.value = null
 }
+
 async function toggleSafeCommand(cliId, action) {
   safeCommandError.value = ''
   safeCommandsBusy.value = cliId
@@ -291,6 +228,7 @@ async function toggleSafeCommand(cliId, action) {
     safeCommandsBusy.value = null
   }
 }
+
 async function addCustomSafeCommand() {
   const cliId = customInput.value.trim()
   if (!cliId) return
@@ -321,6 +259,7 @@ async function addCustomSafeCommand() {
     safeCommandsBusy.value = null
   }
 }
+
 async function removeCustomSafeCommand(grant) {
   safeCommandError.value = ''
   const cliId = grant?.request?.cli_id
@@ -506,127 +445,6 @@ async function removeCustomSafeCommand(grant) {
               </tr>
             </tbody>
           </table>
-        </UCard>
-
-        <!-- YOLO-Modus Section -->
-        <UCard class="mb-6" :ui="{ body: yoloPolicy ? 'p-0' : '' }">
-          <template #header>
-            <div class="flex items-center gap-2">
-              <h2 class="text-lg font-semibold">
-                YOLO-Modus
-              </h2>
-              <UBadge v-if="yoloPolicy" color="warning" variant="subtle" size="sm">
-                aktiv
-              </UBadge>
-            </div>
-            <p class="text-sm text-muted mt-1">
-              Auto-approval für alle Grant-Requests dieses Agents — außer Deny-Pattern oder
-              Risiko-Schwelle greifen. Der Agent sieht keinen Unterschied zu einer
-              menschlichen Bestätigung; nur der Audit-Trail markiert diese Grants als
-              <span class="font-mono">auto_approval_kind: 'yolo'</span>.
-            </p>
-          </template>
-
-          <UAlert
-            v-if="yoloError"
-            color="error"
-            :title="yoloError"
-            class="mb-4"
-            @close="yoloError = ''"
-          />
-
-          <div v-if="yoloLoading" class="text-sm text-muted">
-            Lade…
-          </div>
-
-          <div v-else-if="!yoloPolicy && !yoloEditing">
-            <p class="text-sm text-muted mb-3">
-              Derzeit inaktiv. Alle Grant-Requests dieses Agents warten auf menschliche Bestätigung.
-            </p>
-            <UButton color="warning" icon="i-lucide-zap" @click="startYoloEditing">
-              YOLO-Modus aktivieren
-            </UButton>
-          </div>
-
-          <div v-else-if="yoloPolicy && !yoloEditing" class="p-4">
-            <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-              <dt class="text-muted">
-                Aktiviert von
-              </dt>
-              <dd class="font-mono">
-                {{ yoloPolicy.enabledBy }}
-              </dd>
-              <dt class="text-muted">
-                Risiko-Schwelle
-              </dt>
-              <dd>
-                <span v-if="yoloPolicy.denyRiskThreshold" class="font-mono">
-                  {{ yoloPolicy.denyRiskThreshold }}
-                </span>
-                <span v-else class="text-muted italic">keine</span>
-                <span class="text-muted text-xs ml-2">
-                  (Requests mit Risiko ≥ Schwelle fallen auf manuell zurück)
-                </span>
-              </dd>
-              <dt class="text-muted">
-                Deny-Patterns
-              </dt>
-              <dd>
-                <span v-if="yoloPolicy.denyPatterns.length === 0" class="text-muted italic">
-                  keine
-                </span>
-                <ul v-else class="font-mono text-xs space-y-1">
-                  <li
-                    v-for="p in yoloPolicy.denyPatterns"
-                    :key="p"
-                    class="inline-block bg-(--ui-bg-elevated) px-2 py-0.5 rounded mr-1"
-                  >
-                    {{ p }}
-                  </li>
-                </ul>
-              </dd>
-              <dt class="text-muted">
-                Ablauf
-              </dt>
-              <dd>
-                <span v-if="yoloExpiryInfo">{{ yoloExpiryInfo }}</span>
-                <span v-else class="text-muted italic">unbefristet</span>
-              </dd>
-            </dl>
-            <div class="flex gap-2 mt-4">
-              <UButton icon="i-lucide-pencil" variant="outline" @click="startYoloEditing">
-                Bearbeiten
-              </UButton>
-              <UButton color="error" variant="outline" icon="i-lucide-trash-2" @click="disableYoloPolicy">
-                Deaktivieren
-              </UButton>
-            </div>
-          </div>
-
-          <div v-else class="space-y-4">
-            <UFormField label="Risiko-Schwelle">
-              <USelect v-model="yoloForm.denyRiskThreshold" :items="riskOptions" />
-              <template #help>
-                Requests mit diesem oder höherem Risiko brauchen weiter menschliche Bestätigung.
-                Leer lassen, um die Schwelle zu deaktivieren.
-              </template>
-            </UFormField>
-            <UFormField label="Deny-Patterns (eine Zeile, Glob-Syntax: * ?)">
-              <UTextarea
-                v-model="yoloForm.denyPatterns"
-                :rows="4"
-                placeholder="rm -rf *&#10;sudo *&#10;curl*| sh"
-              />
-            </UFormField>
-            <div class="flex gap-2">
-              <UButton color="warning" icon="i-lucide-save" :loading="yoloSubmitting" @click="saveYoloPolicy">
-                {{ yoloPolicy ? "Speichern" : "Aktivieren" }}
-              </UButton>
-              <UButton variant="ghost" @click="yoloEditing = false">
-                Abbrechen
-              </UButton>
-            </div>
-          </div>
         </UCard>
 
         <!-- Add Standing Grant Form -->

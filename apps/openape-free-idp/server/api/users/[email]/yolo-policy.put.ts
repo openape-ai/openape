@@ -1,7 +1,6 @@
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireYoloPolicyActor } from '../../../utils/yolo-policy-auth'
-import { useIdpStores } from '../../../utils/stores'
-import { createProblemError } from '../../../utils/problem'
+import { useYoloPolicyStore } from '../../../utils/yolo-policy-store'
 import type { RiskLevel, YoloPolicy } from '../../../utils/yolo-policy-store'
 
 const VALID_RISK: RiskLevel[] = ['low', 'medium', 'high', 'critical']
@@ -41,8 +40,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const { yoloPolicyStore } = useIdpStores()
-  const existing = await yoloPolicyStore.get(agentEmail)
+  const store = useYoloPolicyStore()
+  const existing = await store.get(agentEmail)
   const now = Math.floor(Date.now() / 1000)
   const policy: YoloPolicy = {
     agentEmail,
@@ -53,7 +52,7 @@ export default defineEventHandler(async (event) => {
     expiresAt: body.expiresAt !== undefined ? body.expiresAt : (existing?.expiresAt ?? null),
     updatedAt: now,
   }
-  await yoloPolicyStore.put(policy)
+  await store.put(policy)
   return { policy }
 })
 

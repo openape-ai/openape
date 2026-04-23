@@ -1,13 +1,11 @@
+// Session + ownership guard for YOLO-policy CRUD endpoints.
 import type { H3Event } from 'h3'
-import { requireAuth, isAdmin } from './admin'
-import { useIdpStores } from './stores'
-import { createProblemError } from './problem'
+// requireAuth, isAdmin, useIdpStores, createProblemError are auto-imported
+// from @openape/nuxt-auth-idp via the module's addServerImportsDir.
+//
+// eslint-disable-next-line ts/ban-ts-comment
+// @ts-ignore — provided at runtime by the module
 
-/**
- * Guard for YOLO-policy mutations. Returns the caller's identity.
- * Caller must be (a) the management token, (b) an admin, or (c) the
- * owner/approver of the target agent.
- */
 export async function requireYoloPolicyActor(event: H3Event, agentEmail: string): Promise<string> {
   const caller = await requireAuth(event)
 
