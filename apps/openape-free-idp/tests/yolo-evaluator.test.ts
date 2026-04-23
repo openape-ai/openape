@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 // The evaluator lives in @openape/nuxt-auth-idp. Import via the workspace
 // src path; no need to spawn a server for these pure-logic tests.
-// eslint-disable-next-line ts/ban-ts-comment
-// @ts-expect-error — workspace import for unit test
 import { evaluateYoloPolicy, matchesGlob } from '../../../modules/nuxt-auth-idp/src/runtime/server/utils/grant-auto-approval'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
