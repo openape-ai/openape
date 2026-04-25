@@ -1,6 +1,6 @@
 {
   "name": "@openape/cli-auth",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "turbo": {
     "tags": [
       "publishable"
@@ -35,7 +35,6 @@
     "test": "vitest run --no-coverage"
   },
   "dependencies": {
-    "@openape/core": "workspace:*",
     "ofetch": "^1.4.1"
   },
   "devDependencies": {
