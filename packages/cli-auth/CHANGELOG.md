@@ -1,5 +1,11 @@
 # @openape/cli-auth
 
+## 0.2.2
+
+### Patch Changes
+
+- [#162](https://github.com/openape-ai/openape/pull/162) [`29bd8f2`](https://github.com/openape-ai/openape/commit/29bd8f20a439a4c75f0b570b1a77eaacac875af5) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Drop unused `@openape/core` dependency. The lib only uses `ofetch` and Node built-ins; `@openape/core` was inherited from the apes scaffold but never imported. Removing it unblocks downstream installs that previously failed because the package was published with `"@openape/core": "workspace:*"` literally (npm publish doesn't substitute the workspace protocol — only `pnpm publish` does, and the bootstrap publish accidentally went through plain `npm`).
+
 ## 0.2.0
 
 ### Minor Changes
