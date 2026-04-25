@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- [#154](https://github.com/openape-ai/openape/pull/154) [`eff0061`](https://github.com/openape-ai/openape/commit/eff0061704cd88a80654b4df49a8bb7afd82016a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Explicit `maxAge` on the logged-in session cookie (`openape-sp`) so iOS Safari keeps the session across tab-close / backgrounding.
+
+  - New `openapeSp.sessionMaxAge` module option (default: 604800 seconds = 7 days). Env: `NUXT_OPENAPE_SP_SESSION_MAX_AGE`.
+  - `getSpSession` now sets `cookie.maxAge` + `cookie.httpOnly` + `cookie.secure` + `cookie.sameSite: 'lax'` explicitly. Previous behaviour relied on h3's default (session cookie without explicit expiry), which iOS aggressively evicts.
+  - Backwards compatible: existing apps inherit the 7-day default without any config change.
+
+### Patch Changes
+
+- Updated dependencies [[`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db)]:
+  - @openape/core@0.13.2
+  - @openape/auth@0.6.3
+
 ## 0.7.0
 
 ### Minor Changes

@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.18.0
+
+### Minor Changes
+
+- [#160](https://github.com/openape-ai/openape/pull/160) [`caf8d93`](https://github.com/openape-ai/openape/commit/caf8d93bd7df18b7789fca14cbe40f4242cf8e57) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - IdP-issued auth tokens now carry `aud='apes-cli'` consistently across every flow (PKCE / authorization-code, client-credentials, agent-challenge-response). Previously only the PKCE flow set an audience claim; SSH-key and challenge-response flows issued audience-less tokens, which made it impossible for downstream service providers to do scoped replay-protection on token-exchange endpoints.
+
+  - `issueAuthToken` and `issueAgentToken` (in both `@openape/nuxt-auth-idp` and `@openape/server`) accept an optional `aud` parameter and default to `'apes-cli'`.
+  - New `DEFAULT_CLI_AUDIENCE` constant exported for downstream consumers (`expectedAud`).
+  - `verifyAuthToken` / `verifyAgentToken` accept an optional `expectedAud` parameter for audience-restricted verification. When omitted, audience is not checked (preserves backward compatibility with consumers that don't care).
+  - Existing in-flight tokens (max 1h lifetime) are unaffected; new issuance immediately sets the audience.
+
+  This is a precondition for the upcoming token-exchange endpoint on plans / tasks / secrets / seeds SPs that need to enforce `expectedAud='apes-cli'` to reject replays of id_tokens or delegation tokens against the exchange.
+
+- [#156](https://github.com/openape-ai/openape/pull/156) [`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Extract YOLO-mode from `@openape/nuxt-auth-idp` to `openape-free-idp`; module exposes a generic `definePreApprovalHook` seam instead.
+
+  **Module changes (nuxt-auth-idp):**
+
+  - **NEW** `definePreApprovalHook(hook)` + `runPreApprovalHooks(event, request)` — a generic seam apps can use to auto-approve grant requests. Hooks run AFTER standing-grant evaluation; the first non-null match wins. Return `{ kind, decidedBy }` to approve, `null` to defer to the manual flow.
+  - **REMOVED** YOLO-specific files: `yolo-policy-store.ts`, `yolo-policy-auth.ts`, `grant-auto-approval.ts`, `api/users/[email]/yolo-policy.{get,put,delete}.ts`. The module is now YOLO-agnostic.
+  - **REMOVED** `defineYoloPolicyStore` / `yoloPolicyStore` from the public store surface.
+  - The module's runtime `/grants` page now renders `auto_approval_kind` as a generic badge (was: hardcoded YOLO/Standing match).
+
+  **Core change:**
+
+  - `OpenApeGrant.auto_approval_kind` widened from `'standing' | 'yolo'` to `string` so consuming apps can register custom kinds via the hook. Both previously-defined values remain valid; pure type-widen, no runtime impact.
+
+  **Consumer migration** (applied in this PR for openape-free-idp):
+
+  - Apps that relied on `defineYoloPolicyStore` should now register the YOLO feature in their own `server/` tree and call `definePreApprovalHook` from a Nitro plugin.
+
+### Patch Changes
+
+- Updated dependencies [[`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db)]:
+  - @openape/core@0.13.2
+  - @openape/auth@0.6.3
+  - @openape/grants@0.11.2
+
 ## 0.17.0
 
 ### Minor Changes
