@@ -1,5 +1,12 @@
 # @openape/vue-components
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db)]:
+  - @openape/core@0.13.2
+
 ## 0.2.2
 
 ### Patch Changes

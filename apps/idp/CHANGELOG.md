@@ -1,5 +1,15 @@
 # openape-idp
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [[`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db)]:
+  - @openape/core@0.13.2
+  - @openape/auth@0.6.3
+  - @openape/grants@0.11.2
+  - @openape/vue-components@0.2.3
+
 ## 0.1.5
 
 ### Patch Changes

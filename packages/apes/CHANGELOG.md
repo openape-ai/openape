@@ -1,5 +1,13 @@
 # @openape/apes
 
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [[`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db)]:
+  - @openape/core@0.13.2
+  - @openape/grants@0.11.2
+
 ## 0.12.4
 
 ### Patch Changes
