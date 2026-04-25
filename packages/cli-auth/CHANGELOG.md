@@ -1,5 +1,11 @@
 # @openape/cli-auth
 
+## 0.2.3
+
+### Patch Changes
+
+- [#165](https://github.com/openape-ai/openape/pull/165) [`27e13fd`](https://github.com/openape-ai/openape/commit/27e13fdc9d3c1f399326eba4d05d74c479ecf53e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Bump to trigger publish via the now-fixed publish-chain.mjs script (cli-auth was missing from the explicit PACKAGES list, so previous version bumps built but never published).
+
 ## 0.2.2
 
 ### Patch Changes
