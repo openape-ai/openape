@@ -131,6 +131,12 @@ export default defineNitroPlugin(async () => {
     // auto_approval_kind column on grants — null = human, 'standing' or 'yolo'.
     try { await db.run(sql`ALTER TABLE grants ADD COLUMN auto_approval_kind TEXT`) }
     catch { /* already present */ }
+    // decided_by_standing_grant — id of the standing grant that auto-approved
+    // this grant, for audit. Nullable. Drizzle's `db.select().from(grants)`
+    // includes this column on every read, so a missing column means every
+    // /api/grants and /api/standing-grants call 500s on existing prod DBs.
+    try { await db.run(sql`ALTER TABLE grants ADD COLUMN decided_by_standing_grant TEXT`) }
+    catch { /* already present */ }
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
