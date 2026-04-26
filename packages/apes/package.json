@@ -28,8 +28,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "test:coverage": "vitest run --coverage",
-    "postinstall": "node scripts/fix-node-pty-perms.mjs"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -38,7 +37,7 @@
     "citty": "^0.1.6",
     "consola": "^3.4.2",
     "giget": "^2.0.0",
-    "node-pty": "^1.1.0",
+    "@lydell/node-pty": "1.2.0-beta.12",
     "shell-quote": "^1.8.3",
     "zod": "^4.3.6"
   },

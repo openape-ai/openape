@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import type { IPty } from 'node-pty'
-import * as pty from 'node-pty'
+import type { IPty } from '@lydell/node-pty'
+import * as pty from '@lydell/node-pty'
 
 /**
  * Frame returned when the bash child finishes executing a line and is ready
