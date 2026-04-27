@@ -3,7 +3,10 @@ import { ref } from 'vue'
 
 useSeoMeta({ title: 'Account erstellen' })
 
-const email = ref('')
+// Pre-fill from query param so the login page's "no passkey for this domain"
+// recovery flow lands here without making the user retype their address.
+const route = useRoute()
+const email = ref((route.query.email as string) ?? '')
 const loading = ref(false)
 const sent = ref(false)
 const error = ref('')
