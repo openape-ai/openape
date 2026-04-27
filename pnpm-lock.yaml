@@ -470,6 +470,9 @@ importers:
       '@openape/grants':
         specifier: workspace:*
         version: link:../grants
+      '@openape/proxy':
+        specifier: workspace:*
+        version: link:../proxy
       citty:
         specifier: ^0.1.6
         version: 0.1.6

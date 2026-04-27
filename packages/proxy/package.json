@@ -11,8 +11,13 @@
   "author": "Patrick Hofmann",
   "license": "MIT",
   "bin": {
-    "openape-proxy": "./src/index.ts"
+    "openape-proxy": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "config.example.toml",
+    "README.md"
+  ],
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",

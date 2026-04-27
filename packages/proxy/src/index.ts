@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { createServer } from 'node:http'
 import { parseArgs } from 'node:util'
 import { loadMultiAgentConfig } from './config.js'
