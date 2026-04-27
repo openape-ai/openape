@@ -34,6 +34,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
+    "@openape/proxy": "workspace:*",
     "citty": "^0.1.6",
     "consola": "^3.4.2",
     "giget": "^2.0.0",
