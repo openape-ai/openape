@@ -48,7 +48,12 @@ const server = createServer(handler.handleRequest)
 server.on('connect', handler.handleConnect)
 
 server.listen(port, hostname, () => {
-  console.log(`[openape-proxy] Listening on http://${hostname}:${port}`)
+  // When configured with port 0, the OS assigns a free port — use the actual
+  // bound port for the log line so external orchestrators (apes proxy --) can
+  // grep this line to discover where to connect.
+  const addr = server.address()
+  const actualPort = typeof addr === 'object' && addr ? addr.port : port
+  console.log(`[openape-proxy] Listening on http://${hostname}:${actualPort}`)
   console.log(`[openape-proxy] CONNECT tunneling enabled`)
   console.log(`[openape-proxy] Mandatory auth: ${config.proxy.mandatory_auth ?? false}`)
   console.log(`[openape-proxy] Agents: ${config.agents.map(a => a.email).join(', ')}`)
