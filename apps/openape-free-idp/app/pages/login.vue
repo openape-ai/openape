@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 
 useSeoMeta({ title: 'Login' })
 
@@ -22,17 +22,28 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 const { login, error: webauthnError, loading } = useWebAuthn()
 const { fetchUser } = useIdpAuth()
 
+const noPasskeyForDomain = computed(() =>
+  /no passkeys?/i.test(webauthnError.value ?? ''),
+)
+
 async function handlePasskeyLogin() {
-  const success = await login(email.value || undefined)
-  if (success) {
-    await fetchUser()
-    const returnTo = route.query.returnTo as string
-    if (returnTo) {
-      await navigateTo(returnTo, { external: true })
+  try {
+    const success = await login(email.value || undefined)
+    if (success) {
+      await fetchUser()
+      const returnTo = route.query.returnTo as string
+      if (returnTo) {
+        await navigateTo(returnTo, { external: true })
+      }
+      else {
+        await navigateTo('/')
+      }
     }
-    else {
-      await navigateTo('/')
-    }
+  }
+  catch {
+    // Composable already populated webauthnError; the template offers the
+    // re-register CTA when the message indicates "no passkeys for this domain"
+    // (typical after a passkey loss or RP-domain migration like .at → .ai).
   }
 }
 
@@ -250,6 +261,17 @@ onUnmounted(() => {
       <p v-if="webauthnError || challengeError" class="mt-3 text-sm text-red-400 text-center">
         {{ webauthnError || challengeError }}
       </p>
+
+      <!-- Actionable recovery: triggered when the server says "no passkeys for
+           this email" (for current RP domain). Sends the user to the email-
+           based registration flow which adds a new passkey to the existing
+           account without touching whatever credentials they already have. -->
+      <div v-if="noPasskeyForDomain && email" class="mt-3 text-sm text-gray-400 text-center">
+        Kein Passkey für diese Domain hinterlegt.
+        <NuxtLink :to="`/register-email?email=${encodeURIComponent(email)}`" class="text-primary hover:underline">
+          Registrierungslink anfordern
+        </NuxtLink>
+      </div>
 
       <button
         class="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"

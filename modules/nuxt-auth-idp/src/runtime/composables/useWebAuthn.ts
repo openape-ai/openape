@@ -27,8 +27,8 @@ export function useWebAuthn() {
       return result
     }
     catch (err: unknown) {
-      const e = err as { data?: { statusMessage?: string }, message?: string }
-      error.value = e.data?.statusMessage ?? e.message ?? 'Registration failed'
+      const e = err as { data?: { statusMessage?: string, title?: string }, message?: string }
+      error.value = e.data?.title ?? e.data?.statusMessage ?? e.message ?? 'Registration failed'
       throw err
     }
     finally {
@@ -58,8 +58,8 @@ export function useWebAuthn() {
       return result
     }
     catch (err: unknown) {
-      const e = err as { data?: { statusMessage?: string }, message?: string }
-      error.value = e.data?.statusMessage ?? e.message ?? 'Login failed'
+      const e = err as { data?: { statusMessage?: string, title?: string }, message?: string, statusCode?: number }
+      error.value = e.data?.title ?? e.data?.statusMessage ?? e.message ?? 'Login failed'
       throw err
     }
     finally {
@@ -89,8 +89,8 @@ export function useWebAuthn() {
       return result
     }
     catch (err: unknown) {
-      const e = err as { data?: { statusMessage?: string }, message?: string }
-      error.value = e.data?.statusMessage ?? e.message ?? 'Failed to add device'
+      const e = err as { data?: { statusMessage?: string, title?: string }, message?: string }
+      error.value = e.data?.title ?? e.data?.statusMessage ?? e.message ?? 'Failed to add device'
       throw err
     }
     finally {
