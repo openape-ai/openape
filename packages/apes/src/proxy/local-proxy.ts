@@ -104,7 +104,9 @@ export async function startEphemeralProxy(configToml: string): Promise<Ephemeral
 function waitForListenLine(child: ChildProcess): Promise<number> {
   return new Promise<number>((resolveWait, rejectWait) => {
     let buf = ''
-    const onData = (chunk: Buffer) => {
+    let timer: NodeJS.Timeout
+
+    function onData(chunk: Buffer): void {
       buf += chunk.toString('utf8')
       const m = buf.match(/Listening on http:\/\/[^:\s]+:(\d+)/)
       if (m) {
@@ -112,26 +114,26 @@ function waitForListenLine(child: ChildProcess): Promise<number> {
         resolveWait(Number(m[1]))
       }
     }
-    const onExit = (code: number | null) => {
+    function onExit(code: number | null): void {
       cleanup()
       rejectWait(new Error(`openape-proxy exited before listening (code=${code}, stderr accumulated above)`))
     }
-    const onError = (err: Error) => {
+    function onError(err: Error): void {
       cleanup()
       rejectWait(err)
     }
-    const timer = setTimeout(() => {
-      cleanup()
-      rejectWait(new Error('openape-proxy startup timeout (5s)'))
-    }, 5000)
-    timer.unref()
-
-    const cleanup = () => {
+    function cleanup(): void {
       clearTimeout(timer)
       child.stdout?.off('data', onData)
       child.off('exit', onExit)
       child.off('error', onError)
     }
+
+    timer = setTimeout(() => {
+      cleanup()
+      rejectWait(new Error('openape-proxy startup timeout (5s)'))
+    }, 5000)
+    timer.unref()
 
     child.stdout?.on('data', onData)
     child.once('exit', onExit)
