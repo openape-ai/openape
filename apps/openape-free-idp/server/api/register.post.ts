@@ -14,14 +14,20 @@ export default defineEventHandler(async (event) => {
   const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
   await checkRateLimit(email, ip)
 
-  const { userStore, registrationUrlStore } = useIdpStores()
+  const { registrationUrlStore } = useIdpStores()
 
-  // Silent return if user already exists (prevent email enumeration)
-  const existing = await userStore.findByEmail(email)
-  if (existing) {
-    return { ok: true }
-  }
-
+  // We always issue a registration token + send a mail, even for existing
+  // users. The verify endpoint (`webauthn/register/verify.post.ts`) already
+  // handles both new-user and existing-user cases idempotently: it only
+  // creates the user record if missing and otherwise just appends the new
+  // credential. This makes "lost passkey / new device / new RP-domain" a
+  // self-service recovery flow instead of an admin-only ticket.
+  //
+  // Email-enumeration protection is preserved at the response layer: both
+  // unknown and known emails get the same `{ok:true}` response and the same
+  // mail-send latency. The mail content is identical for both cases, so an
+  // attacker who controls a victim's mailbox can't infer "this email is
+  // registered" any more easily than via any normal mail-based recovery flow.
   const token = randomUUID()
   const now = Date.now()
   const twentyFourHours = 24 * 60 * 60 * 1000
