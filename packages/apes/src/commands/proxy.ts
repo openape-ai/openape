@@ -61,11 +61,29 @@ export const proxyCommand = defineCommand({
 
     // Forward SIGINT/SIGTERM so the user's Ctrl-C stops the wrapped command
     // gracefully (which then triggers our finally-block cleanup of the proxy).
+    //
+    // We set every common variant of the proxy env-vars because tools differ:
+    // - libcurl / curl honors lowercase `https_proxy` and uppercase
+    //   `HTTPS_PROXY` (and security advisories caused some distros to ignore
+    //   uppercase `HTTP_PROXY` for HTTP requests; setting both is safest).
+    // - Many Go / Rust / Python tools read uppercase only.
+    // - `ALL_PROXY` is honored by curl, rsync, ftp, and others as a fallback
+    //   when the per-scheme variant is absent.
+    // - Node 24+ native `fetch` (undici) honors `NODE_USE_ENV_PROXY=1`. Setting
+    //   it here means the wrapped command's Node code routes through the proxy
+    //   without per-app ProxyAgent wiring.
+    const noProxy = process.env.NO_PROXY ?? process.env.no_proxy ?? '127.0.0.1,localhost'
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HTTPS_PROXY: proxyUrl,
+      https_proxy: proxyUrl,
       HTTP_PROXY: proxyUrl,
-      NO_PROXY: process.env.NO_PROXY ?? '127.0.0.1,localhost',
+      http_proxy: proxyUrl,
+      ALL_PROXY: proxyUrl,
+      all_proxy: proxyUrl,
+      NO_PROXY: noProxy,
+      no_proxy: noProxy,
+      NODE_USE_ENV_PROXY: '1',
     }
 
     const exitCode = await new Promise<number>((resolveExit) => {
