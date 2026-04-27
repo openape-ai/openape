@@ -1,0 +1,107 @@
+import { spawn } from 'node:child_process'
+import { defineCommand } from 'citty'
+import consola from 'consola'
+import { CliError, CliExit } from '../errors.js'
+import { buildDefaultProxyConfigToml } from '../proxy/config.js'
+import { startEphemeralProxy } from '../proxy/local-proxy.js'
+import { extractWrappedCommand } from '../shapes/index.js'
+
+/**
+ * `apes proxy -- <cmd> [args...]`
+ *
+ * Run a command with `HTTPS_PROXY` (and `HTTP_PROXY`) routed through the
+ * OpenApe egress proxy. Two lifecycle modes:
+ *
+ *  1. `OPENAPE_PROXY_URL` is set in the environment → reuse that proxy. The
+ *     wrapped command inherits `HTTPS_PROXY=$OPENAPE_PROXY_URL`. No spawn,
+ *     no cleanup. This is the path ape-shell takes (M1b) when the user
+ *     started a long-lived `openape-proxy &` themselves.
+ *
+ *  2. `OPENAPE_PROXY_URL` is NOT set → spawn an ephemeral `openape-proxy`
+ *     child process bound to a random free port, exec the wrapped command
+ *     with `HTTPS_PROXY` pointing at it, kill the proxy on wrapped-command
+ *     exit. Per-invocation lifecycle, like `time` or `op run`.
+ *
+ * Mirrors the `apes run --root → escapes` orchestration pattern: this
+ * subcommand is a thin shell around an external runnable that owns the
+ * actual policy + audit logic.
+ */
+export const proxyCommand = defineCommand({
+  meta: {
+    name: 'proxy',
+    description: 'Run a command with HTTPS_PROXY routed through the OpenApe egress proxy.',
+  },
+  args: {
+    _: {
+      type: 'positional',
+      description: 'Command to execute (after --)',
+      required: false,
+    },
+  },
+  async run({ rawArgs }) {
+    const wrapped = extractWrappedCommand(rawArgs ?? [])
+    if (wrapped.length === 0) {
+      throw new CliError('Usage: apes proxy -- <cmd> [args...]')
+    }
+
+    const reuseUrl = process.env.OPENAPE_PROXY_URL
+    let proxyUrl: string
+    let close: (() => Promise<void>) | null = null
+
+    if (reuseUrl) {
+      proxyUrl = reuseUrl
+      consola.info(`[apes proxy] reusing existing proxy at ${proxyUrl}`)
+    }
+    else {
+      const ephemeral = await startEphemeralProxy(buildDefaultProxyConfigToml())
+      proxyUrl = ephemeral.url
+      close = ephemeral.close
+      consola.info(`[apes proxy] started ephemeral proxy at ${proxyUrl}`)
+    }
+
+    // Forward SIGINT/SIGTERM so the user's Ctrl-C stops the wrapped command
+    // gracefully (which then triggers our finally-block cleanup of the proxy).
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      HTTPS_PROXY: proxyUrl,
+      HTTP_PROXY: proxyUrl,
+      NO_PROXY: process.env.NO_PROXY ?? '127.0.0.1,localhost',
+    }
+
+    const exitCode = await new Promise<number>((resolveExit) => {
+      const child = spawn(wrapped[0]!, wrapped.slice(1), {
+        stdio: 'inherit',
+        env: childEnv,
+      })
+      const forward = (sig: NodeJS.Signals) => () => child.kill(sig)
+      const onSigint = forward('SIGINT')
+      const onSigterm = forward('SIGTERM')
+      process.on('SIGINT', onSigint)
+      process.on('SIGTERM', onSigterm)
+      child.once('exit', (code, signal) => {
+        process.off('SIGINT', onSigint)
+        process.off('SIGTERM', onSigterm)
+        if (signal) resolveExit(128 + (signalNumber(signal) ?? 0))
+        else resolveExit(code ?? 0)
+      })
+      child.once('error', (err) => {
+        consola.error(`[apes proxy] failed to spawn '${wrapped[0]}':`, err.message)
+        resolveExit(127)
+      })
+    })
+
+    if (close) await close()
+
+    if (exitCode !== 0) throw new CliExit(exitCode)
+  },
+})
+
+/**
+ * Map a POSIX signal name to its numeric value for the conventional
+ * 128+sig exit-code encoding. Returns undefined for unknown names so the
+ * caller can fall back to a plain non-zero.
+ */
+function signalNumber(signal: NodeJS.Signals): number | undefined {
+  const map: Record<string, number> = { SIGINT: 2, SIGTERM: 15, SIGHUP: 1, SIGQUIT: 3, SIGKILL: 9 }
+  return map[signal]
+}

@@ -20,6 +20,7 @@ import { delegationRevokeCommand } from './commands/grants/delegation-revoke'
 import { adminCommand } from './commands/admin/index'
 import { adapterCommand } from './commands/adapter/index'
 import { runCommand } from './commands/run'
+import { proxyCommand } from './commands/proxy'
 import { explainCommand } from './commands/explain'
 import { configGetCommand } from './commands/config/get'
 import { configSetCommand } from './commands/config/set'
@@ -141,6 +142,7 @@ const main = defineCommand({
     grants: grantsCommand,
     admin: adminCommand,
     run: runCommand,
+    proxy: proxyCommand,
     explain: explainCommand,
     adapter: adapterCommand,
     config: configCommand,
