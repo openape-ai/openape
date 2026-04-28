@@ -1,17 +1,27 @@
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { connect } from 'node:net'
-import type { MultiAgentProxyConfig } from './types.js'
+import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig } from './types.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { isPrivateOrLoopback } from './ssrf.js'
 import { writeAudit } from './audit.js'
+import { evaluateRules } from './matcher.js'
+import type { GrantsClient } from './grants-client.js'
 
 /**
  * Handle HTTP CONNECT requests for tunneling (used by HTTP_PROXY clients).
- * Flow: Auth check → SSRF check → TCP connect → bidirectional pipe.
+ * Flow: Auth → SSRF → host-based rule evaluation (allow / deny / grant_required)
+ *  → TCP connect → bidirectional pipe.
+ *
+ * For HTTPS via CONNECT we only see the hostname (the TLS payload is opaque).
+ * Rules with `methods` or `path` filters cannot be enforced at CONNECT time and
+ * are skipped — they'd only match if the client also carried the same hostname
+ * over cleartext-HTTP forward-proxy. This is intentional: there's no honest way
+ * to gate a method we can't observe.
  */
 export async function handleConnect(
   config: MultiAgentProxyConfig,
+  grantsClients: Map<string, GrantsClient>,
   req: IncomingMessage,
   clientSocket: Socket,
   _head: Buffer,
@@ -85,6 +95,103 @@ export async function handleConnect(
     clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
     clientSocket.destroy()
     return
+  }
+
+  // Host-based rule evaluation. Pick the agent's config: in single-agent or
+  // unauth mode this is just config.agents[0]; in multi-agent mode we use the
+  // identity established above.
+  const agentConf: AgentConfig | undefined = agentEmail
+    ? config.agents.find(a => a.email === agentEmail)
+    : config.agents[0]
+  if (!agentConf) {
+    clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    clientSocket.destroy()
+    return
+  }
+  const effectiveEmail = agentEmail ?? agentConf.email
+
+  const rulesConfig: ProxyConfig = {
+    proxy: {
+      listen: config.proxy.listen,
+      idp_url: agentConf.idp_url,
+      agent_email: agentConf.email,
+      default_action: config.proxy.default_action,
+    },
+    allow: agentConf.allow ?? [],
+    deny: agentConf.deny ?? [],
+    grant_required: agentConf.grant_required ?? [],
+  }
+
+  // CONNECT carries no method/path beyond host:port. Pass 'CONNECT' as method
+  // and '/' as path so rules with method-filters (which we can't enforce here)
+  // simply don't match — operator must specify method-less rules to gate
+  // HTTPS hosts.
+  const action = evaluateRules(rulesConfig, host, 'CONNECT', '/')
+  const baseAudit = {
+    ts: new Date().toISOString(),
+    agent: effectiveEmail,
+    domain: host,
+    method: 'CONNECT',
+    path: target,
+  } as const
+
+  if (action.type === 'deny') {
+    writeAudit({ ...baseAudit, action: 'deny', rule: 'deny-list' })
+    const note = action.note ? ` ${action.note}` : ''
+    clientSocket.write(`HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nBlocked:${note}\r\n`)
+    clientSocket.destroy()
+    return
+  }
+
+  if (action.type === 'grant_required') {
+    const grantsClient = grantsClients.get(agentConf.email)
+    if (!grantsClient) {
+      writeAudit({ ...baseAudit, action: 'deny', rule: 'grant_required (no client)' })
+      clientSocket.write('HTTP/1.1 500 Internal Server Error\r\n\r\nNo grants client for agent\r\n')
+      clientSocket.destroy()
+      return
+    }
+
+    // Async-mode (`request-async`) is meaningful for HTTP forward-proxy where
+    // the client can re-issue the request after approval. CONNECT clients
+    // (curl, gh, …) won't transparently retry on 407 mid-handshake, so we
+    // always block the tunnel until the grant resolves. Operator can shorten
+    // the wait via per-rule `duration` or via the IdP's grant TTL.
+    const startTs = Date.now()
+    try {
+      const grant = await grantsClient.requestGrant({
+        requester: effectiveEmail,
+        targetHost: host,
+        audience: 'proxy',
+        grantType: action.rule.grant_type,
+        permissions: action.rule.permissions,
+        reason: `CONNECT ${host}:${port}`,
+        duration: action.rule.duration,
+      })
+      const decided = await grantsClient.waitForApproval(grant.id)
+      const waitedMs = Date.now() - startTs
+      if (decided.status === 'approved') {
+        writeAudit({ ...baseAudit, action: 'grant_approved', rule: 'grant_required', grant_id: decided.id, waited_ms: waitedMs })
+        // Fall through to the TCP connect below.
+      }
+      else {
+        writeAudit({ ...baseAudit, action: 'grant_denied', rule: 'grant_required', grant_id: decided.id, waited_ms: waitedMs })
+        clientSocket.write(`HTTP/1.1 403 Forbidden\r\n\r\nGrant denied by ${decided.decided_by ?? 'policy'}\r\n`)
+        clientSocket.destroy()
+        return
+      }
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      writeAudit({ ...baseAudit, action: 'grant_timeout', rule: 'grant_required', error: msg })
+      clientSocket.write(`HTTP/1.1 504 Gateway Timeout\r\n\r\nGrant request failed: ${msg}\r\n`)
+      clientSocket.destroy()
+      return
+    }
+  }
+  else {
+    // 'allow' — log and continue.
+    writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list' })
   }
 
   // Connect to target

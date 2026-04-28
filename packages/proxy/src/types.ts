@@ -4,7 +4,7 @@ export interface ProxyConfig {
     listen: string
     idp_url: string
     agent_email: string
-    default_action: 'block' | 'request' | 'request-async'
+    default_action: 'allow' | 'block' | 'request' | 'request-async'
     audit_log?: string
     mandatory_auth?: boolean
   }
@@ -17,7 +17,7 @@ export interface ProxyConfig {
 export interface MultiAgentProxyConfig {
   proxy: {
     listen: string
-    default_action: 'block' | 'request' | 'request-async'
+    default_action: 'allow' | 'block' | 'request' | 'request-async'
     audit_log?: string
     mandatory_auth?: boolean
   }
