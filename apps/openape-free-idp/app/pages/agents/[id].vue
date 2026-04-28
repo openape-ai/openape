@@ -50,14 +50,11 @@ const wizardOpen = ref(false)
 
 // Tab navigation for the bucket sections. Commands is the default landing
 // tab because Standing Grants currently only live there (Web/Root will get
-// their own surfaces in a follow-up PR).
-const activeBucketTab = ref('commands')
-const bucketTabItems = computed(() => BUCKET_DISPLAY.map(b => ({
-  label: b.label,
-  value: b.id,
-  icon: b.icon,
-  slot: b.id,
-})))
+// their own surfaces in a follow-up PR). Custom tab bar instead of UTabs:
+// UTabs's link-variant put each tab into a narrow column that clipped the
+// labels to one or two letters at the agent-detail card width — manual
+// markup gives us proper button sizing.
+const activeBucketTab = ref<'commands' | 'web' | 'root' | 'default'>('commands')
 function bucketByValue(value: string) {
   return BUCKET_DISPLAY.find(b => b.id === value) ?? BUCKET_DISPLAY[0]!
 }
@@ -421,59 +418,57 @@ async function handleDelete() {
                 </template>
               </UPopover>
             </div>
-            <UTabs
-              v-model="activeBucketTab"
-              :items="bucketTabItems"
-              :unmount-on-hide="false"
-              variant="link"
-              size="sm"
-              color="primary"
-            >
-              <template #commands>
-                <div class="space-y-3 p-3">
-                  <BucketYoloCard
-                    :agent-email="agent.email"
-                    :bucket="bucketByValue('commands')"
-                  />
-                  <div>
-                    <h3 class="text-sm font-semibold text-gray-300 mb-2 mt-2">
-                      Erlaubte Commands (Standing Grants)
-                    </h3>
-                    <AllowedCommandsList
-                      :agent-email="agent.email"
-                      :owner="agent.owner ?? user?.email ?? ''"
-                      :standing-grants="standingGrants"
-                      @refresh="loadStandingGrants"
-                      @add-scoped="openWizard"
-                    />
-                  </div>
-                </div>
-              </template>
-              <template #web>
-                <div class="p-3">
-                  <BucketYoloCard
-                    :agent-email="agent.email"
-                    :bucket="bucketByValue('web')"
-                  />
-                </div>
-              </template>
-              <template #root>
-                <div class="p-3">
-                  <BucketYoloCard
-                    :agent-email="agent.email"
-                    :bucket="bucketByValue('root')"
-                  />
-                </div>
-              </template>
-              <template #default>
-                <div class="p-3">
-                  <BucketYoloCard
-                    :agent-email="agent.email"
-                    :bucket="bucketByValue('default')"
-                  />
-                </div>
-              </template>
-            </UTabs>
+            <div class="flex border-b border-gray-700 bg-gray-900/40 overflow-x-auto">
+              <button
+                v-for="b in BUCKET_DISPLAY"
+                :key="b.id"
+                type="button"
+                class="flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors"
+                :class="activeBucketTab === b.id
+                  ? 'border-orange-500 text-orange-400 bg-gray-800/40'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-800/30'"
+                @click="activeBucketTab = b.id as typeof activeBucketTab"
+              >
+                <UIcon :name="b.icon" class="w-4 h-4" />
+                <span>{{ b.label }}</span>
+              </button>
+            </div>
+            <div v-if="activeBucketTab === 'commands'" class="space-y-3 p-3">
+              <BucketYoloCard
+                :agent-email="agent.email"
+                :bucket="bucketByValue('commands')"
+              />
+              <div>
+                <h3 class="text-sm font-semibold text-gray-300 mb-2 mt-2">
+                  Erlaubte Commands (Standing Grants)
+                </h3>
+                <AllowedCommandsList
+                  :agent-email="agent.email"
+                  :owner="agent.owner ?? user?.email ?? ''"
+                  :standing-grants="standingGrants"
+                  @refresh="loadStandingGrants"
+                  @add-scoped="openWizard"
+                />
+              </div>
+            </div>
+            <div v-else-if="activeBucketTab === 'web'" class="p-3">
+              <BucketYoloCard
+                :agent-email="agent.email"
+                :bucket="bucketByValue('web')"
+              />
+            </div>
+            <div v-else-if="activeBucketTab === 'root'" class="p-3">
+              <BucketYoloCard
+                :agent-email="agent.email"
+                :bucket="bucketByValue('root')"
+              />
+            </div>
+            <div v-else-if="activeBucketTab === 'default'" class="p-3">
+              <BucketYoloCard
+                :agent-email="agent.email"
+                :bucket="bucketByValue('default')"
+              />
+            </div>
           </div>
 
           <UAlert
