@@ -6,7 +6,7 @@ import { resolveServerShape } from '@openape/grants'
 import { useDb } from '../database/drizzle'
 import { useYoloPolicyStore  } from '../utils/yolo-policy-store'
 import type { RiskLevel } from '../utils/yolo-policy-store'
-import { commandFromRequest, evaluateYoloPolicy } from '../utils/yolo-evaluator'
+import { commandFromRequest, evaluateYoloPolicy, targetFromRequest } from '../utils/yolo-evaluator'
 
 export default defineNitroPlugin(async () => {
   // Idempotent schema ensure — safe on every boot, needed under OPENAPE_E2E=1
@@ -72,6 +72,9 @@ export default defineNitroPlugin(async () => {
     const policy = await store.get(request.requester, request.audience)
     if (!policy) return null
 
+    // Risk-threshold lookup needs an executable to score, which only exists
+    // for Commands/Root grants. Web grants (ape-proxy) carry no command —
+    // the evaluator just match-globs against target_host instead.
     const cmd = commandFromRequest(request)
     let resolvedRisk: RiskLevel | null = null
     if (policy.denyRiskThreshold && cmd && cmd.length > 0) {
@@ -85,7 +88,8 @@ export default defineNitroPlugin(async () => {
       }
     }
 
-    const result = evaluateYoloPolicy({ policy, command: cmd, resolvedRisk })
+    const target = targetFromRequest(request)
+    const result = evaluateYoloPolicy({ policy, target, resolvedRisk })
     return result ? { kind: result.kind, decidedBy: result.decidedBy } : null
   })
 })
