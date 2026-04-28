@@ -1,5 +1,27 @@
 # @openape/apes
 
+## 0.13.1
+
+### Patch Changes
+
+- [#175](https://github.com/openape-ai/openape/pull/175) [`feda38f`](https://github.com/openape-ai/openape/commit/feda38fe056b823f6d673018c09d91d59eb581e1) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes proxy --` now sets all common proxy env-var variants
+
+  Wider tool coverage for the env-var-based egress mediation. Previously
+  only `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY` (uppercase) were set.
+  Now also: `https_proxy` / `http_proxy` / `no_proxy` (lowercase, libcurl
+
+  - many Python tools), `ALL_PROXY` / `all_proxy` (curl, rsync, ftp), and
+    `NODE_USE_ENV_PROXY=1` (Node 24+ native `fetch` via undici).
+
+  Net effect: a wrapped command's child Node code (e.g. Claude Code's
+  WebFetch tool calling out via undici) now routes through the proxy
+  without per-app ProxyAgent wiring, and lowercase-only tools that
+  previously bypassed (some Python `urllib`, older curl distro builds)
+  are now covered.
+
+  No CLI-flag change. Hard kernel-level enforcement (block direct
+  sockets) remains a separate opt-in milestone.
+
 ## 0.13.0
 
 ### Minor Changes
