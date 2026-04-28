@@ -3,6 +3,7 @@ import { connect } from 'node:net'
 import { describe, expect, it, afterEach } from 'vitest'
 import type { MultiAgentProxyConfig } from '../src/types.js'
 import { handleConnect } from '../src/connect.js'
+import { buildGrantsClients } from '../src/proxy.js'
 
 function makeConfig(overrides?: Partial<MultiAgentProxyConfig['proxy']>): MultiAgentProxyConfig {
   return {
@@ -25,8 +26,9 @@ function startProxy(config: MultiAgentProxyConfig): Promise<{ port: number, clos
       res.writeHead(200)
       res.end('ok')
     })
+    const grantsClients = buildGrantsClients(config)
     server.on('connect', (req, socket, head) => {
-      handleConnect(config, req, socket, head)
+      handleConnect(config, grantsClients, req, socket, head)
     })
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address() as { port: number }
