@@ -65,9 +65,28 @@ export function evaluateRules(
     }
   }
 
-  // 4. Default: treat as grant_required with 'once'
+  // 4. Default action for unmatched hosts. Conceptually the proxy-side
+  // counterpart of the IdP's per-agent YOLO policy — both decide what
+  // happens when no specific rule matches, both live server-side (proxy or
+  // IdP), neither leaks the decision to the agent. Differences:
+  //   - IdP YOLO is per-agent, evaluated at grant time, can have deny-patterns
+  //     and an expiry window.
+  //   - Proxy default_action is per-proxy-instance, evaluated at request time,
+  //     binary outcome (allow/deny/request-grant).
+  //
+  // Modes:
+  //   - 'block': hard deny — paranoid agent profile.
+  //   - 'allow': hard pass — transparent-audit profile (log every call,
+  //     enforce nothing). Equivalent role to a YOLO policy without a
+  //     deny-list.
+  //   - 'request' / 'request-async' (OpenApe-default): treat as
+  //     grant_required with a once-grant catch-all so every new host
+  //     surfaces an interactive grant decision.
   if (config.proxy.default_action === 'block') {
     return { type: 'deny', note: 'No matching rule (default: block)' }
+  }
+  if (config.proxy.default_action === 'allow') {
+    return { type: 'allow' }
   }
 
   return {
