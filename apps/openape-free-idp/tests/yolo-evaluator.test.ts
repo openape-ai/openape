@@ -6,12 +6,15 @@ import { evaluateYoloPolicy, matchesGlob, targetFromRequest } from '../server/ut
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 
 function policy(overrides: Partial<{
+  mode: 'deny-list' | 'allow-list'
   denyRiskThreshold: Risk | null
   denyPatterns: string[]
   expiresAt: number | null
 }> = {}) {
   return {
     agentEmail: 'a@x',
+    audience: '*',
+    mode: overrides.mode ?? 'deny-list',
     enabledBy: 'owner@x',
     denyRiskThreshold: overrides.denyRiskThreshold ?? null,
     denyPatterns: overrides.denyPatterns ?? [],
@@ -97,6 +100,27 @@ describe('evaluateYoloPolicy', () => {
     const p = policy()
     expect(evaluateYoloPolicy({ policy: p, target: 'example.org', resolvedRisk: null }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+
+  describe('allow-list mode', () => {
+    it('no patterns → no match → null (= human approval)', () => {
+      const p = policy({ mode: 'allow-list' })
+      expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null })).toBeNull()
+    })
+    it('matching pattern → approve', () => {
+      const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('non-matching target → null even with patterns', () => {
+      const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'api.github.com', resolvedRisk: null })).toBeNull()
+    })
+    it('risk threshold is ignored in allow-list mode (operator already enumerated safe set)', () => {
+      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'low', denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: 'critical' }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
   })
 })
 

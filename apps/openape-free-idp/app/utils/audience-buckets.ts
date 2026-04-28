@@ -32,6 +32,49 @@ export function audiencesInBucket(bucket: AudienceBucket): string[] {
  * The fourth `default` row covers the per-agent wildcard fallback (audience
  * `'*'`) — anything not matched by a bucket-specific row.
  */
+/**
+ * Per-row pattern shape:
+ *   - 'command' → a single text field. Pattern stored as plain string.
+ *   - 'method-url' → method dropdown + URL/host glob field. Pattern stored
+ *     as `"<METHOD> <URL>"` (or just `"<URL>"` when method='*'), so today's
+ *     host-only matcher still fires for method='*' rows. Method-specific
+ *     rows are stored forward-compatibly for the upcoming proxy-side
+ *     method+path enrichment (M3.5).
+ */
+export type BucketPatternShape = 'command' | 'method-url'
+
+/** HTTP methods offered in the per-row Method dropdown for `method-url` shape. */
+export const HTTP_METHODS = ['*', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const
+export type HttpMethodChoice = typeof HTTP_METHODS[number]
+
+/**
+ * Parse a stored pattern string into its UI representation.
+ *
+ * For `method-url` shape:
+ *   - `"POST https://api.openai.com/v1/*"` → `{ method: 'POST', value: 'https://api.openai.com/v1/*' }`
+ *   - `"api.openai.com"`                   → `{ method: '*',    value: 'api.openai.com' }`
+ *
+ * For `command` shape: always `{ method: '*', value: <whole string> }`.
+ */
+export function parsePattern(stored: string, shape: BucketPatternShape): { method: HttpMethodChoice, value: string } {
+  if (shape === 'command') return { method: '*', value: stored }
+  const m = stored.match(/^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD) (.*)$/)
+  if (m) return { method: m[1] as HttpMethodChoice, value: m[2]! }
+  return { method: '*', value: stored }
+}
+
+/**
+ * Serialize a UI row back to a stored string. Method `'*'` is dropped from
+ * the prefix so today's host-only matcher (which has no method-awareness)
+ * still fires on the URL portion alone. Method-specific rows preserve the
+ * `"METHOD URL"` shape forward-compat.
+ */
+export function serializePattern(method: HttpMethodChoice, value: string, shape: BucketPatternShape): string {
+  const trimmed = value.trim()
+  if (shape === 'command' || method === '*') return trimmed
+  return `${method} ${trimmed}`
+}
+
 export interface BucketDisplay {
   /** Internal id used for keying. `'default'` is the wildcard catch-all. */
   id: AudienceBucket | 'default'
@@ -41,18 +84,13 @@ export interface BucketDisplay {
   audiences: string[]
   icon: string
   accent: 'blue' | 'orange' | 'purple' | 'gray'
-  /**
-   * Placeholder for the deny-patterns textarea. Bucket-specific so users see
-   * shape examples that fit the audience (bash for Commands, host glob for
-   * Web, etc.) instead of bash patterns under a Web tab.
-   */
-  denyPatternPlaceholder: string
-  /** Helper text displayed under the deny-patterns field. */
-  denyPatternHelp: string
-  /**
-   * Optional notice rendered above the form (e.g. limitations, future work).
-   *  Empty string = no banner.
-   */
+  /** Determines the per-row editor: free-form command vs structured method+URL. */
+  patternShape: BucketPatternShape
+  /** Placeholder for the URL/pattern field in a row. */
+  patternPlaceholder: string
+  /** Helper text displayed under the pattern editor. */
+  patternHelp: string
+  /** Optional notice rendered above the form (enforcement-coverage limits). */
   notice?: string
 }
 
@@ -64,8 +102,9 @@ export const BUCKET_DISPLAY: readonly BucketDisplay[] = [
     audiences: ['ape-shell', 'claude-code', 'shapes'],
     icon: 'i-lucide-terminal',
     accent: 'blue',
-    denyPatternPlaceholder: 'rm -rf *\nsudo *\ncurl * | sh\ngit push --force *',
-    denyPatternHelp: 'Bash-Glob-Pattern (eine pro Zeile). Match gegen den vollen Command-String. * = beliebige Zeichen, ? = ein Zeichen.',
+    patternShape: 'command',
+    patternPlaceholder: 'rm -rf *',
+    patternHelp: 'Bash-Glob-Pattern. Match gegen den vollen Command-String. * = beliebige Zeichen, ? = ein Zeichen.',
   },
   {
     id: 'web',
@@ -74,9 +113,10 @@ export const BUCKET_DISPLAY: readonly BucketDisplay[] = [
     audiences: ['ape-proxy'],
     icon: 'i-lucide-globe',
     accent: 'orange',
-    denyPatternPlaceholder: '*.openai.com\nstripe.com\n169.254.169.254\n*.evil.com',
-    denyPatternHelp: 'Host-Glob (eine pro Zeile). Match gegen den Target-Host beim CONNECT. URL-Pfad + Methode sind heute nicht enforcebar (TLS-opaque). Method+Path-Patterns für cleartext-HTTP folgen in einer späteren Iteration.',
-    notice: 'Heute matcht der Evaluator nur Hostname-Globs. URL+Method-Patterns für cleartext-HTTP sind in Arbeit.',
+    patternShape: 'method-url',
+    patternPlaceholder: '*.openai.com',
+    patternHelp: 'Method + URL/Host-Glob pro Zeile. Method=ALL fügt nur den URL-Teil als Host-Glob ein und wirkt heute beim CONNECT. Spezifische Methoden (POST etc.) werden gespeichert, matchen aber erst sobald der Proxy bei cleartext-HTTP-Calls Method+Path mitgibt (geplant in M3.5).',
+    notice: 'Heute matcht nur ALL-Methode (Host-Glob beim CONNECT). Method-spezifische Rows werden gespeichert, aber erst durch M3.5 (proxy-side method+path enrichment) live.',
   },
   {
     id: 'root',
@@ -85,8 +125,9 @@ export const BUCKET_DISPLAY: readonly BucketDisplay[] = [
     audiences: ['escapes'],
     icon: 'i-lucide-shield-alert',
     accent: 'purple',
-    denyPatternPlaceholder: 'apt-get install *\nsystemctl stop *\nuserdel *',
-    denyPatternHelp: 'Bash-Glob für root-Commands (eine pro Zeile). Wird nach escapes-Aufruf gegen den ausgeführten Command-String gematched.',
+    patternShape: 'command',
+    patternPlaceholder: 'apt-get install *',
+    patternHelp: 'Bash-Glob für root-Commands. Match gegen den ausgeführten Command-String nach escapes-Aufruf.',
   },
   {
     id: 'default',
@@ -95,7 +136,8 @@ export const BUCKET_DISPLAY: readonly BucketDisplay[] = [
     audiences: [AUDIENCE_WILDCARD],
     icon: 'i-lucide-asterisk',
     accent: 'gray',
-    denyPatternPlaceholder: '*.openai.com\nrm -rf *',
-    denyPatternHelp: 'Catch-all für Audiences ohne eigenen Bucket. Pattern-Shape je nachdem, welche Audience matched.',
+    patternShape: 'command',
+    patternPlaceholder: '*.openai.com',
+    patternHelp: 'Catch-all-Pattern. Glob-Match gegen das jeweilige Target (Command-String oder Host).',
   },
 ]

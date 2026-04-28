@@ -1,7 +1,12 @@
 import { defineEventHandler, getQuery, getRouterParam, readBody } from 'h3'
 import { requireYoloPolicyActor } from '../../../utils/yolo-policy-auth'
-import { AUDIENCE_WILDCARD, useYoloPolicyStore } from '../../../utils/yolo-policy-store'
-import type { RiskLevel, YoloPolicy } from '../../../utils/yolo-policy-store'
+import {
+  AUDIENCE_WILDCARD,
+  useYoloPolicyStore,
+  YOLO_MODES,
+
+} from '../../../utils/yolo-policy-store'
+import type { RiskLevel, YoloMode, YoloPolicy } from '../../../utils/yolo-policy-store'
 
 const VALID_RISK: RiskLevel[] = ['low', 'medium', 'high', 'critical']
 const MAX_PATTERNS = 64
@@ -13,10 +18,15 @@ export default defineEventHandler(async (event) => {
 
   const caller = await requireYoloPolicyActor(event, agentEmail)
   const body = await readBody<{
+    mode?: YoloMode
     denyRiskThreshold?: RiskLevel | null
     denyPatterns?: string[]
     expiresAt?: number | null
   }>(event)
+
+  if (body.mode !== undefined && !YOLO_MODES.includes(body.mode)) {
+    throw createProblemError({ status: 400, title: `mode must be one of: ${YOLO_MODES.join(', ')}` })
+  }
 
   if (body.denyRiskThreshold !== undefined && body.denyRiskThreshold !== null && !VALID_RISK.includes(body.denyRiskThreshold)) {
     throw createProblemError({ status: 400, title: `denyRiskThreshold must be one of: ${VALID_RISK.join(', ')}` })
@@ -51,6 +61,7 @@ export default defineEventHandler(async (event) => {
   const policy: YoloPolicy = {
     agentEmail,
     audience,
+    mode: body.mode ?? existing?.mode ?? 'deny-list',
     enabledBy: caller === '_management_' ? (existing?.enabledBy ?? caller) : caller,
     denyRiskThreshold: body.denyRiskThreshold !== undefined ? body.denyRiskThreshold : (existing?.denyRiskThreshold ?? null),
     denyPatterns: body.denyPatterns !== undefined ? normalisePatterns(body.denyPatterns) : (existing?.denyPatterns ?? []),
