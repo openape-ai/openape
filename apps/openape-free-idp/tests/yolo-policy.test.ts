@@ -214,10 +214,11 @@ describe('YOLO policy admin API', () => {
     await fetch(`${baseUrl}/api/users/${encodeURIComponent(AGENT_EMAIL)}/yolo-policy`, {
       method: 'PUT',
       headers: { ...managementHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ denyRiskThreshold: 'high', denyPatterns: [] }),
+      body: JSON.stringify({ denyRiskThreshold: 'medium', denyPatterns: [] }),
     })
-    // `some-random-cli` has no registered shape → generic fallback → risk='high'
-    // → >= threshold 'high' → drops to pending.
+    // `some-random-cli` has no registered shape → generic fallback → risk='high'.
+    // Symmetric semantic: risk > threshold ('medium') → drops to pending.
+    // (Equality would approve per "alles bis zu diesem Level wird auto-approved".)
     const res = await fetch(`${baseUrl}/api/grants`, {
       method: 'POST',
       headers: { ...managementHeader, 'Content-Type': 'application/json' },

@@ -107,7 +107,10 @@ const accentClass = computed(() => {
   }
 })
 
-const showRiskThreshold = computed(() => form.value.yoloOn && props.bucket.id !== 'web')
+// Risk threshold has the SAME semantic in both modes ("alles bis zu diesem
+// Level wird auto-approved"). Hidden only for Web because there's no shape
+// resolver / risk score for ape-proxy grants.
+const showRiskThreshold = computed(() => props.bucket.id !== 'web')
 
 // List header changes meaning with the YOLO toggle. Both wordings honest:
 //  - YOLO ON  → list contents are denied (everything else auto-approved)
@@ -279,8 +282,11 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
             </UBadge>
           </div>
           <p class="text-xs text-gray-400 mt-1">
-            <span v-if="form.yoloOn">Jeder Request auto-approved — die Liste unten ist eine <strong>Deny</strong>-Liste (Ausnahmen).</span>
-            <span v-else>Jeder Request wartet auf manuelle Bestätigung — die Liste unten ist eine <strong>Allow</strong>-Liste (Ausnahmen die ohne Bestätigung durchgehen).</span>
+            <span v-if="form.yoloOn">Jeder Request auto-approved — die Liste unten ist eine <strong>Deny</strong>-Liste (engt weiter ein).</span>
+            <span v-else>Jeder Request wartet auf manuelle Bestätigung — die Liste unten ist eine <strong>Allow</strong>-Liste (öffnet weiter).</span>
+            <span v-if="showRiskThreshold && form.denyRiskThreshold">
+              Plus: alles bis Risiko <code class="font-mono">{{ form.denyRiskThreshold }}</code> wird zusätzlich auto-approved.
+            </span>
           </p>
         </div>
         <USwitch v-model="form.yoloOn" />
@@ -337,7 +343,7 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
         <UFormField
           v-if="showRiskThreshold"
           label="Risiko-Schwelle"
-          help="Requests mit diesem Risiko oder höher fallen trotz YOLO zurück auf manuelle Bestätigung."
+          help="Alles bis zu diesem Level wird auto-approved, alles darüber wartet auf manuelle Bestätigung. Wirkt in beiden Modi (im YOLO-aus-Modus zusammen mit der Allow-Liste)."
         >
           <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
         </UFormField>
