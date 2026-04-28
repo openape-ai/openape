@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const grants = sqliteTable('grants', {
   id: text('id').primaryKey(),
@@ -166,14 +166,21 @@ export const signingKeys = sqliteTable('signing_keys', {
 // One row per agent. Presence = enabled. Deny rules mark the subset of
 // grant requests that fall back to the normal (human) approval flow.
 export const yoloPolicies = sqliteTable('yolo_policies', {
-  agentEmail: text('agent_email').primaryKey(),
+  agentEmail: text('agent_email').notNull(),
+  // Audience scope. '*' = applies to ALL audiences as a fallback.
+  // Specific audience strings like 'ape-shell', 'ape-proxy', 'escapes' override
+  // the '*' fallback when the request matches. Composite PK with agent_email
+  // means per-agent-per-audience policies are independent rows.
+  audience: text('audience').notNull().default('*'),
   enabledBy: text('enabled_by').notNull(),
   denyRiskThreshold: text('deny_risk_threshold'),
   denyPatterns: text('deny_patterns', { mode: 'json' }).notNull().default('[]'),
   enabledAt: integer('enabled_at').notNull(),
   expiresAt: integer('expires_at'),
   updatedAt: integer('updated_at').notNull(),
-})
+}, table => [
+  primaryKey({ columns: [table.agentEmail, table.audience] }),
+])
 
 // --- Milestone 5: SSH Keys ---
 

@@ -1,6 +1,6 @@
-import { defineEventHandler, getRouterParam, readBody } from 'h3'
+import { defineEventHandler, getQuery, getRouterParam, readBody } from 'h3'
 import { requireYoloPolicyActor } from '../../../utils/yolo-policy-auth'
-import { useYoloPolicyStore } from '../../../utils/yolo-policy-store'
+import { AUDIENCE_WILDCARD, useYoloPolicyStore } from '../../../utils/yolo-policy-store'
 import type { RiskLevel, YoloPolicy } from '../../../utils/yolo-policy-store'
 
 const VALID_RISK: RiskLevel[] = ['low', 'medium', 'high', 'critical']
@@ -40,11 +40,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Audience scope: optional `?audience=` query param. Defaults to the
+  // wildcard so unmodified UI calls (which don't yet pass audience) keep
+  // writing the per-agent fallback row.
+  const audience = (getQuery(event).audience as string | undefined)?.trim() || AUDIENCE_WILDCARD
+
   const store = useYoloPolicyStore()
-  const existing = await store.get(agentEmail)
+  const existing = await store.getExact(agentEmail, audience)
   const now = Math.floor(Date.now() / 1000)
   const policy: YoloPolicy = {
     agentEmail,
+    audience,
     enabledBy: caller === '_management_' ? (existing?.enabledBy ?? caller) : caller,
     denyRiskThreshold: body.denyRiskThreshold !== undefined ? body.denyRiskThreshold : (existing?.denyRiskThreshold ?? null),
     denyPatterns: body.denyPatterns !== undefined ? normalisePatterns(body.denyPatterns) : (existing?.denyPatterns ?? []),
