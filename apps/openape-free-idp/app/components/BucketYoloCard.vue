@@ -230,6 +230,14 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
       </div>
     </div>
 
+    <UAlert
+      v-if="bucket.notice"
+      color="info"
+      variant="subtle"
+      :title="bucket.notice"
+      icon="i-lucide-info"
+    />
+
     <UAlert v-if="error" color="error" :title="error" @close="error = ''" />
 
     <div v-if="loading" class="text-xs text-gray-400">
@@ -285,11 +293,11 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
       <UFormField label="Risiko-Schwelle" help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt.">
         <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
       </UFormField>
-      <UFormField label="Deny-Patterns (eine Zeile, Glob: * ?)">
+      <UFormField label="Deny-Patterns (eine pro Zeile, Glob: * ?)" :help="bucket.denyPatternHelp">
         <UTextarea
           v-model="form.denyPatterns"
-          :rows="3"
-          placeholder="rm -rf *&#10;sudo *"
+          :rows="4"
+          :placeholder="bucket.denyPatternPlaceholder"
         />
       </UFormField>
       <div class="flex gap-2">

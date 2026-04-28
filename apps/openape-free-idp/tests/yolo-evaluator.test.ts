@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
-import { evaluateYoloPolicy, matchesGlob } from '../server/utils/yolo-evaluator'
+import { evaluateYoloPolicy, matchesGlob, targetFromRequest } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -44,43 +44,91 @@ describe('matchesGlob', () => {
 
 describe('evaluateYoloPolicy', () => {
   it('no policy → null', () => {
-    expect(evaluateYoloPolicy({ policy: null, command: ['ls'], resolvedRisk: null })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: null, target: 'ls', resolvedRisk: null })).toBeNull()
   })
   it('expired policy → null', () => {
     const p = policy({ expiresAt: 1 })
-    const result = evaluateYoloPolicy({ policy: p, command: ['ls'], resolvedRisk: null, now: 100 })
+    const result = evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: null, now: 100 })
     expect(result).toBeNull()
   })
   it('empty command → null', () => {
     const p = policy()
-    expect(evaluateYoloPolicy({ policy: p, command: undefined, resolvedRisk: null })).toBeNull()
-    expect(evaluateYoloPolicy({ policy: p, command: [], resolvedRisk: null })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: undefined, resolvedRisk: null })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: '', resolvedRisk: null })).toBeNull()
   })
   it('match without any rules → approves with enabledBy', () => {
     const p = policy()
-    const result = evaluateYoloPolicy({ policy: p, command: ['ls', '-la'], resolvedRisk: null })
+    const result = evaluateYoloPolicy({ policy: p, target: 'ls -la', resolvedRisk: null })
     expect(result).toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
   })
   it('deny-pattern drops the match', () => {
     const p = policy({ denyPatterns: ['rm *'] })
-    const result = evaluateYoloPolicy({ policy: p, command: ['rm', 'foo'], resolvedRisk: null })
+    const result = evaluateYoloPolicy({ policy: p, target: 'rm foo', resolvedRisk: null })
     expect(result).toBeNull()
   })
   it('risk at threshold blocks', () => {
     const p = policy({ denyRiskThreshold: 'high' })
-    expect(evaluateYoloPolicy({ policy: p, command: ['rm'], resolvedRisk: 'high' })).toBeNull()
-    expect(evaluateYoloPolicy({ policy: p, command: ['rm'], resolvedRisk: 'critical' })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: 'rm', resolvedRisk: 'high' })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: 'rm', resolvedRisk: 'critical' })).toBeNull()
   })
   it('risk below threshold passes', () => {
     const p = policy({ denyRiskThreshold: 'high' })
-    expect(evaluateYoloPolicy({ policy: p, command: ['ls'], resolvedRisk: 'medium' }))
+    expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: 'medium' }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
-    expect(evaluateYoloPolicy({ policy: p, command: ['ls'], resolvedRisk: 'low' }))
+    expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: 'low' }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
   })
   it('risk-threshold only applies when resolvedRisk is non-null', () => {
     const p = policy({ denyRiskThreshold: 'high' })
-    expect(evaluateYoloPolicy({ policy: p, command: ['ls'], resolvedRisk: null }))
+    expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: null }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+
+  // Web grants come in via target_host + audience='ape-proxy' and have no
+  // command. The evaluator should glob-match host patterns against the
+  // host-shaped target the same way it match-globs commands.
+  it('host-target matches host-glob deny pattern', () => {
+    const p = policy({ denyPatterns: ['*.openai.com'] })
+    expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: 'api.github.com', resolvedRisk: null }))
+      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+  it('host-target without deny patterns auto-approves', () => {
+    const p = policy()
+    expect(evaluateYoloPolicy({ policy: p, target: 'example.org', resolvedRisk: null }))
+      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+})
+
+describe('targetFromRequest', () => {
+  it('prefers command over target_host', () => {
+    expect(targetFromRequest({
+      requester: 'a@x',
+      target_host: 'api.openai.com',
+      audience: 'ape-shell',
+      command: ['ls', '-la'],
+    } as never)).toBe('ls -la')
+  })
+  it('falls back to argv from execution_context when command missing', () => {
+    expect(targetFromRequest({
+      requester: 'a@x',
+      target_host: 'api.openai.com',
+      audience: 'ape-shell',
+      execution_context: { argv: ['rm', '-rf', '/'] },
+    } as never)).toBe('rm -rf /')
+  })
+  it('uses target_host for Web grants without a command', () => {
+    expect(targetFromRequest({
+      requester: 'a@x',
+      target_host: 'api.openai.com',
+      audience: 'ape-proxy',
+    } as never)).toBe('api.openai.com')
+  })
+  it('returns undefined when neither shape is present', () => {
+    expect(targetFromRequest({
+      requester: 'a@x',
+      target_host: '',
+      audience: 'ape-proxy',
+    } as never)).toBeUndefined()
   })
 })
