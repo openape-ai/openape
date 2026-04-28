@@ -234,7 +234,7 @@ export function createMultiAgentProxy(
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
           targetHost: domain,
-          audience: 'proxy',
+          audience: 'ape-proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,
@@ -266,7 +266,7 @@ export function createMultiAgentProxy(
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
           targetHost: domain,
-          audience: 'proxy',
+          audience: 'ape-proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,

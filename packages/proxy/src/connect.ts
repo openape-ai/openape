@@ -36,6 +36,41 @@ export async function handleConnect(
     return
   }
 
+  // SYSTEM BYPASS: outbound to any configured IdP host is unconditionally
+  // allowed. The proxy itself talks to the IdP for JWT verification + grant
+  // approval, and any process inside the proxy boundary may need to call the
+  // IdP for `apes login` / `apes whoami` / token-exchange BEFORE it can ever
+  // produce a valid Proxy-Authorization JWT. Blocking IdP traffic would
+  // either deadlock the grant flow or lock users out of authentication.
+  // We therefore skip auth (no JWT yet for first-login), SSRF (local-dev IdPs
+  // can live at 127.0.0.1), and policy rules (operator must not be able to
+  // override this system invariant).
+  const idpHosts = new Set(
+    config.agents
+      .map((a) => {
+        try {
+          return new URL(a.idp_url).hostname.toLowerCase()
+        }
+        catch {
+          return ''
+        }
+      })
+      .filter(h => h.length > 0),
+  )
+  if (idpHosts.has(host.toLowerCase())) {
+    writeAudit({
+      ts: new Date().toISOString(),
+      agent: 'system',
+      action: 'allow',
+      domain: host,
+      method: 'CONNECT',
+      path: target,
+      rule: 'idp-system-bypass',
+    })
+    tunnel(host, port, clientSocket)
+    return
+  }
+
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
 
   // Auth check — CONNECT always requires auth in mandatory mode
@@ -162,7 +197,7 @@ export async function handleConnect(
       const grant = await grantsClient.requestGrant({
         requester: effectiveEmail,
         targetHost: host,
-        audience: 'proxy',
+        audience: 'ape-proxy',
         grantType: action.rule.grant_type,
         permissions: action.rule.permissions,
         reason: `CONNECT ${host}:${port}`,
@@ -194,11 +229,17 @@ export async function handleConnect(
     writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list' })
   }
 
-  // Connect to target
+  tunnel(host, port, clientSocket)
+}
+
+/**
+ * Open a TCP socket to host:port and bidirectionally pipe it with the client
+ * socket. Used by both the policy-pass path (auth + rules approved) and the
+ * IdP system-bypass path (no auth/policy involved).
+ */
+function tunnel(host: string, port: number, clientSocket: Socket): void {
   const targetSocket = connect(port, host, () => {
     clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
-
-    // Bidirectional pipe
     targetSocket.pipe(clientSocket)
     clientSocket.pipe(targetSocket)
   })
@@ -212,7 +253,6 @@ export async function handleConnect(
     targetSocket.destroy()
   })
 
-  // Cleanup on close
   clientSocket.on('close', () => targetSocket.destroy())
   targetSocket.on('close', () => clientSocket.destroy())
 }
