@@ -48,6 +48,20 @@ const wizardOpen = ref(false)
 // its own load/save lifecycle. The page just hands them the agent email and
 // lets them render.
 
+// Tab navigation for the bucket sections. Commands is the default landing
+// tab because Standing Grants currently only live there (Web/Root will get
+// their own surfaces in a follow-up PR).
+const activeBucketTab = ref('commands')
+const bucketTabItems = computed(() => BUCKET_DISPLAY.map(b => ({
+  label: b.label,
+  value: b.id,
+  icon: b.icon,
+  slot: b.id,
+})))
+function bucketByValue(value: string) {
+  return BUCKET_DISPLAY.find(b => b.id === value) ?? BUCKET_DISPLAY[0]!
+}
+
 useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 'Agent') })
 
 await fetchUser()
@@ -346,112 +360,120 @@ async function handleDelete() {
             </p>
           </div>
 
-          <details class="bg-gray-800/40 border border-gray-700 rounded-lg">
-            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
-              Authentifizierung
-            </summary>
-            <div class="px-3 pb-3 pt-1 text-sm text-gray-300 space-y-4">
-              <div class="space-y-2">
-                <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                  1) Bei OpenApe anmelden — für Grant-Anfragen
-                </h4>
-                <p class="text-xs text-gray-400">
-                  Der Agent holt sich einen JWT über Ed25519-Challenge/Response mit seinem
-                  privaten Schlüssel. Danach kann er Grants anfordern und Kommandos ausführen
-                  (inkl. <span class="font-mono">apes run --as root</span> für privilegierte
-                  Commands — Details siehe
-                  <a
-                    href="https://docs.openape.ai/getting-started/quickstart-agent"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-orange-400 underline"
-                  >Quickstart: Agent</a>).
-                </p>
-                <div class="relative">
-                  <pre class="bg-gray-800 border border-gray-700 rounded-lg p-3 pr-10 text-xs text-gray-200 font-mono overflow-x-auto">{{ apesLoginCmd }}</pre>
-                  <UButton
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    :icon="copied === 'apesLogin' ? 'i-lucide-check' : 'i-lucide-copy'"
-                    class="absolute top-2 right-2"
-                    @click="copyField('apesLogin', apesLoginCmd)"
+          <!-- Per-Bucket Tabs: Authorization-Layer (Commands / Web / Root /
+               Default-Fallback). Standing-Grants-Liste für "Erlaubte Commands"
+               ist nur unter Commands sichtbar — Web und Root haben heute noch
+               keine eigene UI dafür, kommt in Folge-PRs. Auth-Details sind
+               jetzt ein Help-Popover statt eines Accordion-Blocks. -->
+          <div class="border border-gray-700 rounded-lg overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-700 bg-gray-800/40">
+              <h2 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <UIcon name="i-lucide-shield-check" class="w-4 h-4 text-gray-400" />
+                Auto-Approval (YOLO) + Standing Grants
+              </h2>
+              <UPopover :content="{ side: 'bottom', align: 'end' }">
+                <UButton
+                  icon="i-lucide-help-circle"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Authentifizierung erklärt"
+                />
+                <template #content>
+                  <div class="p-4 max-w-md text-sm text-gray-200 space-y-3">
+                    <h3 class="font-semibold text-gray-100">
+                      Authentifizierung
+                    </h3>
+                    <div class="space-y-1">
+                      <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                        1) Bei OpenApe anmelden
+                      </h4>
+                      <p class="text-xs text-gray-400">
+                        Ed25519-Challenge/Response mit dem privaten Schlüssel. Danach kann der Agent Grants anfordern.
+                      </p>
+                      <div class="relative">
+                        <pre class="bg-gray-800 border border-gray-700 rounded p-2 pr-8 text-xs text-gray-200 font-mono overflow-x-auto">{{ apesLoginCmd }}</pre>
+                        <UButton
+                          color="neutral"
+                          variant="ghost"
+                          size="xs"
+                          :icon="copied === 'apesLogin' ? 'i-lucide-check' : 'i-lucide-copy'"
+                          class="absolute top-1.5 right-1.5"
+                          @click="copyField('apesLogin', apesLoginCmd)"
+                        />
+                      </div>
+                    </div>
+                    <div class="space-y-1">
+                      <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                        2) DDISA-Login auf SPs
+                      </h4>
+                      <p class="text-xs text-gray-400">
+                        Jede DDISA-fähige Website löst <span class="font-mono">_ddisa.{{ ddisaDomain }}</span> per DNS auf und vertraut diesem IdP.
+                        <a
+                          href="https://docs.openape.ai/getting-started/how-it-works"
+                          target="_blank"
+                          rel="noopener"
+                          class="text-orange-400 underline"
+                        >Mehr</a>.
+                      </p>
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+            </div>
+            <UTabs
+              v-model="activeBucketTab"
+              :items="bucketTabItems"
+              :unmount-on-hide="false"
+              variant="link"
+              size="sm"
+              color="primary"
+            >
+              <template #commands>
+                <div class="space-y-3 p-3">
+                  <BucketYoloCard
+                    :agent-email="agent.email"
+                    :bucket="bucketByValue('commands')"
+                  />
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-300 mb-2 mt-2">
+                      Erlaubte Commands (Standing Grants)
+                    </h3>
+                    <AllowedCommandsList
+                      :agent-email="agent.email"
+                      :owner="agent.owner ?? user?.email ?? ''"
+                      :standing-grants="standingGrants"
+                      @refresh="loadStandingGrants"
+                      @add-scoped="openWizard"
+                    />
+                  </div>
+                </div>
+              </template>
+              <template #web>
+                <div class="p-3">
+                  <BucketYoloCard
+                    :agent-email="agent.email"
+                    :bucket="bucketByValue('web')"
                   />
                 </div>
-                <p class="text-xs text-gray-500">
-                  <span class="font-mono">apes</span> erledigt Challenge/Response + Token-Caching
-                  transparent. Rohe Endpunkte:
-                  <span class="font-mono">POST /api/agent/challenge</span> &rarr;
-                  <span class="font-mono">POST /api/agent/authenticate</span> (siehe
-                  <a
-                    href="https://docs.openape.ai/ecosystem/auth"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-orange-400 underline"
-                  >Auth-Overview</a>).
-                </p>
-              </div>
-
-              <div class="space-y-2">
-                <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                  2) Auf anderen Websites anmelden — via DDISA
-                </h4>
-                <p class="text-xs text-gray-400">
-                  Jede Website, die DDISA unterstützt, erkennt diesen Agent über seine
-                  Email-Domain
-                  <span class="font-mono text-gray-300">{{ ddisaDomain }}</span>. Der SP
-                  löst
-                  <span class="font-mono">_ddisa.{{ ddisaDomain }}</span> per DNS auf, folgt
-                  dem OAuth-Redirect hierher, und der Agent signt den Login mit demselben
-                  Schlüssel wie in (1). Kein separater Account, keine zusätzliche Registrierung.
-                  Flow-Details:
-                  <a
-                    href="https://docs.openape.ai/getting-started/how-it-works"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-orange-400 underline"
-                  >How DDISA works</a>.
-                </p>
-              </div>
-            </div>
-          </details>
-
-          <details class="bg-gray-800/40 border border-gray-700 rounded-lg" open>
-            <summary class="cursor-pointer select-none px-3 py-2 text-sm text-gray-300 font-medium">
-              Erlaubte Commands
-            </summary>
-            <div class="px-3 pb-3">
-              <AllowedCommandsList
-                :agent-email="agent.email"
-                :owner="agent.owner ?? user?.email ?? ''"
-                :standing-grants="standingGrants"
-                @refresh="loadStandingGrants"
-                @add-scoped="openWizard"
-              />
-            </div>
-          </details>
-
-          <!-- Per-Bucket YOLO + Deny: ein Card pro Policy-Layer.
-               Commands / Web / Root-Commands sind die drei Audience-Buckets,
-               'Default' deckt alles ab was nicht zu einem Bucket gehört. -->
-          <div class="space-y-3">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-shield-check" class="w-5 h-5 text-gray-400" />
-              <h2 class="text-lg font-semibold">
-                Auto-Approval (YOLO) + Deny-Patterns
-              </h2>
-            </div>
-            <p class="text-xs text-gray-500 -mt-1">
-              Pro Policy-Layer einzeln aktivieren. Eine Konfiguration für Bash-Commands
-              betrifft Network-Egress nicht und umgekehrt. Lookup ist most-specific-wins:
-              Bucket-spezifischer Eintrag &gt; Default-Fallback &gt; menschliche Bestätigung.
-            </p>
-            <BucketYoloCard
-              v-for="b in BUCKET_DISPLAY"
-              :key="b.id"
-              :agent-email="agent.email"
-              :bucket="b"
-            />
+              </template>
+              <template #root>
+                <div class="p-3">
+                  <BucketYoloCard
+                    :agent-email="agent.email"
+                    :bucket="bucketByValue('root')"
+                  />
+                </div>
+              </template>
+              <template #default>
+                <div class="p-3">
+                  <BucketYoloCard
+                    :agent-email="agent.email"
+                    :bucket="bucketByValue('default')"
+                  />
+                </div>
+              </template>
+            </UTabs>
           </div>
 
           <UAlert
