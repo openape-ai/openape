@@ -69,9 +69,15 @@ describe('evaluateYoloPolicy', () => {
     const result = evaluateYoloPolicy({ policy: p, target: 'rm foo', resolvedRisk: null })
     expect(result).toBeNull()
   })
-  it('risk at threshold blocks', () => {
+  // Risk-threshold semantic (deny-list mode): "alles bis zu diesem Level wird
+  // auto-approved" — equality is allowed, only strictly higher blocks.
+  it('risk at threshold passes (≤ threshold = allowed)', () => {
     const p = policy({ denyRiskThreshold: 'high' })
-    expect(evaluateYoloPolicy({ policy: p, target: 'rm', resolvedRisk: 'high' })).toBeNull()
+    expect(evaluateYoloPolicy({ policy: p, target: 'rm', resolvedRisk: 'high' }))
+      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+  it('risk above threshold blocks', () => {
+    const p = policy({ denyRiskThreshold: 'high' })
     expect(evaluateYoloPolicy({ policy: p, target: 'rm', resolvedRisk: 'critical' })).toBeNull()
   })
   it('risk below threshold passes', () => {
@@ -116,10 +122,24 @@ describe('evaluateYoloPolicy', () => {
       const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'] })
       expect(evaluateYoloPolicy({ policy: p, target: 'api.github.com', resolvedRisk: null })).toBeNull()
     })
-    it('risk threshold is ignored in allow-list mode (operator already enumerated safe set)', () => {
-      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'low', denyPatterns: ['rm *'] })
+    // Symmetric semantic: in allow-list mode the risk threshold ALSO applies as
+    // "alles bis zu diesem Level wird auto-approved". Patterns add further
+    // explicit allows on top.
+    it('risk ≤ threshold approves in allow-list mode', () => {
+      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'medium' })
+      expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: 'low' }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+      expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: 'medium' }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('risk > threshold needs human in allow-list mode (unless allow-pattern matches)', () => {
+      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'medium', denyPatterns: ['rm *'] })
+      // Critical risk > medium → would block, but pattern matches → approves.
       expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: 'critical' }))
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+      // Critical risk + non-matching target → human approval.
+      expect(evaluateYoloPolicy({ policy: p, target: 'curl evil.com', resolvedRisk: 'critical' }))
+        .toBeNull()
     })
   })
 })
