@@ -19,10 +19,11 @@ export default defineNitroPlugin(async () => {
   // on the absence of the `audience` column so it runs at most once per DB.
   try {
     const db = useDb()
-    // Fresh-DB shape (composite PK).
+    // Fresh-DB shape (composite PK + mode).
     await db.run(sql`CREATE TABLE IF NOT EXISTS yolo_policies (
       agent_email TEXT NOT NULL,
       audience TEXT NOT NULL DEFAULT '*',
+      mode TEXT NOT NULL DEFAULT 'deny-list',
       enabled_by TEXT NOT NULL,
       deny_risk_threshold TEXT,
       deny_patterns TEXT NOT NULL DEFAULT '[]',
@@ -36,7 +37,9 @@ export default defineNitroPlugin(async () => {
     // single-column PK on agent_email and no audience column. Detect that
     // and rebuild.
     const cols = await db.all<{ name: string }>(sql`SELECT name FROM pragma_table_info('yolo_policies')`)
-    const hasAudience = Array.isArray(cols) && cols.some((c: { name: string }) => c.name === 'audience')
+    const colNames = Array.isArray(cols) ? cols.map((c: { name: string }) => c.name) : []
+    const hasAudience = colNames.includes('audience')
+    const hasMode = colNames.includes('mode')
     if (!hasAudience) {
       console.warn('[yolo] migrating yolo_policies → composite (agent_email, audience) PK')
       await db.run(sql`CREATE TABLE yolo_policies_v2 (
@@ -55,6 +58,24 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`DROP TABLE yolo_policies`)
       await db.run(sql`ALTER TABLE yolo_policies_v2 RENAME TO yolo_policies`)
       console.warn('[yolo] migration complete')
+    }
+
+    // M3.5: add `mode` column (allow-list vs deny-list) to existing tables.
+    // ALTER TABLE ADD COLUMN with NOT NULL + DEFAULT works in SQLite for
+    // existing rows; new rows pick up the default. Idempotent via try/catch
+    // when the column is already present.
+    if (!hasMode) {
+      try {
+        await db.run(sql`ALTER TABLE yolo_policies ADD COLUMN mode TEXT NOT NULL DEFAULT 'deny-list'`)
+        console.warn('[yolo] added `mode` column (default deny-list)')
+      }
+      catch (err) {
+        // Could already be there if the migration block above just ran (it
+        // creates the table with `mode`). Tolerate silently.
+        if (!String(err).includes('duplicate column')) {
+          console.error('[yolo] mode-column migration failed:', err)
+        }
+      }
     }
   }
   catch (err) {

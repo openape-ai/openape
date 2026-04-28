@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { BucketDisplay } from '../utils/audience-buckets'
+import type { BucketDisplay, HttpMethodChoice } from '../utils/audience-buckets'
+import { HTTP_METHODS, parsePattern, serializePattern } from '../utils/audience-buckets'
+
+type YoloMode = 'deny-list' | 'allow-list'
 
 interface YoloPolicy {
   agentEmail: string
   audience: string
+  mode: YoloMode
   enabledBy: string
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | null
   denyPatterns: string[]
@@ -18,17 +22,15 @@ const props = defineProps<{
   bucket: BucketDisplay
 }>()
 
-/**
- * Per-bucket YOLO state. We hold one YoloPolicy per audience in the bucket
- * (could be 1..N rows). Aggregate state:
- *
- *   - 'all'    — every audience in the bucket has a YOLO row → bucket is fully on
- *   - 'partial'— some audiences have YOLO, some don't → mixed state
- *   - 'none'   — no audience in the bucket has YOLO
- *
- * For multi-audience buckets (Commands has 3) "Enable" writes one row per
- * audience and "Disable" deletes them all. Single-audience buckets are 1:1.
- */
+interface PatternRow { method: HttpMethodChoice, value: string }
+
+interface FormState {
+  mode: YoloMode
+  denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
+  patterns: PatternRow[]
+  duration: string
+}
+
 const policiesByAudience = ref<Record<string, YoloPolicy | null>>({})
 const loading = ref(false)
 const submitting = ref(false)
@@ -43,10 +45,6 @@ const aggregate = computed<'all' | 'partial' | 'none'>(() => {
 })
 
 const representativePolicy = computed<YoloPolicy | null>(() => {
-  // For display purposes, surface the first existing policy in the bucket.
-  // When the bucket is partially active or inactive across audiences, we
-  // still need *some* policy fields to render the form — fall back to the
-  // last-known.
   for (const aud of props.bucket.audiences) {
     const p = policiesByAudience.value[aud]
     if (p) return p
@@ -60,20 +58,21 @@ const expiryLabel = computed(() => {
   return new Date(ts * 1000).toLocaleString()
 })
 
-// --- Form state -------------------------------------------------------------
+const form = ref<FormState>(emptyForm())
 
-interface FormState {
-  denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
-  denyPatterns: string
-  duration: string
+function emptyForm(): FormState {
+  return {
+    mode: 'deny-list',
+    denyRiskThreshold: '',
+    patterns: [],
+    duration: '3600',
+  }
 }
 
-const form = ref<FormState>({
-  denyRiskThreshold: 'high',
-  denyPatterns: '',
-  duration: '3600',
-})
-
+const modeOptions = [
+  { label: 'Deny-Liste — alles erlaubt außer …', value: 'deny-list' },
+  { label: 'Allow-Liste — nichts erlaubt außer …', value: 'allow-list' },
+]
 const riskOptions = [
   { label: 'Kein Schwellwert', value: '' },
   { label: 'Low', value: 'low' },
@@ -90,6 +89,7 @@ const durationOptions = [
   { label: '30 Tage', value: '2592000' },
   { label: 'Unbefristet', value: '' },
 ]
+const methodOptions = HTTP_METHODS.map(m => ({ label: m === '*' ? 'ALL' : m, value: m }))
 
 const accentClass = computed(() => {
   switch (props.bucket.accent) {
@@ -99,6 +99,14 @@ const accentClass = computed(() => {
     default: return 'border-gray-700 bg-gray-900/40'
   }
 })
+
+// Risk threshold is only meaningful in deny-list mode AND for buckets where
+// a shape resolver exists (Commands / Root). Web has no shape risk.
+const showRiskThreshold = computed(() => form.value.mode === 'deny-list' && props.bucket.id !== 'web')
+
+const patternsListLabel = computed(() =>
+  form.value.mode === 'allow-list' ? 'Allow-Patterns' : 'Deny-Patterns',
+)
 
 // --- Data flow --------------------------------------------------------------
 
@@ -111,10 +119,6 @@ async function load() {
       try {
         const url = `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`
         const res = await ($fetch as any)(url) as { policy: YoloPolicy | null }
-        // The GET endpoint falls back to wildcard ('*') when there's no
-        // exact row; we want exact-match here so the "this audience has its
-        // own row" signal isn't muddled by the bucket-default. Only count it
-        // if the returned policy.audience matches what we asked for.
         fetched[aud] = res?.policy && res.policy.audience === aud ? res.policy : null
       }
       catch {
@@ -126,10 +130,14 @@ async function load() {
     const rep = representativePolicy.value
     if (rep) {
       form.value = {
-        denyRiskThreshold: (rep.denyRiskThreshold ?? 'high') as FormState['denyRiskThreshold'],
-        denyPatterns: rep.denyPatterns.join('\n'),
+        mode: rep.mode ?? 'deny-list',
+        denyRiskThreshold: (rep.denyRiskThreshold ?? '') as FormState['denyRiskThreshold'],
+        patterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
         duration: rep.expiresAt ? '' : '3600',
       }
+    }
+    else {
+      form.value = emptyForm()
     }
   }
   catch (err: unknown) {
@@ -141,25 +149,33 @@ async function load() {
   }
 }
 
+function addPatternRow() {
+  form.value.patterns.push({ method: '*', value: '' })
+}
+
+function removePatternRow(i: number) {
+  form.value.patterns.splice(i, 1)
+}
+
 async function save() {
   submitting.value = true
   error.value = ''
   try {
-    const patterns = form.value.denyPatterns
-      .split(/\r?\n/)
-      .map(s => s.trim())
+    const patterns = form.value.patterns
+      .map(r => serializePattern(r.method, r.value, props.bucket.patternShape))
       .filter(Boolean)
     const durationSec = Number(form.value.duration)
     const expiresAt = Number.isFinite(durationSec) && durationSec > 0
       ? Math.floor(Date.now() / 1000) + durationSec
       : null
     const body = {
-      denyRiskThreshold: form.value.denyRiskThreshold || null,
+      mode: form.value.mode,
+      // Risk threshold only meaningful in deny-list mode + non-Web bucket.
+      // Server-side it's stored regardless; UI hides it where it has no effect.
+      denyRiskThreshold: showRiskThreshold.value ? (form.value.denyRiskThreshold || null) : null,
       denyPatterns: patterns,
       expiresAt,
     }
-    // Multi-audience buckets: write one row per audience. The server enforces
-    // (agent_email, audience) uniqueness so re-PUTs are upserts.
     await Promise.all(props.bucket.audiences.map(aud =>
       ($fetch as any)(
         `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`,
@@ -191,7 +207,7 @@ async function disable() {
     ))
     policiesByAudience.value = {}
     editing.value = false
-    form.value = { denyRiskThreshold: 'high', denyPatterns: '', duration: '3600' }
+    form.value = emptyForm()
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -249,27 +265,33 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
         Inaktiv. Grant-Requests in dieser Schicht warten auf menschliche Bestätigung.
       </p>
       <UButton color="warning" size="sm" icon="i-lucide-zap" @click="editing = true">
-        YOLO aktivieren
+        YOLO konfigurieren
       </UButton>
     </div>
 
     <div v-else-if="!editing" class="space-y-2 text-sm">
       <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        <span class="text-gray-400">Modus</span>
+        <span>
+          <code class="bg-gray-800 px-2 py-0.5 rounded text-xs">{{ representativePolicy?.mode ?? 'deny-list' }}</code>
+        </span>
         <span class="text-gray-400">Aktiviert von</span>
         <span class="font-mono text-xs">{{ representativePolicy?.enabledBy ?? '-' }}</span>
-        <span class="text-gray-400">Risiko-Schwelle</span>
-        <span>
-          <span v-if="representativePolicy?.denyRiskThreshold" class="font-mono">{{ representativePolicy.denyRiskThreshold }}</span>
-          <span v-else class="italic text-gray-500">keine</span>
-        </span>
-        <span class="text-gray-400">Deny-Patterns</span>
+        <template v-if="representativePolicy?.mode !== 'allow-list'">
+          <span class="text-gray-400">Risiko-Schwelle</span>
+          <span>
+            <span v-if="representativePolicy?.denyRiskThreshold" class="font-mono">{{ representativePolicy.denyRiskThreshold }}</span>
+            <span v-else class="italic text-gray-500">keine</span>
+          </span>
+        </template>
+        <span class="text-gray-400">{{ representativePolicy?.mode === 'allow-list' ? 'Allow-Patterns' : 'Deny-Patterns' }}</span>
         <span>
           <span v-if="!representativePolicy?.denyPatterns?.length" class="italic text-gray-500">keine</span>
           <span v-else class="flex flex-wrap gap-1">
             <code v-for="p in representativePolicy.denyPatterns" :key="p" class="bg-gray-800 px-2 py-0.5 rounded text-xs">{{ p }}</code>
           </span>
         </span>
-        <span class="text-gray-400">Ablauf</span>
+        <span class="text-gray-400">YOLO-Timer</span>
         <span>{{ expiryLabel }}</span>
       </div>
       <p v-if="aggregate === 'partial'" class="text-xs text-amber-400 italic">
@@ -287,24 +309,67 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
     </div>
 
     <div v-else class="space-y-3">
-      <UFormField label="Dauer" help="Nach Ablauf wird wieder jeder Request manuell bestätigt.">
+      <UFormField label="Modus" help="Deny: alles erlaubt, Pattern blockt. Allow: nur Patterns erlauben.">
+        <USelect v-model="form.mode" :items="modeOptions" />
+      </UFormField>
+      <UFormField label="YOLO-Timer" help="Nach Ablauf wird wieder jeder Request manuell bestätigt.">
         <USelect v-model="form.duration" :items="durationOptions" />
       </UFormField>
-      <UFormField label="Risiko-Schwelle" help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt.">
+      <UFormField
+        v-if="showRiskThreshold"
+        label="Risiko-Schwelle"
+        help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt (nur bei Deny-Liste)."
+      >
         <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
       </UFormField>
-      <UFormField label="Deny-Patterns (eine pro Zeile, Glob: * ?)" :help="bucket.denyPatternHelp">
-        <UTextarea
-          v-model="form.denyPatterns"
-          :rows="4"
-          :placeholder="bucket.denyPatternPlaceholder"
-        />
-      </UFormField>
-      <div class="flex gap-2">
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-medium text-gray-300">{{ patternsListLabel }}</label>
+          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addPatternRow">
+            Hinzufügen
+          </UButton>
+        </div>
+        <p class="text-xs text-gray-500 mb-2">
+          {{ bucket.patternHelp }}
+        </p>
+        <div v-if="form.patterns.length === 0" class="text-xs italic text-gray-500 py-2">
+          Keine Patterns. <span v-if="form.mode === 'allow-list'">Im Allow-Modus ohne Patterns wird nichts auto-approved.</span>
+        </div>
+        <div v-else class="space-y-2">
+          <div
+            v-for="(row, i) in form.patterns"
+            :key="i"
+            class="flex items-center gap-2"
+          >
+            <USelect
+              v-if="bucket.patternShape === 'method-url'"
+              v-model="row.method"
+              :items="methodOptions"
+              class="w-28 shrink-0"
+            />
+            <UInput
+              v-model="row.value"
+              :placeholder="bucket.patternPlaceholder"
+              class="flex-1"
+              :class="{ 'font-mono text-xs': bucket.patternShape === 'method-url' }"
+            />
+            <UButton
+              size="xs"
+              color="error"
+              variant="ghost"
+              icon="i-lucide-trash-2"
+              @click="removePatternRow(i)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-1">
         <UButton color="warning" size="sm" icon="i-lucide-save" :loading="submitting" @click="save">
           {{ aggregate === 'none' ? 'Aktivieren' : 'Speichern' }}
         </UButton>
-        <UButton variant="ghost" size="sm" :disabled="submitting" @click="editing = false">
+        <UButton variant="ghost" size="sm" :disabled="submitting" @click="editing = false; load()">
           Abbrechen
         </UButton>
       </div>

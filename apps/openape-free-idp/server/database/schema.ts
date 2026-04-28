@@ -172,8 +172,17 @@ export const yoloPolicies = sqliteTable('yolo_policies', {
   // the '*' fallback when the request matches. Composite PK with agent_email
   // means per-agent-per-audience policies are independent rows.
   audience: text('audience').notNull().default('*'),
+  // Pattern-list interpretation:
+  //   'deny-list' (default; backwards-compatible with pre-M3.5 rows): auto-
+  //     approve UNLESS a pattern matches. Risk-threshold also applies.
+  //   'allow-list': require manual approval UNLESS a pattern matches. Risk-
+  //     threshold does NOT apply (operator already enumerated the safe set).
+  mode: text('mode').notNull().default('deny-list'),
   enabledBy: text('enabled_by').notNull(),
   denyRiskThreshold: text('deny_risk_threshold'),
+  // Despite the column name, in `mode='allow-list'` these are read as
+  // ALLOW-patterns, not deny-patterns. Renaming the column would force a
+  // full table recreate; the semantic is documented in the evaluator.
   denyPatterns: text('deny_patterns', { mode: 'json' }).notNull().default('[]'),
   enabledAt: integer('enabled_at').notNull(),
   expiresAt: integer('expires_at'),
