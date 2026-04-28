@@ -25,16 +25,25 @@ const props = defineProps<{
 interface PatternRow { method: HttpMethodChoice, value: string }
 
 interface FormState {
-  mode: YoloMode
+  /**
+   * YOLO toggle: true = mode='deny-list' (default allow, list filters out),
+   * false = mode='allow-list' (default deny, list lets through). The conceptual
+   * mapping matches the OpenApe YOLO semantic: YOLO ON = lazy auto-approve.
+   */
+  yoloOn: boolean
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
   patterns: PatternRow[]
   duration: string
 }
 
+/** Map between the binary toggle and the wire-format `mode` enum. */
+function modeFromToggle(yoloOn: boolean): YoloMode {
+  return yoloOn ? 'deny-list' : 'allow-list'
+}
+
 const policiesByAudience = ref<Record<string, YoloPolicy | null>>({})
 const loading = ref(false)
 const submitting = ref(false)
-const editing = ref(false)
 const error = ref('')
 
 const aggregate = computed<'all' | 'partial' | 'none'>(() => {
@@ -54,7 +63,7 @@ const representativePolicy = computed<YoloPolicy | null>(() => {
 
 const expiryLabel = computed(() => {
   const ts = representativePolicy.value?.expiresAt
-  if (!ts) return 'unbefristet'
+  if (!ts) return ''
   return new Date(ts * 1000).toLocaleString()
 })
 
@@ -62,17 +71,15 @@ const form = ref<FormState>(emptyForm())
 
 function emptyForm(): FormState {
   return {
-    mode: 'deny-list',
+    // No row in DB yet → default OFF (= allow-list with 0 patterns =
+    // every request needs human approval). This is the safer default.
+    yoloOn: false,
     denyRiskThreshold: '',
     patterns: [],
-    duration: '3600',
+    duration: '',
   }
 }
 
-const modeOptions = [
-  { label: 'Deny-Liste — alles erlaubt außer …', value: 'deny-list' },
-  { label: 'Allow-Liste — nichts erlaubt außer …', value: 'allow-list' },
-]
 const riskOptions = [
   { label: 'Kein Schwellwert', value: '' },
   { label: 'Low', value: 'low' },
@@ -81,13 +88,13 @@ const riskOptions = [
   { label: 'Critical', value: 'critical' },
 ]
 const durationOptions = [
-  { label: '1 Stunde (Standard)', value: '3600' },
+  { label: 'Unbefristet', value: '' },
+  { label: '1 Stunde', value: '3600' },
   { label: '4 Stunden', value: '14400' },
   { label: '8 Stunden', value: '28800' },
   { label: '1 Tag', value: '86400' },
   { label: '7 Tage', value: '604800' },
   { label: '30 Tage', value: '2592000' },
-  { label: 'Unbefristet', value: '' },
 ]
 const methodOptions = HTTP_METHODS.map(m => ({ label: m === '*' ? 'ALL' : m, value: m }))
 
@@ -100,12 +107,18 @@ const accentClass = computed(() => {
   }
 })
 
-// Risk threshold is only meaningful in deny-list mode AND for buckets where
-// a shape resolver exists (Commands / Root). Web has no shape risk.
-const showRiskThreshold = computed(() => form.value.mode === 'deny-list' && props.bucket.id !== 'web')
+// Risk threshold has the SAME semantic in both modes ("alles bis zu diesem
+// Level wird auto-approved"). Hidden only for Web because there's no shape
+// resolver / risk score for ape-proxy grants.
+const showRiskThreshold = computed(() => props.bucket.id !== 'web')
 
-const patternsListLabel = computed(() =>
-  form.value.mode === 'allow-list' ? 'Allow-Patterns' : 'Deny-Patterns',
+// List header changes meaning with the YOLO toggle. Both wordings honest:
+//  - YOLO ON  → list contents are denied (everything else auto-approved)
+//  - YOLO OFF → list contents are allowed (everything else needs human)
+const listLabel = computed(() => form.value.yoloOn ? 'Deny-Patterns (Ausnahmen vom Auto-Approve)' : 'Allow-Patterns (was auto-approved werden darf)')
+const listEmptyHint = computed(() => form.value.yoloOn
+  ? 'Keine Deny-Patterns. YOLO approved JEDEN Request automatisch.'
+  : 'Keine Allow-Patterns. Jeder Request wartet auf manuelle Bestätigung.',
 )
 
 // --- Data flow --------------------------------------------------------------
@@ -130,10 +143,10 @@ async function load() {
     const rep = representativePolicy.value
     if (rep) {
       form.value = {
-        mode: rep.mode ?? 'deny-list',
+        yoloOn: rep.mode !== 'allow-list',
         denyRiskThreshold: (rep.denyRiskThreshold ?? '') as FormState['denyRiskThreshold'],
         patterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
-        duration: rep.expiresAt ? '' : '3600',
+        duration: rep.expiresAt ? '' : '',
       }
     }
     else {
@@ -169,9 +182,7 @@ async function save() {
       ? Math.floor(Date.now() / 1000) + durationSec
       : null
     const body = {
-      mode: form.value.mode,
-      // Risk threshold only meaningful in deny-list mode + non-Web bucket.
-      // Server-side it's stored regardless; UI hides it where it has no effect.
+      mode: modeFromToggle(form.value.yoloOn),
       denyRiskThreshold: showRiskThreshold.value ? (form.value.denyRiskThreshold || null) : null,
       denyPatterns: patterns,
       expiresAt,
@@ -183,7 +194,6 @@ async function save() {
       ),
     ))
     await load()
-    editing.value = false
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string }, message?: string }
@@ -194,8 +204,8 @@ async function save() {
   }
 }
 
-async function disable() {
-  if (!confirm(`YOLO für ${props.bucket.label} wirklich deaktivieren?`)) return
+async function reset() {
+  if (!confirm(`Policy für ${props.bucket.label} wirklich löschen? Default-Verhalten (jeder Request manuell) wird wiederhergestellt.`)) return
   submitting.value = true
   error.value = ''
   try {
@@ -206,12 +216,11 @@ async function disable() {
       ),
     ))
     policiesByAudience.value = {}
-    editing.value = false
     form.value = emptyForm()
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
-    error.value = e.data?.title ?? 'Deaktivieren fehlgeschlagen'
+    error.value = e.data?.title ?? 'Zurücksetzen fehlgeschlagen'
   }
   finally {
     submitting.value = false
@@ -229,12 +238,6 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
         <div>
           <h3 class="text-base font-semibold flex items-center gap-2">
             {{ bucket.label }}
-            <UBadge v-if="aggregate === 'all'" color="warning" variant="subtle" size="sm">
-              YOLO aktiv
-            </UBadge>
-            <UBadge v-else-if="aggregate === 'partial'" color="warning" variant="outline" size="sm">
-              YOLO teilweise
-            </UBadge>
           </h3>
           <p class="text-xs text-gray-400 mt-1">
             {{ bucket.description }}
@@ -260,72 +263,39 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
       Lade…
     </div>
 
-    <div v-else-if="aggregate === 'none' && !editing">
-      <p class="text-sm text-gray-400 mb-3">
-        Inaktiv. Grant-Requests in dieser Schicht warten auf menschliche Bestätigung.
-      </p>
-      <UButton color="warning" size="sm" icon="i-lucide-zap" @click="editing = true">
-        YOLO konfigurieren
-      </UButton>
-    </div>
-
-    <div v-else-if="!editing" class="space-y-2 text-sm">
-      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-        <span class="text-gray-400">Modus</span>
-        <span>
-          <code class="bg-gray-800 px-2 py-0.5 rounded text-xs">{{ representativePolicy?.mode ?? 'deny-list' }}</code>
-        </span>
-        <span class="text-gray-400">Aktiviert von</span>
-        <span class="font-mono text-xs">{{ representativePolicy?.enabledBy ?? '-' }}</span>
-        <template v-if="representativePolicy?.mode !== 'allow-list'">
-          <span class="text-gray-400">Risiko-Schwelle</span>
-          <span>
-            <span v-if="representativePolicy?.denyRiskThreshold" class="font-mono">{{ representativePolicy.denyRiskThreshold }}</span>
-            <span v-else class="italic text-gray-500">keine</span>
-          </span>
-        </template>
-        <span class="text-gray-400">{{ representativePolicy?.mode === 'allow-list' ? 'Allow-Patterns' : 'Deny-Patterns' }}</span>
-        <span>
-          <span v-if="!representativePolicy?.denyPatterns?.length" class="italic text-gray-500">keine</span>
-          <span v-else class="flex flex-wrap gap-1">
-            <code v-for="p in representativePolicy.denyPatterns" :key="p" class="bg-gray-800 px-2 py-0.5 rounded text-xs">{{ p }}</code>
-          </span>
-        </span>
-        <span class="text-gray-400">YOLO-Timer</span>
-        <span>{{ expiryLabel }}</span>
+    <template v-else>
+      <!-- YOLO toggle: ON = default allow / list = deny-exceptions.
+           OFF = default deny / list = allow-exceptions. -->
+      <div class="flex items-center justify-between gap-3 p-3 rounded-md bg-gray-900/60 border border-gray-700/60">
+        <div>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-zap" class="w-4 h-4" :class="form.yoloOn ? 'text-amber-400' : 'text-gray-500'" />
+            <span class="text-sm font-semibold">YOLO-Modus</span>
+            <UBadge v-if="form.yoloOn" color="warning" variant="subtle" size="sm">
+              an — default allow
+            </UBadge>
+            <UBadge v-else color="neutral" variant="subtle" size="sm">
+              aus — default deny
+            </UBadge>
+            <UBadge v-if="aggregate === 'partial'" color="warning" variant="outline" size="sm">
+              teilweise
+            </UBadge>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            <span v-if="form.yoloOn">Jeder Request auto-approved — die Liste unten ist eine <strong>Deny</strong>-Liste (engt weiter ein).</span>
+            <span v-else>Jeder Request wartet auf manuelle Bestätigung — die Liste unten ist eine <strong>Allow</strong>-Liste (öffnet weiter).</span>
+            <span v-if="showRiskThreshold && form.denyRiskThreshold">
+              Plus: alles bis Risiko <code class="font-mono">{{ form.denyRiskThreshold }}</code> wird zusätzlich auto-approved.
+            </span>
+          </p>
+        </div>
+        <USwitch v-model="form.yoloOn" />
       </div>
-      <p v-if="aggregate === 'partial'" class="text-xs text-amber-400 italic">
-        Teilweise aktiv — nicht alle Audiences in diesem Bucket haben einen
-        eigenen YOLO-Eintrag. Speichern stellt alle gleich.
-      </p>
-      <div class="flex gap-2 pt-2">
-        <UButton size="sm" icon="i-lucide-pencil" variant="outline" @click="editing = true">
-          Bearbeiten
-        </UButton>
-        <UButton size="sm" color="error" variant="outline" icon="i-lucide-trash-2" :loading="submitting" @click="disable">
-          Deaktivieren
-        </UButton>
-      </div>
-    </div>
 
-    <div v-else class="space-y-3">
-      <UFormField label="Modus" help="Deny: alles erlaubt, Pattern blockt. Allow: nur Patterns erlauben.">
-        <USelect v-model="form.mode" :items="modeOptions" />
-      </UFormField>
-      <UFormField label="YOLO-Timer" help="Nach Ablauf wird wieder jeder Request manuell bestätigt.">
-        <USelect v-model="form.duration" :items="durationOptions" />
-      </UFormField>
-      <UFormField
-        v-if="showRiskThreshold"
-        label="Risiko-Schwelle"
-        help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt (nur bei Deny-Liste)."
-      >
-        <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
-      </UFormField>
-
+      <!-- Always-visible pattern list; label flips with the toggle. -->
       <div>
         <div class="flex items-center justify-between mb-1">
-          <label class="text-sm font-medium text-gray-300">{{ patternsListLabel }}</label>
+          <label class="text-sm font-medium text-gray-300">{{ listLabel }}</label>
           <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addPatternRow">
             Hinzufügen
           </UButton>
@@ -334,7 +304,7 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
           {{ bucket.patternHelp }}
         </p>
         <div v-if="form.patterns.length === 0" class="text-xs italic text-gray-500 py-2">
-          Keine Patterns. <span v-if="form.mode === 'allow-list'">Im Allow-Modus ohne Patterns wird nichts auto-approved.</span>
+          {{ listEmptyHint }}
         </div>
         <div v-else class="space-y-2">
           <div
@@ -365,14 +335,49 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
         </div>
       </div>
 
-      <div class="flex gap-2 pt-1">
-        <UButton color="warning" size="sm" icon="i-lucide-save" :loading="submitting" @click="save">
-          {{ aggregate === 'none' ? 'Aktivieren' : 'Speichern' }}
-        </UButton>
-        <UButton variant="ghost" size="sm" :disabled="submitting" @click="editing = false; load()">
-          Abbrechen
-        </UButton>
+      <!-- YOLO-Timer + Risiko-Schwelle (deny-mode + non-web only). -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <UFormField label="YOLO-Timer" help="Nach Ablauf wird die Policy gelöscht (zurück zu default deny).">
+          <USelect v-model="form.duration" :items="durationOptions" />
+        </UFormField>
+        <UFormField
+          v-if="showRiskThreshold"
+          label="Risiko-Schwelle"
+          help="Alles bis zu diesem Level wird auto-approved, alles darüber wartet auf manuelle Bestätigung. Wirkt in beiden Modi (im YOLO-aus-Modus zusammen mit der Allow-Liste)."
+        >
+          <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
+        </UFormField>
       </div>
-    </div>
+
+      <!-- Action row. -->
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <span v-if="expiryLabel" class="text-xs text-gray-500">
+          Aktuell aktiv bis: <span class="font-mono">{{ expiryLabel }}</span>
+        </span>
+        <span v-else />
+        <div class="flex gap-2">
+          <UButton
+            v-if="aggregate !== 'none'"
+            size="sm"
+            color="error"
+            variant="outline"
+            icon="i-lucide-rotate-ccw"
+            :loading="submitting"
+            @click="reset"
+          >
+            Zurücksetzen
+          </UButton>
+          <UButton
+            color="warning"
+            size="sm"
+            icon="i-lucide-save"
+            :loading="submitting"
+            @click="save"
+          >
+            Speichern
+          </UButton>
+        </div>
+      </div>
+    </template>
   </div>
 </template>

@@ -45,21 +45,32 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   const target = ctx.target && ctx.target.length ? ctx.target : null
   if (!target) return null
 
-  // Allow-list mode: operator enumerated the safe set explicitly. Match →
-  // approve, no match → null (= human approval). Risk-threshold doesn't
-  // apply: by listing a specific pattern the operator has already accepted
-  // that risk for the matched targets.
+  // Risk-threshold semantic is SYMMETRIC across modes:
+  //   "alles bis zu diesem Level wird auto-approved, alles darüber wartet"
+  // - deny-list (default allow): risk > threshold → don't approve.
+  // - allow-list (default deny): risk ≤ threshold → approve.
+  // The pattern list adds further nuance:
+  // - deny-list: explicit deny-pattern → don't approve (further restrict).
+  // - allow-list: explicit allow-pattern → approve (further open).
   if (p.mode === 'allow-list') {
+    // 1. Explicit allow-pattern match → approve.
     for (const pattern of p.denyPatterns || []) {
       if (matchesGlob(target, pattern)) return { kind: 'yolo', decidedBy: p.enabledBy }
     }
+    // 2. Risk ≤ threshold → approve.
+    if (ctx.resolvedRisk && p.denyRiskThreshold) {
+      if (RISK_ORDER[ctx.resolvedRisk] <= RISK_ORDER[p.denyRiskThreshold]) {
+        return { kind: 'yolo', decidedBy: p.enabledBy }
+      }
+    }
+    // 3. Neither path matched → human approval.
     return null
   }
 
-  // Deny-list mode (legacy default): auto-approve unless a pattern matches
-  // or the resolved risk meets/exceeds the configured threshold.
+  // Deny-list mode (default allow + restrictions).
   if (ctx.resolvedRisk && p.denyRiskThreshold) {
-    if (RISK_ORDER[ctx.resolvedRisk] >= RISK_ORDER[p.denyRiskThreshold]) return null
+    // Risk > threshold → don't approve.
+    if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null
   }
   for (const pattern of p.denyPatterns || []) {
     if (matchesGlob(target, pattern)) return null
