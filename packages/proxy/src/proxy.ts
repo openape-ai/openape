@@ -43,11 +43,32 @@ export function createProxy(config: ProxyConfig) {
   return createMultiAgentProxy(multiConfig)
 }
 
-/** Multi-agent proxy with SSRF protection and mandatory auth */
-export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
+/**
+ * Build the per-agent GrantsClient map used by both the HTTP forward-proxy
+ * handler (in this file's `createMultiAgentProxy`) and the CONNECT handler
+ * (in `connect.ts`). Exposed so `createNodeHandler` can share a single map
+ * instead of letting each handler construct its own — keeps any future
+ * per-agent token state coherent.
+ */
+export function buildGrantsClients(config: MultiAgentProxyConfig): Map<string, GrantsClient> {
   const grantsClients = new Map<string, GrantsClient>()
   for (const agent of config.agents) {
     grantsClients.set(agent.email, new GrantsClient(agent.idp_url))
+  }
+  return grantsClients
+}
+
+/** Multi-agent proxy with SSRF protection and mandatory auth */
+export function createMultiAgentProxy(
+  config: MultiAgentProxyConfig,
+  grantsClients: Map<string, GrantsClient> = buildGrantsClients(config),
+) {
+  // Backwards-compat: if caller didn't pre-build the map, we build our own.
+  // createNodeHandler always passes one in so the CONNECT handler can share it.
+  for (const agent of config.agents) {
+    if (!grantsClients.has(agent.email)) {
+      grantsClients.set(agent.email, new GrantsClient(agent.idp_url))
+    }
   }
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
@@ -213,7 +234,7 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
           targetHost: domain,
-          audience: 'proxy',
+          audience: 'ape-proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,
@@ -245,7 +266,7 @@ export function createMultiAgentProxy(config: MultiAgentProxyConfig) {
         const grant = await grantsClient.requestGrant({
           requester: effectiveEmail,
           targetHost: domain,
-          audience: 'proxy',
+          audience: 'ape-proxy',
           grantType: rule.grant_type,
           permissions,
           reason: `${method} ${targetUrl}`,
@@ -300,7 +321,12 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
   handleRequest: (req: IncomingMessage, res: ServerResponse) => void
   handleConnect: (req: IncomingMessage, socket: Socket, head: Buffer) => void
 } {
-  const proxy = createMultiAgentProxy(config)
+  // Build grantsClients once; share with both forward-proxy fetch path
+  // (createMultiAgentProxy) and the CONNECT path (handleConnect). Without
+  // sharing, CONNECT-time grant_required rules couldn't reach the IdP in
+  // multi-agent mode without duplicating constructor work.
+  const grantsClients = buildGrantsClients(config)
+  const proxy = createMultiAgentProxy(config, grantsClients)
 
   return {
     handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -354,7 +380,7 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
     },
 
     handleConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
-      handleConnect(config, req, socket, head)
+      handleConnect(config, grantsClients, req, socket, head)
     },
   }
 }
