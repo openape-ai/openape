@@ -8,6 +8,17 @@ import { AUDIENCE_WILDCARD } from './audience-buckets'
 export { AUDIENCE_WILDCARD }
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
+/**
+ * YOLO pattern-list interpretation:
+ *
+ * - `'deny-list'` (legacy default): auto-approve UNLESS a pattern matches.
+ *   The historical YOLO behavior. Risk-threshold also applies.
+ * - `'allow-list'`: require manual approval UNLESS a pattern matches. Operator
+ *   has enumerated the safe set explicitly. Risk-threshold is a no-op here.
+ */
+export type YoloMode = 'deny-list' | 'allow-list'
+export const YOLO_MODES: YoloMode[] = ['deny-list', 'allow-list']
+
 export interface YoloPolicy {
   agentEmail: string
   /**
@@ -17,6 +28,8 @@ export interface YoloPolicy {
    * try (agent, request.audience) first, then fall back to (agent, '*').
    */
   audience: string
+  /** See YoloMode docs. Defaults to 'deny-list' for backwards compat. */
+  mode: YoloMode
   enabledBy: string
   /** Auto-approval stops when the resolved shape risk meets or exceeds this. */
   denyRiskThreshold: RiskLevel | null
@@ -65,9 +78,11 @@ function mapRow(row: Row): YoloPolicy {
     }
     catch { /* leave empty */ }
   }
+  const mode = (row.mode === 'allow-list' ? 'allow-list' : 'deny-list') as YoloMode
   return {
     agentEmail: row.agentEmail,
     audience: row.audience ?? AUDIENCE_WILDCARD,
+    mode,
     enabledBy: row.enabledBy,
     denyRiskThreshold: (row.denyRiskThreshold ?? null) as YoloPolicy['denyRiskThreshold'],
     denyPatterns: patterns,
@@ -102,6 +117,7 @@ export function createDrizzleYoloPolicyStore(): YoloPolicyStore {
       const values = {
         agentEmail: policy.agentEmail,
         audience: policy.audience,
+        mode: policy.mode,
         enabledBy: policy.enabledBy,
         denyRiskThreshold: policy.denyRiskThreshold,
         denyPatterns: policy.denyPatterns,
@@ -115,6 +131,7 @@ export function createDrizzleYoloPolicyStore(): YoloPolicyStore {
         .onConflictDoUpdate({
           target: [yoloPolicies.agentEmail, yoloPolicies.audience],
           set: {
+            mode: values.mode,
             enabledBy: values.enabledBy,
             denyRiskThreshold: values.denyRiskThreshold,
             denyPatterns: values.denyPatterns,
