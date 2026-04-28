@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { useIdpAuth } from '#imports'
 import AllowedCommandsList from '../../components/AllowedCommandsList.vue'
+import BucketYoloCard from '../../components/BucketYoloCard.vue'
 import ScopedCommandWizard from '../../components/ScopedCommandWizard.vue'
+import { BUCKET_DISPLAY } from '../../utils/audience-buckets'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -42,52 +44,9 @@ const statusError = ref('')
 const standingGrants = ref<StandingGrant[]>([])
 const wizardOpen = ref(false)
 
-// --- YOLO-Modus state ---
-interface YoloPolicy {
-  agentEmail: string
-  enabledBy: string
-  denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | null
-  denyPatterns: string[]
-  enabledAt: number
-  expiresAt: number | null
-  updatedAt: number
-}
-
-const yoloPolicy = ref<YoloPolicy | null>(null)
-const yoloLoading = ref(false)
-const yoloError = ref('')
-const yoloEditing = ref(false)
-const yoloSubmitting = ref(false)
-const yoloForm = ref<{
-  denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
-  denyPatterns: string
-  duration: string // seconds, or '' for unbefristet
-}>({
-  denyRiskThreshold: 'high',
-  denyPatterns: '',
-  duration: '3600', // 1 hour default
-})
-const yoloRiskOptions = [
-  { label: 'Kein Schwellwert', value: '' },
-  { label: 'Low', value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High (empfohlen)', value: 'high' },
-  { label: 'Critical', value: 'critical' },
-]
-const yoloDurationOptions = [
-  { label: '1 Stunde (Standard)', value: '3600' },
-  { label: '4 Stunden', value: '14400' },
-  { label: '8 Stunden', value: '28800' },
-  { label: '1 Tag', value: '86400' },
-  { label: '7 Tage', value: '604800' },
-  { label: '30 Tage', value: '2592000' },
-  { label: 'Unbefristet', value: '' },
-]
-const yoloExpiryLabel = computed(() => {
-  const ts = yoloPolicy.value?.expiresAt
-  if (!ts) return 'unbefristet'
-  return new Date(ts * 1000).toLocaleString()
-})
+// YOLO state moved into per-bucket BucketYoloCard components — each card owns
+// its own load/save lifecycle. The page just hands them the agent email and
+// lets them render.
 
 useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 'Agent') })
 
@@ -117,92 +76,9 @@ async function loadStandingGrants() {
   }
 }
 
-async function loadYoloPolicy() {
-  if (!agent.value) return
-  yoloLoading.value = true
-  yoloError.value = ''
-  try {
-    const res = await ($fetch as any)(`/api/users/${encodeURIComponent(agent.value.email)}/yolo-policy`) as { policy: YoloPolicy | null }
-    yoloPolicy.value = res?.policy ?? null
-    if (yoloPolicy.value) {
-      // When re-opening the form, preselect "unbefristet" when there's
-      // already an active policy so we don't silently shorten its expiry.
-      yoloForm.value = {
-        denyRiskThreshold: (yoloPolicy.value.denyRiskThreshold ?? 'high') as typeof yoloForm.value.denyRiskThreshold,
-        denyPatterns: (yoloPolicy.value.denyPatterns ?? []).join('\n'),
-        duration: yoloPolicy.value.expiresAt ? '' : '',
-      }
-    }
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { title?: string } }
-    yoloError.value = e.data?.title ?? 'YOLO-Policy konnte nicht geladen werden'
-  }
-  finally {
-    yoloLoading.value = false
-  }
-}
-
-async function saveYoloPolicy() {
-  if (!agent.value) return
-  yoloSubmitting.value = true
-  yoloError.value = ''
-  try {
-    const patterns = yoloForm.value.denyPatterns
-      .split(/\r?\n/)
-      .map(s => s.trim())
-      .filter(Boolean)
-    const durationSec = Number(yoloForm.value.duration)
-    const expiresAt = Number.isFinite(durationSec) && durationSec > 0
-      ? Math.floor(Date.now() / 1000) + durationSec
-      : null
-    const body = {
-      denyRiskThreshold: yoloForm.value.denyRiskThreshold || null,
-      denyPatterns: patterns,
-      expiresAt,
-    }
-    const res = await ($fetch as any)(
-      `/api/users/${encodeURIComponent(agent.value.email)}/yolo-policy`,
-      { method: 'PUT', body },
-    ) as { policy: YoloPolicy | null }
-    yoloPolicy.value = res?.policy ?? null
-    yoloEditing.value = false
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { title?: string }, message?: string }
-    yoloError.value = e.data?.title ?? e.message ?? 'Speichern fehlgeschlagen'
-  }
-  finally {
-    yoloSubmitting.value = false
-  }
-}
-
-async function disableYoloPolicy() {
-  if (!agent.value) return
-  if (!confirm('YOLO-Modus wirklich deaktivieren?')) return
-  yoloSubmitting.value = true
-  yoloError.value = ''
-  try {
-    await ($fetch as any)(
-      `/api/users/${encodeURIComponent(agent.value.email)}/yolo-policy`,
-      { method: 'DELETE' },
-    )
-    yoloPolicy.value = null
-    yoloEditing.value = false
-    yoloForm.value = { denyRiskThreshold: 'high', denyPatterns: '', duration: '3600' }
-  }
-  catch (err: unknown) {
-    const e = err as { data?: { title?: string } }
-    yoloError.value = e.data?.title ?? 'Deaktivieren fehlgeschlagen'
-  }
-  finally {
-    yoloSubmitting.value = false
-  }
-}
-
 async function loadAll() {
   await loadAgent()
-  await Promise.all([loadStandingGrants(), loadYoloPolicy()])
+  await loadStandingGrants()
 }
 
 watch(user, (u) => {
@@ -555,116 +431,27 @@ async function handleDelete() {
             </div>
           </details>
 
-          <!-- YOLO-Modus: Auto-approval für alle Grants dieses Agents -->
-          <div class="border border-gray-700 rounded-lg p-4 space-y-3 bg-gray-900/40">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <h3 class="text-base font-semibold flex items-center gap-2">
-                  YOLO-Modus
-                  <UBadge v-if="yoloPolicy" color="warning" variant="subtle" size="sm">
-                    aktiv
-                  </UBadge>
-                </h3>
-                <p class="text-xs text-gray-400 mt-1">
-                  Auto-approval für alle Grant-Requests dieses Agents — außer Deny-Pattern oder
-                  Risiko-Schwelle greifen. Nur der Audit-Trail markiert YOLO-Entscheidungen.
-                </p>
-              </div>
+          <!-- Per-Bucket YOLO + Deny: ein Card pro Policy-Layer.
+               Commands / Web / Root-Commands sind die drei Audience-Buckets,
+               'Default' deckt alles ab was nicht zu einem Bucket gehört. -->
+          <div class="space-y-3">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-shield-check" class="w-5 h-5 text-gray-400" />
+              <h2 class="text-lg font-semibold">
+                Auto-Approval (YOLO) + Deny-Patterns
+              </h2>
             </div>
-
-            <UAlert
-              v-if="yoloError"
-              color="error"
-              :title="yoloError"
-              @close="yoloError = ''"
+            <p class="text-xs text-gray-500 -mt-1">
+              Pro Policy-Layer einzeln aktivieren. Eine Konfiguration für Bash-Commands
+              betrifft Network-Egress nicht und umgekehrt. Lookup ist most-specific-wins:
+              Bucket-spezifischer Eintrag &gt; Default-Fallback &gt; menschliche Bestätigung.
+            </p>
+            <BucketYoloCard
+              v-for="b in BUCKET_DISPLAY"
+              :key="b.id"
+              :agent-email="agent.email"
+              :bucket="b"
             />
-
-            <div v-if="yoloLoading" class="text-xs text-gray-400">
-              Lade…
-            </div>
-
-            <div v-else-if="!yoloPolicy && !yoloEditing">
-              <p class="text-sm text-gray-400 mb-3">
-                Derzeit inaktiv. Alle Grant-Requests warten auf menschliche Bestätigung.
-              </p>
-              <UButton
-                color="warning"
-                icon="i-lucide-zap"
-                @click="yoloEditing = true"
-              >
-                YOLO-Modus aktivieren
-              </UButton>
-            </div>
-
-            <div v-else-if="yoloPolicy && !yoloEditing" class="space-y-2 text-sm">
-              <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                <span class="text-gray-400">Aktiviert von</span>
-                <span class="font-mono text-xs">{{ yoloPolicy.enabledBy }}</span>
-                <span class="text-gray-400">Risiko-Schwelle</span>
-                <span>
-                  <span v-if="yoloPolicy.denyRiskThreshold" class="font-mono">{{ yoloPolicy.denyRiskThreshold }}</span>
-                  <span v-else class="italic text-gray-500">keine</span>
-                </span>
-                <span class="text-gray-400">Deny-Patterns</span>
-                <span>
-                  <span v-if="yoloPolicy.denyPatterns.length === 0" class="italic text-gray-500">keine</span>
-                  <span v-else class="flex flex-wrap gap-1">
-                    <code
-                      v-for="p in yoloPolicy.denyPatterns"
-                      :key="p"
-                      class="bg-gray-800 px-2 py-0.5 rounded text-xs"
-                    >{{ p }}</code>
-                  </span>
-                </span>
-                <span class="text-gray-400">Ablauf</span>
-                <span>{{ yoloExpiryLabel }}</span>
-              </div>
-              <div class="flex gap-2 pt-2">
-                <UButton size="sm" icon="i-lucide-pencil" variant="outline" @click="yoloEditing = true">
-                  Bearbeiten
-                </UButton>
-                <UButton
-                  size="sm"
-                  color="error"
-                  variant="outline"
-                  icon="i-lucide-trash-2"
-                  :loading="yoloSubmitting"
-                  @click="disableYoloPolicy"
-                >
-                  Deaktivieren
-                </UButton>
-              </div>
-            </div>
-
-            <div v-else class="space-y-3">
-              <UFormField label="Dauer" help="Nach Ablauf wird wieder jeder Request manuell bestätigt.">
-                <USelect
-                  v-model="yoloForm.duration"
-                  :items="yoloDurationOptions"
-                />
-              </UFormField>
-              <UFormField label="Risiko-Schwelle" help="Requests mit diesem oder höherem Risiko werden weiter menschlich bestätigt.">
-                <USelect
-                  v-model="yoloForm.denyRiskThreshold"
-                  :items="yoloRiskOptions"
-                />
-              </UFormField>
-              <UFormField label="Deny-Patterns (eine Zeile, Glob-Syntax: * ?)">
-                <UTextarea
-                  v-model="yoloForm.denyPatterns"
-                  :rows="4"
-                  placeholder="rm -rf *&#10;sudo *&#10;curl*| sh"
-                />
-              </UFormField>
-              <div class="flex gap-2">
-                <UButton color="warning" icon="i-lucide-save" :loading="yoloSubmitting" @click="saveYoloPolicy">
-                  {{ yoloPolicy ? 'Speichern' : 'Aktivieren' }}
-                </UButton>
-                <UButton variant="ghost" :disabled="yoloSubmitting" @click="yoloEditing = false">
-                  Abbrechen
-                </UButton>
-              </div>
-            </div>
           </div>
 
           <UAlert
