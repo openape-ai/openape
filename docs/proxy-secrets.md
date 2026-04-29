@@ -313,9 +313,24 @@ unaffected by this restriction and works under either runtime.
   rotating credentials.
 - **stdin size cap.** The TOML blob must fit in 4 KiB. Split across multiple
   daemon instances on different ports if you need more secrets than fit.
-- **Go-based clients.** As of Phase 6 release, leaf certs are tagged
-  `UTF8String` so Go's strict `crypto/x509` parser accepts them
-  (`gh`, `kubectl`, `terraform`, anything Go-based). Earlier intermediate
-  builds emitted PrintableString-tagged certs that Go rejected with
-  `invalid PrintableString` — if you see that error, your daemon binary is
-  out of date.
+- **Go-based clients on macOS** (`gh`, `kubectl`, `terraform`, `helm`, …).
+  Two layers to be aware of:
+  1. **Cert encoding** — fixed in Phase 6. Leaf certs are tagged
+     `UTF8String` so Go's strict `crypto/x509` parser accepts them. If you
+     hit `invalid PrintableString` your daemon binary predates this fix.
+  2. **Trust-store discovery** — Go on macOS reads only the system
+     Keychain for `SystemCertPool()`. It **does not** honor `SSL_CERT_FILE`
+     on macOS even when set, so the wrapper's per-invocation trust bundle
+     is invisible to a Go client and the handshake fails with
+     `certificate is not trusted`. On **Linux**, Go does honor
+     `SSL_CERT_FILE` and these clients work via the wrapper. On macOS,
+     wait for v2's `apes proxy ca install` (opt-in Keychain trust) or
+     install the CA manually:
+     ```bash
+     sudo security add-trusted-cert -d -r trustRoot \
+       -k /Library/Keychains/System.keychain \
+       ~/.openape/proxy/ca.crt
+     ```
+     Manual install gives the CA system-wide trust — **only do this if you
+     understand the implications** (any Go binary on the host will trust
+     daemon-minted leaf certs while the daemon is running).
