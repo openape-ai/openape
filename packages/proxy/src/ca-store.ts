@@ -48,3 +48,37 @@ export function loadOrCreateCa(opts: LoadOrCreateCaOpts): CaBundle {
 
   return { certPem, keyPem, created: true }
 }
+
+export interface LeafCert {
+  certPem: string
+  keyPem: string
+  expiresAt: number
+}
+
+export function mintLeafCert(ca: CaBundle, hostname: string): LeafCert {
+  const caCert = forge.pki.certificateFromPem(ca.certPem)
+  const caKey = forge.pki.privateKeyFromPem(ca.keyPem)
+
+  const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 })
+  const cert = forge.pki.createCertificate()
+  cert.publicKey = keys.publicKey
+  cert.serialNumber = `${Date.now()}${Math.floor(Math.random() * 1e6)}`
+  cert.validity.notBefore = new Date()
+  const expiresAt = Date.now() + 24 * 3600_000
+  cert.validity.notAfter = new Date(expiresAt)
+  cert.setSubject([{ name: 'commonName', value: hostname }])
+  cert.setIssuer(caCert.subject.attributes)
+  cert.setExtensions([
+    { name: 'basicConstraints', cA: false },
+    { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
+    { name: 'extKeyUsage', serverAuth: true },
+    { name: 'subjectAltName', altNames: [{ type: 2, value: hostname }] },
+  ])
+  cert.sign(caKey, forge.md.sha256.create())
+
+  return {
+    certPem: forge.pki.certificateToPem(cert),
+    keyPem: forge.pki.privateKeyToPem(keys.privateKey),
+    expiresAt,
+  }
+}

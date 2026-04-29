@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import forge from 'node-forge'
-import { loadOrCreateCa } from '../src/ca-store.js'
+import { loadOrCreateCa, mintLeafCert } from '../src/ca-store.js'
 
 describe('loadOrCreateCa — load existing', () => {
   it('loads an existing CA from disk if both files are present', () => {
@@ -57,5 +57,31 @@ describe('loadOrCreateCa — generate', () => {
     expect(second.created).toBe(false)
     expect(second.certPem).toBe(first.certPem)
     expect(second.keyPem).toBe(first.keyPem)
+  })
+})
+
+describe('mintLeafCert', () => {
+  it('mints a leaf cert chained to the local CA', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'castore-leaf-'))
+    const ca = loadOrCreateCa({
+      certPath: join(dir, 'ca.crt'),
+      keyPath: join(dir, 'ca.key'),
+      subjectCN: 'OpenApe Proxy CA (test)',
+    })
+
+    const leaf = mintLeafCert(ca, 'api.github.com')
+    expect(leaf.certPem).toContain('BEGIN CERTIFICATE')
+    expect(leaf.keyPem).toMatch(/BEGIN (RSA )?PRIVATE KEY/)
+
+    // Verify SAN includes the hostname.
+    const parsed = forge.pki.certificateFromPem(leaf.certPem)
+    const sanExt = parsed.extensions.find((e: any) => e.name === 'subjectAltName')
+    expect(sanExt).toBeTruthy()
+    const altNames = (sanExt as any).altNames as { type: number, value: string }[]
+    expect(altNames.some(n => n.type === 2 && n.value === 'api.github.com')).toBe(true)
+
+    // Verify it's signed by the CA.
+    const caStore = forge.pki.createCaStore([ca.certPem])
+    expect(() => forge.pki.verifyCertificateChain(caStore, [parsed])).not.toThrow()
   })
 })
