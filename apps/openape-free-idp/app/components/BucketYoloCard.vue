@@ -12,6 +12,7 @@ interface YoloPolicy {
   enabledBy: string
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | null
   denyPatterns: string[]
+  allowPatterns: string[]
   enabledAt: number
   expiresAt: number | null
   updatedAt: number
@@ -32,7 +33,13 @@ interface FormState {
    */
   yoloOn: boolean
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
-  patterns: PatternRow[]
+  /**
+   * Independent pattern lists per mode. The active list is shown/edited
+   * based on `yoloOn`; the inactive one is preserved so flipping the toggle
+   * doesn't lose work. Both lists go to the server on every save.
+   */
+  denyPatterns: PatternRow[]
+  allowPatterns: PatternRow[]
   duration: string
 }
 
@@ -69,13 +76,25 @@ const expiryLabel = computed(() => {
 
 const form = ref<FormState>(emptyForm())
 
+// The pattern list the user is currently editing — picked by the YOLO toggle.
+// Switching the toggle reveals the OTHER list rather than relabeling the same
+// one (the previous shape lost data on every flip).
+const activePatterns = computed<PatternRow[]>({
+  get: () => form.value.yoloOn ? form.value.denyPatterns : form.value.allowPatterns,
+  set: (v) => {
+    if (form.value.yoloOn) form.value.denyPatterns = v
+    else form.value.allowPatterns = v
+  },
+})
+
 function emptyForm(): FormState {
   return {
     // No row in DB yet → default OFF (= allow-list with 0 patterns =
     // every request needs human approval). This is the safer default.
     yoloOn: false,
     denyRiskThreshold: '',
-    patterns: [],
+    denyPatterns: [],
+    allowPatterns: [],
     duration: '',
   }
 }
@@ -145,7 +164,8 @@ async function load() {
       form.value = {
         yoloOn: rep.mode !== 'allow-list',
         denyRiskThreshold: (rep.denyRiskThreshold ?? '') as FormState['denyRiskThreshold'],
-        patterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
+        denyPatterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
+        allowPatterns: (rep.allowPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
         duration: rep.expiresAt ? '' : '',
       }
     }
@@ -163,28 +183,38 @@ async function load() {
 }
 
 function addPatternRow() {
-  form.value.patterns.push({ method: '*', value: '' })
+  activePatterns.value = [...activePatterns.value, { method: '*', value: '' }]
 }
 
 function removePatternRow(i: number) {
-  form.value.patterns.splice(i, 1)
+  const next = activePatterns.value.slice()
+  next.splice(i, 1)
+  activePatterns.value = next
+}
+
+function serializeRows(rows: PatternRow[]): string[] {
+  return rows
+    .map(r => serializePattern(r.method, r.value, props.bucket.patternShape))
+    .filter(Boolean)
 }
 
 async function save() {
   submitting.value = true
   error.value = ''
   try {
-    const patterns = form.value.patterns
-      .map(r => serializePattern(r.method, r.value, props.bucket.patternShape))
-      .filter(Boolean)
     const durationSec = Number(form.value.duration)
     const expiresAt = Number.isFinite(durationSec) && durationSec > 0
       ? Math.floor(Date.now() / 1000) + durationSec
       : null
+    // Send BOTH lists every save so the inactive one is preserved across mode
+    // flips. The server treats the unspecified list as "keep current" only
+    // when the field is absent — we always include both, so what the user
+    // sees is what they get.
     const body = {
       mode: modeFromToggle(form.value.yoloOn),
       denyRiskThreshold: showRiskThreshold.value ? (form.value.denyRiskThreshold || null) : null,
-      denyPatterns: patterns,
+      denyPatterns: serializeRows(form.value.denyPatterns),
+      allowPatterns: serializeRows(form.value.allowPatterns),
       expiresAt,
     }
     await Promise.all(props.bucket.audiences.map(aud =>
@@ -303,12 +333,12 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
         <p class="text-xs text-gray-500 mb-2">
           {{ bucket.patternHelp }}
         </p>
-        <div v-if="form.patterns.length === 0" class="text-xs italic text-gray-500 py-2">
+        <div v-if="activePatterns.length === 0" class="text-xs italic text-gray-500 py-2">
           {{ listEmptyHint }}
         </div>
         <div v-else class="space-y-2">
           <div
-            v-for="(row, i) in form.patterns"
+            v-for="(row, i) in activePatterns"
             :key="i"
             class="flex items-center gap-2"
           >

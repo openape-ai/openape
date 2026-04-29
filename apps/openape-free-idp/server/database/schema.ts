@@ -180,10 +180,13 @@ export const yoloPolicies = sqliteTable('yolo_policies', {
   mode: text('mode').notNull().default('deny-list'),
   enabledBy: text('enabled_by').notNull(),
   denyRiskThreshold: text('deny_risk_threshold'),
-  // Despite the column name, in `mode='allow-list'` these are read as
-  // ALLOW-patterns, not deny-patterns. Renaming the column would force a
-  // full table recreate; the semantic is documented in the evaluator.
+  // Two independent pattern lists, one per mode. The active list is picked
+  // by `mode`. Keeping both means flipping the YOLO toggle in the UI doesn't
+  // destroy the inactive list (the previous single-list shape was confusing:
+  // the same array got relabeled as deny-patterns when YOLO was on and as
+  // allow-patterns when YOLO was off).
   denyPatterns: text('deny_patterns', { mode: 'json' }).notNull().default('[]'),
+  allowPatterns: text('allow_patterns', { mode: 'json' }).notNull().default('[]'),
   enabledAt: integer('enabled_at').notNull(),
   expiresAt: integer('expires_at'),
   updatedAt: integer('updated_at').notNull(),

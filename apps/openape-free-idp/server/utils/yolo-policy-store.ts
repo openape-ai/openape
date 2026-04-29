@@ -33,8 +33,18 @@ export interface YoloPolicy {
   enabledBy: string
   /** Auto-approval stops when the resolved shape risk meets or exceeds this. */
   denyRiskThreshold: RiskLevel | null
-  /** Glob patterns that drop the request back to the normal approval flow. */
+  /**
+   * Glob patterns that drop the request back to the normal approval flow.
+   * Active when `mode='deny-list'`; otherwise stored but inert.
+   */
   denyPatterns: string[]
+  /**
+   * Glob patterns that auto-approve a request even though the default is
+   * deny. Active when `mode='allow-list'`; otherwise stored but inert.
+   * Persisted independently of `denyPatterns` so flipping the UI toggle
+   * doesn't destroy the inactive list.
+   */
+  allowPatterns: string[]
   enabledAt: number
   /** Unix seconds; null = no expiry. */
   expiresAt: number | null
@@ -64,20 +74,23 @@ export interface YoloPolicyStore {
 
 type Row = typeof yoloPolicies.$inferSelect
 
-function mapRow(row: Row): YoloPolicy {
-  let patterns: string[] = []
-  if (Array.isArray(row.denyPatterns)) {
-    patterns = (row.denyPatterns as unknown[]).filter((p): p is string => typeof p === 'string')
+function readJsonStringArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return (raw as unknown[]).filter((p): p is string => typeof p === 'string')
   }
-  else if (typeof row.denyPatterns === 'string') {
+  if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(row.denyPatterns)
+      const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
-        patterns = parsed.filter((p): p is string => typeof p === 'string')
+        return parsed.filter((p): p is string => typeof p === 'string')
       }
     }
     catch { /* leave empty */ }
   }
+  return []
+}
+
+function mapRow(row: Row): YoloPolicy {
   const mode = (row.mode === 'allow-list' ? 'allow-list' : 'deny-list') as YoloMode
   return {
     agentEmail: row.agentEmail,
@@ -85,7 +98,8 @@ function mapRow(row: Row): YoloPolicy {
     mode,
     enabledBy: row.enabledBy,
     denyRiskThreshold: (row.denyRiskThreshold ?? null) as YoloPolicy['denyRiskThreshold'],
-    denyPatterns: patterns,
+    denyPatterns: readJsonStringArray(row.denyPatterns),
+    allowPatterns: readJsonStringArray(row.allowPatterns),
     enabledAt: row.enabledAt,
     expiresAt: row.expiresAt ?? null,
     updatedAt: row.updatedAt,
@@ -121,6 +135,7 @@ export function createDrizzleYoloPolicyStore(): YoloPolicyStore {
         enabledBy: policy.enabledBy,
         denyRiskThreshold: policy.denyRiskThreshold,
         denyPatterns: policy.denyPatterns,
+        allowPatterns: policy.allowPatterns,
         enabledAt: policy.enabledAt,
         expiresAt: policy.expiresAt,
         updatedAt: policy.updatedAt,
@@ -135,6 +150,7 @@ export function createDrizzleYoloPolicyStore(): YoloPolicyStore {
             enabledBy: values.enabledBy,
             denyRiskThreshold: values.denyRiskThreshold,
             denyPatterns: values.denyPatterns,
+            allowPatterns: values.allowPatterns,
             expiresAt: values.expiresAt,
             updatedAt: values.updatedAt,
           },
