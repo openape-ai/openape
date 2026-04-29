@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import forge from 'node-forge'
@@ -28,5 +28,34 @@ describe('loadOrCreateCa — load existing', () => {
     expect(ca.certPem).toContain('BEGIN CERTIFICATE')
     expect(ca.keyPem).toContain('BEGIN RSA PRIVATE KEY')
     expect(ca.created).toBe(false)
+  })
+})
+
+describe('loadOrCreateCa — generate', () => {
+  it('generates a fresh CA when files do not exist', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'castore-gen-'))
+    const certPath = join(dir, 'ca.crt')
+    const keyPath = join(dir, 'ca.key')
+
+    const ca = loadOrCreateCa({ certPath, keyPath, subjectCN: 'OpenApe Proxy CA (test)' })
+    expect(ca.created).toBe(true)
+    expect(ca.certPem).toContain('BEGIN CERTIFICATE')
+    expect(ca.keyPem).toMatch(/BEGIN (RSA )?PRIVATE KEY/)
+    expect(existsSync(certPath)).toBe(true)
+    expect(existsSync(keyPath)).toBe(true)
+    expect(statSync(certPath).mode & 0o777).toBe(0o600)
+    expect(statSync(keyPath).mode & 0o777).toBe(0o600)
+  })
+
+  it('reads back an exact match after generation', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'castore-roundtrip-'))
+    const certPath = join(dir, 'ca.crt')
+    const keyPath = join(dir, 'ca.key')
+
+    const first = loadOrCreateCa({ certPath, keyPath, subjectCN: 'OpenApe Proxy CA (test)' })
+    const second = loadOrCreateCa({ certPath, keyPath, subjectCN: 'ignored' })
+    expect(second.created).toBe(false)
+    expect(second.certPem).toBe(first.certPem)
+    expect(second.keyPem).toBe(first.keyPem)
   })
 })
