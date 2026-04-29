@@ -1,13 +1,39 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import { createHash } from 'node:crypto'
-import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig } from './types.js'
+import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig, SecretsStore } from './types.js'
 import { evaluateRules } from './matcher.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
 import { writeAudit } from './audit.js'
 import { checkEgress } from './ssrf.js'
 import { handleConnect } from './connect.js'
+
+/**
+ * Minimal fetch shape used for upstream calls. `typeof fetch` itself carries a
+ * `preconnect` static (Node 22+) which we don't use, so we narrow to the call
+ * signature to keep `MultiAgentProxyDeps.fetchImpl` easy to override in tests.
+ */
+export type UpstreamFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>
+
+/**
+ * Optional dependencies injected into `createMultiAgentProxy`. Kept additive so
+ * existing single-call sites (legacy `createProxy`, `createNodeHandler`) keep
+ * working without supplying any of these.
+ */
+export interface MultiAgentProxyDeps {
+  /**
+   * In-memory secret lookup. When set, the forward-proxy fetch path consults
+   * the store right before forwarding and injects a header on a target match.
+   */
+  secretsStore?: SecretsStore
+  /**
+   * Override the upstream fetch implementation. Defaults to `globalThis.fetch`.
+   * Tests can pass a stub here when they need to assert the outgoing request
+   * shape without relying on `vi.spyOn(globalThis, 'fetch')`.
+   */
+  fetchImpl?: UpstreamFetch
+}
 
 /**
  * Compute a request hash that uniquely identifies the intent.
@@ -61,6 +87,7 @@ export function buildGrantsClients(config: MultiAgentProxyConfig): Map<string, G
 export function createMultiAgentProxy(
   config: MultiAgentProxyConfig,
   grantsClients: Map<string, GrantsClient> = buildGrantsClients(config),
+  deps: MultiAgentProxyDeps = {},
 ) {
   // Backwards-compat: if caller didn't pre-build the map, we build our own.
   // createNodeHandler always passes one in so the CONNECT handler can share it.
@@ -71,6 +98,11 @@ export function createMultiAgentProxy(
   }
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
+  const secretsStore = deps.secretsStore
+  // Bind to globalThis so `vi.spyOn(globalThis, 'fetch')` in tests intercepts
+  // the upstream call. Resolved per-call so spies installed after construction
+  // still take effect.
+  const fetchImpl: UpstreamFetch = deps.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
 
   return {
     port: Number.parseInt(config.proxy.listen.split(':')[1] || '9090'),
@@ -203,7 +235,7 @@ export function createMultiAgentProxy(
       // ALLOW (no grant needed)
       if (action.type === 'allow') {
         writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list', grant_id: null })
-        return forwardRequest(req, targetUrl, bodyBuffer)
+        return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
       }
 
       // GRANT REQUIRED
@@ -229,7 +261,7 @@ export function createMultiAgentProxy(
           grant_id: existing.id,
           request_hash: requestHash,
         })
-        return forwardRequest(req, targetUrl, bodyBuffer)
+        return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
       }
 
       // No existing grant — behavior depends on default_action
@@ -296,7 +328,7 @@ export function createMultiAgentProxy(
             request_hash: requestHash,
             waited_ms: waitedMs,
           })
-          return forwardRequest(req, targetUrl, bodyBuffer)
+          return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
         }
 
         writeAudit({
@@ -409,8 +441,19 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
 /**
  * Forward a request to the target URL.
  * Strips proxy-specific headers, preserves the rest.
+ *
+ * If a `secretsStore` is provided and a secret matches `targetParsed`, the
+ * configured header is rendered from the entry's template and set on the
+ * outgoing request (replacing any existing value with the same name).
  */
-async function forwardRequest(originalReq: Request, targetUrl: string, cachedBody?: ArrayBuffer | null): Promise<Response> {
+async function forwardRequest(
+  originalReq: Request,
+  targetUrl: string,
+  targetParsed: URL,
+  cachedBody: ArrayBuffer | null | undefined,
+  secretsStore: SecretsStore | undefined,
+  fetchImpl: UpstreamFetch,
+): Promise<Response> {
   const headers = new Headers(originalReq.headers)
   // Remove proxy-specific headers
   headers.delete('proxy-authorization')
@@ -418,16 +461,31 @@ async function forwardRequest(originalReq: Request, targetUrl: string, cachedBod
   // Don't send host of the proxy
   headers.delete('host')
 
+  // Inject hook: consult the secrets store after grant decisions and before
+  // forwarding. Logs are redacted — only name/header/method/url are printed,
+  // never the secret value or rendered template.
+  if (secretsStore) {
+    const match = secretsStore.findFor(targetParsed)
+    if (match) {
+      const rendered = match.template.replace(/\$\{value\}/g, match.value)
+      headers.set(match.header, rendered)
+      console.error(
+        `[openape-proxy] injected secret '${match.name}' into ${match.header} for ${originalReq.method} ${targetUrl}`,
+      )
+    }
+  }
+
   const body = cachedBody && cachedBody.byteLength > 0 ? cachedBody : null
 
   try {
-    const res = await fetch(targetUrl, {
+    const upstreamReq = new Request(targetUrl, {
       method: originalReq.method,
       headers,
       body,
       duplex: 'half',
       redirect: 'manual',
-    })
+    } as RequestInit)
+    const res = await fetchImpl(upstreamReq)
 
     // Stream the response back
     const responseHeaders = new Headers(res.headers)
