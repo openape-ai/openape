@@ -52,7 +52,6 @@ export function loadMultiAgentConfig(path: string, overrides?: { mandatoryAuth?:
   const baseProxy: MultiAgentProxyConfig['proxy'] = {
     listen: proxy.listen as string,
     default_action: (proxy.default_action as MultiAgentProxyConfig['proxy']['default_action']) ?? 'block',
-    audit_log: proxy.audit_log as string | undefined,
     mandatory_auth: overrides?.mandatoryAuth ?? (proxy.mandatory_auth as boolean | undefined),
   }
 
