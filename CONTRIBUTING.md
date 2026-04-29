@@ -65,9 +65,19 @@ gh pr create
 - CI must pass before merge
 - Add a changeset if publishable packages changed: `pnpm changeset`
 
-### 6. After Merge
+### 6. After Merge — Release
 
-Changesets bot creates a Release PR automatically. When merged, packages are published to npm.
+Versioning and publish are **local-only**. After your PR with a changeset lands on main, run from your machine:
+
+```bash
+git checkout main
+git pull
+pnpm release:local
+```
+
+This script (`scripts/release-local.mjs`) consumes pending changesets, bumps versions, builds, publishes to npm in dependency order, and pushes the version commit. It replaces what used to be three sequential CI cycles (version-PR + post-merge CI + publish) with a single local pass — usually faster, and you skip the surface area for CI flakes.
+
+The CI `release.yml` is the safety net: pushing a changeset to main without running `release:local` first will fail loudly instead of silently opening a version-PR.
 
 ## Branch Policy
 
