@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -130,6 +131,40 @@ describe('daemon identity loading', () => {
       expect(handle.port).toBeGreaterThan(0)
       expect(existsSync(join(fakeHome, '.openape', 'proxy', 'ca.crt'))).toBe(true)
       expect(existsSync(join(fakeHome, '.openape', 'proxy', 'ca.key'))).toBe(true)
+    }
+    finally {
+      await stopDaemon(handle)
+    }
+  }, 15000)
+
+  it('daemon-mode does not require Proxy-Authorization on incoming requests', async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'auth-bypass-'))
+    const apesDir = join(fakeHome, '.config', 'apes')
+    mkdirSync(apesDir, { recursive: true })
+    writeFileSync(join(apesDir, 'auth.json'), JSON.stringify({
+      email: 'agent_bypass@example.com',
+      idp: 'https://id.example.com',
+      bearer: 'tok',
+    }))
+
+    // Default action 'allow' for the agent means a request with no matching deny rule
+    // will be allowed and forwarded. Without daemon-mode bypass the proxy would
+    // 401 on the missing Proxy-Authorization header. With the bypass, it should
+    // process the request — likely getting a 502 from the upstream resolution
+    // failure (target host x.local doesn't exist), but NOT a 401.
+    const handle = await spawnDaemonAndWaitForBanner(['--global', '--port', '0'], validToml, { HOME: fakeHome })
+    try {
+      const status = await new Promise<number>((resolveStatus) => {
+        const req = httpRequest({
+          host: '127.0.0.1',
+          port: handle.port,
+          method: 'GET',
+          path: '/http://x.local/', // path-encoded form, no Proxy-Authorization header set
+        }, res => resolveStatus(res.statusCode ?? 0))
+        req.on('error', () => resolveStatus(0))
+        req.end()
+      })
+      expect(status).not.toBe(401)
     }
     finally {
       await stopDaemon(handle)

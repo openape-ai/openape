@@ -34,6 +34,14 @@ export interface MultiAgentProxyDeps {
    * shape without relying on `vi.spyOn(globalThis, 'fetch')`.
    */
   fetchImpl?: UpstreamFetch
+  /**
+   * Daemon mode: identity is implicit (loaded from `~/.config/apes/auth.json`
+   * at startup) so per-request `Proxy-Authorization` JWT extraction is
+   * skipped. The daemon's identity = `config.agents[0].email`. Inline mode
+   * (`apes proxy --` ephemeral case) leaves this unset and keeps the existing
+   * JWT-required path.
+   */
+  daemonMode?: boolean
 }
 
 /**
@@ -100,6 +108,7 @@ export function createMultiAgentProxy(
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
   const secretsStore = deps.secretsStore
+  const daemonMode = deps.daemonMode ?? false
   // Bind to globalThis so `vi.spyOn(globalThis, 'fetch')` in tests intercepts
   // the upstream call. Resolved per-call so spies installed after construction
   // still take effect.
@@ -160,26 +169,34 @@ export function createMultiAgentProxy(
       // In multi-agent mode, we need the JWT to identify the agent first.
       // We try verification against each agent's IdP until one succeeds.
       let agentIdentity: { email: string, act: 'agent' } | null = null
-      try {
-        for (const agentConf of config.agents) {
-          agentIdentity = await verifyAgentAuth(
-            req.headers.get('proxy-authorization'),
-            agentConf.idp_url,
-            mandatoryAuth && config.agents.length === 1,
-          )
-          if (agentIdentity) break
-        }
-
-        // If mandatory auth and no identity found from any IdP
-        if (mandatoryAuth && !agentIdentity) {
-          throw new AuthError('JWT required')
-        }
+      if (daemonMode) {
+        // Identity is implicit — the daemon was started by/for one specific
+        // agent. The first (and only) agent in config.agents is the daemon's
+        // identity, loaded from `~/.config/apes/auth.json` at startup.
+        agentIdentity = { email: config.agents[0]!.email, act: 'agent' }
       }
-      catch (err) {
-        if (err instanceof AuthError) {
-          return new Response(`Unauthorized: ${err.message}`, { status: 401 })
+      else {
+        try {
+          for (const agentConf of config.agents) {
+            agentIdentity = await verifyAgentAuth(
+              req.headers.get('proxy-authorization'),
+              agentConf.idp_url,
+              mandatoryAuth && config.agents.length === 1,
+            )
+            if (agentIdentity) break
+          }
+
+          // If mandatory auth and no identity found from any IdP
+          if (mandatoryAuth && !agentIdentity) {
+            throw new AuthError('JWT required')
+          }
         }
-        throw err
+        catch (err) {
+          if (err instanceof AuthError) {
+            return new Response(`Unauthorized: ${err.message}`, { status: 401 })
+          }
+          throw err
+        }
       }
 
       // Find the matching agent config
@@ -371,6 +388,13 @@ export interface NodeHandlerDeps {
    * HTTPS targets; absent → CONNECT stays an opaque TCP tunnel.
    */
   leafCache?: LeafCertCache
+  /**
+   * Daemon mode: skip per-request `Proxy-Authorization` JWT extraction on
+   * both the forward-proxy fetch path and the CONNECT path. Forwarded to
+   * `createMultiAgentProxy` and `handleConnect`. Inline (ephemeral) mode
+   * leaves this unset.
+   */
+  daemonMode?: boolean
 }
 
 /**
@@ -386,7 +410,10 @@ export function createNodeHandler(config: MultiAgentProxyConfig, deps: NodeHandl
   // sharing, CONNECT-time grant_required rules couldn't reach the IdP in
   // multi-agent mode without duplicating constructor work.
   const grantsClients = buildGrantsClients(config)
-  const proxy = createMultiAgentProxy(config, grantsClients, { secretsStore: deps.secretsStore })
+  const proxy = createMultiAgentProxy(config, grantsClients, {
+    secretsStore: deps.secretsStore,
+    daemonMode: deps.daemonMode,
+  })
 
   return {
     handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -455,6 +482,7 @@ export function createNodeHandler(config: MultiAgentProxyConfig, deps: NodeHandl
       handleConnect(config, grantsClients, req, socket, head, {
         secretsStore: deps.secretsStore,
         leafCache: deps.leafCache,
+        daemonMode: deps.daemonMode,
       })
     },
   }

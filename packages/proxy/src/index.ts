@@ -94,7 +94,7 @@ if (values.global) {
       agents: [{ email: identity.email, idp_url: identity.idpUrl }],
     }
 
-    const handler = createNodeHandler(config, { secretsStore: store, leafCache })
+    const handler = createNodeHandler(config, { secretsStore: store, leafCache, daemonMode: true })
     const server = createServer(handler.handleRequest)
     server.on('connect', handler.handleConnect)
     server.listen(port, '127.0.0.1', () => {

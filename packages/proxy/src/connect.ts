@@ -22,6 +22,13 @@ export interface ConnectMitmDeps {
   secretsStore?: SecretsStore
   leafCache?: LeafCertCache
   upstreamRejectUnauthorized?: boolean
+  /**
+   * Daemon mode: skip per-request `Proxy-Authorization` JWT extraction on
+   * the CONNECT path. Identity is implicit — `config.agents[0]` is the
+   * daemon's loaded identity. Inline (`apes proxy --` ephemeral) mode keeps
+   * the existing JWT-required path.
+   */
+  daemonMode?: boolean
 }
 
 /**
@@ -89,48 +96,57 @@ export async function handleConnect(
   }
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
+  const daemonMode = deps?.daemonMode ?? false
 
   // Auth check — CONNECT always requires auth in mandatory mode
   let agentEmail: string | undefined
-  try {
-    const authHeader = req.headers['proxy-authorization'] as string | undefined
-    let identity: { email: string, act: 'agent' } | null = null
+  if (daemonMode) {
+    // Identity is implicit — the daemon was started by/for one specific
+    // agent. The first (and only) agent in config.agents is the daemon's
+    // identity, loaded from `~/.config/apes/auth.json` at startup.
+    agentEmail = config.agents[0]?.email
+  }
+  else {
+    try {
+      const authHeader = req.headers['proxy-authorization'] as string | undefined
+      let identity: { email: string, act: 'agent' } | null = null
 
-    for (const agentConf of config.agents) {
-      identity = await verifyAgentAuth(
-        authHeader ?? null,
-        agentConf.idp_url,
-        mandatoryAuth && config.agents.length === 1,
-      )
-      if (identity) break
+      for (const agentConf of config.agents) {
+        identity = await verifyAgentAuth(
+          authHeader ?? null,
+          agentConf.idp_url,
+          mandatoryAuth && config.agents.length === 1,
+        )
+        if (identity) break
+      }
+
+      if (mandatoryAuth && !identity) {
+        throw new AuthError('JWT required')
+      }
+
+      agentEmail = identity?.email
+
+      // Verify agent is known
+      if (agentEmail) {
+        const known = config.agents.find(a => a.email === agentEmail)
+        if (!known) {
+          clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+          clientSocket.destroy()
+          return
+        }
+      }
+      else if (config.agents.length > 1) {
+        throw new AuthError('JWT required for multi-agent proxy')
+      }
     }
-
-    if (mandatoryAuth && !identity) {
-      throw new AuthError('JWT required')
-    }
-
-    agentEmail = identity?.email
-
-    // Verify agent is known
-    if (agentEmail) {
-      const known = config.agents.find(a => a.email === agentEmail)
-      if (!known) {
-        clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    catch (err) {
+      if (err instanceof AuthError) {
+        clientSocket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         clientSocket.destroy()
         return
       }
+      throw err
     }
-    else if (config.agents.length > 1) {
-      throw new AuthError('JWT required for multi-agent proxy')
-    }
-  }
-  catch (err) {
-    if (err instanceof AuthError) {
-      clientSocket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      clientSocket.destroy()
-      return
-    }
-    throw err
   }
 
   // SSRF / reachability check. We split the two outcomes:
