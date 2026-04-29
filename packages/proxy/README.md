@@ -41,7 +41,6 @@ listen = "127.0.0.1:9090"
 idp_url = "https://id.example.com"
 agent_email = "agent@example.com"
 default_action = "block"
-audit_log = "/var/log/openape-proxy/audit.jsonl"
 
 # Always allow (no grant needed)
 [[allow]]
@@ -72,7 +71,12 @@ duration = 3600
 | `idp_url` | `string` | IdP URL for grant requests |
 | `agent_email` | `string` | Agent identity |
 | `default_action` | `string` | Action when no rule matches (see below) |
-| `audit_log` | `string` | Path to JSONL audit log file |
+
+> Audit data is **not** written to disk locally. The proxy emits an
+> operator-readable summary line to stderr for each decision; the trustworthy,
+> tamper-resistant audit is recorded server-side by the IdP every time it
+> processes a grant request. Anything stored on the agent's host is also
+> writable by the agent, so it can't be relied on as evidence.
 
 ### Rule Options
 
