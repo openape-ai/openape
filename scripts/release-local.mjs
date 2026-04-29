@@ -98,7 +98,15 @@ if (csFiles.length > 0) {
   if (newDirty) {
     step('Commit version bump')
     run('git', ['add', '-A'])
-    run('git', ['commit', '-m', 'chore: version packages'])
+    // The repo's pre-commit hook blocks source edits on `main` to keep humans
+    // off the branch (CONTRIBUTING.md "Branch Policy"). The version-bump
+    // commit produced by `changeset version` is mechanical — generated
+    // CHANGELOG entries plus a single `version` field per package.json — so
+    // it falls under the documented `SKIP_HOOKS=1` exception. The hook
+    // itself prints this exact bypass.
+    run('git', ['commit', '-m', 'chore: version packages'], {
+      env: { ...process.env, SKIP_HOOKS: '1' },
+    })
   }
   else {
     // All changesets target ignored packages → nothing to commit. publish-chain
