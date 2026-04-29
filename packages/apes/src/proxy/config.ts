@@ -1,17 +1,3 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-
-/**
- * Default audit-log path. Follows the XDG Base Directory spec for state files
- * (transient, machine-local, not config). Falls back to `~/.local/state` when
- * `$XDG_STATE_HOME` is unset.
- */
-function defaultAuditPath(): string {
-  const xdg = process.env.XDG_STATE_HOME
-  const stateDir = xdg && xdg.length > 0 ? xdg : join(homedir(), '.local', 'state')
-  return join(stateDir, 'openape', 'proxy-audit.jsonl')
-}
-
 export interface ProxyConfigOptions {
   /**
    * The agent's email (sub-claim of their IdP token). Used as `requester` in
@@ -45,9 +31,13 @@ export interface ProxyConfigOptions {
  *   the caller isn't logged in (we can't synthesize an identity for grant
  *   lookups, so falling back to permissive-with-audit is the honest default
  *   instead of locking everything down).
+ *
+ * No local audit-log path is written: anything stored on the user's machine
+ * is also writable by the user, so it can't function as a tamper-proof trail.
+ * The trustworthy audit lives server-side on the IdP for grant decisions; the
+ * proxy still emits an operator-readable summary to stderr for live debugging.
  */
 export function buildDefaultProxyConfigToml(opts: ProxyConfigOptions): string {
-  const auditPath = defaultAuditPath()
   const defaultAction = opts.mediated ? 'request' : 'allow'
   const escEmail = opts.agentEmail.replace(/"/g, '\\"')
   const escIdp = opts.idpUrl.replace(/"/g, '\\"')
@@ -59,7 +49,6 @@ listen = "127.0.0.1:0"
 idp_url = "${escIdp}"
 agent_email = "${escEmail}"
 default_action = "${defaultAction}"
-audit_log = "${auditPath.replace(/"/g, '\\"')}"
 
 # Cloud / link-local metadata endpoints — never let agent traffic reach these
 # even if a downstream policy mistake would otherwise allow it.

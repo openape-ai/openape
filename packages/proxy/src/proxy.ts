@@ -29,7 +29,6 @@ export function createProxy(config: ProxyConfig) {
     proxy: {
       listen: config.proxy.listen,
       default_action: config.proxy.default_action,
-      audit_log: config.proxy.audit_log,
       mandatory_auth: config.proxy.mandatory_auth,
     },
     agents: [{

@@ -3,7 +3,6 @@ import { createServer } from 'node:http'
 import { parseArgs } from 'node:util'
 import { loadMultiAgentConfig } from './config.js'
 import { createNodeHandler } from './proxy.js'
-import { initAudit } from './audit.js'
 
 const { values } = parseArgs({
   options: {
@@ -19,9 +18,6 @@ console.log(`[openape-proxy] Loading config from ${configPath}`)
 const config = loadMultiAgentConfig(configPath, {
   mandatoryAuth: values['mandatory-auth'] || undefined,
 })
-
-// Init audit log
-initAudit(config.proxy.audit_log)
 
 if (values['dry-run']) {
   console.log('[openape-proxy] DRY RUN mode — logging only, not blocking')
