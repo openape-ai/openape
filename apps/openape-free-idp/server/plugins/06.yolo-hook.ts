@@ -19,7 +19,7 @@ export default defineNitroPlugin(async () => {
   // on the absence of the `audience` column so it runs at most once per DB.
   try {
     const db = useDb()
-    // Fresh-DB shape (composite PK + mode).
+    // Fresh-DB shape (composite PK + mode + split pattern lists).
     await db.run(sql`CREATE TABLE IF NOT EXISTS yolo_policies (
       agent_email TEXT NOT NULL,
       audience TEXT NOT NULL DEFAULT '*',
@@ -27,6 +27,7 @@ export default defineNitroPlugin(async () => {
       enabled_by TEXT NOT NULL,
       deny_risk_threshold TEXT,
       deny_patterns TEXT NOT NULL DEFAULT '[]',
+      allow_patterns TEXT NOT NULL DEFAULT '[]',
       enabled_at INTEGER NOT NULL,
       expires_at INTEGER,
       updated_at INTEGER NOT NULL,
@@ -40,6 +41,7 @@ export default defineNitroPlugin(async () => {
     const colNames = Array.isArray(cols) ? cols.map((c: { name: string }) => c.name) : []
     const hasAudience = colNames.includes('audience')
     const hasMode = colNames.includes('mode')
+    const hasAllowPatterns = colNames.includes('allow_patterns')
     if (!hasAudience) {
       console.warn('[yolo] migrating yolo_policies → composite (agent_email, audience) PK')
       await db.run(sql`CREATE TABLE yolo_policies_v2 (
@@ -74,6 +76,27 @@ export default defineNitroPlugin(async () => {
         // creates the table with `mode`). Tolerate silently.
         if (!String(err).includes('duplicate column')) {
           console.error('[yolo] mode-column migration failed:', err)
+        }
+      }
+    }
+
+    // Split pattern lists per mode. Old rows used `deny_patterns` for both
+    // modes — in `mode='allow-list'` the same column was being read as the
+    // allow-list. Add `allow_patterns` and one-shot move existing allow-list
+    // rows' patterns into the new column. Idempotent: gated on column absence
+    // and clears `deny_patterns` on the moved rows so re-running this is a
+    // no-op for them too.
+    if (!hasAllowPatterns) {
+      try {
+        await db.run(sql`ALTER TABLE yolo_policies ADD COLUMN allow_patterns TEXT NOT NULL DEFAULT '[]'`)
+        await db.run(sql`UPDATE yolo_policies
+          SET allow_patterns = deny_patterns, deny_patterns = '[]'
+          WHERE mode = 'allow-list' AND deny_patterns != '[]'`)
+        console.warn('[yolo] added `allow_patterns` column and moved existing allow-list rows over')
+      }
+      catch (err) {
+        if (!String(err).includes('duplicate column')) {
+          console.error('[yolo] allow_patterns migration failed:', err)
         }
       }
     }
