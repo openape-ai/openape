@@ -275,6 +275,26 @@ issuer. A future `v2` may add an opt-in `apes proxy ca install` flow that
 trusts the local CA system-wide for users who explicitly want native
 `HTTPS_PROXY` to work; it will remain off by default.
 
+## Runtime requirement
+
+The daemon must run under **Node**, not Bun. Bun's `node:tls` compatibility
+layer does not handle the `TLSSocket`-on-existing-socket pattern that the
+CONNECT-MITM pipeline uses — the inner TLS handshake never completes and
+clients hang until timeout. The daemon detects Bun at startup and refuses
+with a clear error.
+
+```bash
+# Preferred — invokes the published bin (shebang: #!/usr/bin/env node):
+sudo -u agent_iurio openape-proxy --global --port 18789 < ~/.secrets-iurio.toml
+
+# Equivalent direct invocation:
+sudo -u agent_iurio node /path/to/openape-proxy/dist/index.js --global \
+  --port 18789 < ~/.secrets-iurio.toml
+```
+
+Inline mode (`apes proxy -- <cmd>` ephemeral path, no `OPENAPE_PROXY`) is
+unaffected by this restriction and works under either runtime.
+
 ## Limitations and known gotchas
 
 - **Wrapper-only HTTPS.** TLS-MITM injection works only for tools spawned via
@@ -293,3 +313,9 @@ trusts the local CA system-wide for users who explicitly want native
   rotating credentials.
 - **stdin size cap.** The TOML blob must fit in 4 KiB. Split across multiple
   daemon instances on different ports if you need more secrets than fit.
+- **Go-based clients.** As of Phase 6 release, leaf certs are tagged
+  `UTF8String` so Go's strict `crypto/x509` parser accepts them
+  (`gh`, `kubectl`, `terraform`, anything Go-based). Earlier intermediate
+  builds emitted PrintableString-tagged certs that Go rejected with
+  `invalid PrintableString` — if you see that error, your daemon binary is
+  out of date.
