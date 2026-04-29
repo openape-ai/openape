@@ -30,6 +30,10 @@ export function handleMitmConnect(opts: MitmConnectOpts): void {
   // By the time we get here the client is already in TLS-handshake mode on the
   // socket, so we must not inject any plaintext bytes before TLS termination.
   const tls = new TLSSocket(opts.clientSocket, { isServer: true, secureContext: ctx })
+  // Resume the underlying socket now that TLSSocket is attached so any paused
+  // data starts flowing into the TLS layer. Safe even if the socket wasn't
+  // paused — `resume()` is a no-op in that case.
+  opts.clientSocket.resume()
 
   let buffer = Buffer.alloc(0)
   let dispatched = false

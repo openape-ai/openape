@@ -47,7 +47,7 @@ export async function handleConnect(
   grantsClients: Map<string, GrantsClient>,
   req: IncomingMessage,
   clientSocket: Socket,
-  _head: Buffer,
+  head: Buffer,
   deps?: ConnectMitmDeps,
 ): Promise<void> {
   const target = req.url ?? ''
@@ -294,7 +294,17 @@ export async function handleConnect(
   // IdP system-bypass branch above also stays on the legacy path so we never
   // MITM the proxy's own auth traffic.
   if (deps?.secretsStore && deps?.leafCache) {
+    // Pause to avoid data races between our 200-write and TLSSocket wrap. The
+    // TLSSocket constructor in `handleMitmConnect` calls `resume()` once it has
+    // attached its read pipeline.
+    clientSocket.pause()
     clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+    // Push any bytes the http parser already captured after the CONNECT headers
+    // back into the socket so the TLSSocket sees them as the start of the
+    // ClientHello. Rare for CONNECT but possible if the client pipelines.
+    if (head.length > 0) {
+      clientSocket.unshift(head)
+    }
     const store = deps.secretsStore
     handleMitmConnect({
       clientSocket,
