@@ -43,13 +43,23 @@ const { values } = parseArgs({
 })
 
 if (values.global) {
+  // Bun's `node:tls` compat layer does not handle TLSSocket-on-existing-socket
+  // reliably for the CONNECT-MITM pipeline (the inner TLS handshake never
+  // completes — no `secure`, no `error`, no `close` events fire). Detect Bun
+  // and refuse with a helpful pointer at Node before doing any work.
+  if ((process.versions as Record<string, string | undefined>).bun) {
+    console.error(
+      '[openape-proxy] --global mode requires Node (Bun is not supported).\n'
+      + '  Bun\'s node:tls compat layer does not handle TLSSocket-on-existing-socket\n'
+      + '  for the CONNECT-MITM pipeline. Re-run with `node` directly, or use the\n'
+      + '  built `openape-proxy` binary (its shebang invokes Node).',
+    )
+    process.exit(2)
+  }
+
   // --global mode: read secrets TOML from stdin (max 4 KiB enforced by
   // parseSecretsBlob; we cap stdin at 8 KiB to surface oversize input early
   // with a friendlier error than waiting for the parser).
-  //
-  // Identity load, CA bootstrap, and port binding land in later tasks; for
-  // Task 13 we validate the stdin payload, print the loaded secret names, and
-  // exit cleanly so callers can verify the wiring end-to-end.
   const stdinBuf: Buffer[] = []
   let total = 0
   let aborted = false

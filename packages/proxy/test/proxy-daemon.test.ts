@@ -1,7 +1,8 @@
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runCliWithEnv as runCli, runCliWithEnv, spawnDaemonAndWaitForBanner, stopDaemon } from './_helpers/daemon-harness.js'
 
@@ -170,4 +171,27 @@ describe('daemon identity loading', () => {
       await stopDaemon(handle)
     }
   }, 15000)
+})
+
+describe('daemon CLI — Bun runtime guard', () => {
+  // Bun's node:tls compat layer hangs on TLSSocket-on-existing-socket; rather
+  // than letting the daemon start and silently break, refuse upfront with a
+  // helpful error pointing the user at Node.
+  it('refuses --global mode when running under Bun', async () => {
+    const bunBin = '/Users/openclaw/.bun/bin/bun'
+    if (!existsSync(bunBin)) {
+      // Soft-skip: CI without Bun shouldn't fail this test.
+      return
+    }
+    const child = spawn(bunBin, ['run', resolve(__dirname, '../src/index.ts'), '--global', '--port', '0'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr.on('data', (d) => { stderr += d })
+    child.stdin.write('version = "1"\n')
+    child.stdin.end()
+    const code: number = await new Promise(res => child.on('exit', c => res(c ?? 0)))
+    expect(code).not.toBe(0)
+    expect(stderr).toMatch(/Bun.*not supported|requires Node/i)
+  }, 10000)
 })
