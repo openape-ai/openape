@@ -25,3 +25,80 @@ value    = "sk-X"
     expect(store.entries[1]?.name).toBe('openai')
   })
 })
+
+describe('parseSecretsBlob — schema validation', () => {
+  it('refuses missing version', () => {
+    const toml = `[secrets.x]
+target = "*"
+header = "A"
+template = "\${value}"
+value = "v"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/version/i)
+  })
+
+  it('refuses unknown version', () => {
+    const toml = `version = "9"
+[secrets.x]
+target = "*"
+header = "A"
+template = "\${value}"
+value = "v"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/version/i)
+  })
+
+  it('refuses entry missing target', () => {
+    const toml = `version = "1"
+[secrets.x]
+header = "A"
+template = "\${value}"
+value = "v"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/target/i)
+  })
+
+  it('refuses entry missing header', () => {
+    const toml = `version = "1"
+[secrets.x]
+target = "*"
+template = "\${value}"
+value = "v"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/header/i)
+  })
+
+  it('refuses entry missing template', () => {
+    const toml = `version = "1"
+[secrets.x]
+target = "*"
+header = "A"
+value = "v"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/template/i)
+  })
+
+  it('refuses entry missing value', () => {
+    const toml = `version = "1"
+[secrets.x]
+target = "*"
+header = "A"
+template = "\${value}"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/value/i)
+  })
+
+  it('refuses oversized blob (> 4 KiB)', () => {
+    const big = 'x'.repeat(4 * 1024 + 1)
+    expect(() => parseSecretsBlob(big)).toThrow(/size|too large|4 KiB/i)
+  })
+
+  it('refuses duplicate target patterns with identical specificity', () => {
+    const toml = `version = "1"
+[secrets.a]
+target = "api.github.com/*"
+header = "A"
+template = "\${value}"
+value = "v1"
+[secrets.b]
+target = "api.github.com/*"
+header = "B"
+template = "\${value}"
+value = "v2"`
+    expect(() => parseSecretsBlob(toml)).toThrow(/duplicate/i)
+  })
+})
