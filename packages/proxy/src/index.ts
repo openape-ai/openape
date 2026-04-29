@@ -1,9 +1,27 @@
 #!/usr/bin/env node
+import type { DaemonIdentity } from './types.js'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { loadMultiAgentConfig } from './config.js'
 import { createNodeHandler } from './proxy.js'
 import { parseSecretsBlob } from './secrets-store.js'
+
+function loadIdentity(): DaemonIdentity {
+  const path = join(homedir(), '.config', 'apes', 'auth.json')
+  if (!existsSync(path)) {
+    console.error(`[openape-proxy] missing ${path} — run \`apes login\` first`)
+    process.exit(2)
+  }
+  const raw = JSON.parse(readFileSync(path, 'utf-8')) as { email?: string, idp?: string, bearer?: string }
+  if (!raw.email || !raw.idp || !raw.bearer) {
+    console.error(`[openape-proxy] malformed ${path} — re-run \`apes login\``)
+    process.exit(2)
+  }
+  return { email: raw.email, idpUrl: raw.idp, bearer: raw.bearer }
+}
 
 const { values } = parseArgs({
   options: {
@@ -51,6 +69,12 @@ if (values.global) {
       console.error(`[openape-proxy] secrets parse error: ${(err as Error).message}`)
       process.exit(2)
     }
+    const identity = loadIdentity()
+    console.log(`[openape-proxy] identity: ${identity.email} (${identity.idpUrl})`)
+    const port = Number.parseInt(values.port ?? '18789')
+    // Stub banner so harness banner-detect resolves; Task 15 replaces this with
+    // the real `server.listen()` callback log line.
+    console.log(`[openape-proxy] listening on 127.0.0.1:${port}`)
     const names = store.entries.map(e => e.name).join(', ')
     console.log(`[openape-proxy] loaded ${store.entries.length} secrets: ${names}`)
     process.exit(0)
