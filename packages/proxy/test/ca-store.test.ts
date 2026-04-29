@@ -115,3 +115,36 @@ describe('createLeafCertCache', () => {
     expect(a1.certPem).not.toBe(a2.certPem)  // re-minted
   })
 })
+
+describe('cert subject encoding', () => {
+  // Regression for the "invalid PrintableString" parse error Go's crypto/x509
+  // throws when node-forge's default attribute tagging trips strict-mode TLS
+  // clients (gh CLI, kubectl, anything Go-based). Both the CA and minted leaf
+  // certs must explicitly tag their CN as UTF8String.
+  it('CA subject CN is tagged UTF8String', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'castore-encoding-ca-'))
+    const ca = loadOrCreateCa({
+      certPath: join(dir, 'ca.crt'),
+      keyPath: join(dir, 'ca.key'),
+      subjectCN: 'OpenApe Proxy CA (test)',
+    })
+    const parsed = forge.pki.certificateFromPem(ca.certPem)
+    const cn = parsed.subject.attributes.find(a => a.name === 'commonName')
+    expect(cn).toBeTruthy()
+    expect(cn?.valueTagClass).toBe(forge.asn1.Type.UTF8)
+  })
+
+  it('leaf cert subject CN is tagged UTF8String', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'castore-encoding-leaf-'))
+    const ca = loadOrCreateCa({
+      certPath: join(dir, 'ca.crt'),
+      keyPath: join(dir, 'ca.key'),
+      subjectCN: 'CA',
+    })
+    const leaf = mintLeafCert(ca, 'api.github.com')
+    const parsed = forge.pki.certificateFromPem(leaf.certPem)
+    const cn = parsed.subject.attributes.find(a => a.name === 'commonName')
+    expect(cn).toBeTruthy()
+    expect(cn?.valueTagClass).toBe(forge.asn1.Type.UTF8)
+  })
+})

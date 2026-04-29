@@ -29,7 +29,15 @@ export function loadOrCreateCa(opts: LoadOrCreateCaOpts): CaBundle {
   cert.serialNumber = String(Date.now())
   cert.validity.notBefore = new Date()
   cert.validity.notAfter = new Date(Date.now() + 10 * 365 * 86400_000)
-  const attrs = [{ name: 'commonName', value: opts.subjectCN }]
+  // Tag the CN explicitly as UTF8String. node-forge defaults to PrintableString
+  // for ASCII inputs, but its DER serializer can emit byte sequences that Go's
+  // strict crypto/x509 parser flags ("invalid PrintableString"). UTF8String
+  // sidesteps the strict-mode check and is universally accepted.
+  // valueTagClass takes an asn1.Type value (the upstream @types annotation says
+  // asn1.Class but node-forge's x509.js reads it from asn1.Type at runtime).
+  const attrs = [
+    { name: 'commonName', value: opts.subjectCN, valueTagClass: forge.asn1.Type.UTF8 },
+  ]
   cert.setSubject(attrs)
   cert.setIssuer(attrs)
   cert.setExtensions([
@@ -66,7 +74,12 @@ export function mintLeafCert(ca: CaBundle, hostname: string): LeafCert {
   cert.validity.notBefore = new Date()
   const expiresAt = Date.now() + 24 * 3600_000
   cert.validity.notAfter = new Date(expiresAt)
-  cert.setSubject([{ name: 'commonName', value: hostname }])
+  // Tag CN as UTF8String for the same reason as the CA — keeps Go's strict
+  // crypto/x509 parser happy. The issuer attributes come straight from the
+  // parsed CA, which is already UTF8-tagged.
+  cert.setSubject([
+    { name: 'commonName', value: hostname, valueTagClass: forge.asn1.Type.UTF8 },
+  ])
   cert.setIssuer(caCert.subject.attributes)
   cert.setExtensions([
     { name: 'basicConstraints', cA: false },
