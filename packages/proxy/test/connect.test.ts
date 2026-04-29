@@ -121,13 +121,17 @@ describe('connect handler', () => {
     expect(statusLine).toContain('401')
   })
 
-  it('blocks malformed target (treated as SSRF)', async () => {
+  it('returns 502 for unresolvable host (DNS NXDOMAIN/no-records)', async () => {
+    // Previously this surfaced as 403 (`ssrf-blocked`) because the SSRF check
+    // conflated "no records" with "private IP". A host that doesn't exist is
+    // a connectivity problem, not a policy decision — see `checkEgress` in
+    // src/ssrf.ts for the new discriminated outcome.
     const config = makeConfig({ mandatory_auth: false })
     config.agents = [{ email: 'bot@example.com', idp_url: 'https://id.example.com' }]
     const { port, close } = await startProxy(config)
     cleanup = close
 
     const { statusLine } = await sendConnect(port, 'not-a-host')
-    expect(statusLine).toContain('403')
+    expect(statusLine).toContain('502')
   })
 })

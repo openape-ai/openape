@@ -52,34 +52,72 @@ function isPrivateIP(ip: string): boolean {
 }
 
 /**
- * Check if a hostname resolves to a private or loopback IP.
- * If the hostname is already an IP literal, check directly.
- * Otherwise, resolve via DNS and check all results.
+ * Result of resolving a hostname for egress safety.
+ *
+ * - `ok` — resolved to at least one address, none of them private/loopback.
+ *   Caller forwards.
+ * - `private` — at least one resolved address is private/loopback. Caller
+ *   refuses with a policy response (403).
+ * - `unresolvable` — DNS returned NXDOMAIN, NODATA, or a query error. Caller
+ *   responds with an upstream-failure code (502). Distinct from `private`
+ *   because the host doesn't exist (or can't be reached) — that's not a
+ *   policy decision, it's a connectivity problem, and conflating the two
+ *   ships misleading 403s for typos and DNS hiccups.
  */
-export async function isPrivateOrLoopback(hostname: string): Promise<boolean> {
-  // Direct IP literal
+export type EgressCheckResult =
+  | { kind: 'ok' }
+  | { kind: 'private' }
+  | { kind: 'unresolvable', reason: 'no-records' | 'dns-error' }
+
+/**
+ * Check whether forwarding a connection to `hostname` is safe.
+ *
+ * IP literals are checked directly; hostnames are resolved via DNS (A and
+ * AAAA in parallel) and every returned address is screened against the
+ * private-range list. If any address is private the result is `private`.
+ *
+ * Note on DNS-rebinding: a careful attacker could return a public IP to our
+ * pre-flight resolution and a private one to the kernel's `connect()`. The
+ * proper fix for that is pinning the resolved IP across the actual socket
+ * call, not blocking on uncertainty — so we no longer conflate "I couldn't
+ * resolve" with "this is private". Callers can layer pinning on top.
+ */
+export async function checkEgress(hostname: string): Promise<EgressCheckResult> {
   if (isIP(hostname)) {
-    return isPrivateIP(hostname)
+    return isPrivateIP(hostname) ? { kind: 'private' } : { kind: 'ok' }
   }
 
-  // localhost shortcut
-  if (hostname === 'localhost') return true
+  if (hostname === 'localhost') return { kind: 'private' }
 
-  // DNS resolution — check both A and AAAA records
+  let settled: PromiseSettledResult<string[]>[]
   try {
-    const [v4, v6] = await Promise.allSettled([
-      resolve4(hostname),
-      resolve6(hostname),
-    ])
-    const addrs: string[] = []
-    if (v4.status === 'fulfilled') addrs.push(...v4.value)
-    if (v6.status === 'fulfilled') addrs.push(...v6.value)
-
-    if (addrs.length === 0) return true // no records — block to be safe
-    return addrs.some(addr => isPrivateIP(addr))
+    settled = await Promise.allSettled([resolve4(hostname), resolve6(hostname)])
   }
   catch {
-    // DNS failure — block to be safe
-    return true
+    return { kind: 'unresolvable', reason: 'dns-error' }
   }
+
+  const addrs: string[] = []
+  for (const r of settled) {
+    if (r.status === 'fulfilled') addrs.push(...r.value)
+  }
+
+  if (addrs.length === 0) {
+    return { kind: 'unresolvable', reason: 'no-records' }
+  }
+
+  return addrs.some(addr => isPrivateIP(addr)) ? { kind: 'private' } : { kind: 'ok' }
+}
+
+/**
+ * Backwards-compatible boolean shim. Returns true for both `private` and
+ * `unresolvable` because that matches the previous (overly conservative)
+ * behaviour. New code should call `checkEgress` and distinguish.
+ *
+ * @deprecated Use `checkEgress` so the caller can return 502 for unresolvable
+ * hosts and 403 only for actual private/loopback IPs.
+ */
+export async function isPrivateOrLoopback(hostname: string): Promise<boolean> {
+  const result = await checkEgress(hostname)
+  return result.kind !== 'ok'
 }

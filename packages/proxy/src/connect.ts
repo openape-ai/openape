@@ -3,7 +3,7 @@ import type { Socket } from 'node:net'
 import { connect } from 'node:net'
 import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig } from './types.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
-import { isPrivateOrLoopback } from './ssrf.js'
+import { checkEgress } from './ssrf.js'
 import { writeAudit } from './audit.js'
 import { evaluateRules } from './matcher.js'
 import type { GrantsClient } from './grants-client.js'
@@ -116,11 +116,18 @@ export async function handleConnect(
     throw err
   }
 
-  // SSRF check
-  if (await isPrivateOrLoopback(host)) {
+  // SSRF / reachability check. We split the two outcomes:
+  //   - `private`        → policy refusal, 403 (the proxy will not forward).
+  //   - `unresolvable`   → upstream not reachable, 502 (DNS NXDOMAIN /
+  //     NODATA / query error — distinct from "I refuse on policy grounds";
+  //     conflating them shipped misleading 403s for typos like
+  //     `apes proxy -- curl https://example.at`).
+  const egress = await checkEgress(host)
+  const auditAgent = agentEmail ?? config.agents[0]?.email ?? 'unknown'
+  if (egress.kind === 'private') {
     writeAudit({
       ts: new Date().toISOString(),
-      agent: agentEmail ?? config.agents[0]?.email ?? 'unknown',
+      agent: auditAgent,
       action: 'deny',
       domain: host,
       method: 'CONNECT',
@@ -128,6 +135,22 @@ export async function handleConnect(
       rule: 'ssrf-blocked',
     })
     clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    clientSocket.destroy()
+    return
+  }
+  if (egress.kind === 'unresolvable') {
+    writeAudit({
+      ts: new Date().toISOString(),
+      agent: auditAgent,
+      action: 'error',
+      domain: host,
+      method: 'CONNECT',
+      path: target,
+      rule: `dns-unresolvable (${egress.reason})`,
+    })
+    clientSocket.write(
+      `HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\n\r\nDNS lookup failed for ${host} (${egress.reason}).\r\n`,
+    )
     clientSocket.destroy()
     return
   }
