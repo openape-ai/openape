@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
-import { CliError, CliExit } from '../errors.js'
+import { CliError } from '../errors.js'
 import { buildDefaultProxyConfigToml  } from '../proxy/config.js'
 import type { ProxyConfigOptions } from '../proxy/config.js'
 import { startEphemeralProxy } from '../proxy/local-proxy.js'
@@ -140,7 +140,15 @@ export const proxyCommand = defineCommand({
 
     if (close) await close()
 
-    if (exitCode !== 0) throw new CliExit(exitCode)
+    // Propagate the wrapped command's exit code without going through
+    // CliExit + citty's runMain. `runMain` catches everything inside its own
+    // try/catch and prints `consola.error(error, "\n")` before our top-level
+    // handler in cli.ts can intercept — and since CliExit has no message,
+    // that surfaces as a bare "ERROR" header followed by an internal stack
+    // trace, which is misleading on a *successful* deny path (curl exits 56,
+    // proxy did its job correctly). process.exit here means the user sees
+    // their wrapped command's exit code and nothing else.
+    if (exitCode !== 0) process.exit(exitCode)
   },
 })
 
