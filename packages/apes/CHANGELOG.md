@@ -1,5 +1,73 @@
 # @openape/apes
 
+## 0.14.0
+
+### Minor Changes
+
+- [#186](https://github.com/openape-ai/openape/pull/186) [`9c1c38a`](https://github.com/openape-ai/openape/commit/9c1c38a57a0572512c9b6ba93fd047c5dc1df972) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes proxy --` is now IdP-mediated when the caller is logged in (M3)
+
+  Closes the gap where the YOLO/Allow/Deny config on `id.openape.ai/agents/<email>`
+  (Web tab) had no effect on `apes proxy --` invocations. Two reasons it
+  previously didn't work:
+
+  1. **The ephemeral proxy never asked the IdP.** Default config used
+     `default_action="allow"` with no `[[grant_required]]` rule, so unmatched
+     hosts went straight through. The IdP grant flow was unreachable.
+  2. **Even if it had asked, the requester was synthetic.** The TOML hard-coded
+     `agent_email = "ephemeral@apes-proxy.local"`, so YOLO lookups keyed on
+     `(email, audience='ape-proxy')` couldn't match the user's real policy row.
+
+  Both fixed:
+
+  - `apes proxy --` now reads the cached `~/.config/apes/auth.json` (already
+    populated by `apes login`). When found: `agent_email` becomes the user's
+    real agent email, `idp_url` becomes the IdP they logged in against, and
+    `default_action` flips to `"request"` — every unmatched egress triggers an
+    IdP grant request whose pre-approval hook applies the user's YOLO policy.
+  - Console banner now says which mode the proxy started in:
+    `[apes proxy] IdP-mediated mode — agent=…, idp=…` vs
+    `[apes proxy] not logged in — transparent mode`.
+
+  Fallback for not-logged-in callers stays the M1a behavior (default-allow +
+  audit, no IdP roundtrip) so `apes proxy --` doesn't suddenly fail for users
+  who haven't run `apes login` yet — the warning tells them how to upgrade to
+  mediated mode.
+
+  End-to-end effect: on `id.openape.ai/agents/<email>` Web-tab, configuring
+  "YOLO aus + allow-list `*.openai.com`" makes `apes proxy -- curl
+https://api.openai.com/...` auto-approve, while `apes proxy -- curl
+https://api.github.com/...` waits for human approval. Identical UX semantics
+  to what the UI promises.
+
+### Patch Changes
+
+- [#188](https://github.com/openape-ai/openape/pull/188) [`21aa5fb`](https://github.com/openape-ai/openape/commit/21aa5fb6f7fc1f680f26cfa85c13f031e0f285b0) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes proxy --` requires `apes login` first
+
+  Removes the silent fallback to transparent mode when no `~/.config/apes/auth.json`
+  is present. That fallback shipped in the same minor that introduced
+  IdP-mediation (M3) and was UX-dishonest: the UI on `id.openape.ai/agents/<email>`
+  suggests YOLO + Allow/Deny rules apply, but a not-logged-in proxy ignored
+  them all and just transparently let everything through. Worst kind of bug
+  for a security-relevant feature — looks like it works, doesn't.
+
+  Now `apes proxy --` exits with code **77** (EX_NOPERM) and a clear message:
+
+  ```
+  apes proxy requires `apes login` first.
+
+  Without a login the proxy has no agent identity to attribute grant
+  requests to, so the YOLO / Allow / Deny policy on id.openape.ai cannot
+  apply. Run:
+
+    apes login
+
+  and re-run `apes proxy -- ...`.
+  ```
+
+  Tightening: anyone scripting around `apes proxy --` who relied on the silent
+  transparent fallback now gets a hard fail. That's intentional — the security
+  posture promised by the UI requires identity.
+
 ## 0.13.2
 
 ### Patch Changes
