@@ -1,10 +1,34 @@
 import { spawn } from 'node:child_process'
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import { loadAuth } from '../config.js'
 import { CliError, CliExit } from '../errors.js'
-import { buildDefaultProxyConfigToml } from '../proxy/config.js'
+import { buildDefaultProxyConfigToml  } from '../proxy/config.js'
+import type { ProxyConfigOptions } from '../proxy/config.js'
 import { startEphemeralProxy } from '../proxy/local-proxy.js'
 import { extractWrappedCommand } from '../shapes/index.js'
+
+/**
+ * Decide between IdP-mediated and transparent proxy modes based on whether
+ * the user is logged in via `apes login`. When logged in: take agent email +
+ * IdP URL from the cached auth file so grant requests are attributed to the
+ * real user. When not logged in: fall back to transparent (default-allow)
+ * mode with a synthetic identity — the honest default rather than locking
+ * everything down.
+ */
+function resolveProxyConfigOptions(): ProxyConfigOptions {
+  const auth = loadAuth()
+  if (auth?.email && auth?.idp) {
+    consola.info(`[apes proxy] IdP-mediated mode — agent=${auth.email}, idp=${auth.idp}`)
+    return { agentEmail: auth.email, idpUrl: auth.idp, mediated: true }
+  }
+  consola.warn('[apes proxy] not logged in — transparent mode (default-allow + audit). Run `apes login` to enable IdP-mediated egress + per-user YOLO policy.')
+  return {
+    agentEmail: 'ephemeral@apes-proxy.local',
+    idpUrl: 'https://id.openape.ai',
+    mediated: false,
+  }
+}
 
 /**
  * `apes proxy -- <cmd> [args...]`
@@ -53,7 +77,7 @@ export const proxyCommand = defineCommand({
       consola.info(`[apes proxy] reusing existing proxy at ${proxyUrl}`)
     }
     else {
-      const ephemeral = await startEphemeralProxy(buildDefaultProxyConfigToml())
+      const ephemeral = await startEphemeralProxy(buildDefaultProxyConfigToml(resolveProxyConfigOptions()))
       proxyUrl = ephemeral.url
       close = ephemeral.close
       consola.info(`[apes proxy] started ephemeral proxy at ${proxyUrl}`)
