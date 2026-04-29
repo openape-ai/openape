@@ -1,5 +1,68 @@
 # @openape/proxy
 
+## 0.3.0
+
+### Minor Changes
+
+- [#177](https://github.com/openape-ai/openape/pull/177) [`cd3e7e6`](https://github.com/openape-ai/openape/commit/cd3e7e6cffbcc5861e8331227a745d87cd4b9db7) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - proxy: host-based allow/deny/grant_required rules now apply at HTTPS CONNECT time
+
+  Until now `connect.ts` (the HTTPS-tunnel handler) only did SSRF protection +
+  optional JWT-auth before piping bytes through. The `[[allow]]` / `[[deny]]` /
+  `[[grant_required]]` lists in the TOML config were inert for HTTPS hosts —
+  they only fired on the cleartext-HTTP forward-proxy path. In practice that
+  meant any agent doing `curl https://...` got tunneled regardless of policy.
+
+  Now CONNECT runs the same `evaluateRules(domain, 'CONNECT', '/')` pipeline
+  the HTTP path uses:
+
+  - `[[deny]]` host-match → 403 fast-reject + audit
+  - `[[grant_required]]` → blocking grant request to the IdP, tunnel only on
+    approval, 403/504 on deny/timeout
+  - `[[allow]]` host-match → tunnel + audit
+  - unmatched → falls to `default_action`
+
+  Rules with `methods` or `path` filters cannot be enforced at CONNECT time
+  (the TLS payload is opaque), so only domain-only rules match for HTTPS.
+  This is intentional and documented inline.
+
+  ### Side-fix: `default_action="allow"`
+
+  Adds `'allow'` to the `default_action` union (was: `'block' | 'request' | 'request-async'`).
+  Previously the matcher only special-cased `'block'` and fell through to
+  `grant_required` for anything else, so a config saying `default_action="allow"`
+  would silently route unmatched hosts to a once-grant request — which blocks
+  or fails when no IdP/grant flow is set up. Matcher now handles `'allow'` as a
+  hard pass, matching the intent of the config string.
+
+  ### Internals: shared `GrantsClient` map
+
+  `createNodeHandler` now builds a single `Map<email, GrantsClient>` via the
+  new public `buildGrantsClients(config)` and passes it to both the forward-
+  proxy fetch path (`createMultiAgentProxy`) and the new CONNECT-side grant
+  flow. `createMultiAgentProxy` accepts an optional pre-built map for back-
+  compat; behavior unchanged when called without it.
+
+### Patch Changes
+
+- [#185](https://github.com/openape-ai/openape/pull/185) [`63e6dd2`](https://github.com/openape-ai/openape/commit/63e6dd2ef98a1fd62a94b8565e5b5c6961279da2) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - proxy: accept the standard `HTTP_PROXY` absolute-URL request line
+
+  `createNodeHandler.handleRequest` previously only understood the legacy
+  path-encoded form (`http://proxy:port/<full-target-url>`). Standard
+  HTTP_PROXY clients — curl, gh, git, npm, undici — send the target as an
+  absolute URL in the request line: `GET http://example.com/path HTTP/1.1`,
+  which `node:http` surfaces as `req.url = "http://example.com/path"`. The
+  old code concatenated this with the proxy's own host header, producing
+  garbage like `http://proxy:portshttp://example.com/path` → "Invalid target
+  URL" 400.
+
+  Fix: detect when `req.url` is already absolute and prefix it with a slash
+  so the existing `pathname.slice(1)` extraction recovers the same target
+  string. Path-form clients (legacy) keep working unchanged.
+
+  Net effect: `apes proxy -- curl http://example.com` returns HTTP 200
+  instead of "Invalid target URL". HTTPS-via-CONNECT was unaffected (uses
+  `handleConnect`, not `handleRequest`).
+
 ## 0.2.15
 
 ### Patch Changes
