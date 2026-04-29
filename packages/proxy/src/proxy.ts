@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import { createHash } from 'node:crypto'
 import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig, SecretsStore } from './types.js'
+import type { LeafCertCache } from './ca-store.js'
 import { evaluateRules } from './matcher.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
@@ -355,10 +356,28 @@ export function createMultiAgentProxy(
 }
 
 /**
+ * Optional dependencies forwarded by `createNodeHandler` to both the
+ * forward-proxy fetch path (`createMultiAgentProxy`) and the CONNECT path
+ * (`handleConnect`). Kept optional so existing zero-arg callers (legacy
+ * single-agent paths, simple multi-agent setups without secret injection or
+ * MITM) keep working unchanged.
+ */
+export interface NodeHandlerDeps {
+  /** In-memory secret lookup, forwarded to both the fetch and CONNECT paths. */
+  secretsStore?: SecretsStore
+  /**
+   * Per-host leaf cert cache backed by the daemon's CA bundle. Required (in
+   * combination with `secretsStore`) for CONNECT-MITM secret injection on
+   * HTTPS targets; absent → CONNECT stays an opaque TCP tunnel.
+   */
+  leafCache?: LeafCertCache
+}
+
+/**
  * Create a node:http compatible handler for use with http.createServer().
  * Returns both a request handler and a CONNECT handler.
  */
-export function createNodeHandler(config: MultiAgentProxyConfig): {
+export function createNodeHandler(config: MultiAgentProxyConfig, deps: NodeHandlerDeps = {}): {
   handleRequest: (req: IncomingMessage, res: ServerResponse) => void
   handleConnect: (req: IncomingMessage, socket: Socket, head: Buffer) => void
 } {
@@ -367,7 +386,7 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
   // sharing, CONNECT-time grant_required rules couldn't reach the IdP in
   // multi-agent mode without duplicating constructor work.
   const grantsClients = buildGrantsClients(config)
-  const proxy = createMultiAgentProxy(config, grantsClients)
+  const proxy = createMultiAgentProxy(config, grantsClients, { secretsStore: deps.secretsStore })
 
   return {
     handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -433,7 +452,10 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
     },
 
     handleConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
-      handleConnect(config, grantsClients, req, socket, head)
+      handleConnect(config, grantsClients, req, socket, head, {
+        secretsStore: deps.secretsStore,
+        leafCache: deps.leafCache,
+      })
     },
   }
 }

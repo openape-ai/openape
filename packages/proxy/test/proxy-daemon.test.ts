@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -33,9 +33,17 @@ header = "Authorization"
 template = "Bearer {{value}}"
 value = "secret123"
 `
-    const r = await runCliWithEnv(['--global', '--port', '0'], blob, { HOME: fakeHome })
-    expect(r.code).toBe(0)
-    expect(r.stdout).toMatch(/loaded 1 secrets.*test_key/)
+    // Task 15 onward: the daemon stays running after parsing stdin, so we
+    // wait for the banner instead of for `runCliWithEnv` exit. The banner
+    // already includes the loaded-secret summary, which is what the original
+    // assertion intends to cover.
+    const handle = await spawnDaemonAndWaitForBanner(['--global', '--port', '0'], blob, { HOME: fakeHome })
+    try {
+      expect(handle.bannerStdout).toMatch(/secrets:\s*test_key/)
+    }
+    finally {
+      await stopDaemon(handle)
+    }
   }, 15000)
 })
 
@@ -50,10 +58,9 @@ describe('daemon harness — smoke', () => {
   }, 15000)
 
   it('spawnDaemonAndWaitForBanner detects the banner', async () => {
-    // Task 14 prints a stub `listening on 127.0.0.1:<port>` line before exiting
-    // (Task 15 replaces this with the real server.listen() callback). The
-    // harness should resolve as soon as the banner appears even if the daemon
-    // exits cleanly right after.
+    // Task 15+: the daemon binds for real via `server.listen()`. With
+    // `--port 0` the OS assigns a free port; the harness regex captures
+    // whatever port number the banner reports.
     const fakeHome = mkdtempSync(join(tmpdir(), 'harness-banner-'))
     const apesDir = join(fakeHome, '.config', 'apes')
     mkdirSync(apesDir, { recursive: true })
@@ -68,7 +75,8 @@ describe('daemon harness — smoke', () => {
       { HOME: fakeHome },
     )
     try {
-      expect(handle.bannerStdout).toMatch(/listening on 127\.0\.0\.1:0/)
+      expect(handle.bannerStdout).toMatch(/listening on 127\.0\.0\.1:\d+/)
+      expect(handle.port).toBeGreaterThan(0)
     }
     finally {
       await stopDaemon(handle)
@@ -100,6 +108,28 @@ describe('daemon identity loading', () => {
     try {
       expect(handle.bannerStdout).toMatch(/agent_iurio@example\.com/)
       expect(handle.bannerStdout).toMatch(/https:\/\/id\.example\.com/)
+    }
+    finally {
+      await stopDaemon(handle)
+    }
+  }, 15000)
+
+  it('binds to --port and emits OPENAPE_PROXY hint + bootstraps CA', async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'bind-'))
+    const apesDir = join(fakeHome, '.config', 'apes')
+    mkdirSync(apesDir, { recursive: true })
+    writeFileSync(join(apesDir, 'auth.json'), JSON.stringify({
+      email: 'agent_bind@example.com',
+      idp: 'https://id.example.com',
+      bearer: 'tok',
+    }))
+
+    const handle = await spawnDaemonAndWaitForBanner(['--global', '--port', '0'], validToml, { HOME: fakeHome })
+    try {
+      expect(handle.bannerStdout).toMatch(/OPENAPE_PROXY=127\.0\.0\.1:\d+/)
+      expect(handle.port).toBeGreaterThan(0)
+      expect(existsSync(join(fakeHome, '.openape', 'proxy', 'ca.crt'))).toBe(true)
+      expect(existsSync(join(fakeHome, '.openape', 'proxy', 'ca.key'))).toBe(true)
     }
     finally {
       await stopDaemon(handle)

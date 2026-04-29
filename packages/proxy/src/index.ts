@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import type { DaemonIdentity } from './types.js'
+import type { DaemonIdentity, MultiAgentProxyConfig } from './types.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
+import { createLeafCertCache, loadOrCreateCa } from './ca-store.js'
 import { loadMultiAgentConfig } from './config.js'
 import { createNodeHandler } from './proxy.js'
 import { parseSecretsBlob } from './secrets-store.js'
@@ -70,14 +71,50 @@ if (values.global) {
       process.exit(2)
     }
     const identity = loadIdentity()
-    console.log(`[openape-proxy] identity: ${identity.email} (${identity.idpUrl})`)
     const port = Number.parseInt(values.port ?? '18789')
-    // Stub banner so harness banner-detect resolves; Task 15 replaces this with
-    // the real `server.listen()` callback log line.
-    console.log(`[openape-proxy] listening on 127.0.0.1:${port}`)
-    const names = store.entries.map(e => e.name).join(', ')
-    console.log(`[openape-proxy] loaded ${store.entries.length} secrets: ${names}`)
-    process.exit(0)
+
+    // Bootstrap (or reuse) the per-user MITM CA stored under
+    // ~/.openape/proxy/. Tagging the CN with the operator email keeps
+    // multi-account dev machines self-explanatory in the system trust store.
+    const ca = loadOrCreateCa({
+      certPath: join(homedir(), '.openape', 'proxy', 'ca.crt'),
+      keyPath: join(homedir(), '.openape', 'proxy', 'ca.key'),
+      subjectCN: `OpenApe Proxy CA (${identity.email})`,
+    })
+    if (ca.created) {
+      console.log(`[openape-proxy] generated new CA at ~/.openape/proxy/ca.crt`)
+    }
+    const leafCache = createLeafCertCache(ca, { capacity: 256 })
+
+    // Daemon mode synthesizes a minimal MultiAgentProxyConfig from the loaded
+    // identity. `default_action: 'allow'` keeps Task 15 a pure bind/CA wiring
+    // milestone — Task 16 will add the daemon-mode auth bypass on top.
+    const config: MultiAgentProxyConfig = {
+      proxy: { listen: `127.0.0.1:${port}`, default_action: 'allow' },
+      agents: [{ email: identity.email, idp_url: identity.idpUrl }],
+    }
+
+    const handler = createNodeHandler(config, { secretsStore: store, leafCache })
+    const server = createServer(handler.handleRequest)
+    server.on('connect', handler.handleConnect)
+    server.listen(port, '127.0.0.1', () => {
+      // `--port 0` lets the OS pick a free port — surface the actual bound
+      // port so harness/orchestrators can grep the banner reliably.
+      const addr = server.address()
+      const actualPort = typeof addr === 'object' && addr ? addr.port : port
+      // Emit identity / secrets / OPENAPE_PROXY hint BEFORE the canonical
+      // `listening on 127.0.0.1:<port>` banner. The banner is what spawners
+      // grep to confirm the daemon is up; printing the hint first guarantees
+      // it lives in the same captured chunk that the spawner reads.
+      console.log(`[openape-proxy] identity: ${identity.email} (${identity.idpUrl})`)
+      const names = store.entries.map(e => e.name).join(', ')
+      console.log(`[openape-proxy] secrets: ${names}`)
+      console.log(`[openape-proxy] export OPENAPE_PROXY=127.0.0.1:${actualPort}`)
+      console.log(`[openape-proxy] listening on 127.0.0.1:${actualPort}`)
+    })
+
+    process.on('SIGINT', () => server.close(() => process.exit(0)))
+    process.on('SIGTERM', () => server.close(() => process.exit(0)))
   })
   process.stdin.resume()
 }
