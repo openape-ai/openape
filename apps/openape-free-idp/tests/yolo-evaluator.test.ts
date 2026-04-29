@@ -9,6 +9,7 @@ function policy(overrides: Partial<{
   mode: 'deny-list' | 'allow-list'
   denyRiskThreshold: Risk | null
   denyPatterns: string[]
+  allowPatterns: string[]
   expiresAt: number | null
 }> = {}) {
   return {
@@ -18,6 +19,7 @@ function policy(overrides: Partial<{
     enabledBy: 'owner@x',
     denyRiskThreshold: overrides.denyRiskThreshold ?? null,
     denyPatterns: overrides.denyPatterns ?? [],
+    allowPatterns: overrides.allowPatterns ?? [],
     enabledAt: 0,
     expiresAt: overrides.expiresAt ?? null,
     updatedAt: 0,
@@ -113,14 +115,20 @@ describe('evaluateYoloPolicy', () => {
       const p = policy({ mode: 'allow-list' })
       expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null })).toBeNull()
     })
-    it('matching pattern → approve', () => {
-      const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'] })
+    it('matching allow-pattern → approve', () => {
+      const p = policy({ mode: 'allow-list', allowPatterns: ['*.openai.com'] })
       expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null }))
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
     })
     it('non-matching target → null even with patterns', () => {
-      const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'] })
+      const p = policy({ mode: 'allow-list', allowPatterns: ['*.openai.com'] })
       expect(evaluateYoloPolicy({ policy: p, target: 'api.github.com', resolvedRisk: null })).toBeNull()
+    })
+    it('inactive denyPatterns are ignored in allow-list mode', () => {
+      // Both lists persist across mode flips. In allow-list mode the
+      // deny-list entries are inert; only `allowPatterns` is consulted.
+      const p = policy({ mode: 'allow-list', denyPatterns: ['*.openai.com'], allowPatterns: [] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null })).toBeNull()
     })
     // Symmetric semantic: in allow-list mode the risk threshold ALSO applies as
     // "alles bis zu diesem Level wird auto-approved". Patterns add further
@@ -133,13 +141,25 @@ describe('evaluateYoloPolicy', () => {
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
     })
     it('risk > threshold needs human in allow-list mode (unless allow-pattern matches)', () => {
-      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'medium', denyPatterns: ['rm *'] })
+      const p = policy({ mode: 'allow-list', denyRiskThreshold: 'medium', allowPatterns: ['rm *'] })
       // Critical risk > medium → would block, but pattern matches → approves.
       expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: 'critical' }))
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
       // Critical risk + non-matching target → human approval.
       expect(evaluateYoloPolicy({ policy: p, target: 'curl evil.com', resolvedRisk: 'critical' }))
         .toBeNull()
+    })
+  })
+
+  describe('inactive list survives mode flips', () => {
+    it('deny-list mode ignores allowPatterns (would otherwise auto-approve)', () => {
+      // Inactive `allowPatterns` MUST NOT be consulted in deny-list mode.
+      // If they were, this `rm` would auto-approve (since it matches an
+      // entry in the inactive list) — but in deny-list mode the only thing
+      // that should drop the request is a denyPattern match.
+      const p = policy({ mode: 'deny-list', allowPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
     })
   })
 })

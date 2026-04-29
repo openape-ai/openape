@@ -17,7 +17,7 @@ export interface YoloDecision {
 export interface YoloDecisionContext {
   policy: YoloPolicy | null
   /**
-   * The string deny-patterns are matched against. Two shapes:
+   * The string the active pattern list is matched against. Two shapes:
    *
    * - For Commands / Root grants this is the joined command line (e.g.
    *   `"git push origin main"`). Operators write bash-style globs like
@@ -54,7 +54,7 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // - allow-list: explicit allow-pattern → approve (further open).
   if (p.mode === 'allow-list') {
     // 1. Explicit allow-pattern match → approve.
-    for (const pattern of p.denyPatterns || []) {
+    for (const pattern of p.allowPatterns || []) {
       if (matchesGlob(target, pattern)) return { kind: 'yolo', decidedBy: p.enabledBy }
     }
     // 2. Risk ≤ threshold → approve.
