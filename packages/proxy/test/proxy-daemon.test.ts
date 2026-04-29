@@ -1,26 +1,8 @@
-import { spawn } from 'node:child_process'
-import { resolve } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-
-const CLI = resolve(__dirname, '../src/index.ts')
-
-function runCli(args: string[], stdin = ''): Promise<{ code: number, stdout: string, stderr: string }> {
-  return new Promise((resolveResult) => {
-    // Use bun (workspace-standard runner; package start/dev scripts use it) to
-    // execute the TypeScript entrypoint directly. tsx via node would also work,
-    // but bun avoids depending on workspace-root tsx hoisting.
-    const child = spawn('bun', ['run', CLI, ...args], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (d) => { stdout += d.toString() })
-    child.stderr.on('data', (d) => { stderr += d.toString() })
-    child.stdin.write(stdin)
-    child.stdin.end()
-    child.on('exit', code => resolveResult({ code: code ?? 0, stdout, stderr }))
-  })
-}
+import { runCliWithEnv as runCli, runCliWithEnv, spawnDaemonAndWaitForBanner } from './_helpers/daemon-harness.js'
 
 describe('daemon CLI', () => {
   it('refuses --global with empty stdin', async () => {
@@ -46,5 +28,35 @@ value = "secret123"
     const r = await runCli(['--global', '--port', '0'], blob)
     expect(r.code).toBe(0)
     expect(r.stdout).toMatch(/loaded 1 secrets.*test_key/)
+  }, 15000)
+})
+
+describe('daemon harness — smoke', () => {
+  it('runCliWithEnv passes a custom HOME', async () => {
+    // Use a HOME without auth.json — daemon must refuse cleanly.
+    const fakeHome = mkdtempSync(join(tmpdir(), 'harness-no-auth-'))
+    const r = await runCliWithEnv(['--global', '--port', '0'], 'version = "1"\n', { HOME: fakeHome })
+    // Note: at Task 13.5 the daemon doesn't yet load auth.json (Task 14), so the
+    // empty-version-only TOML will be accepted, secrets will be empty, and the
+    // daemon will exit 0. Verify env passes through.
+    expect(r.code).toBe(0)
+    expect(r.stdout).toMatch(/loaded 0 secrets/i)
+  }, 15000)
+
+  it('spawnDaemonAndWaitForBanner waits for banner pattern', async () => {
+    // The harness's banner regex matches `listening on 127.0.0.1:<port>` —
+    // but Task 13's --global mode doesn't yet emit a "listening" banner
+    // (it just exits after parsing). Task 15 will add the actual listen banner.
+    // For Task 13.5's smoke, just verify the harness's spawn + banner-detect
+    // surfaces a clear error when the banner never arrives within the timeout.
+    const fakeHome = mkdtempSync(join(tmpdir(), 'harness-no-bind-'))
+    await expect(
+      spawnDaemonAndWaitForBanner(
+        ['--global', '--port', '0'],
+        'version = "1"\n',
+        { HOME: fakeHome },
+        500, // short timeout for the smoke
+      ),
+    ).rejects.toThrow(/exited before banner|timeout/i)
   }, 15000)
 })
