@@ -164,30 +164,37 @@ export const proxyCommand = defineCommand({
         : {}),
     }
 
-    const exitCode = await new Promise<number>((resolveExit) => {
-      const child = spawn(wrapped[0]!, wrapped.slice(1), {
-        stdio: 'inherit',
-        env: childEnv,
+    let exitCode: number
+    try {
+      exitCode = await new Promise<number>((resolveExit) => {
+        const child = spawn(wrapped[0]!, wrapped.slice(1), {
+          stdio: 'inherit',
+          env: childEnv,
+        })
+        const forward = (sig: NodeJS.Signals) => () => child.kill(sig)
+        const onSigint = forward('SIGINT')
+        const onSigterm = forward('SIGTERM')
+        process.on('SIGINT', onSigint)
+        process.on('SIGTERM', onSigterm)
+        child.once('exit', (code, signal) => {
+          process.off('SIGINT', onSigint)
+          process.off('SIGTERM', onSigterm)
+          if (signal) resolveExit(128 + (signalNumber(signal) ?? 0))
+          else resolveExit(code ?? 0)
+        })
+        child.once('error', (err) => {
+          consola.error(`[apes proxy] failed to spawn '${wrapped[0]}':`, err.message)
+          resolveExit(127)
+        })
       })
-      const forward = (sig: NodeJS.Signals) => () => child.kill(sig)
-      const onSigint = forward('SIGINT')
-      const onSigterm = forward('SIGTERM')
-      process.on('SIGINT', onSigint)
-      process.on('SIGTERM', onSigterm)
-      child.once('exit', (code, signal) => {
-        process.off('SIGINT', onSigint)
-        process.off('SIGTERM', onSigterm)
-        if (signal) resolveExit(128 + (signalNumber(signal) ?? 0))
-        else resolveExit(code ?? 0)
-      })
-      child.once('error', (err) => {
-        consola.error(`[apes proxy] failed to spawn '${wrapped[0]}':`, err.message)
-        resolveExit(127)
-      })
-    })
-
-    if (close) await close()
-    bundle?.cleanup()
+    }
+    finally {
+      // Run cleanup on both happy and exception paths so a thrown error
+      // (or signal that aborts the await) doesn't leak the temp trust
+      // bundle or leave the ephemeral proxy running.
+      bundle?.cleanup()
+      if (close) await close()
+    }
 
     // Propagate the wrapped command's exit code without going through
     // CliExit + citty's runMain. `runMain` catches everything inside its own

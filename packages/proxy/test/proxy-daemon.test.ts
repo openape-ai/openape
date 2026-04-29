@@ -31,7 +31,7 @@ describe('daemon CLI', () => {
 [secrets.test_key]
 target = "api.example.com"
 header = "Authorization"
-template = "Bearer {{value}}"
+template = "Bearer \${value}"
 value = "secret123"
 `
     // Task 15 onward: the daemon stays running after parsing stdin, so we

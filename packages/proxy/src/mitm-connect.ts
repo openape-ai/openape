@@ -33,8 +33,8 @@ export function handleMitmConnect(opts: MitmConnectOpts): void {
 
   let buffer = Buffer.alloc(0)
   let dispatched = false
-  tls.on('data', (chunk) => {
-    if (dispatched) return // forward path pipes upstream→tls; ignore further client data here
+  const onData = (chunk: Buffer) => {
+    if (dispatched) return // short-circuit path already wrote the response and ended the socket
     buffer = Buffer.concat([buffer, chunk])
     const headerEnd = buffer.indexOf('\r\n\r\n')
     if (headerEnd < 0) return // incomplete
@@ -68,9 +68,19 @@ export function handleMitmConnect(opts: MitmConnectOpts): void {
     }
 
     // forward path: open upstream TLS, write the mutated request + any body bytes already buffered,
-    // then pipe upstream → client. Subsequent client bytes (request bodies for streaming uploads,
+    // then pipe upstream ↔ client. Subsequent client bytes (request bodies for streaming uploads,
     // pipelined requests) are forwarded raw via tls.pipe(upstream).
+    //
+    // Race guard: the upstream TLS handshake is async; while we wait for
+    // `secureConnect`, the client may send additional body chunks (think
+    // `curl --data-binary @big.bin`). Without pausing, those chunks would
+    // fire this same `data` listener again and be dropped. Pausing here
+    // keeps the chunks buffered inside the TLSSocket; we resume them only
+    // after `tls.pipe(upstream)` is wired *and* this listener is detached,
+    // so they flow straight through the pipe instead of re-entering this
+    // handler.
     dispatched = true
+    tls.pause()
     const upstream = tlsConnect({
       host: opts.host,
       port: opts.port,
@@ -98,11 +108,17 @@ export function handleMitmConnect(opts: MitmConnectOpts): void {
       const remainder = buffer.subarray(headerEnd + 4)
       if (remainder.length > 0) upstream.write(remainder)
       upstream.pipe(tls)
+      // detach this handler before resuming so paused chunks land in the
+      // pipe rather than firing onData again (which would early-return on
+      // `dispatched` and drop them).
+      tls.removeListener('data', onData)
       // any further client-side bytes (streaming uploads / pipelined requests) flow upstream raw
       tls.pipe(upstream)
+      tls.resume()
     })
     upstream.on('error', () => tls.end())
-  })
+  }
+  tls.on('data', onData)
   tls.on('error', () => opts.clientSocket.destroy())
 }
 
