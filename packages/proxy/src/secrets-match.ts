@@ -15,7 +15,7 @@ function targetString(url: URL): string {
   // host[:port]/path — port included only when explicit and non-default.
   const port = url.port ? `:${url.port}` : ''
   const path = url.pathname === '/' ? '' : url.pathname
-  return `${url.hostname}${port}${path}`.replace(/^\/+/, '')
+  return `${url.hostname}${port}${path}`
 }
 
 export function matchSecret(target: URL, entries: readonly SecretEntry[]): SecretEntry | null {
@@ -27,7 +27,7 @@ export function matchSecret(target: URL, entries: readonly SecretEntry[]): Secre
     const re = compileGlob(entry.target)
     if (!re.test(targetStr) && !re.test(`${targetStr}/`)) continue
     const prefix = literalPrefixLen(entry.target)
-    if (!best || prefix > best.prefix || (prefix === best.prefix && i < best.idx)) {
+    if (!best || prefix > best.prefix) {
       best = { entry, prefix, idx: i }
     }
   }

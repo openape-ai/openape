@@ -40,4 +40,10 @@ describe('matchSecret', () => {
     const e = entry('smtp', 'smtp.fastmail.com:587')
     expect(matchSecret(new URL('http://smtp.fastmail.com:587/'), [e])?.name).toBe('smtp')
   })
+
+  it('matches when URL uses default port (no explicit port in URL)', () => {
+    const e = entry('gh', 'api.github.com/*')
+    // URL `:443` is the default for https — URL.port === '' so target string omits it
+    expect(matchSecret(new URL('https://api.github.com:443/x'), [e])?.name).toBe('gh')
+  })
 })
