@@ -1,12 +1,28 @@
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { connect } from 'node:net'
-import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig } from './types.js'
+import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig, SecretsStore } from './types.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { checkEgress } from './ssrf.js'
 import { writeAudit } from './audit.js'
 import { evaluateRules } from './matcher.js'
 import type { GrantsClient } from './grants-client.js'
+import type { LeafCertCache } from './ca-store.js'
+import { handleMitmConnect } from './mitm-connect.js'
+
+/**
+ * Optional MITM injection deps. When BOTH `secretsStore` and `leafCache` are
+ * present we terminate TLS in-process (CONNECT-MITM mode), inspect the inner
+ * HTTPS request, and inject the matching secret header before forwarding.
+ * When either is absent we fall back to the legacy raw TCP tunnel — opaque
+ * pipe, no secret injection (cleartext-only inject still happens via the
+ * forward-proxy fetch path).
+ */
+export interface ConnectMitmDeps {
+  secretsStore?: SecretsStore
+  leafCache?: LeafCertCache
+  upstreamRejectUnauthorized?: boolean
+}
 
 /**
  * Handle HTTP CONNECT requests for tunneling (used by HTTP_PROXY clients).
@@ -25,6 +41,7 @@ export async function handleConnect(
   req: IncomingMessage,
   clientSocket: Socket,
   _head: Buffer,
+  deps?: ConnectMitmDeps,
 ): Promise<void> {
   const target = req.url ?? ''
   const [host, portStr] = target.split(':')
@@ -250,6 +267,47 @@ export async function handleConnect(
   else {
     // 'allow' — log and continue.
     writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list' })
+  }
+
+  // CONNECT-MITM mode: when both a secrets store and a leaf-cert cache are
+  // wired in, terminate TLS in-process so we can inspect the inner request
+  // and inject the matching secret header before forwarding upstream. The
+  // 200-Established line is OUR responsibility here — `handleMitmConnect`
+  // assumes the client is already in TLS-handshake mode on the socket.
+  // Without both deps we keep the legacy opaque TCP pipe (inline mode); the
+  // IdP system-bypass branch above also stays on the legacy path so we never
+  // MITM the proxy's own auth traffic.
+  if (deps?.secretsStore && deps?.leafCache) {
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+    const store = deps.secretsStore
+    handleMitmConnect({
+      clientSocket,
+      host,
+      port,
+      leafCache: deps.leafCache,
+      upstreamRejectUnauthorized: deps.upstreamRejectUnauthorized,
+      onRequest: (mreq) => {
+        // `mreq.host` is the SNI hostname only — `port` is carried separately
+        // because handleMitmConnect splits CONNECT host:port at the boundary.
+        // Reattach a non-default port so secret target globs like
+        // `host:port/*` can match (the matcher's `targetString` keeps explicit
+        // non-default ports verbatim).
+        const portSuffix = port === 443 ? '' : `:${port}`
+        const targetUrl = new URL(`https://${mreq.host}${portSuffix}${mreq.path}`)
+        const match = store.findFor(targetUrl)
+        if (!match) return { type: 'forward', mutatedHeaders: new Map() }
+        const rendered = match.template.replace(/\$\{value\}/g, match.value)
+        // Redacted log line — only name/header/method/url, never the secret.
+        console.error(
+          `[openape-proxy] injected secret '${match.name}' into ${match.header} for ${mreq.method} ${targetUrl.href}`,
+        )
+        return {
+          type: 'forward',
+          mutatedHeaders: new Map([[match.header.toLowerCase(), rendered]]),
+        }
+      },
+    })
+    return
   }
 
   tunnel(host, port, clientSocket)
