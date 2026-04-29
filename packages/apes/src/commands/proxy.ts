@@ -9,25 +9,31 @@ import { startEphemeralProxy } from '../proxy/local-proxy.js'
 import { extractWrappedCommand } from '../shapes/index.js'
 
 /**
- * Decide between IdP-mediated and transparent proxy modes based on whether
- * the user is logged in via `apes login`. When logged in: take agent email +
- * IdP URL from the cached auth file so grant requests are attributed to the
- * real user. When not logged in: fall back to transparent (default-allow)
- * mode with a synthetic identity — the honest default rather than locking
- * everything down.
+ * Pull the agent email + IdP URL from the cached `apes login` session and
+ * return options for an IdP-mediated proxy. Throws if no valid session is on
+ * disk: the proxy needs the user's identity to attribute grant requests
+ * (`requester` field) and to find the right YOLO policy row keyed on
+ * `(agent_email, audience='ape-proxy')`. Without that we'd silently fall
+ * back to permissive transparent mode, which lies to the user about the
+ * UI-side YOLO config having an effect — better to fail loudly.
  */
 function resolveProxyConfigOptions(): ProxyConfigOptions {
   const auth = loadAuth()
-  if (auth?.email && auth?.idp) {
-    consola.info(`[apes proxy] IdP-mediated mode — agent=${auth.email}, idp=${auth.idp}`)
-    return { agentEmail: auth.email, idpUrl: auth.idp, mediated: true }
+  if (!auth?.email || !auth?.idp) {
+    throw new CliError(
+      'apes proxy requires `apes login` first.\n\n'
+      + 'Without a login the proxy has no agent identity to attribute grant\n'
+      + 'requests to, so the YOLO / Allow / Deny policy on id.openape.ai cannot\n'
+      + 'apply. Run:\n\n'
+      + '  apes login\n\n'
+      + 'and re-run `apes proxy -- ...`.',
+      // 77 = EX_NOPERM from sysexits.h ("permission denied"); fits "user has\n'
+      // not authenticated to use this command" better than the default 1.
+      77,
+    )
   }
-  consola.warn('[apes proxy] not logged in — transparent mode (default-allow + audit). Run `apes login` to enable IdP-mediated egress + per-user YOLO policy.')
-  return {
-    agentEmail: 'ephemeral@apes-proxy.local',
-    idpUrl: 'https://id.openape.ai',
-    mediated: false,
-  }
+  consola.info(`[apes proxy] IdP-mediated mode — agent=${auth.email}, idp=${auth.idp}`)
+  return { agentEmail: auth.email, idpUrl: auth.idp, mediated: true }
 }
 
 /**
