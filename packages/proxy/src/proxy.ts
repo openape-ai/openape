@@ -330,8 +330,20 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
 
   return {
     handleRequest(req: IncomingMessage, res: ServerResponse) {
-      // Convert IncomingMessage to Request and use existing fetch logic
-      const url = `http://${req.headers.host || 'localhost'}${req.url || '/'}`
+      // Standard HTTP_PROXY clients (curl, gh, git, npm) send the target as
+      // an absolute URL in the request line for cleartext forward-proxying:
+      //   `GET http://example.com/path HTTP/1.1`
+      // node:http surfaces that absolute URL via `req.url`. The legacy
+      // `proxy.fetch` extraction expects a path-encoded form
+      // (`/<full-target-url>`), so we adapt here: when `req.url` is
+      // absolute, prefix it with a slash so `pathname.slice(1)` recovers
+      // the same target string. Path-form clients (legacy) keep working.
+      const reqUrl = req.url || '/'
+      const isAbsolute = reqUrl.startsWith('http://') || reqUrl.startsWith('https://')
+      const proxyHost = req.headers.host || 'localhost'
+      const url = isAbsolute
+        ? `http://${proxyHost}/${reqUrl}`
+        : `http://${proxyHost}${reqUrl}`
       const chunks: Buffer[] = []
 
       req.on('data', (chunk: Buffer) => chunks.push(chunk))
