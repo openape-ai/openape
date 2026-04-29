@@ -6,7 +6,7 @@ import { evaluateRules } from './matcher.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
 import { writeAudit } from './audit.js'
-import { isPrivateOrLoopback } from './ssrf.js'
+import { checkEgress } from './ssrf.js'
 import { handleConnect } from './connect.js'
 
 /**
@@ -105,9 +105,19 @@ export function createMultiAgentProxy(
       const method = req.method
       const path = targetParsed.pathname
 
-      // SSRF protection — block private/loopback IPs before any rule evaluation
-      if (await isPrivateOrLoopback(domain)) {
+      // SSRF / reachability check. Split outcomes so a non-existent host
+      // doesn't ship as a misleading 403:
+      //   - `private`      → policy refusal (403).
+      //   - `unresolvable` → upstream connectivity failure (502).
+      const egress = await checkEgress(domain)
+      if (egress.kind === 'private') {
         return new Response('Blocked: private/loopback IP', { status: 403 })
+      }
+      if (egress.kind === 'unresolvable') {
+        return new Response(
+          `DNS lookup failed for ${domain} (${egress.reason}).`,
+          { status: 502 },
+        )
       }
 
       // Read body once (needed for hash + forwarding)
