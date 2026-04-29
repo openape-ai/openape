@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import forge from 'node-forge'
-import { loadOrCreateCa, mintLeafCert } from '../src/ca-store.js'
+import { createLeafCertCache, loadOrCreateCa, mintLeafCert } from '../src/ca-store.js'
 
 describe('loadOrCreateCa — load existing', () => {
   it('loads an existing CA from disk if both files are present', () => {
@@ -83,5 +83,35 @@ describe('mintLeafCert', () => {
     // Verify it's signed by the CA.
     const caStore = forge.pki.createCaStore([ca.certPem])
     expect(() => forge.pki.verifyCertificateChain(caStore, [parsed])).not.toThrow()
+  })
+})
+
+describe('createLeafCertCache', () => {
+  it('returns the same cert for repeated calls (cache hit)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cache-'))
+    const ca = loadOrCreateCa({
+      certPath: join(dir, 'ca.crt'),
+      keyPath: join(dir, 'ca.key'),
+      subjectCN: 'CA',
+    })
+    const cache = createLeafCertCache(ca, { capacity: 4 })
+    const a = cache.get('api.github.com')
+    const b = cache.get('api.github.com')
+    expect(a.certPem).toBe(b.certPem)
+  })
+
+  it('evicts least-recently-used when over capacity', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cache-'))
+    const ca = loadOrCreateCa({
+      certPath: join(dir, 'ca.crt'),
+      keyPath: join(dir, 'ca.key'),
+      subjectCN: 'CA',
+    })
+    const cache = createLeafCertCache(ca, { capacity: 2 })
+    const a1 = cache.get('a.example.com')
+    cache.get('b.example.com')
+    cache.get('c.example.com')  // evicts 'a'
+    const a2 = cache.get('a.example.com')
+    expect(a1.certPem).not.toBe(a2.certPem)  // re-minted
   })
 })

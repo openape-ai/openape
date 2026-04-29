@@ -82,3 +82,29 @@ export function mintLeafCert(ca: CaBundle, hostname: string): LeafCert {
     expiresAt,
   }
 }
+
+export interface LeafCertCache {
+  get: (hostname: string) => LeafCert
+}
+
+export function createLeafCertCache(ca: CaBundle, opts: { capacity: number }): LeafCertCache {
+  const cache = new Map<string, LeafCert>()
+  return {
+    get(hostname) {
+      const existing = cache.get(hostname)
+      if (existing && existing.expiresAt > Date.now()) {
+        cache.delete(hostname)
+        cache.set(hostname, existing)  // refresh LRU position
+        return existing
+      }
+      const fresh = mintLeafCert(ca, hostname)
+      cache.set(hostname, fresh)
+      while (cache.size > opts.capacity) {
+        const oldestKey = cache.keys().next().value
+        if (oldestKey === undefined) break
+        cache.delete(oldestKey)
+      }
+      return fresh
+    },
+  }
+}
