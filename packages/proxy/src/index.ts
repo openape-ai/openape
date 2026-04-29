@@ -16,12 +16,20 @@ function loadIdentity(): DaemonIdentity {
     console.error(`[openape-proxy] missing ${path} — run \`apes login\` first`)
     process.exit(2)
   }
-  const raw = JSON.parse(readFileSync(path, 'utf-8')) as { email?: string, idp?: string, bearer?: string }
-  if (!raw.email || !raw.idp || !raw.bearer) {
+  const raw = JSON.parse(readFileSync(path, 'utf-8')) as {
+    email?: string
+    idp?: string
+    access_token?: string
+    bearer?: string
+  }
+  // Production apes-login writes OAuth-2.0 standard `access_token`; some test
+  // harnesses use `bearer` for brevity. Accept either.
+  const bearer = raw.access_token ?? raw.bearer
+  if (!raw.email || !raw.idp || !bearer) {
     console.error(`[openape-proxy] malformed ${path} — re-run \`apes login\``)
     process.exit(2)
   }
-  return { email: raw.email, idpUrl: raw.idp, bearer: raw.bearer }
+  return { email: raw.email, idpUrl: raw.idp, bearer }
 }
 
 const { values } = parseArgs({
