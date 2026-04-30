@@ -98,9 +98,11 @@ export const destroyAgentCommand = defineCommand({
       try {
         const script = buildDestroyTeardownScript({ name, homeDir: `/Users/${name}` })
         writeFileSync(scriptPath, script, { mode: 0o700 })
-        consola.start('Running teardown as root via `apes run --as root`…')
-        consola.info('You will be asked to approve the as=root grant in your DDISA inbox.')
-        execFileSync(apes, ['run', '--as', 'root', '--', 'bash', scriptPath], { stdio: 'inherit' })
+        consola.start('Running teardown as root via `apes run --as root --wait`…')
+        consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
+        // --wait makes the call synchronous; without it `apes run --as root`
+        // returns exit 75 (pending) immediately, leaving a dangling grant.
+        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
       }
       finally {
         rmSync(scratch, { recursive: true, force: true })
