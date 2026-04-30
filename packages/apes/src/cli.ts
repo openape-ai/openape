@@ -18,6 +18,7 @@ import { delegateCommand } from './commands/grants/delegate'
 import { delegationsCommand } from './commands/grants/delegations'
 import { delegationRevokeCommand } from './commands/grants/delegation-revoke'
 import { adminCommand } from './commands/admin/index'
+import { agentsCommand } from './commands/agents/index'
 import { adapterCommand } from './commands/adapter/index'
 import { runCommand } from './commands/run'
 import { proxyCommand } from './commands/proxy'
@@ -140,6 +141,7 @@ const main = defineCommand({
     whoami: whoamiCommand,
     health: healthCommand,
     grants: grantsCommand,
+    agents: agentsCommand,
     admin: adminCommand,
     run: runCommand,
     proxy: proxyCommand,
