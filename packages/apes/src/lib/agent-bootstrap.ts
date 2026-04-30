@@ -172,7 +172,7 @@ export function buildDestroyTeardownScript(input: DestroyTeardownScriptInput): s
   return `#!/bin/bash
 # Best-effort teardown. set -u catches typos; we deliberately do NOT use -e
 # because pkill / launchctl are allowed to fail when the user has no live
-# sessions, and dscl -delete is allowed to fail when the user is already gone.
+# sessions.
 set -u
 
 NAME=${shQuote(name)}
@@ -189,7 +189,32 @@ if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
   rm -rf "$HOME_DIR"
 fi
 
-dscl . -delete "/Users/$NAME" 2>/dev/null || true
+# Delete the user record. \`sysadminctl -deleteUser\` is the canonical macOS
+# API and removes Open Directory metadata that \`dscl . -delete\` leaves
+# behind. Fall back to dscl if sysadminctl isn't available or rejects the
+# user. Surface a clear error if both fail — silent failure here is what
+# left orphaned dscl records on previous spawn/destroy round-trips.
+if command -v sysadminctl >/dev/null 2>&1; then
+  if sysadminctl -deleteUser "$NAME" 2>/dev/null; then
+    :
+  elif dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
+    dscl . -delete "/Users/$NAME" || {
+      echo "ERROR: failed to delete user record /Users/$NAME" >&2
+      exit 1
+    }
+  fi
+elif dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
+  dscl . -delete "/Users/$NAME" || {
+    echo "ERROR: failed to delete user record /Users/$NAME" >&2
+    exit 1
+  }
+fi
+
+# Verify the record is actually gone.
+if dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
+  echo "ERROR: user record /Users/$NAME still exists after teardown" >&2
+  exit 1
+fi
 
 echo "OK destroyed $NAME"
 `
