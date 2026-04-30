@@ -133,6 +133,6 @@ describe('apes agents destroy', () => {
     expect(execFileSync).toHaveBeenCalledTimes(1)
     const [bin, argv] = vi.mocked(execFileSync).mock.calls[0]!
     expect(bin).toBe('/usr/local/bin/apes')
-    expect(argv).toEqual(['run', '--as', 'root', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
+    expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
   })
 })

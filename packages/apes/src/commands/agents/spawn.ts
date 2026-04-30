@@ -130,9 +130,14 @@ export const spawnAgentCommand = defineCommand({
       })
       writeFileSync(scriptPath, script, { mode: 0o700 })
 
-      consola.start('Running privileged setup as root via `apes run --as root`…')
-      consola.info('You will be asked to approve the as=root grant in your DDISA inbox.')
-      execFileSync(apes, ['run', '--as', 'root', '--', 'bash', scriptPath], { stdio: 'inherit' })
+      consola.start('Running privileged setup as root via `apes run --as root --wait`…')
+      consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
+      // --wait is critical: without it `apes run --as root` returns exit 75
+      // (pending) immediately, which we'd interpret as failure and which
+      // would leave a dangling grant referencing a scratch dir we'd cleaned
+      // up in the finally below. With --wait, exit reflects the actual
+      // execution result, so cleanup is safe.
+      execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
 
       consola.success(`Agent ${name} spawned.`)
       console.log('')
