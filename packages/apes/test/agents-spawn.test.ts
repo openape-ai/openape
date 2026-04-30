@@ -146,7 +146,7 @@ describe('apes agents spawn', () => {
     expect(execFileSync).toHaveBeenCalledTimes(1)
     const [bin, argv] = vi.mocked(execFileSync).mock.calls[0]!
     expect(bin).toBe('/usr/local/bin/apes')
-    expect(argv).toEqual(['run', '--as', 'root', '--', 'bash', '/tmp/apes-spawn-test/setup.sh'])
+    expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-spawn-test/setup.sh'])
 
     expect(rmSync).toHaveBeenCalledWith('/tmp/apes-spawn-test', { recursive: true, force: true })
   })
