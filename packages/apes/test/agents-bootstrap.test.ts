@@ -139,7 +139,14 @@ describe('buildDestroyTeardownScript', () => {
     expect(script).toContain('launchctl bootout "user/$UID_OF"')
     expect(script).toContain('pkill -9 -u "$UID_OF"')
     expect(script).toContain('rm -rf "$HOME_DIR"')
+    expect(script).toContain('sysadminctl -deleteUser "$NAME"')
     expect(script).toContain('dscl . -delete "/Users/$NAME"')
+  })
+
+  it('post-verifies the user record is actually gone (no silent failure)', () => {
+    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a' })
+    expect(script).toContain('still exists after teardown')
+    expect(script).toContain('exit 1')
   })
 
   it('guards against empty/root home', () => {
