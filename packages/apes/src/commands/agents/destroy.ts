@@ -84,6 +84,25 @@ export const destroyAgentCommand = defineCommand({
       }
     }
 
+    // IdP-side first: while the parent's bearer is still fresh from preflight.
+    // The escapes step below blocks for human approval, which can take longer
+    // than the token's TTL — running the IdP DELETE after that wait would
+    // surface a stale-token error and leave the agent record orphaned.
+    if (idpExists) {
+      const id = encodeURIComponent(idpAgent!.email)
+      if (args.soft) {
+        await apiFetch(`/api/my-agents/${id}`, { method: 'PATCH', body: { isActive: false }, idp })
+        consola.success(`Deactivated IdP agent ${idpAgent!.email}`)
+      }
+      else {
+        await apiFetch(`/api/my-agents/${id}`, { method: 'DELETE', idp })
+        consola.success(`Deleted IdP agent ${idpAgent!.email}`)
+      }
+    }
+    else {
+      consola.info('No IdP agent to remove (skipped).')
+    }
+
     if (osUserExists) {
       const apes = whichBinary('apes')
       if (!apes) {
@@ -110,21 +129,6 @@ export const destroyAgentCommand = defineCommand({
     }
     else if (!args['keep-os-user'] && isDarwin()) {
       consola.info('No macOS user to remove (skipped).')
-    }
-
-    if (idpExists) {
-      const id = encodeURIComponent(idpAgent!.email)
-      if (args.soft) {
-        await apiFetch(`/api/my-agents/${id}`, { method: 'PATCH', body: { isActive: false }, idp })
-        consola.success(`Deactivated IdP agent ${idpAgent!.email}`)
-      }
-      else {
-        await apiFetch(`/api/my-agents/${id}`, { method: 'DELETE', idp })
-        consola.success(`Deleted IdP agent ${idpAgent!.email}`)
-      }
-    }
-    else {
-      consola.info('No IdP agent to remove (skipped).')
     }
 
     consola.success(`Destroyed ${name}.`)

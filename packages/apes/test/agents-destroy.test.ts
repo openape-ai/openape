@@ -135,4 +135,28 @@ describe('apes agents destroy', () => {
     expect(bin).toBe('/usr/local/bin/apes')
     expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
   })
+
+  it('issues IdP DELETE before the long-blocking escapes call (token-fresh order)', async () => {
+    const { apiFetch } = await import('../src/http.js')
+    const { execFileSync } = await import('node:child_process')
+    const callOrder: string[] = []
+    vi.mocked(apiFetch).mockImplementation(async (path: any, opts?: any) => {
+      callOrder.push(`apiFetch:${opts?.method ?? 'GET'}:${path}`)
+      if (typeof path === 'string' && path === '/api/my-agents') return [AGENT] as any
+      return { ok: true }
+    })
+    vi.mocked(execFileSync).mockImplementation(((..._args: any[]) => {
+      callOrder.push('execFileSync:apes-run-as-root')
+      return Buffer.alloc(0)
+    }) as any)
+    macosUserMock.readMacOSUser.mockReturnValue({ name: 'agent-a', uid: 250, shell: '/usr/local/bin/ape-shell' })
+
+    const { destroyAgentCommand } = await import('../src/commands/agents/destroy.js')
+    await (destroyAgentCommand as any).run({ args: { name: 'agent-a', force: true } })
+
+    const deleteIdx = callOrder.findIndex(c => c.includes('DELETE:/api/my-agents/'))
+    const escapesIdx = callOrder.findIndex(c => c === 'execFileSync:apes-run-as-root')
+    expect(deleteIdx).toBeGreaterThanOrEqual(0)
+    expect(escapesIdx).toBeGreaterThan(deleteIdx)
+  })
 })
