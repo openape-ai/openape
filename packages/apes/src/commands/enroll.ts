@@ -1,14 +1,13 @@
 import { Buffer } from 'node:buffer'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { generateKeyPairSync, sign } from 'node:crypto'
-import { dirname, resolve } from 'node:path'
-import { homedir } from 'node:os'
+import { sign } from 'node:crypto'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadEd25519PrivateKey } from '../ssh-key'
-import { getAgentChallengeEndpoint, getAgentAuthenticateEndpoint } from '../http'
-import { saveAuth, saveConfig, loadConfig } from '../config'
+import { generateAndSaveKey, readPublicKey, resolveKeyPath } from '../lib/keygen'
+import { getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../http'
+import { loadConfig, saveAuth, saveConfig } from '../config'
 import { CliError, CliExit } from '../errors'
 
 const DEFAULT_IDP_URL = 'https://id.openape.at'
@@ -16,67 +15,9 @@ const DEFAULT_KEY_PATH = '~/.ssh/id_ed25519'
 const POLL_INTERVAL = 3000
 const POLL_TIMEOUT = 300_000 // 5 minutes
 
-function resolvePath(p: string): string {
-  return resolve(p.replace(/^~/, homedir()))
-}
-
 function openBrowser(url: string) {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
   execFile(cmd, [url], () => {})
-}
-
-function readPublicKey(keyPath: string): string {
-  const pubPath = `${keyPath}.pub`
-  if (existsSync(pubPath)) {
-    return readFileSync(pubPath, 'utf-8').trim()
-  }
-
-  // Derive public key from private key
-  const keyContent = readFileSync(keyPath, 'utf-8')
-  const privateKey = loadEd25519PrivateKey(keyContent)
-  const jwk = privateKey.export({ format: 'jwk' }) as { x: string }
-  const pubBytes = Buffer.from(jwk.x, 'base64url')
-
-  // Format as OpenSSH public key
-  const keyTypeStr = 'ssh-ed25519'
-  const keyTypeLen = Buffer.alloc(4)
-  keyTypeLen.writeUInt32BE(keyTypeStr.length)
-  const pubKeyLen = Buffer.alloc(4)
-  pubKeyLen.writeUInt32BE(pubBytes.length)
-  const blob = Buffer.concat([keyTypeLen, Buffer.from(keyTypeStr), pubKeyLen, pubBytes])
-
-  return `ssh-ed25519 ${blob.toString('base64')}`
-}
-
-function generateAndSaveKey(keyPath: string): string {
-  const resolved = resolvePath(keyPath)
-  const dir = dirname(resolved)
-
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-
-  // Generate Ed25519 key pair
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-
-  // Export private key in PKCS8 PEM format (universally readable)
-  const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
-  writeFileSync(resolved, privatePem, { mode: 0o600 })
-
-  // Export public key in OpenSSH format
-  const jwk = publicKey.export({ format: 'jwk' }) as { x: string }
-  const pubBytes = Buffer.from(jwk.x, 'base64url')
-  const keyTypeStr = 'ssh-ed25519'
-  const keyTypeLen = Buffer.alloc(4)
-  keyTypeLen.writeUInt32BE(keyTypeStr.length)
-  const pubKeyLen = Buffer.alloc(4)
-  pubKeyLen.writeUInt32BE(pubBytes.length)
-  const blob = Buffer.concat([keyTypeLen, Buffer.from(keyTypeStr), pubKeyLen, pubBytes])
-  const pubKeyStr = `ssh-ed25519 ${blob.toString('base64')}`
-
-  writeFileSync(`${resolved}.pub`, `${pubKeyStr}\n`, { mode: 0o644 })
-
-  return pubKeyStr
 }
 
 async function pollForEnrollment(
@@ -84,7 +25,7 @@ async function pollForEnrollment(
   agentEmail: string,
   keyPath: string,
 ): Promise<{ token: string, expiresIn: number }> {
-  const resolvedKey = resolvePath(keyPath)
+  const resolvedKey = resolveKeyPath(keyPath)
   const keyContent = readFileSync(resolvedKey, 'utf-8')
   const privateKey = loadEd25519PrivateKey(keyContent)
 
@@ -164,7 +105,7 @@ export const enrollCommand = defineCommand({
       || DEFAULT_KEY_PATH
 
     // 2. Handle key
-    const resolvedKey = resolvePath(keyPath)
+    const resolvedKey = resolveKeyPath(keyPath)
     let publicKey: string
 
     if (existsSync(resolvedKey)) {
