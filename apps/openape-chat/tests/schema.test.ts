@@ -1,0 +1,89 @@
+import { createClient } from '@libsql/client'
+import { eq, sql } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/libsql'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { memberships, messages, reactions, rooms } from '../server/database/schema'
+
+// Smoke test for the chat DB schema: spin up an in-memory SQLite, run the
+// same CREATE TABLE statements the production startup plugin runs, and
+// exercise insert/select on each table to catch typos in the schema or the
+// migration script. This file is intentionally low-level — route-handler
+// behaviour gets covered by integration tests once the WS layer lands.
+
+let db: ReturnType<typeof drizzle<{ rooms: typeof rooms, memberships: typeof memberships, messages: typeof messages, reactions: typeof reactions }>>
+
+beforeEach(async () => {
+  const client = createClient({ url: ':memory:' })
+  db = drizzle(client, { schema: { rooms, memberships, messages, reactions } })
+
+  await db.run(sql`CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL)`)
+  await db.run(sql`CREATE TABLE memberships (room_id TEXT NOT NULL, user_email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL, PRIMARY KEY (room_id, user_email))`)
+  await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER)`)
+  await db.run(sql`CREATE TABLE reactions (message_id TEXT NOT NULL, user_email TEXT NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (message_id, user_email, emoji))`)
+})
+
+afterEach(() => {
+  // libsql client doesn't expose close() but :memory: dies with the process anyway.
+})
+
+describe('chat schema', () => {
+  it('inserts and reads a channel room', async () => {
+    await db.insert(rooms).values({
+      id: 'r1', name: 'team-alpha', kind: 'channel', createdByEmail: 'patrick@hofmann.eco', createdAt: 1,
+    })
+    const got = await db.select().from(rooms).where(eq(rooms.id, 'r1')).get()
+    expect(got).toMatchObject({ id: 'r1', name: 'team-alpha', kind: 'channel' })
+  })
+
+  it('enforces composite PK on memberships', async () => {
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'admin', joinedAt: 1 })
+    await expect(
+      db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'member', joinedAt: 2 }),
+    ).rejects.toThrow()
+  })
+
+  it('stores agent-typed messages with reactions', async () => {
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(messages).values({
+      id: 'm1', roomId: 'r1', senderEmail: 'agent-a@id.openape.ai', senderAct: 'agent', body: 'hello', createdAt: 10,
+    })
+    await db.insert(reactions).values({
+      messageId: 'm1', userEmail: 'p@x', emoji: '👍', createdAt: 11,
+    })
+
+    const msg = await db.select().from(messages).where(eq(messages.id, 'm1')).get()
+    expect(msg?.senderAct).toBe('agent')
+    const rs = await db.select().from(reactions).where(eq(reactions.messageId, 'm1'))
+    expect(rs).toHaveLength(1)
+    expect(rs[0]?.emoji).toBe('👍')
+  })
+
+  it('allows multiple emojis from the same user but rejects duplicates', async () => {
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(messages).values({ id: 'm1', roomId: 'r1', senderEmail: 'p@x', senderAct: 'human', body: 'x', createdAt: 1 })
+    await db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '👍', createdAt: 1 })
+    await db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '🔥', createdAt: 1 })
+    await expect(
+      db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '👍', createdAt: 2 }),
+    ).rejects.toThrow()
+  })
+
+  it('lists memberships joined to rooms (the GET /api/rooms shape)', async () => {
+    const now = 1
+    await db.insert(rooms).values({ id: 'r1', name: 'alpha', kind: 'channel', createdByEmail: 'p@x', createdAt: now })
+    await db.insert(rooms).values({ id: 'r2', name: 'beta', kind: 'channel', createdByEmail: 'q@x', createdAt: now })
+    await db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'admin', joinedAt: now })
+    await db.insert(memberships).values({ roomId: 'r2', userEmail: 'p@x', role: 'member', joinedAt: now })
+    await db.insert(memberships).values({ roomId: 'r2', userEmail: 'q@x', role: 'admin', joinedAt: now })
+
+    const result = await db
+      .select({ id: rooms.id, name: rooms.name, role: memberships.role })
+      .from(memberships)
+      .innerJoin(rooms, eq(memberships.roomId, rooms.id))
+      .where(eq(memberships.userEmail, 'p@x'))
+
+    expect(result).toHaveLength(2)
+    expect(result.map(r => r.id).sort()).toEqual(['r1', 'r2'])
+  })
+})
