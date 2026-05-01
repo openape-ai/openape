@@ -68,6 +68,10 @@ async function handleLogout() {
             Abmelden
           </UButton>
         </div>
+
+        <ClientOnly>
+          <EnableNotifications />
+        </ClientOnly>
       </div>
     </UCard>
 
