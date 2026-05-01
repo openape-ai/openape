@@ -31,8 +31,10 @@ type Listener = (frame: ChatFrame) => void
 interface UseChatHandle {
   connected: ReturnType<typeof ref<boolean>>
   on: (fn: Listener) => () => void
-  // Cookie-session callers don't need to pass a token; agent/plugin callers do.
-  connect: (opts?: { token?: string }) => void
+  // Cookie-session callers don't need to pass a token — connect() mints one
+  // via /api/ws-token. Agent/plugin callers can pass their JWKS-signed
+  // bearer directly to skip the round-trip.
+  connect: (opts?: { token?: string }) => Promise<void>
   disconnect: () => void
 }
 
@@ -108,9 +110,23 @@ export function useChat(): UseChatHandle {
     return () => listeners.delete(fn)
   }
 
-  function connect(opts?: { token?: string }) {
+  async function connect(opts?: { token?: string }) {
     manualDisconnect = false
-    open(opts?.token)
+    let token = opts?.token
+    // Cookie-session callers (the Web UI) need a short-lived WS token —
+    // browsers can't put Authorization on the WS upgrade. The endpoint is
+    // cookie-authenticated, so any signed-in user can mint one.
+    if (!token) {
+      try {
+        const res = await $fetch<{ token: string }>('/api/ws-token')
+        token = res.token
+      }
+      catch {
+        // Couldn't mint a token (e.g. session expired) — let the WS open
+        // anyway and rely on the server-side 401 to surface.
+      }
+    }
+    open(token)
   }
 
   function disconnect() {
