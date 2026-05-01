@@ -8,6 +8,33 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   colorMode: { preference: 'dark' },
 
+  // Browser tab title + favicon. The favicon mirrors id.openape.ai's
+  // pattern (single emoji in a 100×100 SVG) — clean at every zoom level
+  // and indistinguishable from a hand-drawn raster on retina displays.
+  // Per-page <Title>…</Title> overrides this via useHead/Head; everything
+  // else inherits the titleTemplate so e.g. /rooms/<name> reads
+  // "alpha — OpenApe Chat".
+  app: {
+    head: {
+      title: 'OpenApe Chat',
+      // %s substitutes the per-page useHead title; if a page omits one,
+      // the standalone `title` above is used and the template is skipped.
+      titleTemplate: '%s — OpenApe Chat',
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/icon-192.png', sizes: '192x192' },
+        { rel: 'apple-touch-icon', href: '/icon-512.png', sizes: '512x512' },
+      ],
+      meta: [
+        { name: 'theme-color', content: '#18181b' },
+        { name: 'description', content: 'Team rooms and DMs for humans and agents.' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'OpenApe Chat' },
+      ],
+    },
+  },
+
   openapeSp: {
     clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'chat.openape.ai',
     spName: process.env.NUXT_OPENAPE_SP_NAME || 'OpenApe Chat',
