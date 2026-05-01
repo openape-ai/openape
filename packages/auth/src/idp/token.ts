@@ -24,7 +24,7 @@ export interface TokenExchangeResult {
 }
 
 export interface UserClaimsResolver {
-  (userId: string, scope?: string): Promise<{ email?: string, name?: string }>
+  (userId: string, scope?: string): Promise<{ email?: string, name?: string, approver?: string }>
 }
 
 /**
@@ -69,7 +69,7 @@ export async function handleTokenExchange(
   await codeStore.delete(params.code)
 
   // Resolve user claims based on scope
-  let extraClaims: { email?: string, name?: string } = {}
+  let extraClaims: { email?: string, name?: string, approver?: string } = {}
   if (resolveUserClaims) {
     extraClaims = await resolveUserClaims(codeEntry.userId, codeEntry.scope)
   }
@@ -84,6 +84,7 @@ export async function handleTokenExchange(
       delegate: codeEntry.delegate,
       email: extraClaims.email,
       name: extraClaims.name,
+      approver: extraClaims.approver,
       authorization_details: codeEntry.authorizationDetails,
       delegation_act: codeEntry.delegationAct,
       delegation_grant: codeEntry.delegationGrant,
@@ -123,6 +124,13 @@ export interface AssertionClaimsInput {
   delegate?: DDISADelegateClaim
   email?: string
   name?: string
+  /**
+   * Email of the user who reviews this user's pending grants and previews.
+   * Surfaced as a claim so SPs (preview.openape.ai, future tools) can route
+   * approvals/notifications without a server-to-server callback to the IdP.
+   * Empty/undefined means the user has no separate approver.
+   */
+  approver?: string
   authorization_details?: OpenApeAuthorizationDetail[]
   /** RFC 8693 delegation: the actual actor */
   delegation_act?: DelegationActClaim
@@ -141,7 +149,7 @@ export async function issueAssertion(
   const key = await keyStore.getSigningKey()
   const now = Math.floor(Date.now() / 1000)
 
-  const payload: DDISAAssertionClaims & { email?: string, name?: string, authorization_details?: OpenApeAuthorizationDetail[] } = {
+  const payload: DDISAAssertionClaims & { email?: string, name?: string, approver?: string, authorization_details?: OpenApeAuthorizationDetail[] } = {
     iss: issuer,
     sub: claims.sub,
     aud: claims.aud,
@@ -166,6 +174,10 @@ export async function issueAssertion(
 
   if (claims.name) {
     payload.name = claims.name
+  }
+
+  if (claims.approver) {
+    payload.approver = claims.approver
   }
 
   if (claims.authorization_details?.length) {
