@@ -19,7 +19,10 @@ interface Reaction {
 }
 
 interface ChatFrame {
-  type: 'message' | 'reaction' | 'reaction-removed' | 'edit' | 'hello' | 'error'
+  type:
+    | 'message' | 'reaction' | 'reaction-removed' | 'edit'
+    | 'membership-added' | 'membership-changed' | 'membership-removed'
+    | 'hello' | 'error'
   room_id?: string
   payload?: Message | Reaction | { messageId: string, userEmail: string, emoji: string } | Record<string, unknown>
   email?: string
