@@ -4,6 +4,7 @@ import { useDb } from '../../../database/drizzle'
 import { messages, reactions } from '../../../database/schema'
 import { resolveCaller } from '../../../utils/auth'
 import { assertMember } from '../../../utils/membership'
+import { broadcastToRoom } from '../../../utils/realtime'
 
 const bodySchema = z.object({
   emoji: z.string().trim().min(1).max(32),
@@ -33,5 +34,6 @@ export default defineEventHandler(async (event) => {
     createdAt: Math.floor(Date.now() / 1000),
   }
   await db.insert(reactions).values(reaction).onConflictDoNothing()
+  await broadcastToRoom(target.roomId, { type: 'reaction', room_id: target.roomId, payload: reaction })
   return reaction
 })

@@ -4,6 +4,7 @@ import { useDb } from '../../../database/drizzle'
 import { messages } from '../../../database/schema'
 import { resolveCaller } from '../../../utils/auth'
 import { assertMember } from '../../../utils/membership'
+import { broadcastToRoom } from '../../../utils/realtime'
 
 const bodySchema = z.object({
   body: z.string().trim().min(1).max(10_000),
@@ -36,7 +37,6 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   await db.insert(messages).values(message)
 
-  // WS broadcast hook: PR 2 will publish this message via the realtime
-  // dispatcher. For now the REST round-trip is the only delivery path.
+  await broadcastToRoom(id, { type: 'message', room_id: id, payload: message })
   return message
 })
