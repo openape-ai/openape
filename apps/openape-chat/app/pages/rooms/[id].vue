@@ -41,6 +41,7 @@ const loading = ref(true)
 const scrollEl = ref<HTMLElement>()
 const roomInfo = ref<RoomInfo | null>(null)
 const roomError = ref<string | null>(null)
+const membersOpen = ref(false)
 
 async function loadRoomInfo() {
   roomError.value = null
@@ -142,6 +143,23 @@ onMounted(async () => {
       const p = frame.payload as { messageId: string, userEmail: string, emoji: string }
       removeReactionLocal(p.messageId, p.userEmail, p.emoji)
     }
+    else if (frame.type === 'membership-removed') {
+      const p = frame.payload as { roomId: string, userEmail: string }
+      // If I'm the one being removed, kick myself out of the room view.
+      // The next loadRoomInfo would 404 anyway; this just makes the
+      // transition immediate instead of waiting for the next interaction.
+      if (p.userEmail === user.value?.sub) {
+        navigateTo('/')
+      }
+    }
+    else if (frame.type === 'membership-changed') {
+      const p = frame.payload as { roomId: string, userEmail: string, role: 'member' | 'admin' }
+      // Refresh local role so the admin UI flips when someone promotes
+      // or demotes me without requiring a page reload.
+      if (p.userEmail === user.value?.sub && roomInfo.value) {
+        roomInfo.value = { ...roomInfo.value, role: p.role }
+      }
+    }
   })
 })
 
@@ -206,6 +224,15 @@ function reactionsFor(messageId: string) {
       <h1 class="font-semibold flex-1 truncate">
         {{ roomInfo?.name ?? roomId }}
       </h1>
+      <UButton
+        v-if="roomInfo"
+        :icon="roomInfo.role === 'admin' ? 'i-lucide-settings' : 'i-lucide-users'"
+        size="sm"
+        color="neutral"
+        variant="ghost"
+        :aria-label="roomInfo.role === 'admin' ? 'Manage members' : 'View members'"
+        @click="membersOpen = true"
+      />
       <span class="text-xs px-2 py-0.5 rounded-full" :class="chat.connected.value ? 'text-emerald-400' : 'text-zinc-500'">
         {{ chat.connected.value ? '● live' : '○ offline' }}
       </span>
@@ -242,5 +269,13 @@ function reactionsFor(messageId: string) {
     </main>
 
     <SendBox v-if="roomInfo" @send="send" />
+
+    <MemberManager
+      v-if="roomInfo"
+      v-model:open="membersOpen"
+      :room-id="roomId"
+      :my-email="user?.sub"
+      :my-role="roomInfo.role"
+    />
   </div>
 </template>

@@ -39,6 +39,7 @@ export function peerCount(): number {
 
 export interface ChatFrame {
   type: 'message' | 'reaction' | 'reaction-removed' | 'edit'
+    | 'membership-added' | 'membership-changed' | 'membership-removed'
   room_id: string
   payload: Record<string, unknown>
 }
