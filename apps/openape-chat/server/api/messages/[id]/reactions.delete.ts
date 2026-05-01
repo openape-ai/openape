@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../../../database/drizzle'
-import { reactions } from '../../../database/schema'
+import { messages, reactions } from '../../../database/schema'
 import { resolveCaller } from '../../../utils/auth'
+import { broadcastToRoom } from '../../../utils/realtime'
 
 const querySchema = z.object({
   emoji: z.string().trim().min(1).max(32),
@@ -19,6 +20,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = useDb()
+  const target = await db.select().from(messages).where(eq(messages.id, id)).get()
   await db
     .delete(reactions)
     .where(and(
@@ -26,6 +28,14 @@ export default defineEventHandler(async (event) => {
       eq(reactions.userEmail, caller.email),
       eq(reactions.emoji, parsed.data.emoji),
     ))
+
+  if (target) {
+    await broadcastToRoom(target.roomId, {
+      type: 'reaction-removed',
+      room_id: target.roomId,
+      payload: { messageId: id, userEmail: caller.email, emoji: parsed.data.emoji },
+    })
+  }
 
   return { ok: true }
 })

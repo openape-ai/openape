@@ -13,7 +13,6 @@ export interface Caller {
 
 interface DDISAClaims {
   sub?: string
-  email?: string
   act?: 'human' | 'agent' | string
 }
 
@@ -47,11 +46,11 @@ export async function resolveCaller(event: H3Event): Promise<Caller> {
 
   const session = await getSpSession(event)
   const claims = (session.data as { claims?: DDISAClaims })?.claims
-  if (!claims?.email) {
+  if (!claims?.sub) {
     throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
   }
   return {
-    email: claims.email,
+    email: claims.sub,
     act: claims.act === 'agent' ? 'agent' : 'human',
     source: 'cookie',
   }
@@ -83,9 +82,9 @@ function extractBearer(event: H3Event): string | null {
 async function verifyBearer(token: string): Promise<Caller> {
   try {
     const { payload } = await verifyJWT<DDISAClaims>(token, getJwks())
-    const email = payload.email || payload.sub
+    const email = payload.sub
     if (!email) {
-      throw createError({ statusCode: 401, statusMessage: 'Token missing email/sub' })
+      throw createError({ statusCode: 401, statusMessage: 'Token missing sub' })
     }
     return {
       email,
