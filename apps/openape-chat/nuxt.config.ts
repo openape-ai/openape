@@ -16,10 +16,13 @@ export default defineNuxtConfig({
   // "alpha — OpenApe Chat".
   app: {
     head: {
-      title: 'OpenApe Chat',
-      // %s substitutes the per-page useHead title; if a page omits one,
-      // the standalone `title` above is used and the template is skipped.
-      titleTemplate: '%s — OpenApe Chat',
+      // Function form of titleTemplate: when a page sets a useHead title
+      // we render "<title> — OpenApe Chat", otherwise just "OpenApe Chat".
+      // Avoids the doubled "OpenApe Chat — OpenApe Chat" you get if you
+      // combine a static `title` with `'%s — OpenApe Chat'`. The cast is
+      // because @nuxt/schema's type narrows to string, while unhead
+      // supports the function at runtime.
+      titleTemplate: ((title?: string) => title ? `${title} — OpenApe Chat` : 'OpenApe Chat') as unknown as string,
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'apple-touch-icon', href: '/icon-192.png', sizes: '192x192' },
