@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const { user, fetchUser } = useOpenApeAuth()
 
+useHead({ title: 'Sign in' })
+
 onMounted(async () => {
   await fetchUser()
   if (user.value) navigateTo('/')
