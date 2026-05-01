@@ -4,6 +4,7 @@ import { useDb } from '../../../database/drizzle'
 import { messages } from '../../../database/schema'
 import { resolveCaller } from '../../../utils/auth'
 import { assertMember } from '../../../utils/membership'
+import { notifyRoomMembers } from '../../../utils/push'
 import { broadcastToRoom } from '../../../utils/realtime'
 
 const bodySchema = z.object({
@@ -38,5 +39,16 @@ export default defineEventHandler(async (event) => {
   await db.insert(messages).values(message)
 
   await broadcastToRoom(id, { type: 'message', room_id: id, payload: message })
+
+  // Web-Push fan-out for offline / installed clients. Best-effort and async
+  // — we don't block the REST response on push delivery, and the helper
+  // silently no-ops if VAPID isn't configured (dev environments).
+  void notifyRoomMembers(id, caller.email, {
+    title: caller.email,
+    body: parsed.data.body.length > 140 ? `${parsed.data.body.slice(0, 140)}…` : parsed.data.body,
+    room_id: id,
+    sender: caller.email,
+  })
+
   return message
 })
