@@ -44,7 +44,12 @@ export default defineNuxtConfig({
     // available — we use precacheAndRoute + registerRoute for caching, and
     // hand-write the push event listeners.
     strategies: 'injectManifest',
-    srcDir: 'public',
+    // SW source lives at the Nuxt project root (apps/openape-chat/sw.ts),
+    // not under app/ or public/. vite-pwa joins srcDir with Nuxt's own
+    // srcDir (default 'app/') so we go up one level to escape the
+    // app-source treesitter and avoid Rollup misreading the entry as
+    // app/public/sw.ts during the build.
+    srcDir: '..',
     filename: 'sw.ts',
     registerType: 'autoUpdate',
     manifest: {
