@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 
@@ -57,13 +57,31 @@ function getEffectiveDuration(grantId) {
 }
 const pendingGrants = computed(() => activeAndPending.value.filter(g => g.status === 'pending'))
 const activeGrants = computed(() => activeAndPending.value.filter(g => g.status === 'approved'))
+// Refetch when the PWA returns to the foreground (push tap focuses an
+// already-open window without remounting; without this the list would
+// keep showing stale state from before the new grant arrived).
+function onVisibilityChange() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible' && user.value) {
+    loadGrants()
+  }
+}
+
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
     await navigateTo('/login')
     return
   }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
   await loadGrants()
+})
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
 })
 async function loadGrants() {
   loading.value = true
