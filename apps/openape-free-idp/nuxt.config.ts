@@ -4,9 +4,25 @@ const localIssuer = process.env.OPENAPE_ISSUER || 'https://id.openape.ai'
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
   nitro: { experimental: { asyncContext: true } },
-  modules: ['@nuxt/ui', '@openape/nuxt-auth-idp', '@sentry/nuxt/module'],
+  modules: ['@nuxt/ui', '@openape/nuxt-auth-idp', '@sentry/nuxt/module', '@vite-pwa/nuxt'],
   css: ['~/assets/css/main.css'],
   colorMode: { preference: 'dark' },
+
+  app: {
+    head: {
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/favicon.svg' },
+      ],
+      meta: [
+        { name: 'theme-color', content: '#18181b' },
+        { name: 'description', content: 'OpenApe Identity Provider — passkeys, agents, grants.' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'OpenApe IdP' },
+      ],
+    },
+  },
 
   openapeIdp: {
     sessionSecret: process.env.OPENAPE_SESSION_SECRET || '',
@@ -27,8 +43,52 @@ export default defineNuxtConfig({
     resendFrom: 'auth@openape.ai',
     tursoUrl: '',
     tursoAuthToken: '',
+    // VAPID keypair for grant-approval push notifications. Generate once
+    // with `scripts/generate-idp-vapid.sh` and persist to env. The public
+    // key is sent to clients (PushManager.subscribe needs it); private key
+    // and subject (a mailto: that push services can use to contact us if
+    // we misbehave) are server-side only. Defaults to empty so dev still
+    // boots without push — the helper silently no-ops in that case.
+    vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
       maxAgentsPerUser: 10,
+      vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || '',
+    },
+  },
+
+  // PWA + custom service worker. injectManifest mode lets us own sw.ts so
+  // we can register `push` and `notificationclick` handlers (vite-pwa's
+  // generateSW mode can't expose those). srcDir: '..' resolves to the
+  // Nuxt project root (apps/openape-free-idp/sw.ts) — see the chat app's
+  // PR #203 for why the file lives outside app/ rather than under it.
+  pwa: {
+    strategies: 'injectManifest',
+    srcDir: '..',
+    filename: 'sw.ts',
+    registerType: 'autoUpdate',
+    manifest: {
+      name: 'OpenApe IdP',
+      short_name: 'OpenApe IdP',
+      description: 'Passkeys, agents, and grant approval — for the open web.',
+      theme_color: '#18181b',
+      background_color: '#18181b',
+      display: 'standalone',
+      start_url: '/',
+      scope: '/',
+      icons: [
+        { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+      ],
+    },
+    injectManifest: {
+      globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+    },
+    client: {
+      installPrompt: true,
+      periodicSyncForUpdates: 60 * 60,
+    },
+    devOptions: {
+      enabled: false, // SW + HMR is a debugging nightmare in dev
     },
   },
 

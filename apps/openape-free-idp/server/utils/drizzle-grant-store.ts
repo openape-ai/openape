@@ -3,6 +3,7 @@ import type { GrantListParams, GrantStore } from '@openape/grants'
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { grants } from '../database/schema'
+import { notifyApproverOfPendingGrant } from './push'
 
 interface ExtendedGrantStore extends GrantStore {
   findAll: () => Promise<OpenApeGrant[]>
@@ -61,6 +62,8 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
   return {
     async save(grant) {
       const row = grantToRow(grant)
+      const isInsert = !(await db.select({ id: grants.id }).from(grants).where(eq(grants.id, grant.id)).get())
+
       await db.insert(grants).values(row).onConflictDoUpdate({
         target: grants.id,
         set: {
@@ -80,6 +83,17 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
           autoApprovalKind: row.autoApprovalKind,
         },
       })
+
+      // Push the approver — only on a fresh insert (not on every save which
+      // is also called for status updates), and only when the grant
+      // actually needs human action. Auto-approved grants (YOLO / standing-
+      // grant match) carry an autoApprovalKind and don't pollute push.
+      // Fire-and-forget: a failing push must never break grant creation.
+      if (isInsert && grant.status === 'pending' && !grant.auto_approval_kind) {
+        void notifyApproverOfPendingGrant(grant).catch((err: unknown) =>
+          console.warn('[push] approver notification failed:', err),
+        )
+      }
     },
 
     async findById(id) {

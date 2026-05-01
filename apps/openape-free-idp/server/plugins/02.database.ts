@@ -137,6 +137,19 @@ export default defineNitroPlugin(async () => {
     // /api/grants and /api/standing-grants call 500s on existing prod DBs.
     try { await db.run(sql`ALTER TABLE grants ADD COLUMN decided_by_standing_grant TEXT`) }
     catch { /* already present */ }
+
+    // Web Push subscriptions for grant-approval notifications. Endpoint is
+    // the browser-push-service URL (stable per browser install) and serves
+    // as the natural primary key; the helper upserts on it so re-subscribing
+    // the same browser doesn't create duplicate rows.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user_email ON push_subscriptions(user_email)`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
