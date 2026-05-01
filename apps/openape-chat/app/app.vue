@@ -1,7 +1,9 @@
 <template>
   <UApp>
     <NuxtPage />
-    <InstallBanner />
-    <UpdateAvailable />
+    <ClientOnly>
+      <InstallBanner />
+      <UpdateAvailable />
+    </ClientOnly>
   </UApp>
 </template>

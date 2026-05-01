@@ -89,7 +89,9 @@ async function logout() {
     </header>
 
     <main class="flex-1 overflow-y-auto pb-24 md:pb-4">
-      <EnableNotifications />
+      <ClientOnly>
+        <EnableNotifications />
+      </ClientOnly>
       <p v-if="!rooms?.length" class="p-8 text-center text-zinc-500 text-sm">
         No rooms yet. Create one to start chatting.
       </p>
