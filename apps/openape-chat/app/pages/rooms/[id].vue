@@ -32,8 +32,7 @@ interface RoomInfo {
   kind: 'channel' | 'dm'
   createdByEmail: string
   createdAt: number
-  isMember: boolean
-  role: 'member' | 'admin' | null
+  role: 'member' | 'admin'
 }
 
 const messages = ref<Message[]>([])
@@ -42,7 +41,6 @@ const loading = ref(true)
 const scrollEl = ref<HTMLElement>()
 const roomInfo = ref<RoomInfo | null>(null)
 const roomError = ref<string | null>(null)
-const joining = ref(false)
 
 async function loadRoomInfo() {
   roomError.value = null
@@ -52,10 +50,12 @@ async function loadRoomInfo() {
   catch (err) {
     const status = (err as { statusCode?: number })?.statusCode
     if (status === 404) {
-      roomError.value = 'This room does not exist.'
+      // The server returns 404 both for "room doesn't exist" and "you're
+      // not a member" — this is intentional, non-members should not be
+      // able to discover that a room exists at all.
+      roomError.value = 'Raum für diesen User nicht verfügbar.'
     }
     else if (status === 401) {
-      // Session likely expired — bounce to login.
       navigateTo('/login')
     }
     else {
@@ -66,7 +66,7 @@ async function loadRoomInfo() {
 }
 
 async function loadMessages() {
-  if (!roomInfo.value?.isMember) {
+  if (!roomInfo.value) {
     messages.value = []
     loading.value = false
     return
@@ -86,22 +86,6 @@ async function loadMessages() {
 async function loadInitial() {
   await loadRoomInfo()
   await loadMessages()
-}
-
-async function joinRoom() {
-  if (joining.value) return
-  joining.value = true
-  try {
-    await $fetch(`/api/rooms/${roomId.value}/join`, { method: 'POST' })
-    await loadRoomInfo()
-    await loadMessages()
-  }
-  catch (err) {
-    roomError.value = err instanceof Error ? err.message : 'Could not join room.'
-  }
-  finally {
-    joining.value = false
-  }
 }
 
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
@@ -238,37 +222,6 @@ function reactionsFor(messageId: string) {
         </UButton>
       </div>
 
-      <div v-else-if="roomInfo && !roomInfo.isMember" class="max-w-sm mx-auto py-12 text-center space-y-4">
-        <UIcon
-          :name="roomInfo.kind === 'dm' ? 'i-lucide-lock' : 'i-lucide-hash'"
-          class="size-10 text-zinc-600 mx-auto"
-        />
-        <div class="space-y-1">
-          <h2 class="text-lg font-semibold">
-            {{ roomInfo.name }}
-          </h2>
-          <p class="text-sm text-zinc-400">
-            <template v-if="roomInfo.kind === 'channel'">
-              You're not a member of this channel yet.
-            </template>
-            <template v-else>
-              This is a direct conversation. Ask {{ roomInfo.createdByEmail }} to add you.
-            </template>
-          </p>
-        </div>
-        <UButton
-          v-if="roomInfo.kind === 'channel'"
-          color="primary"
-          :loading="joining"
-          @click="joinRoom"
-        >
-          Join channel
-        </UButton>
-        <UButton v-else to="/" color="neutral" variant="soft">
-          Back to rooms
-        </UButton>
-      </div>
-
       <template v-else>
         <p v-if="loading" class="text-center text-sm text-zinc-500 py-8">
           Loading…
@@ -288,6 +241,6 @@ function reactionsFor(messageId: string) {
       </template>
     </main>
 
-    <SendBox v-if="roomInfo?.isMember" @send="send" />
+    <SendBox v-if="roomInfo" @send="send" />
   </div>
 </template>
