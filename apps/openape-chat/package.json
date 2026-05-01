@@ -18,6 +18,7 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
+    "@vite-pwa/nuxt": "^1.0.4",
     "drizzle-orm": "^0.44.7",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1",

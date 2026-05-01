@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb } from '../../database/drizzle'
 import { messages } from '../../database/schema'
 import { resolveCaller } from '../../utils/auth'
+import { broadcastToRoom } from '../../utils/realtime'
 
 const bodySchema = z.object({
   body: z.string().trim().min(1).max(10_000),
@@ -33,5 +34,7 @@ export default defineEventHandler(async (event) => {
     .set({ body: parsed.data.body, editedAt })
     .where(eq(messages.id, id))
 
-  return { ...existing, body: parsed.data.body, editedAt }
+  const updated = { ...existing, body: parsed.data.body, editedAt }
+  await broadcastToRoom(existing.roomId, { type: 'edit', room_id: existing.roomId, payload: updated })
+  return updated
 })
