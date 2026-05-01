@@ -56,8 +56,15 @@ export default defineNuxtConfig({
       display: 'standalone',
       start_url: '/',
       scope: '/',
+      // Raster PNGs first so older Android launchers and legacy Chromebook
+      // installs render the home-screen icon at full quality. Modern browsers
+      // (Chrome/Firefox/Safari) prefer the SVG. Regenerate with
+      // scripts/generate-chat-icons.sh if the source SVG changes.
       icons: [
-        { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
       ],
     },
     injectManifest: {
