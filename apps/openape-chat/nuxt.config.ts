@@ -16,13 +16,9 @@ export default defineNuxtConfig({
   // "alpha — OpenApe Chat".
   app: {
     head: {
-      // Function form of titleTemplate: when a page sets a useHead title
-      // we render "<title> — OpenApe Chat", otherwise just "OpenApe Chat".
-      // Avoids the doubled "OpenApe Chat — OpenApe Chat" you get if you
-      // combine a static `title` with `'%s — OpenApe Chat'`. The cast is
-      // because @nuxt/schema's type narrows to string, while unhead
-      // supports the function at runtime.
-      titleTemplate: ((title?: string) => title ? `${title} — OpenApe Chat` : 'OpenApe Chat') as unknown as string,
+      // titleTemplate lives in app/plugins/head.ts as a function — a
+      // function placed here is serialized at build time and silently
+      // dropped, leaving pages without their " — OpenApe Chat" suffix.
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'apple-touch-icon', href: '/icon-192.png', sizes: '192x192' },
