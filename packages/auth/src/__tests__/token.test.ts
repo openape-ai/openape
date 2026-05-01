@@ -499,6 +499,34 @@ describe('issueAssertion', () => {
     expect(payload.name).toBe('Alice')
   })
 
+  it('includes approver claim when provided', async () => {
+    const keyStore = new InMemoryKeyStore()
+
+    const assertion = await issueAssertion(
+      { sub: 'agent@example.com', aud: 'sp.example.com', nonce: 'n', approver: 'patrick@hofmann.eco' },
+      keyStore,
+      'https://idp.example.com',
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(assertion, key.publicKey)
+    expect(payload.approver).toBe('patrick@hofmann.eco')
+  })
+
+  it('omits approver claim when not provided', async () => {
+    const keyStore = new InMemoryKeyStore()
+
+    const assertion = await issueAssertion(
+      { sub: 'alice@example.com', aud: 'sp.example.com', nonce: 'n' },
+      keyStore,
+      'https://idp.example.com',
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(assertion, key.publicKey)
+    expect(payload.approver).toBeUndefined()
+  })
+
   it('includes kid in JWT header', async () => {
     const keyStore = new InMemoryKeyStore()
 
