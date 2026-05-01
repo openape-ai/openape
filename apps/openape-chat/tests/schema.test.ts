@@ -2,7 +2,7 @@ import { createClient } from '@libsql/client'
 import { eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { memberships, messages, reactions, rooms } from '../server/database/schema'
+import { memberships, messages, pushSubscriptions, reactions, rooms } from '../server/database/schema'
 
 // Smoke test for the chat DB schema: spin up an in-memory SQLite, run the
 // same CREATE TABLE statements the production startup plugin runs, and
@@ -10,16 +10,17 @@ import { memberships, messages, reactions, rooms } from '../server/database/sche
 // migration script. This file is intentionally low-level — route-handler
 // behaviour gets covered by integration tests once the WS layer lands.
 
-let db: ReturnType<typeof drizzle<{ rooms: typeof rooms, memberships: typeof memberships, messages: typeof messages, reactions: typeof reactions }>>
+let db: ReturnType<typeof drizzle<{ rooms: typeof rooms, memberships: typeof memberships, messages: typeof messages, reactions: typeof reactions, pushSubscriptions: typeof pushSubscriptions }>>
 
 beforeEach(async () => {
   const client = createClient({ url: ':memory:' })
-  db = drizzle(client, { schema: { rooms, memberships, messages, reactions } })
+  db = drizzle(client, { schema: { rooms, memberships, messages, reactions, pushSubscriptions } })
 
   await db.run(sql`CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL)`)
   await db.run(sql`CREATE TABLE memberships (room_id TEXT NOT NULL, user_email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL, PRIMARY KEY (room_id, user_email))`)
   await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER)`)
   await db.run(sql`CREATE TABLE reactions (message_id TEXT NOT NULL, user_email TEXT NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (message_id, user_email, emoji))`)
+  await db.run(sql`CREATE TABLE push_subscriptions (endpoint TEXT PRIMARY KEY, user_email TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)`)
 })
 
 afterEach(() => {
@@ -67,6 +68,20 @@ describe('chat schema', () => {
     await expect(
       db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '👍', createdAt: 2 }),
     ).rejects.toThrow()
+  })
+
+  it('rejects duplicate push subscription endpoints (PK enforced)', async () => {
+    const sub = {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
+      userEmail: 'p@x',
+      p256dh: 'BNc...',
+      auth: 'aaa',
+      createdAt: 1,
+    }
+    await db.insert(pushSubscriptions).values(sub)
+    await expect(db.insert(pushSubscriptions).values({ ...sub, userEmail: 'q@x' })).rejects.toThrow()
+    const got = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, sub.endpoint)).get()
+    expect(got?.userEmail).toBe('p@x')
   })
 
   it('lists memberships joined to rooms (the GET /api/rooms shape)', async () => {
