@@ -43,6 +43,13 @@ const roomInfo = ref<RoomInfo | null>(null)
 const roomError = ref<string | null>(null)
 const membersOpen = ref(false)
 
+// Per-page title — falls back to a generic placeholder while the
+// metadata loads, then updates to the room name. The titleTemplate
+// from nuxt.config appends " — OpenApe Chat".
+useHead({
+  title: () => roomInfo.value?.name ?? 'Room',
+})
+
 async function loadRoomInfo() {
   roomError.value = null
   try {
