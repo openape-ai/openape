@@ -48,6 +48,15 @@ export default defineNitroPlugin(async () => {
       PRIMARY KEY (message_id, user_email, emoji)
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_email)`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)

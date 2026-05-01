@@ -22,10 +22,12 @@
     "drizzle-orm": "^0.44.7",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1",
+    "web-push": "^3.6.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.19.13",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-istanbul": "^2.1.9",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

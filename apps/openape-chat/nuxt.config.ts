@@ -19,8 +19,16 @@ export default defineNuxtConfig({
   runtimeConfig: {
     tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-chat.db',
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
+    // VAPID keypair for Web Push. Generate once with `npx web-push
+    // generate-vapid-keys` and persist to env. The public key is fine to
+    // ship to clients (they include it when subscribing); the private key
+    // and subject (a mailto: that push services can use to contact us if
+    // we misbehave) are server-side only.
+    vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',
+      vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || '',
     },
   },
 
@@ -31,6 +39,13 @@ export default defineNuxtConfig({
   // back to cache when offline. This is the single most important guard
   // against "users stuck on a 6-week-old build" SW horror stories.
   pwa: {
+    // injectManifest lets us own the SW source so we can handle `push` and
+    // `notificationclick` events ourselves. Workbox helpers are still
+    // available — we use precacheAndRoute + registerRoute for caching, and
+    // hand-write the push event listeners.
+    strategies: 'injectManifest',
+    srcDir: 'public',
+    filename: 'sw.ts',
     registerType: 'autoUpdate',
     manifest: {
       name: 'OpenApe Chat',
@@ -41,53 +56,20 @@ export default defineNuxtConfig({
       display: 'standalone',
       start_url: '/',
       scope: '/',
-      // Single SVG icon for now — Patrick can swap in proper PNG raster icons
-      // (192/512 incl. maskable) before the production deploy. SVG works in
-      // Chrome/Safari/Firefox PWA installs as of 2024+.
       icons: [
         { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
       ],
     },
-    workbox: {
+    injectManifest: {
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-      navigateFallback: null, // never serve a cached HTML shell — we want NetworkFirst
-      runtimeCaching: [
-        {
-          urlPattern: /\/api\/.*/i,
-          handler: 'NetworkFirst',
-          options: {
-            cacheName: 'api-cache',
-            expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-            networkTimeoutSeconds: 5,
-          },
-        },
-        {
-          urlPattern: /\/_nuxt\/.*/i,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'nuxt-assets',
-            expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-          },
-        },
-        {
-          urlPattern: ({ request }) => request.destination === 'document',
-          handler: 'NetworkFirst',
-          options: {
-            cacheName: 'html-cache',
-            networkTimeoutSeconds: 3,
-          },
-        },
-      ],
     },
     client: {
       installPrompt: true,
-      // Force the SW to take control on first visit so users see a fresh
-      // build immediately on next reload, not after the second.
       periodicSyncForUpdates: 60 * 60, // check hourly while tab is open
     },
     devOptions: {
-      // Don't run the SW in `pnpm dev` — it makes HMR unreliable and isn't
-      // representative of production behaviour.
+      // Don't run the SW in `pnpm dev` — HMR + SW caching is a debugging
+      // nightmare and not representative of prod behaviour anyway.
       enabled: false,
     },
   },
