@@ -25,7 +25,7 @@ export async function handleRefreshGrant(
   const { newToken, userId } = await refreshStore.consume(refreshToken)
 
   // Resolve user claims (same as in authorization_code flow)
-  let extraClaims: { email?: string, name?: string } = {}
+  let extraClaims: { email?: string, name?: string, approver?: string } = {}
   if (resolveUserClaims) {
     // Use offline_access scope to indicate refresh context
     extraClaims = await resolveUserClaims(userId, 'openid email profile')
@@ -38,6 +38,7 @@ export async function handleRefreshGrant(
       nonce: crypto.randomUUID(),
       email: extraClaims.email,
       name: extraClaims.name,
+      approver: extraClaims.approver,
     },
     keyStore,
     issuer,
