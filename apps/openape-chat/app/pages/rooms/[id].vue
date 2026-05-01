@@ -26,12 +26,51 @@ const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
 if (!user.value && import.meta.client) navigateTo('/login')
 
+interface RoomInfo {
+  id: string
+  name: string
+  kind: 'channel' | 'dm'
+  createdByEmail: string
+  createdAt: number
+  isMember: boolean
+  role: 'member' | 'admin' | null
+}
+
 const messages = ref<Message[]>([])
 const reactions = ref<Map<string, Reaction[]>>(new Map())
 const loading = ref(true)
 const scrollEl = ref<HTMLElement>()
+const roomInfo = ref<RoomInfo | null>(null)
+const roomError = ref<string | null>(null)
+const joining = ref(false)
 
-async function loadInitial() {
+async function loadRoomInfo() {
+  roomError.value = null
+  try {
+    roomInfo.value = await $fetch<RoomInfo>(`/api/rooms/${roomId.value}`)
+  }
+  catch (err) {
+    const status = (err as { statusCode?: number })?.statusCode
+    if (status === 404) {
+      roomError.value = 'This room does not exist.'
+    }
+    else if (status === 401) {
+      // Session likely expired — bounce to login.
+      navigateTo('/login')
+    }
+    else {
+      roomError.value = err instanceof Error ? err.message : 'Could not load room info.'
+    }
+    roomInfo.value = null
+  }
+}
+
+async function loadMessages() {
+  if (!roomInfo.value?.isMember) {
+    messages.value = []
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const rows = await $fetch<Message[]>(`/api/rooms/${roomId.value}/messages?limit=50`)
@@ -41,6 +80,27 @@ async function loadInitial() {
     loading.value = false
     await nextTick()
     scrollToBottom('instant')
+  }
+}
+
+async function loadInitial() {
+  await loadRoomInfo()
+  await loadMessages()
+}
+
+async function joinRoom() {
+  if (joining.value) return
+  joining.value = true
+  try {
+    await $fetch(`/api/rooms/${roomId.value}/join`, { method: 'POST' })
+    await loadRoomInfo()
+    await loadMessages()
+  }
+  catch (err) {
+    roomError.value = err instanceof Error ? err.message : 'Could not join room.'
+  }
+  finally {
+    joining.value = false
   }
 }
 
@@ -71,8 +131,12 @@ const chat = useChat()
 let off: (() => void) | undefined
 
 onMounted(async () => {
-  await loadInitial()
+  // Connect WS first so the live indicator updates regardless of whether
+  // we can read messages. Non-members watching a Join screen still get
+  // a fresh socket — when they join, broadcasts start flowing immediately
+  // without a reconnect dance.
   chat.connect()
+  await loadInitial()
   off = chat.on((frame) => {
     if (frame.room_id !== roomId.value) return
     if (frame.type === 'message') {
@@ -156,7 +220,7 @@ function reactionsFor(messageId: string) {
         aria-label="Back to rooms"
       />
       <h1 class="font-semibold flex-1 truncate">
-        {{ roomId }}
+        {{ roomInfo?.name ?? roomId }}
       </h1>
       <span class="text-xs px-2 py-0.5 rounded-full" :class="chat.connected.value ? 'text-emerald-400' : 'text-zinc-500'">
         {{ chat.connected.value ? '● live' : '○ offline' }}
@@ -164,23 +228,66 @@ function reactionsFor(messageId: string) {
     </header>
 
     <main ref="scrollEl" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-      <p v-if="loading" class="text-center text-sm text-zinc-500 py-8">
-        Loading…
-      </p>
-      <p v-else-if="!messages.length" class="text-center text-sm text-zinc-500 py-8">
-        No messages yet. Be the first.
-      </p>
-      <MessageBubble
-        v-for="m of messages"
-        :key="m.id"
-        :message="m"
-        :reactions="reactionsFor(m.id)"
-        :my-email="user?.sub"
-        @react="emoji => react(m.id, emoji)"
-        @unreact="emoji => unreact(m.id, emoji)"
-      />
+      <div v-if="roomError" class="max-w-sm mx-auto py-12 text-center space-y-3">
+        <UIcon name="i-lucide-circle-alert" class="size-10 text-zinc-600 mx-auto" />
+        <p class="text-sm text-zinc-400">
+          {{ roomError }}
+        </p>
+        <UButton to="/" color="neutral" variant="soft" size="sm">
+          Back to rooms
+        </UButton>
+      </div>
+
+      <div v-else-if="roomInfo && !roomInfo.isMember" class="max-w-sm mx-auto py-12 text-center space-y-4">
+        <UIcon
+          :name="roomInfo.kind === 'dm' ? 'i-lucide-lock' : 'i-lucide-hash'"
+          class="size-10 text-zinc-600 mx-auto"
+        />
+        <div class="space-y-1">
+          <h2 class="text-lg font-semibold">
+            {{ roomInfo.name }}
+          </h2>
+          <p class="text-sm text-zinc-400">
+            <template v-if="roomInfo.kind === 'channel'">
+              You're not a member of this channel yet.
+            </template>
+            <template v-else>
+              This is a direct conversation. Ask {{ roomInfo.createdByEmail }} to add you.
+            </template>
+          </p>
+        </div>
+        <UButton
+          v-if="roomInfo.kind === 'channel'"
+          color="primary"
+          :loading="joining"
+          @click="joinRoom"
+        >
+          Join channel
+        </UButton>
+        <UButton v-else to="/" color="neutral" variant="soft">
+          Back to rooms
+        </UButton>
+      </div>
+
+      <template v-else>
+        <p v-if="loading" class="text-center text-sm text-zinc-500 py-8">
+          Loading…
+        </p>
+        <p v-else-if="!messages.length" class="text-center text-sm text-zinc-500 py-8">
+          No messages yet. Be the first.
+        </p>
+        <MessageBubble
+          v-for="m of messages"
+          :key="m.id"
+          :message="m"
+          :reactions="reactionsFor(m.id)"
+          :my-email="user?.sub"
+          @react="emoji => react(m.id, emoji)"
+          @unreact="emoji => unreact(m.id, emoji)"
+        />
+      </template>
     </main>
 
-    <SendBox @send="send" />
+    <SendBox v-if="roomInfo?.isMember" @send="send" />
   </div>
 </template>
