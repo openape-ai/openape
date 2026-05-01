@@ -206,3 +206,20 @@ export const sshKeys = sqliteTable('ssh_keys', {
   index('idx_ssh_keys_user_email').on(table.userEmail),
   index('idx_ssh_keys_public_key').on(table.publicKey),
 ])
+
+// --- Milestone 7: Web Push for grant approvers ---
+// One row per (user, browser-install) pair. The endpoint URL is the
+// browser's push-service URL — stable per (browser, install) — and is
+// used as the natural primary key. p256dh + auth are the public keys
+// the server uses to encrypt push payloads; without them, web-push
+// can't deliver. Subscriptions are pruned when a 404/410 comes back
+// (browser uninstalled the PWA or revoked permission).
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  userEmail: text('user_email').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_push_subs_user_email').on(table.userEmail),
+])
