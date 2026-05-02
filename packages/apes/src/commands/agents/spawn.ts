@@ -37,6 +37,14 @@ export const spawnAgentCommand = defineCommand({
       type: 'boolean',
       description: 'Skip writing ~/.claude/settings.json + the Bash-rewrite hook',
     },
+    'claude-token': {
+      type: 'string',
+      description: 'Claude Code OAuth token (sk-ant-oat01-…) from `claude setup-token`. Visible to ps — prefer --claude-token-stdin in scripts.',
+    },
+    'claude-token-stdin': {
+      type: 'boolean',
+      description: 'Read the Claude Code OAuth token from stdin (paranoid form of --claude-token).',
+    },
   },
   async run({ args }) {
     const name = args.name as string
@@ -122,6 +130,10 @@ export const spawnAgentCommand = defineCommand({
       })
 
       const includeClaudeHook = !args['no-claude-hook']
+      const claudeOauthToken = await resolveClaudeToken({
+        flag: typeof args['claude-token'] === 'string' ? args['claude-token'] : undefined,
+        fromStdin: !!args['claude-token-stdin'],
+      })
       const script = buildSpawnSetupScript({
         name,
         homeDir,
@@ -131,6 +143,7 @@ export const spawnAgentCommand = defineCommand({
         authJson,
         claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
         hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
+        claudeOauthToken,
       })
       writeFileSync(scriptPath, script, { mode: 0o700 })
 
@@ -153,3 +166,36 @@ export const spawnAgentCommand = defineCommand({
     }
   },
 })
+
+/**
+ * Resolve the Claude Code OAuth token from --claude-token, --claude-token-stdin,
+ * or neither (returns null = agent will need interactive auth on first claude
+ * run). --flag and --stdin together is rejected as ambiguous.
+ *
+ * Validation: Claude tokens start with `sk-ant-oat01-`. We reject anything
+ * else with a clear hint instead of silently writing a useless string.
+ */
+async function resolveClaudeToken(opts: { flag?: string, fromStdin: boolean }): Promise<string | null> {
+  if (opts.flag && opts.fromStdin) {
+    throw new CliError('Pass --claude-token OR --claude-token-stdin, not both.')
+  }
+  let raw: string | null = null
+  if (typeof opts.flag === 'string') {
+    raw = opts.flag.trim()
+  }
+  else if (opts.fromStdin) {
+    const chunks: Buffer[] = []
+    for await (const chunk of process.stdin) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    }
+    raw = Buffer.concat(chunks).toString('utf-8').trim()
+  }
+  if (!raw) return null
+  if (!raw.startsWith('sk-ant-oat01-')) {
+    throw new CliError(
+      `Claude token doesn't look right (expected sk-ant-oat01-…). Run \`claude setup-token\``
+      + ` and paste the resulting token.`,
+    )
+  }
+  return raw
+}

@@ -100,6 +100,7 @@ describe('buildSpawnSetupScript', () => {
       ...baseInput,
       claudeSettingsJson: CLAUDE_SETTINGS_JSON,
       hookScriptSource: '#!/bin/bash\necho hi\n',
+      claudeOauthToken: null,
     })
     expect(script).toContain(`NAME='agent-a'`)
     expect(script).toContain(`HOME_DIR='/Users/agent-a'`)
@@ -117,8 +118,38 @@ describe('buildSpawnSetupScript', () => {
       ...baseInput,
       claudeSettingsJson: null,
       hookScriptSource: null,
+      claudeOauthToken: null,
     })
     expect(script).not.toContain('.claude')
+  })
+
+  it('with claude OAuth token: writes env file + sources from .zshenv and .profile', () => {
+    const token = 'sk-ant-oat01-FAKE_TOKEN_FOR_TESTING'
+    const script = buildSpawnSetupScript({
+      ...baseInput,
+      claudeSettingsJson: null,
+      hookScriptSource: null,
+      claudeOauthToken: token,
+    })
+    expect(script).toContain('mkdir -p "$HOME_DIR/.config/openape"')
+    expect(script).toContain('cat > "$HOME_DIR/.config/openape/claude-token.env"')
+    expect(script).toContain(`export CLAUDE_CODE_OAUTH_TOKEN=${`'${token}'`}`)
+    expect(script).toContain('chmod 600 "$HOME_DIR/.config/openape/claude-token.env"')
+    expect(script).toContain('"$HOME_DIR/.zshenv"')
+    expect(script).toContain('"$HOME_DIR/.profile"')
+    expect(script).toContain('config/openape/claude-token.env')
+  })
+
+  it('without claude OAuth token: no env file write or rc additions', () => {
+    const script = buildSpawnSetupScript({
+      ...baseInput,
+      claudeSettingsJson: null,
+      hookScriptSource: null,
+      claudeOauthToken: null,
+    })
+    expect(script).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
+    expect(script).not.toContain('cat > "$HOME_DIR/.config/openape/claude-token.env"')
+    expect(script).not.toMatch(/touch "\$HOME_DIR\/\.zshenv"/)
   })
 
   it('refuses inputs that collide with the heredoc delimiter', () => {
@@ -127,6 +158,7 @@ describe('buildSpawnSetupScript', () => {
       privateKeyPem: 'APES_HEREDOC_END pwned',
       claudeSettingsJson: null,
       hookScriptSource: null,
+      claudeOauthToken: null,
     })).toThrow(/Refusing to emit heredoc/)
   })
 })
