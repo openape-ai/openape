@@ -223,6 +223,13 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/session/ssh-keys/:keyId', method: 'delete', handler: resolve('./runtime/server/api/session/ssh-keys/[keyId].delete') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
 
+      // Self-service Sessions — caller can list and revoke their own
+      // refresh-token families across devices. Lives in routeConfig.auth
+      // (not .admin) because every authenticated user gets these regardless
+      // of admin role.
+      addServerHandler({ route: '/api/me/sessions', handler: resolve('./runtime/server/api/me/sessions/index.get') })
+      addServerHandler({ route: '/api/me/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/me/sessions/[familyId].delete') })
+
       // WebAuthn Registration
       addServerHandler({ route: '/api/webauthn/register/options', method: 'post', handler: resolve('./runtime/server/api/webauthn/register/options.post') })
       addServerHandler({ route: '/api/webauthn/register/verify', method: 'post', handler: resolve('./runtime/server/api/webauthn/register/verify.post') })
@@ -272,11 +279,6 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/admin/sessions', handler: resolve('./runtime/server/api/admin/sessions/index.get') })
       addServerHandler({ route: '/api/admin/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/[familyId].delete') })
       addServerHandler({ route: '/api/admin/sessions/user/:email', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/user/[email].delete') })
-
-      // Self-service Sessions — same data scoped to the caller's userId,
-      // so users can list and revoke their own devices without admin role.
-      addServerHandler({ route: '/api/me/sessions', handler: resolve('./runtime/server/api/me/sessions/index.get') })
-      addServerHandler({ route: '/api/me/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/me/sessions/[familyId].delete') })
 
       // Admin Registration URLs
       addServerHandler({ route: '/api/admin/registration-urls', handler: resolve('./runtime/server/api/admin/registration-urls/index.get') })
