@@ -156,6 +156,38 @@ const main = defineCommand({
   },
 })
 
+// Auto-refresh: every command except those that don't need (or shouldn't
+// touch) existing auth gets a transparent token refresh before its handler
+// runs. Matches `ape-shell` behavior — users no longer need to re-`apes
+// login` when an SP rejects their token; the CLI rotates it on the next
+// invocation. login/logout obviously skip; init/enroll/register-user are
+// pre-auth bootstrap; dns-check/utils/explain/workflows are diagnostic and
+// offline-safe.
+const NO_REFRESH_COMMANDS = new Set([
+  'login', 'logout',
+  'init', 'enroll', 'register-user',
+  'dns-check', 'utils', 'explain', 'workflows',
+  '--help', '-h', 'help',
+  '--version', '-v',
+])
+
+async function maybeRefreshAuth(): Promise<void> {
+  const sub = process.argv[2]
+  if (!sub || NO_REFRESH_COMMANDS.has(sub)) return
+  const { loadAuth } = await import('./config.js')
+  if (!loadAuth()) return // not logged in — nothing to refresh
+  try {
+    const { ensureFreshToken } = await import('./http.js')
+    await ensureFreshToken()
+  }
+  catch {
+    // Refresh failures are non-fatal — the actual command will surface a
+    // proper auth error if the token is genuinely unusable.
+  }
+}
+
+await maybeRefreshAuth()
+
 runMain(main).catch((err) => {
   if (err instanceof CliExit) {
     process.exit(err.exitCode)
