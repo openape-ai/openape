@@ -1,5 +1,16 @@
 # @openape/apes
 
+## 0.17.0
+
+### Minor Changes
+
+- [#218](https://github.com/openape-ai/openape/pull/218) [`d8fb15c`](https://github.com/openape-ai/openape/commit/d8fb15cf3eeddd6d30f8f24ea7763a5347d87892) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes login <email>` accepts the email as a positional argument, and DDISA mismatches refuse to log in unless `--force` is passed
+
+  Two UX improvements to `apes login`:
+
+  - **Positional email**: `apes login patrick@hofmann.eco` now works directly. The legacy `--email` flag stays around as an alias.
+  - **DDISA mismatch guard**: when an explicit `--idp` (or `APES_IDP` env, or `defaults.idp` in config.toml) selects a different IdP than the email's domain DDISA record points at, the login refuses with a clear diagnostic. Pass `--force` to bypass. This catches the foot-gun where `apes login --idp https://id.openape.at` produces a token that downstream SPs (e.g. `preview.openape.ai`, `chat.openape.ai`) reject with "IdP mismatch" because they trust the DDISA-resolved IdP instead. Auto-discovered IdPs (no explicit override) bypass the guard since by definition they can't mismatch.
+
 ## 0.16.0
 
 ### Minor Changes
