@@ -273,6 +273,11 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/admin/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/[familyId].delete') })
       addServerHandler({ route: '/api/admin/sessions/user/:email', method: 'delete', handler: resolve('./runtime/server/api/admin/sessions/user/[email].delete') })
 
+      // Self-service Sessions — same data scoped to the caller's userId,
+      // so users can list and revoke their own devices without admin role.
+      addServerHandler({ route: '/api/me/sessions', handler: resolve('./runtime/server/api/me/sessions/index.get') })
+      addServerHandler({ route: '/api/me/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/me/sessions/[familyId].delete') })
+
       // Admin Registration URLs
       addServerHandler({ route: '/api/admin/registration-urls', handler: resolve('./runtime/server/api/admin/registration-urls/index.get') })
       addServerHandler({ route: '/api/admin/registration-urls', method: 'post', handler: resolve('./runtime/server/api/admin/registration-urls/index.post') })
