@@ -1,5 +1,15 @@
 # @openape/apes
 
+## 0.16.0
+
+### Minor Changes
+
+- [`2a06d02`](https://github.com/openape-ai/openape/commit/2a06d02d39cc8c344cc2b740b104c1edb49c1c48) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: new `apes utils …` namespace for admin/diagnostic tools, kicked off with `apes utils dig <domain|email>`
+
+  `apes utils dig patrick@hofmann.eco` strips the local part, looks up the DDISA TXT record at `_ddisa.<domain>`, prints the parsed fields (issuer, mode, priority), and probes the resolved IdP via OIDC discovery. Same data as `apes dns-check` plus email-stripping and `--json` output. Future home for token decoders, config dumpers, version reporters that don't fit the grants/agents/auth namespaces.
+
+  `apes dns-check` is unchanged for backward compatibility.
+
 ## 0.15.2
 
 ### Patch Changes
