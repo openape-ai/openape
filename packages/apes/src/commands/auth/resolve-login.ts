@@ -17,6 +17,13 @@ export interface ResolvedLoginInputs {
   keyPath?: string
   email?: string
   idp?: string
+  /**
+   * Set when the chosen `idp` came from an explicit flag/env/config but the
+   * email's domain has a DDISA record pointing at a *different* IdP. The
+   * caller decides whether to refuse (default), warn-and-continue (`--force`),
+   * etc. `undefined` means no mismatch (or no DDISA record to compare against).
+   */
+  ddisaMismatch?: { dnsIdp: string, chosenIdp: string, domain: string }
 }
 
 const DEFAULT_KEY = join(homedir(), '.ssh', 'id_ed25519')
@@ -84,14 +91,18 @@ export async function resolveLoginInputs(
     )
   }
   let idp: string | undefined
+  let idpSource: 'flag' | 'env' | 'config' | 'ddisa' | undefined
   if (flags.idp) {
     idp = flags.idp
+    idpSource = 'flag'
   }
   else if (process.env.APES_IDP) {
     idp = process.env.APES_IDP
+    idpSource = 'env'
   }
   else if (process.env.GRAPES_IDP) {
     idp = process.env.GRAPES_IDP
+    idpSource = 'env'
     consola.warn(
       'GRAPES_IDP is deprecated, use APES_IDP instead. '
       + 'GRAPES_IDP support will be removed in a future release.',
@@ -99,20 +110,40 @@ export async function resolveLoginInputs(
   }
   else if (config.defaults?.idp) {
     idp = config.defaults.idp
+    idpSource = 'config'
   }
-  else if (email && email.includes('@')) {
+
+  // Always probe DDISA when we have an email — both as the auto-discovery
+  // path (when no explicit IdP was supplied) and as a sanity-check against
+  // explicit overrides. The caller surfaces the resulting mismatch and
+  // gates it behind --force.
+  let ddisaIdp: string | undefined
+  let ddisaDomain: string | undefined
+  if (email && email.includes('@')) {
     const domain = email.split('@')[1]!
+    ddisaDomain = domain
     try {
       const record = await resolveDDISA(domain)
-      if (record?.idp) {
-        idp = record.idp
-        consola.info(`Discovered IdP via DDISA (_ddisa.${domain}): ${idp}`)
-      }
+      if (record?.idp) ddisaIdp = record.idp
     }
     catch {
-      // DNS failure is non-fatal — caller will surface a clear error
+      // DNS failure is non-fatal
     }
   }
 
-  return { keyPath, email, idp }
+  if (!idp && ddisaIdp && ddisaDomain) {
+    idp = ddisaIdp
+    idpSource = 'ddisa'
+    consola.info(`Discovered IdP via DDISA (_ddisa.${ddisaDomain}): ${idp}`)
+  }
+
+  // Mismatch only matters when the user explicitly chose an IdP that differs
+  // from the authoritative DNS record. Auto-discovered IdPs (idpSource ===
+  // 'ddisa') are by definition the DDISA record, so they can't mismatch.
+  let ddisaMismatch: ResolvedLoginInputs['ddisaMismatch']
+  if (idp && ddisaIdp && ddisaDomain && idp !== ddisaIdp && idpSource !== 'ddisa') {
+    ddisaMismatch = { dnsIdp: ddisaIdp, chosenIdp: idp, domain: ddisaDomain }
+  }
+
+  return { keyPath, email, idp, ddisaMismatch }
 }
