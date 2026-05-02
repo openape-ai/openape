@@ -30,6 +30,7 @@ import { mcpCommand } from './commands/mcp/index'
 import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
 import { registerUserCommand } from './commands/register-user'
+import { utilsCommand } from './commands/utils/index'
 import { dnsCheckCommand } from './commands/dns-check'
 import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
@@ -136,6 +137,7 @@ const main = defineCommand({
     enroll: enrollCommand,
     'register-user': registerUserCommand,
     'dns-check': dnsCheckCommand,
+    utils: utilsCommand,
     login: loginCommand,
     logout: logoutCommand,
     whoami: whoamiCommand,
