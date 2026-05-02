@@ -25,6 +25,11 @@ export const loginCommand = defineCommand({
     description: 'Authenticate with an OpenApe IdP',
   },
   args: {
+    user: {
+      type: 'positional',
+      required: false,
+      description: 'Agent email (e.g. patrick@hofmann.eco). Extracted from <key>.pub comment if omitted.',
+    },
     idp: {
       type: 'string',
       description: 'IdP URL (e.g. https://id.openape.at). Auto-discovered via DDISA DNS if omitted.',
@@ -35,26 +40,59 @@ export const loginCommand = defineCommand({
     },
     email: {
       type: 'string',
-      description: 'Agent email. Extracted from <key>.pub comment if omitted.',
+      description: 'Same as the positional email — flag form for backwards compatibility.',
     },
     browser: {
       type: 'boolean',
       description: 'Force browser (PKCE) login even if an SSH key exists',
     },
+    force: {
+      type: 'boolean',
+      description: 'Override DDISA mismatch warnings (use with care)',
+    },
   },
   async run({ args }) {
+    // Positional `user` and the legacy `--email` flag both set email.
+    // Positional wins when both are present (it's the new ergonomic form).
+    const emailArg = (typeof args.user === 'string' && args.user.includes('@'))
+      ? args.user
+      : (typeof args.email === 'string' ? args.email : undefined)
+
     const resolved = await resolveLoginInputs({
       key: args.key,
       idp: args.idp,
-      email: args.email,
+      email: emailArg,
       browser: args.browser,
     })
+
+    if (resolved.ddisaMismatch && !args.force) {
+      const { dnsIdp, chosenIdp, domain } = resolved.ddisaMismatch
+      throw new CliError(
+        `IdP mismatch for ${domain}.\n\n`
+        + `  Authoritative DDISA: ${dnsIdp}\n`
+        + `  You selected:        ${chosenIdp}\n\n`
+        + `Logging in against a different IdP than DDISA points to means SPs that\n`
+        + `trust the DDISA-resolved IdP (e.g. preview.openape.ai) will reject the\n`
+        + `resulting token with "IdP mismatch".\n\n`
+        + `Fix one of:\n`
+        + `  • Drop --idp/APES_IDP/config.defaults.idp — DDISA will auto-pick ${dnsIdp}\n`
+        + `  • Update _ddisa.${domain} if ${chosenIdp} is genuinely the correct IdP\n`
+        + `  • Re-run with --force to authenticate anyway (NOT recommended)`,
+      )
+    }
+    if (resolved.ddisaMismatch && args.force) {
+      consola.warn(
+        `Bypassing DDISA mismatch — ${resolved.ddisaMismatch.domain} resolves to `
+        + `${resolved.ddisaMismatch.dnsIdp}, but you forced ${resolved.ddisaMismatch.chosenIdp}.`,
+      )
+    }
 
     if (resolved.keyPath) {
       if (!resolved.email) {
         throw new CliError(
-          `Agent email required for key-based login. Add an email comment to `
-          + `${resolved.keyPath}.pub (ssh-keygen -C <email>) or pass --email <agent-email>.`,
+          `Agent email required for key-based login. Pass it as a positional `
+          + `(\`apes login <email>\`), set --email, or add an email comment to `
+          + `${resolved.keyPath}.pub via ssh-keygen -C <email>.`,
         )
       }
       if (!resolved.idp) {
