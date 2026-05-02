@@ -91,7 +91,7 @@ describe('apes agents spawn', () => {
     })).rejects.toThrow(/macOS-only/)
   })
 
-  it('rejects when ape-shell is not in /etc/shells', async () => {
+  it('rejects when default login shell (/bin/zsh) is not in /etc/shells', async () => {
     macosUserMock.isShellRegistered.mockReturnValue(false)
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({
@@ -135,7 +135,7 @@ describe('apes agents spawn', () => {
     expect(bootstrapMock.buildSpawnSetupScript).toHaveBeenCalledTimes(1)
     const buildArgs = bootstrapMock.buildSpawnSetupScript.mock.calls[0]![0] as any
     expect(buildArgs.claudeSettingsJson).toBe('{}') // hook included by default
-    expect(buildArgs.shellPath).toBe('/usr/local/bin/ape-shell')
+    expect(buildArgs.shellPath).toBe('/bin/zsh')
 
     expect(writeFileSync).toHaveBeenCalledWith(
       '/tmp/apes-spawn-test/setup.sh',

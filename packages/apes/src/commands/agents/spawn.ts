@@ -21,7 +21,7 @@ import { isDarwin, isShellRegistered, readMacOSUser, whichBinary } from '../../l
 export const spawnAgentCommand = defineCommand({
   meta: {
     name: 'spawn',
-    description: 'Provision a local macOS agent end-to-end (OS user, keypair, IdP agent, ape-shell, Claude hook)',
+    description: 'Provision a local macOS agent end-to-end (OS user, keypair, IdP agent, Claude hook)',
   },
   args: {
     name: {
@@ -31,7 +31,7 @@ export const spawnAgentCommand = defineCommand({
     },
     shell: {
       type: 'string',
-      description: 'Override login shell. Default: $(which ape-shell)',
+      description: 'Login shell for the macOS user. Default: /bin/zsh. Pass $(which ape-shell) to opt into the grant-mediated REPL as login shell.',
     },
     'no-claude-hook': {
       type: 'boolean',
@@ -63,10 +63,14 @@ export const spawnAgentCommand = defineCommand({
       throw new CliError('No IdP URL configured. Run `apes login` first.')
     }
 
-    const apeShell = args.shell ?? whichBinary('ape-shell')
-    if (!apeShell) {
-      throw new CliError('`ape-shell` not found on PATH. Install @openape/apes globally first.')
-    }
+    // Default to plain /bin/zsh (macOS modern default) — ape-shell as login
+    // shell is opt-in via --shell. Rationale: ape-shell intercepts every
+    // command through the grant flow which is the right model for unattended
+    // agents but trips on interactive niceties (terminal control sequences
+    // sent by tools like Warp, exit semantics, etc.). The Claude
+    // bash-rewrite hook still routes Claude-issued commands through
+    // ape-shell — that's where grant-mediation actually matters.
+    const loginShell = (args.shell ?? '/bin/zsh').toString()
     const apes = whichBinary('apes')
     if (!apes) {
       throw new CliError('`apes` not found on PATH. Install @openape/apes globally first.')
@@ -78,10 +82,10 @@ export const spawnAgentCommand = defineCommand({
         + 'install it before running spawn.',
       )
     }
-    if (!isShellRegistered(apeShell)) {
+    if (!isShellRegistered(loginShell)) {
       throw new CliError(
-        `${apeShell} is not registered in /etc/shells. macOS refuses to set it as a login shell. Run:\n`
-        + `  echo ${apeShell} | sudo tee -a /etc/shells\n`
+        `${loginShell} is not registered in /etc/shells. macOS refuses to set it as a login shell. Run:\n`
+        + `  echo ${loginShell} | sudo tee -a /etc/shells\n`
         + 'and try again.',
       )
     }
@@ -121,7 +125,7 @@ export const spawnAgentCommand = defineCommand({
       const script = buildSpawnSetupScript({
         name,
         homeDir,
-        shellPath: apeShell,
+        shellPath: loginShell,
         privateKeyPem: privatePem,
         publicKeySshLine: publicSshLine,
         authJson,
