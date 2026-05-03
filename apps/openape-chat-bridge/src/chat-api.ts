@@ -11,6 +11,14 @@ export interface PostedMessage {
   createdAt: number
 }
 
+export interface ContactView {
+  peerEmail: string
+  myStatus: 'accepted' | 'pending' | 'blocked'
+  theirStatus: 'accepted' | 'pending' | 'blocked'
+  connected: boolean
+  roomId: string | null
+}
+
 const MAX_BODY = 10_000
 
 export class ChatApi {
@@ -25,6 +33,31 @@ export class ChatApi {
       body: replyTo ? { body: trimmed, reply_to: replyTo } : { body: trimmed },
     })
     return result
+  }
+
+  async requestContact(peerEmail: string): Promise<ContactView> {
+    const url = `${this.endpoint}/api/contacts`
+    return await ofetch<ContactView>(url, {
+      method: 'POST',
+      headers: { Authorization: await this.bearer() },
+      body: { email: peerEmail },
+    })
+  }
+
+  async listContacts(): Promise<ContactView[]> {
+    const url = `${this.endpoint}/api/contacts`
+    return await ofetch<ContactView[]>(url, {
+      method: 'GET',
+      headers: { Authorization: await this.bearer() },
+    })
+  }
+
+  async acceptContact(peerEmail: string): Promise<ContactView> {
+    const url = `${this.endpoint}/api/contacts/${encodeURIComponent(peerEmail)}/accept`
+    return await ofetch<ContactView>(url, {
+      method: 'POST',
+      headers: { Authorization: await this.bearer() },
+    })
   }
 
   async patchMessage(messageId: string, body: string): Promise<void> {
