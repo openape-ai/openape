@@ -103,7 +103,7 @@ export function buildBridgeStartScript(): string {
 # Slim launcher — install stack lives in spawn, not here.
 set -euo pipefail
 
-export PATH="$HOME/.bun/install/global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 # Refresh IdP token. Agents auth via SSH-key signing — the cached IdP
 # token has no refresh_token and expires after ~1h. Re-running apes
@@ -207,7 +207,7 @@ export function buildBridgePlist(agentName: string, homeDir: string): string {
         <key>HOME</key>
         <string>${homeDir}</string>
         <key>PATH</key>
-        <string>${homeDir}/.bun/install/global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>${homeDir}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 </dict>
 </plist>
