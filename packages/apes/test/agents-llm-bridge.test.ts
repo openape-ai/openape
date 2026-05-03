@@ -95,28 +95,28 @@ describe('llm-bridge — pure helpers', () => {
     expect(env).toContain('LITELLM_BASE_URL=http://h:1/v1')
   })
 
-  it('buildBridgeStartScript installs pi + bridge via npm, drops extension, execs bridge', () => {
+  it('buildBridgeStartScript is slim — no npm installs at runtime, drops pi extension, execs bridge', () => {
     const sh = buildBridgeStartScript()
     expect(sh.startsWith('#!/usr/bin/env bash')).toBe(true)
-    expect(sh).toContain('npm install -g --silent @openape/chat-bridge')
-    expect(sh).toContain('npm install -g --silent @mariozechner/pi-coding-agent')
-    expect(sh).toContain('NPM_CONFIG_PREFIX="$HOME/.npm-global"')
+    // Heavy installs MUST happen during spawn, not on every launchd boot —
+    // the whole point of #246. start.sh stays under ~5s wall-clock.
+    expect(sh).not.toContain('npm install')
+    expect(sh).not.toContain('bun add')
     expect(sh).toContain('EXT_DIR="$HOME/.pi/agent/extensions"')
     expect(sh).toContain('"$EXT_DIR/litellm.ts"')
     expect(sh).toContain('. "$HOME/.pi/agent/.env"')
     expect(sh).toContain('exec openape-chat-bridge')
+    // PATH includes the bun global bin dir where the installer landed.
+    expect(sh).toContain('$HOME/.bun/install/global/bin')
   })
 
-  it('buildBridgeStartScript installs apes + refreshes IdP token before exec (1h expiry workaround)', () => {
+  it('buildBridgeStartScript refreshes IdP token before exec (1h expiry workaround)', () => {
     const sh = buildBridgeStartScript()
-    // apes is required to re-sign the agent's IdP token via SSH key.
-    expect(sh).toContain('npm install -g --silent @openape/apes')
     // The script must read the agent's own email and idp out of auth.json
     // and call `apes login` BEFORE exec'ing the bridge — otherwise the
     // bridge picks up the (potentially expired) cached token and crashes.
     expect(sh).toContain('~/.config/apes/auth.json')
     expect(sh).toContain('apes login "$agent_email" --idp "$agent_idp"')
-    // Order: login must come before exec.
     const loginIdx = sh.indexOf('apes login')
     const execIdx = sh.indexOf('exec openape-chat-bridge')
     expect(loginIdx).toBeGreaterThan(0)

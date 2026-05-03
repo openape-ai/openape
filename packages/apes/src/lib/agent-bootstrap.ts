@@ -241,10 +241,23 @@ chmod 644 ${shQuote(bridge.plistPath)}
 
 function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
   if (!bridge) return ''
-  // Bootstrap into the system domain. Spawn already runs as root via
-  // \`apes run --as root\`, so we have permission. Stale label is bootouted
-  // first to make re-spawn idempotent.
+  // Install the bridge stack ONCE here, as the agent user, while the human
+  // is already waiting for the spawn grant. Three globals (~1300 packages)
+  // are heavy with npm — bun does it in ~10s. start.sh stays slim and
+  // boots in seconds instead of pulling everything fresh on every restart.
+  //
+  // Then bootstrap the launchd job.
   return `
+echo "==> Installing bridge stack as $NAME via bun (one-time)…"
+su - "$NAME" -c '
+set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
+bun add -g @openape/chat-bridge @openape/apes @mariozechner/pi-coding-agent
+'
+
+# Bootstrap into the system domain. Spawn already runs as root via
+# \`apes run --as root\`, so we have permission. Stale label is bootouted
+# first to make re-spawn idempotent.
 launchctl bootout "system/${bridge.plistLabel}" 2>/dev/null || true
 launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
   echo "warn: bridge bootstrap into system domain failed; check ${bridge.plistPath}"
