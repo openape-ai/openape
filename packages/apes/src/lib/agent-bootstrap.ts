@@ -201,10 +201,11 @@ echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
 export interface DestroyTeardownScriptInput {
   name: string
   homeDir: string
+  adminUser: string
 }
 
 export function buildDestroyTeardownScript(input: DestroyTeardownScriptInput): string {
-  const { name, homeDir } = input
+  const { name, homeDir, adminUser } = input
   return `#!/bin/bash
 # Best-effort teardown. set -u catches typos; we deliberately do NOT use -e
 # because pkill / launchctl are allowed to fail when the user has no live
@@ -213,6 +214,16 @@ set -u
 
 NAME=${shQuote(name)}
 HOME_DIR=${shQuote(homeDir)}
+ADMIN_USER=${shQuote(adminUser)}
+
+# Read the admin password from stdin (line 1). The caller pipes it in.
+# We never accept it as an argv element so it can't show up in process
+# listings or escapes' audit log.
+read -r ADMIN_PASSWORD
+if [ -z "$ADMIN_PASSWORD" ]; then
+  echo "ERROR: no admin password on stdin (expected one line)." >&2
+  exit 2
+fi
 
 UID_OF=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
 
@@ -225,25 +236,32 @@ if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
   rm -rf "$HOME_DIR"
 fi
 
-# Delete the user record. \`sysadminctl -deleteUser\` is the canonical macOS
-# API and removes Open Directory metadata that \`dscl . -delete\` leaves
-# behind. Fall back to dscl if sysadminctl isn't available or rejects the
-# user. Surface a clear error if both fail — silent failure here is what
-# left orphaned dscl records on previous spawn/destroy round-trips.
-if command -v sysadminctl >/dev/null 2>&1; then
-  if sysadminctl -deleteUser "$NAME" 2>/dev/null; then
-    :
-  elif dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
-    dscl . -delete "/Users/$NAME" || {
-      echo "ERROR: failed to delete user record /Users/$NAME" >&2
-      exit 1
-    }
-  fi
-elif dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
-  dscl . -delete "/Users/$NAME" || {
-    echo "ERROR: failed to delete user record /Users/$NAME" >&2
-    exit 1
-  }
+# \`escapes\` is a plain setuid binary — opendirectoryd sees no audit/PAM
+# session attached (AUDIT_SESSION_ID=unset) and rejects DirectoryService
+# writes from this context: a bare \`sysadminctl -deleteUser\` or
+# \`dscl . -delete\` hangs ~5 minutes and exits with eUndefinedError -14987
+# at DSRecord.m:563. Passing explicit -adminUser/-adminPassword bypasses
+# opendirectoryd's implicit "is current session admin?" check and
+# authenticates against DirectoryService directly — the delete then
+# completes in ~1 second.
+if ! command -v sysadminctl >/dev/null 2>&1; then
+  echo "ERROR: sysadminctl not available; cannot delete user record." >&2
+  exit 1
+fi
+
+sysadminctl \\
+  -deleteUser "$NAME" \\
+  -adminUser "$ADMIN_USER" \\
+  -adminPassword "$ADMIN_PASSWORD"
+SYSAD_EC=$?
+unset ADMIN_PASSWORD
+
+if [ $SYSAD_EC -ne 0 ]; then
+  echo "ERROR: sysadminctl -deleteUser failed (exit=$SYSAD_EC)." >&2
+  echo "       Common causes: wrong admin password, admin user '$ADMIN_USER'" >&2
+  echo "       not in admin group, or target user '$NAME' is the last secure" >&2
+  echo "       token holder (run \\\`sysadminctl -secureTokenStatus $NAME\\\`)." >&2
+  exit 1
 fi
 
 # Verify the record is actually gone.

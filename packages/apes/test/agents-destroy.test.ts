@@ -45,11 +45,16 @@ describe('apes agents destroy', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     macosUserMock.readMacOSUser.mockReturnValue(null)
     macosUserMock.isDarwin.mockReturnValue(true)
+    // The OS-teardown path collects the local admin password; CI never
+    // has a TTY so we set the env-var resolution path explicitly. Tests
+    // that exercise the "no password" failure case delete this first.
+    process.env.APES_ADMIN_PASSWORD = 'test-admin-pw'
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
+    delete process.env.APES_ADMIN_PASSWORD
   })
 
   it('rejects an invalid agent name', async () => {
@@ -153,9 +158,34 @@ describe('apes agents destroy', () => {
     await (destroyAgentCommand as any).run({ args: { name: 'agent-a', force: true } })
 
     expect(execFileSync).toHaveBeenCalledTimes(1)
-    const [bin, argv] = vi.mocked(execFileSync).mock.calls[0]!
+    const [bin, argv, opts] = vi.mocked(execFileSync).mock.calls[0]!
     expect(bin).toBe('/usr/local/bin/apes')
     expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
+    // Password must be piped via stdin, never as argv (would leak via
+    // ps and the escapes audit log).
+    expect(opts).toMatchObject({ input: 'test-admin-pw\n', stdio: ['pipe', 'inherit', 'inherit'] })
+    expect(argv).not.toContain('test-admin-pw')
+  })
+
+  it('refuses with a clear hint when --force is set but APES_ADMIN_PASSWORD is missing and there is no TTY', async () => {
+    delete process.env.APES_ADMIN_PASSWORD
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce([AGENT] as any)
+      .mockResolvedValueOnce({ ok: true } as any)
+    macosUserMock.readMacOSUser.mockReturnValue({ name: 'agent-a', uid: 250, shell: '/usr/local/bin/ape-shell' })
+
+    const originalIsTTY = process.stdin.isTTY
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
+    try {
+      const { destroyAgentCommand } = await import('../src/commands/agents/destroy.js')
+      await expect((destroyAgentCommand as any).run({
+        args: { name: 'agent-a', force: true },
+      })).rejects.toThrow(/APES_ADMIN_PASSWORD/)
+    }
+    finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true })
+    }
   })
 
   it('issues IdP DELETE before the long-blocking escapes call (token-fresh order)', async () => {
