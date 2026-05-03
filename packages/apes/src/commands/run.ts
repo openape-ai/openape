@@ -627,23 +627,39 @@ async function runAudienceMode(
   }
 
   consola.success(`Grant requested: ${grant.id}`)
+  consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
-  // Step 2: Wait for approval
+  // Step 2: Wait for approval. Human-in-the-loop, so the budget is generous
+  // (15 min default). The poll loop MUST throw on timeout — if it falls
+  // through to the token-fetch below with status='pending', the server
+  // rejects with a confusing "Grant is not approved (status: pending)"
+  // and the user can't tell the timeout from a real auth error.
   consola.info('Waiting for approval...')
-  const maxWait = 300_000
+  const maxWait = 15 * 60 * 1000
   const interval = 3_000
   const start = Date.now()
+  let approved = false
 
   while (Date.now() - start < maxWait) {
     const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
     if (status.status === 'approved') {
       consola.success('Grant approved!')
+      approved = true
       break
     }
     if (status.status === 'denied' || status.status === 'revoked') {
       throw new CliError(`Grant ${status.status}.`)
     }
     await new Promise(r => setTimeout(r, interval))
+  }
+
+  if (!approved) {
+    const minutes = Math.round(maxWait / 60_000)
+    throw new CliError(
+      `Grant approval timed out after ${minutes} min (still pending). `
+      + `Check your DDISA inbox at ${idp}/grant-approval?grant_id=${grant.id} — `
+      + `if approved later, re-run the same \`apes run\` command and it will reuse the grant.`,
+    )
   }
 
   // Step 3: Get grant token
