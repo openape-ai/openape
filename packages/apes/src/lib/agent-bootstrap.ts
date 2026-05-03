@@ -89,6 +89,24 @@ export interface SpawnSetupScriptInput {
    * prompt for auth on first run inside that user.
    */
   claudeOauthToken: string | null
+  /**
+   * If set, also installs the openape-chat-bridge daemon for this agent:
+   * drops a launchd plist + start script + .env with the LLM proxy master
+   * key. The bridge auto-installs `@openape/chat-bridge` via bun on first
+   * boot. `null` skips the bridge entirely (current default).
+   */
+  bridge: SpawnBridgeFiles | null
+}
+
+export interface SpawnBridgeFiles {
+  /** Plist label, matches `BRIDGE_PLIST_LABEL` in lib/llm-bridge.ts. */
+  plistLabel: string
+  /** XML plist content (full file). */
+  plistContent: string
+  /** start.sh content (idempotent installer + exec). */
+  startScript: string
+  /** .env content (`LITELLM_BASE_URL` + `LITELLM_API_KEY`). */
+  envFile: string
 }
 
 const SH_HEREDOC_DELIMITER = 'APES_HEREDOC_END'
@@ -182,7 +200,7 @@ mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
 cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
 cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
-${claudeBlock}${claudeTokenBlock}
+${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}
 chown -R "$NAME:staff" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
@@ -195,6 +213,30 @@ if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
 fi
 
 echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
+${buildBridgeBootstrapBlock(input.bridge)}`
+}
+
+function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
+  if (!bridge) return ''
+  return `
+mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs" "$HOME_DIR/.pi/agent"
+cat > "$HOME_DIR/.pi/agent/.env" ${shHeredoc(bridge.envFile)}
+cat > "$HOME_DIR/Library/Application Support/openape/bridge/start.sh" ${shHeredoc(bridge.startScript)}
+chmod 755 "$HOME_DIR/Library/Application Support/openape/bridge/start.sh"
+cat > "$HOME_DIR/Library/LaunchAgents/${bridge.plistLabel}.plist" ${shHeredoc(bridge.plistContent)}
+chmod 600 "$HOME_DIR/.pi/agent/.env"
+`
+}
+
+function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
+  if (!bridge) return ''
+  return `
+# Load the bridge launchd job into the agent's gui domain. Runs as root
+# from the spawn setup script so we target gui/<agent-uid> explicitly.
+# Failure here is non-fatal — the plist still lands and launchd will pick
+# it up next time the agent logs in.
+launchctl bootstrap "gui/$NEXT_UID" "$HOME_DIR/Library/LaunchAgents/${bridge.plistLabel}.plist" || \\
+  echo "warn: bridge bootstrap failed for gui/$NEXT_UID; loads on next login"
 `
 }
 
