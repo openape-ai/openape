@@ -23,6 +23,12 @@ import { resolve } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
 
+// Keep this in sync with the publishable (private:false) workspace
+// packages. New entries get appended in dependency order — leaf packages
+// (no other publishable depends on them) can go anywhere after their
+// own deps. The audit script below the file is the source of truth:
+//
+//   node -e "const fs=require('fs'),p=require('path');for(const r of ['packages','modules','apps']){for(const d of fs.readdirSync(r)){const f=p.join(r,d,'package.json');if(!fs.existsSync(f))continue;const j=JSON.parse(fs.readFileSync(f));if(j.private!==true)console.log(j.name,'→',r+'/'+d)}}"
 const PACKAGES = [
   { name: '@openape/core', dir: 'packages/core' },
   { name: '@openape/grants', dir: 'packages/grants' },
@@ -31,10 +37,13 @@ const PACKAGES = [
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/server', dir: 'packages/server' },
   { name: '@openape/browser', dir: 'packages/browser' },
+  { name: '@openape/vue-components', dir: 'packages/vue-components' },
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
+  { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
+  { name: '@openape/chat-bridge', dir: 'apps/openape-chat-bridge' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')
