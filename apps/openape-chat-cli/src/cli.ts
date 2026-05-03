@@ -6,6 +6,7 @@ import { listCommand } from './commands/list'
 import { membersCommand } from './commands/members'
 import { roomsCommand } from './commands/rooms'
 import { sendCommand } from './commands/send'
+import { threadsCommand } from './commands/threads'
 import { watchCommand } from './commands/watch'
 import { whoamiCommand } from './commands/whoami'
 
@@ -21,6 +22,7 @@ const main = defineCommand({
     whoami: whoamiCommand,
     contacts: contactsCommand,
     rooms: roomsCommand,
+    threads: threadsCommand,
     send: sendCommand,
     list: listCommand,
     watch: watchCommand,

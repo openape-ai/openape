@@ -21,6 +21,10 @@ export const memberships = sqliteTable('memberships', {
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
   roomId: text('room_id').notNull(),
+  // Phase B: each room has one or more threads; messages live on a
+  // thread. Nullable for back-compat with rows written before Phase B —
+  // those get treated as the room's "main" thread by query-side joins.
+  threadId: text('thread_id'),
   senderEmail: text('sender_email').notNull(),
   // 'human' or 'agent' — purely a display hint, not a permission boundary in v1
   senderAct: text('sender_act', { enum: ['human', 'agent'] }).notNull(),
@@ -28,6 +32,19 @@ export const messages = sqliteTable('messages', {
   replyTo: text('reply_to'),
   createdAt: integer('created_at').notNull(),
   editedAt: integer('edited_at'),
+})
+
+// Phase B: parallel sessions inside a single 1:1 contact (= room).
+// Each thread has its own bridge pi-RPC session — context is isolated.
+// Default "main" thread is auto-created on contact-accept (or lazy-
+// created on first GET for legacy rooms).
+export const threads = sqliteTable('threads', {
+  id: text('id').primaryKey(),
+  roomId: text('room_id').notNull(),
+  name: text('name').notNull(),
+  createdByEmail: text('created_by_email').notNull(),
+  createdAt: integer('created_at').notNull(),
+  archivedAt: integer('archived_at'),
 })
 
 export const reactions = sqliteTable('reactions', {
@@ -80,4 +97,6 @@ export type NewMessage = typeof messages.$inferInsert
 export type Reaction = typeof reactions.$inferSelect
 export type Contact = typeof contacts.$inferSelect
 export type NewContact = typeof contacts.$inferInsert
+export type Thread = typeof threads.$inferSelect
+export type NewThread = typeof threads.$inferInsert
 export type PushSubscription = typeof pushSubscriptions.$inferSelect

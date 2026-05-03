@@ -15,12 +15,22 @@ export interface Room {
 export interface Message {
   id: string
   roomId: string
+  threadId: string
   senderEmail: string
   senderAct: 'human' | 'agent'
   body: string
   replyTo: string | null
   createdAt: number
   editedAt: number | null
+}
+
+export interface Thread {
+  id: string
+  roomId: string
+  name: string
+  createdByEmail: string
+  createdAt: number
+  archivedAt: number | null
 }
 
 export interface Member {

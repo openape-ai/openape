@@ -8,6 +8,7 @@ import { assertMember } from '../../../utils/membership'
 const querySchema = z.object({
   before: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  thread_id: z.string().uuid().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -23,14 +24,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = useDb()
-  const where = parsed.data.before
-    ? and(eq(messages.roomId, id), lt(messages.createdAt, parsed.data.before))
-    : eq(messages.roomId, id)
+  // Phase B filter: when a thread_id is provided, scope to that thread;
+  // otherwise return all room messages (back-compat). The webapp + CLI
+  // pass the thread_id once they know which thread the user is viewing.
+  const conds = [eq(messages.roomId, id)]
+  if (parsed.data.thread_id) conds.push(eq(messages.threadId, parsed.data.thread_id))
+  if (parsed.data.before) conds.push(lt(messages.createdAt, parsed.data.before))
 
   const rows = await db
     .select()
     .from(messages)
-    .where(where)
+    .where(and(...conds))
     .orderBy(desc(messages.createdAt))
     .limit(parsed.data.limit)
 

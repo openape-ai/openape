@@ -19,8 +19,13 @@ ape-chat rooms use <id>     # set default room
 | `rooms info <id>` | Show one room's metadata |
 | `rooms use <id>` | Persist a default room id |
 | `rooms clear` | Forget the default room |
-| `send "..."` `[--room <id>] [--reply-to <msg-id>]` | Post a message |
-| `list` `[--room <id>] [--limit N] [--before <unix-s>]` | Show recent history |
+| `threads list` `[--room <id>]` | List threads in a room (★ marks active) |
+| `threads new "<name>"` `[--room <id>] [--no-use]` | Create a thread (active by default) |
+| `threads use <id>` `[--room <id>] [--clear]` | Switch active thread for a room |
+| `threads rename <id> "<name>"` | Rename a thread |
+| `threads archive <id>` | Soft-archive a thread (history preserved) |
+| `send "..."` `[--room <id>] [--thread <id>] [--reply-to <msg-id>]` | Post a message (defaults to active thread) |
+| `list` `[--room <id>] [--thread <id>\|all] [--limit N] [--before <unix-s>]` | Show recent history (active thread by default) |
 | `watch` `[--room <id>] [--json]` | Stream live events via WebSocket |
 | `members list` `[--room <id>]` | Members + roles |
 | `members add <email>` `[--role member\|admin] [--room <id>]` | Invite (admins only) |
@@ -42,6 +47,7 @@ configuration commands).
 |---|---|
 | `APE_CHAT_ENDPOINT` | Override the chat host |
 | `APE_CHAT_ROOM` | Override the default room id |
+| `APE_CHAT_THREAD` | Override the default thread id (applies to whichever room is active) |
 
 ## Exit codes
 

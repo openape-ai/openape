@@ -7,6 +7,13 @@ const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
 interface CliState {
   endpoint?: string
   defaultRoomId?: string
+  /**
+   * Per-room active thread. Phase B: rooms can have N threads, and the
+   * CLI remembers which thread the user has `ape-chat threads use`d
+   * inside each room so subsequent `send`/`list` calls land in the
+   * intended thread without forcing a `--thread` flag every time.
+   */
+  defaultThreadByRoom?: Record<string, string>
 }
 
 function configPath(): string {
@@ -54,5 +61,21 @@ export function setDefaultRoomId(roomId: string | null): void {
   const state = loadState()
   if (roomId) state.defaultRoomId = roomId
   else delete state.defaultRoomId
+  saveState(state)
+}
+
+export function getDefaultThreadId(roomId: string, override?: string | null): string | undefined {
+  if (override) return override
+  const env = process.env.APE_CHAT_THREAD
+  if (env) return env
+  return loadState().defaultThreadByRoom?.[roomId]
+}
+
+export function setDefaultThreadId(roomId: string, threadId: string | null): void {
+  const state = loadState()
+  const map = { ...(state.defaultThreadByRoom ?? {}) }
+  if (threadId) map[roomId] = threadId
+  else delete map[roomId]
+  state.defaultThreadByRoom = map
   saveState(state)
 }

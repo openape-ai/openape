@@ -1,7 +1,7 @@
 import { ofetch } from 'ofetch'
 import { getChatBearer } from './auth'
 import { getEndpoint } from './config'
-import type { Member, Message, Room } from './types'
+import type { Member, Message, Room, Thread } from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -67,23 +67,60 @@ export function getRoom(id: string, opts?: { endpoint?: string }): Promise<Room>
 
 export function listMessages(
   roomId: string,
-  query?: { limit?: number, before?: number },
+  query?: { limit?: number, before?: number, threadId?: string },
   opts?: { endpoint?: string },
 ): Promise<Message[]> {
   return request<Message[]>(`/api/rooms/${encodeURIComponent(roomId)}/messages`, {
-    query: { limit: query?.limit, before: query?.before },
+    query: { limit: query?.limit, before: query?.before, thread_id: query?.threadId },
     endpoint: opts?.endpoint,
   })
 }
 
 export function sendMessage(
   roomId: string,
-  body: { body: string, reply_to?: string },
+  body: { body: string, reply_to?: string, thread_id?: string },
   opts?: { endpoint?: string },
 ): Promise<Message> {
   return request<Message>(`/api/rooms/${encodeURIComponent(roomId)}/messages`, {
     method: 'POST',
     body,
+    endpoint: opts?.endpoint,
+  })
+}
+
+export function listThreads(roomId: string, opts?: { endpoint?: string }): Promise<Thread[]> {
+  return request<Thread[]>(`/api/rooms/${encodeURIComponent(roomId)}/threads`, {
+    endpoint: opts?.endpoint,
+  })
+}
+
+export function createThread(
+  roomId: string,
+  body: { name: string },
+  opts?: { endpoint?: string },
+): Promise<Thread> {
+  return request<Thread>(`/api/rooms/${encodeURIComponent(roomId)}/threads`, {
+    method: 'POST',
+    body,
+    endpoint: opts?.endpoint,
+  })
+}
+
+export function patchThread(
+  threadId: string,
+  body: { name?: string, archived?: boolean },
+  opts?: { endpoint?: string },
+): Promise<Thread> {
+  return request<Thread>(`/api/threads/${encodeURIComponent(threadId)}`, {
+    method: 'PATCH',
+    body,
+    endpoint: opts?.endpoint,
+  })
+}
+
+export function archiveThread(threadId: string, opts?: { endpoint?: string }): Promise<void> {
+  return request<void>(`/api/threads/${encodeURIComponent(threadId)}`, {
+    method: 'DELETE',
     endpoint: opts?.endpoint,
   })
 }
