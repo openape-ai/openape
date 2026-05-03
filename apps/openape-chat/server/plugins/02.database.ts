@@ -49,6 +49,20 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)`)
 
+    await db.run(sql`CREATE TABLE IF NOT EXISTS contacts (
+      id TEXT PRIMARY KEY,
+      email_a TEXT NOT NULL,
+      email_b TEXT NOT NULL,
+      status_a TEXT NOT NULL,
+      status_b TEXT NOT NULL,
+      room_id TEXT,
+      requested_at INTEGER NOT NULL,
+      accepted_at INTEGER,
+      UNIQUE (email_a, email_b)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_contacts_email_a ON contacts(email_a)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_contacts_email_b ON contacts(email_b)`)
+
     await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
       endpoint TEXT PRIMARY KEY,
       user_email TEXT NOT NULL,
