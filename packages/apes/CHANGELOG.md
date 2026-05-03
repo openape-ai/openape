@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 0.27.0
+
+### Minor Changes
+
+- [#249](https://github.com/openape-ai/openape/pull/249) [`ee32010`](https://github.com/openape-ai/openape/commit/ee32010bbed125e12ab4012e49f5f47e3b92e2d8) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Bridge model shifts to 1:1-only. `apes agents spawn --bridge` no longer takes `--bridge-room <name>` — it auto-creates a DM between the spawning user and the new agent. The chat-app UI hides channels (group chats) until the contacts model lands; agents in shared rooms produce reply-loops between agents and there's no reliable way to filter agent-from-human messages yet. Existing channels are not deleted, just hidden from the room list. Direct URL access to a channel still works for back-compat.
+
 ## 0.26.1
 
 ### Patch Changes
