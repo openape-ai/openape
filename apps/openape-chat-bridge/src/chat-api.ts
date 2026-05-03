@@ -7,6 +7,7 @@ import { ofetch } from 'ofetch'
 export interface PostedMessage {
   id: string
   roomId: string
+  threadId: string
   body: string
   createdAt: number
 }
@@ -24,13 +25,20 @@ const MAX_BODY = 10_000
 export class ChatApi {
   constructor(private endpoint: string, private bearer: () => Promise<string>) {}
 
-  async postMessage(roomId: string, body: string, replyTo?: string): Promise<PostedMessage> {
+  async postMessage(
+    roomId: string,
+    body: string,
+    opts: { replyTo?: string, threadId?: string } = {},
+  ): Promise<PostedMessage> {
     const trimmed = clamp(body, MAX_BODY)
     const url = `${this.endpoint}/api/rooms/${encodeURIComponent(roomId)}/messages`
+    const payload: Record<string, unknown> = { body: trimmed }
+    if (opts.replyTo) payload.reply_to = opts.replyTo
+    if (opts.threadId) payload.thread_id = opts.threadId
     const result = await ofetch<PostedMessage>(url, {
       method: 'POST',
       headers: { Authorization: await this.bearer() },
-      body: replyTo ? { body: trimmed, reply_to: replyTo } : { body: trimmed },
+      body: payload,
     })
     return result
   }

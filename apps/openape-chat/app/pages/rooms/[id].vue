@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 interface Message {
   id: string
   roomId: string
+  threadId: string
   senderEmail: string
   senderAct: 'human' | 'agent'
   body: string
@@ -17,6 +18,15 @@ interface Reaction {
   userEmail: string
   emoji: string
   createdAt: number
+}
+
+interface Thread {
+  id: string
+  roomId: string
+  name: string
+  createdByEmail: string
+  createdAt: number
+  archivedAt: number | null
 }
 
 const route = useRoute()
@@ -42,10 +52,11 @@ const scrollEl = ref<HTMLElement>()
 const roomInfo = ref<RoomInfo | null>(null)
 const roomError = ref<string | null>(null)
 const membersOpen = ref(false)
+const threads = ref<Thread[]>([])
+const activeThreadId = ref<string | null>(null)
+const newThreadName = ref('')
+const showNewThread = ref(false)
 
-// Per-page title — falls back to a generic placeholder while the
-// metadata loads, then updates to the room name. The titleTemplate
-// from nuxt.config appends " — OpenApe Chat".
 useHead({
   title: () => roomInfo.value?.name ?? 'Room',
 })
@@ -58,9 +69,6 @@ async function loadRoomInfo() {
   catch (err) {
     const status = (err as { statusCode?: number })?.statusCode
     if (status === 404) {
-      // The server returns 404 both for "room doesn't exist" and "you're
-      // not a member" — this is intentional, non-members should not be
-      // able to discover that a room exists at all.
       roomError.value = 'Raum für diesen User nicht verfügbar.'
     }
     else if (status === 401) {
@@ -73,15 +81,33 @@ async function loadRoomInfo() {
   }
 }
 
-async function loadMessages() {
+async function loadThreads(): Promise<void> {
   if (!roomInfo.value) {
+    threads.value = []
+    activeThreadId.value = null
+    return
+  }
+  // Server lazily creates a "main" thread on first GET for legacy rooms,
+  // so the result is guaranteed non-empty for any room the caller is in.
+  const rows = await $fetch<Thread[]>(`/api/rooms/${roomId.value}/threads`)
+  threads.value = rows
+  if (!activeThreadId.value || !rows.some(t => t.id === activeThreadId.value)) {
+    const firstOpen = rows.find(t => !t.archivedAt) ?? rows[0]
+    activeThreadId.value = firstOpen?.id ?? null
+  }
+}
+
+async function loadMessages() {
+  if (!roomInfo.value || !activeThreadId.value) {
     messages.value = []
     loading.value = false
     return
   }
   loading.value = true
   try {
-    const rows = await $fetch<Message[]>(`/api/rooms/${roomId.value}/messages?limit=50`)
+    const rows = await $fetch<Message[]>(`/api/rooms/${roomId.value}/messages`, {
+      query: { limit: 50, thread_id: activeThreadId.value },
+    })
     messages.value = rows
   }
   finally {
@@ -93,6 +119,7 @@ async function loadMessages() {
 
 async function loadInitial() {
   await loadRoomInfo()
+  await loadThreads()
   await loadMessages()
 }
 
@@ -106,7 +133,7 @@ function addReactionLocal(r: Reaction) {
   if (!list.some(x => x.userEmail === r.userEmail && x.emoji === r.emoji)) {
     list.push(r)
     reactions.value.set(r.messageId, list)
-    reactions.value = new Map(reactions.value) // trigger reactivity
+    reactions.value = new Map(reactions.value)
   }
 }
 
@@ -123,16 +150,17 @@ const chat = useChat()
 let off: (() => void) | undefined
 
 onMounted(async () => {
-  // Connect WS first so the live indicator updates regardless of whether
-  // we can read messages. Non-members watching a Join screen still get
-  // a fresh socket — when they join, broadcasts start flowing immediately
-  // without a reconnect dance.
   chat.connect()
   await loadInitial()
   off = chat.on((frame) => {
     if (frame.room_id !== roomId.value) return
     if (frame.type === 'message') {
       const m = frame.payload as Message
+      // Only append messages that belong to the currently-viewed thread.
+      // Other threads still get the broadcast (so a future "unread badge"
+      // hook can pick it up here without server changes), but the active
+      // message list stays scoped.
+      if (m.threadId && m.threadId !== activeThreadId.value) return
       if (!messages.value.some(x => x.id === m.id)) {
         messages.value.push(m)
         nextTick(() => scrollToBottom())
@@ -151,19 +179,32 @@ onMounted(async () => {
       removeReactionLocal(p.messageId, p.userEmail, p.emoji)
     }
     else if (frame.type === 'membership-removed') {
-      const p = frame.payload as { roomId: string, userEmail: string }
-      // If I'm the one being removed, kick myself out of the room view.
-      // The next loadRoomInfo would 404 anyway; this just makes the
-      // transition immediate instead of waiting for the next interaction.
+      const p = frame.payload as { roomId: string, userEmail: string, thread?: Thread }
+      // Two flavours: (a) a member was removed from the room — if it's
+      // me, navigate out; (b) a thread was archived — refresh the
+      // thread list so the tab disappears (or moves to "Archived").
+      if (p.thread) {
+        void loadThreads()
+        return
+      }
       if (p.userEmail === user.value?.sub) {
         navigateTo('/')
       }
     }
     else if (frame.type === 'membership-changed') {
-      const p = frame.payload as { roomId: string, userEmail: string, role: 'member' | 'admin' }
-      // Refresh local role so the admin UI flips when someone promotes
-      // or demotes me without requiring a page reload.
-      if (p.userEmail === user.value?.sub && roomInfo.value) {
+      const p = frame.payload as {
+        roomId: string
+        userEmail?: string
+        role?: 'member' | 'admin'
+        thread?: Thread
+      }
+      // Either a role change for a member (existing v1 behaviour) or a
+      // new/renamed thread (Phase B). Disambiguate via payload shape.
+      if (p.thread) {
+        void loadThreads()
+        return
+      }
+      if (p.userEmail === user.value?.sub && p.role && roomInfo.value) {
         roomInfo.value = { ...roomInfo.value, role: p.role }
       }
     }
@@ -175,13 +216,14 @@ onBeforeUnmount(() => {
 })
 
 watch(roomId, loadInitial)
+watch(activeThreadId, () => { void loadMessages() })
 
 async function send(body: string) {
+  if (!activeThreadId.value) return
   await $fetch(`/api/rooms/${roomId.value}/messages`, {
     method: 'POST',
-    body: { body },
+    body: { body, thread_id: activeThreadId.value },
   })
-  // Server will broadcast via WS; the inbound frame appends + scrolls.
 }
 
 async function react(messageId: string, emoji: string) {
@@ -215,6 +257,26 @@ function reactionsFor(messageId: string) {
   }
   return Array.from(counts.entries(), ([emoji, c]) => ({ emoji, ...c }))
 }
+
+const visibleThreads = computed(() => threads.value.filter(t => !t.archivedAt))
+
+async function selectThread(id: string): Promise<void> {
+  if (activeThreadId.value === id) return
+  activeThreadId.value = id
+}
+
+async function createThread(): Promise<void> {
+  const name = newThreadName.value.trim()
+  if (!name) return
+  const created = await $fetch<Thread>(`/api/rooms/${roomId.value}/threads`, {
+    method: 'POST',
+    body: { name },
+  })
+  newThreadName.value = ''
+  showNewThread.value = false
+  await loadThreads()
+  activeThreadId.value = created.id
+}
 </script>
 
 <template>
@@ -244,6 +306,57 @@ function reactionsFor(messageId: string) {
         {{ chat.connected.value ? '● live' : '○ offline' }}
       </span>
     </header>
+
+    <nav
+      v-if="roomInfo && visibleThreads.length"
+      class="sticky top-[52px] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur overflow-x-auto"
+      aria-label="Threads"
+    >
+      <button
+        v-for="t of visibleThreads"
+        :key="t.id"
+        type="button"
+        class="shrink-0 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors"
+        :class="activeThreadId === t.id
+          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+          : 'text-zinc-400 border border-transparent hover:bg-zinc-900'"
+        @click="selectThread(t.id)"
+      >
+        {{ t.name }}
+      </button>
+      <button
+        type="button"
+        class="shrink-0 px-3 py-1.5 rounded-full text-sm text-zinc-400 border border-zinc-800 hover:bg-zinc-900"
+        aria-label="New thread"
+        @click="showNewThread = !showNewThread"
+      >
+        +
+      </button>
+    </nav>
+
+    <div
+      v-if="showNewThread"
+      class="px-3 py-2 border-b border-zinc-800 flex gap-2"
+    >
+      <UInput
+        v-model="newThreadName"
+        placeholder="Thread name…"
+        size="sm"
+        class="flex-1"
+        @keydown.enter="createThread"
+      />
+      <UButton size="sm" color="primary" :disabled="!newThreadName.trim()" @click="createThread">
+        Create
+      </UButton>
+      <UButton
+        size="sm"
+        color="neutral"
+        variant="ghost"
+        @click="showNewThread = false; newThreadName = ''"
+      >
+        Cancel
+      </UButton>
+    </div>
 
     <main ref="scrollEl" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
       <div v-if="roomError" class="max-w-sm mx-auto py-12 text-center space-y-3">
@@ -275,7 +388,7 @@ function reactionsFor(messageId: string) {
       </template>
     </main>
 
-    <SendBox v-if="roomInfo" @send="send" />
+    <SendBox v-if="roomInfo && activeThreadId" @send="send" />
 
     <MemberManager
       v-if="roomInfo"
