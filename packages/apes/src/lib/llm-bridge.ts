@@ -108,8 +108,33 @@ mkdir -p "$NPM_CONFIG_PREFIX"
 # upgrades on the next launchctl restart instead of needing manual touch.
 npm install -g --silent @openape/chat-bridge@latest
 
+# apes is needed to refresh the agent's IdP token before each boot —
+# agents auth via SSH key signing, the resulting token has no
+# refresh_token and expires after ~1h. Without re-running 'apes login'
+# the bridge would crashloop after the first hour. KeepAlive's 10s
+# throttle then bounds the recovery gap to ~10s.
+if ! command -v apes >/dev/null 2>&1; then
+  npm install -g --silent @openape/apes
+fi
+
 if ! command -v pi >/dev/null 2>&1; then
   npm install -g --silent @mariozechner/pi-coding-agent
+fi
+
+# Refresh IdP token. Read the agent's own email + idp out of the auth
+# file spawn wrote, then re-sign via the registered SSH key. python3 is
+# always available on macOS — avoids a jq dep.
+if [ -f "$HOME/.config/apes/auth.json" ]; then
+  agent_email=$(python3 -c "import json,os,sys
+try: print(json.load(open(os.path.expanduser('~/.config/apes/auth.json')))['email'])
+except Exception: sys.exit(1)" 2>/dev/null || true)
+  agent_idp=$(python3 -c "import json,os,sys
+try: print(json.load(open(os.path.expanduser('~/.config/apes/auth.json')))['idp'])
+except Exception: sys.exit(1)" 2>/dev/null || true)
+  if [ -n "$agent_email" ] && [ -n "$agent_idp" ]; then
+    apes login "$agent_email" --idp "$agent_idp" >/dev/null 2>&1 \\
+      || echo "warn: apes login failed for $agent_email; continuing with cached token"
+  fi
 fi
 
 EXT_DIR="$HOME/.pi/agent/extensions"
