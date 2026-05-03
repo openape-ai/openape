@@ -15,9 +15,11 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
+import { ensureRoomMembership } from '../../lib/chat-room'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
-  BRIDGE_PLIST_LABEL,
+  bridgePlistLabel,
+  bridgePlistPath,
   buildBridgeEnvFile,
   buildBridgePlist,
   buildBridgeStartScript,
@@ -64,6 +66,11 @@ export const spawnAgentCommand = defineCommand({
     'bridge-base-url': {
       type: 'string',
       description: 'Override LITELLM_BASE_URL for the bridge (default: read from ~/litellm/.env or http://127.0.0.1:4000/v1).',
+    },
+    'bridge-room': {
+      type: 'string',
+      description:
+        'After spawn, create (or find) a chat.openape.ai room with this name and add the new agent as a member. Uses the spawning user\'s IdP bearer.',
     },
   },
   async run({ args }) {
@@ -162,8 +169,9 @@ export const spawnAgentCommand = defineCommand({
               cliBaseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
             })
             return {
-              plistLabel: BRIDGE_PLIST_LABEL,
-              plistContent: buildBridgePlist(homeDir),
+              plistLabel: bridgePlistLabel(name),
+              plistPath: bridgePlistPath(name),
+              plistContent: buildBridgePlist(name, homeDir),
               startScript: buildBridgeStartScript(),
               envFile: buildBridgeEnvFile(cfg),
             }
@@ -194,6 +202,29 @@ export const spawnAgentCommand = defineCommand({
       execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
 
       consola.success(`Agent ${name} spawned.`)
+
+      const bridgeRoom = typeof args['bridge-room'] === 'string' ? args['bridge-room'] : undefined
+      if (args.bridge && bridgeRoom) {
+        try {
+          consola.start(`Inviting agent into chat.openape.ai room "${bridgeRoom}"…`)
+          const result = await ensureRoomMembership({
+            callerBearer: auth.access_token,
+            roomName: bridgeRoom,
+            agentEmail: registration.email,
+          })
+          consola.success(
+            result.created
+              ? `Created room ${result.roomId} and added ${registration.email}`
+              : `Room ${result.roomId} already existed; added ${registration.email}`,
+          )
+        }
+        catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          consola.warn(`Could not auto-create / invite to chat room: ${msg}`)
+          consola.info('Add the agent manually with: ape-chat members add <agent-email>')
+        }
+      }
+
       console.log('')
       console.log('Run as the agent with:')
       console.log(`  apes run --as ${name} -- claude --session-name ${name} --dangerously-skip-permissions`)
