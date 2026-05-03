@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  BRIDGE_PLIST_LABEL,
+  bridgePlistLabel,
+  bridgePlistPath,
   buildBridgeEnvFile,
   buildBridgePlist,
   buildBridgeStartScript,
@@ -94,21 +95,32 @@ describe('llm-bridge — pure helpers', () => {
     expect(env).toContain('LITELLM_BASE_URL=http://h:1/v1')
   })
 
-  it('buildBridgeStartScript installs idempotently + sources env + execs bridge', () => {
+  it('buildBridgeStartScript installs pi + bridge via npm, drops extension, execs bridge', () => {
     const sh = buildBridgeStartScript()
     expect(sh.startsWith('#!/usr/bin/env bash')).toBe(true)
-    expect(sh).toContain('bun add -g @openape/chat-bridge')
+    expect(sh).toContain('npm install -g --silent @openape/chat-bridge')
+    expect(sh).toContain('npm install -g --silent @mariozechner/pi-coding-agent')
+    expect(sh).toContain('NPM_CONFIG_PREFIX="$HOME/.npm-global"')
+    expect(sh).toContain('EXT_DIR="$HOME/.pi/agent/extensions"')
+    expect(sh).toContain('"$EXT_DIR/litellm.ts"')
     expect(sh).toContain('. "$HOME/.pi/agent/.env"')
     expect(sh).toContain('exec openape-chat-bridge')
   })
 
-  it('buildBridgePlist embeds homedir paths + KeepAlive + correct label', () => {
-    const plist = buildBridgePlist('/Users/agent-x')
-    expect(plist).toContain(`<string>${BRIDGE_PLIST_LABEL}</string>`)
+  it('buildBridgePlist embeds agent name as label + UserName + paths + KeepAlive', () => {
+    const plist = buildBridgePlist('agent-x', '/Users/agent-x')
+    expect(plist).toContain('<string>eco.hofmann.apes.bridge.agent-x</string>')
+    expect(plist).toContain('<key>UserName</key>')
+    expect(plist).toContain('<string>agent-x</string>')
     expect(plist).toContain('<string>/Users/agent-x/Library/Application Support/openape/bridge/start.sh</string>')
     expect(plist).toContain('<string>/Users/agent-x/Library/Logs/openape-chat-bridge.log</string>')
     expect(plist).toContain('<key>KeepAlive</key>')
     expect(plist).toContain('<key>RunAtLoad</key>')
     expect(plist).toContain('<key>HOME</key>')
+  })
+
+  it('bridgePlistLabel + bridgePlistPath include agent name', () => {
+    expect(bridgePlistLabel('agent-x')).toBe('eco.hofmann.apes.bridge.agent-x')
+    expect(bridgePlistPath('agent-x')).toBe('/Library/LaunchDaemons/eco.hofmann.apes.bridge.agent-x.plist')
   })
 })
