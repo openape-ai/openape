@@ -1,6 +1,6 @@
 {
   "name": "@openape/chat-bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Bridge daemon: forwards chat.openape.ai messages to a local LLM CLI (default: pi) and posts replies back as the agent",
   "type": "module",
   "license": "MIT",
