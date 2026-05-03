@@ -99,8 +99,10 @@ export interface SpawnSetupScriptInput {
 }
 
 export interface SpawnBridgeFiles {
-  /** Plist label, matches `BRIDGE_PLIST_LABEL` in lib/llm-bridge.ts. */
+  /** Plist label, e.g. `eco.hofmann.apes.bridge.<agent>` (must be unique). */
   plistLabel: string
+  /** Absolute path of the plist file (under /Library/LaunchDaemons/). */
+  plistPath: string
   /** XML plist content (full file). */
   plistContent: string
   /** start.sh content (idempotent installer + exec). */
@@ -218,25 +220,34 @@ ${buildBridgeBootstrapBlock(input.bridge)}`
 
 function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
   if (!bridge) return ''
+  // Plist lives in /Library/LaunchDaemons (system-wide), agent-owned files
+  // live in $HOME. Daemons need root-owned plists; the start.sh + .env are
+  // chowned to the agent below by the existing chown -R block.
   return `
-mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs" "$HOME_DIR/.pi/agent"
+mkdir -p "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs" "$HOME_DIR/.pi/agent"
 cat > "$HOME_DIR/.pi/agent/.env" ${shHeredoc(bridge.envFile)}
 cat > "$HOME_DIR/Library/Application Support/openape/bridge/start.sh" ${shHeredoc(bridge.startScript)}
 chmod 755 "$HOME_DIR/Library/Application Support/openape/bridge/start.sh"
-cat > "$HOME_DIR/Library/LaunchAgents/${bridge.plistLabel}.plist" ${shHeredoc(bridge.plistContent)}
 chmod 600 "$HOME_DIR/.pi/agent/.env"
+
+# System-wide LaunchDaemon — root-owned, mode 644 (launchd refuses
+# group/world-writable plists). UserName in the plist makes launchd run
+# the binary as the agent, not root.
+cat > ${shQuote(bridge.plistPath)} ${shHeredoc(bridge.plistContent)}
+chown root:wheel ${shQuote(bridge.plistPath)}
+chmod 644 ${shQuote(bridge.plistPath)}
 `
 }
 
 function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
   if (!bridge) return ''
+  // Bootstrap into the system domain. Spawn already runs as root via
+  // \`apes run --as root\`, so we have permission. Stale label is bootouted
+  // first to make re-spawn idempotent.
   return `
-# Load the bridge launchd job into the agent's gui domain. Runs as root
-# from the spawn setup script so we target gui/<agent-uid> explicitly.
-# Failure here is non-fatal — the plist still lands and launchd will pick
-# it up next time the agent logs in.
-launchctl bootstrap "gui/$NEXT_UID" "$HOME_DIR/Library/LaunchAgents/${bridge.plistLabel}.plist" || \\
-  echo "warn: bridge bootstrap failed for gui/$NEXT_UID; loads on next login"
+launchctl bootout "system/${bridge.plistLabel}" 2>/dev/null || true
+launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
+  echo "warn: bridge bootstrap into system domain failed; check ${bridge.plistPath}"
 `
 }
 
@@ -272,6 +283,16 @@ UID_OF=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {pr
 if [ -n "$UID_OF" ]; then
   launchctl bootout "user/$UID_OF" 2>/dev/null || true
   pkill -9 -u "$UID_OF" 2>/dev/null || true
+fi
+
+# Per-agent system LaunchDaemon written by spawn --bridge. Bootout +
+# delete must come BEFORE we delete the user, otherwise launchd keeps a
+# zombie reference. No-op if the plist isn't there.
+BRIDGE_LABEL="eco.hofmann.apes.bridge.$NAME"
+BRIDGE_PLIST="/Library/LaunchDaemons/$BRIDGE_LABEL.plist"
+if [ -f "$BRIDGE_PLIST" ]; then
+  launchctl bootout "system/$BRIDGE_LABEL" 2>/dev/null || true
+  rm -f "$BRIDGE_PLIST"
 fi
 
 if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
