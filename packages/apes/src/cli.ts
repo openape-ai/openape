@@ -37,6 +37,7 @@ import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
 import { CliError, CliExit } from './errors'
+import { maybeWarnStaleVersion } from './version-check'
 
 // Gracefully handle EPIPE when stdout is closed early (e.g. piped to `head`)
 process.stdout.on('error', (err: NodeJS.ErrnoException) => {
@@ -189,6 +190,12 @@ async function maybeRefreshAuth(): Promise<void> {
 }
 
 await maybeRefreshAuth()
+
+// Stale-version notice. Synchronous cache read prints instantly when
+// we already know we're behind; the actual npm round-trip is bounded
+// to 2s by an AbortSignal so command startup never blocks for long.
+// Cached 24h, so this is a one-time cost per day.
+await maybeWarnStaleVersion(__VERSION__).catch(() => { /* never block */ })
 
 runMain(main).catch((err) => {
   if (err instanceof CliExit) {
