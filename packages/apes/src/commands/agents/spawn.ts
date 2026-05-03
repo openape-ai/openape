@@ -15,7 +15,6 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { requestContactWithAgent } from '../../lib/chat-room'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
   bridgePlistLabel,
@@ -149,6 +148,7 @@ export const spawnAgentCommand = defineCommand({
         accessToken: token,
         email: registration.email,
         expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
+        ownerEmail: auth.email,
       })
 
       const includeClaudeHook = !args['no-claude-hook']
@@ -199,22 +199,8 @@ export const spawnAgentCommand = defineCommand({
       consola.success(`Agent ${name} spawned.`)
 
       if (args.bridge) {
-        try {
-          consola.start(`Sending contact request to ${registration.email}…`)
-          const view = await requestContactWithAgent({
-            callerBearer: auth.access_token,
-            agentEmail: registration.email,
-          })
-          consola.success(
-            view.connected
-              ? `Already connected to ${registration.email}`
-              : `Contact request sent — agent will accept on first bridge boot`,
-          )
-        }
-        catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          consola.warn(`Could not send contact request: ${msg}`)
-        }
+        consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
+        consola.info('Open chat.openape.ai and accept it to start chatting with the agent.')
       }
 
       console.log('')

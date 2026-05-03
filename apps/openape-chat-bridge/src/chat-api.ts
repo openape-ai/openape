@@ -35,6 +35,15 @@ export class ChatApi {
     return result
   }
 
+  async requestContact(peerEmail: string): Promise<ContactView> {
+    const url = `${this.endpoint}/api/contacts`
+    return await ofetch<ContactView>(url, {
+      method: 'POST',
+      headers: { Authorization: await this.bearer() },
+      body: { email: peerEmail },
+    })
+  }
+
   async listContacts(): Promise<ContactView[]> {
     const url = `${this.endpoint}/api/contacts`
     return await ofetch<ContactView[]>(url, {
