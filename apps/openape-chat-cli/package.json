@@ -1,0 +1,59 @@
+{
+  "name": "@openape/ape-chat",
+  "version": "0.1.0",
+  "description": "CLI for chat.openape.ai — shared rooms for humans and agents",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "bin": {
+    "ape-chat": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape.git",
+    "directory": "apps/openape-chat-cli"
+  },
+  "homepage": "https://github.com/openape-ai/openape#readme",
+  "bugs": {
+    "url": "https://github.com/openape-ai/openape/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "citty": "^0.1.6",
+    "jose": "catalog:",
+    "ofetch": "^1.4.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "^8.5.13",
+    "eslint": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "chat",
+    "openape",
+    "cli",
+    "ddisa",
+    "agent"
+  ]
+}
