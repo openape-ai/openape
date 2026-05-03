@@ -17,43 +17,16 @@ if (!user.value && import.meta.client) {
   navigateTo('/login')
 }
 
-const { data: rooms, refresh } = await useFetch<RoomRow[]>('/api/rooms', {
+const { data: allRooms } = await useFetch<RoomRow[]>('/api/rooms', {
   default: () => [],
 })
 
-const showCreate = ref(false)
-const createName = ref('')
-const createKind = ref<'channel' | 'dm'>('channel')
-const createMembers = ref('')
-const creating = ref(false)
-const createError = ref<string | null>(null)
-
-async function createRoom() {
-  createError.value = null
-  if (!createName.value.trim()) return
-  creating.value = true
-  try {
-    const members = createMembers.value
-      .split(/[,\s]+/)
-      .map(s => s.trim())
-      .filter(Boolean)
-    const room = await $fetch<{ id: string }>('/api/rooms', {
-      method: 'POST',
-      body: { name: createName.value.trim(), kind: createKind.value, members },
-    })
-    showCreate.value = false
-    createName.value = ''
-    createMembers.value = ''
-    await refresh()
-    navigateTo(`/rooms/${room.id}`)
-  }
-  catch (err) {
-    createError.value = err instanceof Error ? err.message : 'Failed to create room'
-  }
-  finally {
-    creating.value = false
-  }
-}
+// Channel-style rooms (group chats) are hidden until the contacts model
+// (Phase A) ships — letting an agent loose in a multi-member room with no
+// way to filter agent vs human created reply-loops between agents. DMs
+// (1:1) stay visible because the membership shape inherently bounds the
+// participants.
+const rooms = computed(() => (allRooms.value ?? []).filter(r => r.kind === 'dm'))
 
 async function logout() {
   await spLogout()
@@ -72,13 +45,6 @@ async function logout() {
         <span v-if="user.act === 'agent'">🤖</span>
       </span>
       <UButton
-        icon="i-lucide-plus"
-        size="sm"
-        color="primary"
-        aria-label="New room"
-        @click="showCreate = true"
-      />
-      <UButton
         icon="i-lucide-log-out"
         size="sm"
         color="neutral"
@@ -93,7 +59,9 @@ async function logout() {
         <EnableNotifications />
       </ClientOnly>
       <p v-if="!rooms?.length" class="p-8 text-center text-zinc-500 text-sm">
-        No rooms yet. Create one to start chatting.
+        No direct chats yet.<br>
+        Spawn an agent with <code class="text-zinc-300">apes agents spawn &lt;name&gt; --bridge</code>
+        to start a conversation.
       </p>
       <ul v-else class="divide-y divide-zinc-800">
         <li v-for="room of rooms" :key="room.id">
@@ -113,41 +81,5 @@ async function logout() {
         </li>
       </ul>
     </main>
-
-    <UModal v-model:open="showCreate">
-      <template #content>
-        <form class="p-6 space-y-4" @submit.prevent="createRoom">
-          <h2 class="text-lg font-semibold">
-            New room
-          </h2>
-          <UFormField label="Name" required>
-            <UInput v-model="createName" placeholder="team-alpha" autofocus />
-          </UFormField>
-          <UFormField label="Type">
-            <URadioGroup
-              v-model="createKind"
-              :items="[
-                { value: 'channel', label: 'Channel — many members can join later' },
-                { value: 'dm', label: 'DM — fixed member set' },
-              ]"
-            />
-          </UFormField>
-          <UFormField label="Members (emails, comma or space separated)" :hint="createKind === 'dm' ? 'You + at least one other email' : 'Optional — anyone can join later'">
-            <UTextarea v-model="createMembers" :rows="2" placeholder="alice@example.com, bob@example.com" />
-          </UFormField>
-          <p v-if="createError" class="text-sm text-red-400">
-            {{ createError }}
-          </p>
-          <div class="flex gap-2 justify-end">
-            <UButton color="neutral" variant="ghost" @click="showCreate = false">
-              Cancel
-            </UButton>
-            <UButton type="submit" color="primary" :loading="creating">
-              Create
-            </UButton>
-          </div>
-        </form>
-      </template>
-    </UModal>
   </div>
 </template>
