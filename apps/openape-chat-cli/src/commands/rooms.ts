@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty'
-import { listRooms } from '../api'
+import { createRoom, getRoom, listRooms } from '../api'
 import { setDefaultRoomId } from '../config'
 import { fmtTime, printJson, printLine } from '../output'
 
@@ -44,10 +44,56 @@ const clearSub = defineCommand({
   },
 })
 
+const createSub = defineCommand({
+  meta: { name: 'create', description: 'Create a new room' },
+  args: {
+    name: { type: 'string', required: true, description: 'Display name' },
+    kind: { type: 'string', default: 'channel', description: 'channel | dm' },
+    members: { type: 'string', description: 'Comma-separated member emails to invite' },
+    json: { type: 'boolean', default: false },
+  },
+  async run({ args }) {
+    if (args.kind !== 'channel' && args.kind !== 'dm') {
+      throw new Error('--kind must be "channel" or "dm"')
+    }
+    const memberList = args.members
+      ? args.members.split(',').map(s => s.trim()).filter(Boolean)
+      : []
+    const room = await createRoom({ name: args.name, kind: args.kind, members: memberList })
+    if (args.json) {
+      printJson(room)
+      return
+    }
+    printLine(`created ${room.id}  ${room.kind}  ${room.name}`)
+  },
+})
+
+const infoSub = defineCommand({
+  meta: { name: 'info', description: 'Show metadata for one room' },
+  args: {
+    id: { type: 'positional', required: true, description: 'Room id' },
+    json: { type: 'boolean', default: false },
+  },
+  async run({ args }) {
+    const room = await getRoom(args.id)
+    if (args.json) {
+      printJson(room)
+      return
+    }
+    printLine(`id:        ${room.id}`)
+    printLine(`name:      ${room.name}`)
+    printLine(`kind:      ${room.kind}`)
+    printLine(`createdBy: ${room.createdByEmail}`)
+    printLine(`createdAt: ${fmtTime(room.createdAt)}`)
+  },
+})
+
 export const roomsCommand = defineCommand({
   meta: { name: 'rooms', description: 'List, create, and switch chat rooms' },
   subCommands: {
     list: listSub,
+    create: createSub,
+    info: infoSub,
     use: useSub,
     clear: clearSub,
   },
