@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 0.23.0
+
+### Minor Changes
+
+- [#235](https://github.com/openape-ai/openape/pull/235) [`0aac1a1`](https://github.com/openape-ai/openape/commit/0aac1a1a34b5841c4b0ca7f2bcd854f23940d663) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add `apes agents spawn --bridge` to install the openape-chat-bridge daemon for the spawned agent. Drops a launchd plist + start script + `~/.pi/agent/.env` into the agent's home, so the agent auto-answers chat.openape.ai messages by forwarding them to a local LLM CLI (default: pi). LITELLM_API_KEY + LITELLM_BASE_URL default from `~/litellm/.env` (the spawning user's hand-crafted proxy setup); override via `--bridge-key` / `--bridge-base-url`. `apes agents destroy` already cascades cleanup via `launchctl bootout user/$UID_OF` + `rm -rf $HOME_DIR`, so no destroy changes were needed.
+
 ## 0.22.1
 
 ### Patch Changes
