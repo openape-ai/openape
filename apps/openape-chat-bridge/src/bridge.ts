@@ -19,6 +19,7 @@ import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import { ChatApi } from './chat-api'
+import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { PiRpcSession } from './pi-rpc'
 import { RoomSession } from './room-session'
 
@@ -92,12 +93,70 @@ class Bridge {
   private chat: ChatApi
   private bearer: () => Promise<string>
 
-  constructor(private cfg: BridgeConfig, private selfEmail: string) {
+  constructor(
+    private cfg: BridgeConfig,
+    private selfEmail: string,
+    private ownerEmail: string,
+  ) {
     this.bearer = async () => {
       const idp = await ensureFreshIdpAuth()
       return `Bearer ${idp.access_token}`
     }
     this.chat = new ChatApi(this.cfg.endpoint, this.bearer)
+  }
+
+  /**
+   * If the agent has no contact relationship with the owner yet, send a
+   * friend request from the agent → owner. The owner accepts in the
+   * chat UI; the connection only goes live after that explicit step.
+   * Idempotent: server-side counter-request semantics make a re-call
+   * a no-op when the relationship already exists.
+   */
+  async sendInitialOwnerRequestIfNeeded(): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const ownerLower = this.ownerEmail.toLowerCase()
+    const existing = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower)
+    if (existing) return
+    log(`sending initial contact request to owner ${this.ownerEmail}`)
+    try {
+      await this.chat.requestContact(this.ownerEmail)
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log(`could not send initial request to ${this.ownerEmail}: ${msg}`)
+    }
+  }
+
+  /**
+   * Auto-accept ONLY contact requests from peers the owner has approved
+   * (allowlist + owner themselves). Anything else stays pending — to
+   * accept those, the owner needs to run `apes agents allow <agent>
+   * <peer-email>` first.
+   */
+  async acceptAllowedPendingContacts(): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const pending = contacts.filter(c => c.myStatus === 'pending')
+    if (pending.length === 0) return
+    const allowlist = readAllowlist()
+    const identity = { email: this.selfEmail, ownerEmail: this.ownerEmail, idp: '' }
+    const accepted: string[] = []
+    const skipped: string[] = []
+    for (const c of pending) {
+      if (!shouldAutoAccept(c.peerEmail, identity, allowlist)) {
+        skipped.push(c.peerEmail)
+        continue
+      }
+      try {
+        await this.chat.acceptContact(c.peerEmail)
+        accepted.push(c.peerEmail)
+      }
+      catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log(`failed to accept ${c.peerEmail}: ${msg}`)
+      }
+    }
+    if (accepted.length > 0) log(`accepted: ${accepted.join(', ')}`)
+    if (skipped.length > 0) log(`skipped (not on allowlist): ${skipped.join(', ')}`)
   }
 
   handleInbound(msg: Message): void {
@@ -141,6 +200,17 @@ class Bridge {
       ws.on('open', () => {
         log(`connected as ${this.selfEmail} → ${this.cfg.endpoint}`)
         pingTimer = setInterval(() => ws.ping(), PING_INTERVAL_MS)
+        // (1) On first boot the agent introduces itself to its owner —
+        // owner sees a pending request in the chat UI and explicitly
+        // accepts. (2) For peers the owner has subsequently allow-listed,
+        // we close the handshake automatically. Anyone else stays pending
+        // until the owner uses `apes agents allow`. Both calls soft-fail.
+        void this.sendInitialOwnerRequestIfNeeded().catch((err) => {
+          log(`initial owner request failed: ${err instanceof Error ? err.message : String(err)}`)
+        })
+        void this.acceptAllowedPendingContacts().catch((err) => {
+          log(`accept-pending-contacts failed: ${err instanceof Error ? err.message : String(err)}`)
+        })
       })
 
       ws.on('message', (data: WebSocket.RawData) => {
@@ -169,11 +239,20 @@ class Bridge {
 
 async function main(): Promise<void> {
   const cfg = readConfig()
-  const identity = await getIdentity()
+  // The IdP-side identity tells us who we ARE; the on-disk identity
+  // (from auth.json) tells us who we belong to (`owner_email`). We
+  // sanity-check they match before trusting either.
+  const idpId = await getIdentity()
+  const onDisk = readAgentIdentity()
+  if (onDisk.email.toLowerCase() !== idpId.email.toLowerCase()) {
+    throw new Error(
+      `auth.json email (${onDisk.email}) doesn't match IdP token sub (${idpId.email}) — refusing to start`,
+    )
+  }
 
-  log(`bridge starting — pi=${cfg.piBin} provider=${cfg.provider} model=${cfg.model} room=${cfg.roomFilter ?? '*'}`)
+  log(`bridge starting — agent=${onDisk.email} owner=${onDisk.ownerEmail} pi=${cfg.piBin} provider=${cfg.provider} model=${cfg.model} room=${cfg.roomFilter ?? '*'}`)
 
-  const bridge = new Bridge(cfg, identity.email)
+  const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail)
   let attempt = 0
   while (true) {
     try {

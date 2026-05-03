@@ -363,6 +363,13 @@ export interface AuthJsonInput {
   accessToken: string
   email: string
   expiresAt: number
+  /**
+   * Email of the human owner who spawned this agent. Persisted so the
+   * bridge daemon can (a) send the initial contact request to the right
+   * person and (b) seed its allowlist with the only peer it should
+   * trust by default. Other peers go through `apes agents allow`.
+   */
+  ownerEmail: string
 }
 
 export function buildAgentAuthJson(input: AuthJsonInput): string {
@@ -371,6 +378,7 @@ export function buildAgentAuthJson(input: AuthJsonInput): string {
     access_token: input.accessToken,
     email: input.email,
     expires_at: input.expiresAt,
+    owner_email: input.ownerEmail,
   }, null, 2)}\n`
 }
 

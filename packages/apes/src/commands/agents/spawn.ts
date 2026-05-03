@@ -15,7 +15,6 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { ensureDmWith } from '../../lib/chat-room'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
   bridgePlistLabel,
@@ -149,6 +148,7 @@ export const spawnAgentCommand = defineCommand({
         accessToken: token,
         email: registration.email,
         expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
+        ownerEmail: auth.email,
       })
 
       const includeClaudeHook = !args['no-claude-hook']
@@ -199,23 +199,8 @@ export const spawnAgentCommand = defineCommand({
       consola.success(`Agent ${name} spawned.`)
 
       if (args.bridge) {
-        try {
-          consola.start('Setting up direct chat with the agent…')
-          const result = await ensureDmWith({
-            callerBearer: auth.access_token,
-            callerEmail: auth.email,
-            peerEmail: registration.email,
-          })
-          consola.success(
-            result.created
-              ? `Created direct chat with ${registration.email}`
-              : `Direct chat with ${registration.email} already existed`,
-          )
-        }
-        catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          consola.warn(`Could not auto-create direct chat: ${msg}`)
-        }
+        consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
+        consola.info('Open chat.openape.ai and accept it to start chatting with the agent.')
       }
 
       console.log('')

@@ -17,6 +17,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: parsed.error.message })
   }
 
+  // DM rooms are owned by the contacts model — they exist only as the
+  // backing storage of an accepted contact pair. Direct creation via
+  // /api/rooms with kind='dm' is no longer allowed; clients (and apes
+  // spawn) must POST to /api/contacts which lazy-creates the DM room
+  // upon bilateral accept.
+  if (parsed.data.kind === 'dm') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Direct DM creation is not allowed; use POST /api/contacts to send a friend request.',
+    })
+  }
+
   const id = randomUUID()
   const now = Math.floor(Date.now() / 1000)
   const db = useDb()
