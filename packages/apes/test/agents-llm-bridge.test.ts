@@ -106,8 +106,9 @@ describe('llm-bridge — pure helpers', () => {
     expect(sh).toContain('"$EXT_DIR/litellm.ts"')
     expect(sh).toContain('. "$HOME/.pi/agent/.env"')
     expect(sh).toContain('exec openape-chat-bridge')
-    // PATH includes the bun global bin dir where the installer landed.
-    expect(sh).toContain('$HOME/.bun/install/global/bin')
+    // PATH includes the bun global bin dir where the installer landed
+    // (bun symlinks live in ~/.bun/bin, NOT ~/.bun/install/global/bin).
+    expect(sh).toContain('$HOME/.bun/bin')
   })
 
   it('buildBridgeStartScript refreshes IdP token before exec (1h expiry workaround)', () => {
