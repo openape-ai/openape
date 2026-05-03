@@ -16,6 +16,13 @@ import {
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
+import {
+  BRIDGE_PLIST_LABEL,
+  buildBridgeEnvFile,
+  buildBridgePlist,
+  buildBridgeStartScript,
+  resolveBridgeConfig,
+} from '../../lib/llm-bridge'
 import { isDarwin, isShellRegistered, readMacOSUser, whichBinary } from '../../lib/macos-user'
 
 export const spawnAgentCommand = defineCommand({
@@ -44,6 +51,19 @@ export const spawnAgentCommand = defineCommand({
     'claude-token-stdin': {
       type: 'boolean',
       description: 'Read the Claude Code OAuth token from stdin (paranoid form of --claude-token).',
+    },
+    'bridge': {
+      type: 'boolean',
+      description:
+        'Install the openape-chat-bridge daemon for this agent: drops a launchd plist that runs `@openape/chat-bridge` so the agent answers chat.openape.ai messages. Reads LITELLM_API_KEY/BASE_URL defaults from ~/litellm/.env; override via --bridge-key / --bridge-base-url.',
+    },
+    'bridge-key': {
+      type: 'string',
+      description: 'Override LITELLM_API_KEY for the bridge (default: read from ~/litellm/.env).',
+    },
+    'bridge-base-url': {
+      type: 'string',
+      description: 'Override LITELLM_BASE_URL for the bridge (default: read from ~/litellm/.env or http://127.0.0.1:4000/v1).',
     },
   },
   async run({ args }) {
@@ -134,6 +154,22 @@ export const spawnAgentCommand = defineCommand({
         flag: typeof args['claude-token'] === 'string' ? args['claude-token'] : undefined,
         fromStdin: !!args['claude-token-stdin'],
       })
+
+      const bridge = args.bridge
+        ? (() => {
+            const cfg = resolveBridgeConfig({
+              cliKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
+              cliBaseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
+            })
+            return {
+              plistLabel: BRIDGE_PLIST_LABEL,
+              plistContent: buildBridgePlist(homeDir),
+              startScript: buildBridgeStartScript(),
+              envFile: buildBridgeEnvFile(cfg),
+            }
+          })()
+        : null
+
       const script = buildSpawnSetupScript({
         name,
         homeDir,
@@ -144,6 +180,7 @@ export const spawnAgentCommand = defineCommand({
         claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
         hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
         claudeOauthToken,
+        bridge,
       })
       writeFileSync(scriptPath, script, { mode: 0o700 })
 
