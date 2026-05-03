@@ -20,7 +20,8 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
@@ -34,7 +35,8 @@
     "@types/ws": "^8.5.13",
     "eslint": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22"

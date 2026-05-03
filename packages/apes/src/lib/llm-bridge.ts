@@ -103,9 +103,10 @@ export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 export PATH="$NPM_CONFIG_PREFIX/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 mkdir -p "$NPM_CONFIG_PREFIX"
 
-if ! command -v openape-chat-bridge >/dev/null 2>&1; then
-  npm install -g --silent @openape/chat-bridge
-fi
+# Always pull @latest on boot. npm is cached so this is a no-op when the
+# global is already current; when a new version ships, the daemon auto-
+# upgrades on the next launchctl restart instead of needing manual touch.
+npm install -g --silent @openape/chat-bridge@latest
 
 if ! command -v pi >/dev/null 2>&1; then
   npm install -g --silent @mariozechner/pi-coding-agent
