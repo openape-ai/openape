@@ -1,0 +1,49 @@
+{
+  "name": "@openape/chat-bridge",
+  "version": "0.1.0",
+  "description": "Bridge daemon: forwards chat.openape.ai messages to a local LLM CLI (default: pi) and posts replies back as the agent",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "bin": {
+    "openape-chat-bridge": "./dist/bridge.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "jose": "catalog:",
+    "ofetch": "^1.4.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "^8.5.13",
+    "eslint": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "openape",
+    "chat",
+    "bridge",
+    "agent",
+    "pi"
+  ]
+}
