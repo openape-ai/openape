@@ -78,6 +78,17 @@ export const destroyAgentCommand = defineCommand({
           : `• Hard-delete IdP agent ${idpAgent!.email} and all its SSH keys`)
       }
       consola.warn(`About to destroy "${name}":\n${consequences.join('\n')}`)
+      // Without a TTY, consola.prompt would crash with `uv_tty_init returned
+      // EINVAL` and leave the user with an opaque stack trace. Detect and
+      // refuse with a clear hint instead — `--force` is the explicit
+      // non-interactive path (CI, subprocess invocations, this script's
+      // own caller when piped).
+      if (!process.stdin.isTTY) {
+        throw new CliError(
+          'No TTY available for the interactive confirmation. Re-run with --force '
+          + 'to skip the prompt (this is the same flag CI uses).',
+        )
+      }
       const confirmed = await consola.prompt('Proceed?', { type: 'confirm', initial: false })
       if (typeof confirmed === 'symbol' || !confirmed) {
         throw new CliExit(0)
