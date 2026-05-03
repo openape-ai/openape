@@ -116,3 +116,7 @@ export function removeMember(
     { method: 'DELETE', endpoint: opts?.endpoint },
   )
 }
+
+// Exported for new command modules (contacts.ts) that POST/DELETE
+// arbitrary chat-app paths without a dedicated wrapper.
+export { request as _request }
