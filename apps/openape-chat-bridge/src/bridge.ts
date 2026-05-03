@@ -31,6 +31,7 @@ const DEFAULT_MODEL = 'gpt-5.4'
 const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
+const ALLOWLIST_POLL_INTERVAL_MS = 30_000
 
 interface Message {
   id: string
@@ -196,6 +197,7 @@ class Bridge {
     const ws = new WebSocket(wsUrl)
     return new Promise<void>((resolve, reject) => {
       let pingTimer: NodeJS.Timeout | undefined
+      let allowlistTimer: NodeJS.Timeout | undefined
 
       ws.on('open', () => {
         log(`connected as ${this.selfEmail} → ${this.cfg.endpoint}`)
@@ -211,6 +213,14 @@ class Bridge {
         void this.acceptAllowedPendingContacts().catch((err) => {
           log(`accept-pending-contacts failed: ${err instanceof Error ? err.message : String(err)}`)
         })
+        // Re-poll the allowlist + pending contacts every 30s so an
+        // `apes agents allow <agent> <peer>` call gets picked up within
+        // half a minute without a daemon restart.
+        allowlistTimer = setInterval(() => {
+          void this.acceptAllowedPendingContacts().catch((err) => {
+            log(`allowlist re-poll failed: ${err instanceof Error ? err.message : String(err)}`)
+          })
+        }, ALLOWLIST_POLL_INTERVAL_MS)
       })
 
       ws.on('message', (data: WebSocket.RawData) => {
@@ -227,10 +237,12 @@ class Bridge {
 
       ws.on('close', () => {
         if (pingTimer) clearInterval(pingTimer)
+        if (allowlistTimer) clearInterval(allowlistTimer)
         resolve()
       })
       ws.on('error', (err: Error) => {
         if (pingTimer) clearInterval(pingTimer)
+        if (allowlistTimer) clearInterval(allowlistTimer)
         reject(err)
       })
     })
