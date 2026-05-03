@@ -104,6 +104,28 @@ describe('apes agents destroy', () => {
     })
   })
 
+  it('refuses with a clear hint when no TTY and --force was not passed (was: opaque uv_tty_init crash)', async () => {
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(apiFetch).mockResolvedValueOnce([AGENT] as any)
+    macosUserMock.readMacOSUser.mockReturnValue(null)
+
+    // Force a non-TTY stdin for the duration of this test. Vitest spawns
+    // workers without a controlling terminal, so isTTY is already false,
+    // but we set it explicitly so the assertion stays valid even if a
+    // future test runner attaches one.
+    const originalIsTTY = process.stdin.isTTY
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
+    try {
+      const { destroyAgentCommand } = await import('../src/commands/agents/destroy.js')
+      await expect((destroyAgentCommand as any).run({
+        args: { name: 'agent-a' },
+      })).rejects.toThrow(/No TTY available.*--force/)
+    }
+    finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true })
+    }
+  })
+
   it('--keep-os-user skips the privileged escapes call entirely', async () => {
     const { apiFetch } = await import('../src/http.js')
     const { execFileSync } = await import('node:child_process')
