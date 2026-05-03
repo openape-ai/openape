@@ -1,6 +1,11 @@
 import { defineCommand, runMain } from 'citty'
 import { ApiError } from './api'
+import { docsCommand } from './commands/docs'
+import { listCommand } from './commands/list'
+import { membersCommand } from './commands/members'
 import { roomsCommand } from './commands/rooms'
+import { sendCommand } from './commands/send'
+import { watchCommand } from './commands/watch'
 import { whoamiCommand } from './commands/whoami'
 
 const VERSION = '0.1.0'
@@ -14,6 +19,11 @@ const main = defineCommand({
   subCommands: {
     whoami: whoamiCommand,
     rooms: roomsCommand,
+    send: sendCommand,
+    list: listCommand,
+    watch: watchCommand,
+    members: membersCommand,
+    docs: docsCommand,
   },
 })
 
