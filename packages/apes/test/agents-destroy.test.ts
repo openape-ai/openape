@@ -131,7 +131,7 @@ describe('apes agents destroy', () => {
     }
   })
 
-  it('--keep-os-user skips the privileged escapes call entirely', async () => {
+  it('--keep-os-user skips the privileged sudo call entirely', async () => {
     const { apiFetch } = await import('../src/http.js')
     const { execFileSync } = await import('node:child_process')
     vi.mocked(apiFetch)
@@ -146,7 +146,7 @@ describe('apes agents destroy', () => {
     expect(apiFetch).toHaveBeenCalledTimes(2)
   })
 
-  it('runs the teardown script via apes run --as root when OS user exists', async () => {
+  it('runs the teardown script via sudo -S when OS user exists', async () => {
     const { apiFetch } = await import('../src/http.js')
     const { execFileSync } = await import('node:child_process')
     vi.mocked(apiFetch)
@@ -159,11 +159,12 @@ describe('apes agents destroy', () => {
 
     expect(execFileSync).toHaveBeenCalledTimes(1)
     const [bin, argv, opts] = vi.mocked(execFileSync).mock.calls[0]!
-    expect(bin).toBe('/usr/local/bin/apes')
-    expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
+    expect(bin).toBe('/usr/local/bin/sudo')
+    expect(argv).toEqual(['-S', '--prompt=', '--', 'bash', '/tmp/apes-destroy-test/teardown.sh'])
     // Password must be piped via stdin, never as argv (would leak via
-    // ps and the escapes audit log).
-    expect(opts).toMatchObject({ input: 'test-admin-pw\n', stdio: ['pipe', 'inherit', 'inherit'] })
+    // ps). Two newline-terminated copies: first for sudo -S, second for
+    // the teardown script's `read -r ADMIN_PASSWORD`.
+    expect(opts).toMatchObject({ input: 'test-admin-pw\ntest-admin-pw\n', stdio: ['pipe', 'inherit', 'inherit'] })
     expect(argv).not.toContain('test-admin-pw')
   })
 
@@ -181,14 +182,14 @@ describe('apes agents destroy', () => {
       const { destroyAgentCommand } = await import('../src/commands/agents/destroy.js')
       await expect((destroyAgentCommand as any).run({
         args: { name: 'agent-a', force: true },
-      })).rejects.toThrow(/APES_ADMIN_PASSWORD/)
+      })).rejects.toThrow(/APES_ADMIN_PASSWORD|silent password prompt/)
     }
     finally {
       Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true })
     }
   })
 
-  it('issues IdP DELETE before the long-blocking escapes call (token-fresh order)', async () => {
+  it('issues IdP DELETE before the long-blocking sudo call (token-fresh order)', async () => {
     const { apiFetch } = await import('../src/http.js')
     const { execFileSync } = await import('node:child_process')
     const callOrder: string[] = []
@@ -198,7 +199,7 @@ describe('apes agents destroy', () => {
       return { ok: true }
     })
     vi.mocked(execFileSync).mockImplementation(((..._args: any[]) => {
-      callOrder.push('execFileSync:apes-run-as-root')
+      callOrder.push('execFileSync:sudo')
       return Buffer.alloc(0)
     }) as any)
     macosUserMock.readMacOSUser.mockReturnValue({ name: 'agent-a', uid: 250, shell: '/usr/local/bin/ape-shell' })
@@ -207,8 +208,8 @@ describe('apes agents destroy', () => {
     await (destroyAgentCommand as any).run({ args: { name: 'agent-a', force: true } })
 
     const deleteIdx = callOrder.findIndex(c => c.includes('DELETE:/api/my-agents/'))
-    const escapesIdx = callOrder.findIndex(c => c === 'execFileSync:apes-run-as-root')
+    const sudoIdx = callOrder.findIndex(c => c === 'execFileSync:sudo')
     expect(deleteIdx).toBeGreaterThanOrEqual(0)
-    expect(escapesIdx).toBeGreaterThan(deleteIdx)
+    expect(sudoIdx).toBeGreaterThan(deleteIdx)
   })
 })
