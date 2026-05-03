@@ -100,6 +100,23 @@ class Bridge {
     this.chat = new ChatApi(this.cfg.endpoint, this.bearer)
   }
 
+  async acceptPendingContacts(): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const pending = contacts.filter(c => c.myStatus === 'pending')
+    if (pending.length === 0) return
+    log(`accepting ${pending.length} pending contact request(s): ${pending.map(c => c.peerEmail).join(', ')}`)
+    for (const c of pending) {
+      try {
+        await this.chat.acceptContact(c.peerEmail)
+        log(`accepted contact request from ${c.peerEmail}`)
+      }
+      catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        log(`failed to accept ${c.peerEmail}: ${msg}`)
+      }
+    }
+  }
+
   handleInbound(msg: Message): void {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
@@ -141,6 +158,15 @@ class Bridge {
       ws.on('open', () => {
         log(`connected as ${this.selfEmail} → ${this.cfg.endpoint}`)
         pingTimer = setInterval(() => ws.ping(), PING_INTERVAL_MS)
+        // Accept any pending contact requests addressed to us. The human
+        // who spawned us POSTed /api/contacts during spawn; we close the
+        // bilateral handshake here so the chat link goes live as soon as
+        // the bridge is up. Soft-fail: API errors must not crash the
+        // daemon — the user can always re-send a request.
+        void this.acceptPendingContacts().catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          log(`accept-pending-contacts failed: ${msg}`)
+        })
       })
 
       ws.on('message', (data: WebSocket.RawData) => {

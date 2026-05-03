@@ -15,7 +15,7 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { ensureDmWith } from '../../lib/chat-room'
+import { requestContactWithAgent } from '../../lib/chat-room'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
   bridgePlistLabel,
@@ -200,21 +200,20 @@ export const spawnAgentCommand = defineCommand({
 
       if (args.bridge) {
         try {
-          consola.start('Setting up direct chat with the agent…')
-          const result = await ensureDmWith({
+          consola.start(`Sending contact request to ${registration.email}…`)
+          const view = await requestContactWithAgent({
             callerBearer: auth.access_token,
-            callerEmail: auth.email,
-            peerEmail: registration.email,
+            agentEmail: registration.email,
           })
           consola.success(
-            result.created
-              ? `Created direct chat with ${registration.email}`
-              : `Direct chat with ${registration.email} already existed`,
+            view.connected
+              ? `Already connected to ${registration.email}`
+              : `Contact request sent — agent will accept on first bridge boot`,
           )
         }
         catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          consola.warn(`Could not auto-create direct chat: ${msg}`)
+          consola.warn(`Could not send contact request: ${msg}`)
         }
       }
 
