@@ -67,6 +67,14 @@ function getNpmVersion(name) {
 
 function build(dir) {
   const cwd = resolve(ROOT, dir)
+  // Source-only packages (Vue components consumed via ./src directly) have
+  // no `build` script and don't need one. Detect and skip — running `pnpm
+  // build` against them would error out with "Command not found".
+  const pkg = JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf-8'))
+  if (!pkg.scripts?.build) {
+    console.log(`  No build script — source-only package, skipping build`)
+    return
+  }
   console.log(`  Building...`)
   execFileSync('pnpm', ['build'], { cwd, stdio: 'inherit' })
 }
