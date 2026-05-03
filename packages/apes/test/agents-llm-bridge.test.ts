@@ -107,6 +107,22 @@ describe('llm-bridge — pure helpers', () => {
     expect(sh).toContain('exec openape-chat-bridge')
   })
 
+  it('buildBridgeStartScript installs apes + refreshes IdP token before exec (1h expiry workaround)', () => {
+    const sh = buildBridgeStartScript()
+    // apes is required to re-sign the agent's IdP token via SSH key.
+    expect(sh).toContain('npm install -g --silent @openape/apes')
+    // The script must read the agent's own email and idp out of auth.json
+    // and call `apes login` BEFORE exec'ing the bridge — otherwise the
+    // bridge picks up the (potentially expired) cached token and crashes.
+    expect(sh).toContain('~/.config/apes/auth.json')
+    expect(sh).toContain('apes login "$agent_email" --idp "$agent_idp"')
+    // Order: login must come before exec.
+    const loginIdx = sh.indexOf('apes login')
+    const execIdx = sh.indexOf('exec openape-chat-bridge')
+    expect(loginIdx).toBeGreaterThan(0)
+    expect(execIdx).toBeGreaterThan(loginIdx)
+  })
+
   it('buildBridgePlist embeds agent name as label + UserName + paths + KeepAlive', () => {
     const plist = buildBridgePlist('agent-x', '/Users/agent-x')
     expect(plist).toContain('<string>eco.hofmann.apes.bridge.agent-x</string>')
