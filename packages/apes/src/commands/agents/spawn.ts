@@ -15,7 +15,7 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { ensureRoomMembership } from '../../lib/chat-room'
+import { ensureDmWith } from '../../lib/chat-room'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
   bridgePlistLabel,
@@ -66,11 +66,6 @@ export const spawnAgentCommand = defineCommand({
     'bridge-base-url': {
       type: 'string',
       description: 'Override LITELLM_BASE_URL for the bridge (default: read from ~/litellm/.env or http://127.0.0.1:4000/v1).',
-    },
-    'bridge-room': {
-      type: 'string',
-      description:
-        'After spawn, create (or find) a chat.openape.ai room with this name and add the new agent as a member. Uses the spawning user\'s IdP bearer.',
     },
   },
   async run({ args }) {
@@ -203,25 +198,23 @@ export const spawnAgentCommand = defineCommand({
 
       consola.success(`Agent ${name} spawned.`)
 
-      const bridgeRoom = typeof args['bridge-room'] === 'string' ? args['bridge-room'] : undefined
-      if (args.bridge && bridgeRoom) {
+      if (args.bridge) {
         try {
-          consola.start(`Inviting agent into chat.openape.ai room "${bridgeRoom}"…`)
-          const result = await ensureRoomMembership({
+          consola.start('Setting up direct chat with the agent…')
+          const result = await ensureDmWith({
             callerBearer: auth.access_token,
-            roomName: bridgeRoom,
-            agentEmail: registration.email,
+            callerEmail: auth.email,
+            peerEmail: registration.email,
           })
           consola.success(
             result.created
-              ? `Created room ${result.roomId} and added ${registration.email}`
-              : `Room ${result.roomId} already existed; added ${registration.email}`,
+              ? `Created direct chat with ${registration.email}`
+              : `Direct chat with ${registration.email} already existed`,
           )
         }
         catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          consola.warn(`Could not auto-create / invite to chat room: ${msg}`)
-          consola.info('Add the agent manually with: ape-chat members add <agent-email>')
+          consola.warn(`Could not auto-create direct chat: ${msg}`)
         }
       }
 

@@ -1,10 +1,12 @@
-// Helpers for `apes agents spawn --bridge --bridge-room <name>`. Hits
-// chat.openape.ai's REST API as the spawning user (uses their IdP bearer)
-// to create a room (or find existing) and add the agent as a member.
+// Helpers for `apes agents spawn --bridge`. Hits chat.openape.ai's REST
+// API as the spawning user (uses their IdP bearer) to ensure a DM exists
+// with the new agent. Auto-accepts both directions — the spawn act
+// itself implies trust on the human side, and the agent has no policy
+// of its own.
 //
-// We deliberately use plain fetch here rather than depending on
-// @openape/ape-chat — keeps apes free of a runtime npm dep on the chat
-// CLI. The shape mirrors openape-chat's server/api/rooms/* endpoints.
+// Plain fetch here so apes stays free of a runtime npm dep on
+// @openape/ape-chat. The shape mirrors openape-chat's server/api/rooms/*
+// endpoints.
 
 const DEFAULT_CHAT_ENDPOINT = 'https://chat.openape.ai'
 
@@ -12,6 +14,14 @@ interface Room {
   id: string
   name: string
   kind: 'channel' | 'dm'
+  /** Only present on GET /api/rooms (caller's role). */
+  role?: 'admin' | 'member'
+}
+
+interface Member {
+  userEmail: string
+  role: 'admin' | 'member'
+  joinedAt: number
 }
 
 function chatEndpoint(): string {
@@ -39,48 +49,54 @@ async function chatFetch<T>(
   return await res.json() as T
 }
 
-async function findRoomByName(bearer: string, name: string): Promise<Room | null> {
-  const rooms = await chatFetch<Room[]>(bearer, '/api/rooms')
-  return rooms.find(r => r.name === name) ?? null
+async function listRooms(bearer: string): Promise<Room[]> {
+  return chatFetch<Room[]>(bearer, '/api/rooms')
 }
 
-async function createRoom(bearer: string, name: string): Promise<Room> {
-  return chatFetch<Room>(bearer, '/api/rooms', {
-    method: 'POST',
-    body: { name, kind: 'channel', members: [] },
-  })
+async function listMembers(bearer: string, roomId: string): Promise<Member[]> {
+  return chatFetch<Member[]>(bearer, `/api/rooms/${encodeURIComponent(roomId)}/members`)
 }
 
-async function addMember(bearer: string, roomId: string, email: string, role: 'member' | 'admin' = 'member'): Promise<void> {
-  await chatFetch(bearer, `/api/rooms/${encodeURIComponent(roomId)}/members`, {
-    method: 'POST',
-    body: { email, role },
-  })
+async function findExistingDm(bearer: string, callerEmail: string, peerEmail: string): Promise<Room | null> {
+  // Walk the caller's rooms, filter to DMs, and pick the one whose member
+  // set is exactly {caller, peer}. Server-side this would be a single
+  // query — keeping it client-side until the chat-app exposes a
+  // /api/dms-with/{email} endpoint.
+  const rooms = await listRooms(bearer)
+  for (const room of rooms) {
+    if (room.kind !== 'dm') continue
+    const members = await listMembers(bearer, room.id)
+    if (members.length !== 2) continue
+    const emails = new Set(members.map(m => m.userEmail.toLowerCase()))
+    if (emails.has(callerEmail.toLowerCase()) && emails.has(peerEmail.toLowerCase())) {
+      return room
+    }
+  }
+  return null
 }
 
 /**
- * Idempotent: ensure a room with the given name exists and the agent is
- * a member. Returns the room id.
+ * Idempotent: ensure a DM room exists between the caller and the agent,
+ * with both as members. Used by `apes agents spawn --bridge` so the
+ * fresh agent immediately has a 1:1 chat with the spawning user — no
+ * room name, no manual invite.
  *
- * - If the room exists, reuse it.
- * - If the room exists and the agent is already a member, no-op on
- *   membership (server returns 200 on duplicate inserts in our schema).
+ * Returns the DM room id and whether it was created or reused.
  */
-export async function ensureRoomMembership(opts: {
+export async function ensureDmWith(opts: {
   callerBearer: string
-  roomName: string
-  agentEmail: string
+  callerEmail: string
+  peerEmail: string
 }): Promise<{ roomId: string, created: boolean }> {
-  const existing = await findRoomByName(opts.callerBearer, opts.roomName)
-  let room: Room
-  let created = false
-  if (existing) {
-    room = existing
-  }
-  else {
-    room = await createRoom(opts.callerBearer, opts.roomName)
-    created = true
-  }
-  await addMember(opts.callerBearer, room.id, opts.agentEmail)
-  return { roomId: room.id, created }
+  const existing = await findExistingDm(opts.callerBearer, opts.callerEmail, opts.peerEmail)
+  if (existing) return { roomId: existing.id, created: false }
+
+  // Name is informational. The new contacts UI surfaces the peer's email
+  // (or display name) directly; this string is only the fallback in
+  // legacy room-list views.
+  const room = await chatFetch<Room>(opts.callerBearer, '/api/rooms', {
+    method: 'POST',
+    body: { name: opts.peerEmail, kind: 'dm', members: [opts.peerEmail] },
+  })
+  return { roomId: room.id, created: true }
 }
