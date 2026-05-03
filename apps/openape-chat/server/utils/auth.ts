@@ -1,5 +1,7 @@
 import type { H3Event } from 'h3'
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
+import { decodeProtectedHeader } from 'jose'
+import { verifyCliToken } from './cli-token'
 
 // `getSpSession`, `createError`, `getHeader`, `getQuery`, and `useRuntimeConfig`
 // are all auto-imported by Nuxt 4 (the SP module + nitro), so we don't import
@@ -80,6 +82,25 @@ function extractBearer(event: H3Event): string | null {
 }
 
 async function verifyBearer(token: string): Promise<Caller> {
+  // Dispatch on alg in the protected header. HS256 = SP-scoped CLI token
+  // minted by /api/cli/exchange (verified locally with the session secret).
+  // Anything else (RS256/ES256/EdDSA) goes through the IdP JWKS path.
+  let alg: string | undefined
+  try {
+    alg = decodeProtectedHeader(token).alg
+  }
+  catch {
+    throw createError({ statusCode: 401, statusMessage: 'Malformed bearer token' })
+  }
+
+  if (alg === 'HS256') {
+    const cli = await verifyCliToken(token)
+    if (!cli) {
+      throw createError({ statusCode: 401, statusMessage: 'Invalid CLI token' })
+    }
+    return { email: cli.email, act: cli.act, source: 'bearer' }
+  }
+
   try {
     const { payload } = await verifyJWT<DDISAClaims>(token, getJwks())
     const email = payload.sub
