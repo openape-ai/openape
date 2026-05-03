@@ -1,2 +1,21 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+/*
+ * iOS Safari auto-zooms into form fields when the rendered font-size is
+ * below 16px on touch devices. The chat composer and the room-create
+ * dialogs use Nuxt UI's default input sizing which falls under that
+ * threshold on phones, so every keyboard summon nudges the layout.
+ *
+ * Lock all interactive form fields to >= 16px on touch-only viewports.
+ * Desktop keeps Nuxt UI's default scale via the (hover: hover) media
+ * guard, so the typography rhythm stays untouched there.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
