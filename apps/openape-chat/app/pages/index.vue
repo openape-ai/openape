@@ -137,13 +137,14 @@ function isAgent(email: string): boolean {
 <template>
   <div class="min-h-dvh flex flex-col">
     <header class="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
-      <h1 class="font-semibold text-lg flex-1">
-        OpenApe Chat
-      </h1>
-      <span v-if="user" class="text-xs text-zinc-400 hidden sm:inline">
-        {{ user.sub }}
-        <span v-if="user.act === 'agent'">🤖</span>
-      </span>
+      <div class="flex-1 min-w-0">
+        <h1 class="font-semibold text-lg leading-tight">
+          OpenApe Chat
+        </h1>
+        <p v-if="user" class="text-xs text-zinc-400 truncate leading-tight">
+          {{ user.sub }}<span v-if="user.act === 'agent'"> 🤖</span>
+        </p>
+      </div>
       <UButton
         icon="i-lucide-user-plus"
         size="sm"
