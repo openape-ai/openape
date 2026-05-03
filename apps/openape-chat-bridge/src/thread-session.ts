@@ -1,7 +1,12 @@
-// One RoomSession per chat room. Owns a long-lived pi RPC subprocess,
-// a queue of pending prompts, and the placeholder message id for the
-// in-flight turn. Streams pi text deltas back into the chat by
-// PATCHing the placeholder.
+// One ThreadSession per (room, thread). Owns a long-lived pi RPC
+// subprocess, a queue of pending prompts, and the placeholder message
+// id for the in-flight turn. Streams pi text deltas back into the chat
+// by PATCHing the placeholder.
+//
+// Phase B: each chat thread is an isolated pi conversation. The bridge
+// keeps one of these per (roomId, threadId) so the agent can hold
+// parallel ChatGPT-style sessions with the same human contact without
+// cross-contamination.
 
 import type { ChatApi } from './chat-api'
 import type { PiEvent, PiRpcSession } from './pi-rpc'
@@ -17,19 +22,20 @@ interface ActiveTurn {
   replyToMessageId: string
 }
 
-export interface RoomSessionDeps {
+export interface ThreadSessionDeps {
   roomId: string
+  threadId: string
   chat: ChatApi
   pi: PiRpcSession
   /** Logger sink — bridge typically forwards to stderr. */
   log: (line: string) => void
 }
 
-export class RoomSession {
+export class ThreadSession {
   private active: ActiveTurn | undefined
   private queue: Array<{ body: string, replyToMessageId: string }> = []
 
-  constructor(private deps: RoomSessionDeps) {
+  constructor(private deps: ThreadSessionDeps) {
     this.deps.pi.on(event => this.onPiEvent(event))
   }
 
@@ -43,14 +49,14 @@ export class RoomSession {
   }
 
   private async startTurn(body: string, replyToMessageId: string): Promise<void> {
-    const placeholder = await this.deps.chat.postMessage(this.deps.roomId, '…', replyToMessageId)
+    const placeholder = await this.deps.chat.postMessage(this.deps.roomId, '…', {
+      replyTo: replyToMessageId,
+      threadId: this.deps.threadId,
+    })
     const turn: ActiveTurn = {
       placeholderId: placeholder.id,
       accumulated: '',
       replyToMessageId,
-      // The throttle rebinds to `turn` via closure — when the turn ends
-      // we cancel before clearing `this.active`, so the captured ref is
-      // never used after teardown.
       throttle: createThrottle(async () => {
         if (!this.active || this.active.placeholderId !== placeholder.id) return
         const text = this.active.accumulated || '…'
@@ -58,7 +64,7 @@ export class RoomSession {
           await this.deps.chat.patchMessage(placeholder.id, text)
         }
         catch (err) {
-          this.deps.log(`patch failed (room=${this.deps.roomId}): ${err instanceof Error ? err.message : String(err)}`)
+          this.deps.log(`patch failed (room=${this.deps.roomId} thread=${this.deps.threadId}): ${err instanceof Error ? err.message : String(err)}`)
         }
       }, PATCH_INTERVAL_MS),
     }
@@ -76,17 +82,14 @@ export class RoomSession {
           this.active.accumulated += inner.delta
           this.active.throttle.schedule()
         }
-        // thinking_delta / toolcall_delta / tool_execution_* → ignored in
-        // v1. Hooks live here for the next milestone.
         break
       }
       case 'agent_end':
         this.endTurn()
         break
       case 'response':
-        // RPC responses to our `prompt` command — surfaced for failure cases.
         if (event.success === false) {
-          this.deps.log(`pi rpc error (room=${this.deps.roomId}): ${event.error ?? 'unknown'}`)
+          this.deps.log(`pi rpc error (room=${this.deps.roomId} thread=${this.deps.threadId}): ${event.error ?? 'unknown'}`)
           this.failTurn(`(pi rpc error: ${event.error ?? 'unknown'})`)
         }
         break
@@ -98,8 +101,6 @@ export class RoomSession {
     if (!turn) return
     turn.throttle.flush()
     this.active = undefined
-    // Drain the queue. Doing this synchronously in event order means
-    // queued prompts run sequentially in the same conversation context.
     const next = this.queue.shift()
     if (next) {
       void this.startTurn(next.body, next.replyToMessageId)
