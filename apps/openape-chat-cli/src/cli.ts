@@ -1,5 +1,6 @@
 import { defineCommand, runMain } from 'citty'
 import { ApiError } from './api'
+import { contactsCommand } from './commands/contacts'
 import { docsCommand } from './commands/docs'
 import { listCommand } from './commands/list'
 import { membersCommand } from './commands/members'
@@ -8,7 +9,7 @@ import { sendCommand } from './commands/send'
 import { watchCommand } from './commands/watch'
 import { whoamiCommand } from './commands/whoami'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 
 const main = defineCommand({
   meta: {
@@ -18,6 +19,7 @@ const main = defineCommand({
   },
   subCommands: {
     whoami: whoamiCommand,
+    contacts: contactsCommand,
     rooms: roomsCommand,
     send: sendCommand,
     list: listCommand,
