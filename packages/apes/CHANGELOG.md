@@ -1,5 +1,15 @@
 # @openape/apes
 
+## 0.21.1
+
+### Patch Changes
+
+- [#222](https://github.com/openape-ai/openape/pull/222) [`4bef7c9`](https://github.com/openape-ai/openape/commit/4bef7c988b94813d060861a261d723bfca1541f9) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes agents destroy` refuses with a clear hint when there's no TTY (was: opaque `uv_tty_init returned EINVAL` crash)
+
+  Calling `apes agents destroy <name>` from a non-TTY context (CI, subprocess, automation) used to crash with an unreadable Node-internal stack trace because `consola.prompt` requires a controlling terminal. Detect `!process.stdin.isTTY` upfront and refuse with `"No TTY available for the interactive confirmation. Re-run with --force …"` instead.
+
+  The `--force` flag has always existed for exactly this case; we just weren't surfacing it. No behavior change for interactive use.
+
 ## 0.21.0
 
 ### Minor Changes
