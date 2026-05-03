@@ -31,6 +31,7 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       room_id TEXT NOT NULL,
+      thread_id TEXT,
       sender_email TEXT NOT NULL,
       sender_act TEXT NOT NULL,
       body TEXT NOT NULL,
@@ -38,7 +39,26 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL,
       edited_at INTEGER
     )`)
+    // ALTER for existing prod rows (CREATE TABLE IF NOT EXISTS skips when
+    // table exists; the new column has to be added separately).
+    try {
+      await db.run(sql`ALTER TABLE messages ADD COLUMN thread_id TEXT`)
+    }
+    catch {
+      // Already added in a prior boot — sqlite throws on duplicate column.
+    }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id, created_at)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS threads (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_by_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      archived_at INTEGER
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_threads_room ON threads(room_id, created_at)`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS reactions (
       message_id TEXT NOT NULL,

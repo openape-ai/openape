@@ -2,7 +2,7 @@ import { createClient } from '@libsql/client'
 import { eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { memberships, messages, pushSubscriptions, reactions, rooms } from '../server/database/schema'
+import { memberships, messages, pushSubscriptions, reactions, rooms, threads } from '../server/database/schema'
 
 // Smoke test for the chat DB schema: spin up an in-memory SQLite, run the
 // same CREATE TABLE statements the production startup plugin runs, and
@@ -10,17 +10,18 @@ import { memberships, messages, pushSubscriptions, reactions, rooms } from '../s
 // migration script. This file is intentionally low-level — route-handler
 // behaviour gets covered by integration tests once the WS layer lands.
 
-let db: ReturnType<typeof drizzle<{ rooms: typeof rooms, memberships: typeof memberships, messages: typeof messages, reactions: typeof reactions, pushSubscriptions: typeof pushSubscriptions }>>
+let db: ReturnType<typeof drizzle<{ rooms: typeof rooms, memberships: typeof memberships, messages: typeof messages, reactions: typeof reactions, pushSubscriptions: typeof pushSubscriptions, threads: typeof threads }>>
 
 beforeEach(async () => {
   const client = createClient({ url: ':memory:' })
-  db = drizzle(client, { schema: { rooms, memberships, messages, reactions, pushSubscriptions } })
+  db = drizzle(client, { schema: { rooms, memberships, messages, reactions, pushSubscriptions, threads } })
 
   await db.run(sql`CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL)`)
   await db.run(sql`CREATE TABLE memberships (room_id TEXT NOT NULL, user_email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL, PRIMARY KEY (room_id, user_email))`)
-  await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER)`)
+  await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, thread_id TEXT, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER)`)
   await db.run(sql`CREATE TABLE reactions (message_id TEXT NOT NULL, user_email TEXT NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (message_id, user_email, emoji))`)
   await db.run(sql`CREATE TABLE push_subscriptions (endpoint TEXT PRIMARY KEY, user_email TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)`)
+  await db.run(sql`CREATE TABLE threads (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, name TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL, archived_at INTEGER)`)
 })
 
 afterEach(() => {
@@ -82,6 +83,19 @@ describe('chat schema', () => {
     await expect(db.insert(pushSubscriptions).values({ ...sub, userEmail: 'q@x' })).rejects.toThrow()
     const got = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.endpoint, sub.endpoint)).get()
     expect(got?.userEmail).toBe('p@x')
+  })
+
+  it('scopes messages to a thread when thread_id is set', async () => {
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'dm', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(threads).values({ id: 't1', roomId: 'r1', name: 'main', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(threads).values({ id: 't2', roomId: 'r1', name: 'side', createdByEmail: 'p@x', createdAt: 2 })
+    await db.insert(messages).values({ id: 'm1', roomId: 'r1', threadId: 't1', senderEmail: 'p@x', senderAct: 'human', body: 'main', createdAt: 1 })
+    await db.insert(messages).values({ id: 'm2', roomId: 'r1', threadId: 't2', senderEmail: 'p@x', senderAct: 'human', body: 'side', createdAt: 2 })
+
+    const inT1 = await db.select().from(messages).where(eq(messages.threadId, 't1'))
+    const inT2 = await db.select().from(messages).where(eq(messages.threadId, 't2'))
+    expect(inT1.map(r => r.id)).toEqual(['m1'])
+    expect(inT2.map(r => r.id)).toEqual(['m2'])
   })
 
   it('lists memberships joined to rooms (the GET /api/rooms shape)', async () => {

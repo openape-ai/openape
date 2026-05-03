@@ -21,7 +21,7 @@ import WebSocket from 'ws'
 import { ChatApi } from './chat-api'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { PiRpcSession } from './pi-rpc'
-import { RoomSession } from './room-session'
+import { ThreadSession } from './thread-session'
 
 const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
 const DEFAULT_PI_BIN = 'pi'
@@ -36,6 +36,7 @@ const ALLOWLIST_POLL_INTERVAL_MS = 30_000
 interface Message {
   id: string
   roomId: string
+  threadId: string
   senderEmail: string
   senderAct: 'human' | 'agent'
   body: string
@@ -90,7 +91,10 @@ function truncate(s: string, n: number): string {
 }
 
 class Bridge {
-  private rooms = new Map<string, RoomSession>()
+  // Sessions keyed by `${roomId}:${threadId}` — Phase B keeps an
+  // independent pi context per chat thread so parallel conversations
+  // with the same human contact don't bleed into each other.
+  private threads = new Map<string, ThreadSession>()
   private chat: ChatApi
   private bearer: () => Promise<string>
 
@@ -164,30 +168,39 @@ class Bridge {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
+    // Phase-B-aware servers always include `threadId`; for resilience
+    // against an older server (or a stray pre-Phase-B frame) we'd have
+    // no good fallback — the server now refuses thread-less inserts.
+    if (!msg.threadId) {
+      log(`[${msg.roomId}] dropping message ${msg.id} without threadId — server too old?`)
+      return
+    }
 
-    log(`[${msg.roomId}] in: ${truncate(msg.body, 80)}`)
-    const session = this.getOrCreateRoom(msg.roomId)
+    log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] in: ${truncate(msg.body, 80)}`)
+    const session = this.getOrCreateThread(msg.roomId, msg.threadId)
     session.enqueue(msg.body, msg.id)
   }
 
-  private getOrCreateRoom(roomId: string): RoomSession {
-    let s = this.rooms.get(roomId)
+  private getOrCreateThread(roomId: string, threadId: string): ThreadSession {
+    const key = `${roomId}:${threadId}`
+    let s = this.threads.get(key)
     if (s) return s
     const pi = new PiRpcSession({
       binary: this.cfg.piBin,
       args: ['--provider', this.cfg.provider, '--model', this.cfg.model, '--no-session'],
     })
     pi.onExit((code) => {
-      log(`[${roomId}] pi exited code=${code} — recreating on next message`)
-      this.rooms.delete(roomId)
+      log(`[${roomId}/${threadId.slice(0, 8)}] pi exited code=${code} — recreating on next message`)
+      this.threads.delete(key)
     })
-    s = new RoomSession({
+    s = new ThreadSession({
       roomId,
+      threadId,
       chat: this.chat,
       pi,
       log,
     })
-    this.rooms.set(roomId, s)
+    this.threads.set(key, s)
     return s
   }
 

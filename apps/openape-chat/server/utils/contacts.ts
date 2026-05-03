@@ -10,6 +10,7 @@ import { and, eq, or } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { contacts, memberships, rooms } from '../database/schema'
 import type { Contact } from '../database/schema'
+import { ensureMainThread } from './threads'
 
 export interface ContactView {
   /** Other party's email. */
@@ -87,6 +88,9 @@ export async function ensureDmRoomFor(row: Contact): Promise<string> {
     }).onConflictDoNothing()
   }
   await db.update(contacts).set({ roomId: id }).where(eq(contacts.id, row.id))
+  // Auto-create the room's "main" thread so any first message has
+  // somewhere to land — Phase B threads model.
+  await ensureMainThread({ roomId: id, createdByEmail: row.emailA })
   return id
 }
 

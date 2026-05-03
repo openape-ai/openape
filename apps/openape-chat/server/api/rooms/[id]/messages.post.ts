@@ -6,10 +6,15 @@ import { resolveCaller } from '../../../utils/auth'
 import { assertMember } from '../../../utils/membership'
 import { notifyRoomMembers } from '../../../utils/push'
 import { broadcastToRoom } from '../../../utils/realtime'
+import { ensureMainThread, findThreadById } from '../../../utils/threads'
 
 const bodySchema = z.object({
   body: z.string().trim().min(1).max(10_000),
   reply_to: z.string().uuid().optional(),
+  // Optional in v1: when omitted, the message lands in the room's main
+  // thread (auto-created on first use). Phase-B-aware clients pass the
+  // active thread id explicitly.
+  thread_id: z.string().uuid().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -24,9 +29,29 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: parsed.error.message })
   }
 
+  // Resolve thread: explicit thread_id (validated to belong to this
+  // room) OR fall back to the room's main thread (lazy-create for
+  // legacy rooms).
+  let threadId: string
+  if (parsed.data.thread_id) {
+    const thread = await findThreadById(parsed.data.thread_id)
+    if (!thread || thread.roomId !== id) {
+      throw createError({ statusCode: 400, statusMessage: 'thread_id does not belong to this room' })
+    }
+    if (thread.archivedAt) {
+      throw createError({ statusCode: 400, statusMessage: 'Cannot post to an archived thread' })
+    }
+    threadId = thread.id
+  }
+  else {
+    const main = await ensureMainThread({ roomId: id, createdByEmail: caller.email })
+    threadId = main.id
+  }
+
   const message = {
     id: randomUUID(),
     roomId: id,
+    threadId,
     senderEmail: caller.email,
     senderAct: caller.act,
     body: parsed.data.body,
