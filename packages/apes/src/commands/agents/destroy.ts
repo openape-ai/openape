@@ -9,6 +9,7 @@ import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
 import { AGENT_NAME_REGEX, buildDestroyTeardownScript } from '../../lib/agent-bootstrap'
 import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { readPasswordSilent } from '../../lib/silent-password'
 
 interface IdpUser {
   email: string
@@ -95,10 +96,10 @@ export const destroyAgentCommand = defineCommand({
       }
     }
 
-    // IdP-side first: while the parent's bearer is still fresh from preflight.
-    // The escapes step below blocks for human approval, which can take longer
-    // than the token's TTL — running the IdP DELETE after that wait would
-    // surface a stale-token error and leave the agent record orphaned.
+    // IdP-side first so the parent's bearer is still fresh. The sudo step
+    // below blocks for the password prompt, which the user might take a
+    // moment to complete — running the IdP DELETE after a stale-token
+    // window would leave the agent record orphaned.
     if (idpExists) {
       const id = encodeURIComponent(idpAgent!.email)
       if (args.soft) {
@@ -115,38 +116,33 @@ export const destroyAgentCommand = defineCommand({
     }
 
     if (osUserExists) {
-      const apes = whichBinary('apes')
-      if (!apes) {
-        throw new CliError('`apes` not found on PATH. Install @openape/apes globally first.')
-      }
-      const escapes = whichBinary('escapes')
-      if (!escapes) {
-        throw new CliError('`escapes` not found on PATH; OS teardown requires escapes.')
+      // OS teardown runs via plain sudo + the local admin password. The
+      // previous flow wrapped this in `apes run --as root` (DDISA grant
+      // approval) but the password was needed regardless because
+      // sysadminctl -deleteUser refuses without explicit -adminUser/
+      // -adminPassword in escapes' setuid-root context. Two prompts for
+      // one operation: dropped the grant, kept the password (#239).
+      const sudo = whichBinary('sudo')
+      if (!sudo) {
+        throw new CliError('`sudo` not found on PATH; required for OS teardown.')
       }
 
-      // The teardown script runs in escapes' setuid-root context, which
-      // has no audit/PAM session attached. Bare `sysadminctl -deleteUser`
-      // and `dscl . -delete` hang ~5min then fail with -14987 from there.
-      // sysadminctl with explicit -adminUser/-adminPassword bypasses that
-      // path, so we collect the local admin password here and pipe it to
-      // the script via stdin (never as argv — it would show up in `ps`
-      // and in escapes' audit log).
       const adminUser = userInfo().username
-      const adminPassword = await collectAdminPassword({ adminUser, force: !!args.force })
+      const adminPassword = await collectAdminPassword({ adminUser })
 
       const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
       const scriptPath = join(scratch, 'teardown.sh')
       try {
         const script = buildDestroyTeardownScript({ name, homeDir: `/Users/${name}`, adminUser })
         writeFileSync(scriptPath, script, { mode: 0o700 })
-        consola.start('Running teardown as root via `apes run --as root --wait`…')
-        consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
-        // --wait makes the call synchronous; without it `apes run --as root`
-        // returns exit 75 (pending) immediately, leaving a dangling grant.
-        // input + stdio[0]='pipe' streams the password into bash's stdin
-        // so the teardown's `read -r ADMIN_PASSWORD` consumes it.
-        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], {
-          input: `${adminPassword}\n`,
+        consola.start('Running teardown via sudo…')
+        // sudo -S reads its own password from the first stdin line and
+        // consumes the trailing newline; the rest of stdin is connected
+        // to the child. The teardown script's `read -r ADMIN_PASSWORD`
+        // then picks up the second line for sysadminctl. Same secret
+        // serves both — the user typed it once.
+        execFileSync(sudo, ['-S', '--prompt=', '--', 'bash', scriptPath], {
+          input: `${adminPassword}\n${adminPassword}\n`,
           stdio: ['pipe', 'inherit', 'inherit'],
         })
       }
@@ -163,38 +159,19 @@ export const destroyAgentCommand = defineCommand({
 })
 
 /**
- * Collect the local admin password used for the `sysadminctl -deleteUser
- * -adminUser <u> -adminPassword <p>` call inside the teardown script.
+ * Resolve the local admin password used for sudo + `sysadminctl
+ * -deleteUser`. Single secret, single prompt:
  *
- * Resolution order:
- *   1. `APES_ADMIN_PASSWORD` env var (always preferred — lets CI and
- *      orchestrators script the destroy without a TTY).
- *   2. Interactive prompt (silent) when stdin is a TTY.
- *   3. Refuse with a clear hint when neither is available.
- *
- * `--force` skips the confirmation prompt earlier in the flow but does
- * NOT skip this step: there's no safe non-interactive default for an
- * admin credential, and silent failure here would be a regression
- * compared to the prior `sudo -n` attempt that at least surfaced an
- * error.
+ *   1. `APES_ADMIN_PASSWORD` env var (CI / orchestrators)
+ *   2. Silent terminal prompt (raw-mode stdin, no echo, no mask)
+ *   3. Refuse with a clear hint when neither is available
  */
-async function collectAdminPassword(opts: { adminUser: string, force: boolean }): Promise<string> {
+async function collectAdminPassword(opts: { adminUser: string }): Promise<string> {
   const fromEnv = process.env.APES_ADMIN_PASSWORD
   if (fromEnv && fromEnv.length > 0) return fromEnv
-
-  if (!process.stdin.isTTY) {
-    throw new CliError(
-      `Admin password required for sysadminctl -deleteUser. No TTY available `
-      + `for the silent prompt; set APES_ADMIN_PASSWORD in the environment `
-      + `(local admin password for ${opts.adminUser}). The teardown reads it `
-      + `from stdin and never stores it.`,
-    )
-  }
-
-  consola.info(`Local admin password for ${opts.adminUser} (used for sysadminctl -deleteUser; not stored):`)
-  const pw = await consola.prompt('Admin password', { type: 'text', mask: '*' })
-  if (typeof pw === 'symbol' || !pw || pw.length === 0) {
+  const pw = await readPasswordSilent(`Password for ${opts.adminUser}: `)
+  if (pw.length === 0) {
     throw new CliExit(0)
   }
-  return pw as string
+  return pw
 }
