@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
@@ -123,16 +123,32 @@ export const destroyAgentCommand = defineCommand({
       if (!escapes) {
         throw new CliError('`escapes` not found on PATH; OS teardown requires escapes.')
       }
+
+      // The teardown script runs in escapes' setuid-root context, which
+      // has no audit/PAM session attached. Bare `sysadminctl -deleteUser`
+      // and `dscl . -delete` hang ~5min then fail with -14987 from there.
+      // sysadminctl with explicit -adminUser/-adminPassword bypasses that
+      // path, so we collect the local admin password here and pipe it to
+      // the script via stdin (never as argv — it would show up in `ps`
+      // and in escapes' audit log).
+      const adminUser = userInfo().username
+      const adminPassword = await collectAdminPassword({ adminUser, force: !!args.force })
+
       const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
       const scriptPath = join(scratch, 'teardown.sh')
       try {
-        const script = buildDestroyTeardownScript({ name, homeDir: `/Users/${name}` })
+        const script = buildDestroyTeardownScript({ name, homeDir: `/Users/${name}`, adminUser })
         writeFileSync(scriptPath, script, { mode: 0o700 })
         consola.start('Running teardown as root via `apes run --as root --wait`…')
         consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
         // --wait makes the call synchronous; without it `apes run --as root`
         // returns exit 75 (pending) immediately, leaving a dangling grant.
-        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+        // input + stdio[0]='pipe' streams the password into bash's stdin
+        // so the teardown's `read -r ADMIN_PASSWORD` consumes it.
+        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], {
+          input: `${adminPassword}\n`,
+          stdio: ['pipe', 'inherit', 'inherit'],
+        })
       }
       finally {
         rmSync(scratch, { recursive: true, force: true })
@@ -145,3 +161,40 @@ export const destroyAgentCommand = defineCommand({
     consola.success(`Destroyed ${name}.`)
   },
 })
+
+/**
+ * Collect the local admin password used for the `sysadminctl -deleteUser
+ * -adminUser <u> -adminPassword <p>` call inside the teardown script.
+ *
+ * Resolution order:
+ *   1. `APES_ADMIN_PASSWORD` env var (always preferred — lets CI and
+ *      orchestrators script the destroy without a TTY).
+ *   2. Interactive prompt (silent) when stdin is a TTY.
+ *   3. Refuse with a clear hint when neither is available.
+ *
+ * `--force` skips the confirmation prompt earlier in the flow but does
+ * NOT skip this step: there's no safe non-interactive default for an
+ * admin credential, and silent failure here would be a regression
+ * compared to the prior `sudo -n` attempt that at least surfaced an
+ * error.
+ */
+async function collectAdminPassword(opts: { adminUser: string, force: boolean }): Promise<string> {
+  const fromEnv = process.env.APES_ADMIN_PASSWORD
+  if (fromEnv && fromEnv.length > 0) return fromEnv
+
+  if (!process.stdin.isTTY) {
+    throw new CliError(
+      `Admin password required for sysadminctl -deleteUser. No TTY available `
+      + `for the silent prompt; set APES_ADMIN_PASSWORD in the environment `
+      + `(local admin password for ${opts.adminUser}). The teardown reads it `
+      + `from stdin and never stores it.`,
+    )
+  }
+
+  consola.info(`Local admin password for ${opts.adminUser} (used for sysadminctl -deleteUser; not stored):`)
+  const pw = await consola.prompt('Admin password', { type: 'text', mask: '*' })
+  if (typeof pw === 'symbol' || !pw || pw.length === 0) {
+    throw new CliExit(0)
+  }
+  return pw as string
+}

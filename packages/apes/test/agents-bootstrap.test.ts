@@ -165,24 +165,35 @@ describe('buildSpawnSetupScript', () => {
 
 describe('buildDestroyTeardownScript', () => {
   it('produces a script that deletes the user and home dir', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a' })
+    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
     expect(script).toContain(`NAME='agent-a'`)
     expect(script).toContain(`HOME_DIR='/Users/agent-a'`)
+    expect(script).toContain(`ADMIN_USER='patrickhofmann'`)
     expect(script).toContain('launchctl bootout "user/$UID_OF"')
     expect(script).toContain('pkill -9 -u "$UID_OF"')
     expect(script).toContain('rm -rf "$HOME_DIR"')
-    expect(script).toContain('sysadminctl -deleteUser "$NAME"')
-    expect(script).toContain('dscl . -delete "/Users/$NAME"')
+    expect(script).toContain('sysadminctl \\')
+    expect(script).toContain('-deleteUser "$NAME"')
+    expect(script).toContain('-adminUser "$ADMIN_USER"')
+    expect(script).toContain('-adminPassword "$ADMIN_PASSWORD"')
+  })
+
+  it('reads the admin password from stdin (never as argv) and unsets it after use', () => {
+    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
+    expect(script).toContain('read -r ADMIN_PASSWORD')
+    expect(script).toContain('unset ADMIN_PASSWORD')
+    // The literal password must never be embedded in the script.
+    expect(script).not.toMatch(/-adminPassword\s+["'][^"'$]/)
   })
 
   it('post-verifies the user record is actually gone (no silent failure)', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a' })
+    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
     expect(script).toContain('still exists after teardown')
     expect(script).toContain('exit 1')
   })
 
   it('guards against empty/root home', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a' })
+    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
     expect(script).toContain('"$HOME_DIR" != "/"')
   })
 })
