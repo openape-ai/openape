@@ -7,6 +7,7 @@ import { createDrizzleChallengeStore } from '../utils/drizzle-challenge-store'
 import { createDrizzleRegistrationUrlStore } from '../utils/drizzle-registration-url-store'
 import { createDrizzleKeyStore } from '../utils/drizzle-key-store'
 import { createDrizzleSshKeyStore } from '../utils/drizzle-ssh-key-store'
+import { createDrizzleConsentStore } from '../utils/drizzle-consent-store'
 
 export default defineNitroPlugin(() => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -29,4 +30,7 @@ export default defineNitroPlugin(() => {
 
   // Milestone 5: SSH Keys
   defineSshKeyStore(() => createDrizzleSshKeyStore())
+
+  // DDISA allowlist-user consents (#301)
+  defineConsentStore(() => createDrizzleConsentStore())
 })

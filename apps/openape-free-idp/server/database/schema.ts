@@ -223,3 +223,17 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
 }, table => [
   index('idx_push_subs_user_email').on(table.userEmail),
 ])
+
+// --- DDISA allowlist-user consents (#301) ---
+// One row per (user, SP) pair the user has approved via the consent
+// screen. PK is composite — re-approving the same SP just refreshes
+// `granted_at`. Revocation is a DELETE; the user sees the consent
+// screen again on next /authorize.
+export const consents = sqliteTable('consents', {
+  userEmail: text('user_email').notNull(),
+  clientId: text('client_id').notNull(),
+  grantedAt: integer('granted_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.clientId] }),
+  index('idx_consents_user_email').on(table.userEmail),
+])
