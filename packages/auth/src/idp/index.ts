@@ -1,6 +1,14 @@
 export { type AuthorizeParams, type AuthorizeResult, evaluatePolicy, validateAuthorizeRequest } from './authorize.js'
 export { type AgentKeyResolver, type ClientAssertionResult, validateClientAssertion } from './client-assertion.js'
 export { generateJWKS, type JWKSResponse, serveJWKS } from './jwks.js'
+export {
+  type ClientMetadata,
+  type ClientMetadataMode,
+  type ClientMetadataResolverOptions,
+  type ClientMetadataStore,
+  createClientMetadataResolver,
+  validateRedirectUri,
+} from './client-metadata.js'
 export { handleRefreshGrant, RefreshClientMismatchError, type RefreshGrantResult } from './refresh.js'
 export {
   type CodeEntry,
