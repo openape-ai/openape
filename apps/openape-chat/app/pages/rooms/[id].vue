@@ -39,7 +39,10 @@ if (!user.value && import.meta.client) navigateTo('/login')
 interface RoomInfo {
   id: string
   name: string
-  kind: 'channel' | 'dm'
+  // Only `dm` after the channels removal in #276 — kept as a union
+  // of one so future room kinds can be added back without breaking
+  // the discriminator pattern.
+  kind: 'dm'
   createdByEmail: string
   createdAt: number
   role: 'member' | 'admin'
@@ -295,11 +298,11 @@ async function createThread(): Promise<void> {
       </h1>
       <UButton
         v-if="roomInfo"
-        :icon="roomInfo.role === 'admin' ? 'i-lucide-settings' : 'i-lucide-users'"
+        icon="i-lucide-users"
         size="sm"
         color="neutral"
         variant="ghost"
-        :aria-label="roomInfo.role === 'admin' ? 'Manage members' : 'View members'"
+        aria-label="View members"
         @click="membersOpen = true"
       />
       <span class="text-xs px-2 py-0.5 rounded-full" :class="chat.connected.value ? 'text-emerald-400' : 'text-zinc-500'">
@@ -395,7 +398,6 @@ async function createThread(): Promise<void> {
       v-model:open="membersOpen"
       :room-id="roomId"
       :my-email="user?.sub"
-      :my-role="roomInfo.role"
     />
   </div>
 </template>

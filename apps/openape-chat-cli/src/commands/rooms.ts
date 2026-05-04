@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty'
-import { createRoom, getRoom, listRooms } from '../api'
+import { getRoom, listRooms } from '../api'
 import { setDefaultRoomId } from '../config'
 import { fmtTime, printJson, printLine } from '../output'
 
@@ -15,12 +15,11 @@ const listSub = defineCommand({
       return
     }
     if (rooms.length === 0) {
-      printLine('(no rooms — invite yourself or accept an invite first)')
+      printLine('(no rooms — accept a contact request to start a DM)')
       return
     }
     for (const r of rooms) {
-      const role = r.role ? `[${r.role}]` : ''
-      printLine(`${r.id}  ${r.kind.padEnd(7)}  ${role.padEnd(8)}  ${r.name}  (created ${fmtTime(r.createdAt)})`)
+      printLine(`${r.id}  ${r.kind.padEnd(4)}  ${r.name}  (created ${fmtTime(r.createdAt)})`)
     }
   },
 })
@@ -44,30 +43,6 @@ const clearSub = defineCommand({
   },
 })
 
-const createSub = defineCommand({
-  meta: { name: 'create', description: 'Create a new room' },
-  args: {
-    name: { type: 'string', required: true, description: 'Display name' },
-    kind: { type: 'string', default: 'channel', description: 'channel | dm' },
-    members: { type: 'string', description: 'Comma-separated member emails to invite' },
-    json: { type: 'boolean', default: false },
-  },
-  async run({ args }) {
-    if (args.kind !== 'channel' && args.kind !== 'dm') {
-      throw new Error('--kind must be "channel" or "dm"')
-    }
-    const memberList = args.members
-      ? args.members.split(',').map(s => s.trim()).filter(Boolean)
-      : []
-    const room = await createRoom({ name: args.name, kind: args.kind, members: memberList })
-    if (args.json) {
-      printJson(room)
-      return
-    }
-    printLine(`created ${room.id}  ${room.kind}  ${room.name}`)
-  },
-})
-
 const infoSub = defineCommand({
   meta: { name: 'info', description: 'Show metadata for one room' },
   args: {
@@ -88,11 +63,14 @@ const infoSub = defineCommand({
   },
 })
 
+// Rooms are created lazily by the contact-accept flow (`ape-chat
+// contacts accept`); there is no longer an explicit `rooms create`.
+// The historical `kind:'channel'` path was removed in #276 — see
+// the security audit on 2026-05-04 for the attack scenario.
 export const roomsCommand = defineCommand({
-  meta: { name: 'rooms', description: 'List, create, and switch chat rooms' },
+  meta: { name: 'rooms', description: 'List and switch DM rooms (rooms are created via `ape-chat contacts accept`)' },
   subCommands: {
     list: listSub,
-    create: createSub,
     info: infoSub,
     use: useSub,
     clear: clearSub,
