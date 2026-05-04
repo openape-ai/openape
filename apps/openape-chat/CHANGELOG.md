@@ -1,5 +1,13 @@
 # @openape/chat
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df)]:
+  - @openape/auth@0.9.0
+  - @openape/nuxt-auth-sp@0.8.6
+
 ## 0.2.5
 
 ### Patch Changes
