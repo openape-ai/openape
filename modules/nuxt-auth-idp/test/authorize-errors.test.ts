@@ -16,9 +16,11 @@ vi.mock('h3', () => ({
 
 vi.mock('../src/runtime/server/utils/stores', () => ({
   getIdpIssuer: () => ISSUER,
-  useIdpStores: () => ({
+  useIdpStores: vi.fn(() => ({
     codeStore: { find: vi.fn(), save: vi.fn(), delete: vi.fn() },
-  }),
+    // permissive default → resolve returns null which is allowed
+    clientMetadataStore: { resolve: async () => null },
+  })),
 }))
 
 vi.mock('../src/runtime/server/utils/session', () => ({
@@ -35,6 +37,12 @@ vi.mock('../src/runtime/server/utils/grant-stores', () => ({
     grantStore: {},
     challengeStore: {},
   }),
+}))
+
+vi.mock('nitropack/runtime', () => ({
+  useRuntimeConfig: vi.fn(() => ({
+    openapeIdp: { spMetadataMode: 'permissive', publicClients: '' },
+  })),
 }))
 
 vi.mock('@openape/core', () => ({
@@ -132,6 +140,40 @@ describe('authorize endpoint — error redirects (RFC 6749 §4.1.2.1)', () => {
 
     const { default: handler } = await import('../src/runtime/server/routes/authorize.get')
 
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('rejects redirect_uri not in SP metadata when mode=strict (#280)', async () => {
+    // Override the store + runtime config so this test exercises the
+    // strict-mode path. Pinpoints the spec-mandated redirect_uri
+    // validation per DDISA core.md §5.2.1.
+    const { useIdpStores } = await import('../src/runtime/server/utils/stores')
+    ;(useIdpStores as any).mockReturnValue({
+      codeStore: { find: vi.fn(), save: vi.fn(), delete: vi.fn() },
+      clientMetadataStore: {
+        resolve: async () => ({
+          client_id: 'app.example.com',
+          redirect_uris: ['https://app.example.com/auth/callback'],
+        }),
+      },
+    })
+    const { useRuntimeConfig } = await import('nitropack/runtime')
+    ;(useRuntimeConfig as any).mockReturnValue({
+      openapeIdp: { spMetadataMode: 'strict', publicClients: '' },
+    })
+
+    const { getQuery } = await import('h3')
+    ;(getQuery as any).mockReturnValue({
+      client_id: 'app.example.com',
+      redirect_uri: 'https://attacker.example.com/cb', // NOT in metadata
+      state: 'xyz',
+      code_challenge: 'abc'.repeat(15),
+      code_challenge_method: 'S256',
+      nonce: 'n1',
+      response_type: 'code',
+    })
+
+    const { default: handler } = await import('../src/runtime/server/routes/authorize.get')
     await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
   })
 
