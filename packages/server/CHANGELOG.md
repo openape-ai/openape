@@ -1,5 +1,12 @@
 # @openape/server
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies [[`f787da5`](https://github.com/openape-ai/openape/commit/f787da57a04e3f5ea57395c16278f24fd89c5ebc)]:
+  - @openape/auth@0.8.0
+
 ## 0.3.3
 
 ### Patch Changes
