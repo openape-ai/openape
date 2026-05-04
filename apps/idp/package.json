@@ -1,7 +1,7 @@
 {
   "name": "openape-idp",
   "type": "module",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "turbo": {
     "tags": [
