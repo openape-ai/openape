@@ -53,7 +53,32 @@ export function loadIdpAuth(): IdpAuth | null {
 
 export function saveIdpAuth(auth: IdpAuth): void {
   ensureConfigDir()
-  writeFileSync(getAuthFile(), JSON.stringify(auth, null, 2), { mode: 0o600 })
+  // Preserve fields the IdpAuth type doesn't model — primarily
+  // `owner_email`, written by `apes agents spawn` so the bridge can
+  // tell who the agent belongs to. Without this merge, every call to
+  // `apes login` (e.g. from the bridge's start.sh on each daemon boot)
+  // would silently drop owner_email and the bridge would crash-loop
+  // with "auth.json missing 'owner_email'".
+  const file = getAuthFile()
+  let extra: Record<string, unknown> = {}
+  if (existsSync(file)) {
+    try {
+      const raw = readFileSync(file, 'utf-8')
+      if (raw.trim()) {
+        const prev = JSON.parse(raw) as Record<string, unknown>
+        for (const key of Object.keys(prev)) {
+          if (!(key in (auth as unknown as Record<string, unknown>))) {
+            extra[key] = prev[key]
+          }
+        }
+      }
+    }
+    catch {
+      extra = {}
+    }
+  }
+  const merged = { ...extra, ...auth }
+  writeFileSync(file, JSON.stringify(merged, null, 2), { mode: 0o600 })
 }
 
 export function clearIdpAuth(): void {

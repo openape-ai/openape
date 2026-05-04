@@ -38,10 +38,12 @@ function allowlistPath(): string {
  * Read the agent's identity from auth.json. Throws if the file is
  * missing or has no `email` — both indicate a botched spawn.
  *
- * `ownerEmail` is optional in the file shape (older spawns didn't write
- * it) but the bridge requires it for the new contact-handshake flow;
- * when missing, we throw so the daemon refuses to start rather than
- * accepting from random peers.
+ * `owner_email` is normally written by `apes agents spawn`. If it's
+ * missing we fall back to `OPENAPE_OWNER_EMAIL` from the environment
+ * (set by the launchd plist) so an old auth.json that pre-dates the
+ * Phase A migration doesn't strand the bridge in a crash loop. If both
+ * are missing we throw — the bridge requires it for the contact
+ * handshake.
  */
 export function readAgentIdentity(): AgentIdentity {
   const path = authPath()
@@ -51,13 +53,15 @@ export function readAgentIdentity(): AgentIdentity {
   const raw = readFileSync(path, 'utf8')
   const parsed = JSON.parse(raw) as AuthFile
   if (!parsed.email) throw new Error(`auth.json at ${path} missing 'email'`)
-  if (!parsed.owner_email) {
+  if (!parsed.idp) throw new Error(`auth.json at ${path} missing 'idp'`)
+  const ownerEmail = parsed.owner_email ?? process.env.OPENAPE_OWNER_EMAIL
+  if (!ownerEmail) {
     throw new Error(
-      `auth.json at ${path} missing 'owner_email' — re-spawn the agent with @openape/apes >= 0.28 so the owner can be tracked`,
+      `auth.json at ${path} missing 'owner_email' and no OPENAPE_OWNER_EMAIL env var set — `
+      + 're-spawn the agent with @openape/apes >= 0.28 or add OPENAPE_OWNER_EMAIL to the launchd plist',
     )
   }
-  if (!parsed.idp) throw new Error(`auth.json at ${path} missing 'idp'`)
-  return { email: parsed.email, ownerEmail: parsed.owner_email, idp: parsed.idp }
+  return { email: parsed.email, ownerEmail, idp: parsed.idp }
 }
 
 /**

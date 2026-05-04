@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync as fsWriteFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync as fsReadFileSync, rmSync, writeFileSync as fsWriteFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -64,6 +64,31 @@ describe('IdP auth roundtrip', () => {
     })
     clearIdpAuth()
     expect(loadIdpAuth()).toBeNull()
+  })
+
+  it('preserves unmodelled fields like owner_email across saveIdpAuth calls', () => {
+    // Simulate `apes agents spawn` writing auth.json with owner_email,
+    // followed by a later `apes login` (which only knows about IdpAuth
+    // fields). Without the merge, owner_email would be silently dropped
+    // and the bridge's startup check would crash-loop.
+    fsWriteFileSync(getAuthFile(), JSON.stringify({
+      idp: 'https://id.openape.ai',
+      access_token: 'old',
+      email: 'agent-bot3+patrick+hofmann_eco@id.openape.ai',
+      expires_at: 1,
+      owner_email: 'patrick@hofmann.eco',
+    }), { mode: 0o600 })
+
+    saveIdpAuth({
+      idp: 'https://id.openape.ai',
+      access_token: 'fresh',
+      email: 'agent-bot3+patrick+hofmann_eco@id.openape.ai',
+      expires_at: 2,
+    })
+
+    const reread = JSON.parse(fsReadFileSync(getAuthFile(), 'utf-8')) as Record<string, unknown>
+    expect(reread.access_token).toBe('fresh')
+    expect(reread.owner_email).toBe('patrick@hofmann.eco')
   })
 
   it('returns null on corrupted JSON instead of throwing', () => {
