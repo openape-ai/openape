@@ -8,6 +8,18 @@ export interface AuthData {
   refresh_token?: string
   email: string
   expires_at: number
+  /**
+   * Set by `apes login --key …` (and `apes agents spawn`), absolute
+   * path to the Ed25519 key the agent signs challenges with. Lets
+   * `@openape/cli-auth` refresh agent tokens in-process; see #259.
+   */
+  key_path?: string
+  /**
+   * Email of the human who owns this agent — written by
+   * `apes agents spawn`. The chat-bridge reads it for owner-only
+   * contact handshakes. Optional for human auth.json files.
+   */
+  owner_email?: string
 }
 
 export interface ApesConfig {
@@ -89,7 +101,29 @@ export function loadAuth(): AuthData | null {
 
 export function saveAuth(data: AuthData): void {
   ensureDir()
-  writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2), { mode: 0o600 })
+  // Preserve unmodelled fields from any prior version of auth.json
+  // (e.g. older installs of this package, or fields a sibling CLI
+  // wrote). Symmetric with cli-auth's saveIdpAuth — see #257 for the
+  // bridge crash-loop the bare overwrite caused before.
+  let extra: Record<string, unknown> = {}
+  if (existsSync(AUTH_FILE)) {
+    try {
+      const raw = readFileSync(AUTH_FILE, 'utf-8')
+      if (raw.trim()) {
+        const prev = JSON.parse(raw) as Record<string, unknown>
+        for (const key of Object.keys(prev)) {
+          if (!(key in (data as unknown as Record<string, unknown>))) {
+            extra[key] = prev[key]
+          }
+        }
+      }
+    }
+    catch {
+      extra = {}
+    }
+  }
+  const merged = { ...extra, ...data }
+  writeFileSync(AUTH_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 })
 }
 
 export function clearAuth(): void {

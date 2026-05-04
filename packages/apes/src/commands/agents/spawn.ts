@@ -148,6 +148,7 @@ export const spawnAgentCommand = defineCommand({
         accessToken: token,
         email: registration.email,
         expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
+        keyPath: `${homeDir}/.ssh/id_ed25519`,
         ownerEmail: auth.email,
       })
 
