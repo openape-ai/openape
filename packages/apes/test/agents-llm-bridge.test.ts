@@ -125,7 +125,7 @@ describe('llm-bridge — pure helpers', () => {
   })
 
   it('buildBridgePlist embeds agent name as label + UserName + paths + KeepAlive', () => {
-    const plist = buildBridgePlist('agent-x', '/Users/agent-x')
+    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco')
     expect(plist).toContain('<string>eco.hofmann.apes.bridge.agent-x</string>')
     expect(plist).toContain('<key>UserName</key>')
     expect(plist).toContain('<string>agent-x</string>')
@@ -134,6 +134,15 @@ describe('llm-bridge — pure helpers', () => {
     expect(plist).toContain('<key>KeepAlive</key>')
     expect(plist).toContain('<key>RunAtLoad</key>')
     expect(plist).toContain('<key>HOME</key>')
+  })
+
+  it('buildBridgePlist stamps OPENAPE_OWNER_EMAIL in EnvironmentVariables', () => {
+    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco')
+    // Defense-in-depth: bridge falls back to this env var when auth.json
+    // lacks owner_email (e.g. an old `apes login` clobbered it). Without
+    // this the daemon would crash-loop on "missing 'owner_email'".
+    expect(plist).toContain('<key>OPENAPE_OWNER_EMAIL</key>')
+    expect(plist).toContain('<string>patrick@hofmann.eco</string>')
   })
 
   it('bridgePlistLabel + bridgePlistPath include agent name', () => {

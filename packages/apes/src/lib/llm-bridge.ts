@@ -117,8 +117,15 @@ except Exception: sys.exit(1)" 2>/dev/null || true)
 try: print(json.load(open(os.path.expanduser('~/.config/apes/auth.json')))['idp'])
 except Exception: sys.exit(1)" 2>/dev/null || true)
   if [ -n "$agent_email" ] && [ -n "$agent_idp" ]; then
-    apes login "$agent_email" --idp "$agent_idp" >/dev/null 2>&1 \\
-      || echo "warn: apes login failed for $agent_email; continuing with cached token"
+    # Capture full output so the failure mode is debuggable from logs
+    # without needing an interactive grant approval. apes-login should
+    # succeed with the SSH key under ~/.ssh/id_ed25519 written by spawn;
+    # if it doesn't, the cached token carries us until expiry (~1h) and
+    # the daemon will retry on the next launchd restart.
+    login_output=$(apes login "$agent_email" --idp "$agent_idp" 2>&1) || {
+      echo "warn: apes login failed for $agent_email; continuing with cached token" >&2
+      echo "$login_output" | sed 's/^/  apes-login: /' >&2
+    }
   fi
 fi
 
@@ -172,8 +179,14 @@ exec openape-chat-bridge
  * it automatically and respawns on crash via KeepAlive. UserName ensures
  * launchd starts the process as the agent (not root), even though the
  * plist itself is root-owned.
+ *
+ * `OPENAPE_OWNER_EMAIL` is stamped into the daemon environment as a
+ * defense-in-depth fallback for the chat-bridge identity check: the
+ * canonical source is `owner_email` in `~/.config/apes/auth.json`
+ * (written by spawn), but if a future `apes login` ever clobbers that
+ * field the bridge can still resolve its owner from this env var.
  */
-export function buildBridgePlist(agentName: string, homeDir: string): string {
+export function buildBridgePlist(agentName: string, homeDir: string, ownerEmail: string): string {
   const startScript = `${homeDir}/Library/Application Support/openape/bridge/start.sh`
   const stdoutLog = `${homeDir}/Library/Logs/openape-chat-bridge.log`
   const stderrLog = `${homeDir}/Library/Logs/openape-chat-bridge.err.log`
@@ -208,6 +221,8 @@ export function buildBridgePlist(agentName: string, homeDir: string): string {
         <string>${homeDir}</string>
         <key>PATH</key>
         <string>${homeDir}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>OPENAPE_OWNER_EMAIL</key>
+        <string>${ownerEmail}</string>
     </dict>
 </dict>
 </plist>
