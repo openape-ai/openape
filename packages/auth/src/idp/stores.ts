@@ -35,6 +35,10 @@ export interface CodeStore {
 export interface ConsentStore {
   hasConsent: (userId: string, clientId: string) => Promise<boolean>
   save: (entry: ConsentEntry) => Promise<void>
+  /** All SPs the user has approved, sorted by `grantedAt` desc. */
+  list: (userId: string) => Promise<ConsentEntry[]>
+  /** Revoke consent for a specific SP. No-op if no consent existed. */
+  revoke: (userId: string, clientId: string) => Promise<void>
 }
 
 export interface KeyEntry {
@@ -136,6 +140,19 @@ export class InMemoryConsentStore implements ConsentStore {
 
   async save(entry: ConsentEntry): Promise<void> {
     this.consents.set(this.key(entry.userId, entry.clientId), entry)
+  }
+
+  async list(userId: string): Promise<ConsentEntry[]> {
+    const out: ConsentEntry[] = []
+    for (const entry of this.consents.values()) {
+      if (entry.userId === userId) out.push(entry)
+    }
+    out.sort((a, b) => b.grantedAt - a.grantedAt)
+    return out
+  }
+
+  async revoke(userId: string, clientId: string): Promise<void> {
+    this.consents.delete(this.key(userId, clientId))
   }
 }
 
