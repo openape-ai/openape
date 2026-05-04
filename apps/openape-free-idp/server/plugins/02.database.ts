@@ -150,6 +150,18 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user_email ON push_subscriptions(user_email)`)
+
+    // DDISA allowlist-user consents (#301). One row per (user, SP)
+    // pair the user has approved on the consent screen. PK is
+    // composite — re-approval is an upsert on grantedAt; revocation
+    // is a DELETE.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS consents (
+      user_email TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      granted_at INTEGER NOT NULL,
+      PRIMARY KEY (user_email, client_id)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_consents_user_email ON consents(user_email)`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)

@@ -65,3 +65,35 @@ describe('evaluatePolicy', () => {
     expect(await evaluatePolicy(undefined, 'sp', 'user', store)).toBe('consent')
   })
 })
+
+describe('InMemoryConsentStore — list / revoke (#301)', () => {
+  it('list returns approved SPs sorted by grantedAt desc', async () => {
+    const store = new InMemoryConsentStore()
+    await store.save({ userId: 'patrick@hofmann.eco', clientId: 'chat.openape.ai', grantedAt: 100 })
+    await store.save({ userId: 'patrick@hofmann.eco', clientId: 'plans.openape.ai', grantedAt: 200 })
+    // Other-user entry is excluded.
+    await store.save({ userId: 'other@example.com', clientId: 'tasks.openape.ai', grantedAt: 300 })
+
+    const out = await store.list('patrick@hofmann.eco')
+    expect(out.map(e => e.clientId)).toEqual(['plans.openape.ai', 'chat.openape.ai'])
+  })
+
+  it('list returns empty for user with no consents', async () => {
+    const store = new InMemoryConsentStore()
+    expect(await store.list('nobody@example.com')).toEqual([])
+  })
+
+  it('revoke removes consent — hasConsent returns false afterward', async () => {
+    const store = new InMemoryConsentStore()
+    await store.save({ userId: 'patrick@hofmann.eco', clientId: 'chat.openape.ai', grantedAt: 1 })
+    expect(await store.hasConsent('patrick@hofmann.eco', 'chat.openape.ai')).toBe(true)
+
+    await store.revoke('patrick@hofmann.eco', 'chat.openape.ai')
+    expect(await store.hasConsent('patrick@hofmann.eco', 'chat.openape.ai')).toBe(false)
+  })
+
+  it('revoke is a no-op when no consent exists', async () => {
+    const store = new InMemoryConsentStore()
+    await expect(store.revoke('a@x', 'b.example')).resolves.toBeUndefined()
+  })
+})
