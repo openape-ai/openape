@@ -39,19 +39,19 @@
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@simplewebauthn/browser": "^11",
-    "defu": "^6.1.4",
+    "defu": "^6.1.7",
     "jose": "^5.9.0"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"
   },
   "devDependencies": {
-    "@openape/server": "workspace:*",
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/ui": "^4.5.1",
+    "@openape/server": "workspace:*",
+    "@types/node": "^22.0.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vue/test-utils": "^2.4.6",
-    "@types/node": "^22.0.0",
     "happy-dom": "^18.0.1",
     "nuxt": "^4.3.1",
     "tailwindcss": "^4.2.1",

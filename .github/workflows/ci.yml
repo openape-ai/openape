@@ -30,6 +30,11 @@ jobs:
           for app in apps/openape-free-idp apps/openape-agent-proxy; do
             [ -f "$app/package.json" ] && (cd "$app" && npx nuxi prepare) || true
           done
-      - name: Security audit
-        run: pnpm audit --audit-level=critical || echo "::warning::Security audit found vulnerabilities. Run 'pnpm audit' locally for details."
+      - name: Security audit (production deps, high+ blocks CI)
+        # Scoped to --prod so dev-deps (vitest, eslint, etc.) don't gate
+        # PRs on advisories that never ship. The scheduled `security`
+        # workflow runs without --prod to surface dev-dep issues too.
+        # Threshold is `high` — `critical` was too narrow (e.g. the
+        # rustls-webpki advisories that broke escapes were `high`).
+        run: pnpm audit --prod --audit-level=high
       - run: pnpm turbo run lint typecheck test --filter='./packages/*' --filter='./modules/*' --filter='./apps/*' --concurrency=4

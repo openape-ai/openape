@@ -41,7 +41,7 @@
     "@nuxt/kit": "^3.21.1",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
-    "defu": "^6.1.4"
+    "defu": "^6.1.7"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"
