@@ -37,17 +37,33 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
-  // Management token bypasses authorization check
+  // Management token bypasses authorization check.
   const isManagement = email === '_management_'
-  // Allow if the logged-in user is the requester themselves
-  const isRequester = grant.request.requester === email
-  if (!isManagement && !isRequester) {
+  if (!isManagement) {
     const requesterUser = await userStore.findByEmail(grant.request.requester)
     if (!requesterUser) {
       throw createProblemError({ status: 403, title: 'Requester not found for this grant' })
     }
-    const isOwnerOrApprover = requesterUser.owner === email || requesterUser.approver === email
-    if (!isOwnerOrApprover) {
+    // Approver-policy resolution. Per the User type convention
+    // (`packages/auth/src/idp/stores.ts:320`), `approver === undefined`
+    // means "defaults to owner, or self when there is no owner". So:
+    //
+    //   approver explicitly set    -> only that approver (and the owner) may approve.
+    //   approver unset, owner set  -> owner is the implicit approver (sub-user / agent).
+    //   approver unset, owner unset -> top-level human, self-approval is implicit.
+    //
+    // The previous `isRequester` shortcut allowed *every* requester to
+    // self-approve regardless of policy — that bypassed the entire
+    // delegation model: an agent with only its 1h IdP token could mint
+    // itself authz_jwt for arbitrary audiences without the human owner
+    // ever being involved. See security audit 2026-05-04.
+    const isOwner = requesterUser.owner !== undefined && requesterUser.owner === email
+    const isExplicitApprover = requesterUser.approver !== undefined && requesterUser.approver === email
+    const isImplicitSelfApprove
+      = requesterUser.approver === undefined
+      && requesterUser.owner === undefined
+      && requesterUser.email === email
+    if (!isOwner && !isExplicitApprover && !isImplicitSelfApprove) {
       throw createProblemError({ status: 403, title: 'Only the owner or approver can approve this grant' })
     }
   }
