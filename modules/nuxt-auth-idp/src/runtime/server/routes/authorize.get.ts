@@ -4,7 +4,7 @@ import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { extractDomain, resolveDDISA } from '@openape/core'
 import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
-import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
+import { useGrant, validateDelegation } from '@openape/grants'
 import { tryBearerAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
@@ -143,33 +143,31 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, redirectUrl.toString())
   }
 
-  // Parse and process authorization_details (RFC 9396)
-  const authzDetails = parseAuthorizationDetails(String(query.authorization_details ?? ''))
-  let approvedDetails: OpenApeAuthorizationDetail[] | undefined
-
-  if (authzDetails.length > 0) {
-    const { grantStore } = useGrantStores()
-    approvedDetails = []
-
-    for (const detail of authzDetails) {
-      const grant = await createGrant({
-        requester: bearerPayload ? bearerPayload.sub : userId,
-        target_host: params.client_id,
-        audience: params.client_id,
-        grant_type: detail.approval ?? 'once',
-        permissions: [detail.type === 'openape_cli' ? detail.permission : detail.action],
-        ...(detail.type === 'openape_cli' ? { authorization_details: [detail] } : {}),
-        reason: detail.reason,
-      }, grantStore)
-
-      // Auto-approve: user consents by authenticating in the authorize flow
-      const approved = await approveGrant(grant.id, userId, grantStore)
-      approvedDetails.push({
-        ...detail,
-        grant_id: approved.id,
-      })
-    }
+  // RFC 9396 `authorization_details` is intentionally NOT honoured in
+  // the /authorize GET path. The historical implementation auto-approved
+  // arbitrary grant details whenever the parameter was present, treating
+  // the user's existing IdP session as implicit consent. That meant a
+  // crafted URL — `<a href="https://idp/authorize?...&authorization_details=[<broad cli grant>]">` —
+  // could silently approve grants server-side via top-level GET navigation
+  // (cookies are SameSite=Lax by default), bypassing the approver-policy
+  // entirely. See security audit 2026-05-04 / GitHub issue #273.
+  //
+  // Until a proper consent UI lands (issue #273 follow-up), callers must
+  // use the explicit grant API: POST /api/grants to create the grant
+  // pending, then POST /api/grants/{id}/approve to approve it (which
+  // enforces the approver-policy as fixed in PR #284).
+  const rawAuthzDetails = String(query.authorization_details ?? '')
+  if (rawAuthzDetails.trim() && parseAuthorizationDetails(rawAuthzDetails).length > 0) {
+    throw createProblemError({
+      status: 400,
+      title: '`authorization_details` is not supported on /authorize',
+      detail:
+        'Use POST /api/grants to create the grant pending, then '
+        + 'POST /api/grants/{id}/approve via the approver-policy. '
+        + 'See https://github.com/openape-ai/openape/issues/273',
+    })
   }
+  const approvedDetails: OpenApeAuthorizationDetail[] | undefined = undefined
 
   const code = crypto.randomUUID()
   await codeStore.save({
