@@ -1,5 +1,13 @@
 # @openape/apes
 
+## 0.30.0
+
+### Minor Changes
+
+- [#258](https://github.com/openape-ai/openape/pull/258) [`1023309`](https://github.com/openape-ai/openape/commit/10233090ef09d049f82c4a8b6ae73325c8113416) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes agents spawn --bridge` now stamps `OPENAPE_OWNER_EMAIL` into the bridge daemon's launchd plist `EnvironmentVariables` block, plus its start.sh logs the actual `apes login` failure to stderr instead of silently swallowing it.
+
+  Together these mean a freshly-spawned agent is robust to the cli-auth merge bug from the previous patch: the bridge can resolve its owner from the env var even if `auth.json` ever gets clobbered, and any login refresh failure is debuggable from the daemon's stderr log without an interactive grant approval.
+
 ## 0.29.0
 
 ### Minor Changes
