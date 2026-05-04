@@ -14,7 +14,8 @@ export interface SshKeyStore {
   findByUser: (email: string) => Promise<SshKey[]>
   findByPublicKey: (publicKey: string) => Promise<SshKey | null>
   delete: (keyId: string) => Promise<void>
-  deleteAllForUser: (email: string) => Promise<void>
+  /** See @openape/auth SshKeyStore — `exceptKeyId` is the safety hatch for #295. */
+  deleteAllForUser: (email: string, opts?: { exceptKeyId?: string }) => Promise<void>
 }
 
 export function createSshKeyStore(): SshKeyStore {
@@ -66,12 +67,23 @@ export function createSshKeyStore(): SshKeyStore {
       await storage.removeItem(`ssh-keys:${keyId}`)
     },
 
-    async deleteAllForUser(email) {
+    async deleteAllForUser(email, opts) {
+      const except = opts?.exceptKeyId
       const index = await storage.getItem<string[]>(`user-ssh-keys:${email}`) || []
+      const remaining: string[] = []
       for (const id of index) {
+        if (id === except) {
+          remaining.push(id)
+          continue
+        }
         await storage.removeItem(`ssh-keys:${id}`)
       }
-      await storage.removeItem(`user-ssh-keys:${email}`)
+      if (remaining.length > 0) {
+        await storage.setItem(`user-ssh-keys:${email}`, remaining)
+      }
+      else {
+        await storage.removeItem(`user-ssh-keys:${email}`)
+      }
     },
   }
 }

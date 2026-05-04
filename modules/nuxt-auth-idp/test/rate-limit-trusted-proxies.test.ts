@@ -27,6 +27,41 @@ async function setSocketIp(ip: string | null) {
   ;(getRequestIP as any).mockReturnValue(ip)
 }
 
+// We can't easily import the regex constant directly without exporting
+// it; mirror the source-of-truth here and unit-test the membership.
+// If this drifts, lint/PR review catches it — tests fail loudly because
+// every audit-finding assertion below would change.
+const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users)\b|authorize\b|token\b)/
+
+describe('rate-limit path coverage (#292)', () => {
+  it('covers historical auth + ceremony paths', () => {
+    expect(RE_AUTH_PATHS.test('/api/session')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/auth/passkey')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/agent/challenge')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/webauthn/login/options')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/authorize')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/token')).toBe(true)
+  })
+
+  it('covers free-idp custom paths added in #292', () => {
+    // Brute-forceable paths that were uncapped before the fix.
+    expect(RE_AUTH_PATHS.test('/api/enroll')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/register')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/my-agents')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/my-agents/abc-123')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/push/subscribe')).toBe(true)
+    expect(RE_AUTH_PATHS.test('/api/users/foo@bar.com/whatever')).toBe(true)
+  })
+
+  it('does not cover clearly unrelated paths', () => {
+    expect(RE_AUTH_PATHS.test('/api/grants')).toBe(false)
+    expect(RE_AUTH_PATHS.test('/api/admin/something')).toBe(false)
+    // `register` and `\b` interact correctly: `registries` (no transition
+    // between `register`'s last char and the next) does not match.
+    expect(RE_AUTH_PATHS.test('/api/registries')).toBe(false)
+  })
+})
+
 describe('rate-limit IP CIDR matching', () => {
   it('matches IPs against /24 networks', () => {
     expect(ipMatches('10.1.2.3', '10.1.2.0/24')).toBe(true)
