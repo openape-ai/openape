@@ -10,6 +10,15 @@ export interface IdpAuth {
   refresh_token?: string
   email: string
   expires_at: number
+  /**
+   * Absolute path to an Ed25519 private key, set when the original
+   * `apes login` was key-based (i.e. agent login). Lets `cli-auth`
+   * refresh the access token in-process by signing a fresh challenge
+   * — replaces the per-hour daemon restart cycle that was needed
+   * before this field existed. Optional: human (PKCE) logins leave
+   * it unset and continue to use the OAuth `refresh_token` path.
+   */
+  key_path?: string
 }
 
 /**
