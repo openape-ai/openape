@@ -166,7 +166,7 @@ export const spawnAgentCommand = defineCommand({
             return {
               plistLabel: bridgePlistLabel(name),
               plistPath: bridgePlistPath(name),
-              plistContent: buildBridgePlist(name, homeDir),
+              plistContent: buildBridgePlist(name, homeDir, auth.email),
               startScript: buildBridgeStartScript(),
               envFile: buildBridgeEnvFile(cfg),
             }
