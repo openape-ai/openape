@@ -1,9 +1,10 @@
 // Canonical: @openape/server createAuthorizeHandler
-import type { AuthorizeParams } from '@openape/auth'
+import type { AuthorizeParams, ClientMetadataMode } from '@openape/auth'
 import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
+import { useRuntimeConfig } from 'nitropack/runtime'
 import { extractDomain, resolveDDISA } from '@openape/core'
-import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
+import { evaluatePolicy, validateAuthorizeRequest, validateRedirectUri } from '@openape/auth'
 import { useGrant, validateDelegation } from '@openape/grants'
 import { tryBearerAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
@@ -62,6 +63,39 @@ export default defineEventHandler(async (event) => {
       }
     }
     throw createProblemError({ status: 400, title: error })
+  }
+
+  // SP redirect_uri validation per DDISA core.md §5.2.1 (#280).
+  //
+  // The IdP fetches the SP's published metadata at
+  // https://{client_id}/.well-known/oauth-client-metadata and verifies
+  // the request's redirect_uri matches one the SP itself declared. The
+  // SP — not the IdP — is the source of truth; this isn't a registry,
+  // it's structural enforcement of the spec's MUST. Rollout is
+  // permissive-by-default so existing SPs can publish their metadata
+  // without breaking; flip OPENAPE_IDP_SP_METADATA_MODE=strict once
+  // the rollout is complete.
+  //
+  // We do NOT redirect on this error: the request's redirect_uri is
+  // by definition untrusted at this point, so sending the user there
+  // would itself be the open-redirect we're trying to prevent.
+  const config = useRuntimeConfig()
+  const spMetadataMode = (config.openapeIdp?.spMetadataMode === 'strict')
+    ? 'strict' as ClientMetadataMode
+    : 'permissive' as ClientMetadataMode
+  const { clientMetadataStore } = useIdpStores()
+  const redirectErr = await validateRedirectUri(
+    params.client_id,
+    params.redirect_uri,
+    clientMetadataStore,
+    spMetadataMode,
+  )
+  if (redirectErr) {
+    throw createProblemError({
+      status: 400,
+      title: redirectErr.error,
+      detail: redirectErr.detail,
+    })
   }
 
   // Determine userId: Bearer Token (agent or human) or Human Session
