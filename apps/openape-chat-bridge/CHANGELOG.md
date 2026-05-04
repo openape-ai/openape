@@ -1,5 +1,12 @@
 # @openape/chat-bridge
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`6539c9b`](https://github.com/openape-ai/openape/commit/6539c9b290b9d9f062f54dfdf5378957ee668018)]:
+  - @openape/cli-auth@0.3.0
+
 ## 0.3.1
 
 ### Patch Changes
