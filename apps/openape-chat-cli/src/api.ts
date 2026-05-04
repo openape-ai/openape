@@ -49,18 +49,6 @@ export function listRooms(opts?: { endpoint?: string }): Promise<Room[]> {
   return request<Room[]>('/api/rooms', { endpoint: opts?.endpoint })
 }
 
-export function createRoom(input: {
-  name: string
-  kind: 'channel' | 'dm'
-  members?: string[]
-}, opts?: { endpoint?: string }): Promise<Room> {
-  return request<Room>('/api/rooms', {
-    method: 'POST',
-    body: input,
-    endpoint: opts?.endpoint,
-  })
-}
-
 export function getRoom(id: string, opts?: { endpoint?: string }): Promise<Room> {
   return request<Room>(`/api/rooms/${encodeURIComponent(id)}`, { endpoint: opts?.endpoint })
 }
@@ -129,29 +117,6 @@ export function listMembers(roomId: string, opts?: { endpoint?: string }): Promi
   return request<Member[]>(`/api/rooms/${encodeURIComponent(roomId)}/members`, {
     endpoint: opts?.endpoint,
   })
-}
-
-export function addMember(
-  roomId: string,
-  body: { email: string, role?: 'member' | 'admin' },
-  opts?: { endpoint?: string },
-): Promise<Member> {
-  return request<Member>(`/api/rooms/${encodeURIComponent(roomId)}/members`, {
-    method: 'POST',
-    body,
-    endpoint: opts?.endpoint,
-  })
-}
-
-export function removeMember(
-  roomId: string,
-  email: string,
-  opts?: { endpoint?: string },
-): Promise<{ ok: true }> {
-  return request<{ ok: true }>(
-    `/api/rooms/${encodeURIComponent(roomId)}/members/${encodeURIComponent(email)}`,
-    { method: 'DELETE', endpoint: opts?.endpoint },
-  )
 }
 
 // Exported for new command modules (contacts.ts) that POST/DELETE

@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty'
-import { addMember, listMembers, removeMember } from '../api'
+import { listMembers } from '../api'
 import { getDefaultRoomId } from '../config'
 import { fmtTime, printJson, printLine } from '../output'
 
@@ -33,49 +33,14 @@ const listSub = defineCommand({
   },
 })
 
-const addSub = defineCommand({
-  meta: { name: 'add', description: 'Invite a user (or agent) to a room (admins only)' },
-  args: {
-    email: { type: 'positional', required: true, description: 'Email of the member to add' },
-    room: { type: 'string', description: 'Room id (defaults to current `rooms use`)' },
-    role: { type: 'string', default: 'member', description: 'member | admin' },
-    json: { type: 'boolean', default: false },
-  },
-  async run({ args }) {
-    if (args.role !== 'member' && args.role !== 'admin') {
-      throw new Error('--role must be "member" or "admin"')
-    }
-    const member = await addMember(resolveRoom(args.room), { email: args.email, role: args.role })
-    if (args.json) {
-      printJson(member)
-      return
-    }
-    printLine(`added ${member.userEmail} as ${member.role}`)
-  },
-})
-
-const removeSub = defineCommand({
-  meta: { name: 'remove', description: 'Remove a user from a room (admins only)' },
-  args: {
-    email: { type: 'positional', required: true, description: 'Email of the member to remove' },
-    room: { type: 'string', description: 'Room id (defaults to current `rooms use`)' },
-    json: { type: 'boolean', default: false },
-  },
-  async run({ args }) {
-    const result = await removeMember(resolveRoom(args.room), args.email)
-    if (args.json) {
-      printJson(result)
-      return
-    }
-    printLine(`removed ${args.email}`)
-  },
-})
-
+// Membership is fixed at room (= contact) creation. To start a chat
+// with someone, use `ape-chat contacts add <email>`; to leave one,
+// remove the contact. The historical `add` / `remove` mutations are
+// gone — their endpoints let any admin enrol arbitrary emails as
+// admins without consent (security audit 2026-05-04, #276).
 export const membersCommand = defineCommand({
-  meta: { name: 'members', description: 'List, add, or remove room members' },
+  meta: { name: 'members', description: 'List the two members of a DM room' },
   subCommands: {
     list: listSub,
-    add: addSub,
-    remove: removeSub,
   },
 })

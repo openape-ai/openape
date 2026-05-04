@@ -5,11 +5,12 @@
 export interface Room {
   id: string
   name: string
-  kind: 'channel' | 'dm'
+  // Only `dm` rooms exist after the channel-removal in #276; the type
+  // is kept as a union of one for forward-compat (room kinds like
+  // 'group' may come back as a contact-driven primitive later).
+  kind: 'dm'
   createdByEmail: string
   createdAt: number
-  /** Caller's role in the room. Only present on `GET /api/rooms`. */
-  role?: 'admin' | 'member'
 }
 
 export interface Message {
