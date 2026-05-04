@@ -57,12 +57,14 @@ describe('shQuote', () => {
 })
 
 describe('buildAgentAuthJson', () => {
-  it('emits a stable, parseable auth.json', () => {
+  it('emits a stable, parseable auth.json with key_path + owner_email', () => {
     const out = buildAgentAuthJson({
       idp: 'https://id.openape.ai',
       accessToken: 'tok',
       email: 'agent-a+patrick+hofmann_eco@id.openape.ai',
       expiresAt: 1234567890,
+      keyPath: '/Users/agent-a/.ssh/id_ed25519',
+      ownerEmail: 'patrick@hofmann.eco',
     })
     const parsed = JSON.parse(out)
     expect(parsed).toEqual({
@@ -70,6 +72,11 @@ describe('buildAgentAuthJson', () => {
       access_token: 'tok',
       email: 'agent-a+patrick+hofmann_eco@id.openape.ai',
       expires_at: 1234567890,
+      // key_path lets cli-auth refresh in-process via challenge-response
+      // (#259) — without this the daemon would crash-restart hourly.
+      key_path: '/Users/agent-a/.ssh/id_ed25519',
+      // owner_email backs the contact handshake — see #257.
+      owner_email: 'patrick@hofmann.eco',
     })
     expect(out.endsWith('\n')).toBe(true)
   })

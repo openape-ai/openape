@@ -38,7 +38,7 @@ describe('ensureFreshIdpAuth', () => {
     expect(result.access_token).toBe('still-good')
   })
 
-  it('throws NotLoggedInError when token expired and no refresh_token', async () => {
+  it('throws NotLoggedInError when token expired and no refresh_token AND no key_path', async () => {
     saveIdpAuth({
       idp: 'https://id.openape.ai',
       access_token: 'expired',
@@ -46,6 +46,81 @@ describe('ensureFreshIdpAuth', () => {
       expires_at: 100,
     })
     await expect(ensureFreshIdpAuth(2000)).rejects.toThrow(NotLoggedInError)
+  })
+
+  it('refreshes an agent token via key challenge-response when refresh_token is missing (#259)', async () => {
+    // Write a real Ed25519 PKCS8 key to disk so the in-process signing works.
+    const { generateKeyPairSync } = await import('node:crypto')
+    const { writeFileSync } = await import('node:fs')
+    const { keyObject: priv } = { keyObject: generateKeyPairSync('ed25519').privateKey }
+    const pem = priv.export({ format: 'pem', type: 'pkcs8' }).toString()
+    const keyPath = join(tmpHome, 'agent-key.pem')
+    writeFileSync(keyPath, pem)
+
+    saveIdpAuth({
+      idp: 'https://id.openape.ai',
+      access_token: 'expired',
+      email: 'agent-x+patrick+hofmann_eco@id.openape.ai',
+      expires_at: 100,
+      key_path: keyPath,
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.endsWith('/.well-known/openid-configuration')) {
+        return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (u.endsWith('/api/agent/challenge')) {
+        return new Response(JSON.stringify({ challenge: 'YWJj' }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (u.endsWith('/api/agent/authenticate')) {
+        return new Response(JSON.stringify({ token: 'fresh-agent-token', expires_in: 3600 }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`unexpected fetch ${u}`)
+    })
+
+    const refreshed = await ensureFreshIdpAuth(2000)
+    expect(refreshed.access_token).toBe('fresh-agent-token')
+    expect(refreshed.expires_at).toBe(2000 + 3600)
+    expect(loadIdpAuth()?.access_token).toBe('fresh-agent-token')
+    // key_path stays — needed for the next refresh
+    expect(loadIdpAuth()?.key_path).toBe(keyPath)
+
+    fetchSpy.mockRestore()
+  })
+
+  it('falls back to NotLoggedInError when agent challenge endpoint rejects', async () => {
+    const { generateKeyPairSync } = await import('node:crypto')
+    const { writeFileSync } = await import('node:fs')
+    const priv = generateKeyPairSync('ed25519').privateKey
+    const pem = priv.export({ format: 'pem', type: 'pkcs8' }).toString()
+    const keyPath = join(tmpHome, 'agent-key.pem')
+    writeFileSync(keyPath, pem)
+
+    saveIdpAuth({
+      idp: 'https://id.openape.ai',
+      access_token: 'expired',
+      email: 'agent-x@example',
+      expires_at: 100,
+      key_path: keyPath,
+    })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.endsWith('/.well-known/openid-configuration')) {
+        return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      // IdP rejects the challenge request — refresh path returns null,
+      // ensureFreshIdpAuth surfaces the original NotLoggedInError.
+      return new Response('rate limited', { status: 429 })
+    })
+
+    await expect(ensureFreshIdpAuth(2000)).rejects.toThrow(NotLoggedInError)
+    fetchSpy.mockRestore()
   })
 
   it('refreshes via OIDC and persists the new token', async () => {

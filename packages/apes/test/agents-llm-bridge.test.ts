@@ -111,17 +111,18 @@ describe('llm-bridge — pure helpers', () => {
     expect(sh).toContain('$HOME/.bun/bin')
   })
 
-  it('buildBridgeStartScript refreshes IdP token before exec (1h expiry workaround)', () => {
+  it('buildBridgeStartScript no longer invokes `apes login` — refresh is in-process via cli-auth (#259)', () => {
     const sh = buildBridgeStartScript()
-    // The script must read the agent's own email and idp out of auth.json
-    // and call `apes login` BEFORE exec'ing the bridge — otherwise the
-    // bridge picks up the (potentially expired) cached token and crashes.
-    expect(sh).toContain('~/.config/apes/auth.json')
-    expect(sh).toContain('apes login "$agent_email" --idp "$agent_idp"')
-    const loginIdx = sh.indexOf('apes login')
-    const execIdx = sh.indexOf('exec openape-chat-bridge')
-    expect(loginIdx).toBeGreaterThan(0)
-    expect(execIdx).toBeGreaterThan(loginIdx)
+    // Token refresh moved into @openape/cli-auth's challenge-response
+    // path. start.sh used to invoke `apes login` on every daemon boot
+    // as a workaround for the 1h agent-token expiry; now cli-auth
+    // handles it without shelling out, so the daemon stays connected
+    // across expiry instead of crash-restarting.
+    //
+    // Match the actual command invocation (whitespace-bracketed) instead
+    // of the bare substring — comments still mention the historical
+    // command name.
+    expect(sh).not.toMatch(/(^|[\s;|&])apes\s+login\b/m)
   })
 
   it('buildBridgePlist embeds agent name as label + UserName + paths + KeepAlive', () => {

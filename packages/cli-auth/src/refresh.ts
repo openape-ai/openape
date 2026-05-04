@@ -1,4 +1,5 @@
 import { ofetch } from 'ofetch'
+import { refreshAgentToken } from './agent-refresh.js'
 import { loadIdpAuth, saveIdpAuth } from './storage.js'
 import { AuthError, NotLoggedInError  } from './types.js'
 import type { IdpAuth } from './types.js'
@@ -50,7 +51,17 @@ export async function ensureFreshIdpAuth(now: number = Math.floor(Date.now() / 1
     return auth
   }
 
+  // Agent path: no refresh_token (the IdP doesn't issue one for
+  // /agent/authenticate) but we may have a signing key on disk.
+  // Re-run the same challenge-response flow `apes login --key` does
+  // and persist the refreshed token. See packages/cli-auth/src/agent-refresh.ts
+  // for the rationale and #259 for the daemon crash loop this prevents.
   if (!auth.refresh_token) {
+    const refreshed = await refreshAgentToken(auth, now)
+    if (refreshed) {
+      saveIdpAuth(refreshed)
+      return refreshed
+    }
     throw new NotLoggedInError(
       `IdP token expired at ${new Date(auth.expires_at * 1000).toISOString()} and no refresh_token is stored. Run \`apes login\` again.`,
     )

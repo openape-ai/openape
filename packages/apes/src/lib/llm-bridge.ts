@@ -87,12 +87,16 @@ LITELLM_API_KEY=${cfg.apiKey}
  * start.sh content. Slim — assumes the bridge stack (chat-bridge + apes
  * + pi) was already bun-installed during spawn. Each launchd boot only:
  *
- *   1. Refreshes the agent's IdP token via `apes login` (key-based,
- *      ~1h expiry workaround — agent tokens have no refresh_token).
- *   2. Drops the litellm pi extension if missing (idempotent).
- *   3. Sources the proxy env + execs the bridge.
+ *   1. Drops the litellm pi extension if missing (idempotent).
+ *   2. Sources the proxy env + execs the bridge.
  *
  * Boot time goes from ~75s (with installs) to ~3-5s.
+ *
+ * Token refresh: handled in-process by `@openape/cli-auth`, which
+ * does its own Ed25519 challenge-response when the cached IdP token
+ * expires (`auth.json.key_path` points at `~/.ssh/id_ed25519`). No
+ * `apes login` shell-out needed at boot — the daemon stays connected
+ * across the 1h expiry boundary instead of crash-restarting. See #259.
  *
  * To upgrade an agent's bridge after a new release:
  *   apes run --as <name> -- bun update -g @openape/chat-bridge
@@ -105,29 +109,10 @@ set -euo pipefail
 
 export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-# Refresh IdP token. Agents auth via SSH-key signing — the cached IdP
-# token has no refresh_token and expires after ~1h. Re-running apes
-# login re-signs against the registered key. Soft-fails to leave the
-# bridge usable on cached token if the IdP is briefly unreachable.
-if [ -f "$HOME/.config/apes/auth.json" ] && command -v apes >/dev/null 2>&1; then
-  agent_email=$(python3 -c "import json,os,sys
-try: print(json.load(open(os.path.expanduser('~/.config/apes/auth.json')))['email'])
-except Exception: sys.exit(1)" 2>/dev/null || true)
-  agent_idp=$(python3 -c "import json,os,sys
-try: print(json.load(open(os.path.expanduser('~/.config/apes/auth.json')))['idp'])
-except Exception: sys.exit(1)" 2>/dev/null || true)
-  if [ -n "$agent_email" ] && [ -n "$agent_idp" ]; then
-    # Capture full output so the failure mode is debuggable from logs
-    # without needing an interactive grant approval. apes-login should
-    # succeed with the SSH key under ~/.ssh/id_ed25519 written by spawn;
-    # if it doesn't, the cached token carries us until expiry (~1h) and
-    # the daemon will retry on the next launchd restart.
-    login_output=$(apes login "$agent_email" --idp "$agent_idp" 2>&1) || {
-      echo "warn: apes login failed for $agent_email; continuing with cached token" >&2
-      echo "$login_output" | sed 's/^/  apes-login: /' >&2
-    }
-  fi
-fi
+# Token refresh is in-process via @openape/cli-auth's challenge-response
+# path (auth.json.key_path -> ~/.ssh/id_ed25519). No "apes login" needed
+# at boot — keeping start.sh slim avoids the rate-limit dance the old
+# refresh hit when KeepAlive crash-restarted the daemon every 1h.
 
 EXT_DIR="$HOME/.pi/agent/extensions"
 mkdir -p "$EXT_DIR"

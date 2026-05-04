@@ -364,6 +364,13 @@ export interface AuthJsonInput {
   email: string
   expiresAt: number
   /**
+   * Absolute path to the agent's Ed25519 private key on its own home
+   * directory. Lets `@openape/cli-auth` refresh the access token in
+   * process via challenge-response — see #259. Spawn writes the key
+   * to `${homeDir}/.ssh/id_ed25519` so the path is deterministic.
+   */
+  keyPath: string
+  /**
    * Email of the human owner who spawned this agent. Persisted so the
    * bridge daemon can (a) send the initial contact request to the right
    * person and (b) seed its allowlist with the only peer it should
@@ -378,6 +385,7 @@ export function buildAgentAuthJson(input: AuthJsonInput): string {
     access_token: input.accessToken,
     email: input.email,
     expires_at: input.expiresAt,
+    key_path: input.keyPath,
     owner_email: input.ownerEmail,
   }, null, 2)}\n`
 }
