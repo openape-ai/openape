@@ -45,6 +45,29 @@ export interface ModuleOptions {
    * Env: `NUXT_OPENAPE_IDP_ALLOWED_FRAME_ANCESTORS`
    */
   allowedFrameAncestors: string
+  /**
+   * SP `redirect_uri` enforcement mode (DDISA core.md §5.2.1, #280).
+   *
+   *   - `permissive` (default): unresolvable SP metadata is allowed
+   *     through with a warn-log so SPs that haven't yet published
+   *     `/.well-known/oauth-client-metadata` keep working during
+   *     rollout. Explicit mismatch (metadata exists but redirect_uri
+   *     not in `redirect_uris`) is still rejected.
+   *   - `strict`: unresolvable metadata is also rejected. Use in
+   *     production once all SPs publish their metadata.
+   *
+   * Env: `NUXT_OPENAPE_IDP_SP_METADATA_MODE`
+   */
+  spMetadataMode: 'permissive' | 'strict'
+  /**
+   * Pre-registered "public clients" — native apps without a domain
+   * (RFC 8252). Pass either an object or a JSON string. The IdP uses
+   * this for `client_id`s without a `.` in them; everything else
+   * goes through the well-known fetch.
+   *
+   * Env: `NUXT_OPENAPE_IDP_PUBLIC_CLIENTS` (JSON string)
+   */
+  publicClients: string | Record<string, { client_id: string, redirect_uris: string[] }>
 }
 
 function resolveRoutes(routes: boolean | Partial<RoutesOptions> | undefined): RoutesOptions {
@@ -88,6 +111,8 @@ export default defineNuxtModule<ModuleOptions>({
     pages: true,
     federationProviders: '',
     allowedFrameAncestors: '',
+    spMetadataMode: 'permissive',
+    publicClients: '',
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)

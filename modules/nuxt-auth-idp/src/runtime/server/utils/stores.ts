@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
-import type { ChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import type { ChallengeStore, ClientMetadata, ClientMetadataStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import { createClientMetadataResolver } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
@@ -23,6 +24,33 @@ interface IdpStores {
   jtiStore: JtiStore
   refreshTokenStore: RefreshTokenStore
   sshKeyStore: SshKeyStore
+  clientMetadataStore: ClientMetadataStore
+}
+
+// Module-level singleton for the SP client-metadata resolver. The
+// resolver caches its own results internally; sharing one instance
+// across requests keeps the cache hit-rate up. Per-request scoping
+// via `event.context` doesn't help here because the cache TTL is
+// O(minutes), much longer than a request lifetime.
+let _clientMetadataStore: ClientMetadataStore | null = null
+function getClientMetadataStore(): ClientMetadataStore {
+  if (_clientMetadataStore) return _clientMetadataStore
+  let publicClients: Record<string, ClientMetadata> = {}
+  try {
+    const config = useRuntimeConfig()
+    const raw = config.openapeIdp?.publicClients
+    if (typeof raw === 'string' && raw.trim()) {
+      publicClients = JSON.parse(raw) as Record<string, ClientMetadata>
+    }
+    else if (raw && typeof raw === 'object') {
+      publicClients = raw as Record<string, ClientMetadata>
+    }
+  }
+  catch {
+    publicClients = {}
+  }
+  _clientMetadataStore = createClientMetadataResolver({ publicClients })
+  return _clientMetadataStore
 }
 
 let _stores: IdpStores | null = null
@@ -38,6 +66,7 @@ function initDefaultStores(): IdpStores {
     jtiStore: createJtiStore(),
     refreshTokenStore: createRefreshTokenStore(),
     sshKeyStore: createSshKeyStore(),
+    clientMetadataStore: getClientMetadataStore(),
   }
 }
 
@@ -52,6 +81,7 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     jtiStore: getStoreFactory<JtiStore>('jtiStore')?.(event) ?? createJtiStore(),
     refreshTokenStore: getStoreFactory<RefreshTokenStore>('refreshTokenStore')?.(event) ?? createRefreshTokenStore(),
     sshKeyStore: getStoreFactory<SshKeyStore>('sshKeyStore')?.(event) ?? createSshKeyStore(),
+    clientMetadataStore: getStoreFactory<ClientMetadataStore>('clientMetadataStore')?.(event) ?? getClientMetadataStore(),
   }
 }
 
