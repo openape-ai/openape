@@ -167,12 +167,47 @@ export default defineEventHandler(async (event) => {
   const userDomain = extractDomain(userId)
   const ddisaRecord = await resolveDDISA(userDomain)
   const policyMode = ddisaRecord?.mode ?? 'open'
-  const noopConsentStore = { hasConsent: async () => false, save: async () => {} }
-  const decision = await evaluatePolicy(policyMode, params.client_id, userId, noopConsentStore)
+  const { consentStore } = useIdpStores()
+  const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore)
 
-  if (decision !== 'allow') {
+  if (decision === 'deny') {
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('error', 'access_denied')
+    redirectUrl.searchParams.set('state', params.state)
+    return sendRedirect(event, redirectUrl.toString())
+  }
+
+  if (decision === 'consent') {
+    // DDISA core.md §2.3 `allowlist-user` mode: stash the original
+    // /authorize query in the session and redirect the user to the
+    // consent page. The page reads the stashed state, renders the SP
+    // info (using clientMetadataStore for verified-vs-unverified UI),
+    // and POSTs a CSRF-token-protected confirmation back. On approve
+    // the consent is persisted (so the user isn't asked again) and we
+    // bounce the user back to /authorize, which re-evaluates and now
+    // sees `decision === 'allow'`. See issue #301.
+    if (!bearerPayload) {
+      const session = await getAppSession(event)
+      const csrfToken = crypto.randomUUID()
+      await session.update({
+        pendingConsent: {
+          params,
+          query: query as Record<string, string>,
+          csrfToken,
+          createdAt: Date.now(),
+        },
+      })
+      const consentUrl = new URL('/consent', getRequestURL(event).origin)
+      // The csrf token is *not* in the URL — only in the session, so
+      // it's never logged. The consent page POSTs the token from the
+      // form back, server compares against the session.
+      consentUrl.searchParams.set('client_id', params.client_id)
+      return sendRedirect(event, consentUrl.pathname + consentUrl.search)
+    }
+    // Bearer flow can't show a consent UI — agents must use explicit
+    // grant API instead. Falls through to access_denied.
+    const redirectUrl = new URL(params.redirect_uri)
+    redirectUrl.searchParams.set('error', 'consent_required')
     redirectUrl.searchParams.set('state', params.state)
     return sendRedirect(event, redirectUrl.toString())
   }
