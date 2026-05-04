@@ -23,6 +23,10 @@ export function createConsentStore(): ConsentStore {
     return `consents:${userId.toLowerCase()}:${clientId.toLowerCase()}`
   }
 
+  function userPrefix(userId: string): string {
+    return `consents:${userId.toLowerCase()}:`
+  }
+
   return {
     async hasConsent(userId: string, clientId: string): Promise<boolean> {
       return await storage.hasItem(key(userId, clientId))
@@ -33,6 +37,25 @@ export function createConsentStore(): ConsentStore {
         key(entry.userId, entry.clientId),
         entry,
       )
+    },
+
+    async list(userId: string): Promise<ConsentEntry[]> {
+      // Linear scan over the user's namespace. Fine for any realistic
+      // user — even a power-user with hundreds of approved SPs is well
+      // under the limit unstorage is comfortable with. Sorting happens
+      // client-side because the storage isn't ordered.
+      const keys = await storage.getKeys(userPrefix(userId))
+      const entries: ConsentEntry[] = []
+      for (const k of keys) {
+        const v = await storage.getItem<ConsentEntry>(k)
+        if (v) entries.push(v)
+      }
+      entries.sort((a, b) => b.grantedAt - a.grantedAt)
+      return entries
+    },
+
+    async revoke(userId: string, clientId: string): Promise<void> {
+      await storage.removeItem(key(userId, clientId))
     },
   }
 }

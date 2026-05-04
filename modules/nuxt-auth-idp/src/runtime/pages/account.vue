@@ -19,13 +19,17 @@ const newSshKey = ref('')
 const newSshKeyName = ref('')
 const sshKeyAdding = ref(false)
 
+// Connected services (DDISA allowlist-user consents, #301)
+const consents = ref([])
+const consentsLoading = ref(false)
+
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
     await navigateTo('/login')
     return
   }
-  await Promise.all([loadCredentials(), loadSshKeys()])
+  await Promise.all([loadCredentials(), loadSshKeys(), loadConsents()])
 })
 async function loadCredentials() {
   credentialsLoading.value = true
@@ -123,6 +127,35 @@ async function handleDeleteSshKey(keyId) {
 }
 function fingerprint(keyId) {
   return `SHA256:${keyId.substring(0, 16)}...`
+}
+
+async function loadConsents() {
+  consentsLoading.value = true
+  try {
+    consents.value = await $fetch('/api/account/consents')
+  }
+  catch {
+    consents.value = []
+  }
+  finally {
+    consentsLoading.value = false
+  }
+}
+async function handleRevokeConsent(clientId, clientName) {
+  // Use the human-readable name in the prompt when we have one — falls
+  // back to the bare client_id (hostname) for unverified SPs.
+  const label = clientName || clientId
+  if (!confirm(`Zugriff für ${label} entfernen? Du wirst beim nächsten Login wieder gefragt.`))
+    return
+  error.value = ''
+  try {
+    await $fetch(`/api/account/consents/${encodeURIComponent(clientId)}`, { method: 'DELETE' })
+    success.value = `Zugriff für ${label} widerrufen`
+    await loadConsents()
+  }
+  catch (err) {
+    error.value = err?.data?.title ?? 'Failed to revoke access'
+  }
 }
 </script>
 
@@ -265,6 +298,74 @@ function fingerprint(keyId) {
               Add SSH Key
             </UButton>
           </div>
+        </UCard>
+
+        <UCard class="mt-6 mb-6" :ui="{ body: 'p-0' }">
+          <template #header>
+            <h2 class="text-lg font-semibold">
+              Connected Services
+            </h2>
+            <p class="text-sm text-muted mt-1">
+              Anwendungen, die du bei der Anmeldung an id.openape.ai genehmigt hast.
+              Widerrufen heißt: nächste Anmeldung an diesem Dienst zeigt wieder den Consent-Screen.
+            </p>
+          </template>
+
+          <div v-if="consentsLoading" class="p-6 text-center text-muted">
+            Loading...
+          </div>
+          <div v-else-if="consents.length === 0" class="p-6 text-center text-muted">
+            Keine Dienste genehmigt. (Setze <code>mode=allowlist-user</code> in deiner DDISA-DNS, um Consent-Screens zu aktivieren.)
+          </div>
+          <table v-else class="w-full">
+            <thead class="border-b border-(--ui-border)">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                  Service
+                </th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                  Genehmigt
+                </th>
+                <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
+                  Aktion
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-(--ui-border)">
+              <tr v-for="c in consents" :key="c.clientId" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
+                <td class="px-4 py-3 text-sm">
+                  <div class="flex items-center gap-2">
+                    <img v-if="c.logoUri" :src="c.logoUri" :alt="`${c.clientName} logo`" class="w-6 h-6 rounded bg-white p-0.5 object-contain shrink-0">
+                    <div class="min-w-0">
+                      <div class="font-medium truncate flex items-center gap-1.5">
+                        <a v-if="c.clientUri" :href="c.clientUri" target="_blank" rel="noopener" class="hover:underline">{{ c.clientName || c.clientId }}</a>
+                        <span v-else>{{ c.clientName || c.clientId }}</span>
+                        <UBadge v-if="!c.verified" color="warning" variant="subtle" size="xs">
+                          unverifiziert
+                        </UBadge>
+                      </div>
+                      <div v-if="c.clientName" class="text-xs text-muted truncate">
+                        {{ c.clientId }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                  {{ formatDate(c.grantedAt * 1000) }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <UButton
+                    variant="ghost"
+                    size="xs"
+                    color="error"
+                    @click="handleRevokeConsent(c.clientId, c.clientName)"
+                  >
+                    Widerrufen
+                  </UButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </UCard>
 
         <UCard :ui="{ body: 'p-0' }">
