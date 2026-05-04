@@ -302,4 +302,22 @@ describe('handleRefreshGrant', () => {
       'https://idp.example.com',
     )).rejects.toThrow('expired')
   })
+
+  it('rejects when client_id does not match the one the token was issued for (#274)', async () => {
+    // Pin RFC 6749 §6 audience binding. Without this check, a refresh
+    // token captured from SP-A could be redeemed at /token with
+    // client_id=SP-B to mint an assertion with aud=SP-B — full
+    // cross-audience token forgery.
+    const keyStore = new InMemoryKeyStore()
+    const refreshStore = new InMemoryRefreshTokenStore()
+    const { token } = await refreshStore.create('alice@example.com', 'sp-a.example.com')
+
+    await expect(handleRefreshGrant(
+      token,
+      'sp-b.example.com', // attacker-supplied wrong client
+      refreshStore,
+      keyStore,
+      'https://idp.example.com',
+    )).rejects.toMatchObject({ name: 'RefreshClientMismatchError' })
+  })
 })

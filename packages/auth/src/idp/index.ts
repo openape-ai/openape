@@ -1,7 +1,7 @@
 export { type AuthorizeParams, type AuthorizeResult, evaluatePolicy, validateAuthorizeRequest } from './authorize.js'
 export { type AgentKeyResolver, type ClientAssertionResult, validateClientAssertion } from './client-assertion.js'
 export { generateJWKS, type JWKSResponse, serveJWKS } from './jwks.js'
-export { handleRefreshGrant, type RefreshGrantResult } from './refresh.js'
+export { handleRefreshGrant, RefreshClientMismatchError, type RefreshGrantResult } from './refresh.js'
 export {
   type CodeEntry,
   type CodeStore,

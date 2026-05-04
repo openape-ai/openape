@@ -11,8 +11,22 @@ export interface RefreshGrantResult {
   assertion: string
 }
 
+export class RefreshClientMismatchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RefreshClientMismatchError'
+  }
+}
+
 /**
  * Handle grant_type=refresh_token: rotate refresh token, issue new access/id tokens.
+ *
+ * The `clientId` arg is the request's `client_id` form field, which we
+ * MUST verify matches the client the refresh token was originally
+ * issued to (RFC 6749 §6). Without this check a refresh token captured
+ * for SP-A could be presented at /token with `client_id=SP-B` to mint
+ * a fresh assertion `aud=SP-B` — audience binding broken. See security
+ * audit 2026-05-04 / GitHub issue #274.
  */
 export async function handleRefreshGrant(
   refreshToken: string,
@@ -22,7 +36,13 @@ export async function handleRefreshGrant(
   issuer: string,
   resolveUserClaims?: UserClaimsResolver,
 ): Promise<RefreshGrantResult> {
-  const { newToken, userId } = await refreshStore.consume(refreshToken)
+  const { newToken, userId, clientId: issuedClientId } = await refreshStore.consume(refreshToken)
+
+  if (issuedClientId !== clientId) {
+    throw new RefreshClientMismatchError(
+      `Refresh token was issued for client_id=${issuedClientId}, cannot redeem for client_id=${clientId}`,
+    )
+  }
 
   // Resolve user claims (same as in authorization_code flow)
   let extraClaims: { email?: string, name?: string, approver?: string } = {}
