@@ -1,5 +1,17 @@
 # @openape/chat-bridge
 
+## 0.3.1
+
+### Patch Changes
+
+- [`b519e3f`](https://github.com/openape-ai/openape/commit/b519e3f858011358056daaec8f54a2694c59f191) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix bridge crash-loop "auth.json missing 'owner_email'" after `apes login`.
+
+  - `@openape/cli-auth`: `saveIdpAuth` now merges with existing fields instead of overwriting wholesale. `apes login` (called from the bridge's `start.sh` on every daemon boot) used to silently drop `owner_email` written by `apes agents spawn`, leaving the bridge in a fatal restart loop until the auth.json was manually re-stamped. The merge preserves any unknown keys in the file across logins.
+  - `@openape/chat-bridge`: `readAgentIdentity` falls back to `OPENAPE_OWNER_EMAIL` env var when `owner_email` is missing from auth.json, so an old agent (spawned before the Phase A migration) can be unblocked by adding one line to its launchd plist.
+
+- Updated dependencies [[`b519e3f`](https://github.com/openape-ai/openape/commit/b519e3f858011358056daaec8f54a2694c59f191)]:
+  - @openape/cli-auth@0.2.4
+
 ## 0.3.0
 
 ### Minor Changes
