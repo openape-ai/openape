@@ -11,6 +11,16 @@ export interface ClientMetadata {
   client_name?: string
   redirect_uris: string[]
   jwks_uri?: string
+  /** RFC 7591 §2 — homepage / description URL. Used by consent UIs. */
+  client_uri?: string
+  /** RFC 7591 §2 — logo for the consent UI. */
+  logo_uri?: string
+  /** RFC 7591 §2 — privacy policy link. */
+  policy_uri?: string
+  /** RFC 7591 §2 — terms-of-service link. */
+  tos_uri?: string
+  /** RFC 7591 §2 — admin contact emails. */
+  contacts?: string[]
 }
 
 export interface ClientMetadataStore {
