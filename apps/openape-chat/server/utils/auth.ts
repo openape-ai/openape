@@ -52,7 +52,11 @@ export async function resolveCaller(event: H3Event): Promise<Caller> {
     throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
   }
   return {
-    email: claims.sub,
+    // Lower-case once at the boundary so every downstream comparison
+    // (membership rows, message ownership, contacts canonicalisation,
+    // bridge allowlist) sees the same string regardless of how the IdP
+    // emitted the casing — see #282.
+    email: claims.sub.toLowerCase(),
     act: claims.act === 'agent' ? 'agent' : 'human',
     source: 'cookie',
   }
@@ -98,7 +102,7 @@ async function verifyBearer(token: string): Promise<Caller> {
     if (!cli) {
       throw createError({ statusCode: 401, statusMessage: 'Invalid CLI token' })
     }
-    return { email: cli.email, act: cli.act, source: 'bearer' }
+    return { email: cli.email.toLowerCase(), act: cli.act, source: 'bearer' }
   }
 
   try {
@@ -108,7 +112,7 @@ async function verifyBearer(token: string): Promise<Caller> {
       throw createError({ statusCode: 401, statusMessage: 'Token missing sub' })
     }
     return {
-      email,
+      email: email.toLowerCase(),
       act: payload.act === 'agent' ? 'agent' : 'human',
       source: 'bearer',
     }
