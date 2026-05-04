@@ -284,17 +284,17 @@ async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
 
   const { token, expires_in } = await authResp.json() as { token: string, expires_in: number }
 
+  // Persist the absolute key path on auth.json so any cli-auth consumer
+  // (chat-bridge, ape-tasks, ape-plans, …) can refresh the agent token
+  // in-process without shelling out to `apes login`. See issue #259.
+  const absoluteKeyPath = resolvePath(keyPath.replace(/^~/, homedir()))
   saveAuth({
     idp,
     access_token: token,
     email: agentEmail,
     expires_at: Math.floor(Date.now() / 1000) + (expires_in || 3600),
+    key_path: absoluteKeyPath,
   })
-
-  // Persist the resolved key path + email to config.toml so future apes/ape-shell
-  // invocations can auto-refresh via Ed25519 challenge-response without a new
-  // `apes login`. Merge with existing config so [defaults] is preserved.
-  const absoluteKeyPath = resolvePath(keyPath.replace(/^~/, homedir()))
   const existingConfig = loadConfig()
   saveConfig({
     ...existingConfig,
