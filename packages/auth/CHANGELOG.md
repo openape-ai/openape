@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- [`cbcffc7`](https://github.com/openape-ai/openape/commit/cbcffc74d7fe08520c1a18f2d546181446c1cfca) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix refresh-token cross-audience forgery (closes #274).
+
+  `handleRefreshGrant` accepted a user-supplied `client_id` and passed it straight into `issueAssertion({ aud: clientId })` without verifying it matched the client the token was originally issued to. A refresh token captured for SP-A could therefore be redeemed at the IdP token endpoint with `client_id=SP-B` to mint a fresh assertion with `aud=SP-B` — RFC 6749 §6 audience binding broken.
+
+  The handler now compares the request's `client_id` against the `clientId` returned from `RefreshTokenStore.consume` and throws a new `RefreshClientMismatchError` (also exported from the package) on mismatch. The IdP's `/token` route already maps any error from `handleRefreshGrant` to `400 invalid_grant`, so no route changes were needed.
+
 ## 0.6.3
 
 ### Patch Changes
