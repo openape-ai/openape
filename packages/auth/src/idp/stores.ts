@@ -363,7 +363,15 @@ export interface SshKeyStore {
   findByUser: (email: string) => Promise<SshKey[]>
   findByPublicKey: (publicKey: string) => Promise<SshKey | null>
   delete: (keyId: string) => Promise<void>
-  deleteAllForUser: (email: string) => Promise<void>
+  /**
+   * Delete every key for the user except (optionally) `exceptKeyId`.
+   * The exception is the safety hatch for "rotate one key into the
+   * place of another" flows: save the new one first, then call this
+   * with `exceptKeyId` set to the new id so the agent is never
+   * without an authenticator (see #295). Backwards-compatible — the
+   * options arg is optional.
+   */
+  deleteAllForUser: (email: string, opts?: { exceptKeyId?: string }) => Promise<void>
 }
 
 // --- Grant Challenge Store (ed25519 challenge-response) ---
@@ -459,9 +467,10 @@ export class InMemorySshKeyStore implements SshKeyStore {
     this.keys.delete(keyId)
   }
 
-  async deleteAllForUser(email: string): Promise<void> {
+  async deleteAllForUser(email: string, opts?: { exceptKeyId?: string }): Promise<void> {
+    const except = opts?.exceptKeyId
     for (const [id, key] of this.keys) {
-      if (key.userEmail === email) this.keys.delete(id)
+      if (key.userEmail === email && id !== except) this.keys.delete(id)
     }
   }
 }

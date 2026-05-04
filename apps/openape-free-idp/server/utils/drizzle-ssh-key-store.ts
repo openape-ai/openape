@@ -1,5 +1,5 @@
 // SshKeyStore type is auto-imported from @openape/nuxt-auth-idp via addServerImportsDir
-import { eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { sshKeys } from '../database/schema'
 
@@ -36,8 +36,12 @@ export function createDrizzleSshKeyStore(): SshKeyStore {
       await db.delete(sshKeys).where(eq(sshKeys.keyId, keyId))
     },
 
-    async deleteAllForUser(email) {
-      await db.delete(sshKeys).where(eq(sshKeys.userEmail, email))
+    async deleteAllForUser(email, opts) {
+      const except = opts?.exceptKeyId
+      const filter = except
+        ? and(eq(sshKeys.userEmail, email), ne(sshKeys.keyId, except))
+        : eq(sshKeys.userEmail, email)
+      await db.delete(sshKeys).where(filter)
     },
   }
 }

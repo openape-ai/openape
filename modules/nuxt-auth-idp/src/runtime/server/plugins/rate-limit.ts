@@ -10,7 +10,12 @@ interface RateLimitEntry {
 const WINDOW_MS = 60_000 // 1 minute
 const MAX_REQUESTS = 10
 
-const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn)\b|authorize\b|token\b)/
+// Rate-limited path-prefixes. Anything brute-forceable (auth ceremonies,
+// agent challenges, push subscriptions, account registration, user lookups)
+// is in here. The hyphen in `my-agents` is escaped explicitly. Extended in
+// #292 to cover the free-idp's custom paths (enroll, register, my-agents,
+// push, users) which were previously unlimited — see audit 2026-05-04.
+const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users)\b|authorize\b|token\b)/
 
 const store = new Map<string, RateLimitEntry>()
 
