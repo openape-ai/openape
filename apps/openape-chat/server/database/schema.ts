@@ -3,8 +3,17 @@ import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  // 'channel' = many-member room, 'dm' = exactly two members
-  kind: text('kind', { enum: ['channel', 'dm'] }).notNull(),
+  // Only 'dm' rooms (exactly two members) are created — by the
+  // contact-accept flow in `utils/contacts.ts` (`ensureDmRoomFor`).
+  // The historical 'channel' kind let any authenticated user enrol
+  // arbitrary emails without their consent, with the admin endpoints
+  // promoting any peer to admin: a phishing surface routed via Web
+  // Push from chat.openape.ai. Removed in #276 (security audit
+  // 2026-05-04). Existing 'channel' rows in production (if any
+  // sneaked through Phase A) are still readable — the column is
+  // unconstrained at the DB layer to keep migrations a no-op — but
+  // there is no API surface to create new ones or to add members.
+  kind: text('kind', { enum: ['dm'] }).notNull(),
   createdByEmail: text('created_by_email').notNull(),
   createdAt: integer('created_at').notNull(),
 })

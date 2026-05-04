@@ -29,16 +29,16 @@ afterEach(() => {
 })
 
 describe('chat schema', () => {
-  it('inserts and reads a channel room', async () => {
+  it('inserts and reads a DM room', async () => {
     await db.insert(rooms).values({
-      id: 'r1', name: 'team-alpha', kind: 'channel', createdByEmail: 'patrick@hofmann.eco', createdAt: 1,
+      id: 'r1', name: 'patrick@hofmann.eco ↔ alice@example.com', kind: 'dm', createdByEmail: 'patrick@hofmann.eco', createdAt: 1,
     })
     const got = await db.select().from(rooms).where(eq(rooms.id, 'r1')).get()
-    expect(got).toMatchObject({ id: 'r1', name: 'team-alpha', kind: 'channel' })
+    expect(got?.kind).toBe('dm')
   })
 
   it('enforces composite PK on memberships', async () => {
-    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'dm', createdByEmail: 'p@x', createdAt: 1 })
     await db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'admin', joinedAt: 1 })
     await expect(
       db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'member', joinedAt: 2 }),
@@ -46,7 +46,7 @@ describe('chat schema', () => {
   })
 
   it('stores agent-typed messages with reactions', async () => {
-    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'dm', createdByEmail: 'p@x', createdAt: 1 })
     await db.insert(messages).values({
       id: 'm1', roomId: 'r1', senderEmail: 'agent-a@id.openape.ai', senderAct: 'agent', body: 'hello', createdAt: 10,
     })
@@ -62,7 +62,7 @@ describe('chat schema', () => {
   })
 
   it('allows multiple emojis from the same user but rejects duplicates', async () => {
-    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'channel', createdByEmail: 'p@x', createdAt: 1 })
+    await db.insert(rooms).values({ id: 'r1', name: 'r', kind: 'dm', createdByEmail: 'p@x', createdAt: 1 })
     await db.insert(messages).values({ id: 'm1', roomId: 'r1', senderEmail: 'p@x', senderAct: 'human', body: 'x', createdAt: 1 })
     await db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '👍', createdAt: 1 })
     await db.insert(reactions).values({ messageId: 'm1', userEmail: 'p@x', emoji: '🔥', createdAt: 1 })
@@ -100,8 +100,8 @@ describe('chat schema', () => {
 
   it('lists memberships joined to rooms (the GET /api/rooms shape)', async () => {
     const now = 1
-    await db.insert(rooms).values({ id: 'r1', name: 'alpha', kind: 'channel', createdByEmail: 'p@x', createdAt: now })
-    await db.insert(rooms).values({ id: 'r2', name: 'beta', kind: 'channel', createdByEmail: 'q@x', createdAt: now })
+    await db.insert(rooms).values({ id: 'r1', name: 'alpha', kind: 'dm', createdByEmail: 'p@x', createdAt: now })
+    await db.insert(rooms).values({ id: 'r2', name: 'beta', kind: 'dm', createdByEmail: 'q@x', createdAt: now })
     await db.insert(memberships).values({ roomId: 'r1', userEmail: 'p@x', role: 'admin', joinedAt: now })
     await db.insert(memberships).values({ roomId: 'r2', userEmail: 'p@x', role: 'member', joinedAt: now })
     await db.insert(memberships).values({ roomId: 'r2', userEmail: 'q@x', role: 'admin', joinedAt: now })
