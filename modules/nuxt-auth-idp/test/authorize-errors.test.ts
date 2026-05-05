@@ -138,6 +138,17 @@ describe('authorize endpoint — error redirects (RFC 6749 §4.1.2.1)', () => {
       update: vi.fn(),
     })
 
+    // DDISA record with explicit mode=open — without this the new
+    // safe-by-default policy resolution (#305) would short-circuit
+    // into the /consent redirect and we'd never reach the gate.
+    const { resolveDDISA } = await import('@openape/core')
+    ;(resolveDDISA as any).mockResolvedValueOnce({
+      version: 'ddisa1',
+      idp: 'https://id.openape.at',
+      mode: 'open',
+      raw: 'v=ddisa1 idp=https://id.openape.at; mode=open',
+    })
+
     const { default: handler } = await import('../src/runtime/server/routes/authorize.get')
 
     await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })

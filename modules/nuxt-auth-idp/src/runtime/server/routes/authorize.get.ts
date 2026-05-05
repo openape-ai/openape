@@ -166,7 +166,15 @@ export default defineEventHandler(async (event) => {
 
   const userDomain = extractDomain(userId)
   const ddisaRecord = await resolveDDISA(userDomain)
-  const policyMode = ddisaRecord?.mode ?? 'open'
+  // DDISA core.md §5.6: when the user's `_ddisa.{domain}` TXT record
+  // omits `mode` (or no record exists at all), the IdP picks the
+  // default. The spec recommends prompting for consent. Defaulting to
+  // `open` would silently issue assertions for any SP that asks —
+  // safe only for users who deliberately opted into permissive mode
+  // via DNS, which is exactly the inverse of what a missing record
+  // means. We pass `undefined` through to evaluatePolicy whose
+  // `default:` branch returns `'consent'`.
+  const policyMode = ddisaRecord?.mode
   const { consentStore } = useIdpStores()
   const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore)
 
