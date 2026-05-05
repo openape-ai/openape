@@ -19,6 +19,11 @@ interface AllowlistEntry {
   approvedBy: string
   approvedAt: number
 }
+interface OperatorEntry {
+  userEmail: string
+  promotedBy: string
+  promotedAt: number
+}
 
 const status = ref<AdminStatus | null>(null)
 const statusLoading = ref(false)
@@ -32,6 +37,11 @@ const allowlist = ref<AllowlistEntry[]>([])
 const allowlistLoading = ref(false)
 const newClientId = ref('')
 const adding = ref(false)
+
+const operators = ref<OperatorEntry[]>([])
+const operatorsLoading = ref(false)
+const newOperatorEmail = ref('')
+const promoting = ref(false)
 
 async function loadStatus() {
   statusLoading.value = true
@@ -61,6 +71,53 @@ async function loadAllowlist() {
   }
 }
 
+async function loadOperators() {
+  if (!status.value?.isRoot && !status.value?.isOperator) return
+  operatorsLoading.value = true
+  try {
+    operators.value = await ($fetch as any)('/api/free-idp/admin/operators')
+  }
+  catch {
+    operators.value = []
+  }
+  finally {
+    operatorsLoading.value = false
+  }
+}
+
+async function promoteOperator() {
+  const email = newOperatorEmail.value.trim().toLowerCase()
+  if (!email) return
+  promoting.value = true
+  error.value = ''
+  try {
+    await ($fetch as any)('/api/free-idp/admin/operators', {
+      method: 'POST',
+      body: { email },
+    })
+    newOperatorEmail.value = ''
+    await loadOperators()
+  }
+  catch (err: any) {
+    error.value = err?.data?.title || err?.message || 'Operator-Promotion fehlgeschlagen'
+  }
+  finally {
+    promoting.value = false
+  }
+}
+
+async function demoteOperator(email: string) {
+  try {
+    await ($fetch as any)(`/api/free-idp/admin/operators/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+    })
+    await loadOperators()
+  }
+  catch (err: any) {
+    error.value = err?.data?.title || err?.message || 'Operator-Demote fehlgeschlagen'
+  }
+}
+
 async function generateSecret() {
   issuing.value = true
   error.value = ''
@@ -84,6 +141,7 @@ async function recheck() {
     await ($fetch as any)('/api/free-idp/admin/recheck', { method: 'POST' })
     await loadStatus()
     await loadAllowlist()
+    await loadOperators()
   }
   catch (err: any) {
     error.value = err?.data?.title || err?.message || 'Recheck fehlgeschlagen'
@@ -163,6 +221,7 @@ watch(user, async (u) => {
   if (!u) return
   await loadStatus()
   await loadAllowlist()
+  await loadOperators()
 }, { immediate: true })
 </script>
 
@@ -362,6 +421,69 @@ watch(user, async (u) => {
               size="xs"
               icon="i-lucide-trash-2"
               @click="removeFromAllowlist(entry.clientId)"
+            />
+          </li>
+        </ul>
+      </UCard>
+
+      <UCard v-if="status.isRoot || status.isOperator" class="mt-6">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            Operators
+          </h2>
+          <p class="text-sm text-muted mt-1">
+            Mit-Admins für <code>{{ status.domain }}</code>. Operators können dieselben
+            Admin-Aktionen wie der Root-Admin durchführen — außer andere Operators
+            promoten/demoten. Nur Root-Admins können diese Liste ändern.
+          </p>
+        </template>
+
+        <form
+          v-if="status.isRoot"
+          class="flex gap-2 mb-4"
+          @submit.prevent="promoteOperator"
+        >
+          <UInput
+            v-model="newOperatorEmail"
+            type="email"
+            :placeholder="`alice@${status.domain || 'beispiel.com'}`"
+            class="flex-1"
+            :disabled="promoting"
+          />
+          <UButton type="submit" color="primary" :loading="promoting" icon="i-lucide-user-plus">
+            Promoten
+          </UButton>
+        </form>
+
+        <p v-else class="text-xs text-muted mb-4">
+          Nur ein Root-Admin kann Operators hinzufügen.
+        </p>
+
+        <div v-if="operatorsLoading" class="text-muted text-sm">
+          Lade…
+        </div>
+        <div v-else-if="operators.length === 0" class="text-muted text-sm">
+          Keine Operators ernannt.
+        </div>
+        <ul v-else class="divide-y divide-(--ui-border)">
+          <li
+            v-for="op in operators"
+            :key="op.userEmail"
+            class="py-3 flex items-center justify-between gap-4"
+          >
+            <div class="min-w-0">
+              <code class="font-mono">{{ op.userEmail }}</code>
+              <p class="text-xs text-muted">
+                promoted von {{ op.promotedBy }} · {{ formatDate(op.promotedAt) }}
+              </p>
+            </div>
+            <UButton
+              v-if="status.isRoot"
+              variant="ghost"
+              color="error"
+              size="xs"
+              icon="i-lucide-trash-2"
+              @click="demoteOperator(op.userEmail)"
             />
           </li>
         </ul>
