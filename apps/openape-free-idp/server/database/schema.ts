@@ -237,3 +237,47 @@ export const consents = sqliteTable('consents', {
   primaryKey({ columns: [table.userEmail, table.clientId] }),
   index('idx_consents_user_email').on(table.userEmail),
 ])
+
+// --- DNS-rooted admin claim (#307) ---
+// Each user can mint a random claim secret. To prove they're admin
+// for a domain they own, the user publishes a TXT record at
+// `_openape-admin-id-openape-ai.{user-domain}` containing the secret.
+// We store only sha256(secret) so a DB compromise doesn't expose
+// values that the attacker could plant in DNS to anoint themselves.
+// `revokedAt` is set when the user regenerates — stale rows are kept
+// for audit-trail of past claim secrets.
+export const adminClaimSecrets = sqliteTable('admin_claim_secrets', {
+  userEmail: text('user_email').notNull(),
+  secretHash: text('secret_hash').notNull(),
+  createdAt: integer('created_at').notNull(),
+  revokedAt: integer('revoked_at'),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.secretHash] }),
+  index('idx_admin_claim_user').on(table.userEmail),
+])
+
+// Operators are DB-stored admins for one specific email-domain. A
+// DNS-rooted root admin promotes them via the admin UI. They can do
+// everything an admin can do EXCEPT promote / demote other operators
+// — that gate uses requireRootAdmin.
+export const operators = sqliteTable('operators', {
+  userEmail: text('user_email').notNull(),
+  domain: text('domain').notNull(),
+  promotedBy: text('promoted_by').notNull(),
+  promotedAt: integer('promoted_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.domain] }),
+  index('idx_operators_domain').on(table.domain),
+])
+
+// SPs that the root admin / an operator has admin-allowlisted for a
+// given domain (mode=allowlist-admin). Closes #307. Lookups are by
+// (domain, clientId); revocation is a DELETE.
+export const adminAllowlist = sqliteTable('admin_allowlist', {
+  domain: text('domain').notNull(),
+  clientId: text('client_id').notNull(),
+  approvedBy: text('approved_by').notNull(),
+  approvedAt: integer('approved_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.domain, table.clientId] }),
+])

@@ -175,8 +175,8 @@ export default defineEventHandler(async (event) => {
   // means. We pass `undefined` through to evaluatePolicy whose
   // `default:` branch returns `'consent'`.
   const policyMode = ddisaRecord?.mode
-  const { consentStore } = useIdpStores()
-  const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore)
+  const { consentStore, adminAllowlistStore } = useIdpStores()
+  const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore, { adminAllowlistStore })
 
   if (decision === 'deny') {
     const redirectUrl = new URL(params.redirect_uri)

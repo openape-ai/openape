@@ -40,6 +40,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
       hasConsent: async () => false,
       save: consentSave,
     },
+    adminAllowlistStore: { isAllowed: async () => false },
   })),
 }))
 
@@ -154,7 +155,7 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
     ;(resolveDDISA as any).mockResolvedValue(null)
     const { evaluatePolicy } = await import('@openape/auth')
     await callAuthorize()
-    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything(), expect.objectContaining({ adminAllowlistStore: expect.anything() }))
   })
 
   it('passes undefined mode when DDISA record exists but `mode` field is omitted (#305)', async () => {
@@ -162,7 +163,7 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
     ;(resolveDDISA as any).mockResolvedValue({ version: 'ddisa1', idp: 'https://id.openape.at', raw: 'v=ddisa1 idp=...' })
     const { evaluatePolicy } = await import('@openape/auth')
     await callAuthorize()
-    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything(), expect.objectContaining({ adminAllowlistStore: expect.anything() }))
   })
 
   it('passes through explicit mode=open when DNS sets it — opt-in is honoured (#305)', async () => {
@@ -170,7 +171,7 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
     ;(resolveDDISA as any).mockResolvedValue({ version: 'ddisa1', idp: 'https://id.openape.at', mode: 'open', raw: 'v=ddisa1 mode=open ...' })
     const { evaluatePolicy } = await import('@openape/auth')
     await callAuthorize()
-    expect(evaluatePolicy).toHaveBeenCalledWith('open', 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+    expect(evaluatePolicy).toHaveBeenCalledWith('open', 'app.example.com', 'patrick@hofmann.eco', expect.anything(), expect.objectContaining({ adminAllowlistStore: expect.anything() }))
   })
 })
 
