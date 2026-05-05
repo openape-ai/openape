@@ -300,7 +300,7 @@ async function handleRevokeConsent(clientId, clientName) {
           </div>
         </UCard>
 
-        <UCard class="mt-6 mb-6" :ui="{ body: 'p-0' }">
+        <UCard id="connected-services" class="mt-6 mb-6" :ui="{ body: 'p-0' }">
           <template #header>
             <h2 class="text-lg font-semibold">
               Connected Services

@@ -57,6 +57,16 @@ async function handleLogout() {
             Berechtigungen
           </UButton>
           <UButton
+            to="/account#connected-services"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-link"
+          >
+            Verbundene Dienste
+          </UButton>
+          <UButton
             color="neutral"
             variant="outline"
             size="lg"
