@@ -209,6 +209,7 @@ export default defineNuxtModule<ModuleOptions>({
           { name: 'openape-account', path: '/account', file: resolve('./runtime/pages/account.vue') },
           { name: 'openape-admin', path: '/admin', file: resolve('./runtime/pages/admin.vue') },
           { name: 'openape-consent', path: '/consent', file: resolve('./runtime/pages/consent.vue') },
+          { name: 'openape-denied', path: '/denied', file: resolve('./runtime/pages/denied.vue') },
         ]
 
         if (grants.enablePages) {
@@ -288,6 +289,10 @@ export default defineNuxtModule<ModuleOptions>({
       // DDISA `allowlist-user` consent endpoints used by the /consent page (#301).
       addServerHandler({ route: '/api/authorize/consent', handler: resolve('./runtime/server/api/authorize/consent.get') })
       addServerHandler({ route: '/api/authorize/consent', method: 'post', handler: resolve('./runtime/server/api/authorize/consent.post') })
+
+      // Friendly deny page used by `mode=deny` and unapproved-allowlist-admin (#307).
+      addServerHandler({ route: '/api/authorize/denied', handler: resolve('./runtime/server/api/authorize/denied.get') })
+      addServerHandler({ route: '/api/authorize/denied', method: 'post', handler: resolve('./runtime/server/api/authorize/denied.post') })
     }
 
     // Server route handlers — Admin

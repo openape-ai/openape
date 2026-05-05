@@ -132,11 +132,22 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
     expect(target).toContain('client_id=app.example.com')
   })
 
-  it('returns access_denied when policy decision === \'deny\' (unchanged behaviour)', async () => {
+  it('routes the human flow to /denied on policy deny — friendly UX over silent SP-redirect', async () => {
+    // OAuth-spec compliance is preserved by the /denied page's
+    // "back to SP" button (covered by denied.post tests). Here we
+    // pin that we DON'T silently strand the user at the SP with a
+    // URL-param error — that's the bad UX we replaced.
     evaluatePolicyResult = 'deny'
     await callAuthorize()
+    expect(sessionUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      pendingDeny: expect.objectContaining({
+        params: expect.objectContaining({ client_id: 'app.example.com' }),
+        reason: expect.any(String),
+      }),
+    }))
     const target = mockSendRedirect.mock.calls[0][1]
-    expect(target).toMatch(/^https:\/\/app\.example\.com\/auth\/callback\?error=access_denied/)
+    expect(target).toMatch(/\/denied\?/)
+    expect(target).toContain('client_id=app.example.com')
   })
 
   it('proceeds to code issuance when decision === \'allow\'', async () => {
