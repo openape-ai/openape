@@ -9,8 +9,18 @@ export const WELL_KNOWN_JWKS = '/.well-known/jwks.json'
 export const WELL_KNOWN_OAUTH_CLIENT_METADATA = '/.well-known/oauth-client-metadata'
 export const WELL_KNOWN_OPENID_CONFIG = '/.well-known/openid-configuration'
 
-/** Default DNS cache TTL in seconds */
+/** Default DNS cache TTL in seconds (positive results) */
 export const DEFAULT_DNS_CACHE_TTL = 300
+
+/**
+ * Default DNS cache TTL in seconds for negative results — domains
+ * with no DDISA TXT record. Shorter than the positive TTL so that a
+ * domain that *just* added a record gets picked up reasonably fast.
+ * Long enough to absorb typical authorize-storm patterns and prevent
+ * an attacker from forcing repeated DNS queries by hammering
+ * `/authorize?login_hint=foo@no-ddisa.com`.
+ */
+export const DEFAULT_DNS_NEGATIVE_CACHE_TTL = 60
 
 /** DoH providers with CORS support */
 export const DOH_PROVIDERS = [

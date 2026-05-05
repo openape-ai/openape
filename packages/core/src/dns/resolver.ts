@@ -1,10 +1,10 @@
 import type { DDISARecord, ResolverOptions } from '../types/index.js'
-import { DEFAULT_DNS_CACHE_TTL } from '../constants.js'
+import { DEFAULT_DNS_CACHE_TTL, DEFAULT_DNS_NEGATIVE_CACHE_TTL } from '../constants.js'
 import { resolveTXT as resolveDoh } from './doh.js'
 import { parseDDISARecord } from './parser.js'
 
 interface CacheEntry {
-  record: DDISARecord
+  record: DDISARecord | null
   expires: number
 }
 
@@ -94,8 +94,20 @@ export async function resolveDDISA(
     }
   }
 
-  if (parsed.length === 0)
+  // Cache negative results too (#306). Without this, every authorize
+  // for a user from a non-DDISA domain re-queries DNS — wasted
+  // latency on the happy path and a DoS vector via crafted
+  // login_hints. Note this only fires when `resolveTXTRecords`
+  // returned successfully (possibly empty); transient errors
+  // propagate up and are NOT cached so the next call retries.
+  if (parsed.length === 0) {
+    const negTtl = options?.negativeCacheTTL ?? DEFAULT_DNS_NEGATIVE_CACHE_TTL
+    cache.set(domain, {
+      record: null,
+      expires: Date.now() + negTtl * 1000,
+    })
     return null
+  }
 
   // Sort by priority (lowest = highest priority, like MX). Default priority = 10.
   parsed.sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10))
