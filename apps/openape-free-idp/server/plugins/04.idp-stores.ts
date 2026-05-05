@@ -8,6 +8,7 @@ import { createDrizzleRegistrationUrlStore } from '../utils/drizzle-registration
 import { createDrizzleKeyStore } from '../utils/drizzle-key-store'
 import { createDrizzleSshKeyStore } from '../utils/drizzle-ssh-key-store'
 import { createDrizzleConsentStore } from '../utils/drizzle-consent-store'
+import { createDrizzleAdminAllowlistStore } from '../utils/drizzle-admin-allowlist-store'
 
 export default defineNitroPlugin(() => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -33,4 +34,7 @@ export default defineNitroPlugin(() => {
 
   // DDISA allowlist-user consents (#301)
   defineConsentStore(() => createDrizzleConsentStore())
+
+  // DDISA allowlist-admin SP allowlist (#307)
+  defineAdminAllowlistStore(() => createDrizzleAdminAllowlistStore())
 })

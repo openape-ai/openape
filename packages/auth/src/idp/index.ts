@@ -1,4 +1,4 @@
-export { type AuthorizeParams, type AuthorizeResult, evaluatePolicy, validateAuthorizeRequest } from './authorize.js'
+export { type AuthorizeParams, type AuthorizeResult, type EvaluatePolicyOptions, evaluatePolicy, validateAuthorizeRequest } from './authorize.js'
 export { type AgentKeyResolver, type ClientAssertionResult, validateClientAssertion } from './client-assertion.js'
 export { generateJWKS, type JWKSResponse, serveJWKS } from './jwks.js'
 export {
@@ -11,11 +11,13 @@ export {
 } from './client-metadata.js'
 export { handleRefreshGrant, RefreshClientMismatchError, type RefreshGrantResult } from './refresh.js'
 export {
+  type AdminAllowlistStore,
   type CodeEntry,
   type CodeStore,
   type ConsentEntry,
   type ConsentStore,
   type GrantChallengeStore,
+  InMemoryAdminAllowlistStore,
   InMemoryCodeStore,
   InMemoryConsentStore,
   InMemoryGrantChallengeStore,

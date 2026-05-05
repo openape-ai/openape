@@ -67,6 +67,16 @@ async function handleLogout() {
             Verbundene Dienste
           </UButton>
           <UButton
+            to="/admin"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-shield"
+          >
+            Domain-Admin
+          </UButton>
+          <UButton
             color="neutral"
             variant="outline"
             size="lg"
