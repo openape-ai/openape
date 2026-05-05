@@ -179,6 +179,32 @@ export default defineEventHandler(async (event) => {
   const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore, { adminAllowlistStore })
 
   if (decision === 'deny') {
+    // OAuth 2.0 §4.1.2.1 says we MUST eventually redirect back with
+    // error=access_denied — we honour that on the "Back to SP"
+    // button. But silently dropping the user there with a URL param
+    // they likely won't read is bad UX, especially for the
+    // allowlist-admin case where the user has a clear next step
+    // (ask their domain admin). For human flows we stash the deny
+    // context and route to /denied where the user sees a reason-
+    // specific message + back button. Bearer flows have no UI so
+    // they fall through to the spec-direct redirect.
+    if (!bearerPayload) {
+      const session = await getAppSession(event)
+      await session.update({
+        pendingDeny: {
+          params,
+          query: query as Record<string, string>,
+          // `policyMode` distinguishes "domain owner forbids this
+          // IdP entirely" (mode=deny) from "SP not allowlisted"
+          // (mode=allowlist-admin). The page renders different copy.
+          reason: policyMode === 'deny' ? 'mode-deny' : 'allowlist-admin-not-approved',
+          createdAt: Date.now(),
+        },
+      })
+      const deniedUrl = new URL('/denied', getRequestURL(event).origin)
+      deniedUrl.searchParams.set('client_id', params.client_id)
+      return sendRedirect(event, deniedUrl.pathname + deniedUrl.search)
+    }
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('error', 'access_denied')
     redirectUrl.searchParams.set('state', params.state)
