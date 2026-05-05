@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.25.0
+
+### Minor Changes
+
+- [#313](https://github.com/openape-ai/openape/pull/313) [`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - DDISA `mode=allowlist-admin` is now a real, plug-in-able feature. Closes #307.
+
+  **`@openape/auth`** gains `AdminAllowlistStore` + `InMemoryAdminAllowlistStore`. `evaluatePolicy` accepts an optional 5th `options` arg with `adminAllowlistStore`; with no store wired up the mode keeps its previous safe-deny behaviour.
+
+  **`@openape/nuxt-auth-idp`** wires the new store into `useIdpStores`, exposes a `defineAdminAllowlistStore(...)` registration helper, and adds two pluggable admin resolvers on `event.context`:
+
+  - `openapeAdminResolver(event, email): boolean` — overrides the env-config email allowlist for `requireAdmin`.
+  - `openapeRootAdminResolver(event, email): boolean` — strict tier for actions that must NOT be gateable by env config (e.g. operator promotion). New `requireRootAdmin` consults it; without one registered, fails closed.
+
+  Existing apps without these hooks set keep working — `requireAdmin` falls back to the legacy `OPENAPE_ADMIN_EMAILS` env list.
+
+### Patch Changes
+
+- Updated dependencies [[`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa)]:
+  - @openape/auth@0.10.0
+
 ## 0.24.2
 
 ### Patch Changes
