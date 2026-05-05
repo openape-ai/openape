@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+### Patch Changes
+
+- [#317](https://github.com/openape-ai/openape/pull/317) [`55849f0`](https://github.com/openape-ai/openape/commit/55849f06a41aac7ef0663bf5bbb566b0f898c7a8) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `<OpenApeAuth />` form now maps OAuth-error redirect codes to friendly copy via the same default map as `<OpenApeOAuthErrorAlert />` / `useOpenApeOAuthError()`. SPs that mount the form on their landing page (chat, sp-starter) automatically get the friendly message instead of the raw error code. SPs that want a richer banner (UAlert with dismiss-X, product-specific guidance) should drop `<OpenApeOAuthErrorAlert />` directly on the page.
+
 ## 0.9.0
 
 ### Minor Changes
