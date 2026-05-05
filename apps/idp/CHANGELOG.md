@@ -1,5 +1,12 @@
 # openape-idp
 
+## 0.1.15
+
+### Patch Changes
+
+- Updated dependencies [[`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa)]:
+  - @openape/auth@0.10.0
+
 ## 0.1.14
 
 ### Patch Changes
