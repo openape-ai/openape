@@ -192,24 +192,23 @@ describe('consent.post — approve/cancel/csrf', () => {
     }
   })
 
-  async function postConsent(body) {
+  async function postConsent(body): Promise<{ location?: string } | undefined> {
     const { readBody } = await import('h3')
     ;(readBody).mockResolvedValue(body)
     const { default: handler } = await import('../src/runtime/server/api/authorize/consent.post')
     return await handler({ node: { req: { url: '/api/authorize/consent' } } } as any)
   }
 
-  it('saves consent and resumes /authorize on approve with valid CSRF', async () => {
-    await postConsent({ csrfToken: 'tok-good', action: 'approve' })
+  it('saves consent and returns the resume URL in JSON on approve with valid CSRF', async () => {
+    const res = await postConsent({ csrfToken: 'tok-good', action: 'approve' })
 
     expect(consentSave).toHaveBeenCalledWith(expect.objectContaining({
       userId: 'patrick@hofmann.eco',
       clientId: 'app.example.com',
     }))
     expect(sessionUpdate).toHaveBeenCalledWith({ pendingConsent: undefined })
-    const target = mockSendRedirect.mock.calls[0][1]
-    expect(target).toMatch(/\/authorize\?/)
-    expect(target).toContain('client_id=app.example.com')
+    expect(res?.location).toMatch(/\/authorize\?/)
+    expect(res?.location).toContain('client_id=app.example.com')
   })
 
   it('rejects on missing/wrong CSRF', async () => {
@@ -219,13 +218,12 @@ describe('consent.post — approve/cancel/csrf', () => {
     expect(consentSave).not.toHaveBeenCalled()
   })
 
-  it('redirects to redirect_uri with error=access_denied on cancel', async () => {
-    await postConsent({ csrfToken: 'tok-good', action: 'cancel' })
+  it('returns access_denied redirect to redirect_uri on cancel', async () => {
+    const res = await postConsent({ csrfToken: 'tok-good', action: 'cancel' })
 
     expect(consentSave).not.toHaveBeenCalled()
-    const target = mockSendRedirect.mock.calls[0][1]
-    expect(target).toMatch(/^https:\/\/app\.example\.com\/auth\/callback\?error=access_denied/)
-    expect(target).toContain('state=xyz')
+    expect(res?.location).toMatch(/^https:\/\/app\.example\.com\/auth\/callback\?error=access_denied/)
+    expect(res?.location).toContain('state=xyz')
   })
 
   it('rejects expired consent state (older than 5 min)', async () => {
