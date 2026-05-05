@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveTXT } from '../dns/node.js'
-import { clearDNSCache, resolveDDISA } from '../dns/resolver.js'
+import { clearDNSCache, clearDNSCacheFor, resolveDDISA } from '../dns/resolver.js'
 
 // Mock the node DNS resolver (resolver.ts tries node first, falls back to DoH)
 vi.mock('../dns/node.js', () => ({
@@ -87,4 +87,22 @@ describe('resolveDDISA with DNS resolution', () => {
     expect(mockResolveTXT).toHaveBeenCalledTimes(2)
   })
 
+  it('clearDNSCacheFor drops a single domain entry without touching others', async () => {
+    mockResolveTXT.mockResolvedValue(['v=ddisa1 idp=https://idp.example.com'])
+
+    // Warm two distinct entries.
+    await resolveDDISA('foo.com')
+    await resolveDDISA('bar.com')
+    expect(mockResolveTXT).toHaveBeenCalledTimes(2)
+
+    // Bust foo.com only — bar.com stays cached.
+    expect(clearDNSCacheFor('foo.com')).toBe(true)
+    await resolveDDISA('foo.com')
+    await resolveDDISA('bar.com')
+    expect(mockResolveTXT).toHaveBeenCalledTimes(3)
+  })
+
+  it('clearDNSCacheFor returns false when the entry was not cached', () => {
+    expect(clearDNSCacheFor('never-resolved.com')).toBe(false)
+  })
 })
