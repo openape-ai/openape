@@ -1,7 +1,7 @@
 {
   "name": "@openape/browser",
   "type": "module",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "turbo": {
     "tags": [
       "publishable"

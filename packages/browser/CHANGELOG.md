@@ -1,5 +1,12 @@
 # @openape/browser
 
+## 0.1.13
+
+### Patch Changes
+
+- Updated dependencies [[`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c)]:
+  - @openape/core@0.16.0
+
 ## 0.1.12
 
 ### Patch Changes
