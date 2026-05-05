@@ -46,11 +46,17 @@ export default defineEventHandler(async (event) => {
     clientId: pending.params.client_id,
     redirectUri: pending.params.redirect_uri,
     verified: !!metadata,
+    // `logo_uri` is intentionally NOT forwarded. SP-supplied images
+    // rendered in the IdP origin are an unsanitisable user-content
+    // surface (browser image-parser CVEs, fingerprinting via remote
+    // fetch, social-engineering via fake brand logos). The protocol
+    // doesn't constrain format/size, so we cannot meaningfully
+    // validate. If a deployer wants logos they must override this
+    // page with their own consent UI and accept the risk.
     metadata: metadata
       ? {
           client_name: metadata.client_name,
           client_uri: metadata.client_uri ?? null,
-          logo_uri: metadata.logo_uri ?? null,
           policy_uri: metadata.policy_uri ?? null,
           tos_uri: metadata.tos_uri ?? null,
         }
