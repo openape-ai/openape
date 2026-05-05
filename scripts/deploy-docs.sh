@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# Deploy apps/docs (static HTML from Nuxt prerender) to chatty.
-# Mirror of scripts/deploy-chatty.sh minus the systemd restart + libsql pin —
+# Deploy apps/docs (static HTML from Nuxt prerender) to the deploy host.
+# Mirror of scripts/deploy-free-idp.sh minus the systemd restart + libsql pin —
 # docs has no runtime server, so nginx serves .output/public/ directly.
 #
-# Usage: ./scripts/deploy-chatty-docs.sh
+# Usage: ./scripts/deploy-docs.sh
 # Env:
 #   CHATTY_HOST  SSH target (default: openape@chatty.delta-mind.at). GitHub
-#                Actions sets this to the alias "chatty" with the User openape
+#                Actions sets this to the SSH alias with the User openape
 #                already wired up in ~/.ssh/config; locally we target the
 #                openape user explicitly so it works without a host alias.
-#   CHATTY_BASE  Target dir on chatty (default: /home/openape/projects/docs)
+#   CHATTY_BASE  Target dir on the host (default: /home/openape/projects/docs)
 
 set -euo pipefail
 

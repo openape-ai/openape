@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
 #
-# Deploy apps/openape-chat to chatty.delta-mind.at (chat.openape.ai).
+# Deploy apps/openape-chat to the deploy host.delta-mind.at (chat.openape.ai).
 #
-# Usage: ./scripts/deploy-chatty-chat.sh
+# Usage: ./scripts/deploy-chat.sh
 #
 # Requires:
-#   - SSH access to chatty.delta-mind.at as the service user (default: openape).
+#   - SSH access to the deploy host.delta-mind.at as the service user (default: openape).
 #     Configure via ~/.ssh/config "Host chatty" with "User openape", or override
 #     via CHATTY_HOST.
-#   - Passwordless sudo on chatty for `systemctl restart openape-chat.service`
+#   - Passwordless sudo on the host for `systemctl restart openape-chat.service`
 #     (drop a /etc/sudoers.d/openape-chat fragment scoped to user openape).
 #   - Local node/pnpm, run from the monorepo root.
-#   - Pre-existing systemd unit + nginx vhost on chatty (one-time bootstrap;
+#   - Pre-existing systemd unit + nginx vhost on the host (one-time bootstrap;
 #     see apps/openape-chat/DEPLOY.md).
 #   - VAPID keypair persisted in ${BASE}/shared/.env
 #     (use scripts/generate-chat-vapid.sh once before the first deploy).
 #
-# Release layout on chatty (mirrors the other deploy scripts):
+# Release layout on the host (mirrors the other deploy scripts):
 #   /home/openape/projects/openape-chat/
 #     ├─ releases/<TS>/        timestamped, kept for rollback (last 3)
 #     ├─ current -> releases/<TS>/
 #     └─ shared/.env           chmod 600, persistent across deploys
 #
 # Native-binding pin: @libsql/linux-x64-gnu must match the libsql wrapper
-# version we ship — same constraint as deploy-chatty.sh, same pin (0.4.7).
+# version we ship — same constraint as deploy-free-idp.sh, same pin (0.4.7).
 
 set -euo pipefail
 

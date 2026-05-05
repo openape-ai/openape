@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Generate a VAPID keypair for the openape-chat Web Push integration and
-# print the env block to copy into the chatty .env file.
+# print the env block to copy into the host .env file.
 #
 # Run once before the first deploy. The keys must remain stable across
 # deploys — clients re-subscribe under the same public key, and rotating
@@ -11,7 +11,7 @@
 # Usage:
 #   ./scripts/generate-chat-vapid.sh > /tmp/chat-vapid.env
 #   scp /tmp/chat-vapid.env openape@chatty.delta-mind.at:/home/openape/projects/openape-chat/shared/.env
-#   # then on chatty: chmod 600 …/shared/.env
+#   # then on the host: chmod 600 …/shared/.env
 #
 # Or echo to stdout and inspect first.
 
