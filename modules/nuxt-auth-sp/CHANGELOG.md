@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2
+
+### Patch Changes
+
+- Updated dependencies [[`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c)]:
+  - @openape/core@0.16.0
+  - @openape/auth@0.10.1
+
 ## 0.9.1
 
 ### Patch Changes
