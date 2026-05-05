@@ -1,4 +1,6 @@
 <script setup>
+import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
+
 defineProps({
   title: { type: String, required: false, default: 'Sign in' },
   subtitle: { type: String, required: false, default: 'Enter your email to continue' },
@@ -16,8 +18,14 @@ onMounted(async () => {
   if (user.value) {
     navigateTo('/dashboard')
   }
-  if (route.query.error) {
-    error.value = String(route.query.error)
+  // Surface IdP authorize-deny redirects (RFC 6749 §4.1.2.1) with
+  // friendly per-code copy. SPs that want richer UX (UAlert with
+  // dismiss-X, product-specific guidance) should drop
+  // <OpenApeOAuthErrorAlert /> on the page and skip this form's
+  // built-in error display.
+  if (typeof route.query.error === 'string' && route.query.error) {
+    const code = route.query.error
+    error.value = DEFAULT_OAUTH_ERROR_MESSAGES[code] ?? `Login failed: ${code}.`
   }
 })
 async function handleSubmit() {
