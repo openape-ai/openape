@@ -144,6 +144,34 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
     const target = mockSendRedirect.mock.calls[0][1]
     expect(target).toMatch(/^https:\/\/app\.example\.com\/auth\/callback\?code=/)
   })
+
+  it('passes undefined mode to evaluatePolicy when DDISA record is missing — not \'open\' (#305)', async () => {
+    // DDISA core.md §5.6 recommends prompting for consent when the
+    // DNS record is silent. Defaulting to 'open' would silently issue
+    // assertions for any user without a `_ddisa` TXT record, which is
+    // the inverse of what a missing record should mean.
+    const { resolveDDISA } = await import('@openape/core')
+    ;(resolveDDISA as any).mockResolvedValue(null)
+    const { evaluatePolicy } = await import('@openape/auth')
+    await callAuthorize()
+    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+  })
+
+  it('passes undefined mode when DDISA record exists but `mode` field is omitted (#305)', async () => {
+    const { resolveDDISA } = await import('@openape/core')
+    ;(resolveDDISA as any).mockResolvedValue({ version: 'ddisa1', idp: 'https://id.openape.at', raw: 'v=ddisa1 idp=...' })
+    const { evaluatePolicy } = await import('@openape/auth')
+    await callAuthorize()
+    expect(evaluatePolicy).toHaveBeenCalledWith(undefined, 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+  })
+
+  it('passes through explicit mode=open when DNS sets it — opt-in is honoured (#305)', async () => {
+    const { resolveDDISA } = await import('@openape/core')
+    ;(resolveDDISA as any).mockResolvedValue({ version: 'ddisa1', idp: 'https://id.openape.at', mode: 'open', raw: 'v=ddisa1 mode=open ...' })
+    const { evaluatePolicy } = await import('@openape/auth')
+    await callAuthorize()
+    expect(evaluatePolicy).toHaveBeenCalledWith('open', 'app.example.com', 'patrick@hofmann.eco', expect.anything())
+  })
 })
 
 describe('consent.post — approve/cancel/csrf', () => {
