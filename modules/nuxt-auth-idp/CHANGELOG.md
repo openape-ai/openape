@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.24.2
+
+### Patch Changes
+
+- [#310](https://github.com/openape-ai/openape/pull/310) [`f25a4e3`](https://github.com/openape-ai/openape/commit/f25a4e3dd24305597806bbc06b6dc1a10737fc7a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add `id="connected-services"` anchor to the Connected Services card on `/account` so consuming apps can deep-link to the SP-revoke section. Without it the section is the fourth of five on the page and easy to miss.
+
+- [#311](https://github.com/openape-ai/openape/pull/311) [`625663b`](https://github.com/openape-ai/openape/commit/625663bf7d3e9a4028b7ebb54615755cc9bb5f32) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Default policy mode for missing DDISA `mode` field is now `consent` (= prompt the user), not `open`. Closes #305.
+
+  Per DDISA core.md §5.6: when the user's `_ddisa.{domain}` TXT record omits the `mode` field — or when no DDISA record exists at all — the IdP picks the default. The spec recommends prompting for consent; defaulting to `open` would silently issue assertions for any SP that asks, which is the inverse of what a missing record should mean.
+
+  **Behavior change:** users without a DDISA record now see a consent screen on first login to a new SP. SPs they've already approved (stored in the consent store) still skip the prompt. Users who explicitly want permissive behavior can publish `mode=open` in their `_ddisa.{domain}` TXT record.
+
+- Updated dependencies [[`38c5c3c`](https://github.com/openape-ai/openape/commit/38c5c3cf1c2a4b11c4942e4e9eee6ddcec2deff9)]:
+  - @openape/core@0.15.0
+  - @openape/auth@0.9.2
+  - @openape/grants@0.11.4
+
 ## 0.24.1
 
 ### Patch Changes

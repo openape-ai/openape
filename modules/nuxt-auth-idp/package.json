@@ -1,7 +1,7 @@
 {
   "name": "@openape/nuxt-auth-idp",
   "type": "module",
-  "version": "0.24.1",
+  "version": "0.24.2",
   "turbo": {
     "tags": [
       "publishable"
