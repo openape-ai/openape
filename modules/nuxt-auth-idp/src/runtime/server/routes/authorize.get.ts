@@ -205,8 +205,19 @@ export default defineEventHandler(async (event) => {
       deniedUrl.searchParams.set('client_id', params.client_id)
       return sendRedirect(event, deniedUrl.pathname + deniedUrl.search)
     }
+    // Bearer (agent) deny: redirect back to SP with the spec-defined
+    // error params. Include error_description so SP-side surface UI
+    // can render product-specific guidance instead of just the bare
+    // error code (RFC 6749 §4.1.2.1 "this parameter is OPTIONAL...
+    // intended for the developer").
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('error', 'access_denied')
+    redirectUrl.searchParams.set(
+      'error_description',
+      policyMode === 'deny'
+        ? 'Domain owner forbids this IdP for the user\'s email domain.'
+        : 'SP is not on the admin-curated allowlist for the user\'s email domain.',
+    )
     redirectUrl.searchParams.set('state', params.state)
     return sendRedirect(event, redirectUrl.toString())
   }

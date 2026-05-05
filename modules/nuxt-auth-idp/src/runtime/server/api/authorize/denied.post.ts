@@ -41,6 +41,12 @@ export default defineEventHandler(async (event) => {
 
   const url = new URL(pending.params.redirect_uri)
   url.searchParams.set('error', 'access_denied')
+  url.searchParams.set(
+    'error_description',
+    pending.reason === 'mode-deny'
+      ? 'Domain owner forbids this IdP for the user\'s email domain.'
+      : 'SP is not on the admin-curated allowlist for the user\'s email domain.',
+  )
   if (pending.params.state) url.searchParams.set('state', pending.params.state)
   return { location: url.toString() }
 })

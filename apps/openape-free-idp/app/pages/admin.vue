@@ -93,6 +93,30 @@ async function recheck() {
   }
 }
 
+const bustingCache = ref(false)
+const cacheBustResult = ref('')
+async function bustDdisaCache() {
+  // Drops the IdP's in-memory DDISA cache for the caller's email
+  // domain — useful right after editing `_ddisa.{domain}` so the
+  // server picks up the new mode/idp without waiting on the 300s
+  // positive cache TTL. Gated to root admin server-side.
+  bustingCache.value = true
+  error.value = ''
+  cacheBustResult.value = ''
+  try {
+    const res = await ($fetch as any)('/api/free-idp/admin/dns-cache/bust', { method: 'POST' })
+    cacheBustResult.value = res.wasCached
+      ? `DNS-Cache für ${res.domain} verworfen — nächster /authorize resolved frisch.`
+      : `DNS-Cache für ${res.domain} war bereits leer — nichts zu tun.`
+  }
+  catch (err: any) {
+    error.value = err?.data?.title || err?.message || 'Cache-Bust fehlgeschlagen'
+  }
+  finally {
+    bustingCache.value = false
+  }
+}
+
 async function addToAllowlist() {
   const clientId = newClientId.value.trim().toLowerCase()
   if (!clientId) return
@@ -216,6 +240,25 @@ watch(user, async (u) => {
             </UBadge>
           </dd>
         </dl>
+
+        <div v-if="status.isRoot" class="mt-4 pt-4 border-t border-(--ui-border)">
+          <p class="text-sm text-muted mb-2">
+            DDISA-Resolver-Cache: nach DNS-Edits zurücksetzen, sonst greift der
+            300s-Cache. Nur Root-Admins.
+          </p>
+          <UButton
+            variant="soft"
+            size="xs"
+            icon="i-lucide-eraser"
+            :loading="bustingCache"
+            @click="bustDdisaCache"
+          >
+            DDISA-Cache busten
+          </UButton>
+          <p v-if="cacheBustResult" class="text-xs text-muted mt-2">
+            {{ cacheBustResult }}
+          </p>
+        </div>
       </UCard>
 
       <UCard v-if="!status.isRoot && status.adminTxtName" class="mb-6">
