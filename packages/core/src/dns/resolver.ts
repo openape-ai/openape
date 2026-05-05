@@ -138,3 +138,19 @@ export async function resolveIdP(
 export function clearDNSCache(): void {
   cache.clear()
 }
+
+/**
+ * Drop the cache entry for a specific bare domain. Useful when the
+ * DNS owner just changed their `_ddisa` TXT record and wants the IdP
+ * to pick up the new value without waiting for the (positive) 300s
+ * TTL or the (negative) 60s TTL to expire.
+ *
+ * Caller passes the domain in the same form used by resolveDDISA
+ * (canonical case, no `_ddisa.` prefix). No-op if the entry doesn't
+ * exist. Returns whether something was deleted, so admin UIs can
+ * tell the user "cache was warm, now busted" vs "nothing was cached
+ * anyway".
+ */
+export function clearDNSCacheFor(domain: string): boolean {
+  return cache.delete(domain)
+}
