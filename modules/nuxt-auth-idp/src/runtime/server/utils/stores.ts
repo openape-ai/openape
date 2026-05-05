@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
-import type { ChallengeStore, ClientMetadata, ClientMetadataStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
-import { createClientMetadataResolver } from '@openape/auth'
+import type { AdminAllowlistStore, ChallengeStore, ClientMetadata, ClientMetadataStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import { createClientMetadataResolver, InMemoryAdminAllowlistStore } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { createChallengeStore } from './challenge-store'
 import { createCodeStore } from './code-store'
@@ -27,6 +27,7 @@ interface IdpStores {
   sshKeyStore: SshKeyStore
   clientMetadataStore: ClientMetadataStore
   consentStore: ConsentStore
+  adminAllowlistStore: AdminAllowlistStore
 }
 
 // Module-level singleton for the SP client-metadata resolver. The
@@ -70,6 +71,7 @@ function initDefaultStores(): IdpStores {
     sshKeyStore: createSshKeyStore(),
     clientMetadataStore: getClientMetadataStore(),
     consentStore: createConsentStore(),
+    adminAllowlistStore: new InMemoryAdminAllowlistStore(),
   }
 }
 
@@ -86,6 +88,7 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     sshKeyStore: getStoreFactory<SshKeyStore>('sshKeyStore')?.(event) ?? createSshKeyStore(),
     clientMetadataStore: getStoreFactory<ClientMetadataStore>('clientMetadataStore')?.(event) ?? getClientMetadataStore(),
     consentStore: getStoreFactory<ConsentStore>('consentStore')?.(event) ?? createConsentStore(),
+    adminAllowlistStore: getStoreFactory<AdminAllowlistStore>('adminAllowlistStore')?.(event) ?? new InMemoryAdminAllowlistStore(),
   }
 }
 

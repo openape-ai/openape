@@ -41,6 +41,22 @@ export interface ConsentStore {
   revoke: (userId: string, clientId: string) => Promise<void>
 }
 
+/**
+ * Backing store for the DDISA `mode=allowlist-admin` policy. The
+ * domain owner pre-approves which SPs may receive assertions for
+ * users in their domain; everything else is denied. Reads happen on
+ * the hot /authorize path; writes are app-specific (free-idp ships
+ * an admin UI, other IdPs may seed via config).
+ */
+export interface AdminAllowlistStore {
+  /**
+   * Is `clientId` allowlisted for users in `userDomain`? `userDomain`
+   * is the email-domain side of the user's identifier, not the SP's
+   * domain — the allowlist is scoped per-tenant-domain.
+   */
+  isAllowed: (userDomain: string, clientId: string) => Promise<boolean>
+}
+
 export interface KeyEntry {
   kid: string
   privateKey: KeyLike
@@ -153,6 +169,29 @@ export class InMemoryConsentStore implements ConsentStore {
 
   async revoke(userId: string, clientId: string): Promise<void> {
     this.consents.delete(this.key(userId, clientId))
+  }
+}
+
+/**
+ * Default in-memory implementation. Always denies — apps that want
+ * to support `mode=allowlist-admin` must provide a real store with
+ * a backing table and an admin UI to populate it. Free-idp ships
+ * one such impl; bare module consumers fall back to this.
+ */
+export class InMemoryAdminAllowlistStore implements AdminAllowlistStore {
+  private allowed = new Set<string>()
+
+  private key(userDomain: string, clientId: string): string {
+    return `${userDomain.toLowerCase()}:${clientId.toLowerCase()}`
+  }
+
+  async isAllowed(userDomain: string, clientId: string): Promise<boolean> {
+    return this.allowed.has(this.key(userDomain, clientId))
+  }
+
+  /** Test helper — not part of the public AdminAllowlistStore contract. */
+  add(userDomain: string, clientId: string): void {
+    this.allowed.add(this.key(userDomain, clientId))
   }
 }
 

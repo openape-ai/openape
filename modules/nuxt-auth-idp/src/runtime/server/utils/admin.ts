@@ -6,11 +6,34 @@ import { tryBearerAuth } from './agent-auth'
 import { getAppSession } from './session'
 import { createProblemError } from './problem'
 
+/**
+ * Pluggable admin-status resolver. Consuming apps can register one of
+ * these on `event.context.openapeAdminResolver` (typically from a
+ * Nitro plugin) to replace the default email-allowlist check with
+ * something like a DNS-rooted DDISA admin flow or a DB-backed roles
+ * table. Returning `true` grants admin access for the duration of
+ * this request only — no caching across requests at this layer.
+ *
+ * `openapeRootAdminResolver` is for a stricter "root" tier that
+ * MUST NOT be overridable from app data — used to gate operator
+ * promotion / demotion. Apps that don't have a root tier can omit it
+ * and `requireRootAdmin` will fall through to `requireAdmin`.
+ */
+export type AdminResolver = (event: H3Event, email: string) => boolean | Promise<boolean>
+
+declare module 'h3' {
+  interface H3EventContext {
+    openapeAdminEmails?: string[]
+    openapeAdminResolver?: AdminResolver
+    openapeRootAdminResolver?: AdminResolver
+  }
+}
+
 function getAdminEmails(): string[] {
   try {
     const event = useEvent()
     if (event?.context?.openapeAdminEmails) {
-      const emails = event.context.openapeAdminEmails as string[]
+      const emails = event.context.openapeAdminEmails
       return emails.map(e => e.trim().toLowerCase()).filter(Boolean)
     }
   }
@@ -73,7 +96,10 @@ export async function requireAuth(event: H3Event): Promise<string> {
   return session.data.userId as string
 }
 
-export async function requireAdmin(event: H3Event): Promise<string> {
+async function requireAdminOfTier(
+  event: H3Event,
+  tier: 'admin' | 'root',
+): Promise<string> {
   const tokenCheck = checkManagementToken(event)
   if (tokenCheck === 'valid') return '_management_'
   if (tokenCheck === 'invalid') {
@@ -91,8 +117,43 @@ export async function requireAdmin(event: H3Event): Promise<string> {
     throw createProblemError({ status: 401, title: 'Authentication required' })
   }
   const email = session.data.userId as string
-  if (isAdmin(email)) {
-    return email
+
+  // Resolver takes precedence over the legacy email allowlist when
+  // an app has registered one. For the 'root' tier we deliberately
+  // do NOT fall back to the email allowlist — root status must be
+  // gated by something stronger than env-config (e.g. a DNS-rooted
+  // claim secret). Apps that don't ship a root resolver fall through
+  // to the standard admin check, which is the safe loud failure mode.
+  const resolver = tier === 'root'
+    ? event.context.openapeRootAdminResolver
+    : event.context.openapeAdminResolver
+  if (resolver) {
+    if (await resolver(event, email)) return email
+    throw createProblemError({
+      status: 403,
+      title: tier === 'root' ? 'Root admin access required' : 'Admin access required',
+    })
   }
-  throw createProblemError({ status: 403, title: 'Admin access required' })
+
+  if (tier === 'admin' && isAdmin(email)) return email
+
+  throw createProblemError({
+    status: 403,
+    title: tier === 'root' ? 'Root admin access required' : 'Admin access required',
+  })
+}
+
+export async function requireAdmin(event: H3Event): Promise<string> {
+  return requireAdminOfTier(event, 'admin')
+}
+
+/**
+ * Strict variant for actions that MUST be gated by something stronger
+ * than the email allowlist — e.g. promoting other users to operator,
+ * rotating signing keys. Apps register a resolver via
+ * `event.context.openapeRootAdminResolver`; if none is registered the
+ * call fails closed with 403 (no fallback to env-config).
+ */
+export async function requireRootAdmin(event: H3Event): Promise<string> {
+  return requireAdminOfTier(event, 'root')
 }

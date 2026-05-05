@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluatePolicy, validateAuthorizeRequest } from '../idp/authorize.js'
-import { InMemoryConsentStore } from '../idp/stores.js'
+import { InMemoryAdminAllowlistStore, InMemoryConsentStore } from '../idp/stores.js'
 
 describe('validateAuthorizeRequest', () => {
   const validParams = {
@@ -55,9 +55,64 @@ describe('evaluatePolicy', () => {
     expect(await evaluatePolicy('allowlist-user', 'sp', 'user', store)).toBe('allow')
   })
 
-  it('denies for allowlist-admin mode', async () => {
+  it('denies for allowlist-admin mode without an allowlist store wired up', async () => {
+    // Backward-compat default — callers that don't pass an allowlist
+    // store get the safe deny-all behaviour for this mode.
     const store = new InMemoryConsentStore()
-    expect(await evaluatePolicy('allowlist-admin', 'sp', 'user', store)).toBe('deny')
+    expect(await evaluatePolicy('allowlist-admin', 'sp.example.com', 'user@deltamind.at', store)).toBe('deny')
+  })
+
+  it('denies for allowlist-admin when SP not in the domain allowlist (#307)', async () => {
+    const store = new InMemoryConsentStore()
+    const allowlist = new InMemoryAdminAllowlistStore()
+    expect(await evaluatePolicy(
+      'allowlist-admin',
+      'unapproved.example.com',
+      'user@deltamind.at',
+      store,
+      { adminAllowlistStore: allowlist },
+    )).toBe('deny')
+  })
+
+  it('allows for allowlist-admin when SP is in the domain allowlist (#307)', async () => {
+    const store = new InMemoryConsentStore()
+    const allowlist = new InMemoryAdminAllowlistStore()
+    allowlist.add('deltamind.at', 'plans.openape.ai')
+    expect(await evaluatePolicy(
+      'allowlist-admin',
+      'plans.openape.ai',
+      'user@deltamind.at',
+      store,
+      { adminAllowlistStore: allowlist },
+    )).toBe('allow')
+  })
+
+  it('scopes allowlist-admin per user-domain — entry for deltamind.at does NOT cover example.com users', async () => {
+    const store = new InMemoryConsentStore()
+    const allowlist = new InMemoryAdminAllowlistStore()
+    allowlist.add('deltamind.at', 'plans.openape.ai')
+    expect(await evaluatePolicy(
+      'allowlist-admin',
+      'plans.openape.ai',
+      'someone@example.com',
+      store,
+      { adminAllowlistStore: allowlist },
+    )).toBe('deny')
+  })
+
+  it('denies allowlist-admin when userId has no @ separator', async () => {
+    const store = new InMemoryConsentStore()
+    const allowlist = new InMemoryAdminAllowlistStore()
+    allowlist.add('', 'plans.openape.ai')
+    // Even if the empty domain is in the allowlist (operator config
+    // accident), an unparseable user identifier still denies.
+    expect(await evaluatePolicy(
+      'allowlist-admin',
+      'plans.openape.ai',
+      'malformed-no-at-sign',
+      store,
+      { adminAllowlistStore: allowlist },
+    )).toBe('deny')
   })
 
   it('defaults to consent for undefined mode', async () => {
