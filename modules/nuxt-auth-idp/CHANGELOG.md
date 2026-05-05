@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.24.1
+
+### Patch Changes
+
+- [#309](https://github.com/openape-ai/openape/pull/309) [`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Security hardening of the SP-metadata consent flow. SP-controlled fields fetched from `/.well-known/oauth-client-metadata` are rendered by the IdP's consent UI; without sanitization a malicious SP could ship `javascript:` URIs in `policy_uri` / `tos_uri` and turn the IdP origin into an XSS sandbox at click time.
+
+  - `@openape/auth`: `createClientMetadataResolver` now normalizes every fetched (and operator-supplied) metadata document. URL fields (`logo_uri`, `policy_uri`, `tos_uri`, `client_uri`, `jwks_uri`) must parse as `http(s):` — anything else (`javascript:`, `data:`, `vbscript:`, …) is silently dropped. Display strings are length-capped (200 chars for names, 2000 for URLs).
+  - `@openape/nuxt-auth-idp`: the reference consent page and account-connections list no longer forward or render `logo_uri`. SP-supplied images are an unsanitisable surface (browser image-parser CVEs, fingerprinting, brand-spoofing) — deployers who want logos must override the page with their own UI.
+
+- [#308](https://github.com/openape-ai/openape/pull/308) [`d8fd4b3`](https://github.com/openape-ai/openape/commit/d8fd4b3a6796a566878e6dae831cdf4e806d9e54) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Register six previously-unregistered server route handlers so consuming apps actually expose them:
+
+  - `GET /api/authorize/consent` and `POST /api/authorize/consent` (used by the `/consent` page from the `allowlist-user` flow, #301)
+  - `GET /api/account/consents` and `DELETE /api/account/consents/:clientId` (self-service consent management)
+  - `GET /api/admin/delegations` and `DELETE /api/admin/delegations/:id` (admin)
+
+  The handler files existed under `runtime/server/api/` but were never wired up in the module's `addServerHandler` calls, so requests hit a 404 in production.
+
+- [#304](https://github.com/openape-ai/openape/pull/304) [`3bb4103`](https://github.com/openape-ai/openape/commit/3bb410365a690422eaa4fdd10b1f14a681853a55) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Register the `/consent` page so the DDISA `allowlist-user` flow can render its consent screen. Without this the page-route wasn't extended and the SP redirect from `/authorize` hit a 404.
+
+- Updated dependencies [[`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174)]:
+  - @openape/auth@0.9.1
+
 ## 0.24.0
 
 ### Minor Changes
