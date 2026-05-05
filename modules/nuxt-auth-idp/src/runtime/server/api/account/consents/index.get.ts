@@ -7,9 +7,9 @@ import { createProblemError } from '../../../utils/problem'
  * List the SPs the authenticated user has approved via the
  * `allowlist-user` consent flow (DDISA core.md §2.3, #301).
  *
- * Each entry is enriched with the SP's published metadata when
- * available — name + logo for the connections UI. SPs that don't
- * publish metadata fall back to displaying the bare client_id.
+ * Each entry is enriched with the SP's published name when
+ * available. SP-supplied images (`logo_uri`) are intentionally
+ * NOT forwarded — see consent.get.ts for the rationale.
  */
 export default defineEventHandler(async (event) => {
   const session = await getAppSession(event)
@@ -29,7 +29,6 @@ export default defineEventHandler(async (event) => {
       verified: !!metadata,
       clientName: metadata?.client_name ?? null,
       clientUri: metadata?.client_uri ?? null,
-      logoUri: metadata?.logo_uri ?? null,
     }
   }))
 

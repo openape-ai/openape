@@ -335,7 +335,6 @@ async function handleRevokeConsent(clientId, clientName) {
               <tr v-for="c in consents" :key="c.clientId" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
                 <td class="px-4 py-3 text-sm">
                   <div class="flex items-center gap-2">
-                    <img v-if="c.logoUri" :src="c.logoUri" :alt="`${c.clientName} logo`" class="w-6 h-6 rounded bg-white p-0.5 object-contain shrink-0">
                     <div class="min-w-0">
                       <div class="font-medium truncate flex items-center gap-1.5">
                         <a v-if="c.clientUri" :href="c.clientUri" target="_blank" rel="noopener" class="hover:underline">{{ c.clientName || c.clientId }}</a>
