@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+### Minor Changes
+
+- [#316](https://github.com/openape-ai/openape/pull/316) [`d447ca1`](https://github.com/openape-ai/openape/commit/d447ca14eb4017c36e5da0766b6dc9cf47048310) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add `useOpenApeOAuthError()` composable + `<OpenApeOAuthErrorAlert />` component for surfacing IdP-side authorize-deny errors (RFC 6749 §4.1.2.1) on the SP's landing page. Without this, an SP redirected back with `?error=access_denied` left the user on the regular login form with no clue what happened. Drop the component on a login page and the user sees a friendly title + reason copy instead.
+
+  The composable exposes `{ error, dismiss }`; the component wraps it in a UAlert with sensible defaults. SPs can override the per-code copy via the `messages` prop / option for product-specific guidance.
+
 ## 0.8.9
 
 ### Patch Changes
