@@ -97,6 +97,106 @@ describe('createClientMetadataResolver — DDISA §4.1 SP metadata fetch', () =>
   })
 })
 
+describe('createClientMetadataResolver — sanitization of SP-supplied fields', () => {
+  // SP metadata is fetched from an SP-controlled domain and rendered
+  // by the IdP's consent UI. Without sanitization a malicious SP can
+  // ship `javascript:` URIs in `policy_uri` / `tos_uri` and turn the
+  // IdP origin into an XSS sandbox at click time. We strip anything
+  // that's not http(s) at resolver time so downstream consumers can
+  // bind these fields to `:href` / `:src` without re-validating.
+
+  function resolverWithRaw(raw: unknown) {
+    const fetchImpl = vi.fn().mockResolvedValue(raw)
+    return createClientMetadataResolver({ fetchImpl })
+  }
+
+  it('drops javascript: URLs from policy_uri / tos_uri / client_uri / logo_uri', async () => {
+    const resolver = resolverWithRaw({
+      client_id: 'evil.example.com',
+      client_name: 'Microsoft Login',
+      redirect_uris: ['https://evil.example.com/cb'],
+      policy_uri: 'javascript:alert(document.cookie)',
+      tos_uri: 'javascript:fetch("https://evil/x")',
+      client_uri: 'javascript:void(0)',
+      logo_uri: 'javascript:alert(1)',
+    })
+    const result = await resolver.resolve('evil.example.com')
+    expect(result?.policy_uri).toBeUndefined()
+    expect(result?.tos_uri).toBeUndefined()
+    expect(result?.client_uri).toBeUndefined()
+    expect(result?.logo_uri).toBeUndefined()
+    // Required fields preserved
+    expect(result?.client_id).toBe('evil.example.com')
+    expect(result?.redirect_uris).toEqual(['https://evil.example.com/cb'])
+  })
+
+  it('drops data: and vbscript: URLs from logo_uri', async () => {
+    const resolver = resolverWithRaw({
+      client_id: 'evil.example.com',
+      redirect_uris: ['https://evil.example.com/cb'],
+      logo_uri: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxzY3JpcHQ+YWxlcnQoMSk8L3NjcmlwdD48L3N2Zz4=',
+    })
+    const result = await resolver.resolve('evil.example.com')
+    expect(result?.logo_uri).toBeUndefined()
+  })
+
+  it('keeps valid https URLs untouched', async () => {
+    const resolver = resolverWithRaw({
+      client_id: 'app.example.com',
+      redirect_uris: ['https://app.example.com/cb'],
+      policy_uri: 'https://app.example.com/privacy',
+      tos_uri: 'https://app.example.com/terms',
+      client_uri: 'https://app.example.com/',
+      logo_uri: 'https://cdn.example.com/logo.png',
+    })
+    const result = await resolver.resolve('app.example.com')
+    expect(result?.policy_uri).toBe('https://app.example.com/privacy')
+    expect(result?.tos_uri).toBe('https://app.example.com/terms')
+    expect(result?.client_uri).toBe('https://app.example.com/')
+    expect(result?.logo_uri).toBe('https://cdn.example.com/logo.png')
+  })
+
+  it('truncates oversized client_name to prevent UI-disruption attacks', async () => {
+    const resolver = resolverWithRaw({
+      client_id: 'app.example.com',
+      redirect_uris: ['https://app.example.com/cb'],
+      client_name: 'X'.repeat(10_000),
+    })
+    const result = await resolver.resolve('app.example.com')
+    expect(result?.client_name?.length).toBeLessThanOrEqual(200)
+  })
+
+  it('drops malformed URL strings entirely', async () => {
+    const resolver = resolverWithRaw({
+      client_id: 'app.example.com',
+      redirect_uris: ['https://app.example.com/cb'],
+      policy_uri: 'not-a-url',
+      tos_uri: '',
+    })
+    const result = await resolver.resolve('app.example.com')
+    expect(result?.policy_uri).toBeUndefined()
+    expect(result?.tos_uri).toBeUndefined()
+  })
+
+  it('sanitizes publicClients entries the same way as fetched metadata', async () => {
+    // Operator-supplied config is also untrusted-ish (typos, copy-paste
+    // errors, supply-chain compromise of a config file) — apply the
+    // same hygiene rule.
+    const resolver = createClientMetadataResolver({
+      publicClients: {
+        'cli-tool': {
+          client_id: 'cli-tool',
+          redirect_uris: ['http://localhost:9876/cb'],
+          policy_uri: 'javascript:alert(1)' as string,
+        },
+      },
+    })
+    const result = await resolver.resolve('cli-tool')
+    expect(result?.policy_uri).toBeUndefined()
+    expect(result?.redirect_uris).toEqual(['http://localhost:9876/cb'])
+  })
+})
+
 describe('validateRedirectUri', () => {
   function staticStore(metadata: ClientMetadata | null) {
     return { resolve: async () => metadata }

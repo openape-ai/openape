@@ -57,6 +57,71 @@ export interface ClientMetadataResolverOptions {
 const WELL_KNOWN_PRIMARY = '/.well-known/oauth-client-metadata'
 const WELL_KNOWN_LEGACY = '/.well-known/sp-manifest.json'
 
+// Caps on SP-supplied display strings. SPs that exceed these are
+// almost always either misconfigured or attempting UI-disruption /
+// XSS-via-length attacks against IdP consent screens. We trim
+// silently rather than reject the whole metadata so a single oversize
+// field doesn't lock out an otherwise-valid SP.
+const MAX_DISPLAY_NAME = 200
+const MAX_URL = 2000
+
+// Schemes accepted in URL fields fetched from SP metadata. Anything
+// else (`javascript:`, `data:`, `vbscript:`, `file:`, …) is silently
+// dropped. The IdP's consent UI binds these to `:href` / `:src`, so
+// allowing `javascript:` here is a direct XSS-on-click vector. `http:`
+// is permitted only because some SPs run plain HTTP in dev — the
+// reference UI may further restrict to `https:` only at render time.
+const SAFE_URL_SCHEMES = new Set(['https:', 'http:'])
+
+function sanitizeShortString(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return undefined
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed
+}
+
+function sanitizeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  if (value.length > MAX_URL) return undefined
+  let parsed: URL
+  try { parsed = new URL(value) }
+  catch { return undefined }
+  if (!SAFE_URL_SCHEMES.has(parsed.protocol)) return undefined
+  return parsed.toString()
+}
+
+/**
+ * Strip SP-controlled metadata down to a known-safe shape. The
+ * resolver runs this on every fetched document so downstream
+ * consumers (consent UI, admin views) can render the fields without
+ * having to remember which ones came from an untrusted source.
+ *
+ * Rules:
+ *   - `client_id` and `redirect_uris` are NOT touched here — the
+ *     caller has already type-validated them via `isValidMetadata`,
+ *     and `redirect_uri` matching is exact-equality so we mustn't
+ *     normalize away a trailing slash etc.
+ *   - All display strings are length-capped.
+ *   - All URL fields must parse as `http(s):` — no `javascript:`,
+ *     `data:`, etc. Invalid → field is dropped.
+ *   - `contacts` is filtered to string entries only.
+ */
+function sanitizeMetadata(raw: ClientMetadata): ClientMetadata {
+  return {
+    client_id: raw.client_id,
+    redirect_uris: raw.redirect_uris,
+    client_name: sanitizeShortString(raw.client_name, MAX_DISPLAY_NAME),
+    client_uri: sanitizeHttpUrl(raw.client_uri),
+    logo_uri: sanitizeHttpUrl(raw.logo_uri),
+    policy_uri: sanitizeHttpUrl(raw.policy_uri),
+    tos_uri: sanitizeHttpUrl(raw.tos_uri),
+    jwks_uri: sanitizeHttpUrl(raw.jwks_uri),
+    contacts: Array.isArray(raw.contacts)
+      ? raw.contacts.filter((c): c is string => typeof c === 'string').map(c => c.slice(0, MAX_DISPLAY_NAME))
+      : undefined,
+  }
+}
+
 interface CacheEntry {
   metadata: ClientMetadata | null
   expiresAt: number
@@ -119,7 +184,7 @@ export function createClientMetadataResolver(
     const candidates = [base + WELL_KNOWN_PRIMARY, base + WELL_KNOWN_LEGACY]
     for (const url of candidates) {
       const raw = await fetchOne(url)
-      if (raw && isValidMetadata(raw)) return raw
+      if (raw && isValidMetadata(raw)) return sanitizeMetadata(raw)
     }
     return null
   }
@@ -133,7 +198,8 @@ export function createClientMetadataResolver(
 
       // Public-client (CLI / native app) shortcut — no network call.
       if (!looksLikeHostname(clientId)) {
-        const fixed = publicClients[clientId] ?? null
+        const raw = publicClients[clientId]
+        const fixed = raw ? sanitizeMetadata(raw) : null
         cache.set(clientId, { metadata: fixed, expiresAt: now + ttl })
         return fixed
       }
