@@ -352,8 +352,14 @@ export interface OpenApeManifest {
 
 /** DNS resolver options */
 export interface ResolverOptions {
-  /** Cache TTL in seconds (default: 300) */
+  /** Cache TTL in seconds for positive results (default: 300) */
   cacheTTL?: number
+  /**
+   * Cache TTL in seconds for negative results — domains with no
+   * DDISA record (default: 60). Shorter than positive TTL to let a
+   * domain that just added a record be picked up promptly.
+   */
+  negativeCacheTTL?: number
   /** DoH provider URL (for edge/browser) */
   dohProvider?: string
   /** Skip cache */
