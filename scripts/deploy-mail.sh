@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Deploy apps/openape-agent-mail to chatty (mail.openape.ai).
-# Shape mirrors scripts/deploy-chatty.sh (id). Includes libsql native pin
+# Deploy apps/openape-agent-mail to mail.openape.ai.
+# Shape mirrors scripts/deploy-free-idp.sh (id). Includes libsql native pin
 # because mail uses @libsql/client for its drizzle DB.
 
 set -euo pipefail

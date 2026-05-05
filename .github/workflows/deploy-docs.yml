@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'apps/docs/**'
-      - 'scripts/deploy-chatty-docs.sh'
+      - 'scripts/deploy-docs.sh'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-chatty-docs.yml'
+      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-chatty-docs
+  group: deploy-docs
   cancel-in-progress: false
 
 jobs:
@@ -63,7 +63,7 @@ jobs:
           echo "Previous release: ${PREV:-<none>}"
 
       - name: Deploy
-        run: ./scripts/deploy-chatty-docs.sh
+        run: ./scripts/deploy-docs.sh
 
       - name: Public HTTPS health check
         run: |

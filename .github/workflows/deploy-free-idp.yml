@@ -1,0 +1,105 @@
+name: Deploy id.openape.ai
+
+# Auto-deploys apps/openape-free-idp to chatty.delta-mind.at on main push.
+# Uses scripts/deploy-free-idp.sh for build + rsync + restart + health check.
+# Independent of ci.yml — no test gate. Public HTTPS health check + auto-rollback
+# cover failing deploys. See plan: .claude/plans/openape-policy-shift/ci-deploy.md
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/openape-free-idp/**'
+      - 'modules/nuxt-auth-idp/**'
+      - 'packages/auth/**'
+      - 'packages/core/**'
+      - 'packages/grants/**'
+      - 'scripts/deploy-free-idp.sh'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-free-idp.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-free-idp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHATTY_HOST: chatty
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.CHATTY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CHATTY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/chatty
+          chmod 600 ~/.ssh/chatty
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<'EOF'
+          Host chatty
+            HostName chatty.delta-mind.at
+            User openape
+            IdentityFile ~/.ssh/chatty
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Capture previous release (for rollback)
+        id: prev
+        run: |
+          PREV=$(ssh chatty "readlink /home/openape/projects/openape-free-idp/current 2>/dev/null" || echo "")
+          echo "release=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Previous release: ${PREV:-<none>}"
+
+      - name: Deploy
+        run: ./scripts/deploy-free-idp.sh
+
+      - name: Public HTTPS health check
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            N=$(curl -fsS https://id.openape.ai/api/shapes 2>/dev/null | jq 'length' || echo 0)
+            if [ "$N" -ge 50 ]; then
+              echo "✓ https://id.openape.ai serves $N shapes"
+              exit 0
+            fi
+            echo "attempt $i: got $N shapes, retrying..."
+            sleep 3
+          done
+          echo "✗ public health check failed after 5 attempts"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure() && steps.prev.outputs.release != ''
+        env:
+          PREV_RELEASE: ${{ steps.prev.outputs.release }}
+        run: |
+          set -euo pipefail
+          # Validate timestamp shape (YYYY-MM-DDTHH-MM-SS) before using in remote shell
+          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-free-idp/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "refusing to roll back to unexpected path: $PREV_RELEASE"
+            exit 1
+          fi
+          echo "↩ Rolling back to $PREV_RELEASE"
+          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-free-idp/current && sudo systemctl restart openape-free-idp.service"
+          echo "✓ rollback complete"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deploy apps/openape-agent-proxy to chatty (proxy.openape.ai).
+# Deploy apps/openape-agent-proxy to proxy.openape.ai.
 # No DB → no libsql native pin, otherwise identical to the mail deploy.
 
 set -euo pipefail
