@@ -1,4 +1,4 @@
-import { defineEventHandler, readBody, sendRedirect } from 'h3'
+import { defineEventHandler, readBody } from 'h3'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
 import { createProblemError } from '../../utils/problem'
@@ -52,11 +52,20 @@ export default defineEventHandler(async (event) => {
   const captured = { params: pending.params, query: pending.query }
   await session.update({ pendingConsent: undefined })
 
+  // We deliberately return the navigation target as JSON instead of
+  // a 302 sendRedirect: the consent page calls this endpoint with
+  // `fetch({ redirect: 'manual' })` so the user-visible page can do
+  // a top-level `window.location.assign`. With `redirect: 'manual'`
+  // browsers turn the response into an opaque-redirect type whose
+  // headers aren't readable, so `headers.get('Location')` always
+  // returns null — that's the Fetch spec, not a server bug. JSON
+  // body sidesteps that entirely. Cancel and approve both flow
+  // through this same shape for symmetry.
   if (action === 'cancel') {
     const url = new URL(captured.params.redirect_uri)
     url.searchParams.set('error', 'access_denied')
     if (captured.params.state) url.searchParams.set('state', captured.params.state)
-    return sendRedirect(event, url.toString())
+    return { location: url.toString() }
   }
 
   // Persist the approval so subsequent /authorize calls skip the
@@ -77,5 +86,5 @@ export default defineEventHandler(async (event) => {
   for (const [k, v] of Object.entries(captured.query)) {
     if (typeof v === 'string') resumeUrl.searchParams.set(k, v)
   }
-  return sendRedirect(event, resumeUrl.pathname + resumeUrl.search)
+  return { location: resumeUrl.pathname + resumeUrl.search }
 })

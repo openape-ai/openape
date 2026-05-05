@@ -41,18 +41,19 @@ async function submit(action) {
   submitting.value = true
   error.value = ''
   try {
-    const res = await $fetch.raw('/api/authorize/consent', {
+    // The server returns `{ location }` in a JSON body rather than
+    // a 302 redirect. With `fetch({ redirect: 'manual' })` browsers
+    // turn 3xx responses into opaque-redirect types whose Location
+    // header is unreadable — that's the Fetch spec, not a server
+    // quirk. JSON sidesteps it; we do the top-level navigation
+    // ourselves, which is what we want anyway (the next hop is the
+    // SP's redirect_uri, cross-origin).
+    const { location } = await $fetch('/api/authorize/consent', {
       method: 'POST',
       body: { csrfToken: data.value.csrfToken, action },
-      redirect: 'manual',
     })
-    // The handler responds with 302 — fetch.raw exposes the Location
-    // header so we can do the navigation client-side. (Browser-fetch
-    // would follow it transparently but blocks cross-origin reads of
-    // the resulting body, which is fine — we navigate anyway.)
-    const target = res.headers.get('location')
-    if (target) {
-      window.location.assign(target)
+    if (typeof location === 'string' && location) {
+      window.location.assign(location)
     }
     else {
       error.value = 'Server did not return a redirect target.'
