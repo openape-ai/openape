@@ -1,12 +1,12 @@
-# Deploying chat.openape.ai to chatty
+# Deploying chat.openape.ai
 
-> One-time bootstrap + recurring deploy via `scripts/deploy-chatty-chat.sh`. Mirrors the layout of the other `chatty.delta-mind.at`-hosted services (see `scripts/deploy-chatty.sh` for `id.openape.ai`, `scripts/deploy-chatty-proxy.sh` for `proxy.openape.ai`).
+> One-time bootstrap + recurring deploy via `scripts/deploy-chat.sh`. Mirrors the layout of the other hosted services (see `scripts/deploy-free-idp.sh` for `id.openape.ai`, `scripts/deploy-proxy.sh` for `proxy.openape.ai`).
 
 ---
 
-## One-time bootstrap on chatty
+## One-time bootstrap
 
-These steps only run once per host. After this, `./scripts/deploy-chatty-chat.sh` from the monorepo root handles every subsequent deploy.
+These steps only run once per host. After this, `./scripts/deploy-chat.sh` from the monorepo root handles every subsequent deploy.
 
 ### 1. Release directory + persistent shared state
 
@@ -149,7 +149,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### 6. DNS
 
-A/AAAA record for `chat.openape.ai` → chatty's IP. The nginx vhost handles the rest. Coordinate with whoever owns the openape.ai zone.
+A/AAAA record for `chat.openape.ai` → the host's IP. The nginx vhost handles the rest. Coordinate with whoever owns the openape.ai zone.
 
 ---
 
@@ -158,7 +158,7 @@ A/AAAA record for `chat.openape.ai` → chatty's IP. The nginx vhost handles the
 Once the bootstrap is done, every release is just:
 
 ```sh
-./scripts/deploy-chatty-chat.sh
+./scripts/deploy-chat.sh
 ```
 
 That script:
@@ -216,4 +216,4 @@ sudo journalctl -u openape-chat -f
 curl -i http://127.0.0.1:3007/api/me   # 401 expected when no session
 ```
 
-Database lives at `shared/openape-chat.db` (SQLite). Back it up alongside the other chatty SQLite files (`/home/openape/projects/*/shared/*.db`).
+Database lives at `shared/openape-chat.db` (SQLite). Back it up alongside the other SQLite files (`/home/openape/projects/*/shared/*.db`).

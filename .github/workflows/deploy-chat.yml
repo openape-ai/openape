@@ -1,21 +1,25 @@
-name: Deploy proxy.openape.ai
+name: Deploy chat.openape.ai
+
+# Auto-deploys apps/openape-chat to the SSH host on main push.
+# Uses scripts/deploy-chat.sh for build + rsync + restart + health check.
+# Independent of ci.yml — no test gate. Public HTTPS health check +
+# auto-rollback cover failing deploys.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'apps/openape-agent-proxy/**'
+      - 'apps/openape-chat/**'
       - 'modules/nuxt-auth-sp/**'
       - 'packages/auth/**'
       - 'packages/core/**'
-      - 'packages/grants/**'
-      - 'scripts/deploy-chatty-proxy.sh'
+      - 'scripts/deploy-chat.sh'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-chatty-proxy.yml'
+      - '.github/workflows/deploy-chat.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-chatty-proxy
+  group: deploy-chat
   cancel-in-progress: false
 
 jobs:
@@ -27,12 +31,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Setup SSH
         env:
@@ -44,7 +52,7 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/chatty
           chmod 600 ~/.ssh/chatty
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<'EOF'
+          cat > ~/.ssh/config <<'CFGEOF'
           Host chatty
             HostName chatty.delta-mind.at
             User openape
@@ -52,29 +60,32 @@ jobs:
             IdentitiesOnly yes
             StrictHostKeyChecking yes
             UserKnownHostsFile ~/.ssh/known_hosts
-          EOF
+          CFGEOF
           chmod 600 ~/.ssh/config
 
       - name: Capture previous release (for rollback)
         id: prev
         run: |
-          PREV=$(ssh chatty "readlink /home/openape/projects/openape-agent-proxy/current 2>/dev/null" || echo "")
+          PREV=$(ssh chatty "readlink /home/openape/projects/openape-chat/current 2>/dev/null" || echo "")
           echo "release=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Previous release: ${PREV:-<none>}"
 
       - name: Deploy
-        run: ./scripts/deploy-chatty-proxy.sh
+        run: ./scripts/deploy-chat.sh
 
       - name: Public HTTPS health check
         run: |
           set -euo pipefail
           for i in 1 2 3 4 5; do
-            status=$(curl -s -o /dev/null -w '%{http_code}' https://proxy.openape.ai/ || echo 000)
-            case $status in 200|301|302|401|403)
-              echo "https://proxy.openape.ai/ returned $status"
-              exit 0 ;;
-            esac
+            STATUS=$(curl -fsS -o /dev/null -w '%{http_code}' https://chat.openape.ai/ 2>/dev/null || echo 0)
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
+              echo "✓ https://chat.openape.ai responds (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "attempt $i: got HTTP $STATUS, retrying..."
             sleep 3
           done
+          echo "✗ public health check failed after 5 attempts"
           exit 1
 
       - name: Rollback on failure
@@ -83,8 +94,11 @@ jobs:
           PREV_RELEASE: ${{ steps.prev.outputs.release }}
         run: |
           set -euo pipefail
-          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-agent-proxy/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+          # Validate timestamp shape (YYYY-MM-DDTHH-MM-SS) before using in remote shell
+          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-chat/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
             echo "refusing to roll back to unexpected path: $PREV_RELEASE"
             exit 1
           fi
-          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-agent-proxy/current && sudo systemctl restart openape-agent-proxy.service"
+          echo "↩ Rolling back to $PREV_RELEASE"
+          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-chat/current && sudo systemctl restart openape-chat.service"
+          echo "✓ rollback complete"

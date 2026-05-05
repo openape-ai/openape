@@ -2,7 +2,7 @@
 #
 # Generate a VAPID keypair for the openape-free-idp Web Push integration
 # (id.openape.ai approver notifications) and print the env block to copy
-# into the chatty .env file.
+# into the host .env file.
 #
 # Run once before the first deploy. The keys must remain stable across
 # deploys — clients re-subscribe under the same public key, and rotating
@@ -15,7 +15,7 @@
 # Usage:
 #   ./scripts/generate-idp-vapid.sh > /tmp/idp-vapid.env
 #   scp /tmp/idp-vapid.env openape@chatty.delta-mind.at:/home/openape/projects/openape-free-idp/shared/.env
-#   # then on chatty: chmod 600 …/shared/.env
+#   # then on the host: chmod 600 …/shared/.env
 #
 # Or echo to stdout and inspect first.
 

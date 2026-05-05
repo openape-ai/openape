@@ -2,25 +2,25 @@
 #
 # Deploy apps/openape-free-idp to chatty.delta-mind.at (id.openape.ai).
 #
-# Usage: ./scripts/deploy-chatty.sh
+# Usage: ./scripts/deploy-free-idp.sh
 #
 # Requires:
 #   - SSH access to chatty.delta-mind.at as the service user (default: openape).
 #     Configure via ~/.ssh/config "Host chatty" with "User openape", or override
-#     via CHATTY_HOST. The GitHub Actions deploy-chatty workflow sets that up
+#     via CHATTY_HOST. The GitHub Actions deploy-free-idp workflow sets that up
 #     from repo secrets.
-#   - Passwordless sudo on chatty for `systemctl restart openape-free-idp.service`
+#   - Passwordless sudo on the host for `systemctl restart openape-free-idp.service`
 #     (installed in /etc/sudoers.d/openape-free-idp, scoped to user openape).
 #   - Local node/pnpm, run from the monorepo root.
 #
-# Release layout on chatty:
+# Release layout on the host:
 #   /home/openape/projects/openape-free-idp/
 #     ├─ releases/<TS>/        timestamped, kept for rollback (last 3)
 #     ├─ current -> releases/<TS>/
 #     └─ shared/.env           chmod 600, persistent across deploys
 #
 # Native-binding pin: @libsql/linux-x64-gnu must match libsql wrapper version.
-# See the chatty deploy plan for the 0.4.7 pin rationale.
+# See the deploy plan for the 0.4.7 pin rationale.
 
 set -euo pipefail
 
