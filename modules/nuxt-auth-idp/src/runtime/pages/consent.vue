@@ -85,7 +85,6 @@ async function submit(action) {
 
       <template v-if="data.verified">
         <div class="sp-row">
-          <img v-if="data.metadata?.logo_uri" :src="data.metadata.logo_uri" :alt="`${data.metadata.client_name} logo`" class="logo">
           <div>
             <h1>{{ data.metadata?.client_name || data.clientId }}</h1>
             <p class="muted">
