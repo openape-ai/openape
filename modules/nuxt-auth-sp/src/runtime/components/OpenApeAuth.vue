@@ -1,4 +1,12 @@
 <script setup>
+// Module-shipped components live in `node_modules/.../dist/...`
+// after the consumer installs from npm. Nuxt's unimport plugin
+// doesn't reliably transform `.vue` files inside `node_modules`,
+// so component-internal calls like `useOpenApeAuth()` blow up at
+// SSR time with "useOpenApeAuth is not defined". Explicit imports
+// from `#imports` fix that — same shape as the IdP-side pages do.
+import { onMounted, ref } from 'vue'
+import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
 import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
 
 defineProps({
