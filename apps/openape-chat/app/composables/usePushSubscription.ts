@@ -55,6 +55,28 @@ export function usePushSubscription(): PushHandle {
     const reg = await getRegistration()
     const sub = await reg?.pushManager.getSubscription()
     subscribed.value = !!sub
+
+    // Heartbeat: re-POST the current subscription on every load. The
+    // server-side push.ts deletes a subscription row on 404/410 from the
+    // push service — but the browser-side PushSubscription is still
+    // "valid" from its own perspective, so without re-POSTing we'd quietly
+    // stay out of the DB and miss every subsequent notification. The POST
+    // is an idempotent upsert keyed on `endpoint`, so this is cheap and
+    // safe to call on every app open.
+    if (sub) {
+      const json = sub.toJSON() as { endpoint?: string, keys?: { p256dh: string, auth: string } }
+      if (json.endpoint && json.keys?.p256dh && json.keys?.auth) {
+        try {
+          await $fetch('/api/push/subscribe', {
+            method: 'POST',
+            body: { endpoint: json.endpoint, keys: json.keys },
+          })
+        }
+        catch {
+          // Best-effort heartbeat — never block UI on it.
+        }
+      }
+    }
   }
 
   function urlBase64ToUint8Array(base64: string): Uint8Array {
