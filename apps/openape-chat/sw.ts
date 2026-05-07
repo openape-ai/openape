@@ -113,6 +113,63 @@ self.addEventListener('notificationclick', (event) => {
   })())
 })
 
+// ---------------------------------------------------------------------------
+// pushsubscriptionchange — fires when the push service (FCM, APNs, Mozilla)
+// invalidates or rotates the subscription. Without this handler the
+// subscription silently dies: the server's 404/410 cleanup prunes the row,
+// the page-side `subscribed` ref still says `true` because the browser
+// PushSubscription object is "valid" from its perspective, and `enable()`
+// short-circuits without re-subscribing. End result: notifications stop
+// arriving and the user can only fix it by uninstalling+reinstalling the
+// PWA. With this handler the browser tells us when its old endpoint died,
+// we re-subscribe with the same VAPID key, and POST the new endpoint to
+// the server so the next push lands.
+// ---------------------------------------------------------------------------
+
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - base64.length % 4) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(b64)
+  const out = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+  return out
+}
+
+self.addEventListener('pushsubscriptionchange', (event: Event) => {
+  // Cast: 'pushsubscriptionchange' isn't in lib.webworker.d.ts's strict
+  // event map yet for all TS targets. The shape is well-defined in the
+  // Push API spec and stable across browsers.
+  const e = event as ExtendableEvent
+  e.waitUntil((async () => {
+    try {
+      const res = await fetch('/api/push/vapid', { credentials: 'include' })
+      if (!res.ok) return
+      const { vapidPublicKey } = await res.json() as { vapidPublicKey?: string }
+      if (!vapidPublicKey) return
+
+      const keyBytes = urlBase64ToUint8Array(vapidPublicKey)
+      const keyBuffer = new ArrayBuffer(keyBytes.byteLength)
+      new Uint8Array(keyBuffer).set(keyBytes)
+      const sub = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBuffer,
+      })
+      const json = sub.toJSON() as { endpoint: string, keys: { p256dh: string, auth: string } }
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      })
+    }
+    catch {
+      // Best-effort. The browser will fire pushsubscriptionchange again
+      // if our re-subscribe also fails, and the page-side heartbeat will
+      // catch any drift the next time the user opens the app.
+    }
+  })())
+})
+
 self.addEventListener('install', () => {
   // Activate the new SW immediately on install so users see fresh behaviour
   // on their next reload (not the one after that).
