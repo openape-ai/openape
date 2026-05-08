@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.1.1
+
+### Patch Changes
+
+- [#345](https://github.com/openape-ai/openape/pull/345) [`11d0ab5`](https://github.com/openape-ai/openape/commit/11d0ab5a2a878fbf03d39eec99ecd57a3b65d06e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Auto-install `bun` during `apes agents spawn --bridge` if the agent user doesn't have it. Hidden service-account agents have a clean $HOME and no system-wide bun on macOS (bun installs per-user via the curl-bash installer; brew doesn't ship it), so `bun add -g @openape/chat-bridge @openape/apes` was failing with `bun: command not found` on every fresh bridged spawn. Now the bridge install block runs the official bun installer first if needed, then proceeds with the bun add — idempotent for re-spawns.
+
 ## 1.1.0
 
 ### Minor Changes
