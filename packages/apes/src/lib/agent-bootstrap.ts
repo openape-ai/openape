@@ -297,32 +297,35 @@ export interface SpawnTroopFiles {
  */
 function buildTroopBlock(troop: SpawnTroopFiles | null): string {
   if (!troop) return ''
+  // Plist lives in /Library/LaunchDaemons (system-wide), root-owned, mode 644
+  // — launchd refuses to load group/world-writable plists. The UserName key
+  // inside makes launchd run `apes agents sync` as the agent uid. Same
+  // pattern the bridge has always used; troop sync inherits it (M6 originally
+  // tried gui/<uid> but hidden agents have no user-launchd domain).
+  //
+  // Logs + task cache + LaunchAgents dir still live under the agent's home
+  // (sync writes there).
   return `
 mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
 cat > ${shQuote(troop.plistPath)} ${shHeredoc(troop.plistContent)}
+chown root:wheel ${shQuote(troop.plistPath)}
 chmod 644 ${shQuote(troop.plistPath)}
 `
 }
 
 function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null, name: string): string {
   if (!troop) return ''
-  // Hidden service-accounts (IsHidden=1) never log in, so their `gui/<uid>`
-  // launchd domain doesn't exist on a freshly-spawned user — `launchctl
-  // bootstrap gui/<uid>` would fail with "Domain does not support specified
-  // action". `launchctl asuser <uid>` (run as root) bootstraps launchd for
-  // that uid first, then the inner bootstrap runs in the now-existing
-  // domain. Agent name is interpolated at TS template time so the warn
-  // message survives `set -u` in the inner shell.
+  // System-domain bootstrap (root-only, doesn't need a user session).
+  // RunAtLoad fires the first sync immediately so the agent appears in
+  // the troop SP UI within seconds of spawn finishing.
   return `
-# Bootstrap the troop sync launchd into the agent's user domain so it
-# starts firing every 5 minutes. RunAtLoad in the plist also kicks off
-# an immediate first sync so the agent registers + appears in the troop
-# SP within seconds of spawn finishing.
+# Bootstrap the troop sync launchd in the system domain. setup.sh runs
+# as root via \`apes run --as root\`, so we have permission. Stale label
+# is bootouted first to make re-spawn idempotent.
 echo "==> Installing troop sync launchd as ${name}…"
-NAME_UID="$(id -u ${shQuote(name)})"
-launchctl asuser "$NAME_UID" launchctl bootout "gui/$NAME_UID/${troop.plistLabel}" 2>/dev/null || true
-launchctl asuser "$NAME_UID" launchctl bootstrap "gui/$NAME_UID" ${shQuote(troop.plistPath)} || \\
-  echo "warn: troop sync bootstrap failed; run \\\`apes agents sync\\\` manually as ${name} to register at troop.openape.ai"
+launchctl bootout "system/${troop.plistLabel}" 2>/dev/null || true
+launchctl bootstrap system ${shQuote(troop.plistPath)} || \\
+  echo "warn: troop sync bootstrap failed; check ${troop.plistPath}"
 `
 }
 

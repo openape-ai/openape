@@ -180,11 +180,11 @@ export const spawnAgentCommand = defineCommand({
       // RunAtLoad fires it once eagerly so the agent registers at
       // troop.openape.ai within seconds of spawn finishing.
       const troopPlistLabel = `openape.troop.sync.${name}`
-      const troopPlistPath = `${homeDir}/Library/LaunchAgents/${troopPlistLabel}.plist`
+      const troopPlistPath = `/Library/LaunchDaemons/${troopPlistLabel}.plist`
       const troop = {
         plistLabel: troopPlistLabel,
         plistPath: troopPlistPath,
-        plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir }),
+        plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir, userName: name }),
       }
 
       const script = buildSpawnSetupScript({
