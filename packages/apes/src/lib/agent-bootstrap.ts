@@ -262,11 +262,20 @@ function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null, name: string
   // the bash $NAME var) because the inner `su -c '...'` runs in a fresh
   // shell that doesn't inherit setup.sh's NAME — `set -u` would crash on
   // the first $NAME reference inside the single-quoted block.
+  //
+  // Fresh service-account agents have no bun installed (bun is per-user
+  // under $HOME/.bun, not system-wide via brew). The first step inside
+  // su- now bootstraps bun via the official installer if it isn't there
+  // yet — idempotent: re-spawn just no-ops the install.
   return `
 echo "==> Installing bridge stack as ${name} via bun (one-time)…"
 su - ${shQuote(name)} -c '
 set -euo pipefail
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
+if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.bun/bin/bun" ]; then
+  echo "==> bun not found — installing via official installer"
+  curl -fsSL https://bun.sh/install | bash
+fi
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
 bun add -g @openape/chat-bridge @openape/apes
 '
 
