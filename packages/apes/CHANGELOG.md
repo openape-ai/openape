@@ -1,5 +1,13 @@
 # @openape/apes
 
+## 1.0.3
+
+### Patch Changes
+
+- [#338](https://github.com/openape-ai/openape/pull/338) [`1b709c8`](https://github.com/openape-ai/openape/commit/1b709c87d2a7659f5165235510b5cef8c76a91ba) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Move troop sync plist from `~/Library/LaunchAgents/` (gui/<uid> domain) to `/Library/LaunchDaemons/` (system domain) with a `UserName` key — same pattern the bridge has always used. Hidden service accounts (IsHidden=1) never log in graphically, so their per-user launchd domain doesn't exist; `launchctl bootstrap gui/<uid>` was failing with "Domain does not support specified action" for every spawned agent. System-domain bootstrap doesn't need a user session — launchd runs the daemon as the agent uid via `UserName`.
+
+  Side benefit: removes the `su -c '...'` wrapper, so no more shell-quoting issues with `set -u` inside the inner shell.
+
 ## 1.0.2
 
 ### Patch Changes
