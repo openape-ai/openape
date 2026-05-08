@@ -1,7 +1,7 @@
 {
   "name": "@openape/chat-bridge",
   "version": "0.3.2",
-  "description": "Bridge daemon: forwards chat.openape.ai messages to a local LLM CLI (default: pi) and posts replies back as the agent",
+  "description": "Bridge daemon: forwards chat.openape.ai messages into an `apes agents serve --rpc` runtime and streams replies back as the agent",
   "type": "module",
   "license": "MIT",
   "private": false,
@@ -46,6 +46,6 @@
     "chat",
     "bridge",
     "agent",
-    "pi"
+    "apes"
   ]
 }
