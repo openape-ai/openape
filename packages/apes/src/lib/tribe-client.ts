@@ -1,0 +1,104 @@
+// Typed thin client for tribe.openape.ai's agent-side API. The CLI
+// never talks to the owner-side endpoints (those are for the web UI);
+// the tribe-client only knows about the three /me/* endpoints needed
+// by `apes agents sync` and `apes agents run`.
+//
+// Default endpoint is https://tribe.openape.ai. Override with the
+// OPENAPE_TRIBE_URL env var (handy for staging or local dev). The
+// agent JWT comes from `~/.config/apes/auth.json` — the file
+// `apes agents spawn` writes when it provisions the macOS user.
+
+export const DEFAULT_TRIBE_URL = 'https://tribe.openape.ai'
+
+export interface TaskSpec {
+  agentEmail: string
+  taskId: string
+  name: string
+  cron: string
+  systemPrompt: string
+  tools: string[]
+  maxSteps: number
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SyncResponse {
+  agent_email: string
+  host_id: string
+  first_sync: boolean
+  last_seen_at: number
+}
+
+export interface RunStartResponse {
+  id: string
+  started_at: number
+}
+
+export interface RunFinalisePayload {
+  status: 'ok' | 'error'
+  final_message: string | null
+  step_count: number
+  trace?: unknown
+}
+
+export class TribeClient {
+  constructor(
+    public readonly tribeUrl: string,
+    public readonly agentJwt: string,
+  ) {}
+
+  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(`${this.tribeUrl}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        'Authorization': `Bearer ${this.agentJwt}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`tribe ${init?.method ?? 'GET'} ${path} failed: ${res.status} ${text}`)
+    }
+    if (res.status === 204) return undefined as T
+    return await res.json() as T
+  }
+
+  sync(input: { hostname: string, hostId: string, ownerEmail: string, pubkeySsh?: string }): Promise<SyncResponse> {
+    return this.request('/api/agents/me/sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        hostname: input.hostname,
+        host_id: input.hostId,
+        owner_email: input.ownerEmail,
+        ...(input.pubkeySsh ? { pubkey_ssh: input.pubkeySsh } : {}),
+      }),
+    })
+  }
+
+  listTasks(): Promise<TaskSpec[]> {
+    return this.request('/api/agents/me/tasks')
+  }
+
+  startRun(taskId: string): Promise<RunStartResponse> {
+    return this.request('/api/agents/me/runs', {
+      method: 'POST',
+      body: JSON.stringify({ task_id: taskId }),
+    })
+  }
+
+  finaliseRun(id: string, payload: RunFinalisePayload): Promise<unknown> {
+    return this.request(`/api/agents/me/runs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  }
+}
+
+export function resolveTribeUrl(override?: string): string {
+  if (override) return override.replace(/\/$/, '')
+  const fromEnv = process.env.OPENAPE_TRIBE_URL
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  return DEFAULT_TRIBE_URL
+}
