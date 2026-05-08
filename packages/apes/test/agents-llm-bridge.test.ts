@@ -68,7 +68,20 @@ describe('llm-bridge — pure helpers', () => {
       cliBaseUrl: 'http://only:2/v1',
       envPath: '/nonexistent',
     })
-    expect(cfg).toEqual({ apiKey: 'sk-cli-only', baseUrl: 'http://only:2/v1' })
+    expect(cfg).toEqual({ apiKey: 'sk-cli-only', baseUrl: 'http://only:2/v1', model: undefined })
+  })
+
+  it('resolveBridgeConfig: cliModel overrides env model', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lbenv-model-'))
+    try {
+      const envPath = join(dir, '.env')
+      writeFileSync(envPath, 'LITELLM_MASTER_KEY=k\nAPE_CHAT_BRIDGE_MODEL=gpt-5.4\n')
+      const cfg = resolveBridgeConfig({ cliModel: 'gpt-5.4-pro', envPath })
+      expect(cfg.model).toBe('gpt-5.4-pro')
+    }
+    finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('resolveBridgeConfig: pure env mode falls back to default base URL', () => {
@@ -93,6 +106,12 @@ describe('llm-bridge — pure helpers', () => {
     const env = buildBridgeEnvFile({ apiKey: 'sk-x', baseUrl: 'http://h:1/v1' })
     expect(env).toContain('LITELLM_API_KEY=sk-x')
     expect(env).toContain('LITELLM_BASE_URL=http://h:1/v1')
+    expect(env).not.toContain('APE_CHAT_BRIDGE_MODEL=')
+  })
+
+  it('buildBridgeEnvFile writes APE_CHAT_BRIDGE_MODEL when model is set', () => {
+    const env = buildBridgeEnvFile({ apiKey: 'k', baseUrl: 'http://x/v1', model: 'gpt-5.4' })
+    expect(env).toContain('APE_CHAT_BRIDGE_MODEL=gpt-5.4')
   })
 
   it('buildBridgeStartScript is slim — no npm installs at runtime, no pi extension write, execs bridge', () => {
