@@ -1,5 +1,21 @@
 # @openape/apes
 
+## 1.0.0
+
+### Major Changes
+
+- [#331](https://github.com/openape-ai/openape/pull/331) [`f941d7b`](https://github.com/openape-ai/openape/commit/f941d7b212aa3c4ce6301d134ff6076ae6520365) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - **BREAKING**: SP renamed from `tribe` to `troop` ("troop" is the primatologically-correct collective for apes).
+
+  Migration for self-hosted agents:
+
+  - Env var: `OPENAPE_TRIBE_URL` → `OPENAPE_TROOP_URL`
+  - Default URL: `https://tribe.openape.ai` → `https://troop.openape.ai`
+  - launchd plist labels: `openape.tribe.sync.<agent>` → `openape.troop.sync.<agent>`,
+    `openape.tribe.<agent>.<task>` → `openape.troop.<agent>.<task>`
+
+  After upgrading, run `apes agents spawn <name>` again to re-bootstrap with new
+  plist labels, or manually `launchctl bootout` the old labels and re-sync.
+
 ## 0.32.0
 
 ### Minor Changes
