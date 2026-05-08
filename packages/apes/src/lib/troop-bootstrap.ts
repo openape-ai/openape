@@ -1,6 +1,14 @@
 // Troop-side spawn integration. Installs the periodic sync launchd
-// plist for a freshly spawned agent and bootstraps it into the
-// agent's user-domain so it kicks off immediately.
+// plist for a freshly spawned agent and bootstraps it into the system
+// domain (run-as the agent via UserName) so it kicks off immediately.
+//
+// Why /Library/LaunchDaemons + system domain (not ~/Library/LaunchAgents
+// + gui/<uid>): spawned agents are hidden service accounts (IsHidden=1)
+// that never log in graphically, so their per-user launchd domain
+// doesn't exist. `launchctl bootstrap gui/<uid>` fails with "Domain does
+// not support specified action". The bridge had the same constraint and
+// solved it the same way — system-level plist with UserName key. Keeps
+// the daemon running 24/7 regardless of login state.
 //
 // The sync plist runs `apes agents sync` every 5 minutes (StartInterval).
 // It also fires once on bootstrap (the implicit launchctl bootstrap
@@ -14,14 +22,16 @@ export function syncPlistLabel(agentName: string): string {
   return `${SYNC_LABEL_PREFIX}.${agentName}`
 }
 
-export function syncPlistPath(homeDir: string, agentName: string): string {
-  return `${homeDir}/Library/LaunchAgents/${syncPlistLabel(agentName)}.plist`
+export function syncPlistPath(_homeDir: string, agentName: string): string {
+  return `/Library/LaunchDaemons/${syncPlistLabel(agentName)}.plist`
 }
 
 interface SyncPlistInput {
   agentName: string
   apesBin: string
   homeDir: string
+  /** macOS short username — passed to UserName so launchd runs the daemon as the agent. */
+  userName: string
   // Optional override for OPENAPE_TROOP_URL — exposed in the plist
   // EnvironmentVariables so the launchd-spawned `apes agents sync`
   // talks to the right SP. Default: https://troop.openape.ai (via
@@ -54,6 +64,8 @@ export function buildSyncPlist(input: SyncPlistInput): string {
 <dict>
   <key>Label</key>
   <string>${escape(syncPlistLabel(input.agentName))}</string>
+  <key>UserName</key>
+  <string>${escape(input.userName)}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${escape(input.apesBin)}</string>
