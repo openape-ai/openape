@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.0.1
+
+### Patch Changes
+
+- [#335](https://github.com/openape-ai/openape/pull/335) [`26add22`](https://github.com/openape-ai/openape/commit/26add22869f5347dcf0b724a50ae5fa1bf8e1c2b) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix `apes agents spawn` crashing on the troop-sync-install line with `setup.sh: line N: NAME…: unbound variable`. With `set -u`, `$NAME…` was parsed as a variable named `NAME…` (the U+2026 ellipsis got eaten into the identifier). Use `${NAME}…` so the brace cleanly terminates the variable name. Same fix applied to the bridge-install echo.
+
 ## 1.0.0
 
 ### Major Changes
