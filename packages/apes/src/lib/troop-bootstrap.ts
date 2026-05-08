@@ -45,17 +45,23 @@ function escape(s: string): string {
 }
 
 export function buildSyncPlist(input: SyncPlistInput): string {
+  // launchd defaults PATH to /usr/bin:/bin:/usr/sbin:/sbin — too narrow
+  // for the apes binary's `#!/usr/bin/env node` shebang to find node.
+  // Include the agent's bun bin (where apes itself is installed),
+  // homebrew, and the standard system paths so the daemon can resolve
+  // both `node` and `bun` regardless of how the agent host is set up.
+  const pathLine = `    <key>PATH</key><string>${escape(input.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>\n`
   const envBlock = input.troopUrl
     ? `  <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${escape(input.homeDir)}</string>
-    <key>OPENAPE_TROOP_URL</key><string>${escape(input.troopUrl)}</string>
+${pathLine}    <key>OPENAPE_TROOP_URL</key><string>${escape(input.troopUrl)}</string>
   </dict>
 `
     : `  <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${escape(input.homeDir)}</string>
-  </dict>
+${pathLine}  </dict>
 `
 
   return `<?xml version="1.0" encoding="UTF-8"?>
