@@ -169,20 +169,30 @@ function fmtDate(ts: number | null): string {
   })
 }
 
+function fmtRelative(ts: number | null): string {
+  if (!ts) return 'never'
+  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts)
+  if (sec < 60) return 'just now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
+  return `${Math.floor(sec / 86400)}d ago`
+}
+
 const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'success', error: 'error' }
 </script>
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-(--ui-border) px-4 sm:px-6 py-3 flex items-center gap-2">
-      <UButton to="/agents" variant="ghost" size="sm" icon="i-lucide-arrow-left">
-        Agents
+    <header class="border-b border-(--ui-border) px-3 sm:px-6 py-3 flex items-center gap-2 sticky top-0 z-10 bg-zinc-950/95 backdrop-blur">
+      <UButton to="/agents" variant="ghost" size="sm" icon="i-lucide-arrow-left" :ui="{ base: 'shrink-0' }">
+        <span class="hidden sm:inline">Agents</span>
       </UButton>
-      <span v-if="detail" class="text-muted">/</span>
-      <span v-if="detail" class="font-mono">{{ detail.agent.agentName }}</span>
+      <span v-if="detail" class="font-mono font-semibold truncate flex-1">
+        🦍 {{ detail.agent.agentName }}
+      </span>
     </header>
 
-    <main class="px-4 sm:px-6 py-6 max-w-4xl mx-auto space-y-6">
+    <main class="px-4 sm:px-6 py-4 sm:py-6 max-w-4xl mx-auto space-y-4 sm:space-y-6">
       <UAlert v-if="error" color="error" :title="error" />
 
       <UCard v-if="loading">
@@ -192,47 +202,73 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
       </UCard>
 
       <template v-else-if="detail">
-        <!-- Agent header -->
-        <UCard>
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              {{ detail.agent.agentName }}
-            </h2>
-          </template>
-          <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
-            <dt class="text-muted">
-              Email
-            </dt>
-            <dd class="font-mono break-all">
-              {{ detail.agent.email }}
-            </dd>
-            <dt class="text-muted">
-              Hostname
-            </dt>
-            <dd class="font-mono">
-              {{ detail.agent.hostname || '—' }}
-            </dd>
-            <dt class="text-muted">
-              Host ID
-            </dt>
-            <dd class="font-mono text-xs break-all">
-              {{ detail.agent.hostId || '—' }}
-            </dd>
-            <dt class="text-muted">
-              Public SSH key
-            </dt>
-            <dd class="font-mono text-xs break-all">
-              {{ detail.agent.pubkeySsh || '—' }}
-            </dd>
-            <dt class="text-muted">
-              First sync
-            </dt>
-            <dd>{{ fmtDate(detail.agent.firstSeenAt) }}</dd>
-            <dt class="text-muted">
-              Last sync
-            </dt>
-            <dd>{{ fmtDate(detail.agent.lastSeenAt) }}</dd>
-          </dl>
+        <!-- Agent metadata. Collapsed by default on mobile because the
+             SSH key + email are long strings that crowd out the tasks
+             section, which is what the user actually came here to edit. -->
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-info" class="text-muted size-4" />
+                <span class="font-medium">Agent details</span>
+                <span class="text-xs text-muted">·</span>
+                <span class="text-xs text-muted">last sync {{ fmtRelative(detail.agent.lastSeenAt) }}</span>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <dl class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-(--ui-border)">
+              <div>
+                <dt class="text-xs text-muted mb-0.5">
+                  Email
+                </dt>
+                <dd class="font-mono text-xs break-all">
+                  {{ detail.agent.email }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-muted mb-0.5">
+                  Hostname
+                </dt>
+                <dd class="font-mono">
+                  {{ detail.agent.hostname || '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-muted mb-0.5">
+                  Host ID
+                </dt>
+                <dd class="font-mono text-xs break-all">
+                  {{ detail.agent.hostId || '—' }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs text-muted mb-0.5">
+                  Public SSH key
+                </dt>
+                <dd class="font-mono text-xs break-all">
+                  {{ detail.agent.pubkeySsh || '—' }}
+                </dd>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <dt class="text-xs text-muted mb-0.5">
+                    First sync
+                  </dt>
+                  <dd class="text-sm">
+                    {{ fmtDate(detail.agent.firstSeenAt) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-muted mb-0.5">
+                    Last sync
+                  </dt>
+                  <dd class="text-sm">
+                    {{ fmtDate(detail.agent.lastSeenAt) }}
+                  </dd>
+                </div>
+              </div>
+            </dl>
+          </details>
         </UCard>
 
         <!-- Tasks -->
@@ -249,32 +285,49 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
           </template>
 
           <div v-if="detail.tasks.length === 0" class="p-6 text-center text-muted text-sm">
-            No tasks yet — create one to schedule the agent.
+            No tasks yet — tap "New task" to schedule the agent.
           </div>
           <ul v-else class="divide-y divide-(--ui-border)">
-            <li
-              v-for="t in detail.tasks"
-              :key="t.taskId"
-              class="px-4 py-3 flex items-start justify-between gap-3"
-            >
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <code class="font-mono">{{ t.taskId }}</code>
-                  <span class="font-medium">{{ t.name }}</span>
-                  <UBadge v-if="!t.enabled" color="neutral" variant="subtle" size="xs">
-                    disabled
-                  </UBadge>
+            <li v-for="t in detail.tasks" :key="t.taskId">
+              <button
+                type="button"
+                class="w-full text-left px-4 py-4 active:bg-zinc-900 transition-colors flex items-start gap-3"
+                @click="openEdit(t)"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <span class="font-medium text-base">{{ t.name }}</span>
+                    <UBadge v-if="!t.enabled" color="neutral" variant="subtle" size="xs">
+                      disabled
+                    </UBadge>
+                  </div>
+                  <div class="flex items-center gap-2 text-xs text-muted">
+                    <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
+                    <code class="font-mono">{{ t.cron }}</code>
+                  </div>
+                  <p v-if="t.systemPrompt" class="text-xs text-muted mt-1 line-clamp-2">
+                    {{ t.systemPrompt }}
+                  </p>
+                  <div class="flex items-center gap-2 text-xs text-muted mt-1.5 flex-wrap">
+                    <span v-if="t.tools.length > 0" class="flex items-center gap-1">
+                      <UIcon name="i-lucide-wrench" class="size-3.5 shrink-0" />
+                      {{ t.tools.length }} {{ t.tools.length === 1 ? 'tool' : 'tools' }}
+                    </span>
+                    <span class="flex items-center gap-1">
+                      <UIcon name="i-lucide-list-checks" class="size-3.5 shrink-0" />
+                      max {{ t.maxSteps }} steps
+                    </span>
+                  </div>
                 </div>
-                <div class="text-xs text-muted mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span><code>{{ t.cron }}</code></span>
-                  <span>tools: {{ t.tools.length === 0 ? '(none)' : t.tools.join(', ') }}</span>
-                  <span>max steps: {{ t.maxSteps }}</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1">
-                <UButton variant="ghost" size="xs" icon="i-lucide-pencil" @click="openEdit(t)" />
-                <UButton variant="ghost" color="error" size="xs" icon="i-lucide-trash-2" @click="remove(t)" />
-              </div>
+                <UButton
+                  variant="ghost"
+                  color="error"
+                  size="sm"
+                  icon="i-lucide-trash-2"
+                  :ui="{ base: 'shrink-0' }"
+                  @click.stop="remove(t)"
+                />
+              </button>
             </li>
           </ul>
         </UCard>
@@ -320,48 +373,63 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
       </template>
     </main>
 
-    <!-- Task editor modal -->
-    <UModal v-model:open="showEditor" :title="editing.isNew ? 'New task' : `Edit ${editing.taskId}`">
+    <!-- Task editor modal — fullscreen on mobile so the keyboard
+         doesn't push the save button under the textarea. -->
+    <UModal
+      v-model:open="showEditor"
+      :title="editing.isNew ? 'New task' : `Edit ${editing.taskId}`"
+      fullscreen
+      :ui="{ content: 'sm:max-w-2xl sm:max-h-[90vh]' }"
+    >
       <template #body>
-        <form class="space-y-4" @submit.prevent="save">
-          <UFormField label="task_id (slug)" hint="lowercase letters/digits/dashes; immutable">
+        <form class="space-y-5" @submit.prevent="save">
+          <UFormField label="task_id" hint="lowercase letters, digits, dashes — immutable" :required="editing.isNew">
             <UInput
               v-model="form.task_id"
               :disabled="!editing.isNew"
               placeholder="daily-summary"
+              size="lg"
               class="w-full font-mono"
             />
           </UFormField>
-          <UFormField label="Display name">
-            <UInput v-model="form.name" placeholder="Daily Summary" class="w-full" />
+          <UFormField label="Display name" required>
+            <UInput v-model="form.name" placeholder="Daily Summary" size="lg" class="w-full" />
           </UFormField>
-          <UFormField label="Cron">
+          <UFormField label="When to run" hint="Cron syntax — see preview below">
             <CronInput v-model="form.cron" />
           </UFormField>
-          <UFormField label="System prompt">
-            <UTextarea v-model="form.system_prompt" :rows="6" class="w-full" />
+          <UFormField label="System prompt" hint="What should this agent do? Tell it like you'd tell a person.">
+            <UTextarea
+              v-model="form.system_prompt"
+              :rows="8"
+              autoresize
+              size="lg"
+              class="w-full"
+              placeholder="You are a helpful assistant. Every morning, summarise the latest emails and post the digest to my Slack."
+            />
           </UFormField>
-          <UFormField label="Tools">
+          <UFormField label="Tools available">
             <ToolPicker v-model="form.tools" />
           </UFormField>
-          <UFormField label="Max steps">
-            <UInput v-model.number="form.max_steps" type="number" :min="1" :max="50" />
+          <UFormField label="Max tool-call rounds per run">
+            <UInput v-model.number="form.max_steps" type="number" :min="1" :max="50" size="lg" class="w-full" />
           </UFormField>
           <UFormField>
             <UCheckbox v-model="form.enabled" label="Enabled" />
           </UFormField>
 
           <UAlert v-if="saveError" color="error" :title="saveError" />
-
-          <div class="flex justify-end gap-2 pt-2">
-            <UButton variant="ghost" :disabled="saving" @click="showEditor = false">
-              Cancel
-            </UButton>
-            <UButton type="submit" color="primary" :loading="saving">
-              {{ editing.isNew ? 'Create' : 'Save' }}
-            </UButton>
-          </div>
         </form>
+      </template>
+      <template #footer>
+        <div class="flex flex-row-reverse w-full gap-2">
+          <UButton type="submit" color="primary" :loading="saving" size="lg" class="flex-1 sm:flex-none justify-center" @click="save">
+            {{ editing.isNew ? 'Create task' : 'Save changes' }}
+          </UButton>
+          <UButton variant="ghost" :disabled="saving" size="lg" @click="showEditor = false">
+            Cancel
+          </UButton>
+        </div>
       </template>
     </UModal>
   </div>
