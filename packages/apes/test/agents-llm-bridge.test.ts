@@ -95,19 +95,20 @@ describe('llm-bridge — pure helpers', () => {
     expect(env).toContain('LITELLM_BASE_URL=http://h:1/v1')
   })
 
-  it('buildBridgeStartScript is slim — no npm installs at runtime, drops pi extension, execs bridge', () => {
+  it('buildBridgeStartScript is slim — no npm installs at runtime, no pi extension write, execs bridge', () => {
     const sh = buildBridgeStartScript()
     expect(sh.startsWith('#!/usr/bin/env bash')).toBe(true)
     // Heavy installs MUST happen during spawn, not on every launchd boot —
     // the whole point of #246. start.sh stays under ~5s wall-clock.
     expect(sh).not.toContain('npm install')
     expect(sh).not.toContain('bun add')
-    expect(sh).toContain('EXT_DIR="$HOME/.pi/agent/extensions"')
-    expect(sh).toContain('"$EXT_DIR/litellm.ts"')
-    expect(sh).toContain('. "$HOME/.pi/agent/.env"')
+    // M6 dropped the pi-extension write — the runtime is now ours
+    // (M8 swaps chat-bridge to spawn `apes agents serve --rpc`).
+    expect(sh).not.toContain('.pi/agent/extensions')
+    expect(sh).not.toContain('PI_EXT_EOF')
+    // Env file moved out of ~/.pi/agent and into the bridge dir.
+    expect(sh).toContain('"$HOME/Library/Application Support/openape/bridge/.env"')
     expect(sh).toContain('exec openape-chat-bridge')
-    // PATH includes the bun global bin dir where the installer landed
-    // (bun symlinks live in ~/.bun/bin, NOT ~/.bun/install/global/bin).
     expect(sh).toContain('$HOME/.bun/bin')
   })
 
