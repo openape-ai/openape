@@ -221,7 +221,7 @@ if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
 fi
 
 echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
-${buildBridgeBootstrapBlock(input.bridge)}${buildTroopBootstrapBlock(input.troop)}`
+${buildBridgeBootstrapBlock(input.bridge, name)}${buildTroopBootstrapBlock(input.troop, name)}`
 }
 
 function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
@@ -249,7 +249,7 @@ chmod 644 ${shQuote(bridge.plistPath)}
 `
 }
 
-function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
+function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null, name: string): string {
   if (!bridge) return ''
   // Install the bridge stack ONCE here, as the agent user, while the human
   // is already waiting for the spawn grant. With M6 the dependency tree
@@ -257,9 +257,14 @@ function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
   // (M8) so the apes binary is the only runtime peer it needs.
   //
   // Then bootstrap the launchd job.
+  //
+  // The literal agent name is interpolated at TS-template time (not via
+  // the bash $NAME var) because the inner `su -c '...'` runs in a fresh
+  // shell that doesn't inherit setup.sh's NAME — `set -u` would crash on
+  // the first $NAME reference inside the single-quoted block.
   return `
-echo "==> Installing bridge stack as \${NAME} via bun (one-time)…"
-su - "$NAME" -c '
+echo "==> Installing bridge stack as ${name} via bun (one-time)…"
+su - ${shQuote(name)} -c '
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
 bun add -g @openape/chat-bridge @openape/apes
@@ -299,21 +304,25 @@ chmod 644 ${shQuote(troop.plistPath)}
 `
 }
 
-function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null): string {
+function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null, name: string): string {
   if (!troop) return ''
+  // Hidden service-accounts (IsHidden=1) never log in, so their `gui/<uid>`
+  // launchd domain doesn't exist on a freshly-spawned user — `launchctl
+  // bootstrap gui/<uid>` would fail with "Domain does not support specified
+  // action". `launchctl asuser <uid>` (run as root) bootstraps launchd for
+  // that uid first, then the inner bootstrap runs in the now-existing
+  // domain. Agent name is interpolated at TS template time so the warn
+  // message survives `set -u` in the inner shell.
   return `
-# Bootstrap the troop sync launchd into the agent's GUI domain so it
-# starts firing every 5 minutes. RunAtLoad in the plist also kicks
-# off an immediate first sync so the agent registers + appears in
-# the troop SP within seconds of spawn finishing.
-echo "==> Installing troop sync launchd as \${NAME}…"
-su - "$NAME" -c '
-set -euo pipefail
-NAME_UID="$(id -u)"
-launchctl bootout "gui/$NAME_UID/${troop.plistLabel}" 2>/dev/null || true
-launchctl bootstrap "gui/$NAME_UID" ${shQuote(troop.plistPath)} || \\
-  echo "warn: troop sync bootstrap failed; run \\\`apes agents sync\\\` manually as $NAME to register at troop.openape.ai"
-'
+# Bootstrap the troop sync launchd into the agent's user domain so it
+# starts firing every 5 minutes. RunAtLoad in the plist also kicks off
+# an immediate first sync so the agent registers + appears in the troop
+# SP within seconds of spawn finishing.
+echo "==> Installing troop sync launchd as ${name}…"
+NAME_UID="$(id -u ${shQuote(name)})"
+launchctl asuser "$NAME_UID" launchctl bootout "gui/$NAME_UID/${troop.plistLabel}" 2>/dev/null || true
+launchctl asuser "$NAME_UID" launchctl bootstrap "gui/$NAME_UID" ${shQuote(troop.plistPath)} || \\
+  echo "warn: troop sync bootstrap failed; run \\\`apes agents sync\\\` manually as ${name} to register at troop.openape.ai"
 `
 }
 
