@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.1.0
+
+### Minor Changes
+
+- [#344](https://github.com/openape-ai/openape/pull/344) [`d7cd4fa`](https://github.com/openape-ai/openape/commit/d7cd4fa90e7bb83664f8e0d7c32902fed1ef87e0) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add `--bridge-model` flag to `apes agents spawn` and `APE_CHAT_BRIDGE_MODEL` env-var support. Lets you spawn a bridged agent against a LiteLLM proxy that doesn't route the bridge's built-in default (`claude-haiku-4-5`) — e.g. a proxy fronting only ChatGPT subscription needs `gpt-5.4`. Without this the bridge daemon would 404 on every chat message because the proxy doesn't know the default model name.
+
 ## 1.0.5
 
 ### Patch Changes
