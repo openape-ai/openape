@@ -25,8 +25,9 @@ if (user.value) {
         </div>
 
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-          Your troop of<br>
-          <span class="text-primary-500">small agents.</span>
+          We feed<br>
+          baby apes<br>
+          <span class="text-primary-500">with inference.</span>
         </h1>
 
         <p class="mt-4 text-zinc-400 text-lg">

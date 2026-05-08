@@ -51,13 +51,15 @@ function fmtDate(ts: number | null): string {
   return new Date(ts * 1000).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function fmtKey(key: string | null): string {
-  if (!key) return '—'
-  // Show ssh-ed25519 fingerprint-style: type + first/last 6 chars of body
-  const m = key.trim().match(/^(ssh-\S+)\s+(\S+)/)
-  if (!m) return `${key.slice(0, 16)}…`
-  const body = m[2]!
-  return `${m[1]} ${body.slice(0, 6)}…${body.slice(-6)}`
+// Relative time for the at-a-glance "is this agent alive?" signal —
+// absolute timestamps don't work on a phone-sized card.
+function fmtRelative(ts: number | null): string {
+  if (!ts) return 'never'
+  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts)
+  if (sec < 60) return 'just now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
+  return `${Math.floor(sec / 86400)}d ago`
 }
 
 const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
@@ -69,19 +71,22 @@ const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-(--ui-border) px-4 sm:px-6 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <span class="text-2xl">🦍</span>
+    <header class="border-b border-(--ui-border) px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-10 bg-zinc-950/95 backdrop-blur">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-2xl shrink-0">🦍</span>
         <h1 class="text-xl font-semibold">
           Troop
         </h1>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-muted hidden sm:inline">{{ user?.sub }}</span>
-        <UButton variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout">
-          Logout
-        </UButton>
-      </div>
+      <UButton
+        variant="ghost"
+        size="sm"
+        icon="i-lucide-log-out"
+        :ui="{ base: 'shrink-0' }"
+        @click="logout"
+      >
+        <span class="hidden sm:inline">Logout</span>
+      </UButton>
     </header>
 
     <main class="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
@@ -112,78 +117,65 @@ const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
         </div>
       </UCard>
 
-      <UCard v-else :ui="{ body: 'p-0' }">
-        <table class="w-full text-sm">
-          <thead class="text-xs text-muted">
-            <tr class="border-b border-(--ui-border)">
-              <th class="text-left px-4 py-2 font-medium">
-                Name
-              </th>
-              <th class="text-left px-4 py-2 font-medium">
-                Host
-              </th>
-              <th class="text-left px-4 py-2 font-medium">
-                Tasks
-              </th>
-              <th class="text-left px-4 py-2 font-medium">
-                Last run
-              </th>
-              <th class="text-left px-4 py-2 font-medium">
-                Last sync
-              </th>
-              <th />
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-(--ui-border)">
-            <tr v-for="a in agents" :key="a.email">
-              <td class="px-4 py-3">
-                <div class="font-mono">
-                  {{ a.agentName }}
+      <!-- Mobile-first card list. The table layout was unreadable on
+           a phone (5 narrow columns + email truncation). One tap-target
+           per agent → links to the detail page; everything secondary
+           goes underneath as small badges/labels. -->
+      <ul v-else class="space-y-3">
+        <li v-for="a in agents" :key="a.email">
+          <NuxtLink
+            :to="`/agents/${a.agentName}`"
+            class="block rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-4 active:bg-zinc-900 transition-colors"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 class="text-lg font-semibold font-mono truncate">
+                    {{ a.agentName }}
+                  </h3>
+                  <UBadge
+                    v-if="a.lastRunStatus"
+                    :color="(statusColor[a.lastRunStatus] as any)"
+                    variant="subtle"
+                    size="xs"
+                  >
+                    {{ a.lastRunStatus }}
+                  </UBadge>
                 </div>
-                <div class="text-xs text-muted truncate">
-                  {{ a.email }}
-                </div>
-              </td>
-              <td class="px-4 py-3">
-                <div class="text-xs">
+                <p class="text-xs text-muted mt-0.5 truncate">
                   {{ a.hostname || '—' }}
-                </div>
-                <div class="text-xs text-muted font-mono">
-                  {{ a.hostId ? `${a.hostId.slice(0, 8)}…` : '—' }}
-                </div>
-                <div class="text-xs text-muted truncate" :title="a.pubkeySsh ?? ''">
-                  {{ fmtKey(a.pubkeySsh) }}
-                </div>
-              </td>
-              <td class="px-4 py-3 text-center">
-                {{ a.taskCount }}
-              </td>
-              <td class="px-4 py-3">
-                <UBadge
-                  v-if="a.lastRunStatus"
-                  :color="(statusColor[a.lastRunStatus] as any)"
-                  variant="subtle"
-                  size="xs"
-                >
-                  {{ a.lastRunStatus }}
-                </UBadge>
-                <span v-else class="text-muted">—</span>
-                <div class="text-xs text-muted">
-                  {{ fmtDate(a.lastRunAt) }}
-                </div>
-              </td>
-              <td class="px-4 py-3 text-xs text-muted">
-                {{ fmtDate(a.lastSeenAt) }}
-              </td>
-              <td class="px-4 py-3 text-right">
-                <UButton :to="`/agents/${a.agentName}`" variant="ghost" size="xs" icon="i-lucide-arrow-right">
-                  Manage
-                </UButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </UCard>
+                </p>
+              </div>
+              <UIcon name="i-lucide-chevron-right" class="text-muted shrink-0 size-5 mt-1" />
+            </div>
+
+            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <div>
+                <dt class="text-muted">
+                  Tasks
+                </dt>
+                <dd class="font-medium">
+                  {{ a.taskCount }}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-muted">
+                  Last sync
+                </dt>
+                <dd class="truncate">
+                  {{ fmtRelative(a.lastSeenAt) }}
+                </dd>
+              </div>
+              <div v-if="a.lastRunAt" class="col-span-2">
+                <dt class="text-muted">
+                  Last run
+                </dt>
+                <dd>{{ fmtDate(a.lastRunAt) }}</dd>
+              </div>
+            </dl>
+          </NuxtLink>
+        </li>
+      </ul>
     </main>
   </div>
 </template>
