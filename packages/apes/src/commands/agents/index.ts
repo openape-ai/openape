@@ -4,11 +4,12 @@ import { destroyAgentCommand } from './destroy'
 import { listAgentsCommand } from './list'
 import { registerAgentCommand } from './register'
 import { spawnAgentCommand } from './spawn'
+import { syncAgentCommand } from './sync'
 
 export const agentsCommand = defineCommand({
   meta: {
     name: 'agents',
-    description: 'Manage owned agents (register, spawn, list, destroy, allow)',
+    description: 'Manage owned agents (register, spawn, list, destroy, allow, sync)',
   },
   subCommands: {
     register: registerAgentCommand,
@@ -16,5 +17,6 @@ export const agentsCommand = defineCommand({
     list: listAgentsCommand,
     destroy: destroyAgentCommand,
     allow: allowAgentCommand,
+    sync: syncAgentCommand,
   },
 })
