@@ -2,31 +2,41 @@
 //
 // Long-running daemon. Connects to chat.openape.ai via WebSocket using
 // the agent's IdP token. For each inbound message that wasn't sent by
-// the agent itself, forwards into a long-lived pi RPC subprocess for
-// the room. Streams pi's `text_delta` events back as progressive PATCH
+// the agent itself, forwards into a long-lived `apes agents serve --rpc`
+// subprocess. Streams text_delta events back as progressive PATCH
 // updates on a placeholder chat message — so the human sees the agent
-// "type" in real time, with memory across messages in the same room.
+// "type" in real time, with memory across messages in the same thread.
+//
+// M8: replaced the per-thread `pi --mode rpc` subprocess with a single
+// shared `apes agents serve --rpc` runtime that multiplexes sessions
+// via the `session_id` field. Tools, system prompt, model, max_steps
+// are now per-message instead of per-process flags.
 //
 // Env knobs (all optional):
-//   APE_CHAT_ENDPOINT            override https://chat.openape.ai
-//   APE_CHAT_BRIDGE_PI_BIN       pi binary path (default: 'pi' on PATH)
-//   APE_CHAT_BRIDGE_PROVIDER     pi --provider (default: 'litellm')
-//   APE_CHAT_BRIDGE_MODEL        pi --model    (default: 'gpt-5.4')
-//   APE_CHAT_BRIDGE_ROOM         restrict to one room id
+//   APE_CHAT_ENDPOINT             override https://chat.openape.ai
+//   APE_CHAT_BRIDGE_APES_BIN      apes binary path (default: 'apes' on PATH)
+//   APE_CHAT_BRIDGE_MODEL         per-message model (default: 'claude-haiku-4-5')
+//   APE_CHAT_BRIDGE_TOOLS         comma-separated tool names (default: '' — no tools)
+//   APE_CHAT_BRIDGE_MAX_STEPS     max tool-call rounds per turn (default: 10)
+//   APE_CHAT_BRIDGE_SYSTEM_PROMPT system prompt (default: friendly assistant)
+//   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
+import { ApesRpcSession } from './apes-rpc'
 import { ChatApi } from './chat-api'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
-import { PiRpcSession } from './pi-rpc'
 import { ThreadSession } from './thread-session'
 
 const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
-const DEFAULT_PI_BIN = 'pi'
-const DEFAULT_PROVIDER = 'litellm'
-const DEFAULT_MODEL = 'gpt-5.4'
+const DEFAULT_APES_BIN = 'apes'
+const DEFAULT_MODEL = 'claude-haiku-4-5'
+const DEFAULT_MAX_STEPS = 10
+const DEFAULT_SYSTEM_PROMPT
+  = 'You are a helpful assistant in a 1:1 chat. Be concise and friendly. '
+    + 'When asked for facts, say "I don\'t know" rather than guess.'
 
 const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
@@ -53,18 +63,26 @@ interface WsFrame {
 
 interface BridgeConfig {
   endpoint: string
-  piBin: string
-  provider: string
+  apesBin: string
   model: string
+  systemPrompt: string
+  tools: string[]
+  maxSteps: number
   roomFilter?: string
 }
 
 function readConfig(): BridgeConfig {
+  const toolsRaw = process.env.APE_CHAT_BRIDGE_TOOLS ?? ''
+  const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
+  const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
+  const maxSteps = maxStepsRaw ? Number.parseInt(maxStepsRaw, 10) : DEFAULT_MAX_STEPS
   return {
     endpoint: (process.env.APE_CHAT_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
-    piBin: process.env.APE_CHAT_BRIDGE_PI_BIN ?? DEFAULT_PI_BIN,
-    provider: process.env.APE_CHAT_BRIDGE_PROVIDER ?? DEFAULT_PROVIDER,
+    apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
     model: process.env.APE_CHAT_BRIDGE_MODEL ?? DEFAULT_MODEL,
+    systemPrompt: process.env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
+    tools,
+    maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
     roomFilter: process.env.APE_CHAT_BRIDGE_ROOM,
   }
 }
@@ -91,12 +109,12 @@ function truncate(s: string, n: number): string {
 }
 
 class Bridge {
-  // Sessions keyed by `${roomId}:${threadId}` — Phase B keeps an
-  // independent pi context per chat thread so parallel conversations
-  // with the same human contact don't bleed into each other.
+  // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession
+  // borrows the shared ApesRpcSession and multiplexes via session_id.
   private threads = new Map<string, ThreadSession>()
   private chat: ChatApi
   private bearer: () => Promise<string>
+  private rpc: ApesRpcSession | undefined
 
   constructor(
     private cfg: BridgeConfig,
@@ -111,12 +129,30 @@ class Bridge {
   }
 
   /**
-   * If the agent has no contact relationship with the owner yet, send a
-   * friend request from the agent → owner. The owner accepts in the
-   * chat UI; the connection only goes live after that explicit step.
-   * Idempotent: server-side counter-request semantics make a re-call
-   * a no-op when the relationship already exists.
+   * Lazy-spawn the runtime so we don't pay startup cost when no chat
+   * messages arrive. Recreates on subprocess exit so a crash doesn't
+   * permanently break the bridge.
    */
+  private getRpc(): ApesRpcSession {
+    if (this.rpc?.isAlive()) return this.rpc
+    log('spawning `apes agents serve --rpc`')
+    const rpc = new ApesRpcSession({
+      binary: this.cfg.apesBin,
+      args: ['agents', 'serve', '--rpc'],
+    })
+    rpc.onExit((code) => {
+      log(`apes-rpc exited code=${code} — will respawn on next message; recent stderr: ${rpc.recentStderr().slice(-300).replace(/\n/g, ' / ')}`)
+      // Drop all thread sessions — they were tied to this subprocess's
+      // in-memory session map. Threads will recreate themselves next
+      // inbound message.
+      for (const t of this.threads.values()) t.dispose()
+      this.threads.clear()
+      this.rpc = undefined
+    })
+    this.rpc = rpc
+    return rpc
+  }
+
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {
     const contacts = await this.chat.listContacts()
     const ownerLower = this.ownerEmail.toLowerCase()
@@ -132,12 +168,6 @@ class Bridge {
     }
   }
 
-  /**
-   * Auto-accept ONLY contact requests from peers the owner has approved
-   * (allowlist + owner themselves). Anything else stays pending — to
-   * accept those, the owner needs to run `apes agents allow <agent>
-   * <peer-email>` first.
-   */
   async acceptAllowedPendingContacts(): Promise<void> {
     const contacts = await this.chat.listContacts()
     const pending = contacts.filter(c => c.myStatus === 'pending')
@@ -168,9 +198,6 @@ class Bridge {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
-    // Phase-B-aware servers always include `threadId`; for resilience
-    // against an older server (or a stray pre-Phase-B frame) we'd have
-    // no good fallback — the server now refuses thread-less inserts.
     if (!msg.threadId) {
       log(`[${msg.roomId}] dropping message ${msg.id} without threadId — server too old?`)
       return
@@ -185,19 +212,16 @@ class Bridge {
     const key = `${roomId}:${threadId}`
     let s = this.threads.get(key)
     if (s) return s
-    const pi = new PiRpcSession({
-      binary: this.cfg.piBin,
-      args: ['--provider', this.cfg.provider, '--model', this.cfg.model, '--no-session'],
-    })
-    pi.onExit((code) => {
-      log(`[${roomId}/${threadId.slice(0, 8)}] pi exited code=${code} — recreating on next message`)
-      this.threads.delete(key)
-    })
     s = new ThreadSession({
       roomId,
       threadId,
       chat: this.chat,
-      pi,
+      rpc: this.getRpc(),
+      sessionId: key,
+      systemPrompt: this.cfg.systemPrompt,
+      tools: this.cfg.tools,
+      maxSteps: this.cfg.maxSteps,
+      model: this.cfg.model,
       log,
     })
     this.threads.set(key, s)
@@ -215,20 +239,12 @@ class Bridge {
       ws.on('open', () => {
         log(`connected as ${this.selfEmail} → ${this.cfg.endpoint}`)
         pingTimer = setInterval(() => ws.ping(), PING_INTERVAL_MS)
-        // (1) On first boot the agent introduces itself to its owner —
-        // owner sees a pending request in the chat UI and explicitly
-        // accepts. (2) For peers the owner has subsequently allow-listed,
-        // we close the handshake automatically. Anyone else stays pending
-        // until the owner uses `apes agents allow`. Both calls soft-fail.
         void this.sendInitialOwnerRequestIfNeeded().catch((err) => {
           log(`initial owner request failed: ${err instanceof Error ? err.message : String(err)}`)
         })
         void this.acceptAllowedPendingContacts().catch((err) => {
           log(`accept-pending-contacts failed: ${err instanceof Error ? err.message : String(err)}`)
         })
-        // Re-poll the allowlist + pending contacts every 30s so an
-        // `apes agents allow <agent> <peer>` call gets picked up within
-        // half a minute without a daemon restart.
         allowlistTimer = setInterval(() => {
           void this.acceptAllowedPendingContacts().catch((err) => {
             log(`allowlist re-poll failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -264,9 +280,6 @@ class Bridge {
 
 async function main(): Promise<void> {
   const cfg = readConfig()
-  // The IdP-side identity tells us who we ARE; the on-disk identity
-  // (from auth.json) tells us who we belong to (`owner_email`). We
-  // sanity-check they match before trusting either.
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
   if (onDisk.email.toLowerCase() !== idpId.email.toLowerCase()) {
@@ -275,7 +288,11 @@ async function main(): Promise<void> {
     )
   }
 
-  log(`bridge starting — agent=${onDisk.email} owner=${onDisk.ownerEmail} pi=${cfg.piBin} provider=${cfg.provider} model=${cfg.model} room=${cfg.roomFilter ?? '*'}`)
+  log(
+    `bridge starting — agent=${onDisk.email} owner=${onDisk.ownerEmail} `
+    + `apes=${cfg.apesBin} model=${cfg.model} tools=[${cfg.tools.join(',') || 'none'}] `
+    + `max_steps=${cfg.maxSteps} room=${cfg.roomFilter ?? '*'}`,
+  )
 
   const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail)
   let attempt = 0
