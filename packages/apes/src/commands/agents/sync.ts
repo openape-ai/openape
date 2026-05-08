@@ -34,19 +34,33 @@ function readAuthJson(): AuthJson {
   }
   if (!parsed.access_token) throw new CliError(`${AUTH_PATH} is missing access_token`)
   if (!parsed.email) throw new CliError(`${AUTH_PATH} is missing email`)
-  if (!parsed.email.startsWith('agent+')) {
+  // Agent addresses derived by deriveAgentEmail() in the IdP's enroll
+  // endpoint look like:
+  //   <safeName>-<ownerHash>+<owner-local>+<owner-domain>@<idp-host>
+  // (e.g. "igor4-cb6bf26a+patrick+hofmann_eco@id.openape.ai"). The
+  // distinguishing feature vs. a human address is the embedded `+` from
+  // the subaddressing — humans never have that.
+  if (!parsed.email.includes('+')) {
     throw new CliError(
-      `${AUTH_PATH} email is "${parsed.email}" — expected an agent+name+domain@idp address. Run \`apes agents spawn\` rather than calling sync from a human user.`,
+      `${AUTH_PATH} email is "${parsed.email}" — expected an agent address (with embedded +owner+domain). Run \`apes agents spawn\` rather than calling sync from a human user.`,
     )
   }
   return parsed
 }
 
 function agentNameFromEmail(email: string): string {
-  // agent+<name>+<owner-domain>@<idp-host>
-  const m = email.match(/^agent\+([^+]+)\+/)
-  if (!m) throw new CliError(`agent email "${email}" does not match agent+name+domain pattern`)
-  return m[1]!
+  // <name>-<ownerHash>+<owner-local>+<owner-domain>@<idp-host>
+  // The agent NAME is everything up to the last `-` before the first
+  // `+` — the suffix `-<ownerHash>` is appended at registration time
+  // to disambiguate same-named agents across owners.
+  const before = email.split('+')[0]!
+  const dashIdx = before.lastIndexOf('-')
+  if (dashIdx <= 0) {
+    // Pre-hash format (e.g. "agenta+patrick+hofmann_eco@…") — fall back
+    // to the local-part as-is so we keep working with older agents.
+    return before
+  }
+  return before.slice(0, dashIdx)
 }
 
 function findApesBin(): string {
