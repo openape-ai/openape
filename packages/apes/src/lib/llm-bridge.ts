@@ -114,46 +114,13 @@ export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 # at boot — keeping start.sh slim avoids the rate-limit dance the old
 # refresh hit when KeepAlive crash-restarted the daemon every 1h.
 
-EXT_DIR="$HOME/.pi/agent/extensions"
-mkdir -p "$EXT_DIR"
-if [ ! -f "$EXT_DIR/litellm.ts" ]; then
-  cat > "$EXT_DIR/litellm.ts" <<'PI_EXT_EOF'
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
-const BASE_URL = process.env.LITELLM_BASE_URL ?? "http://127.0.0.1:4000/v1";
-
-export default async function (pi: ExtensionAPI) {
-  pi.registerProvider("litellm", {
-    baseUrl: BASE_URL,
-    apiKey: "LITELLM_API_KEY",
-    api: "openai-completions",
-    models: [
-      {
-        id: "gpt-5.4",
-        name: "ChatGPT 5.4 (Subscription)",
-        reasoning: false,
-        input: ["text", "image"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 200000,
-        maxTokens: 8192,
-      },
-      {
-        id: "gpt-5.3-codex",
-        name: "ChatGPT 5.3 Codex (Subscription)",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 200000,
-        maxTokens: 8192,
-      },
-    ],
-  });
-}
-PI_EXT_EOF
-fi
+# M6 dropped the third-party LLM-runtime install + extension write
+# that used to live here. The bridge now spawns
+# \`apes agents serve --rpc\` directly (M8) which calls LiteLLM
+# itself, so no third-party extension config is needed.
 
 set -a
-. "$HOME/.pi/agent/.env"
+. "$HOME/Library/Application Support/openape/bridge/.env"
 set +a
 exec openape-chat-bridge
 `
