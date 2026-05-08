@@ -2,7 +2,7 @@
 #
 # Deploy apps/openape-tribe to the deploy host.delta-mind.at (tribe.openape.ai).
 #
-# Usage: ./scripts/deploy-chat.sh
+# Usage: ./scripts/deploy-tribe.sh
 #
 # Requires:
 #   - SSH access to the deploy host.delta-mind.at as the service user (default: openape).
@@ -28,11 +28,11 @@ set -euo pipefail
 HOST="${CHATTY_HOST:-chatty.delta-mind.at}"
 USER_="${CHATTY_USER:-openape}"
 BASE="${CHATTY_BASE:-/home/openape/projects/openape-tribe}"
-PORT="${CHATTY_CHAT_PORT:-3007}"
+PORT="${CHATTY_TRIBE_PORT:-3010}"
 TS=$(date -u +%Y-%m-%dT%H-%M-%S)
 
 echo "→ Build .output locally"
-pnpm turbo run build --filter @openape/chat
+pnpm turbo run build --filter @openape/tribe
 
 echo "→ Rsync release to ${USER_}@${HOST}:${BASE}/releases/${TS}/"
 rsync -az --delete \
@@ -43,7 +43,7 @@ echo "→ Pin matching @libsql/linux-x64-gnu native binding (0.4.7)"
 ssh -l "${USER_}" "${HOST}" bash -s <<REMOTE
 set -euo pipefail
 cd /tmp
-rm -rf libsql-pkg-chat && mkdir libsql-pkg-chat && cd libsql-pkg-chat
+rm -rf libsql-pkg-tribe && mkdir libsql-pkg-tribe && cd libsql-pkg-tribe
 npm pack @libsql/linux-x64-gnu@0.4.7 >/dev/null 2>&1
 tar -xzf libsql-linux-x64-gnu-0.4.7.tgz
 mkdir -p ${BASE}/releases/${TS}/server/node_modules/@libsql/linux-x64-gnu
