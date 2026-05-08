@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.0.4
+
+### Patch Changes
+
+- [#339](https://github.com/openape-ai/openape/pull/339) [`4e465d4`](https://github.com/openape-ai/openape/commit/4e465d41e4b1f20fdefa428d35a65159f066e12b) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add PATH to the troop sync plist's EnvironmentVariables so the daemon can find `node` (and `bun`). launchd defaults to `/usr/bin:/bin:/usr/sbin:/sbin` — too narrow for the apes binary's `#!/usr/bin/env node` shebang. Without this the sync log filled with `env: node: No such file or directory` and the agent never reached troop.openape.ai.
+
 ## 1.0.3
 
 ### Patch Changes
