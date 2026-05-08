@@ -68,7 +68,7 @@ export default defineNuxtConfig({
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
     vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
-      maxAgentsPerUser: 10,
+      maxAgentsPerUser: Number(process.env.NUXT_PUBLIC_MAX_AGENTS_PER_USER || 100),
       vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || '',
     },
   },
