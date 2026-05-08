@@ -1,0 +1,127 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { defineCommand } from 'citty'
+import consola from 'consola'
+import { CliError } from '../../errors'
+import { reconcile } from '../../lib/launchd-reconcile'
+import { getHostId, getHostname } from '../../lib/macos-host'
+import { resolveTribeUrl, TribeClient } from '../../lib/tribe-client'
+
+interface AuthJson {
+  idp: string
+  access_token: string
+  email: string
+  expires_at?: number
+  key_path?: string
+  owner_email?: string
+}
+
+const AUTH_PATH = join(homedir(), '.config', 'apes', 'auth.json')
+const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
+
+function readAuthJson(): AuthJson {
+  if (!existsSync(AUTH_PATH)) {
+    throw new CliError(
+      `No agent auth found at ${AUTH_PATH}. Run \`apes agents spawn <name>\` to provision an agent first.`,
+    )
+  }
+  const raw = readFileSync(AUTH_PATH, 'utf8')
+  let parsed: AuthJson
+  try { parsed = JSON.parse(raw) as AuthJson }
+  catch (err) {
+    throw new CliError(`${AUTH_PATH} is not valid JSON: ${(err as Error).message}`)
+  }
+  if (!parsed.access_token) throw new CliError(`${AUTH_PATH} is missing access_token`)
+  if (!parsed.email) throw new CliError(`${AUTH_PATH} is missing email`)
+  if (!parsed.email.startsWith('agent+')) {
+    throw new CliError(
+      `${AUTH_PATH} email is "${parsed.email}" — expected an agent+name+domain@idp address. Run \`apes agents spawn\` rather than calling sync from a human user.`,
+    )
+  }
+  return parsed
+}
+
+function agentNameFromEmail(email: string): string {
+  // agent+<name>+<owner-domain>@<idp-host>
+  const m = email.match(/^agent\+([^+]+)\+/)
+  if (!m) throw new CliError(`agent email "${email}" does not match agent+name+domain pattern`)
+  return m[1]!
+}
+
+function findApesBin(): string {
+  // process.argv[1] is the apes entry script; resolve the symlink to
+  // the actual binary so launchd can invoke it directly. If
+  // process.argv[1] isn't reliable (e.g. when run via `node dist/...`),
+  // fall back to whatever's on PATH at /usr/local/bin/apes.
+  const argv1 = process.argv[1]
+  if (argv1 && existsSync(argv1)) return argv1
+  for (const candidate of ['/opt/homebrew/bin/apes', '/usr/local/bin/apes']) {
+    if (existsSync(candidate)) return candidate
+  }
+  throw new CliError('Could not locate the apes binary path for launchd. Set APES_BIN env var to point at it.')
+}
+
+export const syncAgentCommand = defineCommand({
+  meta: {
+    name: 'sync',
+    description: 'Pull this agent\'s task list from tribe.openape.ai and reconcile launchd plists',
+  },
+  args: {
+    'tribe-url': {
+      type: 'string',
+      description: 'Override tribe SP base URL (default: $OPENAPE_TRIBE_URL or https://tribe.openape.ai)',
+    },
+  },
+  async run({ args }) {
+    const auth = readAuthJson()
+    const agentName = agentNameFromEmail(auth.email)
+    const tribeUrl = resolveTribeUrl(args['tribe-url'] as string | undefined)
+    const client = new TribeClient(tribeUrl, auth.access_token)
+
+    const hostId = getHostId()
+    const host = getHostname()
+    if (!hostId) {
+      throw new CliError('Could not read IOPlatformUUID — is this macOS? Tribe sync only works on macOS for v1.')
+    }
+    if (!auth.owner_email) {
+      throw new CliError(`${AUTH_PATH} is missing owner_email — re-run \`apes agents spawn\` to update.`)
+    }
+
+    consola.start(`Syncing ${agentName} (${host}, hostId ${hostId.slice(0, 8)}…) with ${tribeUrl}`)
+
+    const sync = await client.sync({
+      hostname: host,
+      hostId,
+      ownerEmail: auth.owner_email,
+    })
+    consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
+
+    const tasks = await client.listTasks()
+    consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
+
+    // Cache full task specs locally so `apes agents run <task_id>`
+    // can execute without going to network. Cache layout:
+    //   ~/.openape/agent/tasks/<task_id>.json
+    mkdirSync(TASK_CACHE_DIR, { recursive: true })
+    for (const task of tasks) {
+      const path = join(TASK_CACHE_DIR, `${task.taskId}.json`)
+      writeFileSync(path, `${JSON.stringify(task, null, 2)}\n`, { mode: 0o600 })
+    }
+
+    const apesBin = findApesBin()
+    const result = reconcile({
+      agentName,
+      apesBin,
+      homeDir: homedir(),
+      desired: tasks,
+    })
+
+    if (result.added.length) consola.success(`launchd: added ${result.added.join(', ')}`)
+    if (result.updated.length) consola.success(`launchd: updated ${result.updated.join(', ')}`)
+    if (result.removed.length) consola.warn(`launchd: removed ${result.removed.join(', ')}`)
+    if (result.unchanged.length) consola.info(`launchd: ${result.unchanged.length} unchanged`)
+
+    consola.success('Sync complete.')
+  },
+})
