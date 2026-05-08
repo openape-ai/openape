@@ -51,7 +51,7 @@ describe('buildPlistContent', () => {
       },
     })
     expect(body).toContain('<key>Label</key>')
-    expect(body).toContain('<string>openape.tribe.alice.mail-triage</string>')
+    expect(body).toContain('<string>openape.troop.alice.mail-triage</string>')
     expect(body).toContain('<string>/usr/local/bin/apes</string>')
     expect(body).toContain('<string>agents</string>')
     expect(body).toContain('<string>run</string>')

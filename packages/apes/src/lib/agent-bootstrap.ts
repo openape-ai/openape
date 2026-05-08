@@ -97,11 +97,11 @@ export interface SpawnSetupScriptInput {
    */
   bridge: SpawnBridgeFiles | null
   /**
-   * Tribe sync launchd plist. Always set for spawn-via-tribe; passed
+   * Troop sync launchd plist. Always set for spawn-via-troop; passed
    * as null only by tests that exercise the legacy path. Drops the
    * plist into ~/Library/LaunchAgents/ and bootstraps it.
    */
-  tribe: SpawnTribeFiles | null
+  troop: SpawnTroopFiles | null
 }
 
 export interface SpawnBridgeFiles {
@@ -208,7 +208,7 @@ mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
 cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
 cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
-${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTribeBlock(input.tribe)}
+${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTroopBlock(input.troop)}
 chown -R "$NAME:staff" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
@@ -221,7 +221,7 @@ if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
 fi
 
 echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
-${buildBridgeBootstrapBlock(input.bridge)}${buildTribeBootstrapBlock(input.tribe)}`
+${buildBridgeBootstrapBlock(input.bridge)}${buildTroopBootstrapBlock(input.troop)}`
 }
 
 function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
@@ -274,8 +274,8 @@ launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
 `
 }
 
-export interface SpawnTribeFiles {
-  /** Plist label, e.g. `openape.tribe.sync.<agent>`. */
+export interface SpawnTroopFiles {
+  /** Plist label, e.g. `openape.troop.sync.<agent>`. */
   plistLabel: string
   /** Absolute path under $HOME/Library/LaunchAgents/. */
   plistPath: string
@@ -284,35 +284,35 @@ export interface SpawnTribeFiles {
 }
 
 /**
- * Tribe sync launchd plist — installed for every spawned agent.
- * Drops `~/Library/LaunchAgents/openape.tribe.sync.<agent>.plist`,
+ * Troop sync launchd plist — installed for every spawned agent.
+ * Drops `~/Library/LaunchAgents/openape.troop.sync.<agent>.plist`,
  * bootstraps it into the agent's user-domain (gui/<uid>), then runs
- * `apes agents sync` once eagerly so the agent appears at the tribe
+ * `apes agents sync` once eagerly so the agent appears at the troop
  * SP within seconds rather than waiting a full sync interval.
  */
-function buildTribeBlock(tribe: SpawnTribeFiles | null): string {
-  if (!tribe) return ''
+function buildTroopBlock(troop: SpawnTroopFiles | null): string {
+  if (!troop) return ''
   return `
 mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
-cat > ${shQuote(tribe.plistPath)} ${shHeredoc(tribe.plistContent)}
-chmod 644 ${shQuote(tribe.plistPath)}
+cat > ${shQuote(troop.plistPath)} ${shHeredoc(troop.plistContent)}
+chmod 644 ${shQuote(troop.plistPath)}
 `
 }
 
-function buildTribeBootstrapBlock(tribe: SpawnTribeFiles | null): string {
-  if (!tribe) return ''
+function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null): string {
+  if (!troop) return ''
   return `
-# Bootstrap the tribe sync launchd into the agent's GUI domain so it
+# Bootstrap the troop sync launchd into the agent's GUI domain so it
 # starts firing every 5 minutes. RunAtLoad in the plist also kicks
 # off an immediate first sync so the agent registers + appears in
-# the tribe SP within seconds of spawn finishing.
-echo "==> Installing tribe sync launchd as $NAME…"
+# the troop SP within seconds of spawn finishing.
+echo "==> Installing troop sync launchd as $NAME…"
 su - "$NAME" -c '
 set -euo pipefail
 NAME_UID="$(id -u)"
-launchctl bootout "gui/$NAME_UID/${tribe.plistLabel}" 2>/dev/null || true
-launchctl bootstrap "gui/$NAME_UID" ${shQuote(tribe.plistPath)} || \\
-  echo "warn: tribe sync bootstrap failed; run \\\`apes agents sync\\\` manually as $NAME to register at tribe.openape.ai"
+launchctl bootout "gui/$NAME_UID/${troop.plistLabel}" 2>/dev/null || true
+launchctl bootstrap "gui/$NAME_UID" ${shQuote(troop.plistPath)} || \\
+  echo "warn: troop sync bootstrap failed; run \\\`apes agents sync\\\` manually as $NAME to register at troop.openape.ai"
 '
 `
 }

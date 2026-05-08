@@ -3,7 +3,7 @@
 // `tools[]` parameter) and (b) an `execute` function called when the
 // model emits a `tool_calls` entry. Adding a new tool means
 // implementing it here AND adding an entry to
-// apps/openape-tribe/server/tool-catalog.json so the SP validates
+// apps/openape-troop/server/tool-catalog.json so the SP validates
 // task specs against the same allowlist.
 //
 // The registry is keyed by string name (`time.now`, `http.get`, …).
