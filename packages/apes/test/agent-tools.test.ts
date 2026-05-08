@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest'
+import { asOpenAiTools, taskTools, TOOLS } from '../src/lib/agent-tools'
+import { _internal as fileInternal } from '../src/lib/agent-tools/file'
+import { homedir } from 'node:os'
+
+describe('tool registry', () => {
+  it('TOOLS has the expected keys', () => {
+    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search']) {
+      expect(TOOLS[name]).toBeDefined()
+    }
+  })
+
+  it('taskTools resolves names to definitions', () => {
+    const t = taskTools(['time.now'])
+    expect(t).toHaveLength(1)
+    expect(t[0]?.name).toBe('time.now')
+  })
+
+  it('taskTools throws on unknown names', () => {
+    expect(() => taskTools(['time.now', 'magic.do'])).toThrow(/unknown tool/)
+  })
+
+  it('asOpenAiTools strips execute', () => {
+    const out = asOpenAiTools([TOOLS['time.now']!])
+    expect(out[0]).toEqual({
+      type: 'function',
+      function: expect.objectContaining({ name: 'time.now' }),
+    })
+    expect((out[0]!.function as Record<string, unknown>).execute).toBeUndefined()
+  })
+})
+
+describe('time.now', () => {
+  it('returns iso, epoch_seconds, timezone offset', async () => {
+    const result = await TOOLS['time.now']!.execute({}) as Record<string, unknown>
+    expect(typeof result.iso).toBe('string')
+    expect(typeof result.epoch_seconds).toBe('number')
+    expect(typeof result.timezone_offset_minutes).toBe('number')
+  })
+})
+
+describe('file tool jail', () => {
+  it('rejects path traversal via ../', () => {
+    expect(() => fileInternal.jailPath('../etc/passwd')).toThrow(/outside the agent's home/)
+  })
+
+  it('rejects absolute paths outside $HOME', () => {
+    expect(() => fileInternal.jailPath('/etc/passwd')).toThrow(/outside the agent's home/)
+  })
+
+  it('accepts paths inside $HOME', () => {
+    expect(fileInternal.jailPath('Documents/notes.md')).toBe(`${homedir()}/Documents/notes.md`)
+    expect(fileInternal.jailPath('~/Documents/notes.md')).toBe(`${homedir()}/Documents/notes.md`)
+  })
+
+  it('rejects empty + non-string paths', () => {
+    expect(() => fileInternal.jailPath('')).toThrow()
+    expect(() => fileInternal.jailPath(123 as unknown as string)).toThrow()
+  })
+})

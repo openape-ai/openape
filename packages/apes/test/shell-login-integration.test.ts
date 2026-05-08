@@ -31,9 +31,10 @@ const TMP_DIR = join(tmpdir(), `apes-login-test-${process.pid}-${Date.now()}`)
 const TMP_SYMLINK = join(TMP_DIR, 'ape-shell')
 
 describe('ape-shell login shell + $SHELL compatibility', () => {
+  // The beforeAll spawns a full pnpm build which can take 10–20s
+  // depending on machine + cache state. Default hook timeout (10s)
+  // makes this flake — bump it.
   beforeAll(() => {
-    // Build once upfront. `tsup` is fast enough that this is cheap in CI,
-    // and it avoids requiring the test runner to depend on the `build` task.
     const build = spawnSync('pnpm', ['--filter', '@openape/apes', 'build'], {
       cwd: REPO_ROOT,
       stdio: 'pipe',
@@ -47,7 +48,7 @@ describe('ape-shell login shell + $SHELL compatibility', () => {
     // cli.js so argv[1] basename matches the detection in rewriteApeShellArgs.
     mkdirSync(TMP_DIR, { recursive: true })
     symlinkSync(DIST_CLI, TMP_SYMLINK)
-  })
+  }, 60_000)
 
   afterAll(() => {
     try {
