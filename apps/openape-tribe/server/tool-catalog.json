@@ -1,0 +1,59 @@
+{
+  "_comment": "Authoritative list of tool names the apes-runtime ships. Server validates POST /api/agents/:name/tasks payloads against this; the UI's tool-picker fetches it via GET /api/tool-catalog. Adding a new tool means: 1) implement in packages/apes/src/lib/agent-tools/, 2) add an entry here.",
+  "tools": [
+    {
+      "name": "time.now",
+      "description": "Current UTC timestamp + ISO date. Useful as a sanity check that tool-calling round-trips.",
+      "inputs": "none",
+      "risk": "low"
+    },
+    {
+      "name": "http.get",
+      "description": "GET an HTTPS URL and return the body (capped at 1MB). Headers are agent-controlled within a deny-list of dangerous values.",
+      "inputs": "{ url: string, headers?: Record<string,string> }",
+      "risk": "medium"
+    },
+    {
+      "name": "http.post",
+      "description": "POST JSON to an HTTPS URL and return the response body. Same caps + header policy as http.get.",
+      "inputs": "{ url: string, body: unknown, headers?: Record<string,string> }",
+      "risk": "medium"
+    },
+    {
+      "name": "file.read",
+      "description": "Read a file from the agent's home directory ($HOME). Path traversal blocked. Capped at 1MB.",
+      "inputs": "{ path: string }",
+      "risk": "medium"
+    },
+    {
+      "name": "file.write",
+      "description": "Write a file in the agent's home directory ($HOME). Path traversal blocked. 1MB max payload.",
+      "inputs": "{ path: string, content: string }",
+      "risk": "high"
+    },
+    {
+      "name": "tasks.list",
+      "description": "List the owner's open ape-tasks (the user's personal task list at tasks.openape.ai), optionally filtered by status.",
+      "inputs": "{ status?: 'open'|'doing'|'done'|'archived', team_id?: string }",
+      "risk": "low"
+    },
+    {
+      "name": "tasks.create",
+      "description": "Create a new ape-task on the owner's task list.",
+      "inputs": "{ title: string, notes?: string, priority?: 'low'|'med'|'high', due_at?: string }",
+      "risk": "medium"
+    },
+    {
+      "name": "mail.list",
+      "description": "List recent inbox messages via o365-cli. Only available if the agent host has o365-cli installed and authenticated.",
+      "inputs": "{ limit?: number, unread_only?: boolean }",
+      "risk": "low"
+    },
+    {
+      "name": "mail.search",
+      "description": "Search inbox via o365-cli with a query string.",
+      "inputs": "{ q: string, limit?: number }",
+      "risk": "low"
+    }
+  ]
+}
