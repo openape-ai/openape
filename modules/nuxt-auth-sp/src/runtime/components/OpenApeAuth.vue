@@ -1,10 +1,4 @@
 <script setup>
-// Module-shipped components live in `node_modules/.../dist/...`
-// after the consumer installs from npm. Nuxt's unimport plugin
-// doesn't reliably transform `.vue` files inside `node_modules`,
-// so component-internal calls like `useOpenApeAuth()` blow up at
-// SSR time with "useOpenApeAuth is not defined". Explicit imports
-// from `#imports` fix that — same shape as the IdP-side pages do.
 import { onMounted, ref } from 'vue'
 import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
 import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
@@ -26,11 +20,6 @@ onMounted(async () => {
   if (user.value) {
     navigateTo('/dashboard')
   }
-  // Surface IdP authorize-deny redirects (RFC 6749 §4.1.2.1) with
-  // friendly per-code copy. SPs that want richer UX (UAlert with
-  // dismiss-X, product-specific guidance) should drop
-  // <OpenApeOAuthErrorAlert /> on the page and skip this form's
-  // built-in error display.
   if (typeof route.query.error === 'string' && route.query.error) {
     const code = route.query.error
     error.value = DEFAULT_OAUTH_ERROR_MESSAGES[code] ?? `Login failed: ${code}.`
