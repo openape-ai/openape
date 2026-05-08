@@ -73,7 +73,7 @@ export const serveAgentCommand = defineCommand({
       // We don't actually use the agent JWT in serve mode — the bridge
       // is the only caller and it talks to chat.openape.ai itself —
       // but reading auth.json is a sanity check that we're running
-      // as a tribe-spawned agent user, not stray.
+      // as a troop-spawned agent user, not stray.
       try { JSON.parse(readFileSync(AUTH_PATH, 'utf8')) as AuthJson }
       catch { /* tolerate */ }
     }

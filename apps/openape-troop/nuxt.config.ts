@@ -24,15 +24,15 @@ export default defineNuxtConfig({
   },
 
   openapeSp: {
-    clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'tribe.openape.ai',
-    spName: process.env.NUXT_OPENAPE_SP_NAME || 'OpenApe Tribe',
-    sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || 'change-me-tribe-secret-at-least-32-chars-long',
+    clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'troop.openape.ai',
+    spName: process.env.NUXT_OPENAPE_SP_NAME || 'OpenApe Troop',
+    sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || 'change-me-troop-secret-at-least-32-chars-long',
     openapeUrl: process.env.NUXT_OPENAPE_URL ?? '',
     fallbackIdpUrl: process.env.NUXT_OPENAPE_SP_FALLBACK_IDP_URL || 'https://id.openape.ai',
   },
 
   runtimeConfig: {
-    tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-tribe.db',
+    tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-troop.db',
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',

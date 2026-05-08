@@ -55,6 +55,6 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)`)
   }
   catch (err) {
-    console.error('[tribe/database] table init failed:', err)
+    console.error('[troop/database] table init failed:', err)
   }
 })
