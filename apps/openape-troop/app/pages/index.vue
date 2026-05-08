@@ -21,7 +21,7 @@ if (user.value) {
         />
 
         <div class="text-6xl mb-6" aria-hidden="true">
-          🦒
+          🦍
         </div>
 
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">

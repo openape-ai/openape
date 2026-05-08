@@ -13,12 +13,33 @@ export default defineNuxtConfig({
 
   app: {
     head: {
+      // titleTemplate function lives in app/plugins/head.ts — a function
+      // here gets serialized at build time and silently dropped, leaving
+      // every page rendering its own title without the suffix.
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/icon-192.png', sizes: '192x192' },
+        { rel: 'apple-touch-icon', href: '/icon-512.png', sizes: '512x512' },
       ],
       meta: [
         { name: 'theme-color', content: '#18181b' },
         { name: 'description', content: 'Manage your OpenApe agents — crons, system prompts, tools, run history.' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'OpenApe Troop' },
+        // Open Graph — controls Slack/Discord/iMessage/Twitter previews
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: 'OpenApe Troop' },
+        { property: 'og:title', content: 'OpenApe Troop — your troop of small agents' },
+        { property: 'og:description', content: 'Cron-scheduled, single-purpose agents on your own machine. Manage from anywhere.' },
+        { property: 'og:url', content: 'https://troop.openape.ai' },
+        { property: 'og:image', content: 'https://troop.openape.ai/og-image.png' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: 'OpenApe Troop — your troop of small agents' },
+        { name: 'twitter:description', content: 'Cron-scheduled, single-purpose agents on your own machine.' },
+        { name: 'twitter:image', content: 'https://troop.openape.ai/og-image.png' },
       ],
     },
   },
