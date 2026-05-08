@@ -2,10 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
 import { join } from 'node:path'
-import type { TaskSpec } from './tribe-client'
+import type { TaskSpec } from './troop-client'
 
-// Reconciles ~/Library/LaunchAgents/openape.tribe.<agent>.<task>.plist
-// against the desired set from the tribe SP.
+// Reconciles ~/Library/LaunchAgents/openape.troop.<agent>.<task>.plist
+// against the desired set from the troop SP.
 //
 // One plist per task. Filename encodes the agent name + task slug so
 // we can scope the diff with a glob — multiple agents on the same
@@ -25,7 +25,7 @@ export interface ReconcileResult {
   unchanged: string[]
 }
 
-const PLIST_PREFIX = 'openape.tribe.'
+const PLIST_PREFIX = 'openape.troop.'
 
 function plistDir(): string {
   return join(homedir(), 'Library', 'LaunchAgents')
@@ -149,9 +149,9 @@ function plistBody(input: { label: string, apesBin: string, taskId: string, sche
   </dict>
 ${calendarKey}
   <key>StandardOutPath</key>
-  <string>${escape(input.homeDir)}/Library/Logs/openape-tribe-${escape(input.taskId)}.log</string>
+  <string>${escape(input.homeDir)}/Library/Logs/openape-troop-${escape(input.taskId)}.log</string>
   <key>StandardErrorPath</key>
-  <string>${escape(input.homeDir)}/Library/Logs/openape-tribe-${escape(input.taskId)}.log</string>
+  <string>${escape(input.homeDir)}/Library/Logs/openape-troop-${escape(input.taskId)}.log</string>
 </dict>
 </plist>
 `

@@ -1,14 +1,14 @@
-// Typed thin client for tribe.openape.ai's agent-side API. The CLI
+// Typed thin client for troop.openape.ai's agent-side API. The CLI
 // never talks to the owner-side endpoints (those are for the web UI);
-// the tribe-client only knows about the three /me/* endpoints needed
+// the troop-client only knows about the three /me/* endpoints needed
 // by `apes agents sync` and `apes agents run`.
 //
-// Default endpoint is https://tribe.openape.ai. Override with the
-// OPENAPE_TRIBE_URL env var (handy for staging or local dev). The
+// Default endpoint is https://troop.openape.ai. Override with the
+// OPENAPE_TROOP_URL env var (handy for staging or local dev). The
 // agent JWT comes from `~/.config/apes/auth.json` — the file
 // `apes agents spawn` writes when it provisions the macOS user.
 
-export const DEFAULT_TRIBE_URL = 'https://tribe.openape.ai'
+export const DEFAULT_TROOP_URL = 'https://troop.openape.ai'
 
 export interface TaskSpec {
   agentEmail: string
@@ -42,14 +42,14 @@ export interface RunFinalisePayload {
   trace?: unknown
 }
 
-export class TribeClient {
+export class TroopClient {
   constructor(
-    public readonly tribeUrl: string,
+    public readonly troopUrl: string,
     public readonly agentJwt: string,
   ) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.tribeUrl}${path}`, {
+    const res = await fetch(`${this.troopUrl}${path}`, {
       ...init,
       headers: {
         ...(init?.headers ?? {}),
@@ -59,7 +59,7 @@ export class TribeClient {
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`tribe ${init?.method ?? 'GET'} ${path} failed: ${res.status} ${text}`)
+      throw new Error(`troop ${init?.method ?? 'GET'} ${path} failed: ${res.status} ${text}`)
     }
     if (res.status === 204) return undefined as T
     return await res.json() as T
@@ -96,9 +96,9 @@ export class TribeClient {
   }
 }
 
-export function resolveTribeUrl(override?: string): string {
+export function resolveTroopUrl(override?: string): string {
   if (override) return override.replace(/\/$/, '')
-  const fromEnv = process.env.OPENAPE_TRIBE_URL
+  const fromEnv = process.env.OPENAPE_TROOP_URL
   if (fromEnv) return fromEnv.replace(/\/$/, '')
-  return DEFAULT_TRIBE_URL
+  return DEFAULT_TROOP_URL
 }

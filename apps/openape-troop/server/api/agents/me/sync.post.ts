@@ -14,7 +14,7 @@ const bodySchema = z.object({
   host_id: z.string().min(8).max(128),
   // The agent was provisioned by its owner via `apes agents spawn`,
   // so the owner's email is known on the agent host. Posting it
-  // here lets tribe associate the agent with the right owner; the
+  // here lets troop associate the agent with the right owner; the
   // ownerDomain part is also encoded in the agent's own email and
   // we cross-check the two below.
   owner_email: z.string().email(),

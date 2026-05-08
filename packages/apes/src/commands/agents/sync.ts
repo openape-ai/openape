@@ -6,7 +6,7 @@ import consola from 'consola'
 import { CliError } from '../../errors'
 import { reconcile } from '../../lib/launchd-reconcile'
 import { getHostId, getHostname } from '../../lib/macos-host'
-import { resolveTribeUrl, TribeClient } from '../../lib/tribe-client'
+import { resolveTroopUrl, TroopClient } from '../../lib/troop-client'
 
 interface AuthJson {
   idp: string
@@ -65,30 +65,30 @@ function findApesBin(): string {
 export const syncAgentCommand = defineCommand({
   meta: {
     name: 'sync',
-    description: 'Pull this agent\'s task list from tribe.openape.ai and reconcile launchd plists',
+    description: 'Pull this agent\'s task list from troop.openape.ai and reconcile launchd plists',
   },
   args: {
-    'tribe-url': {
+    'troop-url': {
       type: 'string',
-      description: 'Override tribe SP base URL (default: $OPENAPE_TRIBE_URL or https://tribe.openape.ai)',
+      description: 'Override troop SP base URL (default: $OPENAPE_TROOP_URL or https://troop.openape.ai)',
     },
   },
   async run({ args }) {
     const auth = readAuthJson()
     const agentName = agentNameFromEmail(auth.email)
-    const tribeUrl = resolveTribeUrl(args['tribe-url'] as string | undefined)
-    const client = new TribeClient(tribeUrl, auth.access_token)
+    const troopUrl = resolveTroopUrl(args['troop-url'] as string | undefined)
+    const client = new TroopClient(troopUrl, auth.access_token)
 
     const hostId = getHostId()
     const host = getHostname()
     if (!hostId) {
-      throw new CliError('Could not read IOPlatformUUID — is this macOS? Tribe sync only works on macOS for v1.')
+      throw new CliError('Could not read IOPlatformUUID — is this macOS? Troop sync only works on macOS for v1.')
     }
     if (!auth.owner_email) {
       throw new CliError(`${AUTH_PATH} is missing owner_email — re-run \`apes agents spawn\` to update.`)
     }
 
-    consola.start(`Syncing ${agentName} (${host}, hostId ${hostId.slice(0, 8)}…) with ${tribeUrl}`)
+    consola.start(`Syncing ${agentName} (${host}, hostId ${hostId.slice(0, 8)}…) with ${troopUrl}`)
 
     const sync = await client.sync({
       hostname: host,

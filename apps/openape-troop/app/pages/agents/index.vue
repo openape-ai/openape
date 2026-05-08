@@ -73,7 +73,7 @@ const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
       <div class="flex items-center gap-2">
         <span class="text-2xl">🦒</span>
         <h1 class="text-xl font-semibold">
-          Tribe
+          Troop
         </h1>
       </div>
       <div class="flex items-center gap-2">

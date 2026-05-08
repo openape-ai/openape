@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildSyncPlist, syncPlistLabel, syncPlistPath } from '../src/lib/tribe-bootstrap'
+import { buildSyncPlist, syncPlistLabel, syncPlistPath } from '../src/lib/troop-bootstrap'
 
-describe('tribe-bootstrap', () => {
-  it('label + path follow the openape.tribe.sync.<agent> convention', () => {
-    expect(syncPlistLabel('alice')).toBe('openape.tribe.sync.alice')
+describe('troop-bootstrap', () => {
+  it('label + path follow the openape.troop.sync.<agent> convention', () => {
+    expect(syncPlistLabel('alice')).toBe('openape.troop.sync.alice')
     expect(syncPlistPath('/Users/alice', 'alice'))
-      .toBe('/Users/alice/Library/LaunchAgents/openape.tribe.sync.alice.plist')
+      .toBe('/Users/alice/Library/LaunchAgents/openape.troop.sync.alice.plist')
   })
 
   it('plist body includes the agents-sync invocation, RunAtLoad, 5min interval', () => {
@@ -14,7 +14,7 @@ describe('tribe-bootstrap', () => {
       apesBin: '/usr/local/bin/apes',
       homeDir: '/Users/alice',
     })
-    expect(body).toContain('<string>openape.tribe.sync.alice</string>')
+    expect(body).toContain('<string>openape.troop.sync.alice</string>')
     expect(body).toContain('<string>/usr/local/bin/apes</string>')
     expect(body).toContain('<string>agents</string>')
     expect(body).toContain('<string>sync</string>')
@@ -25,15 +25,15 @@ describe('tribe-bootstrap', () => {
     expect(body).toContain('<key>HOME</key><string>/Users/alice</string>')
   })
 
-  it('passes through OPENAPE_TRIBE_URL when supplied (staging)', () => {
+  it('passes through OPENAPE_TROOP_URL when supplied (staging)', () => {
     const body = buildSyncPlist({
       agentName: 'alice',
       apesBin: '/usr/local/bin/apes',
       homeDir: '/Users/alice',
-      tribeUrl: 'https://staging.tribe.openape.ai',
+      troopUrl: 'https://staging.troop.openape.ai',
     })
-    expect(body).toContain('<key>OPENAPE_TRIBE_URL</key>')
-    expect(body).toContain('<string>https://staging.tribe.openape.ai</string>')
+    expect(body).toContain('<key>OPENAPE_TROOP_URL</key>')
+    expect(body).toContain('<string>https://staging.troop.openape.ai</string>')
   })
 
   it('escapes XML metacharacters in the agent name', () => {

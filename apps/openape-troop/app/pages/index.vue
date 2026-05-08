@@ -16,7 +16,7 @@ if (user.value) {
         <OpenApeOAuthErrorAlert
           class="text-left mb-6 w-full"
           :messages="{
-            access_denied: 'Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Tribe noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse.',
+            access_denied: 'Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Troop noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse.',
           }"
         />
 
@@ -25,7 +25,7 @@ if (user.value) {
         </div>
 
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-          Your tribe of<br>
+          Your troop of<br>
           <span class="text-primary-500">small agents.</span>
         </h1>
 
