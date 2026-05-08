@@ -96,6 +96,12 @@ export interface SpawnSetupScriptInput {
    * boot. `null` skips the bridge entirely (current default).
    */
   bridge: SpawnBridgeFiles | null
+  /**
+   * Tribe sync launchd plist. Always set for spawn-via-tribe; passed
+   * as null only by tests that exercise the legacy path. Drops the
+   * plist into ~/Library/LaunchAgents/ and bootstraps it.
+   */
+  tribe: SpawnTribeFiles | null
 }
 
 export interface SpawnBridgeFiles {
@@ -202,7 +208,7 @@ mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
 cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
 cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
-${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}
+${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTribeBlock(input.tribe)}
 chown -R "$NAME:staff" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
@@ -215,7 +221,7 @@ if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
 fi
 
 echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
-${buildBridgeBootstrapBlock(input.bridge)}`
+${buildBridgeBootstrapBlock(input.bridge)}${buildTribeBootstrapBlock(input.tribe)}`
 }
 
 function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
@@ -223,12 +229,16 @@ function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
   // Plist lives in /Library/LaunchDaemons (system-wide), agent-owned files
   // live in $HOME. Daemons need root-owned plists; the start.sh + .env are
   // chowned to the agent below by the existing chown -R block.
+  //
+  // M6 dropped the `~/.pi/agent/.env` write — chat-bridge gets its
+  // LiteLLM env from the start.sh that M8 will rewrite to spawn
+  // `apes agents serve --rpc` instead of pi.
   return `
-mkdir -p "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs" "$HOME_DIR/.pi/agent"
-cat > "$HOME_DIR/.pi/agent/.env" ${shHeredoc(bridge.envFile)}
+mkdir -p "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs"
+cat > "$HOME_DIR/Library/Application Support/openape/bridge/.env" ${shHeredoc(bridge.envFile)}
 cat > "$HOME_DIR/Library/Application Support/openape/bridge/start.sh" ${shHeredoc(bridge.startScript)}
 chmod 755 "$HOME_DIR/Library/Application Support/openape/bridge/start.sh"
-chmod 600 "$HOME_DIR/.pi/agent/.env"
+chmod 600 "$HOME_DIR/Library/Application Support/openape/bridge/.env"
 
 # System-wide LaunchDaemon — root-owned, mode 644 (launchd refuses
 # group/world-writable plists). UserName in the plist makes launchd run
@@ -242,9 +252,9 @@ chmod 644 ${shQuote(bridge.plistPath)}
 function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
   if (!bridge) return ''
   // Install the bridge stack ONCE here, as the agent user, while the human
-  // is already waiting for the spawn grant. Three globals (~1300 packages)
-  // are heavy with npm — bun does it in ~10s. start.sh stays slim and
-  // boots in seconds instead of pulling everything fresh on every restart.
+  // is already waiting for the spawn grant. With M6 the dependency tree
+  // dropped pi-coding-agent — chat-bridge spawns `apes agents serve --rpc`
+  // (M8) so the apes binary is the only runtime peer it needs.
   //
   // Then bootstrap the launchd job.
   return `
@@ -252,7 +262,7 @@ echo "==> Installing bridge stack as $NAME via bun (one-time)…"
 su - "$NAME" -c '
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
-bun add -g @openape/chat-bridge @openape/apes @mariozechner/pi-coding-agent
+bun add -g @openape/chat-bridge @openape/apes
 '
 
 # Bootstrap into the system domain. Spawn already runs as root via
@@ -261,6 +271,49 @@ bun add -g @openape/chat-bridge @openape/apes @mariozechner/pi-coding-agent
 launchctl bootout "system/${bridge.plistLabel}" 2>/dev/null || true
 launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
   echo "warn: bridge bootstrap into system domain failed; check ${bridge.plistPath}"
+`
+}
+
+export interface SpawnTribeFiles {
+  /** Plist label, e.g. `openape.tribe.sync.<agent>`. */
+  plistLabel: string
+  /** Absolute path under $HOME/Library/LaunchAgents/. */
+  plistPath: string
+  /** Full plist XML content. */
+  plistContent: string
+}
+
+/**
+ * Tribe sync launchd plist — installed for every spawned agent.
+ * Drops `~/Library/LaunchAgents/openape.tribe.sync.<agent>.plist`,
+ * bootstraps it into the agent's user-domain (gui/<uid>), then runs
+ * `apes agents sync` once eagerly so the agent appears at the tribe
+ * SP within seconds rather than waiting a full sync interval.
+ */
+function buildTribeBlock(tribe: SpawnTribeFiles | null): string {
+  if (!tribe) return ''
+  return `
+mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
+cat > ${shQuote(tribe.plistPath)} ${shHeredoc(tribe.plistContent)}
+chmod 644 ${shQuote(tribe.plistPath)}
+`
+}
+
+function buildTribeBootstrapBlock(tribe: SpawnTribeFiles | null): string {
+  if (!tribe) return ''
+  return `
+# Bootstrap the tribe sync launchd into the agent's GUI domain so it
+# starts firing every 5 minutes. RunAtLoad in the plist also kicks
+# off an immediate first sync so the agent registers + appears in
+# the tribe SP within seconds of spawn finishing.
+echo "==> Installing tribe sync launchd as $NAME…"
+su - "$NAME" -c '
+set -euo pipefail
+NAME_UID="$(id -u)"
+launchctl bootout "gui/$NAME_UID/${tribe.plistLabel}" 2>/dev/null || true
+launchctl bootstrap "gui/$NAME_UID" ${shQuote(tribe.plistPath)} || \\
+  echo "warn: tribe sync bootstrap failed; run \\\`apes agents sync\\\` manually as $NAME to register at tribe.openape.ai"
+'
 `
 }
 
