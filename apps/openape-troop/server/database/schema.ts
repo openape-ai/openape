@@ -5,7 +5,7 @@ import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlit
 // PK is the agent's email (DDISA-style `agent+name+ownerdomain@id.openape.ai`).
 // The IdP guarantees email uniqueness so a second `apes agents spawn alice`
 // from a different host hits an IdP-side conflict before it ever reaches
-// tribe — the owner has to pick distinct names like `alice-laptop` /
+// troop — the owner has to pick distinct names like `alice-laptop` /
 // `alice-mini` for multi-host. `hostId` is the stable hardware-rooted
 // identifier (Mac IOPlatformUUID), pinned at first sync; mismatched
 // later syncs get 401 (the agent's keypair was likely copied to another

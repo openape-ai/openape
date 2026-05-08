@@ -425,7 +425,7 @@ importers:
         specifier: ^2.0.0
         version: 2.2.12(typescript@5.9.3)
 
-  apps/openape-tribe:
+  apps/openape-troop:
     dependencies:
       '@iconify-json/lucide':
         specifier: ^1.2.90

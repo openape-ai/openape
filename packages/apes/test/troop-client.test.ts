@@ -1,34 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_TRIBE_URL, resolveTribeUrl, TribeClient } from '../src/lib/tribe-client'
+import { DEFAULT_TROOP_URL, resolveTroopUrl, TroopClient } from '../src/lib/troop-client'
 
-describe('resolveTribeUrl', () => {
-  const original = process.env.OPENAPE_TRIBE_URL
+describe('resolveTroopUrl', () => {
+  const original = process.env.OPENAPE_TROOP_URL
   afterEach(() => {
-    if (original === undefined) delete process.env.OPENAPE_TRIBE_URL
-    else process.env.OPENAPE_TRIBE_URL = original
+    if (original === undefined) delete process.env.OPENAPE_TROOP_URL
+    else process.env.OPENAPE_TROOP_URL = original
   })
 
   it('returns the default when nothing is set', () => {
-    delete process.env.OPENAPE_TRIBE_URL
-    expect(resolveTribeUrl()).toBe(DEFAULT_TRIBE_URL)
+    delete process.env.OPENAPE_TROOP_URL
+    expect(resolveTroopUrl()).toBe(DEFAULT_TROOP_URL)
   })
 
   it('honours the env var', () => {
-    process.env.OPENAPE_TRIBE_URL = 'https://staging.tribe.openape.ai'
-    expect(resolveTribeUrl()).toBe('https://staging.tribe.openape.ai')
+    process.env.OPENAPE_TROOP_URL = 'https://staging.troop.openape.ai'
+    expect(resolveTroopUrl()).toBe('https://staging.troop.openape.ai')
   })
 
   it('explicit override beats the env var', () => {
-    process.env.OPENAPE_TRIBE_URL = 'https://staging.tribe.openape.ai'
-    expect(resolveTribeUrl('http://localhost:3010')).toBe('http://localhost:3010')
+    process.env.OPENAPE_TROOP_URL = 'https://staging.troop.openape.ai'
+    expect(resolveTroopUrl('http://localhost:3010')).toBe('http://localhost:3010')
   })
 
   it('strips trailing slash', () => {
-    expect(resolveTribeUrl('http://localhost:3010/')).toBe('http://localhost:3010')
+    expect(resolveTroopUrl('http://localhost:3010/')).toBe('http://localhost:3010')
   })
 })
 
-describe('TribeClient', () => {
+describe('TroopClient', () => {
   let fetchMock: ReturnType<typeof vi.fn>
   beforeEach(() => {
     fetchMock = vi.fn()
@@ -37,7 +37,7 @@ describe('TribeClient', () => {
 
   it('attaches the agent JWT as a Bearer header', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
-    const client = new TribeClient('http://localhost:3010', 'test.jwt.value')
+    const client = new TroopClient('http://localhost:3010', 'test.jwt.value')
     await client.listTasks()
     const [, init] = fetchMock.mock.calls[0]!
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test.jwt.value')
@@ -45,13 +45,13 @@ describe('TribeClient', () => {
 
   it('throws with the response body on non-2xx', async () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
-    const client = new TribeClient('http://localhost:3010', 'jwt')
+    const client = new TroopClient('http://localhost:3010', 'jwt')
     await expect(client.listTasks()).rejects.toThrow(/500.*boom/)
   })
 
   it('returns undefined for 204 responses', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
-    const client = new TribeClient('http://localhost:3010', 'jwt')
+    const client = new TroopClient('http://localhost:3010', 'jwt')
     const out = await client.finaliseRun('id-1', { status: 'ok', final_message: 'done', step_count: 1 })
     expect(out).toBeUndefined()
   })
@@ -63,7 +63,7 @@ describe('TribeClient', () => {
       first_sync: true,
       last_seen_at: 0,
     }), { status: 200 }))
-    const client = new TribeClient('http://localhost:3010', 'jwt')
+    const client = new TroopClient('http://localhost:3010', 'jwt')
     await client.sync({
       hostname: 'mac.local',
       hostId: 'AAAA-BBBB',
@@ -86,7 +86,7 @@ describe('TribeClient', () => {
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'r-1', started_at: 1 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }))
-    const client = new TribeClient('http://localhost:3010', 'jwt')
+    const client = new TroopClient('http://localhost:3010', 'jwt')
     await client.startRun('mail-triage')
     await client.finaliseRun('r-1', { status: 'ok', final_message: null, step_count: 3, trace: { foo: 'bar' } })
 

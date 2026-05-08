@@ -7,8 +7,8 @@ import { CliError } from '../../errors'
 import { taskTools } from '../../lib/agent-tools'
 import { runLoop  } from '../../lib/agent-runtime'
 import type { RuntimeConfig } from '../../lib/agent-runtime'
-import { resolveTribeUrl, TribeClient  } from '../../lib/tribe-client'
-import type { TaskSpec } from '../../lib/tribe-client'
+import { resolveTroopUrl, TroopClient  } from '../../lib/troop-client'
+import type { TaskSpec } from '../../lib/troop-client'
 
 const AUTH_PATH = join(homedir(), '.config', 'apes', 'auth.json')
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
@@ -27,7 +27,7 @@ function readAuth(): AuthJson {
 function readTaskSpec(taskId: string): TaskSpec {
   const path = join(TASK_CACHE_DIR, `${taskId}.json`)
   if (!existsSync(path)) {
-    throw new CliError(`No cached task spec at ${path}. Run \`apes agents sync\` first to pull the task list from tribe.`)
+    throw new CliError(`No cached task spec at ${path}. Run \`apes agents sync\` first to pull the task list from troop.`)
   }
   return JSON.parse(readFileSync(path, 'utf8')) as TaskSpec
 }
@@ -59,7 +59,7 @@ function readLitellmConfig(model?: string): RuntimeConfig {
 export const runAgentCommand = defineCommand({
   meta: {
     name: 'run',
-    description: 'Execute one task (typically launchd-invoked). Reports the run record to tribe.',
+    description: 'Execute one task (typically launchd-invoked). Reports the run record to troop.',
   },
   args: {
     'task-id': {
@@ -67,9 +67,9 @@ export const runAgentCommand = defineCommand({
       description: 'Task ID (slug) to run. The cached spec at ~/.openape/agent/tasks/<id>.json is used.',
       required: true,
     },
-    'tribe-url': {
+    'troop-url': {
       type: 'string',
-      description: 'Override tribe SP base URL.',
+      description: 'Override troop SP base URL.',
     },
     'model': {
       type: 'string',
@@ -91,8 +91,8 @@ export const runAgentCommand = defineCommand({
       throw new CliError(`task ${taskId}: ${(err as Error).message}`)
     }
 
-    const tribe = new TribeClient(resolveTribeUrl(args['tribe-url'] as string | undefined), auth.access_token)
-    const { id: runId } = await tribe.startRun(taskId)
+    const troop = new TroopClient(resolveTroopUrl(args['troop-url'] as string | undefined), auth.access_token)
+    const { id: runId } = await troop.startRun(taskId)
     consola.info(`Run ${runId} started for task ${taskId}`)
 
     try {
@@ -107,7 +107,7 @@ export const runAgentCommand = defineCommand({
         maxSteps: spec.maxSteps,
       })
 
-      await tribe.finaliseRun(runId, {
+      await troop.finaliseRun(runId, {
         status: result.status,
         final_message: result.finalMessage,
         step_count: result.stepCount,
@@ -118,7 +118,7 @@ export const runAgentCommand = defineCommand({
     }
     catch (err) {
       const message = (err as Error)?.message ?? String(err)
-      await tribe.finaliseRun(runId, {
+      await troop.finaliseRun(runId, {
         status: 'error',
         final_message: message.slice(0, 4000),
         step_count: 0,

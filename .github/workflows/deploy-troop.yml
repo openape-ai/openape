@@ -1,7 +1,7 @@
-name: Deploy tribe.openape.ai
+name: Deploy troop.openape.ai
 
-# Auto-deploys apps/openape-tribe to the SSH host on main push.
-# Uses scripts/deploy-tribe.sh for build + rsync + restart + health check.
+# Auto-deploys apps/openape-troop to the SSH host on main push.
+# Uses scripts/deploy-troop.sh for build + rsync + restart + health check.
 # Independent of ci.yml — no test gate. Public HTTPS health check +
 # auto-rollback cover failing deploys.
 
@@ -9,17 +9,17 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/openape-tribe/**'
+      - 'apps/openape-troop/**'
       - 'modules/nuxt-auth-sp/**'
       - 'packages/auth/**'
       - 'packages/core/**'
-      - 'scripts/deploy-tribe.sh'
+      - 'scripts/deploy-troop.sh'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-tribe.yml'
+      - '.github/workflows/deploy-troop.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-tribe
+  group: deploy-troop
   cancel-in-progress: false
 
 jobs:
@@ -66,20 +66,20 @@ jobs:
       - name: Capture previous release (for rollback)
         id: prev
         run: |
-          PREV=$(ssh chatty "readlink /home/openape/projects/openape-tribe/current 2>/dev/null" || echo "")
+          PREV=$(ssh chatty "readlink /home/openape/projects/openape-troop/current 2>/dev/null" || echo "")
           echo "release=$PREV" >> "$GITHUB_OUTPUT"
           echo "Previous release: ${PREV:-<none>}"
 
       - name: Deploy
-        run: ./scripts/deploy-tribe.sh
+        run: ./scripts/deploy-troop.sh
 
       - name: Public HTTPS health check
         run: |
           set -euo pipefail
           for i in 1 2 3 4 5; do
-            STATUS=$(curl -fsS -o /dev/null -w '%{http_code}' https://tribe.openape.ai/ 2>/dev/null || echo 0)
+            STATUS=$(curl -fsS -o /dev/null -w '%{http_code}' https://troop.openape.ai/ 2>/dev/null || echo 0)
             if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
-              echo "✓ https://tribe.openape.ai responds (HTTP $STATUS)"
+              echo "✓ https://troop.openape.ai responds (HTTP $STATUS)"
               exit 0
             fi
             echo "attempt $i: got HTTP $STATUS, retrying..."
@@ -94,10 +94,10 @@ jobs:
           PREV_RELEASE: ${{ steps.prev.outputs.release }}
         run: |
           set -euo pipefail
-          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-tribe/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+          if [[ ! "$PREV_RELEASE" =~ ^/home/openape/projects/openape-troop/releases/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
             echo "refusing to roll back to unexpected path: $PREV_RELEASE"
             exit 1
           fi
           echo "↩ Rolling back to $PREV_RELEASE"
-          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-tribe/current && sudo systemctl restart openape-tribe.service"
+          ssh chatty "ln -sfn $PREV_RELEASE /home/openape/projects/openape-troop/current && sudo systemctl restart openape-troop.service"
           echo "✓ rollback complete"

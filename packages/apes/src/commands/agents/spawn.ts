@@ -15,7 +15,7 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { buildSyncPlist } from '../../lib/tribe-bootstrap'
+import { buildSyncPlist } from '../../lib/troop-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import {
   bridgePlistLabel,
@@ -175,15 +175,15 @@ export const spawnAgentCommand = defineCommand({
           })()
         : null
 
-      // Tribe sync launchd — installed for every agent (no opt-out
+      // Troop sync launchd — installed for every agent (no opt-out
       // for v1). The plist runs `apes agents sync` every 5min and
       // RunAtLoad fires it once eagerly so the agent registers at
-      // tribe.openape.ai within seconds of spawn finishing.
-      const tribePlistLabel = `openape.tribe.sync.${name}`
-      const tribePlistPath = `${homeDir}/Library/LaunchAgents/${tribePlistLabel}.plist`
-      const tribe = {
-        plistLabel: tribePlistLabel,
-        plistPath: tribePlistPath,
+      // troop.openape.ai within seconds of spawn finishing.
+      const troopPlistLabel = `openape.troop.sync.${name}`
+      const troopPlistPath = `${homeDir}/Library/LaunchAgents/${troopPlistLabel}.plist`
+      const troop = {
+        plistLabel: troopPlistLabel,
+        plistPath: troopPlistPath,
         plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir }),
       }
 
@@ -198,7 +198,7 @@ export const spawnAgentCommand = defineCommand({
         hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
         claudeOauthToken,
         bridge,
-        tribe,
+        troop,
       })
       writeFileSync(scriptPath, script, { mode: 0o700 })
 
@@ -212,7 +212,7 @@ export const spawnAgentCommand = defineCommand({
       execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
 
       consola.success(`Agent ${name} spawned.`)
-      consola.info(`🔗 Tribe: https://tribe.openape.ai/agents/${name}`)
+      consola.info(`🔗 Troop: https://troop.openape.ai/agents/${name}`)
 
       if (args.bridge) {
         consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
