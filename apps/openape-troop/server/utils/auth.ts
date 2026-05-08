@@ -75,9 +75,13 @@ export async function requireAgent(event: H3Event): Promise<string> {
     // because the agent JWT is a sealed token bound to the keypair
     // we registered at IdP-enroll, not a bearer trivially copyable
     // across SPs.
-    claims = await verifyJWT(token, getJwks(), {
-      issuer: idpUrl,
-    }) as DDISAClaims
+    //
+    // verifyJWT returns { payload, protectedHeader } — extract the
+    // payload before reading claims (treating the wrapper object as
+    // the claims silently produces `act: undefined` and rejects every
+    // valid agent token with a 403).
+    const result = await verifyJWT(token, getJwks(), { issuer: idpUrl })
+    claims = result.payload as DDISAClaims
   }
   catch {
     problem(401, 'Invalid or expired agent JWT')
