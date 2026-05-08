@@ -67,6 +67,10 @@ export const spawnAgentCommand = defineCommand({
       type: 'string',
       description: 'Override LITELLM_BASE_URL for the bridge (default: read from ~/litellm/.env or http://127.0.0.1:4000/v1).',
     },
+    'bridge-model': {
+      type: 'string',
+      description: 'Model the bridge sends in chat-completion requests (default: claude-haiku-4-5). Override when fronting a proxy that doesn\'t route the default — e.g. ChatGPT-only proxy needs `gpt-5.4`.',
+    },
   },
   async run({ args }) {
     const name = args.name as string
@@ -164,6 +168,7 @@ export const spawnAgentCommand = defineCommand({
             const cfg = resolveBridgeConfig({
               cliKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
               cliBaseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
+              cliModel: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
             })
             return {
               plistLabel: bridgePlistLabel(name),
