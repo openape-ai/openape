@@ -258,7 +258,7 @@ function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null): string {
   //
   // Then bootstrap the launchd job.
   return `
-echo "==> Installing bridge stack as $NAME via bun (one-time)…"
+echo "==> Installing bridge stack as \${NAME} via bun (one-time)…"
 su - "$NAME" -c '
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
@@ -306,7 +306,7 @@ function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null): string {
 # starts firing every 5 minutes. RunAtLoad in the plist also kicks
 # off an immediate first sync so the agent registers + appears in
 # the troop SP within seconds of spawn finishing.
-echo "==> Installing troop sync launchd as $NAME…"
+echo "==> Installing troop sync launchd as \${NAME}…"
 su - "$NAME" -c '
 set -euo pipefail
 NAME_UID="$(id -u)"
