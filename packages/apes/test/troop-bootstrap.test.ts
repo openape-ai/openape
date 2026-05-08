@@ -29,6 +29,11 @@ describe('troop-bootstrap', () => {
     // UserName makes launchd run the daemon as the agent uid.
     expect(body).toContain('<key>UserName</key>')
     expect(body).toContain('<string>alice</string>')
+    // PATH must include common node/bun locations so the apes binary's
+    // `#!/usr/bin/env node` shebang resolves.
+    expect(body).toContain('<key>PATH</key>')
+    expect(body).toContain('/Users/alice/.bun/bin')
+    expect(body).toContain('/opt/homebrew/bin')
   })
 
   it('passes through OPENAPE_TROOP_URL when supplied (staging)', () => {
