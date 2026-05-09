@@ -13,7 +13,7 @@ import type { TaskSpec } from '../../lib/troop-client'
 const AUTH_PATH = join(homedir(), '.config', 'apes', 'auth.json')
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
 
-interface AuthJson { access_token: string, email: string }
+interface AuthJson { access_token: string, email: string, owner_email?: string }
 
 function readAuth(): AuthJson {
   if (!existsSync(AUTH_PATH)) {
@@ -24,12 +24,78 @@ function readAuth(): AuthJson {
   return parsed
 }
 
+/**
+ * Post the run result as a chat DM from the agent to its owner. Best-
+ * effort: any failure (no room yet because owner hasn't accepted the
+ * contact request, chat down, network, …) just logs and returns. The
+ * run record on troop is still authoritative; the chat DM is the
+ * convenience surface so the owner sees the answer in the same
+ * conversation thread they'd expect to ask about it.
+ */
+async function postRunResultToChat(opts: {
+  authToken: string
+  ownerEmail: string
+  taskName: string
+  status: 'ok' | 'error'
+  stepCount: number
+  finalMessage: string | null
+  endpoint?: string
+}): Promise<void> {
+  const endpoint = (opts.endpoint ?? process.env.APE_CHAT_ENDPOINT ?? 'https://chat.openape.ai').replace(/\/$/, '')
+  try {
+    // Find the room with the owner. The bridge sets up the contact
+    // relationship on first boot — if the owner hasn't accepted yet,
+    // there's no room and we silently no-op.
+    const contactsRes = await fetch(`${endpoint}/api/contacts`, {
+      headers: { Authorization: `Bearer ${opts.authToken}` },
+    })
+    if (!contactsRes.ok) return
+    const contacts = await contactsRes.json() as Array<{ peerEmail: string, roomId: string | null, connected: boolean }>
+    const ownerLower = opts.ownerEmail.toLowerCase()
+    const ownerRow = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower && c.connected && c.roomId)
+    if (!ownerRow?.roomId) {
+      consola.info('chat DM skipped — no active room with owner (accept the contact request in chat to enable)')
+      return
+    }
+    const prefix = opts.status === 'ok' ? '✅' : '❌'
+    const msg = opts.finalMessage?.trim() || (opts.status === 'ok' ? '(no output)' : '(crashed)')
+    const body = `${prefix} *${opts.taskName}* (${opts.stepCount} steps)\n\n${msg}`.slice(0, 9000)
+    const postRes = await fetch(`${endpoint}/api/rooms/${encodeURIComponent(ownerRow.roomId)}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${opts.authToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    })
+    if (!postRes.ok) {
+      consola.warn(`chat DM post failed: ${postRes.status}`)
+    }
+  }
+  catch (err) {
+    consola.warn(`chat DM error: ${(err as Error).message}`)
+  }
+}
+
 function readTaskSpec(taskId: string): TaskSpec {
   const path = join(TASK_CACHE_DIR, `${taskId}.json`)
   if (!existsSync(path)) {
     throw new CliError(`No cached task spec at ${path}. Run \`apes agents sync\` first to pull the task list from troop.`)
   }
   return JSON.parse(readFileSync(path, 'utf8')) as TaskSpec
+}
+
+interface AgentJson { systemPrompt: string }
+const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+
+/**
+ * Read the cached agent-level config (systemPrompt). Falls back to an
+ * empty systemPrompt if the file is missing — older agents written
+ * before the system-prompt refactor (#346) won't have one yet, and the
+ * next sync will create it. Empty systemPrompt is fine: the runtime
+ * just sends the user message with no system message.
+ */
+function readAgentConfig(): AgentJson {
+  if (!existsSync(AGENT_CONFIG_PATH)) return { systemPrompt: '' }
+  try { return JSON.parse(readFileSync(AGENT_CONFIG_PATH, 'utf8')) as AgentJson }
+  catch { return { systemPrompt: '' } }
 }
 
 function readLitellmConfig(model?: string): RuntimeConfig {
@@ -80,6 +146,7 @@ export const runAgentCommand = defineCommand({
     const taskId = args['task-id'] as string
     const auth = readAuth()
     const spec = readTaskSpec(taskId)
+    const agentCfg = readAgentConfig()
     const config = readLitellmConfig(args.model as string | undefined)
 
     let tools: ReturnType<typeof taskTools>
@@ -98,11 +165,12 @@ export const runAgentCommand = defineCommand({
     try {
       const result = await runLoop({
         config,
-        systemPrompt: spec.systemPrompt,
-        // Cron tasks have no prior user message — the task fires by
-        // schedule. We use a synthetic kick-off message; tasks can
-        // ignore it via their system prompt.
-        userMessage: 'It is time to run this task. Use your tools as needed and report when done.',
+        // Agent persona/behaviour ("you are Igor, …") set at agent level;
+        // the task's userPrompt is the imperative job ("read my mail and
+        // summarise"). The cron firing is the trigger — the message body
+        // is the task itself.
+        systemPrompt: agentCfg.systemPrompt,
+        userMessage: spec.userPrompt,
         tools,
         maxSteps: spec.maxSteps,
       })
@@ -114,6 +182,16 @@ export const runAgentCommand = defineCommand({
         trace: result.trace,
       })
       consola.success(`Run ${runId} ${result.status} (${result.stepCount} steps)`)
+      if (auth.owner_email) {
+        await postRunResultToChat({
+          authToken: auth.access_token,
+          ownerEmail: auth.owner_email,
+          taskName: spec.name,
+          status: result.status,
+          stepCount: result.stepCount,
+          finalMessage: result.finalMessage,
+        })
+      }
       if (result.status === 'error') process.exit(1)
     }
     catch (err) {
@@ -124,6 +202,16 @@ export const runAgentCommand = defineCommand({
         step_count: 0,
         trace: [],
       }).catch(() => { /* best-effort */ })
+      if (auth.owner_email) {
+        await postRunResultToChat({
+          authToken: auth.access_token,
+          ownerEmail: auth.owner_email,
+          taskName: spec.name,
+          status: 'error',
+          stepCount: 0,
+          finalMessage: message,
+        })
+      }
       throw new CliError(`Run ${runId} crashed: ${message}`)
     }
   },

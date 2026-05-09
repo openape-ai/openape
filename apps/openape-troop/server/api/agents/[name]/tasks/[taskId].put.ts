@@ -8,7 +8,7 @@ import { validateCron, validateTools } from '../../../../utils/task-validation'
 const bodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   cron: z.string().min(1).max(50).optional(),
-  system_prompt: z.string().min(1).max(8000).optional(),
+  user_prompt: z.string().min(1).max(8000).optional(),
   tools: z.array(z.string()).optional(),
   max_steps: z.number().int().min(1).max(50).optional(),
   enabled: z.boolean().optional(),
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
   const updates: Record<string, unknown> = { updatedAt: Math.floor(Date.now() / 1000) }
   if (body.data.name !== undefined) updates.name = body.data.name
   if (body.data.cron !== undefined) updates.cron = body.data.cron
-  if (body.data.system_prompt !== undefined) updates.systemPrompt = body.data.system_prompt
+  if (body.data.user_prompt !== undefined) updates.userPrompt = body.data.user_prompt
   if (body.data.tools !== undefined) updates.tools = body.data.tools
   if (body.data.max_steps !== undefined) updates.maxSteps = body.data.max_steps
   if (body.data.enabled !== undefined) updates.enabled = body.data.enabled

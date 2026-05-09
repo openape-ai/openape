@@ -17,6 +17,7 @@ interface Agent {
   hostId: string | null
   hostname: string | null
   pubkeySsh: string | null
+  systemPrompt: string
   firstSeenAt: number | null
   lastSeenAt: number | null
   createdAt: number
@@ -26,7 +27,7 @@ interface Task {
   taskId: string
   name: string
   cron: string
-  systemPrompt: string
+  userPrompt: string
   tools: string[]
   maxSteps: number
   enabled: boolean
@@ -72,6 +73,40 @@ async function load() {
 watch(user, (u) => { if (u) load() }, { immediate: true })
 onMounted(() => { if (!user.value) navigateTo('/login') })
 
+// Agent-level system prompt editor — saved on blur via PATCH
+// /api/agents/[name]. The bridge daemon re-reads agent.json on every
+// inbound chat message, and `apes agents run` reads it at run start,
+// so edits propagate within one sync cycle (~5min) without restart.
+const systemPromptDraft = ref('')
+const systemPromptSaving = ref(false)
+const systemPromptError = ref('')
+const systemPromptDirty = computed(() =>
+  systemPromptDraft.value !== (detail.value?.agent.systemPrompt ?? ''),
+)
+
+watch(detail, (d) => {
+  if (d) systemPromptDraft.value = d.agent.systemPrompt ?? ''
+}, { immediate: true })
+
+async function saveSystemPrompt() {
+  if (!systemPromptDirty.value) return
+  systemPromptSaving.value = true
+  systemPromptError.value = ''
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}`, {
+      method: 'PATCH',
+      body: { system_prompt: systemPromptDraft.value },
+    })
+    if (detail.value) detail.value.agent.systemPrompt = systemPromptDraft.value
+  }
+  catch (err: any) {
+    systemPromptError.value = err?.data?.statusMessage || err?.message || 'save failed'
+  }
+  finally {
+    systemPromptSaving.value = false
+  }
+}
+
 // Task editor state
 const showEditor = ref(false)
 const editing = ref<{ taskId: string, isNew: boolean }>({ taskId: '', isNew: true })
@@ -79,7 +114,7 @@ const form = ref({
   task_id: '',
   name: '',
   cron: '*/5 * * * *',
-  system_prompt: '',
+  user_prompt: '',
   tools: [] as string[],
   max_steps: 10,
   enabled: true,
@@ -93,7 +128,7 @@ function openCreate() {
     task_id: '',
     name: '',
     cron: '*/5 * * * *',
-    system_prompt: '',
+    user_prompt: '',
     tools: [],
     max_steps: 10,
     enabled: true,
@@ -108,7 +143,7 @@ function openEdit(t: Task) {
     task_id: t.taskId,
     name: t.name,
     cron: t.cron,
-    system_prompt: t.systemPrompt,
+    user_prompt: t.userPrompt,
     tools: [...t.tools],
     max_steps: t.maxSteps,
     enabled: t.enabled,
@@ -133,7 +168,7 @@ async function save() {
         body: {
           name: form.value.name,
           cron: form.value.cron,
-          system_prompt: form.value.system_prompt,
+          user_prompt: form.value.user_prompt,
           tools: form.value.tools,
           max_steps: form.value.max_steps,
           enabled: form.value.enabled,
@@ -271,6 +306,47 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
           </details>
         </UCard>
 
+        <!-- Agent-level system prompt — applies to every chat message
+             AND every cron task run. Tasks supply the user-prompt
+             (what to do); chat supplies the user-message (the human's
+             question). Saved on blur. -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold">
+                System prompt
+              </h2>
+              <UBadge v-if="systemPromptDirty" color="warning" variant="subtle" size="xs">
+                unsaved
+              </UBadge>
+              <UBadge v-else-if="systemPromptDraft" color="success" variant="subtle" size="xs">
+                set
+              </UBadge>
+              <UBadge v-else color="neutral" variant="subtle" size="xs">
+                empty
+              </UBadge>
+            </div>
+          </template>
+          <UTextarea
+            v-model="systemPromptDraft"
+            :rows="5"
+            autoresize
+            size="lg"
+            class="w-full"
+            placeholder="Du bist Igor, ein loyaler kleiner Agent. Sprich kurz und auf Deutsch. Frag nach wenn etwas unklar ist."
+            @blur="saveSystemPrompt"
+          />
+          <p class="text-xs text-muted mt-2">
+            Persönlichkeit, Stil, Grundregeln — gilt für jede Nachricht im Chat und für jeden Task-Run. Wird via Sync (~5min) auf den Agent-Host übertragen.
+          </p>
+          <UAlert v-if="systemPromptError" color="error" :title="systemPromptError" class="mt-3" />
+          <div v-if="systemPromptDirty" class="flex justify-end mt-3">
+            <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
+              Save
+            </UButton>
+          </div>
+        </UCard>
+
         <!-- Tasks -->
         <UCard :ui="{ body: 'p-0' }">
           <template #header>
@@ -305,8 +381,8 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
                     <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
                     <code class="font-mono">{{ t.cron }}</code>
                   </div>
-                  <p v-if="t.systemPrompt" class="text-xs text-muted mt-1 line-clamp-2">
-                    {{ t.systemPrompt }}
+                  <p v-if="t.userPrompt" class="text-xs text-muted mt-1 line-clamp-2">
+                    {{ t.userPrompt }}
                   </p>
                   <div class="flex items-center gap-2 text-xs text-muted mt-1.5 flex-wrap">
                     <span v-if="t.tools.length > 0" class="flex items-center gap-1">
@@ -390,6 +466,11 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
               placeholder="daily-summary"
               size="lg"
               class="w-full font-mono"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              pattern="[a-z][a-z0-9-]*"
+              @input="form.task_id = String($event.target.value).toLowerCase().replace(/[^a-z0-9-]/g, '')"
             />
           </UFormField>
           <UFormField label="Display name" required>
@@ -398,14 +479,14 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
           <UFormField label="When to run" hint="Cron syntax — see preview below">
             <CronInput v-model="form.cron" />
           </UFormField>
-          <UFormField label="System prompt" hint="What should this agent do? Tell it like you'd tell a person.">
+          <UFormField label="What should run?" hint="The job for this run — agent's persona/style is set on the agent itself." required>
             <UTextarea
-              v-model="form.system_prompt"
+              v-model="form.user_prompt"
               :rows="8"
               autoresize
               size="lg"
               class="w-full"
-              placeholder="You are a helpful assistant. Every morning, summarise the latest emails and post the digest to my Slack."
+              placeholder="Lese mein Postfach durch und mach mir eine Zusammenfassung der wichtigsten neuen Mails."
             />
           </UFormField>
           <UFormField label="Tools available">
