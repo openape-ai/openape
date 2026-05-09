@@ -12,15 +12,24 @@
 // via the `session_id` field. Tools, system prompt, model, max_steps
 // are now per-message instead of per-process flags.
 //
+// System-prompt source: ~/.openape/agent/agent.json — populated by
+// `apes agents sync` from the troop SP. Re-read per inbound message
+// so owner-side edits via troop UI propagate within one sync cycle
+// (~5min) without restarting the daemon. Env var below is the
+// boot-time fallback when the file isn't there yet.
+//
 // Env knobs (all optional):
 //   APE_CHAT_ENDPOINT             override https://chat.openape.ai
 //   APE_CHAT_BRIDGE_APES_BIN      apes binary path (default: 'apes' on PATH)
 //   APE_CHAT_BRIDGE_MODEL         per-message model (default: 'claude-haiku-4-5')
 //   APE_CHAT_BRIDGE_TOOLS         comma-separated tool names (default: '' — no tools)
 //   APE_CHAT_BRIDGE_MAX_STEPS     max tool-call rounds per turn (default: 10)
-//   APE_CHAT_BRIDGE_SYSTEM_PROMPT system prompt (default: friendly assistant)
+//   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
 //   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import { decodeJwt } from 'jose'
@@ -29,6 +38,24 @@ import { ApesRpcSession } from './apes-rpc'
 import { ChatApi } from './chat-api'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { ThreadSession } from './thread-session'
+
+const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+
+/**
+ * Resolve the agent's system prompt at the moment we're about to send a
+ * message. Reads `~/.openape/agent/agent.json` (written by `apes agents
+ * sync`); falls back to env-default when the file is missing or
+ * unreadable. Empty string in the file is respected — owner can clear
+ * the prompt deliberately.
+ */
+function resolveSystemPrompt(envFallback: string): string {
+  if (!existsSync(AGENT_CONFIG_PATH)) return envFallback
+  try {
+    const parsed = JSON.parse(readFileSync(AGENT_CONFIG_PATH, 'utf8')) as { systemPrompt?: string }
+    return typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : envFallback
+  }
+  catch { return envFallback }
+}
 
 const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
 const DEFAULT_APES_BIN = 'apes'
@@ -218,7 +245,7 @@ class Bridge {
       chat: this.chat,
       rpc: this.getRpc(),
       sessionId: key,
-      systemPrompt: this.cfg.systemPrompt,
+      systemPrompt: resolveSystemPrompt(this.cfg.systemPrompt),
       tools: this.cfg.tools,
       maxSteps: this.cfg.maxSteps,
       model: this.cfg.model,

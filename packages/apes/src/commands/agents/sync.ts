@@ -111,12 +111,21 @@ export const syncAgentCommand = defineCommand({
     })
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
 
-    const tasks = await client.listTasks()
+    const { system_prompt: systemPrompt, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
 
-    // Cache full task specs locally so `apes agents run <task_id>`
-    // can execute without going to network. Cache layout:
+    // Cache full task specs + agent-level config locally so the bridge
+    // daemon and `apes agents run <task_id>` can execute without going
+    // to network. Cache layout:
+    //   ~/.openape/agent/agent.json        — { systemPrompt }
     //   ~/.openape/agent/tasks/<task_id>.json
+    const agentDir = join(homedir(), '.openape', 'agent')
+    mkdirSync(agentDir, { recursive: true })
+    writeFileSync(
+      join(agentDir, 'agent.json'),
+      `${JSON.stringify({ systemPrompt }, null, 2)}\n`,
+      { mode: 0o600 },
+    )
     mkdirSync(TASK_CACHE_DIR, { recursive: true })
     for (const task of tasks) {
       const path = join(TASK_CACHE_DIR, `${task.taskId}.json`)

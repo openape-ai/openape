@@ -18,6 +18,12 @@ export const agents = sqliteTable('agents', {
   hostId: text('host_id'),
   hostname: text('hostname'),
   pubkeySsh: text('pubkey_ssh'),
+  // Persona / behaviour rules that apply to every interaction with this
+  // agent — both cron-driven task runs and live chat-bridge messages
+  // inherit it as the LLM `system` message. Per-task `userPrompt` is
+  // the imperative job description; per-chat user-input is the human's
+  // current message.
+  systemPrompt: text('system_prompt').notNull().default(''),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
@@ -30,12 +36,18 @@ export const agents = sqliteTable('agents', {
 // `cron` accepts a small subset of standard cron syntax (see M4 docs);
 // invalid lines are rejected at API-create time. `tools` is a JSON array
 // of string names that must be in the catalog the apes-runtime ships.
+//
+// `userPrompt` is the imperative job description ("read my mail and
+// summarise"). It's combined with the agent-level `systemPrompt` at run
+// time: system = agent.systemPrompt, user = task.userPrompt. Pre-refactor
+// schema had a per-task `system_prompt` instead; the migration in
+// `02.database.ts` renames it to keep existing data.
 export const tasks = sqliteTable('tasks', {
   agentEmail: text('agent_email').notNull(),
   taskId: text('task_id').notNull(),
   name: text('name').notNull(),
   cron: text('cron').notNull(),
-  systemPrompt: text('system_prompt').notNull(),
+  userPrompt: text('user_prompt').notNull(),
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>(),
   maxSteps: integer('max_steps').notNull().default(10),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),

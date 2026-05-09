@@ -19,6 +19,7 @@ export default defineNitroPlugin(async () => {
       host_id TEXT,
       hostname TEXT,
       pubkey_ssh TEXT,
+      system_prompt TEXT NOT NULL DEFAULT '',
       first_seen_at INTEGER,
       last_seen_at INTEGER,
       created_at INTEGER NOT NULL
@@ -31,7 +32,7 @@ export default defineNitroPlugin(async () => {
       task_id TEXT NOT NULL,
       name TEXT NOT NULL,
       cron TEXT NOT NULL,
-      system_prompt TEXT NOT NULL,
+      user_prompt TEXT NOT NULL DEFAULT '',
       tools TEXT NOT NULL,
       max_steps INTEGER NOT NULL DEFAULT 10,
       enabled INTEGER NOT NULL DEFAULT 1,
@@ -39,6 +40,24 @@ export default defineNitroPlugin(async () => {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (agent_email, task_id)
     )`)
+
+    // Idempotent migration block — runs every boot but each ALTER is
+    // wrapped in try/catch since SQLite has no IF NOT EXISTS for column
+    // ops. The point: agents created before the system-prompt refactor
+    // (#346) stay readable, and existing pre-refactor task rows keep
+    // their content (the per-task system_prompt becomes user_prompt).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''`)
+    }
+    catch { /* column exists */ }
+    try {
+      await db.run(sql`ALTER TABLE tasks RENAME COLUMN system_prompt TO user_prompt`)
+    }
+    catch { /* already renamed, or table created fresh with user_prompt */ }
+    try {
+      await db.run(sql`ALTER TABLE tasks ADD COLUMN user_prompt TEXT NOT NULL DEFAULT ''`)
+    }
+    catch { /* column exists (either via fresh create or from rename above) */ }
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS runs (
       id TEXT PRIMARY KEY,
