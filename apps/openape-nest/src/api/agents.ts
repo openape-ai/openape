@@ -44,10 +44,13 @@ export async function handleAgentSpawn(ctx: RouteCtx): Promise<{ name: string, e
   }
 
   // Delegate privileged setup to the existing apes spawn flow. The nest
-  // daemon runs as the human user and has the always-grant cached, so
-  // this `apes run --as root -- apes agents spawn <name>` reuses the
-  // grant silently — no human prompt.
-  const args = ['run', '--as', 'root', '--', 'apes', 'agents', 'spawn', name]
+  // daemon runs with HOME=~/.openape/nest so apes-cli reads the nest's
+  // own auth.json — YOLO-policy on the nest-identity auto-approves the
+  // outer grant + the inner setup.sh-grant. `--wait` blocks until the
+  // grant is approved AND the command finishes (without it, apes run
+  // returns exit 75 EX_TEMPFAIL the moment the grant is created, even
+  // when YOLO auto-approves milliseconds later).
+  const args = ['run', '--as', 'root', '--wait', '--', 'apes', 'agents', 'spawn', name]
   const includeBridge = body?.bridge === true
   if (includeBridge) {
     args.push('--bridge')
