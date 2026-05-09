@@ -1,5 +1,13 @@
 # @openape/chat-bridge
 
+## 1.1.0
+
+### Minor Changes
+
+- [#348](https://github.com/openape-ai/openape/pull/348) [`8fa08c4`](https://github.com/openape-ai/openape/commit/8fa08c4c9a76b328efd66325e43b5da5b99dd22a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Cron tasks now run **inside the chat-bridge daemon** instead of via per-task launchd plists. One process, one LiteLLM config (the bridge's), one WebSocket to chat.openape.ai. The bridge's existing `ApesRpcSession` is reused for task fires — fixed `session_id = task:<taskId>` so the runtime carries memory across runs (within its evict TTL), fixed chat thread per task (persisted to `~/.openape/agent/task-threads.json`) so all runs of one task land in the same chat thread instead of fanning out into N independent DMs.
+
+  `apes agents sync` no longer reconciles per-task launchd plists. The chat-bridge's `CronRunner` ticks every 60s, reads `~/.openape/agent/tasks/*.json`, fires anything whose cron matches the current minute. `apes agents run` is now optional (kept for ad-hoc invocation but no longer scheduled by the bridge stack).
+
 ## 1.0.0
 
 ### Major Changes
