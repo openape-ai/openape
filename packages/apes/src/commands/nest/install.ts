@@ -16,9 +16,10 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import { APES_AGENTS_ADAPTER_TOML } from './apes-agents-adapter'
 
 const PLIST_LABEL = 'ai.openape.nest'
 
@@ -73,6 +74,25 @@ function buildPlist(args: PlistArgs): string {
 `
 }
 
+/**
+ * Bundled `apes-agents` shapes adapter — written into
+ * `~/.openape/shapes/adapters/` so a capability-grant with selector
+ * `name=*` can cover any agent name (selectorValueMatches glob).
+ * Without this adapter, every spawn/destroy hits exact-arg matching
+ * and the always-grant doesn't reuse.
+ */
+function installAdapter(): boolean {
+  const target = join(homedir(), '.openape', 'shapes', 'adapters', 'apes-agents.toml')
+  mkdirSync(dirname(target), { recursive: true })
+  let existing = ''
+  try { existing = readFileSync(target, 'utf8') }
+  catch { /* not yet */ }
+  if (existing === APES_AGENTS_ADAPTER_TOML) return false
+  writeFileSync(target, APES_AGENTS_ADAPTER_TOML, { mode: 0o644 })
+  consola.success(`Wrote shapes adapter ${target}`)
+  return true
+}
+
 function findBinary(name: string): string {
   for (const dir of [
     join(homedir(), '.bun', 'bin'),
@@ -111,6 +131,9 @@ export const installNestCommand = defineCommand({
     consola.info(`  apes binary: ${apesBin}`)
     consola.info(`  HTTP port:   ${port}`)
 
+    // Adapter first — capability-grants need it.
+    installAdapter()
+
     mkdirSync(join(homeDir, 'Library', 'LaunchAgents'), { recursive: true })
 
     const desired = buildPlist({ nestBin, apesBin, homeDir, port })
@@ -138,13 +161,11 @@ export const installNestCommand = defineCommand({
     consola.success(`Nest daemon bootstrapped — http://127.0.0.1:${port}`)
 
     consola.info('')
-    consola.info('Next: approve the always-grant for nest-managed spawn/destroy.')
-    consola.info('Run this once and choose "Always" when the IdP UI prompts:')
+    consola.info('Next: request the capability-grant that lets the nest spawn/destroy any agent without per-call approval:')
     consola.info('')
-    consola.info('  apes run --as root --approval=always --reason "nest-managed agent spawn" \\')
-    consola.info('    -- apes agents spawn _grant_pattern_seed_')
+    consola.info('  apes nest authorize')
     consola.info('')
-    consola.info('(The seed-spawn will fail because "_grant_pattern_seed_" is not a valid')
-    consola.info('agent name — that\'s expected. The grant just needs to be approved-as-always.)')
+    consola.info('That requests an `apes-agents` capability-grant covering all agent names (selector glob `name=*`)')
+    consola.info('from your DDISA inbox; approve it once as `always` and the nest API runs silently from then on.')
   },
 })
