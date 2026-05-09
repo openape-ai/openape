@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { APES_AGENTS_ADAPTER_TOML } from './apes-agents-adapter'
+import { NEST_DATA_DIR } from './enroll'
 
 const PLIST_LABEL = 'ai.openape.nest'
 
@@ -34,12 +35,19 @@ function escape(s: string): string {
 interface PlistArgs {
   nestBin: string
   apesBin: string
-  homeDir: string
+  /** macOS user home — used for log file path + PATH (where bun lives). */
+  userHome: string
+  /**
+   * Nest data dir — `HOME` for the daemon process so apes-cli reads
+   * the nest's own auth.json (not the human's) when invoking
+   * subprocesses like `apes run --as root -- apes agents spawn`.
+   */
+  nestHome: string
   port: number
 }
 
 function buildPlist(args: PlistArgs): string {
-  const logsDir = join(args.homeDir, 'Library', 'Logs')
+  const logsDir = join(args.userHome, 'Library', 'Logs')
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -51,7 +59,7 @@ function buildPlist(args: PlistArgs): string {
     <string>${escape(args.nestBin)}</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${escape(args.homeDir)}</string>
+  <string>${escape(args.nestHome)}</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -60,8 +68,8 @@ function buildPlist(args: PlistArgs): string {
   <integer>10</integer>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HOME</key><string>${escape(args.homeDir)}</string>
-    <key>PATH</key><string>${escape(args.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>${escape(args.nestHome)}</string>
+    <key>PATH</key><string>${escape(args.userHome)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>OPENAPE_NEST_PORT</key><string>${args.port}</string>
     <key>OPENAPE_APES_BIN</key><string>${escape(args.apesBin)}</string>
   </dict>
@@ -136,7 +144,12 @@ export const installNestCommand = defineCommand({
 
     mkdirSync(join(homeDir, 'Library', 'LaunchAgents'), { recursive: true })
 
-    const desired = buildPlist({ nestBin, apesBin, homeDir, port })
+    // nest-data-dir is HOME for the daemon — apes-cli subprocesses
+    // it spawns (apes run --as root --) read auth.json from the nest's
+    // own enrolled identity, not the human's, so YOLO-policy on the
+    // nest-agent gates them.
+    mkdirSync(NEST_DATA_DIR, { recursive: true })
+    const desired = buildPlist({ nestBin, apesBin, userHome: homeDir, nestHome: NEST_DATA_DIR, port })
     let existing = ''
     try { existing = readFileSync(plistPath(), 'utf8') }
     catch { /* not yet installed */ }
@@ -161,11 +174,11 @@ export const installNestCommand = defineCommand({
     consola.success(`Nest daemon bootstrapped — http://127.0.0.1:${port}`)
 
     consola.info('')
-    consola.info('Next: request the capability-grant that lets the nest spawn/destroy any agent without per-call approval:')
+    consola.info('Next steps for zero-prompt spawn — both one-time:')
     consola.info('')
-    consola.info('  apes nest authorize')
+    consola.info('  1. apes nest enroll       # register nest as DDISA agent (creates own auth.json)')
+    consola.info('  2. apes nest authorize    # set YOLO-policy on the nest agent')
     consola.info('')
-    consola.info('That requests an `apes-agents` capability-grant covering all agent names (selector glob `name=*`)')
-    consola.info('from your DDISA inbox; approve it once as `always` and the nest API runs silently from then on.')
+    consola.info('After that, every `POST http://127.0.0.1:9091/agents` runs without DDISA prompts.')
   },
 })
