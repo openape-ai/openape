@@ -32,10 +32,12 @@ const DEFAULT_ALLOW_PATTERNS = [
   // — `bash *` would be unsafe.
   'bash *apes-spawn-*setup.sh',
   // Bridge invocation the supervisor uses to keep agent processes
-  // running. Pattern is intentionally precise — not a generic
-  // `apes run --as *` wildcard — so a compromised nest can't pivot
-  // to running arbitrary commands as arbitrary users.
-  'apes run --as * -- openape-chat-bridge',
+  // running. The grant request escapes-helper sends to the IdP
+  // contains the *inner* command only — `apes run --as <agent> --`
+  // is the wrapper that gets unwrapped before grant creation. So
+  // the YOLO target string is just `openape-chat-bridge`, not the
+  // full wrapped invocation.
+  'openape-chat-bridge',
 ]
 
 export const authorizeNestCommand = defineCommand({

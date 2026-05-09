@@ -39,7 +39,13 @@ interface RegistryFile {
   agents: AgentEntry[]
 }
 
-const REGISTRY_DIR = join(homedir(), '.openape', 'nest')
+// The nest daemon's launchd plist sets HOME=~/.openape/nest, so
+// homedir() already points at the nest's data dir. Joining
+// `.openape/nest/agents.json` on top of that produces a doubly-nested
+// path (`~/.openape/nest/.openape/nest/agents.json`) that the YOLO
+// log search and humans never find. Keep the registry directly under
+// the data dir.
+const REGISTRY_DIR = homedir()
 const REGISTRY_PATH = join(REGISTRY_DIR, 'agents.json')
 
 function emptyRegistry(): RegistryFile {
