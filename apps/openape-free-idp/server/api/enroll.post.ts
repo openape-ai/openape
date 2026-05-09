@@ -66,12 +66,25 @@ export default defineEventHandler(async (event) => {
 
   const { userStore, sshKeyStore } = useIdpStores()
 
-  // Transitive ownership: when the caller is itself an agent (e.g. a
-  // Nest enrolling a child agent on behalf of its human owner),
-  // attribute the new agent to the human at the top of the chain. Else
-  // the new agent's email gets the caller's full sub-addressed email
-  // recursively encoded into the local-part, exploding the format and
-  // breaking parseAgentEmail / troop-side ownerDomain validation.
+  // Owner attribution priority (high → low):
+  //
+  //   1. Delegated access token: the bearer JWT's `sub` is already
+  //      the human owner (the IdP's /api/oauth/token-exchange minted
+  //      it that way). `requireAuth` returns that `sub`. The agent's
+  //      identity is in the `act.sub` claim of the token, captured
+  //      separately for audit. No further lookup needed — `email`
+  //      from requireAuth IS the right owner.
+  //
+  //   2. Direct agent token (legacy / no delegation yet): the bearer
+  //      sub IS the agent's email. We fall back to the user-store
+  //      lookup that finds the agent's owner. Soft-deprecated by
+  //      path 1 — once every Nest/agent setup has a delegation
+  //      grant from its owner, this fallback can be removed (#stage-3
+  //      tracks the cleanup). Until then, removing it would break
+  //      every Nest that hasn't migrated.
+  //
+  //   3. Direct human token: sub IS the owner. Same as path 1 from
+  //      the perspective of this code.
   let effectiveOwner = email
   const callerRecord = await userStore.findByEmail(email)
   if (callerRecord?.type === 'agent' && callerRecord.owner) {
