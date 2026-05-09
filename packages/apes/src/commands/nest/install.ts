@@ -101,6 +101,34 @@ function installAdapter(): boolean {
   return true
 }
 
+/**
+ * Write `APE_CHAT_BRIDGE_MODEL=<value>` to `~/litellm/.env`. The same
+ * file resolveBridgeConfig (in lib/llm-bridge.ts) reads at
+ * `apes [nest|agents] spawn --bridge` time. Idempotent: replaces the
+ * line in place if it already exists, appends otherwise. Creates the
+ * file (and ~/litellm/) on first call.
+ *
+ * Why ~/litellm/.env and not the central /etc/openape/litellm.env:
+ * fresh installs (no privilege-isolation migration yet) only have the
+ * user-home file. The central file is the optional post-migration
+ * upgrade — see migrate-to-service-user.sh which symlinks both
+ * locations to /etc/openape/litellm.env so writing to ~/litellm/.env
+ * keeps working for both layouts.
+ */
+function writeBridgeModelDefault(model: string): void {
+  const envDir = join(homedir(), 'litellm')
+  const envFile = join(envDir, '.env')
+  mkdirSync(envDir, { recursive: true })
+  let lines: string[] = []
+  if (existsSync(envFile)) {
+    lines = readFileSync(envFile, 'utf8').split('\n').filter(l => !l.startsWith('APE_CHAT_BRIDGE_MODEL='))
+  }
+  lines.push(`APE_CHAT_BRIDGE_MODEL=${model}`)
+  // Trim trailing blanks then ensure file ends with one newline
+  while (lines.length > 0 && lines.at(-1)!.trim() === '') lines.pop()
+  writeFileSync(envFile, `${lines.join('\n')}\n`, { mode: 0o600 })
+}
+
 function findBinary(name: string): string {
   for (const dir of [
     join(homedir(), '.bun', 'bin'),
@@ -124,6 +152,10 @@ export const installNestCommand = defineCommand({
       type: 'string',
       description: 'Port for the nest HTTP API (default: 9091)',
     },
+    'bridge-model': {
+      type: 'string',
+      description: 'Default model for chat-bridge spawns. Persisted as APE_CHAT_BRIDGE_MODEL in ~/litellm/.env so every `apes [nest|agents] spawn --bridge` picks it up automatically. Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only). Re-run install with a new value to overwrite.',
+    },
   },
   async run({ args }) {
     const homeDir = homedir()
@@ -138,6 +170,11 @@ export const installNestCommand = defineCommand({
     consola.info(`  nest binary: ${nestBin}`)
     consola.info(`  apes binary: ${apesBin}`)
     consola.info(`  HTTP port:   ${port}`)
+
+    if (typeof args['bridge-model'] === 'string' && args['bridge-model']) {
+      writeBridgeModelDefault(args['bridge-model'])
+      consola.success(`Default bridge model set to ${args['bridge-model']} (in ~/litellm/.env)`)
+    }
 
     // Adapter first — capability-grants need it.
     installAdapter()

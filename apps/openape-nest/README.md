@@ -18,6 +18,18 @@ apes nest authorize    # set the YOLO policy — covers the inner
                        # `apes agents spawn` calls the daemon makes
 ```
 
+Set the bridge default model at install time so every spawn uses the
+same one without `--bridge-model` repetition:
+
+```bash
+apes nest install --bridge-model gpt-5.4    # ChatGPT-only LiteLLM proxy
+apes nest install --bridge-model claude-haiku-4-5  # Anthropic
+```
+
+This writes `APE_CHAT_BRIDGE_MODEL=<value>` to `~/litellm/.env`,
+which `resolveBridgeConfig()` reads at every `apes [nest|agents] spawn
+--bridge`. Re-run with a different value to overwrite.
+
 ### Optional: privilege isolation with a dedicated service user
 
 By default, `apes nest install` configures the daemon as a user-domain
