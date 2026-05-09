@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.6.1
+
+### Patch Changes
+
+- [#358](https://github.com/openape-ai/openape/pull/358) [`f56ea4b`](https://github.com/openape-ai/openape/commit/f56ea4b9dfb3f9aa3085d9b8afee6c1240506da5) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes nest authorize` default allow_patterns now also covers the inner setup.sh-grant that `apes agents spawn` shells out to (`bash *apes-spawn-*setup.sh`). Without it, the outer spawn auto-approves but the inner privileged setup blocks on a fresh DDISA prompt.
+
 ## 1.6.0
 
 ### Minor Changes
