@@ -1,4 +1,4 @@
-import { asOpenAiTools  } from './agent-tools'
+import { asOpenAiTools, localToolName, wireToolName } from './agent-tools'
 import type { ToolDefinition } from './agent-tools'
 
 // Shared agent loop: send messages + tools to LiteLLM (OpenAI-
@@ -138,18 +138,23 @@ export async function runLoop(opts: RunOptions): Promise<RunResult> {
     }
 
     // Execute each tool call; the model sees the result on the next turn.
+    // Wire-format names (`time_now`) get decoded to local catalog names
+    // (`time.now`) for lookup + handler events; we send back the same
+    // wire name in the tool message so the next request validates.
     for (const call of assistant.tool_calls) {
-      const tool = opts.tools.find(t => t.name === call.function.name)
+      const wireName = call.function.name
+      const localName = localToolName(wireName)
+      const tool = opts.tools.find(t => t.name === localName)
       let parsedArgs: unknown
       try { parsedArgs = JSON.parse(call.function.arguments) }
       catch { parsedArgs = {} }
-      opts.handlers?.onToolCall?.({ name: call.function.name, args: parsedArgs })
-      trace.push({ step, type: 'tool_call', tool: call.function.name, preview: previewJson(parsedArgs) })
+      opts.handlers?.onToolCall?.({ name: localName, args: parsedArgs })
+      trace.push({ step, type: 'tool_call', tool: localName, preview: previewJson(parsedArgs) })
 
       let result: unknown
       let isError = false
       if (!tool) {
-        result = `unknown tool: ${call.function.name}`
+        result = `unknown tool: ${localName}`
         isError = true
       }
       else {
@@ -163,18 +168,18 @@ export async function runLoop(opts: RunOptions): Promise<RunResult> {
       }
 
       if (isError) {
-        opts.handlers?.onToolError?.({ name: call.function.name, error: String(result) })
-        trace.push({ step, type: 'tool_error', tool: call.function.name, preview: previewJson(result) })
+        opts.handlers?.onToolError?.({ name: localName, error: String(result) })
+        trace.push({ step, type: 'tool_error', tool: localName, preview: previewJson(result) })
       }
       else {
-        opts.handlers?.onToolResult?.({ name: call.function.name, result })
-        trace.push({ step, type: 'tool_result', tool: call.function.name, preview: previewJson(result) })
+        opts.handlers?.onToolResult?.({ name: localName, result })
+        trace.push({ step, type: 'tool_result', tool: localName, preview: previewJson(result) })
       }
 
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
-        name: call.function.name,
+        name: wireToolName(localName),
         content: typeof result === 'string' ? result : JSON.stringify(result),
       })
     }

@@ -61,10 +61,35 @@ export function taskTools(names: string[]): ToolDefinition[] {
 /**
  * Format the registry slice as the OpenAI `tools` param. Strips the
  * `execute` function — only the spec part goes to the LLM.
+ *
+ * Tool names get sent through `wireToolName()` because some upstreams
+ * — notably ChatGPT's Responses API behind LiteLLM — enforce
+ * `^[a-zA-Z0-9_-]+$` and reject our dotted catalog names like
+ * `time.now`. Use `localToolName()` to map back when the model emits
+ * a tool_call.
  */
 export function asOpenAiTools(tools: ToolDefinition[]): { type: 'function', function: Omit<ToolDefinition, 'execute'> }[] {
   return tools.map(t => ({
     type: 'function' as const,
-    function: { name: t.name, description: t.description, parameters: t.parameters },
+    function: { name: wireToolName(t.name), description: t.description, parameters: t.parameters },
   }))
+}
+
+/** Encode a local tool name (e.g. `time.now`) for the wire format. */
+export function wireToolName(local: string): string {
+  return local.replace(/\./g, '_')
+}
+
+/**
+ * Decode a tool name from the wire format back to its local form. The
+ * encoding is `.` → `_`; we recover the original by looking for an
+ * exact match in the catalog and only fall back to passing the name
+ * through if no match is found (so unknown tool names still surface
+ * as the obvious "unknown tool" error rather than silent rewrites).
+ */
+export function localToolName(wire: string): string {
+  for (const t of Object.values(TOOLS)) {
+    if (wireToolName(t.name) === wire) return t.name
+  }
+  return wire
 }
