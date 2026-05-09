@@ -1,5 +1,12 @@
 # @openape/ape-chat
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`8ca96f1`](https://github.com/openape-ai/openape/commit/8ca96f10f7a0a9c8adc5afa5c8fd863f62342f6c)]:
+  - @openape/cli-auth@0.4.0
+
 ## 0.4.0
 
 ### Minor Changes
