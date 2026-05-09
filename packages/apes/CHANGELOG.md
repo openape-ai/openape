@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.7.1
+
+### Patch Changes
+
+- [`e8f66cf`](https://github.com/openape-ai/openape/commit/e8f66cf3ab2c756337ff70b85fe7fede29c7ea1d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes agents spawn`'s setup.sh now exports a wide PATH at the top — escapes-spawned scripts inherit a minimal PATH that excludes `/usr/sbin` (where chown / dscl / pwpolicy live), so privileged setup hit `chown: command not found` at line 131. Now resolves without forcing absolute paths.
+
 ## 1.7.0
 
 ### Minor Changes
