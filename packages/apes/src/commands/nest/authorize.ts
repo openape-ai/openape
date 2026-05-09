@@ -20,7 +20,16 @@ interface NestAuth {
 }
 
 const DEFAULT_ALLOW_PATTERNS = [
-  // Outer spawn-grant — what the nest's HTTP handler invokes.
+  // Caller → Nest API gates. The new-style flow: `apes nest <op>`
+  // requests a grant with audience='nest' and command=['nest','<op>',
+  // ...]. Patrick's YOLO auto-approves these so the local Nest API
+  // is gated cryptographically without a per-call human prompt.
+  'nest status',
+  'nest list',
+  'nest spawn *',
+  'nest destroy *',
+  // Inner spawn/destroy grants the nest itself triggers via
+  // `apes run --as root --wait -- apes agents spawn|destroy`.
   'apes agents spawn *',
   'apes agents destroy *',
   'apes agents sync',
@@ -31,12 +40,11 @@ const DEFAULT_ALLOW_PATTERNS = [
   // glob below limits the auto-approval to that exact lifecycle path
   // — `bash *` would be unsafe.
   'bash *apes-spawn-*setup.sh',
-  // Bridge invocation the supervisor uses to keep agent processes
-  // running. The grant request escapes-helper sends to the IdP
-  // contains the *inner* command only — `apes run --as <agent> --`
-  // is the wrapper that gets unwrapped before grant creation. So
-  // the YOLO target string is just `openape-chat-bridge`, not the
-  // full wrapped invocation.
+  // Bridge invocation. The grant request escapes-helper sends to the
+  // IdP contains the *inner* command only — `apes run --as <agent> --`
+  // is the wrapper that gets unwrapped before grant creation. So the
+  // YOLO target string is just `openape-chat-bridge`, not the full
+  // wrapped invocation.
   'openape-chat-bridge',
 ]
 

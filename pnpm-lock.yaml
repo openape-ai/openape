@@ -430,6 +430,9 @@ importers:
       '@openape/cli-auth':
         specifier: workspace:*
         version: link:../../packages/cli-auth
+      '@openape/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       ofetch:
         specifier: ^1.4.1
         version: 1.5.1
