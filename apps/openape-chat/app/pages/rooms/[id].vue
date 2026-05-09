@@ -94,6 +94,14 @@ async function loadThreads(): Promise<void> {
   // so the result is guaranteed non-empty for any room the caller is in.
   const rows = await $fetch<Thread[]>(`/api/rooms/${roomId.value}/threads`)
   threads.value = rows
+  // Deep-link via `?thread=<id>` (set by the SW notificationclick when
+  // a push lands and the user taps it). If the requested thread doesn't
+  // exist (or was archived), fall through to the first-open default.
+  const queryThread = typeof route.query.thread === 'string' ? route.query.thread : null
+  if (queryThread && rows.some(t => t.id === queryThread)) {
+    activeThreadId.value = queryThread
+    return
+  }
   if (!activeThreadId.value || !rows.some(t => t.id === activeThreadId.value)) {
     const firstOpen = rows.find(t => !t.archivedAt) ?? rows[0]
     activeThreadId.value = firstOpen?.id ?? null
