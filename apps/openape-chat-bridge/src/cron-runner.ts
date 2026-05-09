@@ -271,16 +271,25 @@ export class CronRunner {
     const prefix = turn.status === 'error' ? '❌' : '✅'
     const text = turn.accumulated.trim() || (turn.status === 'error' ? '(crashed)' : '(no output)')
     const body = `${prefix} *${turn.taskName}*\n\n${text}`.slice(0, 9000)
-    const threadId = this.taskThreads.get(turn.taskId)
+    let threadId = this.taskThreads.get(turn.taskId)
+    // First run of this task — explicitly create a new chat thread
+    // named after the task so the chat sidebar gets a dedicated entry
+    // (otherwise messages without thread_id land in the room's main
+    // thread, fanning out everything into one stream).
+    if (!threadId) {
+      try {
+        const created = await this.deps.chat.createThread(turn.roomId, turn.taskName || turn.taskId)
+        threadId = created.id
+        this.taskThreads.set(turn.taskId, threadId)
+        this.persistTaskThreads()
+        this.deps.log(`task ${turn.taskId} thread created: ${threadId}`)
+      }
+      catch (err) {
+        this.deps.log(`createThread failed for ${turn.taskId}, falling back to main thread: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
     try {
       const posted = await this.deps.chat.postMessage(turn.roomId, body, threadId ? { threadId } : {})
-      // First run of this task — server allocated a fresh thread when
-      // we posted without threadId. Cache + persist it so every
-      // subsequent run lands in the same thread.
-      if (!threadId && posted.threadId) {
-        this.taskThreads.set(turn.taskId, posted.threadId)
-        this.persistTaskThreads()
-      }
       this.deps.log(`task DM posted (session=${sid}, ${turn.accumulated.length} chars, thread=${posted.threadId})`)
     }
     catch (err) {
