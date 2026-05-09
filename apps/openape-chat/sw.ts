@@ -51,6 +51,12 @@ registerRoute(
 interface PushPayload {
   type?: string
   room_id?: string
+  /**
+   * Thread the message was posted into. Used by notificationclick to
+   * deep-link straight into the thread instead of the room's default
+   * (main) thread.
+   */
+  thread_id?: string
   title?: string
   body?: string
   sender?: string
@@ -83,17 +89,27 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const data = event.notification.data as PushPayload | undefined
-  const target = data?.room_id ? `/rooms/${data.room_id}` : '/'
+  // Deep-link to the specific thread when we have one, otherwise drop
+  // the user in the room (default thread). The page reads `?thread=`
+  // from route.query on mount and selects that thread instead of
+  // auto-picking the first open one.
+  const target = data?.room_id
+    ? (data.thread_id
+        ? `/rooms/${data.room_id}?thread=${encodeURIComponent(data.thread_id)}`
+        : `/rooms/${data.room_id}`)
+    : '/'
 
   event.waitUntil((async () => {
     const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    // If a window is already open at the right URL, focus it; otherwise
-    // open a new one. Falls back to focusing any open window if the URL
-    // can't be opened (e.g. file: scheme).
+    // If a window is already open on the right room (path matches AND
+    // — when we have a thread — same thread query), focus it.
+    // Otherwise navigate the first available window or open a new one.
     for (const client of clientsList) {
       try {
         const url = new URL(client.url)
-        if (url.pathname === target) {
+        const samePath = data?.room_id ? url.pathname === `/rooms/${data.room_id}` : url.pathname === '/'
+        const sameThread = !data?.thread_id || url.searchParams.get('thread') === data.thread_id
+        if (samePath && sameThread) {
           await client.focus()
           return
         }
@@ -101,7 +117,6 @@ self.addEventListener('notificationclick', (event) => {
       catch { /* unparseable client URL — ignore */ }
     }
     if (clientsList.length > 0) {
-      // Navigate the first available window to the target.
       const first = clientsList[0]
       if ('navigate' in first && typeof first.navigate === 'function') {
         await first.navigate(target)

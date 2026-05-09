@@ -23,6 +23,12 @@ export interface PushNotice {
   title: string
   body: string
   room_id?: string
+  /**
+   * Specific thread the message was posted into. The SW uses this in
+   * the notificationclick handler to deep-link directly to the thread
+   * (instead of dropping the user in the room's main thread view).
+   */
+  thread_id?: string
   sender?: string
 }
 
@@ -57,6 +63,7 @@ export async function notifyRoomMembers(roomId: string, senderEmail: string, not
   const payload = JSON.stringify({
     type: 'message',
     room_id: roomId,
+    thread_id: notice.thread_id,
     title: notice.title,
     body: notice.body,
     sender: notice.sender,
