@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
+    "@openape/core": "workspace:*",
     "ofetch": "^1.4.1"
   },
   "devDependencies": {
