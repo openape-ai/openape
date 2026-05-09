@@ -31,12 +31,19 @@ interface NestAuth {
 }
 
 const DEFAULT_ALLOW_PATTERNS = [
-  // Agent lifecycle ops the nest issues against `apes run --as root`
+  // Outer spawn-grant — what the nest's HTTP handler invokes.
   'apes agents spawn *',
   'apes agents destroy *',
   'apes agents sync',
-  // Bridge invocation the supervisor uses to keep agent processes
-  // running. Pattern is intentionally precise — not a generic
+  // Inner setup.sh-grant — `apes agents spawn` itself shells out to
+  // `apes run --as root --wait -- bash <tempdir>/setup.sh` to do the
+  // dscl/launchctl/heredoc-write work. Path looks like
+  // `bash /var/folders/.../apes-spawn-<name>-XXXX/setup.sh`. The narrow
+  // glob below limits the auto-approval to that exact lifecycle path
+  // — `bash *` would be unsafe.
+  'bash *apes-spawn-*setup.sh',
+  // Bridge invocation the nest's process supervisor uses (Stage 1
+  // supervisor work). Intentionally precise — not a generic
   // `apes run --as *` wildcard — so a compromised nest can't pivot
   // to running arbitrary commands as arbitrary users.
   'apes run --as * -- openape-chat-bridge',
