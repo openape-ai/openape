@@ -43,10 +43,15 @@ export const delegateCommand = defineCommand({
     const idp = getIdpUrl()!
     const delegationsUrl = await getDelegationsEndpoint(idp)
 
+    // Server expects `grant_type`, not `approval`. The CLI flag stays
+    // named `--approval` for UX continuity (matches the term humans
+    // see in the IdP grant-approval UI), but the request body must
+    // carry the wire name. Without this rename the server always
+    // defaults to grant_type='once' regardless of the flag value.
     const body: Record<string, unknown> = {
       delegate: args.to,
       audience: args.at,
-      approval: args.approval,
+      grant_type: args.approval,
     }
 
     if (args.scopes) {
