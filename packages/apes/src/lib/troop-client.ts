@@ -30,9 +30,11 @@ export interface TaskSpec {
 
 /** Response from /api/agents/me/tasks — agent config + task list. */
 export interface AgentTasksResponse {
-  /** Agent-level persona/behaviour rules — used as `system` for both
+  /**
+   * Agent-level persona/behaviour rules — used as `system` for both
    * cron task runs and live chat-bridge messages. Empty string when the
-   * owner hasn't set one. */
+   * owner hasn't set one.
+   */
   system_prompt: string
   tasks: TaskSpec[]
 }

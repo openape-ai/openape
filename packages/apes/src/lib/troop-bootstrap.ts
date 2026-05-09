@@ -30,7 +30,14 @@ interface SyncPlistInput {
   agentName: string
   apesBin: string
   homeDir: string
-  /** macOS short username — passed to UserName so launchd runs the daemon as the agent. */
+  /**
+   * macOS short username for the agent. The sync daemon itself runs
+   * as ROOT (so it can write into /Library/LaunchDaemons/ and
+   * `launchctl bootstrap system` task plists — system-domain
+   * operations a hidden service-account agent has no permission for).
+   * Sync resolves the agent's numeric uid/gid by stat-ing $HOME at
+   * runtime, then chowns its writes back to those ids.
+   */
   userName: string
   // Optional override for OPENAPE_TROOP_URL — exposed in the plist
   // EnvironmentVariables so the launchd-spawned `apes agents sync`
@@ -50,18 +57,24 @@ export function buildSyncPlist(input: SyncPlistInput): string {
   // Include the agent's bun bin (where apes itself is installed),
   // homebrew, and the standard system paths so the daemon can resolve
   // both `node` and `bun` regardless of how the agent host is set up.
+  //
+  // HOME is set to the agent's home dir even though the daemon runs as
+  // root — Node's `os.homedir()` reads $HOME first, so all of sync's
+  // file operations stay scoped under /Users/<agent>/. AGENT_UID/GID
+  // tell sync who to chown those files to after writing.
   const pathLine = `    <key>PATH</key><string>${escape(input.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>\n`
+  const agentUserLine = `    <key>AGENT_USER</key><string>${escape(input.userName)}</string>\n`
   const envBlock = input.troopUrl
     ? `  <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${escape(input.homeDir)}</string>
-${pathLine}    <key>OPENAPE_TROOP_URL</key><string>${escape(input.troopUrl)}</string>
+${pathLine}${agentUserLine}    <key>OPENAPE_TROOP_URL</key><string>${escape(input.troopUrl)}</string>
   </dict>
 `
     : `  <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${escape(input.homeDir)}</string>
-${pathLine}  </dict>
+${pathLine}${agentUserLine}  </dict>
 `
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -70,8 +83,6 @@ ${pathLine}  </dict>
 <dict>
   <key>Label</key>
   <string>${escape(syncPlistLabel(input.agentName))}</string>
-  <key>UserName</key>
-  <string>${escape(input.userName)}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${escape(input.apesBin)}</string>
