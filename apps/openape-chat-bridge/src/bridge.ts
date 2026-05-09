@@ -21,7 +21,14 @@
 // Env knobs (all optional):
 //   APE_CHAT_ENDPOINT             override https://chat.openape.ai
 //   APE_CHAT_BRIDGE_APES_BIN      apes binary path (default: 'apes' on PATH)
-//   APE_CHAT_BRIDGE_MODEL         per-message model (default: 'claude-haiku-4-5')
+//   APE_CHAT_BRIDGE_MODEL         per-message model — REQUIRED. Boot
+//                                 fails fast if unset. Used to default
+//                                 to 'claude-haiku-4-5' but that
+//                                 silently misrouted on LiteLLM proxies
+//                                 fronting only ChatGPT or only
+//                                 Anthropic, producing 400s on every
+//                                 message instead of a clear startup
+//                                 error.
 //   APE_CHAT_BRIDGE_TOOLS         comma-separated tool names (default: '' — no tools)
 //   APE_CHAT_BRIDGE_MAX_STEPS     max tool-call rounds per turn (default: 10)
 //   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
@@ -60,7 +67,6 @@ function resolveSystemPrompt(envFallback: string): string {
 
 const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
 const DEFAULT_APES_BIN = 'apes'
-const DEFAULT_MODEL = 'claude-haiku-4-5'
 const DEFAULT_MAX_STEPS = 10
 const DEFAULT_SYSTEM_PROMPT
   = 'You are a helpful assistant in a 1:1 chat. Be concise and friendly. '
@@ -104,10 +110,27 @@ function readConfig(): BridgeConfig {
   const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
   const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
   const maxSteps = maxStepsRaw ? Number.parseInt(maxStepsRaw, 10) : DEFAULT_MAX_STEPS
+
+  // Model is required — there's no safe built-in default. A wrong
+  // default silently routes to a model the user's LiteLLM proxy
+  // doesn't know about and 400s every chat-completion request,
+  // visible only as a runtime error in the chat UI. Failing at
+  // startup with a pointer to the fix is much friendlier.
+  const model = process.env.APE_CHAT_BRIDGE_MODEL
+  if (!model) {
+    throw new Error(
+      'APE_CHAT_BRIDGE_MODEL is not set. Set it in the bridge .env '
+      + '(usually `~/Library/Application Support/openape/bridge/.env` '
+      + 'on macOS) or globally in `~/litellm/.env` so resolveBridgeConfig '
+      + 'picks it up at spawn time. Common values: `gpt-5.4` (ChatGPT-only '
+      + 'LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only).',
+    )
+  }
+
   return {
     endpoint: (process.env.APE_CHAT_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
     apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
-    model: process.env.APE_CHAT_BRIDGE_MODEL ?? DEFAULT_MODEL,
+    model,
     systemPrompt: process.env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
