@@ -165,6 +165,8 @@ class Bridge {
       ownerEmail: this.ownerEmail,
       model: this.cfg.model,
       log,
+      troopUrl: (process.env.OPENAPE_TROOP_URL ?? 'https://troop.openape.ai').replace(/\/$/, ''),
+      bearer: this.bearer,
     })
     this.cron.start()
   }
