@@ -1,10 +1,14 @@
 import { Buffer } from 'node:buffer'
 import { createPrivateKey, sign } from 'node:crypto'
+import { exchangeWithDelegation } from '@openape/cli-auth'
+import { loadAuth } from '../config'
 import { apiFetch, getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../http'
 
 export const AGENT_NAME_REGEX = /^[a-z][a-z0-9-]{0,23}$/
 export const SSH_ED25519_PREFIX = 'ssh-ed25519 '
 export const SSH_ED25519_REGEX = /^ssh-ed25519 [A-Za-z0-9+/=]+(\s.*)?$/
+
+const ENROLL_AUDIENCE = 'enroll-agent'
 
 export interface RegisterAgentResponse {
   email: string
@@ -14,16 +18,126 @@ export interface RegisterAgentResponse {
   status: string
 }
 
+/**
+ * Enrol an agent at the IdP. When the local caller is itself an
+ * agent (e.g. the local Nest enrolling a child agent), we look for
+ * a delegation grant from the agent's owner authorising us to act
+ * for them, and exchange both tokens for a delegated access token
+ * (RFC 8693). The /api/enroll endpoint then sees `sub=owner` and
+ * `act={sub:caller}` and attributes ownership correctly without
+ * needing a server-side transitive-ownership heuristic.
+ *
+ * Falls back to the direct call (caller-as-requester) when no
+ * delegation is available — the IdP's transitive-ownership lookup
+ * still covers that path until M3 retires it.
+ */
 export async function registerAgentAtIdp(input: {
   name: string
   publicKey: string
   idp?: string
 }): Promise<RegisterAgentResponse> {
+  const delegated = await tryDelegatedEnrollToken(input.idp)
   return await apiFetch<RegisterAgentResponse>('/api/enroll', {
     method: 'POST',
     body: { name: input.name, publicKey: input.publicKey },
     idp: input.idp,
+    ...(delegated ? { headers: { Authorization: `Bearer ${delegated}` } } : {}),
   })
+}
+
+/**
+ * If the caller is an agent and the owner has previously approved a
+ * delegation grant (audience `enroll-agent`), exchange the agent's
+ * access token + the delegation grant id for a delegated access
+ * token whose `sub` is the owner.
+ *
+ * Lookup strategy: list active grants where requester = owner_email,
+ * find the first delegation grant where delegate = us and audience is
+ * `enroll-agent` or `*`. Returns null on any failure (no delegation
+ * found, network error, etc.) so the caller falls back to the
+ * direct-enroll path — token-exchange is an optimisation while the
+ * IdP's transitive-ownership lookup still covers the gap.
+ */
+async function tryDelegatedEnrollToken(idp?: string): Promise<string | null> {
+  try {
+    const auth = loadAuth()
+    if (!auth?.access_token) return null
+    // Only agents need delegation. Humans always enrol on their own
+    // behalf (sub=owner already).
+    const claims = decodeJwtClaims(auth.access_token)
+    if (claims?.act !== 'agent') return null
+    const ownerEmail = (auth as { owner_email?: unknown }).owner_email
+    if (typeof ownerEmail !== 'string' || !ownerEmail) return null
+    const myEmail = auth.email
+    if (typeof myEmail !== 'string' || !myEmail) return null
+
+    const idpUrl = idp ?? auth.idp
+    if (!idpUrl) return null
+
+    const grantId = await findEnrollDelegationGrantId(idpUrl, ownerEmail, myEmail)
+    if (!grantId) return null
+
+    const result = await exchangeWithDelegation({
+      idp: idpUrl,
+      actorToken: auth.access_token,
+      audience: ENROLL_AUDIENCE,
+      delegationGrantId: grantId,
+    })
+    return result.access_token
+  }
+  catch {
+    return null
+  }
+}
+
+interface GrantListEntry {
+  id: string
+  type?: string
+  status?: string
+  expires_at?: number
+  request: {
+    audience?: string
+    delegate?: string
+    delegator?: string
+    grant_type?: string
+  }
+}
+
+async function findEnrollDelegationGrantId(
+  idp: string,
+  delegator: string,
+  delegate: string,
+): Promise<string | null> {
+  const url = `${idp.replace(/\/$/, '')}/api/grants?status=approved&limit=200&requester=${encodeURIComponent(delegator)}`
+  // Anonymous request: the IdP allows listing one's own approved
+  // grants without auth in some configurations; if it requires auth
+  // and rejects, we return null and fall back. Acceptable because
+  // the delegation lookup is optional.
+  const res = await apiFetch<{ data: GrantListEntry[] }>(url)
+  const now = Math.floor(Date.now() / 1000)
+  for (const g of res.data ?? []) {
+    if (g.type !== 'delegation') continue
+    if (g.status !== 'approved') continue
+    if (g.request.delegate !== delegate) continue
+    const aud = g.request.audience
+    if (aud !== '*' && aud !== ENROLL_AUDIENCE) continue
+    if (g.expires_at && g.expires_at <= now) continue
+    return g.id
+  }
+  return null
+}
+
+function decodeJwtClaims(token: string): { act?: unknown } | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const padded = part + '='.repeat((4 - part.length % 4) % 4)
+    const json = Buffer.from(padded, 'base64').toString('utf8')
+    return JSON.parse(json) as { act?: unknown }
+  }
+  catch {
+    return null
+  }
 }
 
 export interface IssuedAgentToken {
