@@ -66,24 +66,39 @@ export default defineEventHandler(async (event) => {
 
   const { userStore, sshKeyStore } = useIdpStores()
 
-  const existingOwned = await userStore.findByOwner(email)
+  // Transitive ownership: when the caller is itself an agent (e.g. a
+  // Nest enrolling a child agent on behalf of its human owner),
+  // attribute the new agent to the human at the top of the chain. Else
+  // the new agent's email gets the caller's full sub-addressed email
+  // recursively encoded into the local-part, exploding the format and
+  // breaking parseAgentEmail / troop-side ownerDomain validation.
+  let effectiveOwner = email
+  const callerRecord = await userStore.findByEmail(email)
+  if (callerRecord?.type === 'agent' && callerRecord.owner) {
+    effectiveOwner = callerRecord.owner
+  }
+
+  const existingOwned = await userStore.findByOwner(effectiveOwner)
   if (existingOwned.length >= maxAgents) {
     throw createError({ statusCode: 409, statusMessage: `Agent limit reached (${maxAgents}). Delete an existing agent first.` })
   }
 
-  const agentEmail = deriveAgentEmail(email, body.name)
+  const agentEmail = deriveAgentEmail(effectiveOwner, body.name)
 
   const existingByEmail = await userStore.findByEmail(agentEmail)
   if (existingByEmail) {
     throw createError({ statusCode: 409, statusMessage: 'An agent with this name already exists. Choose a different name.' })
   }
 
-  // Create user
+  // Create user. owner = effectiveOwner (= the human at the top of
+  // the chain when caller is an agent itself; same as the caller for
+  // human callers). approver mirrors owner so the YOLO-policy CRUD
+  // and grant-approval flows route to the right human.
   const user = await userStore.create({
     email: agentEmail,
     name: body.name,
-    owner: email,
-    approver: email,
+    owner: effectiveOwner,
+    approver: effectiveOwner,
     type: 'agent',
     isActive: true,
     createdAt: Math.floor(Date.now() / 1000),
