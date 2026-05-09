@@ -15,12 +15,26 @@ export interface TaskSpec {
   taskId: string
   name: string
   cron: string
-  systemPrompt: string
+  /**
+   * Imperative job description — sent as the LLM `user` message at run
+   * time. The agent's persona / behaviour rules are in `agent.systemPrompt`
+   * and served separately at sync time (see `AgentTasksResponse`).
+   */
+  userPrompt: string
   tools: string[]
   maxSteps: number
   enabled: boolean
   createdAt: number
   updatedAt: number
+}
+
+/** Response from /api/agents/me/tasks — agent config + task list. */
+export interface AgentTasksResponse {
+  /** Agent-level persona/behaviour rules — used as `system` for both
+   * cron task runs and live chat-bridge messages. Empty string when the
+   * owner hasn't set one. */
+  system_prompt: string
+  tasks: TaskSpec[]
 }
 
 export interface SyncResponse {
@@ -77,7 +91,7 @@ export class TroopClient {
     })
   }
 
-  listTasks(): Promise<TaskSpec[]> {
+  listTasks(): Promise<AgentTasksResponse> {
     return this.request('/api/agents/me/tasks')
   }
 
