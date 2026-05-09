@@ -1,8 +1,10 @@
 import { defineCommand } from 'citty'
 import { authorizeNestCommand } from './authorize'
+import { destroyNestCommand } from './destroy'
 import { enrollNestCommand } from './enroll'
 import { installNestCommand } from './install'
 import { listNestCommand } from './list'
+import { spawnNestCommand } from './spawn'
 import { statusNestCommand } from './status'
 import { uninstallNestCommand } from './uninstall'
 
@@ -17,6 +19,8 @@ export const nestCommand = defineCommand({
     authorize: authorizeNestCommand,
     status: statusNestCommand,
     list: listNestCommand,
+    spawn: spawnNestCommand,
+    destroy: destroyNestCommand,
     uninstall: uninstallNestCommand,
   },
 })
