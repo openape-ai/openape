@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.2.1
+
+### Patch Changes
+
+- [#347](https://github.com/openape-ai/openape/pull/347) [`31e872a`](https://github.com/openape-ai/openape/commit/31e872a51c688c48018600a6c92a8e0ff745fb24) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix cron tasks never firing on hidden service-account agents. Tasks plists were going to `~/Library/LaunchAgents/` and `launchctl bootstrap gui/<uid>` — same dead-end as the troop sync plist had before #338. Move task plists to `/Library/LaunchDaemons/` with `UserName=<agent>`, bootstrap into `system` domain. Sync daemon now runs as ROOT (so it can write into `/Library/LaunchDaemons/` and bootstrap system-domain jobs); chowns its writes in the agent's `$HOME` back to the agent uid via stat(`$HOME`).
+
 ## 1.2.0
 
 ### Minor Changes
