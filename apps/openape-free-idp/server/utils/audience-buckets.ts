@@ -36,6 +36,10 @@ export const KNOWN_BUCKETS: Record<string, AudienceBucket> = {
   'ape-shell': 'commands',
   'claude-code': 'commands',
   'shapes': 'commands',
+  // The local Nest control-plane daemon (`apes nest spawn|destroy|list`).
+  // Commands layer because the Nest's API surface is "may this caller
+  // tell my Mac to spawn/destroy a local agent?" — gated per-call.
+  'nest': 'commands',
   // Web layer
   'ape-proxy': 'web',
   // Root-Commands layer
