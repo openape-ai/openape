@@ -57,10 +57,16 @@ Sauberer Weg ist DDISA-Standard: **delegated tokens** mit RFC-8693 Token-Exchang
 
 ## Progress
 
-- [ ] `[2026-05-09 18:30]` Plan geschrieben — los
-- [ ] M1: Token-Exchange-Endpoint
-- [ ] M2: CLI-side + apes agents register integration
-- [ ] M3: enroll.post.ts cleanup
+- [x] `[2026-05-09 18:30]` Plan geschrieben — los
+- [x] `[2026-05-09 19:00]` M1: Token-Exchange-Endpoint — PR #369 merged
+- [x] `[2026-05-09 19:30]` M2: CLI-side + apes agents register integration — PR #370 merged
+- [x] `[2026-05-09 19:50]` M3: AuthTokenPayload erweitert um structured `act`, enroll.post.ts dokumentiert Owner-Attribution-Pfade
+
+## Surprises & Discoveries
+
+- **2026-05-09**: RFC 8693 `subject_token` ist STRICT REQUIRED, was unsere Use-Case bricht (Nest hat Patrick's Token nicht). Pragmatische Lösung: subject_token optional machen wenn `delegation_grant_id` vorhanden — die delegator-Identität kommt dann aus dem Grant. Nicht mehr strikt RFC-compliant aber gleicher Effekt für unsere Flows. RFC-Strict-Mode bleibt funktionierend für Caller die beide Tokens haben.
+- **2026-05-09**: AuthTokenPayload's `act` war hartkodiert auf `'agent' | 'human'` String. Delegierte Tokens haben `act: { sub: '...' }` Object — verifyAuthToken hat das initial mit "Invalid act claim" abgelehnt. Erweitert um beide Varianten.
+- **2026-05-09**: Transitive-ownership Hack in enroll.post.ts NICHT gelöscht (Plan-Abweichung). Begründung: Delete würde alle Nest-Setups ohne Delegation-Grant brechen. Wird soft-deprecated, Cleanup tracked als #stage-3 wenn alle Nests migriert sind.
 
 ## Surprises & Discoveries
 
