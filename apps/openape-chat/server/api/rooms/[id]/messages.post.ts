@@ -72,6 +72,7 @@ export default defineEventHandler(async (event) => {
     title: caller.email,
     body: parsed.data.body.length > 140 ? `${parsed.data.body.slice(0, 140)}…` : parsed.data.body,
     room_id: id,
+    thread_id: threadId,
     sender: caller.email,
   })
 
