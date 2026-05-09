@@ -1,0 +1,108 @@
+// OpenApe Nest daemon — local control-plane that hosts agents on this
+// computer. Listens on 127.0.0.1:9091 (localhost-only, no auth — only
+// processes running as the same human user can reach it). Talks to
+// troop SP for ownership state, supervises chat-bridge children, runs
+// the cron loop in the bridge process (since #348).
+//
+// Bootstrapped by `apes nest install` — see packages/apes/src/commands/
+// nest/install.ts. Started + KeepAlive'd by launchd via
+// /Library/LaunchAgents/ai.openape.nest.plist (user domain — daemon
+// runs as the human user, not root or _openape_nest yet; that
+// privilege-isolation step is Stage 1.5).
+
+import { createServer   } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import process from 'node:process'
+import { handleAgentsList, handleAgentSpawn, handleAgentDestroy, handleNestStatus } from './api/agents'
+import { Supervisor } from './lib/supervisor'
+import { listAgents } from './lib/registry'
+
+const HOST = '127.0.0.1'
+const PORT = Number(process.env.OPENAPE_NEST_PORT ?? 9091)
+const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
+
+function log(line: string): void {
+  process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
+}
+
+const supervisor = new Supervisor({ apesBin: APES_BIN, log })
+
+// Initial reconcile from the persisted registry — re-spawns the
+// chat-bridge child for every agent that was registered before the
+// last daemon shutdown (or boot).
+supervisor.reconcile(listAgents())
+log(`nest: supervisor reconciled, ${supervisor.size()} agent process(es) running`)
+
+interface RouteCtx {
+  url: URL
+  body: unknown
+  log: typeof log
+  apesBin: string
+  supervisor: Supervisor
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(chunk as Buffer)
+  if (chunks.length === 0) return {}
+  const text = Buffer.concat(chunks).toString('utf8')
+  if (!text.trim()) return {}
+  try { return JSON.parse(text) }
+  catch { throw new Error('invalid JSON body') }
+}
+
+function send(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json' })
+  res.end(JSON.stringify(body))
+}
+
+const server = createServer((req, res) => {
+  ;(async () => {
+    try {
+      const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`)
+      const body = req.method && ['POST', 'PUT', 'PATCH'].includes(req.method)
+        ? await readJsonBody(req)
+        : {}
+      const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, supervisor }
+
+      if (req.method === 'GET' && url.pathname === '/status') {
+        return send(res, 200, handleNestStatus(ctx))
+      }
+      if (req.method === 'GET' && url.pathname === '/agents') {
+        return send(res, 200, handleAgentsList(ctx))
+      }
+      if (req.method === 'POST' && url.pathname === '/agents') {
+        const result = await handleAgentSpawn(ctx)
+        return send(res, 201, result)
+      }
+      const destroyMatch = req.method === 'DELETE' && url.pathname.match(/^\/agents\/([^/]+)$/)
+      if (destroyMatch) {
+        const result = await handleAgentDestroy(ctx, destroyMatch[1]!)
+        return send(res, 200, result)
+      }
+
+      send(res, 404, { error: 'not found' })
+    }
+    catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log(`nest: request failed: ${msg}`)
+      send(res, 500, { error: msg })
+    }
+  })()
+})
+
+server.listen(PORT, HOST, () => {
+  log(`nest: listening on http://${HOST}:${PORT}`)
+})
+
+process.on('SIGTERM', () => {
+  log('nest: SIGTERM — stopping supervisor')
+  supervisor.stopAll()
+  server.close(() => process.exit(0))
+})
+
+process.on('SIGINT', () => {
+  log('nest: SIGINT — stopping supervisor')
+  supervisor.stopAll()
+  server.close(() => process.exit(0))
+})
