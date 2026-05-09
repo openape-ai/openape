@@ -8,7 +8,6 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { listAgents, removeAgent, upsertAgent, findAgent  } from '../lib/registry'
 import type { AgentEntry } from '../lib/registry'
-import type { Supervisor } from '../lib/supervisor'
 
 const execFileAsync = promisify(execFile)
 
@@ -19,13 +18,11 @@ interface RouteCtx {
   body: unknown
   log: (line: string) => void
   apesBin: string
-  supervisor: Supervisor
 }
 
-export function handleNestStatus(ctx: RouteCtx): { agents: number, processes: ReturnType<Supervisor['status']> } {
+export function handleNestStatus(_ctx: RouteCtx): { agents: number } {
   return {
     agents: listAgents().length,
-    processes: ctx.supervisor.status(),
   }
 }
 
@@ -82,7 +79,6 @@ export async function handleAgentSpawn(ctx: RouteCtx): Promise<{ name: string, e
       : undefined,
   }
   upsertAgent(entry)
-  ctx.supervisor.reconcile(listAgents())
   return { name, email: entry.email, uid, home: entry.home }
 }
 
@@ -91,16 +87,14 @@ export async function handleAgentDestroy(ctx: RouteCtx, name: string): Promise<{
   const entry = findAgent(name)
   if (!entry) throw new Error(`agent "${name}" not registered with this nest`)
 
-  // Stop our supervised child first so destroy doesn't race a respawn.
-  ctx.supervisor.stop(name)
-
-  // Delegate privileged teardown.
+  // Delegate privileged teardown — apes agents destroy boots out the
+  // bridge + troop-sync system-domain plists too, so the bridge child
+  // dies cleanly without us having to track it.
   ctx.log(`nest: destroying agent "${name}"...`)
   const args = ['run', '--as', 'root', '--', 'apes', 'agents', 'destroy', name, '--force']
   await execFileAsync(ctx.apesBin, args, { maxBuffer: 4 * 1024 * 1024 })
 
   removeAgent(name)
-  ctx.supervisor.reconcile(listAgents())
   return { name, removed: true }
 }
 
