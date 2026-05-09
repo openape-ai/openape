@@ -20,6 +20,7 @@ import { delegationRevokeCommand } from './commands/grants/delegation-revoke'
 import { adminCommand } from './commands/admin/index'
 import { agentsCommand } from './commands/agents/index'
 import { nestCommand } from './commands/nest/index'
+import { yoloCommand } from './commands/yolo/index'
 import { adapterCommand } from './commands/adapter/index'
 import { runCommand } from './commands/run'
 import { proxyCommand } from './commands/proxy'
@@ -149,6 +150,7 @@ const main = defineCommand({
     grants: grantsCommand,
     agents: agentsCommand,
     nest: nestCommand,
+    yolo: yoloCommand,
     admin: adminCommand,
     run: runCommand,
     proxy: proxyCommand,
