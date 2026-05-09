@@ -1,4 +1,4 @@
-// RFC 8693 OAuth 2.0 Token Exchange.
+// RFC 8693-style OAuth 2.0 Token Exchange (delegation flavour).
 //
 // Use case: a delegate (typically an agent like the local Nest) holds
 // its own IdP-issued access token AND a Delegation grant from a
@@ -7,15 +7,22 @@
 // agent's owner is the human, not the delegate.
 //
 // Inputs (JSON or form):
-//   subject_token     - access token of the delegator (Patrick)
-//   actor_token       - access token of the delegate (Nest)
+//   actor_token       - REQUIRED. access token of the delegate (Nest).
 //   grant_type        - must equal urn:ietf:params:oauth:grant-type:token-exchange
 //   audience?         - the audience the new token should carry (default: apes-cli)
-//   delegation_grant_id? - explicit delegation grant. If omitted, we
-//                          look up an active 'always'/'timed' delegation
-//                          grant where delegator=subject and
-//                          delegate=actor with audience that matches
-//                          (or '*').
+//   delegation_grant_id? - explicit delegation grant id. RECOMMENDED:
+//                          when provided, the delegator's identity is
+//                          derived from grant.delegator and a separate
+//                          subject_token is NOT required. This is the
+//                          common case for our agent flows since the
+//                          delegator (human) does not online-sign
+//                          requests — their consent lives in the
+//                          delegation grant.
+//   subject_token?    - OPTIONAL. access token of the delegator. If
+//                       provided, must validate AND its sub must equal
+//                       the delegation's delegator. Only useful when a
+//                       caller has both tokens and wants belt-and-
+//                       suspenders verification (RFC 8693 strict mode).
 //
 // Output: { access_token, token_type:'Bearer', expires_in:3600,
 //           issued_token_type:'urn:ietf:params:oauth:token-type:access_token' }
@@ -64,33 +71,26 @@ export default defineEventHandler(async (event) => {
       title: `grant_type must be ${TOKEN_EXCHANGE_GRANT_TYPE} (got ${body.grant_type ?? 'undefined'})`,
     })
   }
-  if (!body.subject_token) {
-    throw createProblemError({ status: 400, title: 'subject_token is required' })
-  }
   if (!body.actor_token) {
-    throw createProblemError({ status: 400, title: 'actor_token is required (RFC 8693 § 2.1)' })
+    throw createProblemError({ status: 400, title: 'actor_token is required' })
+  }
+  if (!body.subject_token && !body.delegation_grant_id) {
+    throw createProblemError({
+      status: 400,
+      title: 'either subject_token or delegation_grant_id is required',
+    })
   }
 
   const { keyStore } = useIdpStores()
   const { grantStore } = useGrantStores()
   const issuer = getIdpIssuer()
 
-  // Verify both presented tokens against the IdP's own JWKS (we only
-  // accept tokens we issued ourselves — no external IdP federation
-  // here). Audience is intentionally not asserted: the subject and
-  // actor tokens may have been issued for different audiences (CLI vs
-  // SP) and that's fine — the exchange minted token gets a fresh aud.
+  // Verify the actor_token against the IdP's own JWKS. Audience is
+  // intentionally not asserted: the actor token may have been issued
+  // for a CLI audience and that's fine — the exchange minted token
+  // gets a fresh aud.
   const signingKey = await keyStore.getSigningKey()
-  let subjectClaims, actorClaims
-  try {
-    subjectClaims = await verifyAuthToken(body.subject_token, issuer, signingKey.publicKey)
-  }
-  catch (err) {
-    throw createProblemError({
-      status: 401,
-      title: `Invalid subject_token: ${err instanceof Error ? err.message : String(err)}`,
-    })
-  }
+  let actorClaims
   try {
     actorClaims = await verifyAuthToken(body.actor_token, issuer, signingKey.publicKey)
   }
@@ -110,18 +110,66 @@ export default defineEventHandler(async (event) => {
 
   const requestedAudience = body.audience ?? DEFAULT_AUDIENCE
 
-  // Find the delegation grant. Either explicit grant_id or look up
-  // the most-recent active 'always'/'timed' delegation grant where
-  // delegator=subject AND delegate=actor AND audience matches (or '*').
-  const delegation = body.delegation_grant_id
-    ? await loadExplicitDelegation(grantStore, body.delegation_grant_id, subjectClaims.sub, actorClaims.sub, requestedAudience)
-    : await loadFirstActiveDelegation(grantStore, subjectClaims.sub, actorClaims.sub, requestedAudience)
-
-  if (!delegation) {
-    throw createProblemError({
-      status: 403,
-      title: `No active delegation found from ${subjectClaims.sub} to ${actorClaims.sub} for audience ${requestedAudience}`,
-    })
+  // Resolve delegation + delegator identity. Two paths:
+  //   1. delegation_grant_id explicit → derive delegator from grant.
+  //      Optional belt-and-suspenders subject_token must match.
+  //   2. subject_token only → look up first active delegation for
+  //      (delegator=subject_token.sub, delegate=actor.sub, audience).
+  let delegation
+  let delegatorEmail: string
+  if (body.delegation_grant_id) {
+    delegation = await loadExplicitDelegationByActor(
+      grantStore,
+      body.delegation_grant_id,
+      actorClaims.sub,
+      requestedAudience,
+    )
+    if (!delegation) {
+      throw createProblemError({
+        status: 403,
+        title: `Delegation grant ${body.delegation_grant_id} is not approved, expired, or not for actor ${actorClaims.sub}/audience ${requestedAudience}`,
+      })
+    }
+    delegatorEmail = delegation.request.delegator!
+    if (body.subject_token) {
+      let subjectClaims
+      try {
+        subjectClaims = await verifyAuthToken(body.subject_token, issuer, signingKey.publicKey)
+      }
+      catch (err) {
+        throw createProblemError({
+          status: 401,
+          title: `Invalid subject_token: ${err instanceof Error ? err.message : String(err)}`,
+        })
+      }
+      if (subjectClaims.sub !== delegatorEmail) {
+        throw createProblemError({
+          status: 403,
+          title: 'subject_token sub does not match delegation.delegator',
+        })
+      }
+    }
+  }
+  else {
+    // subject_token-only path (must be present per upper guard)
+    let subjectClaims
+    try {
+      subjectClaims = await verifyAuthToken(body.subject_token!, issuer, signingKey.publicKey)
+    }
+    catch (err) {
+      throw createProblemError({
+        status: 401,
+        title: `Invalid subject_token: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
+    delegation = await loadFirstActiveDelegation(grantStore, subjectClaims.sub, actorClaims.sub, requestedAudience)
+    if (!delegation) {
+      throw createProblemError({
+        status: 403,
+        title: `No active delegation found from ${subjectClaims.sub} to ${actorClaims.sub} for audience ${requestedAudience}`,
+      })
+    }
+    delegatorEmail = subjectClaims.sub
   }
 
   // Mint the delegated access token. `act` is structured per DDISA
@@ -135,7 +183,7 @@ export default defineEventHandler(async (event) => {
   })
     .setProtectedHeader({ alg: 'EdDSA', kid: signingKey.kid })
     .setIssuer(issuer)
-    .setSubject(subjectClaims.sub)
+    .setSubject(delegatorEmail)
     .setAudience(requestedAudience)
     .setIssuedAt()
     .setExpirationTime(`${expiresInSec}s`)
@@ -151,10 +199,15 @@ export default defineEventHandler(async (event) => {
 
 // --- helpers ---
 
-async function loadExplicitDelegation(
+/**
+ * Variant: caller passed delegation_grant_id, we don't know the
+ * delegator yet (it's IN the grant). We look up by id, validate the
+ * actor + audience match, and return the grant; the caller reads the
+ * delegator off it.
+ */
+async function loadExplicitDelegationByActor(
   grantStore: ReturnType<typeof useGrantStores>['grantStore'],
   grantId: string,
-  delegatorEmail: string,
   delegateEmail: string,
   audience: string,
 ): Promise<OpenApeGrant | null> {
@@ -162,7 +215,6 @@ async function loadExplicitDelegation(
   if (!grant) return null
   if (grant.type !== 'delegation') return null
   if (grant.status !== 'approved') return null
-  if (grant.request.delegator !== delegatorEmail) return null
   if (grant.request.delegate !== delegateEmail) return null
   if (grant.request.audience !== '*' && grant.request.audience !== audience) return null
   if (grant.expires_at && grant.expires_at <= Math.floor(Date.now() / 1000)) return null
