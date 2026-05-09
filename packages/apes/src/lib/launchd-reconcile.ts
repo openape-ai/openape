@@ -1,18 +1,26 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { homedir, userInfo } from 'node:os'
+import { userInfo } from 'node:os'
 import { join } from 'node:path'
 import type { TaskSpec } from './troop-client'
 
-// Reconciles ~/Library/LaunchAgents/openape.troop.<agent>.<task>.plist
+// Reconciles /Library/LaunchDaemons/openape.troop.<agent>.<task>.plist
 // against the desired set from the troop SP.
 //
 // One plist per task. Filename encodes the agent name + task slug so
 // we can scope the diff with a glob — multiple agents on the same
 // macOS user (uncommon but possible) don't step on each other's
 // scheduled jobs. `enabled: false` tasks still get a plist written
-// (so the user can see them in the Library/LaunchAgents listing) but
-// the job is `bootout`-ed so launchd doesn't fire it.
+// (so the user can see them in the LaunchDaemons listing) but the
+// job is `bootout`-ed so launchd doesn't fire it.
+//
+// Plists live in /Library/LaunchDaemons (system domain) with a
+// UserName key so launchd runs the daemon as the agent uid. Same
+// reason as the troop-sync plist: hidden service-account agents
+// (IsHidden=1, UID < 500, never log in) have no per-user launchd
+// domain, so `launchctl bootstrap gui/<uid>` fails with "Domain does
+// not support specified action". System-domain bootstrap doesn't
+// need a user session.
 //
 // We avoid `launchctl` calls when nothing changed — content-equality
 // on the existing file vs the desired plist body. macOS's launchctl
@@ -28,7 +36,7 @@ export interface ReconcileResult {
 const PLIST_PREFIX = 'openape.troop.'
 
 function plistDir(): string {
-  return join(homedir(), 'Library', 'LaunchAgents')
+  return '/Library/LaunchDaemons'
 }
 
 function plistPath(agentName: string, taskId: string): string {
@@ -112,7 +120,7 @@ function escape(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function plistBody(input: { label: string, apesBin: string, taskId: string, schedule: ScheduleSlot[], homeDir: string }): string {
+function plistBody(input: { label: string, apesBin: string, taskId: string, schedule: ScheduleSlot[], homeDir: string, userName: string }): string {
   const calendarBlocks = input.schedule.map((slot) => {
     const lines: string[] = []
     if (slot.Minute !== undefined) lines.push(`      <key>Minute</key><integer>${slot.Minute}</integer>`)
@@ -133,6 +141,8 @@ function plistBody(input: { label: string, apesBin: string, taskId: string, sche
 <dict>
   <key>Label</key>
   <string>${escape(input.label)}</string>
+  <key>UserName</key>
+  <string>${escape(input.userName)}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${escape(input.apesBin)}</string>
@@ -146,6 +156,8 @@ function plistBody(input: { label: string, apesBin: string, taskId: string, sche
   <dict>
     <key>HOME</key>
     <string>${escape(input.homeDir)}</string>
+    <key>PATH</key>
+    <string>${escape(input.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
 ${calendarKey}
   <key>StandardOutPath</key>
@@ -162,6 +174,12 @@ interface BuildArgs {
   apesBin: string
   homeDir: string
   task: TaskSpec
+  /**
+   * macOS short username for the UserName plist key (the agent that
+   * launchd should run the task as). Defaults to the current user when
+   * not supplied — handy in tests.
+   */
+  userName?: string
 }
 
 function buildPlistContent(args: BuildArgs): string {
@@ -171,22 +189,20 @@ function buildPlistContent(args: BuildArgs): string {
     taskId: args.task.taskId,
     schedule: cronToSchedule(args.task.cron),
     homeDir: args.homeDir,
+    userName: args.userName ?? userInfo().username,
   })
 }
 
-function uid(): number {
-  return userInfo().uid
-}
-
 function bootstrap(label: string, path: string): void {
-  // Idempotent: bootout first (silent if not loaded), then bootstrap.
-  try { execFileSync('/bin/launchctl', ['bootout', `gui/${uid()}/${label}`], { stdio: 'ignore' }) }
+  // System-domain bootstrap (no user session needed). Idempotent —
+  // bootout first (silent if not loaded), then bootstrap.
+  try { execFileSync('/bin/launchctl', ['bootout', `system/${label}`], { stdio: 'ignore' }) }
   catch { /* not loaded */ }
-  execFileSync('/bin/launchctl', ['bootstrap', `gui/${uid()}`, path], { stdio: 'ignore' })
+  execFileSync('/bin/launchctl', ['bootstrap', 'system', path], { stdio: 'ignore' })
 }
 
 function bootout(label: string): void {
-  try { execFileSync('/bin/launchctl', ['bootout', `gui/${uid()}/${label}`], { stdio: 'ignore' }) }
+  try { execFileSync('/bin/launchctl', ['bootout', `system/${label}`], { stdio: 'ignore' }) }
   catch { /* not loaded */ }
 }
 
@@ -195,6 +211,12 @@ export interface ReconcileInput {
   apesBin: string
   homeDir: string
   desired: TaskSpec[]
+  /**
+   * macOS short username for the UserName plist key. Defaults to the
+   * current user — that's only correct in tests; production sync runs
+   * as ROOT so the caller MUST pass the agent's username explicitly.
+   */
+  userName?: string
 }
 
 export function reconcile(input: ReconcileInput): ReconcileResult {
@@ -228,6 +250,7 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
       apesBin: input.apesBin,
       homeDir: input.homeDir,
       task,
+      userName: input.userName,
     })
 
     let existingContent = ''
