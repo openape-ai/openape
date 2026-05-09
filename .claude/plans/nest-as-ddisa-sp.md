@@ -173,10 +173,10 @@ Nach diesem Plan: jeder Nest-API-Call läuft durch das DDISA-Grant-System genau 
 
 ## Progress
 
-- [ ] `[2026-05-09 16:30]` Plan geschrieben, Patrick freigegeben — los
-- [ ] `[ ]` Milestone 1: Read-only API geschützt
-- [ ] `[ ]` Milestone 2: Schreibende API geschützt
-- [ ] `[ ]` Milestone 3: Negative Tests + Doku
+- [x] `[2026-05-09 16:30]` Plan geschrieben, Patrick freigegeben — los
+- [x] `[2026-05-09 17:00]` Milestone 1: Read-only API geschützt — PR #366 gemerged
+- [x] `[2026-05-09 17:30]` Milestone 2: Schreibende API geschützt — PR #367 gemerged
+- [x] `[2026-05-09 18:00]` Milestone 3: Negative Tests + Doku
 
 ## Surprises & Discoveries
 
@@ -202,4 +202,12 @@ Nach diesem Plan: jeder Nest-API-Call läuft durch das DDISA-Grant-System genau 
 
 ## Outcomes & Retrospective
 
-(Nach Abschluss aller Milestones füllen.)
+- **Ergebnis:** alle 3 Milestones in einer Session geliefert. `apes nest list/status/spawn/destroy` gehen alle durch DDISA-Grants. Read-only und Spawn jeweils ein Approval, Reuse danach silent. Destroy per-name (engerer Scope für destruktive Ops). Negative-Tests 4/4 grün als Bash-Script. README schreibt den neuen Auth-Flow + erklärt warum kein in-daemon Supervisor.
+- **Abweichungen vom Plan:**
+  - Geplant: per-name spawn-Grants (`['nest','spawn',<name>]`). Implementiert: wildcard-name spawn-Grants (`['nest','spawn']`). Grund: Patrick als Human bekommt für jeden new-name-Spawn einen Approval-Prompt — schlechte UX. Trade-off im README dokumentiert.
+  - Geplant: `apes nest authorize` neu laufen lassen post-deploy. Tatsächlich: nicht nötig weil YOLO für Patrick-als-Human eh nicht greift. YOLO-Patterns für `nest *` bleiben drin als Vorbereitung für agent-zu-Nest-Calls (Agent-Spawning-Agent in einer späteren Iteration).
+  - Geplant: tsup config musste minimal angepasst werden (noExternal für @openape/* Workspace-Deps), sonst lief der globale daemon nach Reinstall in `ERR_MODULE_NOT_FOUND` weil `@openape/core` keine Dep im publish manifest war.
+- **Learnings:**
+  - YOLO ist agent-scoped — für Human→Service Auth braucht es 'always'-Grants mit Reuse-Lookup. Pattern: lookup existing → fetch fresh token → use. Erste Implementation hatte das nicht und gab jeder `apes nest list` einen Approval-Prompt.
+  - tsup bundling: Workspace deps müssen explizit via `noExternal: [/^@openape\//]` rein. Weil tsup standardmäßig externals für alles in node_modules macht, was bei monorepo-symlinks unsichtbar bleibt aber nach npm-publish kracht.
+  - Grant-Scope-Granularität ist eine Security/UX-Tradeoff-Achse. Spawn=wildcard, destroy=per-name war die richtige Mischung — engere Scopes fühlen sich nach 30s wie Reibung an, weitere Scopes verlieren ihren Audit-Wert.
