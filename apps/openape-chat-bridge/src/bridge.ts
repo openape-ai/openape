@@ -36,6 +36,7 @@ import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import { ApesRpcSession } from './apes-rpc'
 import { ChatApi } from './chat-api'
+import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { ThreadSession } from './thread-session'
 
@@ -142,6 +143,7 @@ class Bridge {
   private chat: ChatApi
   private bearer: () => Promise<string>
   private rpc: ApesRpcSession | undefined
+  private cron: CronRunner | undefined
 
   constructor(
     private cfg: BridgeConfig,
@@ -153,6 +155,18 @@ class Bridge {
       return `Bearer ${idp.access_token}`
     }
     this.chat = new ChatApi(this.cfg.endpoint, this.bearer)
+    // The cron runner ticks every 60s, fires matching tasks via the
+    // SAME ApesRpcSession the chat threads use, posts results as DMs
+    // through the existing chat WebSocket connection. Replaces the
+    // per-task launchd plist + separate `apes agents run` process model.
+    this.cron = new CronRunner({
+      rpc: () => this.getRpc(),
+      chat: this.chat,
+      ownerEmail: this.ownerEmail,
+      model: this.cfg.model,
+      log,
+    })
+    this.cron.start()
   }
 
   /**
