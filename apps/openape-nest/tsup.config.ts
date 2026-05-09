@@ -9,5 +9,6 @@ export default defineConfig({
   shims: false,
   dts: false,
   sourcemap: false,
+  outExtension: () => ({ js: '.mjs' }),
   banner: { js: '#!/usr/bin/env node' },
 })
