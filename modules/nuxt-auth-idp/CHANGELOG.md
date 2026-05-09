@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.27.0
+
+### Minor Changes
+
+- [#371](https://github.com/openape-ai/openape/pull/371) [`bf67c11`](https://github.com/openape-ai/openape/commit/bf67c1163961a8803a2621cab58ef2fed1497c8d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `AuthTokenPayload.act` and `verifyAuthToken` now accept the structured `DelegationActClaim` shape (`{ sub: string }`) emitted by the IdP's `/api/oauth/token-exchange` endpoint, in addition to the existing `'human' | 'agent'` strings. Tokens minted via token-exchange carry both `sub` (the delegator) and `act.sub` (the delegate); downstream consumers can do owner-attribution from the token alone. The `delegation_grant` claim (the id of the delegation that authorised the exchange) is also surfaced for audit.
+
+  Existing direct-issuance tokens (act=`agent` | `human`) are unchanged; only the verifier was extended to widen the accepted shape. `verifyAgentToken` (the strict "caller must be an agent" path) keeps its narrow contract.
+
+  Plus: enroll.post.ts has expanded comments documenting the three owner-attribution paths (delegated token, direct agent, direct human) — the transitive-ownership lookup is preserved as a soft-deprecated fallback for Nest setups that haven't yet created a delegation grant; the path becomes a no-op for tokens minted via token-exchange (where `sub` is already the human owner).
+
+- [#369](https://github.com/openape-ai/openape/pull/369) [`4788d4a`](https://github.com/openape-ai/openape/commit/4788d4a82f2fbaec1677ca104df0732aed62313f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add RFC 8693 OAuth Token Exchange endpoint (`POST /api/oauth/token-exchange`). Lets a delegate (typically an agent like the local Nest) act on behalf of a delegator (typically the human owner) at IdP-level. Inputs: `subject_token` (delegator's access token), `actor_token` (delegate's access token), `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, optional `audience` and `delegation_grant_id`. Output: a fresh access token with `sub=delegator` and `act={sub:delegate}` so downstream verifiers can do owner-attribution from the token alone — no server-side heuristics. Looks up the delegation grant either by explicit id or by scanning the delegator's approved grants for one matching delegate + audience.
+
+### Patch Changes
+
+- [#370](https://github.com/openape-ai/openape/pull/370) [`8ca96f1`](https://github.com/openape-ai/openape/commit/8ca96f10f7a0a9c8adc5afa5c8fd863f62342f6c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Wire up delegation token-exchange end-to-end:
+
+  - **`@openape/cli-auth`** exports `exchangeWithDelegation()` — posts an actor token + (optional) delegation grant id to the IdP's `/api/oauth/token-exchange` and returns a delegated access token whose `sub` is the delegator.
+  - **`@openape/apes`** `registerAgentAtIdp()` now checks if the local caller is itself an agent. If yes, it lists the owner's approved grants, finds the first delegation grant for the `enroll-agent` audience, exchanges tokens, and presents the delegated access token as `Authorization: Bearer …` to `/api/enroll`. Falls back to the direct call (caller-as-requester) when no delegation is configured — the IdP's transitive-ownership lookup still covers that path until M3.
+  - **IdP token-exchange** (`@openape/nuxt-auth-idp`) accepts a `delegation_grant_id` without requiring a `subject_token`: when the grant id is provided, the delegator identity is derived from `grant.delegator` and `subject_token` becomes optional (it can still be supplied for belt-and-suspenders verification, in which case its sub must match the grant's delegator).
+
+  The `subject_token`-only path (RFC 8693 strict mode) and the new `delegation_grant_id`-only path coexist on the same endpoint.
+
 ## 0.26.1
 
 ### Patch Changes
