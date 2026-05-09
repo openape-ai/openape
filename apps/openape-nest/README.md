@@ -18,6 +18,33 @@ apes nest authorize    # set the YOLO policy — covers the inner
                        # `apes agents spawn` calls the daemon makes
 ```
 
+### Optional: privilege isolation with a dedicated service user
+
+By default, `apes nest install` configures the daemon as a user-domain
+`LaunchAgent` running under your own Mac user account, with state at
+`~/.openape/nest`. That works fine for personal use. For a more
+hardened setup the daemon can be promoted to a system-domain
+`LaunchDaemon` running under a dedicated `_openape_nest` macOS service
+user (uid 481, hidden, no shell, no GUI session) with state under
+`/var/openape/nest`.
+
+To migrate an existing user-domain install:
+
+```bash
+apes run --as root --wait -- bash apps/openape-nest/scripts/migrate-to-service-user.sh
+```
+
+The script creates the user/group, copies your data dir to
+`/var/openape/nest`, and swaps the plist. The Nest's IdP identity is
+bound to its ssh keypair (which moves with the data dir), so the same
+`nest-…@id.openape.ai` identity continues to work — no re-enroll
+needed, all existing approved delegations / grants stay valid.
+
+After migration you may want a fresh `apes login --key` for the Nest
+to refresh the access token (the migrated `auth.json` carries the
+old token; `cli-auth`'s challenge-response refresh handles it on
+expiry, but a manual login also works).
+
 After that, day-to-day lifecycle goes through `apes nest`:
 
 ```bash
