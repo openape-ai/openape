@@ -1,8 +1,13 @@
 // OpenApe Nest daemon — local control-plane that hosts agents on this
 // computer. Listens on 127.0.0.1:9091 (localhost-only, no auth — only
-// processes running as the same human user can reach it). Talks to
-// troop SP for ownership state, supervises chat-bridge children, runs
-// the cron loop in the bridge process (since #348).
+// processes running as the same human user can reach it). Acts as an
+// API surface in front of `apes agents spawn|destroy`; bridge-process
+// lifecycle is delegated to the per-agent system-domain launchd plists
+// `apes agents spawn --bridge` installs into `/Library/LaunchDaemons/`.
+// (We previously tried supervising bridges in-daemon — see git history
+// for the supervisor — but it duplicated launchd's job, raced the
+// system-domain plist, and inherited the human-user PATH which doesn't
+// see the agent's `~/.bun/bin/openape-chat-bridge`.)
 //
 // Bootstrapped by `apes nest install` — see packages/apes/src/commands/
 // nest/install.ts. Started + KeepAlive'd by launchd via
@@ -14,8 +19,6 @@ import { createServer   } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import process from 'node:process'
 import { handleAgentsList, handleAgentSpawn, handleAgentDestroy, handleNestStatus } from './api/agents'
-import { Supervisor } from './lib/supervisor'
-import { listAgents } from './lib/registry'
 
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.OPENAPE_NEST_PORT ?? 9091)
@@ -25,20 +28,11 @@ function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
 }
 
-const supervisor = new Supervisor({ apesBin: APES_BIN, log })
-
-// Initial reconcile from the persisted registry — re-spawns the
-// chat-bridge child for every agent that was registered before the
-// last daemon shutdown (or boot).
-supervisor.reconcile(listAgents())
-log(`nest: supervisor reconciled, ${supervisor.size()} agent process(es) running`)
-
 interface RouteCtx {
   url: URL
   body: unknown
   log: typeof log
   apesBin: string
-  supervisor: Supervisor
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -63,7 +57,7 @@ const server = createServer((req, res) => {
       const body = req.method && ['POST', 'PUT', 'PATCH'].includes(req.method)
         ? await readJsonBody(req)
         : {}
-      const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, supervisor }
+      const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN }
 
       if (req.method === 'GET' && url.pathname === '/status') {
         return send(res, 200, handleNestStatus(ctx))
@@ -96,13 +90,11 @@ server.listen(PORT, HOST, () => {
 })
 
 process.on('SIGTERM', () => {
-  log('nest: SIGTERM — stopping supervisor')
-  supervisor.stopAll()
+  log('nest: SIGTERM — shutting down')
   server.close(() => process.exit(0))
 })
 
 process.on('SIGINT', () => {
-  log('nest: SIGINT — stopping supervisor')
-  supervisor.stopAll()
+  log('nest: SIGINT — shutting down')
   server.close(() => process.exit(0))
 })
