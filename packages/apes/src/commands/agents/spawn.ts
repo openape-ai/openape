@@ -154,7 +154,15 @@ export const spawnAgentCommand = defineCommand({
         email: registration.email,
         expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
         keyPath: `${homeDir}/.ssh/id_ed25519`,
-        ownerEmail: auth.email,
+        // The IdP resolves the owner transitively (when the caller
+        // is itself an agent — e.g. a Nest spawning a child — the
+        // human at the top of the chain becomes owner). Use the
+        // server-resolved owner, not the local caller's auth.email,
+        // otherwise the agent's auth.json will carry the Nest's
+        // email and troop will reject sync calls because the
+        // encoded owner-domain in the agent email doesn't match
+        // the auth.json's owner_email domain.
+        ownerEmail: registration.owner,
       })
 
       const includeClaudeHook = !args['no-claude-hook']
