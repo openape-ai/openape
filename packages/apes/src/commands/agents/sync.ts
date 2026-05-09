@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chownSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineCommand } from 'citty'
@@ -114,6 +114,31 @@ export const syncAgentCommand = defineCommand({
     const { system_prompt: systemPrompt, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
 
+    // Sync runs as ROOT in production (the launchd plist sets
+    // UserName=root so it can write /Library/LaunchDaemons/ and
+    // bootstrap into the system domain — a hidden service-account
+    // agent has no permission for either). Files we write into the
+    // agent's home need to be owned by the agent so the bridge daemon
+    // and `apes agents run` (both running AS the agent) can read
+    // them. Resolve agent's uid/gid by stat-ing $HOME — that's
+    // already chown'd to the agent at spawn time.
+    let agentUid: number | null = null
+    let agentGid: number | null = null
+    if (process.geteuid?.() === 0) {
+      try {
+        const homeStat = statSync(homedir())
+        agentUid = homeStat.uid
+        agentGid = homeStat.gid
+      }
+      catch { /* fall through, no chowning */ }
+    }
+    function chownToAgent(path: string): void {
+      if (agentUid !== null && agentGid !== null) {
+        try { chownSync(path, agentUid, agentGid) }
+        catch { /* best-effort */ }
+      }
+    }
+
     // Cache full task specs + agent-level config locally so the bridge
     // daemon and `apes agents run <task_id>` can execute without going
     // to network. Cache layout:
@@ -121,15 +146,21 @@ export const syncAgentCommand = defineCommand({
     //   ~/.openape/agent/tasks/<task_id>.json
     const agentDir = join(homedir(), '.openape', 'agent')
     mkdirSync(agentDir, { recursive: true })
+    chownToAgent(join(homedir(), '.openape'))
+    chownToAgent(agentDir)
+    const agentJsonPath = join(agentDir, 'agent.json')
     writeFileSync(
-      join(agentDir, 'agent.json'),
+      agentJsonPath,
       `${JSON.stringify({ systemPrompt }, null, 2)}\n`,
       { mode: 0o600 },
     )
+    chownToAgent(agentJsonPath)
     mkdirSync(TASK_CACHE_DIR, { recursive: true })
+    chownToAgent(TASK_CACHE_DIR)
     for (const task of tasks) {
       const path = join(TASK_CACHE_DIR, `${task.taskId}.json`)
       writeFileSync(path, `${JSON.stringify(task, null, 2)}\n`, { mode: 0o600 })
+      chownToAgent(path)
     }
 
     const apesBin = findApesBin()
@@ -138,6 +169,10 @@ export const syncAgentCommand = defineCommand({
       apesBin,
       homeDir: homedir(),
       desired: tasks,
+      // Sync runs as root in production — pass the agent username
+      // explicitly for the UserName plist key (launchd will then run
+      // each task daemon AS the agent, not as root).
+      userName: process.env.AGENT_USER || undefined,
     })
 
     if (result.added.length) consola.success(`launchd: added ${result.added.join(', ')}`)

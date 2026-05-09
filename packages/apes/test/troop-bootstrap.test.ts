@@ -10,7 +10,7 @@ describe('troop-bootstrap', () => {
       .toBe('/Library/LaunchDaemons/openape.troop.sync.alice.plist')
   })
 
-  it('plist body includes the agents-sync invocation, RunAtLoad, 5min interval, UserName', () => {
+  it('plist body includes the agents-sync invocation, RunAtLoad, 5min interval, no UserName (runs as root)', () => {
     const body = buildSyncPlist({
       agentName: 'alice',
       apesBin: '/usr/local/bin/apes',
@@ -26,14 +26,19 @@ describe('troop-bootstrap', () => {
     expect(body).toContain('<key>RunAtLoad</key>')
     expect(body).toContain('<true/>')
     expect(body).toContain('<key>HOME</key><string>/Users/alice</string>')
-    // UserName makes launchd run the daemon as the agent uid.
-    expect(body).toContain('<key>UserName</key>')
-    expect(body).toContain('<string>alice</string>')
+    // No UserName — sync runs as ROOT so it can write
+    // /Library/LaunchDaemons/ and `launchctl bootstrap system` task
+    // plists. It chowns its writes back to the agent uid via stat($HOME).
+    expect(body).not.toContain('<key>UserName</key>')
     // PATH must include common node/bun locations so the apes binary's
     // `#!/usr/bin/env node` shebang resolves.
     expect(body).toContain('<key>PATH</key>')
     expect(body).toContain('/Users/alice/.bun/bin')
     expect(body).toContain('/opt/homebrew/bin')
+    // Sync (as root) reads AGENT_USER to plumb into the per-task plist
+    // UserName key so each task daemon runs as the agent.
+    expect(body).toContain('<key>AGENT_USER</key>')
+    expect(body).toContain('<string>alice</string>')
   })
 
   it('passes through OPENAPE_TROOP_URL when supplied (staging)', () => {
