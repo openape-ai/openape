@@ -114,16 +114,30 @@ const server = createServer((req, res) => {
         return send(res, 200, handleAgentsList(ctx))
       }
       if (req.method === 'POST' && url.pathname === '/agents') {
-        // M2 wires this; for now keep the unauthenticated path so
-        // existing tooling doesn't break in the middle of the rollout.
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: 'unauth', grantId: 'unauth' }
+        const name = (body as { name?: unknown } | undefined)?.name
+        if (typeof name !== 'string' || !name) {
+          return sendProblem(res, 400, 'POST /agents requires body.name (string)')
+        }
+        // Grant scope is `nest spawn` (no name baked in) — one
+        // approval covers any future spawn. The agent name comes
+        // from the request body; the grant doesn't constrain it.
+        // Mirror semantics for destroy is intentionally tighter
+        // (per-name) — see api/agents.ts comment + `apes nest spawn`.
+        const grant = await requireNestGrant(req, res, ['nest', 'spawn'])
+        if (!grant) return
+        log(`nest: POST /agents (spawn ${name}) authorized (caller=${grant.caller}, grant=${grant.grantId})`)
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
         const result = await handleAgentSpawn(ctx)
         return send(res, 201, result)
       }
       const destroyMatch = req.method === 'DELETE' && url.pathname.match(/^\/agents\/([^/]+)$/)
       if (destroyMatch) {
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: 'unauth', grantId: 'unauth' }
-        const result = await handleAgentDestroy(ctx, destroyMatch[1]!)
+        const name = destroyMatch[1]!
+        const grant = await requireNestGrant(req, res, ['nest', 'destroy', name])
+        if (!grant) return
+        log(`nest: DELETE /agents/${name} authorized (caller=${grant.caller}, grant=${grant.grantId})`)
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
+        const result = await handleAgentDestroy(ctx, name)
         return send(res, 200, result)
       }
 

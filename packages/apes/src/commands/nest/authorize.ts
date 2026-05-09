@@ -26,7 +26,10 @@ const DEFAULT_ALLOW_PATTERNS = [
   // is gated cryptographically without a per-call human prompt.
   'nest status',
   'nest list',
-  'nest spawn *',
+  // spawn uses a wildcard-name grant (one approval, any name)
+  'nest spawn',
+  // destroy stays per-name (typed in command), so the YOLO pattern
+  // matches the per-name shape `nest destroy igor18`.
   'nest destroy *',
   // Inner spawn/destroy grants the nest itself triggers via
   // `apes run --as root --wait -- apes agents spawn|destroy`.
