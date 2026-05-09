@@ -129,18 +129,42 @@ export interface CronRunnerDeps {
   ownerEmail: string
   model: string
   log: (line: string) => void
+  /**
+   * Troop SP URL (default: https://troop.openape.ai) — used to record
+   * run history per fire so the troop owner UI can show status + the
+   * final_message under "Recent runs".
+   */
+  troopUrl: string
+  /**
+   * Same Bearer the bridge uses for chat — works for troop because
+   * the agent JWT is acceptable on both SPs (no per-SP audience check).
+   */
+  bearer: () => Promise<string>
 }
 
 export class CronRunner {
   private timer: NodeJS.Timeout | undefined
   private lastTickedMinute: string | undefined
-  /** Sessions still streaming — keeps their accumulated text + the
-   * destination room until 'done', when we post the final message. */
-  private pending = new Map<string, { taskId: string, taskName: string, accumulated: string, roomId: string, status: 'ok' | 'error' | 'pending' }>()
+  /**
+   * Sessions still streaming — keeps accumulated text, destination
+   * room, plus the troop run-id we created at fire time so we can
+   * PATCH it with status + step_count when the run ends.
+   */
+  private pending = new Map<string, {
+    taskId: string
+    taskName: string
+    accumulated: string
+    roomId: string
+    status: 'ok' | 'error' | 'pending'
+    runId?: string
+  }>()
+
   private detach: (() => void) | undefined
-  /** taskId → chatThreadId. Loaded from disk on construct, persisted
+  /**
+   * taskId → chatThreadId. Loaded from disk on construct, persisted
    * after each new thread allocation. All runs of the same task post
-   * into the same thread so the chat history stays coherent. */
+   * into the same thread so the chat history stays coherent.
+   */
   private taskThreads: Map<string, string> = new Map()
 
   constructor(private deps: CronRunnerDeps) {
@@ -190,8 +214,10 @@ export class CronRunner {
     this.detach = undefined
   }
 
-  /** Fire any tasks whose cron matches the current minute. Idempotent
-   * within a single minute — we de-dup by floored-minute-string. */
+  /**
+   * Fire any tasks whose cron matches the current minute. Idempotent
+   * within a single minute — we de-dup by floored-minute-string.
+   */
   private async tick(): Promise<void> {
     const now = new Date()
     const minuteKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`
@@ -228,8 +254,34 @@ export class CronRunner {
     // Same chat-thread-id → all runs land as messages in one thread,
     // not as N independent DMs at the top of the inbox.
     const sessionId = `task:${spec.taskId}`
-    this.pending.set(sessionId, { taskId: spec.taskId, taskName: spec.name, accumulated: '', roomId: room.roomId, status: 'pending' })
-    this.deps.log(`task ${spec.taskId} fired (session=${sessionId})`)
+
+    // Open a run record in troop FIRST so the UI's "Recent runs" list
+    // shows the run as 'running' immediately. Best-effort — if troop is
+    // down we still execute the task and post the DM; just no row.
+    let runId: string | undefined
+    try {
+      const res = await fetch(`${this.deps.troopUrl}/api/agents/me/runs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': await this.deps.bearer(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task_id: spec.taskId }),
+      })
+      if (res.ok) {
+        const data = await res.json() as { id: string }
+        runId = data.id
+      }
+      else {
+        this.deps.log(`troop startRun ${spec.taskId} failed: ${res.status}`)
+      }
+    }
+    catch (err) {
+      this.deps.log(`troop startRun ${spec.taskId} error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+
+    this.pending.set(sessionId, { taskId: spec.taskId, taskName: spec.name, accumulated: '', roomId: room.roomId, status: 'pending', runId })
+    this.deps.log(`task ${spec.taskId} fired (session=${sessionId}, run=${runId ?? 'no-troop'})`)
 
     // Make sure the rpc subprocess is alive — bridge keeps a single
     // shared one for chat threads + tasks alike.
@@ -255,15 +307,39 @@ export class CronRunner {
         break
       case 'done':
         turn.status = event.status === 'error' ? 'error' : 'ok'
+        void this.finaliseRun(turn, typeof event.step_count === 'number' ? event.step_count : 0)
         void this.postResult(sid, turn)
         this.pending.delete(sid)
         break
       case 'error':
         turn.status = 'error'
         turn.accumulated = `(runtime error: ${event.message ?? 'unknown'})`
+        void this.finaliseRun(turn, 0)
         void this.postResult(sid, turn)
         this.pending.delete(sid)
         break
+    }
+  }
+
+  private async finaliseRun(turn: { runId?: string, status: 'ok' | 'error' | 'pending', accumulated: string }, stepCount: number): Promise<void> {
+    if (!turn.runId) return
+    try {
+      await fetch(`${this.deps.troopUrl}/api/agents/me/runs/${encodeURIComponent(turn.runId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': await this.deps.bearer(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: turn.status === 'pending' ? 'error' : turn.status,
+          final_message: turn.accumulated.slice(0, 4000),
+          step_count: stepCount,
+          trace: [],
+        }),
+      })
+    }
+    catch (err) {
+      this.deps.log(`troop finaliseRun failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
