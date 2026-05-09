@@ -425,6 +425,34 @@ importers:
         specifier: ^2.0.0
         version: 2.2.12(typescript@5.9.3)
 
+  apps/openape-nest:
+    dependencies:
+      '@openape/cli-auth':
+        specifier: workspace:*
+        version: link:../../packages/cli-auth
+      ofetch:
+        specifier: ^1.4.1
+        version: 1.5.1
+    devDependencies:
+      '@antfu/eslint-config':
+        specifier: 'catalog:'
+        version: 7.7.2(@typescript-eslint/rule-tester@8.57.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@typescript-eslint/typescript-estree@8.57.0(typescript@5.9.3))(@typescript-eslint/utils@8.57.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(@vue/compiler-sfc@3.5.30)(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.15
+      eslint:
+        specifier: ^9.35.0
+        version: 9.39.4(jiti@2.6.1)
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(@microsoft/api-extractor@7.58.1(@types/node@22.19.15))(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(happy-dom@18.0.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   apps/openape-troop:
     dependencies:
       '@iconify-json/lucide':
