@@ -51,7 +51,10 @@ export async function handleAgentSpawn(ctx: RouteCtx): Promise<{ name: string, e
   // returns exit 75 EX_TEMPFAIL the moment the grant is created, even
   // when YOLO auto-approves milliseconds later).
   const args = ['run', '--as', 'root', '--wait', '--', 'apes', 'agents', 'spawn', name]
-  const includeBridge = body?.bridge === true
+  // Bridge is on by default — without it the agent has no chat
+  // connection + no cron-runner, which makes it functionally inert.
+  // Pass `bridge: false` explicitly to opt out.
+  const includeBridge = body?.bridge !== false
   if (includeBridge) {
     args.push('--bridge')
     if (typeof body?.bridgeKey === 'string') args.push('--bridge-key', body.bridgeKey)
