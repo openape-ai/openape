@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.9.0
+
+### Minor Changes
+
+- [#374](https://github.com/openape-ai/openape/pull/374) [`559569c`](https://github.com/openape-ai/openape/commit/559569cad20400ff4232b3d730c8fecc1df1aebd) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes nest install --bridge-model <name>` persists the default bridge model used by every subsequent `apes [nest|agents] spawn --bridge`. Writes `APE_CHAT_BRIDGE_MODEL=<name>` into `~/litellm/.env` (the file `resolveBridgeConfig()` already reads at spawn time). Without this flag, the chat-bridge falls back to its built-in default `claude-haiku-4-5`, which 400s every chat-completion request when the user's LiteLLM proxy fronts only ChatGPT (or only Anthropic etc.).
+
 ## 1.8.1
 
 ### Patch Changes
