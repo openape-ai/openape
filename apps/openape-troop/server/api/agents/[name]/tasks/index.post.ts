@@ -9,7 +9,11 @@ const bodySchema = z.object({
   task_id: z.string(),
   name: z.string().min(1).max(100),
   cron: z.string().min(1).max(50),
-  system_prompt: z.string().min(1).max(8000),
+  // The imperative job description ("read my mail and summarise"). Sent
+  // as the LLM `user` message at run time. The agent-level systemPrompt
+  // (set on the agent itself) provides persona/style; the task-level
+  // userPrompt provides the concrete job.
+  user_prompt: z.string().min(1).max(8000),
   tools: z.array(z.string()),
   max_steps: z.number().int().min(1).max(50).default(10),
   enabled: z.boolean().default(true),
@@ -49,7 +53,7 @@ export default defineEventHandler(async (event) => {
     taskId: body.data.task_id,
     name: body.data.name,
     cron: body.data.cron,
-    systemPrompt: body.data.system_prompt,
+    userPrompt: body.data.user_prompt,
     tools: t.tools,
     maxSteps: body.data.max_steps,
     enabled: body.data.enabled,
@@ -60,7 +64,7 @@ export default defineEventHandler(async (event) => {
     set: {
       name: body.data.name,
       cron: body.data.cron,
-      systemPrompt: body.data.system_prompt,
+      userPrompt: body.data.user_prompt,
       tools: t.tools,
       maxSteps: body.data.max_steps,
       enabled: body.data.enabled,
