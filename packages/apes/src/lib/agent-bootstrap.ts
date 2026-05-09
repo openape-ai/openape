@@ -169,6 +169,12 @@ done
   return `#!/bin/bash
 set -euo pipefail
 
+# escapes-spawned scripts inherit a minimal PATH that doesn't include
+# /usr/sbin — which is where chown / dscl / pwpolicy live. Force a
+# wide PATH so the privileged setup commands resolve without absolute
+# paths everywhere.
+export PATH="/usr/sbin:/usr/bin:/bin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+
 NAME=${shQuote(name)}
 HOME_DIR=${shQuote(homeDir)}
 SHELL_PATH=${shQuote(shellPath)}
