@@ -98,7 +98,12 @@ export class Supervisor {
     // that matches the command pattern (see findExistingGrant). The
     // human approves the always-grant once during `apes nest install`;
     // every supervisor restart from then on is silent (no human prompt).
-    const args = ['run', '--as', agent.name, '--', 'openape-chat-bridge']
+    // `--wait` is mandatory: even though YOLO auto-approves the grant
+    // server-side, `apes run` without `--wait` returns exit 75
+    // (EX_TEMPFAIL) the moment the grant is created — before the CLI
+    // observes the approval. Same lesson as the nest API spawn handler
+    // (apps/openape-nest/src/api/agents.ts).
+    const args = ['run', '--as', agent.name, '--wait', '--', 'openape-chat-bridge']
     const child = spawn(this.deps.apesBin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
