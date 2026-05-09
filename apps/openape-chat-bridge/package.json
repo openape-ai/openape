@@ -1,6 +1,6 @@
 {
   "name": "@openape/chat-bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Bridge daemon: forwards chat.openape.ai messages into an `apes agents serve --rpc` runtime and streams replies back as the agent",
   "type": "module",
   "license": "MIT",
