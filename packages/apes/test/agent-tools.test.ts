@@ -20,11 +20,13 @@ describe('tool registry', () => {
     expect(() => taskTools(['time.now', 'magic.do'])).toThrow(/unknown tool/)
   })
 
-  it('asOpenAiTools strips execute', () => {
+  it('asOpenAiTools strips execute and wire-encodes the name (dots → underscores)', () => {
     const out = asOpenAiTools([TOOLS['time.now']!])
     expect(out[0]).toEqual({
       type: 'function',
-      function: expect.objectContaining({ name: 'time.now' }),
+      // ChatGPT's Responses API enforces ^[a-zA-Z0-9_-]+$ on tool names
+      // — dot-bearing catalog names get wire-encoded to underscores.
+      function: expect.objectContaining({ name: 'time_now' }),
     })
     expect((out[0]!.function as Record<string, unknown>).execute).toBeUndefined()
   })

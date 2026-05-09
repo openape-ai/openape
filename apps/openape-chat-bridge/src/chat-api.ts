@@ -68,6 +68,21 @@ export class ChatApi {
     })
   }
 
+  /**
+   * Create a named thread in a room. Used by the cron-runner to drop
+   * each task's runs into its own thread so the chat sidebar shows
+   * one thread per task instead of all task DMs piling into the
+   * main thread.
+   */
+  async createThread(roomId: string, name: string): Promise<{ id: string, name: string }> {
+    const url = `${this.endpoint}/api/rooms/${encodeURIComponent(roomId)}/threads`
+    return await ofetch<{ id: string, name: string }>(url, {
+      method: 'POST',
+      headers: { Authorization: await this.bearer() },
+      body: { name: name.slice(0, 100) },
+    })
+  }
+
   async patchMessage(messageId: string, body: string): Promise<void> {
     const trimmed = clamp(body, MAX_BODY)
     const url = `${this.endpoint}/api/messages/${encodeURIComponent(messageId)}`
