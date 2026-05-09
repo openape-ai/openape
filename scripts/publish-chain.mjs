@@ -44,6 +44,7 @@ const PACKAGES = [
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
   { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
   { name: '@openape/chat-bridge', dir: 'apps/openape-chat-bridge' },
+  { name: '@openape/nest', dir: 'apps/openape-nest' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')
