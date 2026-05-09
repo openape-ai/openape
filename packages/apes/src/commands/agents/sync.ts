@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { CliError } from '../../errors'
-import { reconcile } from '../../lib/launchd-reconcile'
 import { getHostId, getHostname } from '../../lib/macos-host'
 import { resolveTroopUrl, TroopClient } from '../../lib/troop-client'
 
@@ -61,19 +60,6 @@ function agentNameFromEmail(email: string): string {
     return before
   }
   return before.slice(0, dashIdx)
-}
-
-function findApesBin(): string {
-  // process.argv[1] is the apes entry script; resolve the symlink to
-  // the actual binary so launchd can invoke it directly. If
-  // process.argv[1] isn't reliable (e.g. when run via `node dist/...`),
-  // fall back to whatever's on PATH at /usr/local/bin/apes.
-  const argv1 = process.argv[1]
-  if (argv1 && existsSync(argv1)) return argv1
-  for (const candidate of ['/opt/homebrew/bin/apes', '/usr/local/bin/apes']) {
-    if (existsSync(candidate)) return candidate
-  }
-  throw new CliError('Could not locate the apes binary path for launchd. Set APES_BIN env var to point at it.')
 }
 
 export const syncAgentCommand = defineCommand({
@@ -163,22 +149,11 @@ export const syncAgentCommand = defineCommand({
       chownToAgent(path)
     }
 
-    const apesBin = findApesBin()
-    const result = reconcile({
-      agentName,
-      apesBin,
-      homeDir: homedir(),
-      desired: tasks,
-      // Sync runs as root in production — pass the agent username
-      // explicitly for the UserName plist key (launchd will then run
-      // each task daemon AS the agent, not as root).
-      userName: process.env.AGENT_USER || undefined,
-    })
-
-    if (result.added.length) consola.success(`launchd: added ${result.added.join(', ')}`)
-    if (result.updated.length) consola.success(`launchd: updated ${result.updated.join(', ')}`)
-    if (result.removed.length) consola.warn(`launchd: removed ${result.removed.join(', ')}`)
-    if (result.unchanged.length) consola.info(`launchd: ${result.unchanged.length} unchanged`)
+    // Cron tasks no longer get a per-task launchd plist (#347 was the
+    // last attempt — too many failure modes for hidden agents). The
+    // chat-bridge daemon's CronRunner ticks every 60s, reads these
+    // task specs and fires the ones whose cron matches inside the
+    // already-running ApesRpcSession. Sync just keeps the cache fresh.
 
     consola.success('Sync complete.')
   },
