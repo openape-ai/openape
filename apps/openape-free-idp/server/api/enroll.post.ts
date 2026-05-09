@@ -89,6 +89,14 @@ export default defineEventHandler(async (event) => {
   const callerRecord = await userStore.findByEmail(email)
   if (callerRecord?.type === 'agent' && callerRecord.owner) {
     effectiveOwner = callerRecord.owner
+    // Audit signal during the rollout: agent-side delegation flow
+    // (registerAgentAtIdp's tryDelegatedEnrollToken) is supposed to
+    // mint a token whose `sub` is already the human owner — so when
+    // we DO see an agent's email coming through here, it means the
+    // delegation path didn't fire (either the agent has no
+    // delegation grant, or the token-exchange failed). Counts as a
+    // signal to track until we can confidently remove this fallback.
+    console.warn(`[enroll] transitive-ownership fallback fired: caller=${email} → owner=${effectiveOwner} (agent has no delegation; consider running \`apes grants delegate --to ${email} --at enroll-agent --approval always\` from the owner)`)
   }
 
   const existingOwned = await userStore.findByOwner(effectiveOwner)

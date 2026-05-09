@@ -75,7 +75,15 @@ async function tryDelegatedEnrollToken(idp?: string): Promise<string | null> {
     if (!idpUrl) return null
 
     const grantId = await findEnrollDelegationGrantId(idpUrl, ownerEmail, myEmail)
-    if (!grantId) return null
+    if (!grantId) {
+      // Visible signal during the rollout window so we can tell when
+      // a Nest is still falling back to /api/enroll's transitive-
+      // ownership heuristic (and therefore why removing that
+      // heuristic would break it). Stays at debug volume so it
+      // doesn't pollute the spawn flow's stdout.
+      console.warn(`[agent-bootstrap] no enroll-agent delegation from ${ownerEmail} to ${myEmail} — falling back to direct enroll`)
+      return null
+    }
 
     const result = await exchangeWithDelegation({
       idp: idpUrl,
@@ -83,9 +91,11 @@ async function tryDelegatedEnrollToken(idp?: string): Promise<string | null> {
       audience: ENROLL_AUDIENCE,
       delegationGrantId: grantId,
     })
+    console.log(`[agent-bootstrap] using delegated token from grant ${grantId} (sub=${ownerEmail}, act=${myEmail})`)
     return result.access_token
   }
-  catch {
+  catch (err) {
+    console.warn(`[agent-bootstrap] delegated-enroll exchange failed: ${err instanceof Error ? err.message : String(err)} — falling back to direct enroll`)
     return null
   }
 }
