@@ -18,6 +18,10 @@ interface RouteCtx {
   body: unknown
   log: (line: string) => void
   apesBin: string
+  /** DDISA-grant subject — set by the auth middleware. 'unauth' on
+   * the legacy (M2-pending) write endpoints. */
+  caller: string
+  grantId: string
 }
 
 export function handleNestStatus(_ctx: RouteCtx): { agents: number } {
