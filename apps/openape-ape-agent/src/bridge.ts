@@ -1,4 +1,4 @@
-// openape-chat-bridge
+// ape-agent (formerly openape-chat-bridge)
 //
 // Long-running daemon. Connects to chat.openape.ai via WebSocket using
 // the agent's IdP token. For each inbound message that wasn't sent by

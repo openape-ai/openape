@@ -46,8 +46,11 @@ const DEFAULT_ALLOW_PATTERNS = [
   // Bridge invocation. The grant request escapes-helper sends to the
   // IdP contains the *inner* command only — `apes run --as <agent> --`
   // is the wrapper that gets unwrapped before grant creation. So the
-  // YOLO target string is just `openape-chat-bridge`, not the full
-  // wrapped invocation.
+  // YOLO target string is just the agent-runtime binary name, not
+  // the full wrapped invocation. We list both the new canonical
+  // name and the legacy alias — pm2 ecosystem.config.js files
+  // written before @openape/ape-agent@2.0.0 still use the old name.
+  'ape-agent',
   'openape-chat-bridge',
   // Phase E: per-agent pm2 management. The Nest shells out
   // `apes run --as <agent> -- bash /var/openape/agents/<agent>/start.sh`

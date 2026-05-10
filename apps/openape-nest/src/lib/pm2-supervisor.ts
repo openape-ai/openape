@@ -61,7 +61,7 @@ function ecosystemContents(apesBin: string, agentName: string): string {
 module.exports = {
   apps: [{
     name: '${pm2AppName(agentName)}',
-    script: 'openape-chat-bridge',
+    script: 'ape-agent',
     autorestart: true,
     max_restarts: 10,
     min_uptime: '30s',
