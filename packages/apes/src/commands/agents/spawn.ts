@@ -67,7 +67,7 @@ export const spawnAgentCommand = defineCommand({
     'bridge': {
       type: 'boolean',
       description:
-        'Install the openape-chat-bridge daemon for this agent: drops a launchd plist that runs `@openape/chat-bridge` so the agent answers chat.openape.ai messages. Reads LITELLM_API_KEY/BASE_URL defaults from ~/litellm/.env; override via --bridge-key / --bridge-base-url.',
+        'Install the ape-agent runtime for this agent: drops a launchd plist that runs `@openape/ape-agent` so the agent answers chat.openape.ai messages. Reads LITELLM_API_KEY/BASE_URL defaults from ~/litellm/.env; override via --bridge-key / --bridge-base-url.',
     },
     'bridge-key': {
       type: 'string',
@@ -201,7 +201,7 @@ export const spawnAgentCommand = defineCommand({
             })
             // Capture the host's bin dirs ONCE per spawn — same dirs
             // are baked into both the plist's PATH and start.sh.
-            // Throws if node / openape-chat-bridge / apes aren't on
+            // Throws if node / ape-agent / apes aren't on
             // the host PATH.
             const hostBinDirs = captureHostBinDirs()
             return {

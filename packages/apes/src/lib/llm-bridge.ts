@@ -81,29 +81,35 @@ export function resolveBridgeConfig(opts: {
 /**
  * Capture the host's bin directories the bridge needs at runtime:
  * `node` (for the `#!/usr/bin/env node` shebang on the bridge binary),
- * `openape-chat-bridge` (the bridge itself), and `apes` (for the
+ * `ape-agent` (the bridge itself), and `apes` (for the
  * `apes agents serve --rpc` subprocess the bridge spawns).
  *
  * On Homebrew macOS these all live in /opt/homebrew/bin. Resolved
  * dynamically so the same code works under nvm, volta, asdf, or
  * system Node. Throws if any required binary isn't on the host PATH —
  * that means the operator hasn't installed the OpenApe stack yet
- * (`npm i -g @openape/apes @openape/chat-bridge` fixes it). The
+ * (`npm i -g @openape/apes @openape/ape-agent` fixes it). The
  * thrown error is the right surface area: previously the spawn flow
  * silently `bun add -g`'d the missing pieces per agent, costing
  * 30-90s/spawn and ~100MB/agent.
+ *
+ * `ape-agent` is the canonical binary name (renamed from
+ * `openape-chat-bridge` in @openape/ape-agent@2.0.0). The old name
+ * is still shipped as an alias by the same package, so existing
+ * pm2 ecosystem.config.js that reference `openape-chat-bridge`
+ * keep working on hosts that have @openape/ape-agent installed.
  */
 export function captureHostBinDirs(): string[] {
   const dirs: string[] = []
   const seen = new Set<string>()
-  for (const bin of ['node', 'openape-chat-bridge', 'apes']) {
+  for (const bin of ['node', 'ape-agent', 'apes']) {
     let resolved: string
     try {
       resolved = execFileSync('/usr/bin/which', [bin], { encoding: 'utf8' }).trim()
     }
     catch {
-      const installCmd = bin === 'openape-chat-bridge'
-        ? 'npm i -g @openape/chat-bridge'
+      const installCmd = bin === 'ape-agent'
+        ? 'npm i -g @openape/ape-agent'
         : bin === 'apes'
           ? 'npm i -g @openape/apes'
           : 'install Node.js (e.g. brew install node)'
@@ -152,7 +158,8 @@ ${modelLine}`
  * across the 1h expiry boundary instead of crash-restarting. See #259.
  *
  * To upgrade an agent's bridge after a new release:
- *   apes run --as <name> -- bun update -g @openape/chat-bridge
+ *   npm i -g @openape/ape-agent@latest
+ *   apes run --as <name> -- pm2 reload openape-bridge-<name>
  */
 export function buildBridgeStartScript(hostBinDirs: string[]): string {
   // PATH is the host's resolved bin dirs (from captureHostBinDirs)
@@ -175,7 +182,7 @@ ${pathLine}
 set -a
 . "$HOME/Library/Application Support/openape/bridge/.env"
 set +a
-exec openape-chat-bridge
+exec ape-agent
 `
 }
 
@@ -193,9 +200,9 @@ exec openape-chat-bridge
  */
 export function buildBridgePlist(agentName: string, homeDir: string, ownerEmail: string, hostBinDirs: string[]): string {
   const startScript = `${homeDir}/Library/Application Support/openape/bridge/start.sh`
-  const stdoutLog = `${homeDir}/Library/Logs/openape-chat-bridge.log`
-  const stderrLog = `${homeDir}/Library/Logs/openape-chat-bridge.err.log`
-  // PATH = host's resolved bin dirs (where node, openape-chat-bridge,
+  const stdoutLog = `${homeDir}/Library/Logs/ape-agent.log`
+  const stderrLog = `${homeDir}/Library/Logs/ape-agent.err.log`
+  // PATH = host's resolved bin dirs (where node, ape-agent,
   // and apes already live) + standard system path. No `~/.bun/bin`
   // entry — the per-agent bun install was retired in favour of host-
   // wide tooling. See captureHostBinDirs for resolution.
