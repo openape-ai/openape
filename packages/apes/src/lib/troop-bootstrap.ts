@@ -45,6 +45,14 @@ interface SyncPlistInput {
   // the apes binary's resolveTroopUrl). Useful for testing against
   // a staging troop.
   troopUrl?: string
+  /**
+   * Host bin dirs (e.g. ['/opt/homebrew/bin']) baked into the plist's
+   * PATH so the launchd-spawned `apes` binary's `#!/usr/bin/env node`
+   * shebang resolves. Captured at spawn time via captureHostBinDirs.
+   * Falls back to ['/opt/homebrew/bin','/usr/local/bin'] if not given,
+   * for backwards compat with older callers.
+   */
+  hostBinDirs?: string[]
 }
 
 function escape(s: string): string {
@@ -54,15 +62,19 @@ function escape(s: string): string {
 export function buildSyncPlist(input: SyncPlistInput): string {
   // launchd defaults PATH to /usr/bin:/bin:/usr/sbin:/sbin — too narrow
   // for the apes binary's `#!/usr/bin/env node` shebang to find node.
-  // Include the agent's bun bin (where apes itself is installed),
-  // homebrew, and the standard system paths so the daemon can resolve
-  // both `node` and `bun` regardless of how the agent host is set up.
+  // We bake the host's resolved bin dirs (where node and apes already
+  // live, captured via captureHostBinDirs at spawn time) and the
+  // standard system path. Per-agent `~/.bun/bin` is gone — agents
+  // now share the host's tooling install. See agent-bootstrap M9.
   //
   // HOME is set to the agent's home dir even though the daemon runs as
   // root — Node's `os.homedir()` reads $HOME first, so all of sync's
   // file operations stay scoped under /Users/<agent>/. AGENT_UID/GID
   // tell sync who to chown those files to after writing.
-  const pathLine = `    <key>PATH</key><string>${escape(input.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>\n`
+  const pathDirs = (input.hostBinDirs && input.hostBinDirs.length > 0
+    ? input.hostBinDirs
+    : ['/opt/homebrew/bin', '/usr/local/bin']).join(':')
+  const pathLine = `    <key>PATH</key><string>${escape(pathDirs)}:/usr/bin:/bin</string>\n`
   const agentUserLine = `    <key>AGENT_USER</key><string>${escape(input.userName)}</string>\n`
   const envBlock = input.troopUrl
     ? `  <key>EnvironmentVariables</key>
