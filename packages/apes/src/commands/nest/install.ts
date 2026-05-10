@@ -69,7 +69,7 @@ function buildPlist(args: PlistArgs): string {
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key><string>${escape(args.nestHome)}</string>
-    <key>PATH</key><string>${escape(args.userHome)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>OPENAPE_NEST_PORT</key><string>${args.port}</string>
     <key>OPENAPE_APES_BIN</key><string>${escape(args.apesBin)}</string>
   </dict>

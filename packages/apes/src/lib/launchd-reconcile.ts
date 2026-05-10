@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import process from 'node:process'
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
@@ -157,7 +158,7 @@ function plistBody(input: { label: string, apesBin: string, taskId: string, sche
     <key>HOME</key>
     <string>${escape(input.homeDir)}</string>
     <key>PATH</key>
-    <string>${escape(input.homeDir)}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>${escape(process.env.PATH ?? '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin')}</string>
   </dict>
 ${calendarKey}
   <key>StandardOutPath</key>

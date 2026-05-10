@@ -379,39 +379,21 @@ chmod 644 ${shQuote(bridge.plistPath)}
 `
 }
 
-function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null, name: string): string {
+function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null, _name: string): string {
   if (!bridge) return ''
-  // Install the bridge stack ONCE here, as the agent user, while the human
-  // is already waiting for the spawn grant. With M6 the dependency tree
-  // dropped pi-coding-agent — chat-bridge spawns `apes agents serve --rpc`
-  // (M8) so the apes binary is the only runtime peer it needs.
+  // We don't install the bridge stack per-agent anymore. Until M9 each
+  // spawn ran a `bun add -g @openape/chat-bridge @openape/apes` (and
+  // bootstrapped bun itself if it wasn't there yet) into the new
+  // agent's home. That added 30-90s per spawn, ~100MB of disk per
+  // agent, and a per-agent upgrade workflow (`bun update -g` per
+  // home). Now the host's existing `node`/`openape-chat-bridge`/`apes`
+  // binaries are exposed to the bridge process via the PATH we baked
+  // into the launchd plist (see buildBridgePlist's PATH key, derived
+  // from \`which node\` at spawn time). Spawns drop to ~3-5s, agents
+  // share one bridge version, upgrades happen once on the host.
   //
-  // Then bootstrap the launchd job.
-  //
-  // The literal agent name is interpolated at TS-template time (not via
-  // the bash $NAME var) because the inner `su -c '...'` runs in a fresh
-  // shell that doesn't inherit setup.sh's NAME — `set -u` would crash on
-  // the first $NAME reference inside the single-quoted block.
-  //
-  // Fresh service-account agents have no bun installed (bun is per-user
-  // under $HOME/.bun, not system-wide via brew). The first step inside
-  // su- now bootstraps bun via the official installer if it isn't there
-  // yet — idempotent: re-spawn just no-ops the install.
+  // Just bootstrap the launchd job — root-already, idempotent re-spawn.
   return `
-echo "==> Installing bridge stack as ${name} via bun (one-time)…"
-su - ${shQuote(name)} -c '
-set -euo pipefail
-if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.bun/bin/bun" ]; then
-  echo "==> bun not found — installing via official installer"
-  curl -fsSL https://bun.sh/install | bash
-fi
-export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.bun/install/global/bin"
-bun add -g @openape/chat-bridge @openape/apes
-'
-
-# Bootstrap into the system domain. Spawn already runs as root via
-# \`apes run --as root\`, so we have permission. Stale label is bootouted
-# first to make re-spawn idempotent.
 launchctl bootout "system/${bridge.plistLabel}" 2>/dev/null || true
 launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
   echo "warn: bridge bootstrap into system domain failed; check ${bridge.plistPath}"
