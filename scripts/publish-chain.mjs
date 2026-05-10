@@ -43,7 +43,7 @@ const PACKAGES = [
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
   { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
-  { name: '@openape/chat-bridge', dir: 'apps/openape-chat-bridge' },
+  { name: '@openape/ape-agent', dir: 'apps/openape-ape-agent' },
   { name: '@openape/nest', dir: 'apps/openape-nest' },
 ]
 
