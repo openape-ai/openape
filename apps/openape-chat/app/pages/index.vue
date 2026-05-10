@@ -175,7 +175,7 @@ function isAgent(email: string): boolean {
         No contacts yet.<br>
         Tap <UIcon name="i-lucide-user-plus" class="size-3 inline-block align-text-top" /> to add one,
         or spawn an agent with
-        <code class="text-zinc-300">apes agents spawn &lt;name&gt; --bridge</code>
+        <code class="text-zinc-300">apes agents spawn &lt;name&gt;</code>
         to start a conversation.
       </p>
 

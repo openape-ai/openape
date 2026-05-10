@@ -104,7 +104,7 @@ function installAdapter(): boolean {
 /**
  * Write `APE_CHAT_BRIDGE_MODEL=<value>` to `~/litellm/.env`. The same
  * file resolveBridgeConfig (in lib/llm-bridge.ts) reads at
- * `apes [nest|agents] spawn --bridge` time. Idempotent: replaces the
+ * `apes [nest|agents] spawn` time. Idempotent: replaces the
  * line in place if it already exists, appends otherwise. Creates the
  * file (and ~/litellm/) on first call.
  *
@@ -154,7 +154,7 @@ export const installNestCommand = defineCommand({
     },
     'bridge-model': {
       type: 'string',
-      description: 'Default model for chat-bridge spawns. Persisted as APE_CHAT_BRIDGE_MODEL in ~/litellm/.env so every `apes [nest|agents] spawn --bridge` picks it up automatically. Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only). Re-run install with a new value to overwrite.',
+      description: 'Default model for ape-agent spawns. Persisted as APE_CHAT_BRIDGE_MODEL in ~/litellm/.env so every `apes [nest|agents] spawn` picks it up automatically. Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only). Re-run install with a new value to overwrite.',
     },
   },
   async run({ args }) {

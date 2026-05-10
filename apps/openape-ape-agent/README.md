@@ -15,9 +15,10 @@ ships as an alias so existing pm2 ecosystem.config.js files keep working.
 npm i -g @openape/ape-agent
 ```
 
-The `apes agents spawn --bridge` workflow expects `ape-agent`, `apes`,
+The default `apes agents spawn` workflow expects `ape-agent`, `apes`,
 and `node` on PATH — install them globally on the host once, not per
-agent.
+agent. Pass `--no-bridge` if you only want an IdP/troop account
+without the chat runtime (headless / CI use cases).
 
 ## What it does
 
@@ -37,7 +38,7 @@ in the troop UI take effect on the next sync, no restart needed.
 
 ## Configuration (`~/Library/Application Support/openape/bridge/.env`)
 
-Written by `apes agents spawn --bridge`. Required:
+Written by `apes agents spawn` (unless `--no-bridge`). Required:
 
 | Variable | Purpose |
 |---|---|
