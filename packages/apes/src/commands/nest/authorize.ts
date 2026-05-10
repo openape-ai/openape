@@ -50,10 +50,11 @@ const DEFAULT_ALLOW_PATTERNS = [
   // wrapped invocation.
   'openape-chat-bridge',
   // Phase E: per-agent pm2 management. The Nest shells out
-  // `apes run --as <agent> -- pm2 startOrReload /var/openape/nest/agents/<agent>/ecosystem.config.js`
-  // and `apes run --as <agent> -- pm2 delete openape-bridge-<agent>`.
-  // Inner-command (post-unwrap) targets:
-  'pm2 startOrReload *',
+  // `apes run --as <agent> -- bash /var/openape/agents/<agent>/start.sh`
+  // (the start.sh sets HOME/PM2_HOME and redirects pm2's stdio so the
+  // god-daemon detach doesn't block our exec parent), plus
+  // `apes run --as <agent> -- pm2 delete openape-bridge-<agent>` for teardown.
+  'bash /var/openape/agents/*/start.sh',
   'pm2 delete openape-bridge-*',
   'pm2 jlist',
 ]
