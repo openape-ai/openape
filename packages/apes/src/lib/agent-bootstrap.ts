@@ -495,7 +495,7 @@ if [ -n "$UID_OF" ]; then
   pkill -9 -u "$UID_OF" 2>/dev/null || true
 fi
 
-# Per-agent system LaunchDaemon written by spawn --bridge. Bootout +
+# Per-agent system LaunchDaemon written by spawn (unless --no-bridge). Bootout +
 # delete must come BEFORE we delete the user, otherwise launchd keeps a
 # zombie reference. No-op if the plist isn't there.
 BRIDGE_LABEL="eco.hofmann.apes.bridge.$NAME"

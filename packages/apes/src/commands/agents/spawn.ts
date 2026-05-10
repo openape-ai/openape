@@ -64,10 +64,10 @@ export const spawnAgentCommand = defineCommand({
       type: 'boolean',
       description: 'Read the Claude Code OAuth token from stdin (paranoid form of --claude-token).',
     },
-    'bridge': {
+    'no-bridge': {
       type: 'boolean',
       description:
-        'Install the ape-agent runtime for this agent: drops a launchd plist that runs `@openape/ape-agent` so the agent answers chat.openape.ai messages. Reads LITELLM_API_KEY/BASE_URL defaults from ~/litellm/.env; override via --bridge-key / --bridge-base-url.',
+        'Skip the ape-agent runtime install. Default behaviour installs the runtime so the agent answers chat.openape.ai messages (reads LITELLM_API_KEY/BASE_URL from ~/litellm/.env; override via --bridge-key / --bridge-base-url). Use --no-bridge for headless / CI / IdP-only account provisioning where the agent will not run a chat loop.',
     },
     'bridge-key': {
       type: 'string',
@@ -192,7 +192,11 @@ export const spawnAgentCommand = defineCommand({
         fromStdin: !!args['claude-token-stdin'],
       })
 
-      const bridge = args.bridge
+      // Bridge install is the default — every agent needs the runtime
+      // to answer chat or fire cron tasks. `--no-bridge` is the explicit
+      // escape for headless / CI / account-only provisioning.
+      const withBridge = !args['no-bridge']
+      const bridge = withBridge
         ? (() => {
             const cfg = resolveBridgeConfig({
               cliKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
@@ -280,7 +284,7 @@ export const spawnAgentCommand = defineCommand({
           home: homeDir,
           email: registration.email,
           registeredAt: Math.floor(Date.now() / 1000),
-          bridge: args.bridge
+          bridge: withBridge
             ? {
                 baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
                 apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
@@ -299,7 +303,7 @@ export const spawnAgentCommand = defineCommand({
       consola.success(`Agent ${name} spawned.`)
       consola.info(`🔗 Troop: https://troop.openape.ai/agents/${name}`)
 
-      if (args.bridge) {
+      if (withBridge) {
         consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
         consola.info('Open chat.openape.ai and accept it to start chatting with the agent.')
       }
