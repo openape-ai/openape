@@ -2,6 +2,7 @@ import { eq, inArray } from 'drizzle-orm'
 import webpush from 'web-push'
 import { useDb } from '../database/drizzle'
 import { memberships, pushSubscriptions } from '../database/schema'
+import { isUserFocusedOn } from './focus'
 
 let _configured = false
 
@@ -52,6 +53,10 @@ export async function notifyRoomMembers(roomId: string, senderEmail: string, not
   const recipientEmails = recipients
     .map(r => r.userEmail)
     .filter(e => e !== senderEmail)
+    // Suppress push for users who already have the room+thread open
+    // on a connected device. The focus map is populated by the WS
+    // handler in response to `focus` / `blur` frames from the client.
+    .filter(e => !isUserFocusedOn(e, roomId, notice.thread_id))
   if (recipientEmails.length === 0) return
 
   const subs = await db
