@@ -46,7 +46,7 @@ interface RegistryFile {
 // log search and humans never find. Keep the registry directly under
 // the data dir.
 const REGISTRY_DIR = homedir()
-const REGISTRY_PATH = join(REGISTRY_DIR, 'agents.json')
+export const REGISTRY_PATH = join(REGISTRY_DIR, 'agents.json')
 
 function emptyRegistry(): RegistryFile {
   return { version: 1, agents: [] }

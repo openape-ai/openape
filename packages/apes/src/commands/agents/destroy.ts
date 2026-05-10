@@ -9,6 +9,7 @@ import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
 import { AGENT_NAME_REGEX, buildDestroyTeardownScript } from '../../lib/agent-bootstrap'
 import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { removeNestAgent } from '../../lib/nest-registry'
 import { readPasswordSilent } from '../../lib/silent-password'
 
 interface IdpUser {
@@ -152,6 +153,14 @@ export const destroyAgentCommand = defineCommand({
     }
     else if (!args['keep-os-user'] && isDarwin()) {
       consola.info('No macOS user to remove (skipped).')
+    }
+
+    // Phase F: drop the entry from the Nest's registry. The Nest's
+    // file-watcher reconciles its pm2-supervisor → bridge gets pm2-
+    // deleted automatically.
+    try { removeNestAgent(name) }
+    catch (err) {
+      consola.warn(`Could not update nest registry: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     consola.success(`Destroyed ${name}.`)
