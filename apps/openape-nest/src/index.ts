@@ -1,19 +1,18 @@
 // OpenApe Nest daemon — local control-plane that hosts agents on this
-// computer. Listens on 127.0.0.1:9091 (localhost-only, no auth — only
-// processes running as the same human user can reach it). Acts as an
-// API surface in front of `apes agents spawn|destroy`; bridge-process
-// lifecycle is delegated to the per-agent system-domain launchd plists
-// `apes agents spawn --bridge` installs into `/Library/LaunchDaemons/`.
-// (We previously tried supervising bridges in-daemon — see git history
-// for the supervisor — but it duplicated launchd's job, raced the
-// system-domain plist, and inherited the human-user PATH which doesn't
-// see the agent's `~/.bun/bin/openape-chat-bridge`.)
+// computer. Listens on 127.0.0.1:9091, gated by DDISA grant tokens
+// (see lib/auth.ts).
 //
-// Bootstrapped by `apes nest install` — see packages/apes/src/commands/
-// nest/install.ts. Started + KeepAlive'd by launchd via
-// /Library/LaunchAgents/ai.openape.nest.plist (user domain — daemon
-// runs as the human user, not root or _openape_nest yet; that
-// privilege-isolation step is Stage 1.5).
+// As of Phase B (#sim-arch) the Nest also supervises one chat-bridge
+// process per registered agent in-daemon (see lib/supervisor.ts).
+// New spawns no longer install per-agent system-domain launchd plists
+// in /Library/LaunchDaemons/ — there's just one launchd entry for the
+// Nest itself, and it owns the rest. PR #376's host-PATH-capture fixed
+// the PATH-inheritance bug that killed the previous in-daemon
+// supervisor (deleted in PR #365), so it's safe to bring it back.
+//
+// Bootstrapped by `apes nest install`. Started + KeepAlive'd by
+// launchd (system-domain after `apes nest migrate-to-service-user`,
+// user-domain otherwise).
 
 import { createServer   } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -21,6 +20,8 @@ import process from 'node:process'
 import { handleAgentsList, handleAgentSpawn, handleAgentDestroy, handleNestStatus } from './api/agents'
 import { NestAuthError, primeJwksCache, verifyNestGrant } from './lib/auth'
 import type { NestGrantContext } from './lib/auth'
+import { listAgents } from './lib/registry'
+import { Supervisor } from './lib/supervisor'
 
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.OPENAPE_NEST_PORT ?? 9091)
@@ -37,7 +38,16 @@ interface RouteCtx {
   apesBin: string
   caller: string
   grantId: string
+  supervisor: Supervisor
 }
+
+const supervisor = new Supervisor({ apesBin: APES_BIN, log })
+
+// Reconcile from the persisted registry on boot — re-spawns the
+// chat-bridge child for every agent that was registered before the
+// last daemon shutdown.
+supervisor.reconcile(listAgents())
+log(`nest: supervisor reconciled, ${supervisor.size()} bridge process(es) starting`)
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -103,14 +113,14 @@ const server = createServer((req, res) => {
         const grant = await requireNestGrant(req, res, ['nest', 'status'])
         if (!grant) return
         log(`nest: GET /status authorized (caller=${grant.caller}, grant=${grant.grantId})`)
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId, supervisor }
         return send(res, 200, handleNestStatus(ctx))
       }
       if (req.method === 'GET' && url.pathname === '/agents') {
         const grant = await requireNestGrant(req, res, ['nest', 'list'])
         if (!grant) return
         log(`nest: GET /agents authorized (caller=${grant.caller}, grant=${grant.grantId})`)
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId, supervisor }
         return send(res, 200, handleAgentsList(ctx))
       }
       if (req.method === 'POST' && url.pathname === '/agents') {
@@ -126,7 +136,7 @@ const server = createServer((req, res) => {
         const grant = await requireNestGrant(req, res, ['nest', 'spawn'])
         if (!grant) return
         log(`nest: POST /agents (spawn ${name}) authorized (caller=${grant.caller}, grant=${grant.grantId})`)
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId, supervisor }
         const result = await handleAgentSpawn(ctx)
         return send(res, 201, result)
       }
@@ -136,7 +146,7 @@ const server = createServer((req, res) => {
         const grant = await requireNestGrant(req, res, ['nest', 'destroy', name])
         if (!grant) return
         log(`nest: DELETE /agents/${name} authorized (caller=${grant.caller}, grant=${grant.grantId})`)
-        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId }
+        const ctx: RouteCtx = { url, body, log, apesBin: APES_BIN, caller: grant.caller, grantId: grant.grantId, supervisor }
         const result = await handleAgentDestroy(ctx, name)
         return send(res, 200, result)
       }
@@ -158,11 +168,13 @@ server.listen(PORT, HOST, () => {
 })
 
 process.on('SIGTERM', () => {
-  log('nest: SIGTERM — shutting down')
+  log('nest: SIGTERM — stopping supervisor')
+  supervisor.stopAll()
   server.close(() => process.exit(0))
 })
 
 process.on('SIGINT', () => {
-  log('nest: SIGINT — shutting down')
+  log('nest: SIGINT — stopping supervisor')
+  supervisor.stopAll()
   server.close(() => process.exit(0))
 })

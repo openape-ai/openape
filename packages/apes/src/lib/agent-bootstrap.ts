@@ -356,48 +356,28 @@ ${buildBridgeBootstrapBlock(input.bridge, name)}${buildTroopBootstrapBlock(input
 
 function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
   if (!bridge) return ''
-  // Plist lives in /Library/LaunchDaemons (system-wide), agent-owned files
-  // live in $HOME. Daemons need root-owned plists; the start.sh + .env are
-  // chowned to the agent below by the existing chown -R block.
-  //
-  // M6 dropped the `~/.pi/agent/.env` write — chat-bridge gets its
-  // LiteLLM env from the start.sh that M8 will rewrite to spawn
-  // `apes agents serve --rpc` instead of pi.
+  // Phase B (#sim-arch): no per-agent system-domain bridge plist
+  // anymore. The Nest's in-process supervisor owns bridge lifecycle
+  // (`apps/openape-nest/src/lib/supervisor.ts`). We still drop the
+  // bridge .env into the agent home so the bridge's
+  // resolveBridgeConfig finds it at runtime — same path the
+  // supervisor's child process uses. start.sh is no longer needed
+  // (the supervisor invokes openape-chat-bridge directly via
+  // \`apes run --as <agent>\`), and the system-domain plist is no
+  // longer written.
   return `
 mkdir -p "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs"
 cat > "$HOME_DIR/Library/Application Support/openape/bridge/.env" ${shHeredoc(bridge.envFile)}
-cat > "$HOME_DIR/Library/Application Support/openape/bridge/start.sh" ${shHeredoc(bridge.startScript)}
-chmod 755 "$HOME_DIR/Library/Application Support/openape/bridge/start.sh"
 chmod 600 "$HOME_DIR/Library/Application Support/openape/bridge/.env"
-
-# System-wide LaunchDaemon — root-owned, mode 644 (launchd refuses
-# group/world-writable plists). UserName in the plist makes launchd run
-# the binary as the agent, not root.
-cat > ${shQuote(bridge.plistPath)} ${shHeredoc(bridge.plistContent)}
-chown root:wheel ${shQuote(bridge.plistPath)}
-chmod 644 ${shQuote(bridge.plistPath)}
 `
 }
 
-function buildBridgeBootstrapBlock(bridge: SpawnBridgeFiles | null, _name: string): string {
-  if (!bridge) return ''
-  // We don't install the bridge stack per-agent anymore. Until M9 each
-  // spawn ran a `bun add -g @openape/chat-bridge @openape/apes` (and
-  // bootstrapped bun itself if it wasn't there yet) into the new
-  // agent's home. That added 30-90s per spawn, ~100MB of disk per
-  // agent, and a per-agent upgrade workflow (`bun update -g` per
-  // home). Now the host's existing `node`/`openape-chat-bridge`/`apes`
-  // binaries are exposed to the bridge process via the PATH we baked
-  // into the launchd plist (see buildBridgePlist's PATH key, derived
-  // from \`which node\` at spawn time). Spawns drop to ~3-5s, agents
-  // share one bridge version, upgrades happen once on the host.
-  //
-  // Just bootstrap the launchd job — root-already, idempotent re-spawn.
-  return `
-launchctl bootout "system/${bridge.plistLabel}" 2>/dev/null || true
-launchctl bootstrap system ${shQuote(bridge.plistPath)} || \\
-  echo "warn: bridge bootstrap into system domain failed; check ${bridge.plistPath}"
-`
+function buildBridgeBootstrapBlock(_bridge: SpawnBridgeFiles | null, _name: string): string {
+  // Phase B: no launchd plist to bootstrap — Nest supervisor takes
+  // over at the next /agents POST handler reconcile. Caller (the
+  // Nest's POST /agents handler) calls supervisor.reconcile(...)
+  // after the spawn succeeds.
+  return ''
 }
 
 export interface SpawnTroopFiles {
