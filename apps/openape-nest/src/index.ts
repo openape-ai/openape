@@ -3,7 +3,7 @@
 //
 //   1. **pm2 supervisor**: each registered agent gets its own pm2-god
 //      daemon (running as the agent's macOS uid) supervising one
-//      `openape-chat-bridge` process. See lib/pm2-supervisor.ts.
+//      `ape-agent` process. See lib/pm2-supervisor.ts.
 //   2. **troop sync**: every 5 min walk the registry, run
 //      `apes agents sync` for each. See lib/troop-sync.ts.
 //   3. **registry watcher**: fs.watch on agents.json. When the

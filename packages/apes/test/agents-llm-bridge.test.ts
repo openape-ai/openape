@@ -127,7 +127,7 @@ describe('llm-bridge — pure helpers', () => {
     expect(sh).not.toContain('PI_EXT_EOF')
     // Env file moved out of ~/.pi/agent and into the bridge dir.
     expect(sh).toContain('"$HOME/Library/Application Support/openape/bridge/.env"')
-    expect(sh).toContain('exec openape-chat-bridge')
+    expect(sh).toContain('exec ape-agent')
     // PATH includes the host-resolved bin dirs passed in.
     expect(sh).toContain('/opt/homebrew/bin')
   })
@@ -152,7 +152,7 @@ describe('llm-bridge — pure helpers', () => {
     expect(plist).toContain('<key>UserName</key>')
     expect(plist).toContain('<string>agent-x</string>')
     expect(plist).toContain('<string>/Users/agent-x/Library/Application Support/openape/bridge/start.sh</string>')
-    expect(plist).toContain('<string>/Users/agent-x/Library/Logs/openape-chat-bridge.log</string>')
+    expect(plist).toContain('<string>/Users/agent-x/Library/Logs/ape-agent.log</string>')
     expect(plist).toContain('<key>KeepAlive</key>')
     expect(plist).toContain('<key>RunAtLoad</key>')
     expect(plist).toContain('<key>HOME</key>')

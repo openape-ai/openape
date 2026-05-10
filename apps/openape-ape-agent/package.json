@@ -1,11 +1,12 @@
 {
-  "name": "@openape/chat-bridge",
-  "version": "1.4.0",
-  "description": "Bridge daemon: forwards chat.openape.ai messages into an `apes agents serve --rpc` runtime and streams replies back as the agent",
+  "name": "@openape/ape-agent",
+  "version": "2.0.0",
+  "description": "OpenApe agent runtime: per-agent process that connects to chat.openape.ai, runs the LLM loop with tools + cron tasks, and streams replies back to owners.",
   "type": "module",
   "license": "MIT",
   "private": false,
   "bin": {
+    "ape-agent": "./dist/bridge.mjs",
     "openape-chat-bridge": "./dist/bridge.mjs"
   },
   "files": [
@@ -44,9 +45,9 @@
   },
   "keywords": [
     "openape",
-    "chat",
-    "bridge",
     "agent",
+    "runtime",
+    "ddisa",
     "apes"
   ]
 }

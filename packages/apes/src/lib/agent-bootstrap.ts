@@ -214,10 +214,10 @@ export interface SpawnSetupScriptInput {
    */
   claudeOauthToken: string | null
   /**
-   * If set, also installs the openape-chat-bridge daemon for this agent:
+   * If set, also installs the ape-agent runtime for this agent:
    * drops a launchd plist + start script + .env with the LLM proxy master
-   * key. The bridge auto-installs `@openape/chat-bridge` via bun on first
-   * boot. `null` skips the bridge entirely (current default).
+   * key. The runtime expects `@openape/ape-agent` to already be installed
+   * globally on the host. `null` skips the bridge entirely (current default).
    */
   bridge: SpawnBridgeFiles | null
   /**
@@ -368,7 +368,7 @@ function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
   // bridge .env into the agent home so the bridge's
   // resolveBridgeConfig finds it at runtime — same path the
   // supervisor's child process uses. start.sh is no longer needed
-  // (the supervisor invokes openape-chat-bridge directly via
+  // (the supervisor invokes ape-agent directly via
   // \`apes run --as <agent>\`), and the system-domain plist is no
   // longer written.
   return `
