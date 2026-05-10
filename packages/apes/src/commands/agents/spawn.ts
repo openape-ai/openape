@@ -246,14 +246,27 @@ export const spawnAgentCommand = defineCommand({
       })
       writeFileSync(scriptPath, script, { mode: 0o700 })
 
-      consola.start('Running privileged setup as root via `apes run --as root --wait`…')
-      consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
-      // --wait is critical: without it `apes run --as root` returns exit 75
-      // (pending) immediately, which we'd interpret as failure and which
-      // would leave a dangling grant referencing a scratch dir we'd cleaned
-      // up in the finally below. With --wait, exit reflects the actual
-      // execution result, so cleanup is safe.
-      execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+      // Skip the second escalation if we're already root. This happens
+      // when `apes nest spawn` (or any wrapper) invokes us via
+      // `apes run --as root -- apes agents spawn` — the outer `apes
+      // run` already obtained Patrick's grant + escapes-setuid us to
+      // root, so an inner `apes run --as root` would just request a
+      // second redundant grant. Direct call to bash skips that and
+      // gets us down to ONE approval per spawn (the outer one).
+      const alreadyRoot = process.getuid?.() === 0
+      if (alreadyRoot) {
+        consola.start('Running privileged setup directly (already root)…')
+        execFileSync('bash', [scriptPath], { stdio: 'inherit' })
+      }
+      else {
+        consola.start('Running privileged setup as root via `apes run --as root --wait`…')
+        consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
+        // --wait is critical: without it `apes run --as root` returns
+        // exit 75 (pending) immediately, which we'd interpret as
+        // failure and which would leave a dangling grant referencing
+        // a scratch dir we'd cleaned up in the finally below.
+        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+      }
 
       // Phase F: register in the Nest's registry directly (replaces
       // the old intent-channel handler in the Nest). The Nest
