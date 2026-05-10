@@ -33,7 +33,12 @@ import { promisify } from 'node:util'
 import type { AgentEntry } from './registry'
 
 const execFileAsync = promisify(execFile)
-const AGENTS_DIR = '/var/openape/nest/agents'
+// World-readable so agents can read their own ecosystem.config.js
+// when pm2 (running as the agent uid) opens the file. The Nest's
+// own private state stays under /var/openape/nest/ at mode 750;
+// these per-agent ecosystem files are mechanically generated and
+// hold no secrets, so 755 dir + 644 file is fine.
+const AGENTS_DIR = '/var/openape/agents'
 
 export interface Pm2SupervisorDeps {
   apesBin: string
@@ -116,8 +121,11 @@ export class Pm2Supervisor {
     // reads it via apes-run+escapes — escapes inherits ENV but the
     // working dir flips to the agent's $HOME, so we use the absolute
     // path.
+    // Ensure the parent + per-agent dirs are world-traversable so
+    // agents (different uids) can read their own ecosystem.config.js.
+    mkdirSync(AGENTS_DIR, { recursive: true, mode: 0o755 })
     const dir = join(AGENTS_DIR, agentName)
-    mkdirSync(dir, { recursive: true })
+    mkdirSync(dir, { recursive: true, mode: 0o755 })
     const path = ecosystemPath(agentName)
     writeFileSync(path, ecosystemContents(this.deps.apesBin, agentName), { mode: 0o644 })
 
