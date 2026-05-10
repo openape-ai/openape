@@ -30,10 +30,11 @@ describe('troop-bootstrap', () => {
     // /Library/LaunchDaemons/ and `launchctl bootstrap system` task
     // plists. It chowns its writes back to the agent uid via stat($HOME).
     expect(body).not.toContain('<key>UserName</key>')
-    // PATH must include common node/bun locations so the apes binary's
-    // `#!/usr/bin/env node` shebang resolves.
+    // PATH must include common node locations so the apes binary's
+    // `#!/usr/bin/env node` shebang resolves. (Per-agent bun was retired —
+    // node + apes + chat-bridge now live in host-wide bin dirs like
+    // /opt/homebrew/bin or /usr/local/bin.)
     expect(body).toContain('<key>PATH</key>')
-    expect(body).toContain('/Users/alice/.bun/bin')
     expect(body).toContain('/opt/homebrew/bin')
     // Sync (as root) reads AGENT_USER to plumb into the per-task plist
     // UserName key so each task daemon runs as the agent.

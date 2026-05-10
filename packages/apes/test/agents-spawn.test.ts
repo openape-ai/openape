@@ -51,6 +51,18 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }))
 
+// captureHostBinDirs() shells out to /usr/bin/which to resolve real bin
+// dirs on the host. Tests don't need to exercise that probe — stub the
+// helper to return a fixed list so spawn-orchestration assertions only
+// see the calls they care about.
+vi.mock('../src/lib/llm-bridge.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/llm-bridge.js')>()
+  return {
+    ...actual,
+    captureHostBinDirs: vi.fn(() => ['/usr/local/bin']),
+  }
+})
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
   return {

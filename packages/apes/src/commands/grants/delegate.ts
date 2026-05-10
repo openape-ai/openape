@@ -59,7 +59,23 @@ export const delegateCommand = defineCommand({
     }
 
     if (args.expires) {
-      body.expires_at = args.expires
+      // The IdP's /api/delegations endpoint validates timed grants with a
+      // `duration` field (seconds), not an ISO `expires_at`. Convert here
+      // so users can keep using a human-friendly --expires timestamp.
+      if (args.approval === 'timed') {
+        const expiresMs = Date.parse(args.expires)
+        if (Number.isNaN(expiresMs)) {
+          throw new CliError(`Invalid --expires value: "${args.expires}" is not an ISO 8601 timestamp.`)
+        }
+        const durationSec = Math.floor((expiresMs - Date.now()) / 1000)
+        if (durationSec <= 0) {
+          throw new CliError(`Invalid --expires value: "${args.expires}" is in the past.`)
+        }
+        body.duration = durationSec
+      }
+      else {
+        body.expires_at = args.expires
+      }
     }
 
     const result = await apiFetch<{ id: string }>(delegationsUrl, {
