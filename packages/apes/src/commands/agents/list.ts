@@ -3,7 +3,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError } from '../../errors'
 import { apiFetch } from '../../http'
-import { isDarwin, listMacOSUserNames } from '../../lib/macos-user'
+import { isDarwin, listMacOSUserNames, readMacOSUser } from '../../lib/macos-user'
 
 interface IdpUser {
   email: string
@@ -46,14 +46,20 @@ export const listAgentsCommand = defineCommand({
       : all.filter(u => u.isActive !== false)
 
     const osUsers = isDarwin() ? listMacOSUserNames() : new Set<string>()
-    const home = (name: string) => `/Users/${name}`
+    // Resolve actual NFSHomeDirectory from dscl per agent — Phase G
+    // agents are at /var/openape/homes/<name>, legacy at /Users/<name>.
+    const homeOf = (name: string): string | null => {
+      if (!osUsers.has(name)) return null
+      const u = readMacOSUser(name)
+      return u?.homeDir ?? `/Users/${name}`
+    }
 
     const rows = filtered.map(u => ({
       name: u.name,
       email: u.email,
       isActive: u.isActive !== false,
       osUser: osUsers.has(u.name),
-      home: osUsers.has(u.name) ? home(u.name) : null,
+      home: homeOf(u.name),
     }))
 
     if (args.json) {

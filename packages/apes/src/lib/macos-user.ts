@@ -5,6 +5,9 @@ export interface MacOSUserSummary {
   name: string
   uid: number | null
   shell: string | null
+  /** Resolved NFSHomeDirectory — varies between /Users/<name> for
+   *  legacy agents and /var/openape/homes/<name> for Phase G+ agents. */
+  homeDir: string | null
 }
 
 export function isDarwin(): boolean {
@@ -30,10 +33,12 @@ export function readMacOSUser(name: string): MacOSUserSummary | null {
 
   const uidMatch = output.match(/UniqueID:\s*(\d+)/)
   const shellMatch = output.match(/UserShell:\s*(\S.*)$/m)
+  const homeMatch = output.match(/NFSHomeDirectory:\s*(\S.*)$/m)
   return {
     name,
     uid: uidMatch ? Number.parseInt(uidMatch[1]!, 10) : null,
     shell: shellMatch ? shellMatch[1]!.trim() : null,
+    homeDir: homeMatch ? homeMatch[1]!.trim() : null,
   }
 }
 
