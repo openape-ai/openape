@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-agent",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "OpenApe agent runtime: per-agent process that connects to chat.openape.ai, runs the LLM loop with tools + cron tasks, and streams replies back to owners.",
   "type": "module",
   "license": "MIT",
