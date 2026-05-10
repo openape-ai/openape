@@ -22,6 +22,7 @@ import { NestAuthError, primeJwksCache, verifyNestGrant } from './lib/auth'
 import type { NestGrantContext } from './lib/auth'
 import { listAgents } from './lib/registry'
 import { Supervisor } from './lib/supervisor'
+import { TroopSync } from './lib/troop-sync'
 
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.OPENAPE_NEST_PORT ?? 9091)
@@ -42,12 +43,14 @@ interface RouteCtx {
 }
 
 const supervisor = new Supervisor({ apesBin: APES_BIN, log })
+const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 
 // Reconcile from the persisted registry on boot — re-spawns the
 // chat-bridge child for every agent that was registered before the
 // last daemon shutdown.
 supervisor.reconcile(listAgents())
 log(`nest: supervisor reconciled, ${supervisor.size()} bridge process(es) starting`)
+troopSync.start()
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -168,13 +171,15 @@ server.listen(PORT, HOST, () => {
 })
 
 process.on('SIGTERM', () => {
-  log('nest: SIGTERM — stopping supervisor')
+  log('nest: SIGTERM — stopping supervisor + troop-sync')
   supervisor.stopAll()
+  troopSync.stop()
   server.close(() => process.exit(0))
 })
 
 process.on('SIGINT', () => {
-  log('nest: SIGINT — stopping supervisor')
+  log('nest: SIGINT — stopping supervisor + troop-sync')
   supervisor.stopAll()
+  troopSync.stop()
   server.close(() => process.exit(0))
 })
