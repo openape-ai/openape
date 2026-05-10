@@ -9,7 +9,7 @@
     "dev": "nuxt dev --port 3007",
     "typecheck": "nuxi prepare && nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "nuxi prepare && vitest run"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
