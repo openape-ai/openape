@@ -18,6 +18,10 @@ interface Agent {
   hostname: string | null
   pubkeySsh: string | null
   systemPrompt: string
+  /** Tool-name whitelist — drives which tools the chat-bridge exposes
+   *  to the LLM during live thread turns. Defaults to all known tools
+   *  on first sync; owner narrows here. */
+  tools: string[]
   firstSeenAt: number | null
   lastSeenAt: number | null
   createdAt: number
@@ -104,6 +108,42 @@ async function saveSystemPrompt() {
   }
   finally {
     systemPromptSaving.value = false
+  }
+}
+
+// Agent-level tool whitelist editor — saved on toggle via PATCH
+// /api/agents/[name] with `tools: string[]`. The bridge re-reads the
+// list from agent.json on every new chat thread, so changes
+// propagate within the next sync (~5min).
+const toolsDraft = ref<string[]>([])
+const toolsSaving = ref(false)
+const toolsError = ref('')
+const toolsDirty = computed(() => {
+  const a = (detail.value?.agent.tools ?? []).toSorted()
+  const b = toolsDraft.value.toSorted()
+  return a.length !== b.length || a.some((v, i) => v !== b[i])
+})
+
+watch(detail, (d) => {
+  if (d) toolsDraft.value = [...(d.agent.tools ?? [])]
+}, { immediate: true })
+
+async function saveTools() {
+  if (!toolsDirty.value) return
+  toolsSaving.value = true
+  toolsError.value = ''
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}`, {
+      method: 'PATCH',
+      body: { tools: toolsDraft.value },
+    })
+    if (detail.value) detail.value.agent.tools = [...toolsDraft.value]
+  }
+  catch (err: any) {
+    toolsError.value = err?.data?.statusMessage || err?.message || 'save failed'
+  }
+  finally {
+    toolsSaving.value = false
   }
 }
 
@@ -343,6 +383,39 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
           <div v-if="systemPromptDirty" class="flex justify-end mt-3">
             <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
               Save
+            </UButton>
+          </div>
+        </UCard>
+
+        <!-- Agent-level tool whitelist — controls which tools the chat-
+             bridge exposes to the LLM during live thread turns. New
+             agents start with all tools enabled; narrow as needed. -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold">
+                Tools
+              </h2>
+              <div class="flex items-center gap-2">
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  {{ toolsDraft.length }} selected
+                </UBadge>
+                <UBadge v-if="toolsDirty" color="warning" variant="subtle" size="xs">
+                  unsaved
+                </UBadge>
+              </div>
+            </div>
+          </template>
+          <p class="text-xs text-muted mb-3">
+            Welche Tools darf der Agent im Chat verwenden? Default: alle. Nach
+            Speichern via Sync (~5min) auf den Agent-Host übertragen — kein
+            Bridge-Restart nötig (jeder neue Chat-Thread liest die Liste frisch).
+          </p>
+          <ToolPicker v-model="toolsDraft" :disabled="toolsSaving" />
+          <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
+          <div v-if="toolsDirty" class="flex justify-end mt-3">
+            <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
+              Save tools
             </UButton>
           </div>
         </UCard>
