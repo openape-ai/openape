@@ -136,7 +136,7 @@ function isAgent(email: string): boolean {
 
 <template>
   <div class="min-h-dvh flex flex-col">
-    <header class="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+    <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
       <div class="flex-1 min-w-0">
         <h1 class="font-semibold text-lg leading-tight">
           OpenApe Chat
