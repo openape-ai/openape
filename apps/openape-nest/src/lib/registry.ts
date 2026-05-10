@@ -66,7 +66,13 @@ export function readRegistry(): RegistryFile {
 
 export function writeRegistry(reg: RegistryFile): void {
   mkdirSync(REGISTRY_DIR, { recursive: true })
-  writeFileSync(REGISTRY_PATH, `${JSON.stringify(reg, null, 2)}\n`, { mode: 0o600 })
+  // mode 660 (not 600): the apes-cli running as the human user reads
+  // the registry directly to power `apes nest list` and the spawn
+  // path's `upsertNestAgent` write — Patrick is in the
+  // `_openape_nest` group post-`migrate-to-service-user`, so 660 lets
+  // him rw without sudo. The file holds no secrets (just agent
+  // metadata: uid, home, email).
+  writeFileSync(REGISTRY_PATH, `${JSON.stringify(reg, null, 2)}\n`, { mode: 0o660 })
 }
 
 export function listAgents(): AgentEntry[] {
