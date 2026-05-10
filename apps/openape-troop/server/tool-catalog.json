@@ -54,6 +54,12 @@
       "description": "Search inbox via o365-cli with a query string.",
       "inputs": "{ q: string, limit?: number }",
       "risk": "low"
+    },
+    {
+      "name": "bash",
+      "description": "Run a shell command on the agent host via ape-shell. Every command goes through the DDISA grant cycle — auto-approved by a matching YOLO scope or owner push notification. Runs as the agent's macOS user; file/network access is limited to what that user can see. Returns stdout, stderr, exit code.",
+      "inputs": "{ cmd: string, timeout_ms?: number }",
+      "risk": "high"
     }
   ]
 }

@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 
 describe('tool registry', () => {
   it('TOOLS has the expected keys', () => {
-    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search']) {
+    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search', 'bash']) {
       expect(TOOLS[name]).toBeDefined()
     }
   })
@@ -29,6 +29,23 @@ describe('tool registry', () => {
       function: expect.objectContaining({ name: 'time_now' }),
     })
     expect((out[0]!.function as Record<string, unknown>).execute).toBeUndefined()
+  })
+})
+
+describe('bash tool', () => {
+  it('rejects empty + non-string cmd before spawning anything', async () => {
+    const bash = TOOLS.bash!
+    await expect(bash.execute({})).rejects.toThrow(/cmd must be a non-empty string/)
+    await expect(bash.execute({ cmd: '' })).rejects.toThrow(/cmd must be a non-empty string/)
+    await expect(bash.execute({ cmd: '   ' })).rejects.toThrow(/cmd must be a non-empty string/)
+    await expect(bash.execute({ cmd: 42 as unknown as string })).rejects.toThrow(/cmd must be a non-empty string/)
+  })
+
+  it('declares cmd as the only required parameter', () => {
+    const params = TOOLS.bash!.parameters as { properties: Record<string, unknown>, required: string[] }
+    expect(params.required).toEqual(['cmd'])
+    expect(params.properties.cmd).toBeDefined()
+    expect(params.properties.timeout_ms).toBeDefined()
   })
 })
 
