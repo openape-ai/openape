@@ -49,6 +49,13 @@ const DEFAULT_ALLOW_PATTERNS = [
   // YOLO target string is just `openape-chat-bridge`, not the full
   // wrapped invocation.
   'openape-chat-bridge',
+  // Phase E: per-agent pm2 management. The Nest shells out
+  // `apes run --as <agent> -- pm2 startOrReload /var/openape/nest/agents/<agent>/ecosystem.config.js`
+  // and `apes run --as <agent> -- pm2 delete openape-bridge-<agent>`.
+  // Inner-command (post-unwrap) targets:
+  'pm2 startOrReload *',
+  'pm2 delete openape-bridge-*',
+  'pm2 jlist',
 ]
 
 export const authorizeNestCommand = defineCommand({
