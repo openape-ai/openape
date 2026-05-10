@@ -60,6 +60,18 @@ vi.mock('../src/lib/llm-bridge.js', async (importOriginal) => {
   return {
     ...actual,
     captureHostBinDirs: vi.fn(() => ['/usr/local/bin']),
+    // Bridge is now installed by default — stub the .env / config probe
+    // so tests don't need a real LITELLM_API_KEY on the host.
+    resolveBridgeConfig: vi.fn(() => ({
+      baseUrl: 'http://127.0.0.1:4000/v1',
+      apiKey: 'sk-test',
+      model: 'gpt-5.4',
+    })),
+    buildBridgeEnvFile: vi.fn(() => 'LITELLM_API_KEY=sk-test\n'),
+    buildBridgeStartScript: vi.fn(() => '#!/usr/bin/env bash\nexec ape-agent\n'),
+    buildBridgePlist: vi.fn(() => '<plist/>'),
+    bridgePlistLabel: vi.fn((n: string) => `eco.hofmann.apes.bridge.${n}`),
+    bridgePlistPath: vi.fn((n: string) => `/Library/LaunchDaemons/eco.hofmann.apes.bridge.${n}.plist`),
   }
 })
 
