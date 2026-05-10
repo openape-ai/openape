@@ -23,16 +23,22 @@ function ensureVapidConfigured(): boolean {
  * Best-effort fan-out of a Web Push notification to whoever should
  * approve a freshly-created pending grant.
  *
- * Approver resolution: there's no `approver` column on `grants` today —
- * approver is derived from the requester's user row (`users.approver`).
- * Agents have an explicit approver set when they're enrolled; humans
- * (no `approver` row) get no notification, which is correct since
- * humans don't need someone else to approve their own grants.
+ * Approver resolution:
+ *   1. If the requester has an explicit `approver` row (the case for
+ *      agents, set at enroll time), notify the approver.
+ *   2. If the requester is a human and has no `approver` row, notify
+ *      the requester themselves — humans approve their own grants in
+ *      the IdP UI, so they need to know one's pending. This used to
+ *      `return` early on the assumption that "humans don't need
+ *      someone else to approve their own grants", but the right
+ *      reading is: humans ARE their own approver.
+ *   3. If the requester has no user row at all (shouldn't happen but
+ *      defensively), skip silently.
  *
  * Skips silently when:
  *   - VAPID keys aren't configured (dev environments)
- *   - Requester has no user row, or no `approver` set
- *   - Approver has no push subscriptions
+ *   - Requester has no user row
+ *   - Resolved recipient has no push subscriptions
  *   - The grant is auto-approved (caller is responsible for that check;
  *     this helper assumes status='pending' and !auto_approval_kind)
  *
@@ -48,12 +54,17 @@ export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise
     .from(users)
     .where(eq(users.email, grant.request.requester))
     .get()
-  if (!requester?.approver) return
+  if (!requester) return
+
+  // Recipient = explicit approver if present, else the requester
+  // themselves (human approving their own grant). Agents always have
+  // an approver set at enroll-time; humans typically don't.
+  const recipient = requester.approver ?? requester.email
 
   const subs = await db
     .select()
     .from(pushSubscriptions)
-    .where(eq(pushSubscriptions.userEmail, requester.approver))
+    .where(eq(pushSubscriptions.userEmail, recipient))
   if (subs.length === 0) return
 
   const summary = summarizeRequest(grant.request)
