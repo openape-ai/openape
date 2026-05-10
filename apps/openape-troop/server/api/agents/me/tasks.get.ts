@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const agentEmail = await requireAgent(event)
   const db = useDb()
   const agent = await db
-    .select({ systemPrompt: agents.systemPrompt })
+    .select({ systemPrompt: agents.systemPrompt, tools: agents.tools })
     .from(agents)
     .where(eq(agents.email, agentEmail))
     .get()
@@ -23,6 +23,10 @@ export default defineEventHandler(async (event) => {
     .where(eq(tasks.agentEmail, agentEmail))
   return {
     system_prompt: agent?.systemPrompt ?? '',
+    // tools[] = whitelist for chat-bridge runtime + cron task fallback.
+    // The bridge writes this into ~/.openape/agent/agent.json on every
+    // sync; bridge reads it from there at boot for live chat tool-calls.
+    tools: agent?.tools ?? [],
     tasks: taskList,
   }
 })

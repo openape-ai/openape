@@ -24,6 +24,12 @@ export const agents = sqliteTable('agents', {
   // the imperative job description; per-chat user-input is the human's
   // current message.
   systemPrompt: text('system_prompt').notNull().default(''),
+  // Tool whitelist — JSON string array of tool names from
+  // `tool-catalog.json`. New agents start with all-tools-enabled
+  // on first sync; owners narrow via the troop UI (or PATCH
+  // `/api/agents/:email/tools`). The chat-bridge reads this list
+  // from `~/.openape/agent/agent.json` after each sync.
+  tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),

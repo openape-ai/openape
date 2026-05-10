@@ -36,6 +36,14 @@ export interface AgentTasksResponse {
    * owner hasn't set one.
    */
   system_prompt: string
+  /**
+   * Tool whitelist for chat-bridge runtime. Cron tasks have their own
+   * per-task `tools[]` (see TaskSpec); this is the list the bridge
+   * exposes to the LLM during live chat-thread turns. Empty array =
+   * no tools (pure chat). Defaults to "all known tools" on first
+   * sync — owner narrows via troop UI.
+   */
+  tools: string[]
   tasks: TaskSpec[]
 }
 
