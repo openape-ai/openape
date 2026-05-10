@@ -7,7 +7,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
-import { AGENT_NAME_REGEX, buildDestroyTeardownScript } from '../../lib/agent-bootstrap'
+import { AGENT_NAME_REGEX, buildDestroyTeardownScript, buildPhaseGTeardownScript } from '../../lib/agent-bootstrap'
 import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
 import { removeNestAgent } from '../../lib/nest-registry'
 import { readPasswordSilent } from '../../lib/silent-password'
@@ -121,39 +121,57 @@ export const destroyAgentCommand = defineCommand({
     }
 
     if (osUserExists) {
-      // OS teardown runs via plain sudo + the local admin password. The
-      // previous flow wrapped this in `apes run --as root` (DDISA grant
-      // approval) but the password was needed regardless because
-      // sysadminctl -deleteUser refuses without explicit -adminUser/
-      // -adminPassword in escapes' setuid-root context. Two prompts for
-      // one operation: dropped the grant, kept the password (#239).
-      const sudo = whichBinary('sudo')
-      if (!sudo) {
-        throw new CliError('`sudo` not found on PATH; required for OS teardown.')
-      }
+      const homeDir = osUser?.homeDir ?? `/Users/${name}`
+      const isPhaseG = homeDir.startsWith('/var/openape/homes/')
 
-      const adminUser = userInfo().username
-      const adminPassword = await collectAdminPassword({ adminUser })
-
-      const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
-      const scriptPath = join(scratch, 'teardown.sh')
-      try {
-        const homeDir = osUser?.homeDir ?? `/Users/${name}`
-        const script = buildDestroyTeardownScript({ name, homeDir, adminUser })
-        writeFileSync(scriptPath, script, { mode: 0o700 })
-        consola.start('Running teardown via sudo…')
-        // sudo -S reads its own password from the first stdin line and
-        // consumes the trailing newline; the rest of stdin is connected
-        // to the child. The teardown script's `read -r ADMIN_PASSWORD`
-        // then picks up the second line for sysadminctl. Same secret
-        // serves both — the user typed it once.
-        execFileSync(sudo, ['-S', '--prompt=', '--', 'bash', scriptPath], {
-          input: `${adminPassword}\n${adminPassword}\n`,
-          stdio: ['pipe', 'inherit', 'inherit'],
-        })
+      if (isPhaseG) {
+        // Phase G agents live under /var/openape/homes/ — root via
+        // escapes can `rm -rf` the home (no FDA wall on /var/) and
+        // bootout the user-domain launchd. The dscl record removal
+        // still needs sysadminctl + admin password (escapes' setuid
+        // context lacks an audit session, opendirectoryd rejects a
+        // plain `dscl . -delete`), so we skip it: the user record
+        // becomes a harmless tombstone — uid in the hidden range,
+        // IsHidden=1, NFSHomeDirectory pointing at a path that no
+        // longer exists. Operators can run `sudo sysadminctl
+        // -deleteUser <name>` interactively later if they want full
+        // cleanup.
+        const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
+        const scriptPath = join(scratch, 'teardown.sh')
+        try {
+          const script = buildPhaseGTeardownScript({ name, homeDir })
+          writeFileSync(scriptPath, script, { mode: 0o700 })
+          consola.start('Running teardown (Phase G — no admin password needed)…')
+          execFileSync('apes', ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+        }
+        finally {
+          rmSync(scratch, { recursive: true, force: true })
+        }
+        consola.info(`dscl record /Users/${name} kept as tombstone (hidden, no home). Run \`sudo sysadminctl -deleteUser ${name}\` to fully remove.`)
       }
-      finally {
-        rmSync(scratch, { recursive: true, force: true })
+      else {
+        // Legacy path: home under /Users/, FDA-blocked. Need sudo
+        // + admin password to invoke sysadminctl.
+        const sudo = whichBinary('sudo')
+        if (!sudo) {
+          throw new CliError('`sudo` not found on PATH; required for OS teardown.')
+        }
+        const adminUser = userInfo().username
+        const adminPassword = await collectAdminPassword({ adminUser })
+        const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
+        const scriptPath = join(scratch, 'teardown.sh')
+        try {
+          const script = buildDestroyTeardownScript({ name, homeDir, adminUser })
+          writeFileSync(scriptPath, script, { mode: 0o700 })
+          consola.start('Running teardown via sudo…')
+          execFileSync(sudo, ['-S', '--prompt=', '--', 'bash', scriptPath], {
+            input: `${adminPassword}\n${adminPassword}\n`,
+            stdio: ['pipe', 'inherit', 'inherit'],
+          })
+        }
+        finally {
+          rmSync(scratch, { recursive: true, force: true })
+        }
       }
     }
     else if (!args['keep-os-user'] && isDarwin()) {

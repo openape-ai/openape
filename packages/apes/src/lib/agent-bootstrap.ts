@@ -426,6 +426,47 @@ export interface DestroyTeardownScriptInput {
   adminUser: string
 }
 
+/**
+ * Phase G teardown — for agents whose home is under /var/openape/homes/.
+ * Skips sysadminctl + admin-password because:
+ *   1. The home dir is on /var/, not FDA-protected → root can rm.
+ *   2. We accept leaving the dscl user record as a tombstone
+ *      (hidden, IsHidden=1, no home, no processes) — opendirectoryd
+ *      refuses dscl . -delete from escapes' setuid-root context
+ *      without admin auth, but the tombstone is harmless.
+ * Result: fully scriptable destroy without an interactive admin
+ * password prompt.
+ */
+export function buildPhaseGTeardownScript(input: { name: string, homeDir: string }): string {
+  const { name, homeDir } = input
+  return `#!/bin/bash
+set -u
+
+NAME=${shQuote(name)}
+HOME_DIR=${shQuote(homeDir)}
+
+UID_OF=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
+
+if [ -n "$UID_OF" ]; then
+  launchctl bootout "user/$UID_OF" 2>/dev/null || true
+  pkill -9 -u "$UID_OF" 2>/dev/null || true
+fi
+
+# Per-agent ecosystem files written by the Nest's pm2-supervisor.
+rm -rf "/var/openape/agents/$NAME"
+
+# Home dir lives under /var/openape/homes/ — no FDA wall, root can
+# remove directly.
+if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
+  rm -rf "$HOME_DIR"
+fi
+
+# dscl record stays as a tombstone. Operators run
+# \`sudo sysadminctl -deleteUser $NAME\` to fully clean up if desired.
+echo "OK Phase-G teardown done for $NAME (dscl record kept as tombstone)"
+`
+}
+
 export function buildDestroyTeardownScript(input: DestroyTeardownScriptInput): string {
   const { name, homeDir, adminUser } = input
   return `#!/bin/bash
