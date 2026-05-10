@@ -12,4 +12,9 @@ export default defineConfig({
   sourcemap: false,
   outExtension: () => ({ js: '.mjs' }),
   banner: { js: '#!/usr/bin/env node' },
+  // Bundle workspace deps into the published binary so a global
+  // install doesn't need transitive node_modules for them. External
+  // deps (already present at runtime as published npm packages) stay
+  // out of the bundle.
+  noExternal: [/^@openape\//],
 })

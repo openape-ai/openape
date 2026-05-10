@@ -292,6 +292,9 @@ importers:
 
   apps/openape-chat-bridge:
     dependencies:
+      '@openape/apes':
+        specifier: workspace:*
+        version: link:../../packages/apes
       '@openape/cli-auth':
         specifier: workspace:*
         version: link:../../packages/cli-auth

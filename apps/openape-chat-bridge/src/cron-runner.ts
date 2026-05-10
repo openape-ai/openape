@@ -19,7 +19,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { ApesEvent, ApesRpcSession } from './apes-rpc'
+import type { RuntimeConfig } from '@openape/apes'
+import { runLoop, taskTools } from '@openape/apes'
 import type { ChatApi } from './chat-api'
 
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
@@ -123,11 +124,12 @@ function readSystemPrompt(): string {
 }
 
 export interface CronRunnerDeps {
-  rpc: () => ApesRpcSession
+  /** Resolved at bridge boot — model + LiteLLM proxy details. The
+   * cron runner shares it with chat threads. */
+  runtimeConfig: RuntimeConfig
   chat: ChatApi
   /** Owner email — where DMs go. Resolved from the contacts list at fire time. */
   ownerEmail: string
-  model: string
   log: (line: string) => void
   /**
    * Troop SP URL (default: https://troop.openape.ai) — used to record
@@ -159,7 +161,6 @@ export class CronRunner {
     runId?: string
   }>()
 
-  private detach: (() => void) | undefined
   /**
    * taskId → chatThreadId. Loaded from disk on construct, persisted
    * after each new thread allocation. All runs of the same task post
@@ -199,7 +200,9 @@ export class CronRunner {
 
   start(): void {
     if (this.timer) return
-    this.detach = this.deps.rpc().on(event => this.onRpcEvent(event))
+    // Phase A simplification: no RPC subprocess to attach to. Each
+    // task fire calls runLoop directly and updates `pending` from
+    // the run's handlers — see fireTask below.
     // First tick after a small delay — gives chat a moment to settle.
     this.timer = setInterval(() => this.tick(), TICK_INTERVAL_MS)
     // And one immediate tick so cron jobs that match the current minute
@@ -210,8 +213,6 @@ export class CronRunner {
   stop(): void {
     if (this.timer) clearInterval(this.timer)
     this.timer = undefined
-    this.detach?.()
-    this.detach = undefined
   }
 
   /**
@@ -283,41 +284,44 @@ export class CronRunner {
     this.pending.set(sessionId, { taskId: spec.taskId, taskName: spec.name, accumulated: '', roomId: room.roomId, status: 'pending', runId })
     this.deps.log(`task ${spec.taskId} fired (session=${sessionId}, run=${runId ?? 'no-troop'})`)
 
-    // Make sure the rpc subprocess is alive — bridge keeps a single
-    // shared one for chat threads + tasks alike.
-    const rpc = this.deps.rpc()
-    rpc.prompt({
-      sessionId,
-      systemPrompt,
-      tools: spec.tools,
-      maxSteps: spec.maxSteps,
-      model: this.deps.model,
-      userMsg: spec.userPrompt,
-    })
+    // Run the agent loop in-process. No subprocess, no RPC.
+    void this.runTask(sessionId, systemPrompt, spec)
   }
 
-  private onRpcEvent(event: ApesEvent): void {
-    const sid = event.session_id
-    if (!sid || !sid.startsWith('task:')) return
-    const turn = this.pending.get(sid)
-    if (!turn) return
-    switch (event.type) {
-      case 'text_delta':
-        if (typeof event.delta === 'string') turn.accumulated += event.delta
-        break
-      case 'done':
-        turn.status = event.status === 'error' ? 'error' : 'ok'
-        void this.finaliseRun(turn, typeof event.step_count === 'number' ? event.step_count : 0)
-        void this.postResult(sid, turn)
-        this.pending.delete(sid)
-        break
-      case 'error':
-        turn.status = 'error'
-        turn.accumulated = `(runtime error: ${event.message ?? 'unknown'})`
-        void this.finaliseRun(turn, 0)
-        void this.postResult(sid, turn)
-        this.pending.delete(sid)
-        break
+  private async runTask(
+    sessionId: string,
+    systemPrompt: string,
+    spec: { tools: string[], maxSteps: number, userPrompt: string },
+  ): Promise<void> {
+    try {
+      const result = await runLoop({
+        config: this.deps.runtimeConfig,
+        systemPrompt,
+        userMessage: spec.userPrompt,
+        tools: taskTools(spec.tools),
+        maxSteps: spec.maxSteps,
+        handlers: {
+          onTextDelta: (delta) => {
+            const turn = this.pending.get(sessionId)
+            if (turn) turn.accumulated += delta
+          },
+        },
+      })
+      const turn = this.pending.get(sessionId)
+      if (!turn) return
+      turn.status = result.status === 'error' ? 'error' : 'ok'
+      await this.finaliseRun(turn, result.stepCount)
+      await this.postResult(sessionId, turn)
+      this.pending.delete(sessionId)
+    }
+    catch (err) {
+      const turn = this.pending.get(sessionId)
+      if (!turn) return
+      turn.status = 'error'
+      turn.accumulated = `(runtime error: ${err instanceof Error ? err.message : String(err)})`
+      await this.finaliseRun(turn, 0)
+      await this.postResult(sessionId, turn)
+      this.pending.delete(sessionId)
     }
   }
 
