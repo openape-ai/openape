@@ -23,6 +23,7 @@ import {
   buildBridgeEnvFile,
   buildBridgePlist,
   buildBridgeStartScript,
+  captureHostBinDirs,
   resolveBridgeConfig,
 } from '../../lib/llm-bridge'
 import { isDarwin, isShellRegistered, readMacOSUser, whichBinary } from '../../lib/macos-user'
@@ -178,11 +179,16 @@ export const spawnAgentCommand = defineCommand({
               cliBaseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
               cliModel: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
             })
+            // Capture the host's bin dirs ONCE per spawn — same dirs
+            // are baked into both the plist's PATH and start.sh.
+            // Throws if node / openape-chat-bridge / apes aren't on
+            // the host PATH.
+            const hostBinDirs = captureHostBinDirs()
             return {
               plistLabel: bridgePlistLabel(name),
               plistPath: bridgePlistPath(name),
-              plistContent: buildBridgePlist(name, homeDir, auth.email),
-              startScript: buildBridgeStartScript(),
+              plistContent: buildBridgePlist(name, homeDir, auth.email, hostBinDirs),
+              startScript: buildBridgeStartScript(hostBinDirs),
               envFile: buildBridgeEnvFile(cfg),
             }
           })()
@@ -194,10 +200,15 @@ export const spawnAgentCommand = defineCommand({
       // troop.openape.ai within seconds of spawn finishing.
       const troopPlistLabel = `openape.troop.sync.${name}`
       const troopPlistPath = `/Library/LaunchDaemons/${troopPlistLabel}.plist`
+      // Reuse the bridge's host-bin-dir capture if a bridge was set
+      // up; otherwise capture once for the troop sync alone. The
+      // sync daemon needs `node` (apes-cli's shebang) and `apes`
+      // (the actual binary it runs) on PATH.
+      const troopBinDirs = bridge ? captureHostBinDirs() : captureHostBinDirs()
       const troop = {
         plistLabel: troopPlistLabel,
         plistPath: troopPlistPath,
-        plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir, userName: name }),
+        plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir, userName: name, hostBinDirs: troopBinDirs }),
       }
 
       const script = buildSpawnSetupScript({
