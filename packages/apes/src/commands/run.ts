@@ -606,6 +606,22 @@ async function runAudienceMode(
   const grantsUrl = await getGrantsEndpoint(idp)
   const command = action.split(' ')
   const targetHost = (args.host as string) || hostname()
+  const runAs = (args.as as string | undefined) ?? undefined
+
+  // Step 0: Reuse path — look for an existing approved 'timed' /
+  // 'always' grant that matches our command exactly, instead of
+  // creating a new pending grant every call. The legacy behaviour
+  // (always create new) meant `apes run --as root --approval always`
+  // re-prompted on every invocation despite the always-grant being
+  // designed for reuse. Now: first call creates+approves once,
+  // subsequent calls fetch a fresh token off the same grant id.
+  const reusableId = await findReusableAudienceGrant({
+    grantsUrl, requester: auth.email, audience, command, targetHost, runAs,
+  })
+  if (reusableId) {
+    const { authz_jwt } = await apiFetch<{ authz_jwt: string }>(`${grantsUrl}/${reusableId}/token`, { method: 'POST' })
+    return executeWithGrantToken({ audience, command, args, token: authz_jwt })
+  }
 
   // Step 1: Request grant
   consola.info(`Requesting ${audience} grant on ${targetHost}: ${command.join(' ')}`)
@@ -618,7 +634,7 @@ async function runAudienceMode(
       grant_type: args.approval,
       command,
       reason: (args.reason as string) || command.join(' '),
-      ...(args.as ? { run_as: args.as } : {}),
+      ...(runAs ? { run_as: runAs } : {}),
     },
   })
   if (!shouldWaitForGrant(args)) {
@@ -669,14 +685,23 @@ async function runAudienceMode(
   })
 
   // Step 4: Execute or output token
+  return executeWithGrantToken({ audience, command, args, token: authz_jwt })
+}
+
+function executeWithGrantToken(opts: {
+  audience: string
+  command: string[]
+  args: Record<string, unknown>
+  token: string
+}): void {
+  const { audience, command, args, token } = opts
   if (audience === 'escapes') {
     consola.info(`Executing: ${command.join(' ')}`)
     try {
       // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside
-      // the escapes pipe don't self-detect as ape-shell mode. Same
-      // rationale as execShellCommand above.
+      // the escapes pipe don't self-detect as ape-shell mode.
       const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
-      execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', authz_jwt, '--', ...command], {
+      execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', token, '--', ...command], {
         stdio: 'inherit',
         env: inheritedEnv,
       })
@@ -687,6 +712,64 @@ async function runAudienceMode(
     }
   }
   else {
-    process.stdout.write(authz_jwt)
+    process.stdout.write(token)
+  }
+}
+
+/**
+ * Look for an existing approved `timed`/`always` grant matching the
+ * current request exactly. Returns the grant id, or null if no
+ * reusable grant exists. Network/parse errors fall through to null
+ * (the caller then creates a fresh grant).
+ *
+ * Match criteria (all required):
+ *   - status === 'approved'
+ *   - grant_type !== 'once' (once-grants get consumed on use)
+ *   - audience matches
+ *   - target_host matches
+ *   - command array equals exactly
+ *   - run_as matches (or both undefined)
+ *   - not expired (if grant_type=timed)
+ */
+async function findReusableAudienceGrant(opts: {
+  grantsUrl: string
+  requester: string
+  audience: string
+  command: string[]
+  targetHost: string
+  runAs?: string
+}): Promise<string | null> {
+  try {
+    const grants = await apiFetch<{
+      data: Array<{
+        id: string
+        status: string
+        expires_at?: number
+        request: {
+          audience: string
+          target_host: string
+          grant_type: string
+          command?: string[]
+          run_as?: string
+        }
+      }>
+    }>(`${opts.grantsUrl}?requester=${encodeURIComponent(opts.requester)}&status=approved&limit=50`)
+    const now = Math.floor(Date.now() / 1000)
+    const match = grants.data.find((g) => {
+      const r = g.request
+      if (r.audience !== opts.audience) return false
+      if (r.target_host !== opts.targetHost) return false
+      if (r.grant_type === 'once') return false
+      if (r.grant_type === 'timed' && g.expires_at && g.expires_at <= now) return false
+      const cmd = r.command ?? []
+      if (cmd.length !== opts.command.length) return false
+      if (!cmd.every((c, i) => c === opts.command[i])) return false
+      if ((r.run_as ?? undefined) !== opts.runAs) return false
+      return true
+    })
+    return match?.id ?? null
+  }
+  catch {
+    return null
   }
 }
