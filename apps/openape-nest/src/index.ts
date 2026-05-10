@@ -1,34 +1,33 @@
-// OpenApe Nest daemon — local control-plane that hosts agents on this
-// computer. Phase D (#sim-arch) makes the Nest a pure long-running
-// CLIENT: no HTTP server bound to a port, no DDISA-grant gating of an
-// inbound API. Three responsibilities:
+// OpenApe Nest daemon — Phase F (#sim-arch): pure long-running
+// CLIENT, no inbound channel of any kind. Three responsibilities:
 //
-//   1. Supervisor: one chat-bridge child per registered agent
-//      (`apes run --as <agent> --wait -- openape-chat-bridge`),
-//      restart with backoff. See lib/supervisor.ts.
-//   2. Troop sync: every 5 min, walk the registry and run
-//      `apes agents sync` for each agent. See lib/troop-sync.ts.
-//   3. Intent channel: poll `~/intents/*.json` for control commands
-//      (spawn / destroy / list) dropped by the apes-cli, execute,
-//      write `<id>.response` back. See lib/intent-channel.ts.
+//   1. **pm2 supervisor**: each registered agent gets its own pm2-god
+//      daemon (running as the agent's macOS uid) supervising one
+//      `openape-chat-bridge` process. See lib/pm2-supervisor.ts.
+//   2. **troop sync**: every 5 min walk the registry, run
+//      `apes agents sync` for each. See lib/troop-sync.ts.
+//   3. **registry watcher**: fs.watch on agents.json. When the
+//      apes-cli writes a new entry (after `apes agents spawn`) or
+//      drops one (after `apes agents destroy`), the Nest reconciles
+//      its pm2 state automatically.
 //
-// Dir-based intent transport instead of HTTP because (a) the Nest
-// stays a client (no listening socket), (b) UNIX permissions on the
-// shared dir gate access (mode 770, group _openape_nest), (c) no
-// per-call DDISA grant burn (which was unworkable since humans have
-// no YOLO and would have re-approved on every spawn).
+// No HTTP server, no intent-channel directory, no DDISA-grant
+// gating of incoming calls. The apes-cli does its work directly
+// via `apes run --as root -- apes agents spawn|destroy` and writes
+// to the shared agents.json registry; the Nest just observes.
 //
 // Bootstrapped by `apes nest install`. Started + KeepAlive'd by
 // launchd (one entry total — system-domain after migrate-to-service-
 // user, user-domain otherwise).
 
+import { watch } from 'node:fs'
 import process from 'node:process'
-import { IntentChannel, reapStaleResponses } from './lib/intent-channel'
-import { listAgents } from './lib/registry'
+import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
 import { TroopSync } from './lib/troop-sync'
 
 const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
+const RECONCILE_DEBOUNCE_MS = 1000
 
 function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
@@ -36,38 +35,47 @@ function log(line: string): void {
 
 const supervisor = new Pm2Supervisor({ apesBin: APES_BIN, log })
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
-const intentChannel = new IntentChannel({ apesBin: APES_BIN, supervisor, log })
 
-// Reconcile from the persisted registry on boot — pm2 picks up its
-// own state from the pm2-god daemon (which outlives the Nest), so
-// agents already running stay running. New entries since last
-// reconcile get started.
-void supervisor.reconcile(listAgents()).then(() =>
-  log('nest: pm2-supervisor reconciled with registry'),
-).catch((err) => {
-  log(`nest: pm2-supervisor reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
-})
+async function reconcile(): Promise<void> {
+  try {
+    await supervisor.reconcile(listAgents())
+    log('nest: pm2-supervisor reconciled with registry')
+  }
+  catch (err) {
+    log(`nest: reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
 
+void reconcile()
 troopSync.start()
-intentChannel.start()
 
-// Reap stale response files every hour.
-const reaperTimer = setInterval(reapStaleResponses, 60 * 60 * 1000, log)
+// Watch the registry file for changes. fs.watch fires once per
+// "something happened" — debounce with a small timer because some
+// editors / atomic-rename writes fire two events in quick
+// succession (rename: old, rename: new).
+let reconcileTimer: NodeJS.Timeout | undefined
+try {
+  watch(REGISTRY_PATH, () => {
+    if (reconcileTimer) clearTimeout(reconcileTimer)
+    reconcileTimer = setTimeout(() => { void reconcile() }, RECONCILE_DEBOUNCE_MS)
+  })
+  log(`nest: watching ${REGISTRY_PATH} for registry changes`)
+}
+catch (err) {
+  log(`nest: registry watch failed (${err instanceof Error ? err.message : String(err)}) — falling back to 5s poll`)
+  setInterval(() => { void reconcile() }, 5_000).unref()
+}
 
 process.on('SIGTERM', () => {
   log('nest: SIGTERM — stopping')
-  void supervisor.stopAll()
   troopSync.stop()
-  intentChannel.stop()
-  clearInterval(reaperTimer)
+  if (reconcileTimer) clearTimeout(reconcileTimer)
   process.exit(0)
 })
 
 process.on('SIGINT', () => {
   log('nest: SIGINT — stopping')
-  void supervisor.stopAll()
   troopSync.stop()
-  intentChannel.stop()
-  clearInterval(reaperTimer)
+  if (reconcileTimer) clearTimeout(reconcileTimer)
   process.exit(0)
 })
