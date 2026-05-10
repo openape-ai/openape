@@ -396,38 +396,22 @@ export interface SpawnTroopFiles {
  * `apes agents sync` once eagerly so the agent appears at the troop
  * SP within seconds rather than waiting a full sync interval.
  */
-function buildTroopBlock(troop: SpawnTroopFiles | null): string {
-  if (!troop) return ''
-  // Plist lives in /Library/LaunchDaemons (system-wide), root-owned, mode 644
-  // — launchd refuses to load group/world-writable plists. The UserName key
-  // inside makes launchd run `apes agents sync` as the agent uid. Same
-  // pattern the bridge has always used; troop sync inherits it (M6 originally
-  // tried gui/<uid> but hidden agents have no user-launchd domain).
-  //
-  // Logs + task cache + LaunchAgents dir still live under the agent's home
-  // (sync writes there).
+function buildTroopBlock(_troop: SpawnTroopFiles | null): string {
+  // Phase C (#sim-arch): no per-agent troop-sync plist anymore. The
+  // Nest's centralised TroopSync loop walks the registry every 5 min
+  // and runs `apes agents sync` for each agent (see
+  // apps/openape-nest/src/lib/troop-sync.ts). We still create the
+  // agent-side dirs that `apes agents sync` writes to.
   return `
-mkdir -p "$HOME_DIR/Library/LaunchAgents" "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
-cat > ${shQuote(troop.plistPath)} ${shHeredoc(troop.plistContent)}
-chown root:wheel ${shQuote(troop.plistPath)}
-chmod 644 ${shQuote(troop.plistPath)}
+mkdir -p "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
 `
 }
 
-function buildTroopBootstrapBlock(troop: SpawnTroopFiles | null, name: string): string {
-  if (!troop) return ''
-  // System-domain bootstrap (root-only, doesn't need a user session).
-  // RunAtLoad fires the first sync immediately so the agent appears in
-  // the troop SP UI within seconds of spawn finishing.
-  return `
-# Bootstrap the troop sync launchd in the system domain. setup.sh runs
-# as root via \`apes run --as root\`, so we have permission. Stale label
-# is bootouted first to make re-spawn idempotent.
-echo "==> Installing troop sync launchd as ${name}…"
-launchctl bootout "system/${troop.plistLabel}" 2>/dev/null || true
-launchctl bootstrap system ${shQuote(troop.plistPath)} || \\
-  echo "warn: troop sync bootstrap failed; check ${troop.plistPath}"
-`
+function buildTroopBootstrapBlock(_troop: SpawnTroopFiles | null, _name: string): string {
+  // Phase C: no system-domain plist to bootstrap. The Nest's
+  // centralised troop-sync loop will pick the new agent up at the
+  // next tick (≤5 min after spawn).
+  return ''
 }
 
 export interface DestroyTeardownScriptInput {
