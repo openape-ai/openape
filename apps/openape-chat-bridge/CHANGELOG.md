@@ -1,5 +1,12 @@
 # @openape/chat-bridge
 
+## 1.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`ce9bef7`](https://github.com/openape-ai/openape/commit/ce9bef7487849f3c74fa9a8f7753e0465484e9a5)]:
+  - @openape/apes@1.13.0
+
 ## 1.3.2
 
 ### Patch Changes
