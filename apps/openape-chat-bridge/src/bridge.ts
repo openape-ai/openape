@@ -41,7 +41,7 @@ import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
-import { ApesRpcSession } from './apes-rpc'
+import type { RuntimeConfig } from '@openape/apes'
 import { ChatApi } from './chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
@@ -160,12 +160,12 @@ function truncate(s: string, n: number): string {
 }
 
 class Bridge {
-  // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession
-  // borrows the shared ApesRpcSession and multiplexes via session_id.
+  // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession holds
+  // its own message history and calls @openape/apes' runLoop directly
+  // (no stdio JSON-RPC subprocess — see thread-session.ts).
   private threads = new Map<string, ThreadSession>()
   private chat: ChatApi
   private bearer: () => Promise<string>
-  private rpc: ApesRpcSession | undefined
   private cron: CronRunner | undefined
 
   constructor(
@@ -179,14 +179,13 @@ class Bridge {
     }
     this.chat = new ChatApi(this.cfg.endpoint, this.bearer)
     // The cron runner ticks every 60s, fires matching tasks via the
-    // SAME ApesRpcSession the chat threads use, posts results as DMs
-    // through the existing chat WebSocket connection. Replaces the
+    // same in-process runLoop the chat threads use, posts results as
+    // DMs through the existing chat WebSocket connection. Replaces the
     // per-task launchd plist + separate `apes agents run` process model.
     this.cron = new CronRunner({
-      rpc: () => this.getRpc(),
+      runtimeConfig: this.runtimeConfig(),
       chat: this.chat,
       ownerEmail: this.ownerEmail,
-      model: this.cfg.model,
       log,
       troopUrl: (process.env.OPENAPE_TROOP_URL ?? 'https://troop.openape.ai').replace(/\/$/, ''),
       bearer: this.bearer,
@@ -195,28 +194,17 @@ class Bridge {
   }
 
   /**
-   * Lazy-spawn the runtime so we don't pay startup cost when no chat
-   * messages arrive. Recreates on subprocess exit so a crash doesn't
-   * permanently break the bridge.
+   * RuntimeConfig is shared across thread sessions and the cron runner.
+   * The bridge resolves it from its own env at boot and reuses for the
+   * whole process lifetime.
    */
-  private getRpc(): ApesRpcSession {
-    if (this.rpc?.isAlive()) return this.rpc
-    log('spawning `apes agents serve --rpc`')
-    const rpc = new ApesRpcSession({
-      binary: this.cfg.apesBin,
-      args: ['agents', 'serve', '--rpc'],
-    })
-    rpc.onExit((code) => {
-      log(`apes-rpc exited code=${code} — will respawn on next message; recent stderr: ${rpc.recentStderr().slice(-300).replace(/\n/g, ' / ')}`)
-      // Drop all thread sessions — they were tied to this subprocess's
-      // in-memory session map. Threads will recreate themselves next
-      // inbound message.
-      for (const t of this.threads.values()) t.dispose()
-      this.threads.clear()
-      this.rpc = undefined
-    })
-    this.rpc = rpc
-    return rpc
+  private runtimeConfig(): RuntimeConfig {
+    const apiBase = (process.env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
+    const apiKey = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
+    if (!apiKey) {
+      throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
+    }
+    return { apiBase, apiKey, model: this.cfg.model }
   }
 
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {
@@ -282,12 +270,10 @@ class Bridge {
       roomId,
       threadId,
       chat: this.chat,
-      rpc: this.getRpc(),
-      sessionId: key,
+      runtimeConfig: this.runtimeConfig(),
       systemPrompt: resolveSystemPrompt(this.cfg.systemPrompt),
       tools: this.cfg.tools,
       maxSteps: this.cfg.maxSteps,
-      model: this.cfg.model,
       log,
     })
     this.threads.set(key, s)
