@@ -308,6 +308,12 @@ if dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Phase G: agent home dirs live under /var/openape/homes/, not
+# /Users/. Pre-create the parent and chmod it world-traversable
+# so per-agent dirs can be reached by their respective uids.
+mkdir -p /var/openape/homes
+chmod 755 /var/openape/homes
+
 # Pick the next free UID in the [200, 500) hidden service-account range.
 # Starts the running max at 199 so an empty range yields 200 after the
 # floor check; otherwise NEXT_UID = max(existing in-range UIDs) + 1.

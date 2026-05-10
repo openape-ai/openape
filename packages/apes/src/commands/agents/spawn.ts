@@ -139,7 +139,18 @@ export const spawnAgentCommand = defineCommand({
       throw new CliError(`macOS user "${name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
     }
 
-    const homeDir = `/Users/${name}`
+    // Phase G (#sim-arch): hidden service-account agents live under
+    // /var/openape/homes/<name>, matching macOS convention for hidden
+    // services (_www → /var/empty, _postgres → /var/empty, our own
+    // _openape_nest → /var/openape/nest). Keeps /Users/ for real
+    // human accounts only — Finder, TimeMachine, Migration Assistant
+    // stop seeing agents.
+    //
+    // The dscl record stays at /Users/<name> (that's the dscl
+    // namespace, not a filesystem path) — only the NFSHomeDirectory
+    // attribute changes. setup.sh below interpolates this into the
+    // dscl create call.
+    const homeDir = `/var/openape/homes/${name}`
     const scratch = mkdtempSync(join(tmpdir(), `apes-spawn-${name}-`))
     const scriptPath = join(scratch, 'setup.sh')
 

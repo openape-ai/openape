@@ -64,7 +64,8 @@ export const destroyAgentCommand = defineCommand({
     const idpAgent = owned.find(u => u.name === name)
     const idpExists = idpAgent !== undefined
 
-    const osUserExists = !args['keep-os-user'] && isDarwin() && readMacOSUser(name) !== null
+    const osUser = isDarwin() ? readMacOSUser(name) : null
+    const osUserExists = !args['keep-os-user'] && osUser !== null
 
     if (!idpExists && !osUserExists) {
       consola.info(`Nothing to destroy: no IdP agent and no OS user named "${name}".`)
@@ -73,7 +74,10 @@ export const destroyAgentCommand = defineCommand({
 
     if (!args.force) {
       const consequences: string[] = []
-      if (osUserExists) consequences.push(`• Remove macOS user ${name} and rm -rf /Users/${name}`)
+      if (osUserExists) {
+        const home = osUser?.homeDir ?? `/Users/${name}`
+        consequences.push(`• Remove macOS user ${name} and rm -rf ${home}`)
+      }
       if (idpExists) {
         consequences.push(args.soft
           ? `• Deactivate IdP agent ${idpAgent!.email} (PATCH isActive=false)`
@@ -134,7 +138,8 @@ export const destroyAgentCommand = defineCommand({
       const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
       const scriptPath = join(scratch, 'teardown.sh')
       try {
-        const script = buildDestroyTeardownScript({ name, homeDir: `/Users/${name}`, adminUser })
+        const homeDir = osUser?.homeDir ?? `/Users/${name}`
+        const script = buildDestroyTeardownScript({ name, homeDir, adminUser })
         writeFileSync(scriptPath, script, { mode: 0o700 })
         consola.start('Running teardown via sudo…')
         // sudo -S reads its own password from the first stdin line and
