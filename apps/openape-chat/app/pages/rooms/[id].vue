@@ -292,7 +292,7 @@ async function createThread(): Promise<void> {
 
 <template>
   <div class="min-h-dvh flex flex-col">
-    <header class="sticky top-0 z-10 flex items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+    <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
       <UButton
         to="/"
         icon="i-lucide-arrow-left"
@@ -320,7 +320,7 @@ async function createThread(): Promise<void> {
 
     <nav
       v-if="roomInfo && visibleThreads.length"
-      class="sticky top-[52px] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur overflow-x-auto"
+      class="sticky top-[var(--chat-header-height)] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur overflow-x-auto"
       aria-label="Threads"
     >
       <button

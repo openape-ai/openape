@@ -19,3 +19,46 @@
   }
 }
 
+/*
+ * iOS safe-area + tap-target tweaks.
+ *
+ * `viewport-fit=cover` + `apple-mobile-web-app-status-bar-style=black-translucent`
+ * (both in nuxt.config.ts) tell iOS to overlay the status bar on our content
+ * and expose the inset env() values. The rules below use those values so
+ * sticky headers don't draw under the notch/dynamic island, and so the
+ * fixed compose bar at the bottom clears the home indicator.
+ *
+ * Apple's HIG calls for a 44pt minimum tap target on touch surfaces. Nuxt
+ * UI's `size="sm"` buttons are 30px — fine on desktop, easy to miss on a
+ * phone. We size up all UButton instances inside headers and nav rails
+ * (the spots the user is most likely to mis-tap into) to 44px on touch
+ * viewports only. Desktop keeps the tighter visual rhythm.
+ */
+
+/* Total height of the sticky header — used as the `top:` value for the
+ * thread-tabs nav that sits beneath it. Computed at runtime so the
+ * offset tracks env(safe-area-inset-top) per device. The 3.25rem term
+ * matches the header's py-3 + button height. */
+:root {
+  --chat-header-height: calc(env(safe-area-inset-top) + 3.25rem);
+}
+
+/* Safe-area helpers. The header in each page applies `.safe-pt` so the
+ * notch/dynamic island doesn't crash into the title row. */
+.safe-pt {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+.safe-pb {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  /* Bigger tap targets for header / nav buttons on phones + tablets.
+   * Desktop is untouched — the visual scale there is fine. */
+  header button,
+  header a[role="button"],
+  nav[aria-label] button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
