@@ -25,6 +25,14 @@ export default defineNuxtConfig({
         { rel: 'apple-touch-icon', href: '/icon-512.png', sizes: '512x512' },
       ],
       meta: [
+        // viewport-fit=cover is the prerequisite for env(safe-area-inset-*).
+        // Without it iOS doesn't expose the inset values, so headers/inputs
+        // still draw flush with the notch/dynamic island and the home
+        // indicator. Pairing it with apple-mobile-web-app-status-bar-style
+        // = 'black-translucent' below tells iOS to overlay the status bar
+        // on our content — we then compensate with safe-area-inset-top
+        // padding in the sticky header (see assets/css/main.css).
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'theme-color', content: '#18181b' },
         { name: 'description', content: 'Team rooms and DMs for humans and agents.' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },

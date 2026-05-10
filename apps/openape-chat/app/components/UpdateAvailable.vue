@@ -36,7 +36,7 @@ async function reload() {
   >
     <div
       v-if="needRefresh"
-      class="fixed top-3 inset-x-3 md:top-4 md:left-auto md:right-4 md:w-80 z-50 rounded-lg shadow-lg bg-zinc-900 border border-zinc-700 p-3 flex items-center gap-3"
+      class="fixed top-[calc(env(safe-area-inset-top)+0.75rem)] inset-x-3 md:top-4 md:left-auto md:right-4 md:w-80 z-50 rounded-lg shadow-lg bg-zinc-900 border border-zinc-700 p-3 flex items-center gap-3"
     >
       <UIcon name="i-lucide-download" class="text-primary-400 size-5 shrink-0" />
       <div class="flex-1 text-sm">
