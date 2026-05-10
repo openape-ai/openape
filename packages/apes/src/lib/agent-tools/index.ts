@@ -11,6 +11,7 @@
 // the registry it can use. Unknown names abort the run before any
 // LLM call so the model can't invent a tool we haven't shipped.
 
+import { bashTools } from './bash'
 import { fileTools } from './file'
 import { httpTools } from './http'
 import { mailTools } from './mail'
@@ -32,6 +33,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   ...fileTools,
   ...tasksTools,
   ...mailTools,
+  ...bashTools,
 ]
 
 export const TOOLS: Record<string, ToolDefinition> = Object.fromEntries(
