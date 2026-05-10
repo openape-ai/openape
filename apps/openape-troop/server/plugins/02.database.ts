@@ -50,6 +50,13 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''`)
     }
     catch { /* column exists */ }
+    // Phase H: tool whitelist per agent. Default '[]' for existing
+    // pre-refactor rows; new agents land via the sync.post handler
+    // which writes the all-tools list.
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN tools TEXT NOT NULL DEFAULT '[]'`)
+    }
+    catch { /* column exists */ }
     try {
       await db.run(sql`ALTER TABLE tasks RENAME COLUMN system_prompt TO user_prompt`)
     }

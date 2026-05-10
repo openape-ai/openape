@@ -65,6 +65,30 @@ function resolveSystemPrompt(envFallback: string): string {
   catch { return envFallback }
 }
 
+/**
+ * Resolve the agent's tool whitelist for chat-bridge runtime.
+ * Source of truth (priority order):
+ *   1. `~/.openape/agent/agent.json` (`tools[]` written by the
+ *      latest `apes agents sync` from troop) — the live owner-
+ *      controlled config.
+ *   2. `APE_CHAT_BRIDGE_TOOLS` env var (legacy fallback) — the
+ *      deprecated mechanism left in place so old deployments
+ *      keep working until they sync.
+ *   3. `[]` — pure-chat agent, no tools.
+ */
+function resolveTools(envFallback: string[]): string[] {
+  if (existsSync(AGENT_CONFIG_PATH)) {
+    try {
+      const parsed = JSON.parse(readFileSync(AGENT_CONFIG_PATH, 'utf8')) as { tools?: unknown }
+      if (Array.isArray(parsed.tools)) {
+        return parsed.tools.filter((t): t is string => typeof t === 'string')
+      }
+    }
+    catch { /* fall through */ }
+  }
+  return envFallback
+}
+
 const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
 const DEFAULT_APES_BIN = 'apes'
 const DEFAULT_MAX_STEPS = 10
@@ -306,7 +330,10 @@ class Bridge {
       chat: this.chat,
       runtimeConfig: this.runtimeConfig(),
       systemPrompt: resolveSystemPrompt(this.cfg.systemPrompt),
-      tools: this.cfg.tools,
+      // Tools resolve from agent.json (latest sync from troop) on
+      // every new thread, so owner edits in the troop UI take
+      // effect after the next sync without a bridge restart.
+      tools: resolveTools(this.cfg.tools),
       maxSteps: this.cfg.maxSteps,
       log,
     })
