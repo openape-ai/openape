@@ -2,6 +2,7 @@ import type { ChatPeer } from '../../utils/realtime'
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
 import { jwtVerify } from 'jose'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import { clearFocusForPeer, setFocus } from '../../utils/focus'
 import { registerPeer, unregisterPeer } from '../../utils/realtime'
 
 interface DDISAClaims {
@@ -129,15 +130,40 @@ export default defineWebSocketHandler({
     }
   },
 
-  message(peer, _message) {
-    // v1 is server-push only. Clients post via REST, the broadcast hub
-    // pushes notifications via this socket. Ping/pong is handled by the
-    // browser/Crossws layer automatically.
-    void peer
-    void _message
+  message(peer, message) {
+    // The bulk of v1 traffic is server→client (post via REST, broadcast
+    // back). The one client→server frame we accept is `focus` / `blur`,
+    // used to suppress push delivery to recipients who are already
+    // looking at the same room+thread on a connected device. Anything
+    // else gets ignored — malformed frames must not poison the loop.
+    const ctx = ctxByPeerId.get(peer.id)
+    if (!ctx) return
+    let frame: { type?: string, room_id?: string, thread_id?: string }
+    try {
+      const raw = typeof message === 'string'
+        ? message
+        : typeof (message as { text?: () => string }).text === 'function'
+          ? (message as { text: () => string }).text()
+          : String(message)
+      frame = JSON.parse(raw) as typeof frame
+    }
+    catch {
+      return
+    }
+    if (frame.type === 'focus' && typeof frame.room_id === 'string') {
+      setFocus(peer.id, {
+        email: ctx.email,
+        roomId: frame.room_id,
+        threadId: typeof frame.thread_id === 'string' ? frame.thread_id : undefined,
+      })
+    }
+    else if (frame.type === 'blur') {
+      clearFocusForPeer(peer.id)
+    }
   },
 
   close(peer) {
+    clearFocusForPeer(peer.id)
     const ctx = ctxByPeerId.get(peer.id)
     if (!ctx) return
     ctxByPeerId.delete(peer.id)
