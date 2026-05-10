@@ -97,8 +97,9 @@ export const syncAgentCommand = defineCommand({
     })
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
 
-    const { system_prompt: systemPrompt, tasks } = await client.listTasks()
+    const { system_prompt: systemPrompt, tools, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
+    consola.info(`Tools enabled: ${tools.length === 0 ? '(none)' : tools.join(', ')}`)
 
     // Sync runs as ROOT in production (the launchd plist sets
     // UserName=root so it can write /Library/LaunchDaemons/ and
@@ -137,7 +138,7 @@ export const syncAgentCommand = defineCommand({
     const agentJsonPath = join(agentDir, 'agent.json')
     writeFileSync(
       agentJsonPath,
-      `${JSON.stringify({ systemPrompt }, null, 2)}\n`,
+      `${JSON.stringify({ systemPrompt, tools }, null, 2)}\n`,
       { mode: 0o600 },
     )
     chownToAgent(agentJsonPath)

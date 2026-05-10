@@ -1,9 +1,14 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import toolCatalog from '../../../tool-catalog.json'
 import { useDb } from '../../../database/drizzle'
 import { agents } from '../../../database/schema'
 import { parseAgentEmail } from '../../../utils/agent-email'
 import { requireAgent } from '../../../utils/auth'
+
+// Default tool whitelist for first-time agent sync — all currently-
+// shipped tools are enabled. Owners narrow via the troop UI later.
+const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }> }).tools.map(t => t.name)
 
 const bodySchema = z.object({
   hostname: z.string().min(1).max(253),
@@ -84,6 +89,8 @@ export default defineEventHandler(async (event) => {
     hostId: body.data.host_id,
     hostname: body.data.hostname,
     pubkeySsh: body.data.pubkey_ssh ?? null,
+    // Default-all-tools on first sync. Owner can later narrow via UI.
+    tools: ALL_TOOL_NAMES,
     firstSeenAt: now,
     lastSeenAt: now,
     createdAt: now,
