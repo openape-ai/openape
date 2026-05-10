@@ -30,13 +30,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { handleAgentSpawn, handleAgentDestroy } from '../api/agents'
 import { listAgents } from './registry'
-import type { Supervisor } from './supervisor'
+import type { Pm2Supervisor } from './pm2-supervisor'
 
 const POLL_MS = 1_000
 
 export interface IntentChannelDeps {
   apesBin: string
-  supervisor: Supervisor
+  supervisor: Pm2Supervisor
   log: (line: string) => void
 }
 

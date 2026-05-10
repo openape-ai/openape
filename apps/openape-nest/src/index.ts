@@ -25,7 +25,7 @@
 import process from 'node:process'
 import { IntentChannel, reapStaleResponses } from './lib/intent-channel'
 import { listAgents } from './lib/registry'
-import { Supervisor } from './lib/supervisor'
+import { Pm2Supervisor } from './lib/pm2-supervisor'
 import { TroopSync } from './lib/troop-sync'
 
 const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
@@ -34,15 +34,19 @@ function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
 }
 
-const supervisor = new Supervisor({ apesBin: APES_BIN, log })
+const supervisor = new Pm2Supervisor({ apesBin: APES_BIN, log })
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const intentChannel = new IntentChannel({ apesBin: APES_BIN, supervisor, log })
 
-// Reconcile from the persisted registry on boot — re-spawns the
-// chat-bridge child for every agent that was registered before the
-// last daemon shutdown.
-supervisor.reconcile(listAgents())
-log(`nest: supervisor reconciled, ${supervisor.size()} bridge process(es) starting`)
+// Reconcile from the persisted registry on boot — pm2 picks up its
+// own state from the pm2-god daemon (which outlives the Nest), so
+// agents already running stay running. New entries since last
+// reconcile get started.
+void supervisor.reconcile(listAgents()).then(() =>
+  log('nest: pm2-supervisor reconciled with registry'),
+).catch((err) => {
+  log(`nest: pm2-supervisor reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
+})
 
 troopSync.start()
 intentChannel.start()
@@ -52,7 +56,7 @@ const reaperTimer = setInterval(reapStaleResponses, 60 * 60 * 1000, log)
 
 process.on('SIGTERM', () => {
   log('nest: SIGTERM — stopping')
-  supervisor.stopAll()
+  void supervisor.stopAll()
   troopSync.stop()
   intentChannel.stop()
   clearInterval(reaperTimer)
@@ -61,7 +65,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   log('nest: SIGINT — stopping')
-  supervisor.stopAll()
+  void supervisor.stopAll()
   troopSync.stop()
   intentChannel.stop()
   clearInterval(reaperTimer)
