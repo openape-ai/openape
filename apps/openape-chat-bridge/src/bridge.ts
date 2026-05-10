@@ -105,7 +105,41 @@ interface BridgeConfig {
   roomFilter?: string
 }
 
+/**
+ * Load env vars from the bridge .env file written at spawn time.
+ * Merges into process.env (no overwrite — process.env wins). Used to
+ * have a start.sh wrapper that sourced this file; with the Nest
+ * supervisor invoking the bridge directly we load it here. Silent
+ * no-op if the file is missing (covers ad-hoc invocations + tests).
+ */
+function loadBridgeEnvFile(): void {
+  const path = join(homedir(), 'Library', 'Application Support', 'openape', 'bridge', '.env')
+  if (!existsSync(path)) return
+  try {
+    const raw = readFileSync(path, 'utf8')
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eq = trimmed.indexOf('=')
+      if (eq < 0) continue
+      const key = trimmed.slice(0, eq).trim()
+      const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
+      if (!key) continue
+      // Don't clobber explicit env (lets operators override per-launch).
+      if (process.env[key] === undefined) {
+        process.env[key] = value
+      }
+    }
+  }
+  catch {
+    // Tolerate read errors — fail-fast checks below will surface
+    // the real problem with a clearer message.
+  }
+}
+
 function readConfig(): BridgeConfig {
+  loadBridgeEnvFile()
+
   const toolsRaw = process.env.APE_CHAT_BRIDGE_TOOLS ?? ''
   const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
   const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
