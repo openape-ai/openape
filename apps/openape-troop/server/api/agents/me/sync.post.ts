@@ -72,11 +72,20 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'host_id mismatch: agent keypair appears to have moved to a different host',
       })
     }
+    // Backfill tools[] for legacy rows that existed before the
+    // tool-whitelist column was added (their migration default was
+    // empty []). New rows go through the insert path below which
+    // seeds all-tools by default; existing rows would otherwise be
+    // stuck on []. We only backfill when the row is currently empty
+    // — owners that explicitly narrowed to a non-empty subset keep
+    // their settings.
+    const toolsBackfill = (existing.tools?.length ?? 0) === 0 ? ALL_TOOL_NAMES : existing.tools
     await db.update(agents).set({
       hostId: body.data.host_id,
       hostname: body.data.hostname,
       ownerEmail: body.data.owner_email.toLowerCase(),
       pubkeySsh: body.data.pubkey_ssh ?? existing.pubkeySsh,
+      tools: toolsBackfill,
       lastSeenAt: now,
     }).where(eq(agents.email, agentEmail))
     return { agent_email: agentEmail, host_id: body.data.host_id, first_sync: false, last_seen_at: now }

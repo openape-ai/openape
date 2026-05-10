@@ -115,7 +115,7 @@ describe('llm-bridge — pure helpers', () => {
   })
 
   it('buildBridgeStartScript is slim — no npm installs at runtime, no pi extension write, execs bridge', () => {
-    const sh = buildBridgeStartScript()
+    const sh = buildBridgeStartScript(['/opt/homebrew/bin', '/usr/local/bin'])
     expect(sh.startsWith('#!/usr/bin/env bash')).toBe(true)
     // Heavy installs MUST happen during spawn, not on every launchd boot —
     // the whole point of #246. start.sh stays under ~5s wall-clock.
@@ -128,11 +128,12 @@ describe('llm-bridge — pure helpers', () => {
     // Env file moved out of ~/.pi/agent and into the bridge dir.
     expect(sh).toContain('"$HOME/Library/Application Support/openape/bridge/.env"')
     expect(sh).toContain('exec openape-chat-bridge')
-    expect(sh).toContain('$HOME/.bun/bin')
+    // PATH includes the host-resolved bin dirs passed in.
+    expect(sh).toContain('/opt/homebrew/bin')
   })
 
   it('buildBridgeStartScript no longer invokes `apes login` — refresh is in-process via cli-auth (#259)', () => {
-    const sh = buildBridgeStartScript()
+    const sh = buildBridgeStartScript(['/opt/homebrew/bin'])
     // Token refresh moved into @openape/cli-auth's challenge-response
     // path. start.sh used to invoke `apes login` on every daemon boot
     // as a workaround for the 1h agent-token expiry; now cli-auth
@@ -146,7 +147,7 @@ describe('llm-bridge — pure helpers', () => {
   })
 
   it('buildBridgePlist embeds agent name as label + UserName + paths + KeepAlive', () => {
-    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco')
+    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco', ['/opt/homebrew/bin'])
     expect(plist).toContain('<string>eco.hofmann.apes.bridge.agent-x</string>')
     expect(plist).toContain('<key>UserName</key>')
     expect(plist).toContain('<string>agent-x</string>')
@@ -158,7 +159,7 @@ describe('llm-bridge — pure helpers', () => {
   })
 
   it('buildBridgePlist stamps OPENAPE_OWNER_EMAIL in EnvironmentVariables', () => {
-    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco')
+    const plist = buildBridgePlist('agent-x', '/Users/agent-x', 'patrick@hofmann.eco', ['/opt/homebrew/bin'])
     // Defense-in-depth: bridge falls back to this env var when auth.json
     // lacks owner_email (e.g. an old `apes login` clobbered it). Without
     // this the daemon would crash-loop on "missing 'owner_email'".
