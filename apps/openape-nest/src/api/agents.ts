@@ -22,7 +22,7 @@ interface RouteCtx {
    * the legacy (M2-pending) write endpoints. */
   caller: string
   grantId: string
-  supervisor: import('../lib/supervisor').Supervisor
+  supervisor: import('../lib/pm2-supervisor').Pm2Supervisor
 }
 
 export function handleNestStatus(_ctx: RouteCtx): { agents: number } {
@@ -85,7 +85,7 @@ export async function handleAgentSpawn(ctx: RouteCtx): Promise<{ name: string, e
   }
   upsertAgent(entry)
   // Hand the new agent to the supervisor so its bridge starts.
-  ctx.supervisor.reconcile(listAgents())
+  await ctx.supervisor.reconcile(listAgents())
   return { name, email: entry.email, uid, home: entry.home }
 }
 
@@ -94,16 +94,15 @@ export async function handleAgentDestroy(ctx: RouteCtx, name: string): Promise<{
   const entry = findAgent(name)
   if (!entry) throw new Error(`agent "${name}" not registered with this nest`)
 
-  // Stop our supervised bridge first so destroy doesn't race a respawn.
-  ctx.supervisor.stop(name)
-
   // Delegate privileged teardown.
   ctx.log(`nest: destroying agent "${name}"...`)
   const args = ['run', '--as', 'root', '--', 'apes', 'agents', 'destroy', name, '--force']
   await execFileAsync(ctx.apesBin, args, { maxBuffer: 4 * 1024 * 1024 })
 
   removeAgent(name)
-  ctx.supervisor.reconcile(listAgents())
+  // pm2-supervisor reconciles to the new registry — picks up the
+  // missing agent and pm2-deletes the bridge process.
+  await ctx.supervisor.reconcile(listAgents())
   return { name, removed: true }
 }
 
