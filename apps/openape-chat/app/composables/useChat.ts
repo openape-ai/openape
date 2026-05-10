@@ -39,6 +39,10 @@ interface UseChatHandle {
   // bearer directly to skip the round-trip.
   connect: (opts?: { token?: string }) => Promise<void>
   disconnect: () => void
+  // Send a frame to the server. Safe to call before/after connect — no-op
+  // when the socket isn't open. Used by rooms/[id] to emit focus/blur
+  // frames so the server can suppress push for the active surface.
+  send: (frame: Record<string, unknown>) => void
 }
 
 let _instance: UseChatHandle | null = null
@@ -132,6 +136,12 @@ export function useChat(): UseChatHandle {
     open(token)
   }
 
+  function send(frame: Record<string, unknown>) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return
+    try { socket.send(JSON.stringify(frame)) }
+    catch { /* socket race — fine, next reconnect will re-sync state */ }
+  }
+
   function disconnect() {
     manualDisconnect = true
     if (reconnectTimer) {
@@ -143,6 +153,6 @@ export function useChat(): UseChatHandle {
     connected.value = false
   }
 
-  _instance = { connected, on, connect, disconnect }
+  _instance = { connected, on, connect, disconnect, send }
   return _instance
 }

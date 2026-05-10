@@ -160,9 +160,36 @@ function removeReactionLocal(messageId: string, userEmail: string, emoji: string
 const chat = useChat()
 let off: (() => void) | undefined
 
+// Tell the server which surface we're looking at so it can suppress push
+// notifications for messages that would just be noise (we already see
+// the message stream in this thread). Re-fire on visibility change and
+// after WS reconnect so server-side state stays in sync.
+function sendFocus() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState !== 'visible') return
+  if (!roomId.value) return
+  chat.send({
+    type: 'focus',
+    room_id: roomId.value,
+    ...(activeThreadId.value ? { thread_id: activeThreadId.value } : {}),
+  })
+}
+function sendBlur() {
+  chat.send({ type: 'blur' })
+}
+function onVisibilityChange() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'visible') sendFocus()
+  else sendBlur()
+}
+
 onMounted(async () => {
   chat.connect()
   await loadInitial()
+  sendFocus()
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
   off = chat.on((frame) => {
     if (frame.room_id !== roomId.value) return
     if (frame.type === 'message') {
@@ -224,10 +251,18 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   off?.()
+  sendBlur()
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
 })
 
 watch(roomId, loadInitial)
-watch(activeThreadId, () => { void loadMessages() })
+watch(activeThreadId, () => { void loadMessages(); sendFocus() })
+// Re-emit focus after a reconnect — the server lost our prior state
+// when the WS dropped, otherwise the silent-tab window would notify
+// for messages we're actively viewing.
+watch(() => chat.connected.value, (now) => { if (now) sendFocus() })
 
 async function send(body: string) {
   if (!activeThreadId.value) return
