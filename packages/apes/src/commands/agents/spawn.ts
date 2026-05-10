@@ -27,6 +27,15 @@ import {
   resolveBridgeConfig,
 } from '../../lib/llm-bridge'
 import { isDarwin, isShellRegistered, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { upsertNestAgent } from '../../lib/nest-registry'
+
+function readMacOSUidOrNull(name: string): number | null {
+  try {
+    const u = readMacOSUser(name)
+    return u?.uid ?? null
+  }
+  catch { return null }
+}
 
 export const spawnAgentCommand = defineCommand({
   meta: {
@@ -234,6 +243,34 @@ export const spawnAgentCommand = defineCommand({
       // up in the finally below. With --wait, exit reflects the actual
       // execution result, so cleanup is safe.
       execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+
+      // Phase F: register in the Nest's registry directly (replaces
+      // the old intent-channel handler in the Nest). The Nest
+      // watches agents.json and reconciles its pm2-supervisor when
+      // it sees a new entry — bridge starts within a second.
+      try {
+        const uid = readMacOSUidOrNull(name)
+        upsertNestAgent({
+          name,
+          uid: uid ?? -1,
+          home: homeDir,
+          email: registration.email,
+          registeredAt: Math.floor(Date.now() / 1000),
+          bridge: args.bridge
+            ? {
+                baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
+                apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
+                model: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
+              }
+            : undefined,
+        })
+      }
+      catch (err) {
+        // Don't fail the spawn just because the registry write
+        // glitched — the agent exists in macOS, the human can
+        // manually register later. Log loudly.
+        consola.warn(`Could not write to nest registry: ${err instanceof Error ? err.message : String(err)}`)
+      }
 
       consola.success(`Agent ${name} spawned.`)
       consola.info(`🔗 Troop: https://troop.openape.ai/agents/${name}`)
