@@ -19,5 +19,8 @@ useSeoMeta({
 <template>
   <NuxtLayout>
     <NuxtPage />
+    <ClientOnly>
+      <UpdateAvailable />
+    </ClientOnly>
   </NuxtLayout>
 </template>
