@@ -1,7 +1,15 @@
 ---
 name: mail
 description: When the user asks about their inbox — what's there, search for an email, recent unread — use mail.list / mail.search.
-requires_tools: [mail.list]
+metadata:
+  openape:
+    requires_tools: [mail.list]
+  openclaw:
+    # If the o365-cli binary isn't on PATH the underlying tool fails
+    # at runtime — skip the skill from the prompt so the LLM doesn't
+    # try to use it on a host where it can't run.
+    requires:
+      bins: [o365-cli]
 ---
 
 # Inbox (o365-cli)

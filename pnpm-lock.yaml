@@ -254,6 +254,9 @@ importers:
       ws:
         specifier: ^8.18.0
         version: 8.19.0
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.2
     devDependencies:
       '@antfu/eslint-config':
         specifier: 'catalog:'

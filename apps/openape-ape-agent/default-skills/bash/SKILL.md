@@ -1,7 +1,9 @@
 ---
 name: bash
 description: When a task can't be done with the other curated tools (file.read, http.get, tasks.create, mail.list, etc.), use bash — runs any shell command on the agent host through the DDISA grant cycle.
-requires_tools: [bash]
+metadata:
+  openape:
+    requires_tools: [bash]
 ---
 
 # Shell access via ape-shell

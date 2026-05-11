@@ -1,7 +1,9 @@
 ---
 name: file
 description: When the user asks you to read, write, or check a file in your home directory, use the file.read / file.write tools — they're $HOME-jailed and safer than bash cat.
-requires_tools: [file.read]
+metadata:
+  openape:
+    requires_tools: [file.read]
 ---
 
 # Files in $HOME

@@ -1,7 +1,15 @@
 ---
 name: tasks
 description: When the user wants to see, create, or schedule a task/reminder/wiedervorlage on their personal task list, use tasks.list / tasks.create.
-requires_tools: [tasks.list]
+metadata:
+  openape:
+    requires_tools: [tasks.list]
+  openclaw:
+    # The bash escape-hatch path uses ape-tasks; surface it as a soft
+    # dependency so on a host without ape-tasks the LLM is told this
+    # skill doesn't apply.
+    requires:
+      bins: [ape-tasks]
 ---
 
 # Personal tasks (ape-tasks)
