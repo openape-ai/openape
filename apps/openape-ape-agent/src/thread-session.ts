@@ -62,9 +62,14 @@ export class ThreadSession {
   }
 
   private async startTurn(body: string, replyToMessageId: string): Promise<void> {
-    const placeholder = await this.deps.chat.postMessage(this.deps.roomId, '…', {
+    // Post an empty streaming placeholder. With streaming=true the
+    // server accepts an empty body — clients render it as a typing
+    // indicator instead of a literal "…". The first PATCH lands the
+    // first chunk of LLM output; further patches keep streaming=true.
+    const placeholder = await this.deps.chat.postMessage(this.deps.roomId, '', {
       replyTo: replyToMessageId,
       threadId: this.deps.threadId,
+      streaming: true,
     })
     const turn: ActiveTurn = {
       placeholderId: placeholder.id,
@@ -72,9 +77,13 @@ export class ThreadSession {
       replyToMessageId,
       throttle: createThrottle(async () => {
         if (!this.active || this.active.placeholderId !== placeholder.id) return
-        const text = this.active.accumulated || '…'
+        const text = this.active.accumulated
+        // Empty-body ticks during streaming would be no-ops on the
+        // server. Wait until the first token arrives before the first
+        // PATCH so the UI can keep showing the typing-indicator.
+        if (text.length === 0) return
         try {
-          await this.deps.chat.patchMessage(placeholder.id, text)
+          await this.deps.chat.patchMessage(placeholder.id, { body: text })
         }
         catch (err) {
           this.deps.log(`patch failed (room=${this.deps.roomId} thread=${this.deps.threadId}): ${err instanceof Error ? err.message : String(err)}`)
@@ -82,6 +91,17 @@ export class ThreadSession {
       }, PATCH_INTERVAL_MS),
     }
     this.active = turn
+
+    // Pretty status labels for the tool-call subtitle. The wrench
+    // emoji nudges the UI to render a status-with-icon row under the
+    // typing cursor — e.g. "🔧 time.now". Strings short enough to fit
+    // alongside the cursor on a phone (~30 chars max).
+    const setStatus = async (status: string | null): Promise<void> => {
+      try { await this.deps.chat.patchMessage(placeholder.id, { streamingStatus: status }) }
+      catch (err) {
+        this.deps.log(`status patch failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
 
     // Run the agent loop in-process. Same code path the legacy
     // `apes agents serve --rpc` subprocess used; we just call it
@@ -102,12 +122,15 @@ export class ThreadSession {
           },
           onToolCall: ({ name }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_call: ${name}`)
+            void setStatus(`🔧 ${name}`)
           },
           onToolResult: ({ name }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_result: ${name}`)
+            void setStatus(null)
           },
           onToolError: ({ name, error }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_error: ${name} → ${error}`)
+            void setStatus(null)
           },
         },
       })
@@ -123,19 +146,34 @@ export class ThreadSession {
       if (result.status === 'error') {
         this.deps.log(`runtime done with status=error (room=${this.deps.roomId} thread=${this.deps.threadId})`)
       }
-      this.endTurn()
+      await this.endTurn()
     }
     catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.deps.log(`runtime error (room=${this.deps.roomId} thread=${this.deps.threadId}): ${message}`)
-      this.failTurn(`(runtime error: ${message})`)
+      await this.failTurn(`(runtime error: ${message})`)
     }
   }
 
-  private endTurn(): void {
+  /**
+   * Stream-end: flush any pending throttled body PATCH, then mark the
+   * message as no-longer-streaming. The combined call also triggers
+   * the user-facing push (the placeholder POST suppressed it).
+   */
+  private async endTurn(): Promise<void> {
     const turn = this.active
     if (!turn) return
     turn.throttle.flush()
+    try {
+      await this.deps.chat.patchMessage(turn.placeholderId, {
+        body: turn.accumulated || '(empty response)',
+        streaming: false,
+        streamingStatus: null,
+      })
+    }
+    catch (err) {
+      this.deps.log(`stream-end patch failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
     this.active = undefined
     const next = this.queue.shift()
     if (next) {
@@ -143,11 +181,21 @@ export class ThreadSession {
     }
   }
 
-  private failTurn(message: string): void {
+  private async failTurn(message: string): Promise<void> {
     const turn = this.active
     if (!turn) return
     turn.accumulated = message
     turn.throttle.flush()
+    try {
+      await this.deps.chat.patchMessage(turn.placeholderId, {
+        body: message,
+        streaming: false,
+        streamingStatus: null,
+      })
+    }
+    catch (err) {
+      this.deps.log(`fail-turn patch failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
     this.active = undefined
     const next = this.queue.shift()
     if (next) {

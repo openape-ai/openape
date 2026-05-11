@@ -28,13 +28,18 @@ export class ChatApi {
   async postMessage(
     roomId: string,
     body: string,
-    opts: { replyTo?: string, threadId?: string } = {},
+    opts: { replyTo?: string, threadId?: string, streaming?: boolean } = {},
   ): Promise<PostedMessage> {
-    const trimmed = clamp(body, MAX_BODY)
+    // When streaming, empty body is fine — the server holds the
+    // placeholder until the bridge starts patching tokens in. Outside
+    // streaming, fall back to the legacy "…" placeholder so the
+    // server's min-1-char rule keeps passing for compose-side users.
+    const bodyForServer = opts.streaming ? body : clamp(body, MAX_BODY)
     const url = `${this.endpoint}/api/rooms/${encodeURIComponent(roomId)}/messages`
-    const payload: Record<string, unknown> = { body: trimmed }
+    const payload: Record<string, unknown> = { body: bodyForServer }
     if (opts.replyTo) payload.reply_to = opts.replyTo
     if (opts.threadId) payload.thread_id = opts.threadId
+    if (opts.streaming) payload.streaming = true
     const result = await ofetch<PostedMessage>(url, {
       method: 'POST',
       headers: { Authorization: await this.bearer() },
@@ -83,13 +88,41 @@ export class ChatApi {
     })
   }
 
-  async patchMessage(messageId: string, body: string): Promise<void> {
-    const trimmed = clamp(body, MAX_BODY)
+  /**
+   * Update an in-flight or completed message. The server differentiates
+   * three modes via the message's current `streaming` state and the
+   * `streaming` field in this call:
+   *
+   *   - Stream tick: pass `body` only (current accumulated text).
+   *     Server keeps streaming=true and does NOT bump edited_at.
+   *   - Stream end: pass `body` + `streaming: false`. Server clears
+   *     the streaming flag and triggers the user-facing push.
+   *   - Tool-call status: pass `streamingStatus` only (no body).
+   *     Renders as "🔧 time.now" in the typing-subtitle.
+   *   - Tool-call cleared: pass `streamingStatus: null`.
+   */
+  async patchMessage(
+    messageId: string,
+    opts: { body?: string, streaming?: boolean, streamingStatus?: string | null } = {},
+  ): Promise<void> {
     const url = `${this.endpoint}/api/messages/${encodeURIComponent(messageId)}`
+    const payload: Record<string, unknown> = {}
+    if (opts.body !== undefined) {
+      // Outside the streaming-end transition, the server requires a
+      // non-empty body. clamp() preserves that floor while letting the
+      // bridge spam empty-string-during-streaming ticks pass through
+      // for the placeholder-only case.
+      payload.body = opts.streaming === false && opts.body.trim().length === 0
+        ? clamp(opts.body, MAX_BODY)
+        : (opts.body.length <= MAX_BODY ? opts.body : `${opts.body.slice(0, MAX_BODY - 1)}…`)
+    }
+    if (opts.streaming !== undefined) payload.streaming = opts.streaming
+    if (opts.streamingStatus !== undefined) payload.streaming_status = opts.streamingStatus
+    if (Object.keys(payload).length === 0) return
     await ofetch(url, {
       method: 'PATCH',
       headers: { Authorization: await this.bearer() },
-      body: { body: trimmed },
+      body: payload,
     })
   }
 }

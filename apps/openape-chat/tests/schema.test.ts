@@ -18,7 +18,7 @@ beforeEach(async () => {
 
   await db.run(sql`CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL)`)
   await db.run(sql`CREATE TABLE memberships (room_id TEXT NOT NULL, user_email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', joined_at INTEGER NOT NULL, PRIMARY KEY (room_id, user_email))`)
-  await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, thread_id TEXT, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER)`)
+  await db.run(sql`CREATE TABLE messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, thread_id TEXT, sender_email TEXT NOT NULL, sender_act TEXT NOT NULL, body TEXT NOT NULL, reply_to TEXT, created_at INTEGER NOT NULL, edited_at INTEGER, streaming INTEGER NOT NULL DEFAULT 0, streaming_status TEXT)`)
   await db.run(sql`CREATE TABLE reactions (message_id TEXT NOT NULL, user_email TEXT NOT NULL, emoji TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (message_id, user_email, emoji))`)
   await db.run(sql`CREATE TABLE push_subscriptions (endpoint TEXT PRIMARY KEY, user_email TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)`)
   await db.run(sql`CREATE TABLE threads (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, name TEXT NOT NULL, created_by_email TEXT NOT NULL, created_at INTEGER NOT NULL, archived_at INTEGER)`)
