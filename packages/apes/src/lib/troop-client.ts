@@ -28,6 +28,15 @@ export interface TaskSpec {
   updatedAt: number
 }
 
+export interface SkillSpec {
+  /** Slug — becomes the directory name on disk (`skills/<name>/SKILL.md`). */
+  name: string
+  /** One-line summary the LLM sees in the system prompt's available_skills block. */
+  description: string
+  /** Full SKILL.md content the agent runtime writes to disk after sync. */
+  body: string
+}
+
 /** Response from /api/agents/me/tasks — agent config + task list. */
 export interface AgentTasksResponse {
   /**
@@ -44,6 +53,16 @@ export interface AgentTasksResponse {
    * sync — owner narrows via troop UI.
    */
   tools: string[]
+  /**
+   * Always-on persona / hard rules — markdown body that lands at
+   * `~/.openape/agent/SOUL.md` after sync. Empty string when unset.
+   */
+  soul: string
+  /**
+   * Lazy-load skill catalog — only enabled rows from agent_skills.
+   * Each one lands at `~/.openape/agent/skills/<name>/SKILL.md`.
+   */
+  skills: SkillSpec[]
   tasks: TaskSpec[]
 }
 
