@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  _internalSkillsCacheReset,
   composeSkills,
   composeSystemPrompt,
   formatSkillsBlock,
@@ -17,6 +18,7 @@ describe('skills loader', () => {
   let home: string
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'ape-agent-skills-'))
+    _internalSkillsCacheReset()
   })
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
@@ -46,14 +48,45 @@ describe('skills loader', () => {
       expect(fm).toEqual({ name: 'foo', description: 'a tool that foos' })
     })
 
-    it('parses requires_tools as inline array', () => {
+    it('parses legacy top-level requires_tools as inline array', () => {
       const fm = parseFrontmatter('---\nname: foo\ndescription: d\nrequires_tools: [a, b, c]\n---\nbody')
       expect(fm?.requiresTools).toEqual(['a', 'b', 'c'])
     })
 
-    it('parses requires_tools as block array', () => {
+    it('parses legacy top-level requires_tools as block array', () => {
       const fm = parseFrontmatter('---\nname: foo\ndescription: d\nrequires_tools:\n  - a\n  - b\n---')
       expect(fm?.requiresTools).toEqual(['a', 'b'])
+    })
+
+    it('reads openape-namespaced requires_tools from nested metadata', () => {
+      const fm = parseFrontmatter('---\nname: foo\ndescription: d\nmetadata:\n  openape:\n    requires_tools: [time.now, http.get]\n---')
+      expect(fm?.requiresTools).toEqual(['time.now', 'http.get'])
+    })
+
+    it('reads openclaw-namespaced requires.bins from nested metadata', () => {
+      const fm = parseFrontmatter('---\nname: foo\ndescription: d\nmetadata:\n  openclaw:\n    requires:\n      bins: [o365-cli]\n---')
+      expect(fm?.requiresBins).toEqual(['o365-cli'])
+    })
+
+    it('openape namespace wins over legacy top-level requires_tools', () => {
+      const fm = parseFrontmatter('---\nname: foo\ndescription: d\nrequires_tools: [legacy]\nmetadata:\n  openape:\n    requires_tools: [winner]\n---')
+      expect(fm?.requiresTools).toEqual(['winner'])
+    })
+
+    it('accepts both openclaw + openape blocks side-by-side (the cross-runtime case)', () => {
+      const fm = parseFrontmatter(`---
+name: foo
+description: d
+metadata:
+  openclaw:
+    emoji: 📊
+    requires:
+      bins: [o365-cli]
+  openape:
+    requires_tools: [mail.list]
+---`)
+      expect(fm?.requiresTools).toEqual(['mail.list'])
+      expect(fm?.requiresBins).toEqual(['o365-cli'])
     })
 
     it('returns null when no frontmatter or required fields missing', () => {
@@ -136,6 +169,25 @@ describe('skills loader', () => {
       const names = skills.map(s => s.name)
       expect(names).toContain('free')
       expect(names).not.toContain('needs-mail')
+    })
+
+    it('drops skills whose required binaries aren\'t on host PATH', () => {
+      mkdirSync(join(skillsDir(home), 'needs-fictional-binary'), { recursive: true })
+      writeFileSync(
+        join(skillsDir(home), 'needs-fictional-binary', 'SKILL.md'),
+        // A binary that obviously won't be on PATH — `which` will fail.
+        '---\nname: needs-fictional-binary\ndescription: D\nmetadata:\n  openclaw:\n    requires:\n      bins: [openape-not-a-real-bin-zz9plural9z]\n---',
+      )
+      mkdirSync(join(skillsDir(home), 'has-shell'), { recursive: true })
+      writeFileSync(
+        join(skillsDir(home), 'has-shell', 'SKILL.md'),
+        // `sh` is on every macOS / Linux box → eligibility passes.
+        '---\nname: has-shell\ndescription: D\nmetadata:\n  openclaw:\n    requires:\n      bins: [sh]\n---',
+      )
+      const skills = composeSkills(home, [])
+      const names = skills.map(s => s.name)
+      expect(names).toContain('has-shell')
+      expect(names).not.toContain('needs-fictional-binary')
     })
 
     it('agent-side skill shadows a default-skill of the same name', () => {
