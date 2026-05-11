@@ -9,6 +9,8 @@ interface Message {
   replyTo: string | null
   createdAt: number
   editedAt: number | null
+  streaming?: boolean
+  streamingStatus?: string | null
 }
 
 interface Reaction {

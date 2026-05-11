@@ -11,6 +11,14 @@ interface Message {
   replyTo: string | null
   createdAt: number
   editedAt: number | null
+  // Agent-only: true while the bridge is mid-stream. Distinguishes
+  // "still being typed" from "fully posted, then later edited" so the
+  // (edited) badge doesn't fire on every token chunk.
+  streaming?: boolean
+  // Agent-only: ephemeral "what is the agent doing right now"
+  // (e.g. "🔧 time.now"). Rendered as a subtitle under the typing
+  // cursor; cleared when the tool finishes or streaming ends.
+  streamingStatus?: string | null
 }
 
 interface Reaction {

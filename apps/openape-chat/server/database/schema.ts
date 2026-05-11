@@ -41,6 +41,21 @@ export const messages = sqliteTable('messages', {
   replyTo: text('reply_to'),
   createdAt: integer('created_at').notNull(),
   editedAt: integer('edited_at'),
+  // `streaming` is the agent-side counterpart to `edited_at`: the bridge
+  // posts an empty placeholder + streams chunks via PATCH while the LLM
+  // generates. We need to distinguish "live typing" from "human-edited
+  // after the fact" — without it every agent message would carry a noisy
+  // "(edited)" badge because each token chunk is a PATCH.
+  //
+  // While streaming=true the PATCH handler updates `body` without
+  // bumping `edited_at`. The final flush sets streaming=false; from
+  // that point on, normal edit semantics apply.
+  streaming: integer('streaming', { mode: 'boolean' }).notNull().default(false),
+  // Ephemeral "what is the agent doing right now" — set when a tool
+  // call starts, cleared when it completes. Surfaces in the chat UI as
+  // a subtitle under the typing cursor so the user sees "🔧 time.now"
+  // instead of an opaque pause. Cleared on streaming=false.
+  streamingStatus: text('streaming_status'),
 })
 
 // Phase B: parallel sessions inside a single 1:1 contact (= room).
