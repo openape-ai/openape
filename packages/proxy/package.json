@@ -31,10 +31,10 @@
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "jose": "^5.9.0",
-    "smol-toml": "^1.3.0"
+    "smol-toml": "^1.6.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.10",
+    "@types/bun": "^1.3.13",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",

@@ -18,19 +18,19 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.90",
-    "@libsql/client": "^0.14.0",
-    "@nuxt/ui": "^4.4.0",
+    "@iconify-json/lucide": "^1.2.106",
+    "@libsql/client": "^0.17.3",
+    "@nuxt/ui": "^4.7.1",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/vue-components": "workspace:*",
-    "@sentry/nuxt": "^10.47.0",
+    "@sentry/nuxt": "^10.52.0",
     "@vite-pwa/nuxt": "^1.0.4",
     "drizzle-orm": "^0.44.7",
-    "nuxt": "^4.0.0",
+    "nuxt": "^4.4.5",
     "resend": "^4.0.0",
-    "tailwindcss": "^4.0.0",
+    "tailwindcss": "^4.3.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

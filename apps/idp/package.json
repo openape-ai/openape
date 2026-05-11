@@ -19,17 +19,17 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
-    "@nuxt/ui": "^4.5.1",
+    "@libsql/client": "^0.17.3",
+    "@nuxt/ui": "^4.7.1",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/vue-components": "workspace:*",
-    "@sentry/node": "^10.47.0",
+    "@sentry/node": "^10.52.0",
     "drizzle-orm": "^0.44.7",
     "h3": "catalog:",
     "jose": "catalog:",
-    "nitropack": "^2.11.0",
+    "nitropack": "^2.13.4",
     "vue": "catalog:",
     "vue-router": "^4.5.0"
   },

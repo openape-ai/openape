@@ -28,7 +28,7 @@
   },
   "peerDependencies": {
     "playwright": "^1.50.0",
-    "playwright-core": "^1.50.0"
+    "playwright-core": "^1.59.1"
   },
   "peerDependenciesMeta": {
     "playwright": {
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
-    "playwright-core": "^1.50.0",
+    "playwright-core": "^1.59.1",
     "tsup": "^8.5.1",
     "typescript": "^5.8.2",
     "vitest": "^3.2.4"
