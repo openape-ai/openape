@@ -27,10 +27,12 @@
 // shadowed by an agent-side skill of the same name — that's how an
 // owner overrides the bundled `bash` skill with their own variant.
 
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse as parseYaml } from 'yaml'
 
 export interface Skill {
   name: string
@@ -41,9 +43,21 @@ export interface Skill {
    * Optional eligibility filter. If any required tool name is *not*
    * in the agent's enabled `tools[]`, the skill is dropped from the
    * formatted prompt — the agent shouldn't see a skill it can't
-   * execute. Tools list comes from agent.json.
+   * execute. Tools list comes from agent.json. Sourced from either
+   * the legacy top-level `requires_tools` or the nested
+   * `metadata.openape.requires_tools`.
    */
   requiresTools?: string[]
+  /**
+   * Optional eligibility filter on host-PATH binaries. Mirrors
+   * OpenClaw's `metadata.openclaw.requires.bins` — a skill that
+   * expects `o365-cli` to be installed lists it here, and we drop
+   * the skill from the prompt on hosts where the binary is missing.
+   * Resolved via `which` once per scan; result is cached for the
+   * lifetime of the process. Sourced from either openclaw or
+   * openape metadata namespaces — same semantics.
+   */
+  requiresBins?: string[]
 }
 
 const SKILLS_SUBDIR = ['.openape', 'agent', 'skills']
@@ -73,24 +87,49 @@ export function readSoul(home: string = homedir()): string | null {
 }
 
 /**
- * Parse YAML-ish frontmatter from the head of a SKILL.md. We accept
- * the openclaw format:
+ * Parse YAML frontmatter from the head of a SKILL.md. We accept three
+ * frontmatter shapes so a SKILL.md published on clawhub.ai (the
+ * OpenClaw skill registry) drops into our runtime without
+ * modification:
  *
+ *   # Legacy / openape-flat (current default-skills):
  *   ---
  *   name: <slug>
  *   description: <one-liner>
- *   requires_tools: [time.now, http.get]   # optional
+ *   requires_tools: [time.now, http.get]
  *   ---
- *   <markdown body…>
+ *
+ *   # OpenClaw-aligned (what clawhub.ai skills use):
+ *   ---
+ *   name: <slug>
+ *   description: <one-liner>
+ *   metadata:
+ *     openclaw:
+ *       emoji: 📊
+ *       os: ["darwin"]
+ *       requires:
+ *         bins: ["o365-cli"]
+ *   ---
+ *
+ *   # openape-namespaced (additive — coexists with openclaw block):
+ *   ---
+ *   name: <slug>
+ *   description: <one-liner>
+ *   metadata:
+ *     openape:
+ *       requires_tools: [mail.list]
+ *   ---
  *
  * Returns `null` if no frontmatter is found or the required `name`
  * and `description` fields are missing — those are the only two
- * fields the rest of the system depends on.
+ * fields the rest of the system depends on. Falls back to legacy
+ * flat keys when the metadata block is absent.
  */
 export function parseFrontmatter(content: string): {
   name: string
   description: string
   requiresTools?: string[]
+  requiresBins?: string[]
 } | null {
   const trimmed = content.trimStart()
   if (!trimmed.startsWith('---')) return null
@@ -98,42 +137,78 @@ export function parseFrontmatter(content: string): {
   if (closeIdx < 0) return null
   const fmBlock = trimmed.slice(3, closeIdx).trim()
 
-  const fields: Record<string, string> = {}
-  let arrayKey: string | null = null
-  let arrayBuf: string[] = []
-  for (const rawLine of fmBlock.split('\n')) {
-    const line = rawLine.replace(/\r$/, '')
-    if (arrayKey) {
-      const m = line.match(/^[\t ]*-[\t ]+(\S.*)$/)
-      if (m) { arrayBuf.push(m[1]!.trim()); continue }
-      fields[arrayKey] = arrayBuf.join(',')
-      arrayKey = null
-      arrayBuf = []
-    }
-    const kv = line.match(/^([a-z_]\w*)[\t ]*:[\t ]?(.*)$/i)
-    if (!kv) continue
-    const [, key, value] = kv
-    if (value!.trim() === '') {
-      arrayKey = key!
-      arrayBuf = []
-      continue
-    }
-    // Inline array: `[a, b]`
-    const inlineArray = value!.match(/^\[(.*)\]$/)
-    if (inlineArray) {
-      fields[key!] = inlineArray[1]!.split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean).join(',')
-      continue
-    }
-    fields[key!] = value!.trim().replace(/^["']|["']$/g, '')
-  }
-  if (arrayKey) fields[arrayKey] = arrayBuf.join(',')
+  let parsed: unknown
+  try { parsed = parseYaml(fmBlock) }
+  catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const fields = parsed as Record<string, unknown>
 
-  if (!fields.name || !fields.description) return null
-  const requiresTools = fields.requires_tools
-    ? fields.requires_tools.split(',').map(s => s.trim()).filter(Boolean)
-    : undefined
-  return { name: fields.name, description: fields.description, requiresTools }
+  const name = typeof fields.name === 'string' ? fields.name.trim() : ''
+  const description = typeof fields.description === 'string' ? fields.description.trim() : ''
+  if (!name || !description) return null
+
+  function asStringArray(v: unknown): string[] | undefined {
+    if (!Array.isArray(v)) return undefined
+    const out = v
+      .map(x => typeof x === 'string' ? x.trim() : '')
+      .filter(s => s.length > 0)
+    return out.length > 0 ? out : undefined
+  }
+
+  // Tool eligibility: openape namespace first, then top-level
+  // requires_tools (legacy/back-compat). OpenClaw doesn't have a
+  // direct equivalent — they use `requires.bins` instead.
+  const meta = (fields.metadata && typeof fields.metadata === 'object' && !Array.isArray(fields.metadata))
+    ? fields.metadata as Record<string, unknown>
+    : {}
+  const openapeMeta = (meta.openape && typeof meta.openape === 'object' && !Array.isArray(meta.openape))
+    ? meta.openape as Record<string, unknown>
+    : {}
+  const openclawMeta = (meta.openclaw && typeof meta.openclaw === 'object' && !Array.isArray(meta.openclaw))
+    ? meta.openclaw as Record<string, unknown>
+    : {}
+
+  const requiresTools = asStringArray(openapeMeta.requires_tools) ?? asStringArray(fields.requires_tools)
+
+  // Binary eligibility: openclaw namespace canonical form, also
+  // accept openape.requires.bins as a mirror. Top-level
+  // `requires_bins` is supported as a legacy/flat alias.
+  function readRequiresBins(scope: Record<string, unknown>): string[] | undefined {
+    const requires = scope.requires
+    if (requires && typeof requires === 'object' && !Array.isArray(requires)) {
+      return asStringArray((requires as Record<string, unknown>).bins)
+    }
+    return undefined
+  }
+  const requiresBins
+    = readRequiresBins(openclawMeta)
+      ?? readRequiresBins(openapeMeta)
+      ?? asStringArray(fields.requires_bins)
+
+  return { name, description, requiresTools, requiresBins }
 }
+
+// Cache binary-on-PATH lookups for the lifetime of the process.
+// The skills scan runs on every new ThreadSession, so we'd otherwise
+// re-shell out to `which o365-cli` many times per chat session for
+// no gain — paths don't change at runtime.
+const binCheckCache = new Map<string, boolean>()
+
+function hasBinaryOnPath(bin: string): boolean {
+  const cached = binCheckCache.get(bin)
+  if (cached !== undefined) return cached
+  let found = false
+  try {
+    execFileSync('/usr/bin/which', [bin], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    found = true
+  }
+  catch { /* missing */ }
+  binCheckCache.set(bin, found)
+  return found
+}
+
+// Test-only: reset the cache so unit tests don't leak across cases.
+export const _internalSkillsCacheReset = () => binCheckCache.clear()
 
 /**
  * Scan a directory of `<name>/SKILL.md` skills and return the parsed
@@ -165,6 +240,7 @@ export function scanSkillsDir(dir: string): Skill[] {
       description: fm.description,
       filePath: skillPath,
       requiresTools: fm.requiresTools,
+      requiresBins: fm.requiresBins,
     })
   }
   return out
@@ -201,6 +277,10 @@ export function composeSkills(home: string, enabledTools: string[]): Skill[] {
     if (s.requiresTools && s.requiresTools.length > 0) {
       const allPresent = s.requiresTools.every(t => enabled.has(t))
       if (!allPresent) continue
+    }
+    if (s.requiresBins && s.requiresBins.length > 0) {
+      const allBinsPresent = s.requiresBins.every(b => hasBinaryOnPath(b))
+      if (!allBinsPresent) continue
     }
     out.push(s)
   }

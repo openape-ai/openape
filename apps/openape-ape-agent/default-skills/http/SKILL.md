@@ -1,7 +1,9 @@
 ---
 name: http
 description: When the user asks to fetch a webpage, hit a REST API, or POST JSON to an endpoint, use the http.get / http.post tools — never invent URLs.
-requires_tools: [http.get]
+metadata:
+  openape:
+    requires_tools: [http.get]
 ---
 
 # HTTP fetch

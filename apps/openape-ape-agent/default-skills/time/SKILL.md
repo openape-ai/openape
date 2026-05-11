@@ -1,7 +1,9 @@
 ---
 name: time
 description: When the user asks for the current time, date, or wants a sanity-check that the runtime is alive, use the time.now tool — never guess.
-requires_tools: [time.now]
+metadata:
+  openape:
+    requires_tools: [time.now]
 ---
 
 # Time and date
