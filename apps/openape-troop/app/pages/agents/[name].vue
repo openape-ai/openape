@@ -22,6 +22,9 @@ interface Agent {
    *  to the LLM during live thread turns. Defaults to all known tools
    *  on first sync; owner narrows here. */
   tools: string[]
+  /** Always-on persona / hard rules — markdown. Lands at
+   *  `~/.openape/agent/SOUL.md` after sync. */
+  soul: string
   firstSeenAt: number | null
   lastSeenAt: number | null
   createdAt: number
@@ -144,6 +147,111 @@ async function saveTools() {
   }
   finally {
     toolsSaving.value = false
+  }
+}
+
+// SOUL.md — always-on persona / hard rules. Saved on demand via the
+// same PATCH endpoint as system_prompt. Larger cap than system_prompt
+// (32KB vs 8KB) because owners may inline policy + style guides.
+const soulDraft = ref('')
+const soulSaving = ref(false)
+const soulError = ref('')
+const soulDirty = computed(() => soulDraft.value !== (detail.value?.agent.soul ?? ''))
+
+watch(detail, (d) => {
+  if (d) soulDraft.value = d.agent.soul ?? ''
+}, { immediate: true })
+
+async function saveSoul() {
+  if (!soulDirty.value) return
+  soulSaving.value = true
+  soulError.value = ''
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}`, {
+      method: 'PATCH',
+      body: { soul: soulDraft.value },
+    })
+    if (detail.value) detail.value.agent.soul = soulDraft.value
+  }
+  catch (err: any) {
+    soulError.value = err?.data?.statusMessage || err?.message || 'save failed'
+  }
+  finally {
+    soulSaving.value = false
+  }
+}
+
+// Skills — per-agent SKILL.md catalog. Each row → one
+// `<name>/SKILL.md` on the agent host after sync. CRUD via dedicated
+// endpoints under /api/agents/[name]/skills/.
+interface Skill {
+  agentEmail: string
+  name: string
+  description: string
+  body: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+const skills = ref<Skill[]>([])
+const skillsError = ref('')
+const skillEditor = ref<{ open: boolean, isNew: boolean, name: string, description: string, body: string, enabled: boolean }>({
+  open: false,
+  isNew: true,
+  name: '',
+  description: '',
+  body: '',
+  enabled: true,
+})
+const skillSaving = ref(false)
+
+async function loadSkills() {
+  if (!agentName.value) return
+  skillsError.value = ''
+  try { skills.value = await ($fetch as any)(`/api/agents/${agentName.value}/skills`) }
+  catch (err: any) { skillsError.value = err?.data?.statusMessage || err?.message || 'failed to load skills' }
+}
+watch(detail, (d) => { if (d) loadSkills() })
+
+function openCreateSkill() {
+  skillEditor.value = { open: true, isNew: true, name: '', description: '', body: '', enabled: true }
+}
+function openEditSkill(s: Skill) {
+  skillEditor.value = { open: true, isNew: false, name: s.name, description: s.description, body: s.body, enabled: s.enabled }
+}
+async function saveSkill() {
+  if (!agentName.value) return
+  skillSaving.value = true
+  skillsError.value = ''
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}/skills`, {
+      method: 'PUT',
+      body: {
+        name: skillEditor.value.name,
+        description: skillEditor.value.description,
+        body: skillEditor.value.body,
+        enabled: skillEditor.value.enabled,
+      },
+    })
+    skillEditor.value.open = false
+    await loadSkills()
+  }
+  catch (err: any) {
+    skillsError.value = err?.data?.statusMessage || err?.message || 'save failed'
+  }
+  finally {
+    skillSaving.value = false
+  }
+}
+async function deleteSkill(name: string) {
+  if (!agentName.value) return
+  if (!confirm(`Delete skill '${name}'? This is permanent — to keep it but hide it from the agent use 'disabled'.`)) return
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    await loadSkills()
+  }
+  catch (err: any) {
+    skillsError.value = err?.data?.statusMessage || err?.message || 'delete failed'
   }
 }
 
@@ -419,6 +527,128 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
             </UButton>
           </div>
         </UCard>
+
+        <!-- SOUL.md — always-on persona / hard rules -->
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold">
+                SOUL.md
+              </h2>
+              <UBadge v-if="soulDirty" color="warning" variant="subtle" size="xs">
+                unsaved
+              </UBadge>
+              <UBadge v-else-if="soulDraft" color="success" variant="subtle" size="xs">
+                {{ soulDraft.length }} chars
+              </UBadge>
+            </div>
+          </template>
+          <p class="text-xs text-muted mb-3">
+            Always-on persona, language preferences, hard rules. Rendered as the first block of the
+            system prompt the LLM sees, ahead of skills + base system prompt. Markdown. Lands at
+            <code class="text-zinc-300">~/.openape/agent/SOUL.md</code> after the next sync (~5min).
+          </p>
+          <UTextarea
+            v-model="soulDraft"
+            placeholder="You are Patrick's agent. Be brief. Antworte standardmäßig auf Deutsch, technische Erklärungen auf Englisch."
+            :rows="6"
+            autoresize
+            :disabled="soulSaving"
+          />
+          <UAlert v-if="soulError" color="error" :title="soulError" class="mt-3" />
+          <div v-if="soulDirty" class="flex justify-end mt-3">
+            <UButton size="sm" color="primary" :loading="soulSaving" @click="saveSoul">
+              Save SOUL.md
+            </UButton>
+          </div>
+        </UCard>
+
+        <!-- Skills — lazy-load SKILL.md catalog -->
+        <UCard :ui="{ body: 'p-0' }">
+          <template #header>
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-semibold">
+                  Skills
+                </h2>
+                <p class="text-xs text-muted mt-1">
+                  Lazy-loaded SKILL.md instructions. The agent sees name + description in every
+                  system prompt; the body is read on demand via the file.read tool when the task
+                  matches.
+                </p>
+              </div>
+              <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openCreateSkill">
+                New skill
+              </UButton>
+            </div>
+          </template>
+
+          <UAlert v-if="skillsError" color="error" :title="skillsError" class="m-4" />
+          <div v-if="skills.length === 0" class="p-6 text-center text-muted text-sm">
+            No custom skills yet — the agent runs with the default skills bundled in
+            <code class="text-zinc-300">@openape/ape-agent</code> (one per built-in tool).
+          </div>
+          <ul v-else class="divide-y divide-(--ui-border)">
+            <li v-for="s in skills" :key="s.name">
+              <button
+                type="button"
+                class="w-full text-left px-4 py-3 active:bg-zinc-900 transition-colors flex items-start gap-3"
+                @click="openEditSkill(s)"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap mb-1">
+                    <span class="font-medium text-base">{{ s.name }}</span>
+                    <UBadge v-if="!s.enabled" color="neutral" variant="subtle" size="xs">
+                      disabled
+                    </UBadge>
+                  </div>
+                  <div class="text-xs text-muted line-clamp-2">
+                    {{ s.description }}
+                  </div>
+                </div>
+                <UButton
+                  size="sm"
+                  color="error"
+                  variant="ghost"
+                  icon="i-lucide-trash-2"
+                  aria-label="Delete skill"
+                  @click.stop="deleteSkill(s.name)"
+                />
+              </button>
+            </li>
+          </ul>
+        </UCard>
+
+        <!-- Skill editor modal -->
+        <UModal v-model:open="skillEditor.open">
+          <template #content>
+            <div class="p-5 space-y-4">
+              <h3 class="text-lg font-semibold">
+                {{ skillEditor.isNew ? 'New skill' : `Edit ${skillEditor.name}` }}
+              </h3>
+              <UFormField label="Name" :description="skillEditor.isNew ? 'lowercase, [a-z0-9-], max 32 — becomes the directory name on disk' : 'name is immutable after creation'">
+                <UInput v-model="skillEditor.name" :disabled="!skillEditor.isNew || skillSaving" placeholder="iurio" />
+              </UFormField>
+              <UFormField label="Description" description="One-liner the LLM sees in every system prompt; tells it when to load this skill">
+                <UInput v-model="skillEditor.description" :disabled="skillSaving" placeholder="When the user asks about IURIO projects, cases, or documents, load this." />
+              </UFormField>
+              <UFormField label="Body (markdown)" description="Full SKILL.md content — workflows, commands, conventions">
+                <UTextarea v-model="skillEditor.body" :rows="14" :disabled="skillSaving" placeholder="# IURIO CLI usage…" />
+              </UFormField>
+              <UFormField label="Enabled" description="Disabled skills stay on disk but the agent doesn't see them.">
+                <USwitch v-model="skillEditor.enabled" :disabled="skillSaving" />
+              </UFormField>
+              <div class="flex justify-end gap-2">
+                <UButton variant="ghost" :disabled="skillSaving" @click="skillEditor.open = false">
+                  Cancel
+                </UButton>
+                <UButton color="primary" :loading="skillSaving" @click="saveSkill">
+                  Save
+                </UButton>
+              </div>
+            </div>
+          </template>
+        </UModal>
 
         <!-- Tasks -->
         <UCard :ui="{ body: 'p-0' }">

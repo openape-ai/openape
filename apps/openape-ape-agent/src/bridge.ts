@@ -45,6 +45,7 @@ import type { RuntimeConfig } from '@openape/apes'
 import { ChatApi } from './chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
+import { composeSystemPrompt } from './skills'
 import { ThreadSession } from './thread-session'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
@@ -329,11 +330,16 @@ class Bridge {
       threadId,
       chat: this.chat,
       runtimeConfig: this.runtimeConfig(),
-      systemPrompt: resolveSystemPrompt(this.cfg.systemPrompt),
       // Tools resolve from agent.json (latest sync from troop) on
       // every new thread, so owner edits in the troop UI take
       // effect after the next sync without a bridge restart.
+      // SOUL.md + skills are merged into the system prompt the same
+      // way — picked up per-thread without restart.
       tools: resolveTools(this.cfg.tools),
+      systemPrompt: composeSystemPrompt({
+        base: resolveSystemPrompt(this.cfg.systemPrompt),
+        enabledTools: resolveTools(this.cfg.tools),
+      }),
       maxSteps: this.cfg.maxSteps,
       log,
     })

@@ -1,4 +1,4 @@
-import { chownSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chownSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineCommand } from 'citty'
@@ -97,9 +97,11 @@ export const syncAgentCommand = defineCommand({
     })
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
 
-    const { system_prompt: systemPrompt, tools, tasks } = await client.listTasks()
+    const { system_prompt: systemPrompt, tools, soul, skills, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
     consola.info(`Tools enabled: ${tools.length === 0 ? '(none)' : tools.join(', ')}`)
+    consola.info(`Skills: ${skills.length === 0 ? '(none)' : skills.map(s => s.name).join(', ')}`)
+    consola.info(`SOUL.md: ${soul.length > 0 ? `${soul.length} chars` : '(empty)'}`)
 
     // Sync runs as ROOT in production (the launchd plist sets
     // UserName=root so it can write /Library/LaunchDaemons/ and
@@ -148,6 +150,42 @@ export const syncAgentCommand = defineCommand({
       const path = join(TASK_CACHE_DIR, `${task.taskId}.json`)
       writeFileSync(path, `${JSON.stringify(task, null, 2)}\n`, { mode: 0o600 })
       chownToAgent(path)
+    }
+
+    // SOUL.md — always-on persona. Write empty string deliberately
+    // (don't delete the file) so the agent runtime sees the owner's
+    // explicit decision to clear rules rather than treating it as
+    // "not yet synced".
+    const soulPath = join(agentDir, 'SOUL.md')
+    writeFileSync(soulPath, soul.endsWith('\n') ? soul : `${soul}\n`, { mode: 0o600 })
+    chownToAgent(soulPath)
+
+    // Skills mirror — one-way sync from troop. Anything currently
+    // on disk that's not in the response gets pruned, so disabling
+    // or deleting a skill in troop UI takes effect on the next sync
+    // (instead of leaving stale SKILL.md files behind that the
+    // available_skills block would still list).
+    const skillsDir = join(agentDir, 'skills')
+    mkdirSync(skillsDir, { recursive: true })
+    chownToAgent(skillsDir)
+    const incomingNames = new Set(skills.map(s => s.name))
+    // Prune
+    try {
+      for (const entry of readdirSync(skillsDir)) {
+        if (incomingNames.has(entry)) continue
+        try { rmSync(join(skillsDir, entry), { recursive: true, force: true }) }
+        catch { /* best-effort prune; next sync retries */ }
+      }
+    }
+    catch { /* directory just created, nothing to prune */ }
+    // Write
+    for (const skill of skills) {
+      const skillDir = join(skillsDir, skill.name)
+      mkdirSync(skillDir, { recursive: true })
+      chownToAgent(skillDir)
+      const skillPath = join(skillDir, 'SKILL.md')
+      writeFileSync(skillPath, skill.body.endsWith('\n') ? skill.body : `${skill.body}\n`, { mode: 0o600 })
+      chownToAgent(skillPath)
     }
 
     // Cron tasks no longer get a per-task launchd plist (#347 was the
