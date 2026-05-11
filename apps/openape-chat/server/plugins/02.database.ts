@@ -47,6 +47,15 @@ export default defineNitroPlugin(async () => {
     catch {
       // Already added in a prior boot — sqlite throws on duplicate column.
     }
+    // Streaming-aware messages — separates "agent live-typing" (chunked
+    // PATCHes that arrive while the LLM is mid-completion) from "human
+    // edited after the fact". Without this, every agent message shows
+    // "(edited)" because the chat-bridge's stream-throttle PATCHes the
+    // body once per ~300ms while text_delta events stream in.
+    try { await db.run(sql`ALTER TABLE messages ADD COLUMN streaming INTEGER NOT NULL DEFAULT 0`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE messages ADD COLUMN streaming_status TEXT`) }
+    catch { /* column exists */ }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id, created_at)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)`)
 
