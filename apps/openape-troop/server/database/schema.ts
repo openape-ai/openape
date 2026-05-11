@@ -30,6 +30,13 @@ export const agents = sqliteTable('agents', {
   // `/api/agents/:email/tools`). The chat-bridge reads this list
   // from `~/.openape/agent/agent.json` after each sync.
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  // Always-on persona / hard rules — rendered as the first block of
+  // the system prompt the LLM sees, ahead of skills + base system
+  // prompt. Free-form markdown; the OpenClaw `AGENTS.md` / `SOUL.md`
+  // pattern. Empty string means "no extra rules" — defaults are fine.
+  // Distributed to agents via `apes agents sync` which writes the
+  // body to `~/.openape/agent/SOUL.md`.
+  soul: text('soul').notNull().default(''),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
@@ -61,6 +68,29 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: integer('updated_at').notNull(),
 }, table => [
   primaryKey({ columns: [table.agentEmail, table.taskId] }),
+])
+
+// agent_skills — per-agent skill catalog (OpenClaw-style SKILL.md
+// metadata). Each row turns into a `<name>/SKILL.md` file on the
+// agent host after sync. The agent runtime injects a short
+// `<available_skills>` block listing `name` + `description` into
+// every system prompt; the body itself is loaded lazily by the LLM
+// via the file.read tool when the task matches the description.
+// Empty/missing rows = the agent runs with only its built-in default
+// skills (shipped in the ape-agent npm package).
+export const agentSkills = sqliteTable('agent_skills', {
+  agentEmail: text('agent_email').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  body: text('body').notNull(),
+  // Soft-disable a skill without deleting it. Owner-controlled toggle
+  // in the troop UI; disabled skills are excluded from the agent's
+  // sync payload so the LLM never sees them.
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.agentEmail, table.name] }),
 ])
 
 // runs — execution history. Trace is JSON; capped at ~16KB by the API
