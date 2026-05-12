@@ -24,6 +24,7 @@ interface AgentRow {
 const agents = ref<AgentRow[]>([])
 const loading = ref(true)
 const error = ref('')
+const showSpawn = ref(false)
 
 async function load() {
   loading.value = true
@@ -78,16 +79,27 @@ const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
           Troop
         </h1>
       </div>
-      <UButton
-        variant="ghost"
-        size="sm"
-        icon="i-lucide-log-out"
-        :ui="{ base: 'shrink-0' }"
-        @click="logout"
-      >
-        <span class="hidden sm:inline">Logout</span>
-      </UButton>
+      <div class="flex items-center gap-2 shrink-0">
+        <UButton
+          color="primary"
+          size="sm"
+          icon="i-lucide-plus"
+          @click="showSpawn = true"
+        >
+          <span class="hidden sm:inline">Spawn agent</span>
+        </UButton>
+        <UButton
+          variant="ghost"
+          size="sm"
+          icon="i-lucide-log-out"
+          :ui="{ base: 'shrink-0' }"
+          @click="logout"
+        >
+          <span class="hidden sm:inline">Logout</span>
+        </UButton>
+      </div>
     </header>
+    <SpawnAgentDialog v-model:open="showSpawn" @update:open="(v) => { if (!v) load() }" />
 
     <main class="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
       <h2 class="text-2xl font-bold mb-1">

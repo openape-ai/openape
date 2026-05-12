@@ -25,6 +25,7 @@ import process from 'node:process'
 import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
 import { TroopSync } from './lib/troop-sync'
+import { readNestVersion, TroopWs } from './lib/troop-ws'
 
 const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
 const RECONCILE_DEBOUNCE_MS = 1000
@@ -35,6 +36,7 @@ function log(line: string): void {
 
 const supervisor = new Pm2Supervisor({ apesBin: APES_BIN, log })
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
+const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
 
 async function reconcile(): Promise<void> {
   try {
@@ -48,6 +50,7 @@ async function reconcile(): Promise<void> {
 
 void reconcile()
 troopSync.start()
+troopWs.start()
 
 // Watch the registry file for changes. fs.watch fires once per
 // "something happened" — debounce with a small timer because some
@@ -69,6 +72,7 @@ catch (err) {
 process.on('SIGTERM', () => {
   log('nest: SIGTERM — stopping')
   troopSync.stop()
+  troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
   process.exit(0)
 })
@@ -76,6 +80,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   log('nest: SIGINT — stopping')
   troopSync.stop()
+  troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
   process.exit(0)
 })

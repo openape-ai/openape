@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 const route = useRoute()
@@ -79,6 +79,30 @@ async function load() {
 
 watch(user, (u) => { if (u) load() }, { immediate: true })
 onMounted(() => { if (!user.value) navigateTo('/login') })
+
+// Live-nest indicator. Polls /api/nest/hosts every 30s. If any
+// connected nest covers this owner's hosts, the agent is on a
+// host that propagates config-updates over WS instead of the 5min
+// poll. Pure UX surface — never gates any action.
+interface NestHost { host_id: string, hostname: string, version: string, last_seen_at: number }
+const nestHosts = ref<NestHost[]>([])
+let nestHostsTimer: ReturnType<typeof setInterval> | null = null
+async function loadNestHosts() {
+  try { nestHosts.value = await ($fetch as any)('/api/nest/hosts') }
+  catch { /* badge silently falls back to "offline" */ }
+}
+onMounted(() => {
+  void loadNestHosts()
+  nestHostsTimer = setInterval(loadNestHosts, 30_000)
+})
+onBeforeUnmount(() => { if (nestHostsTimer) clearInterval(nestHostsTimer) })
+
+const nestOnline = computed(() => nestHosts.value.length > 0)
+const nestLabel = computed(() => {
+  if (!nestOnline.value) return 'nest offline — falling back to 5min poll'
+  const names = nestHosts.value.map(h => h.hostname).join(', ')
+  return `live · ${names}`
+})
 
 // Agent-level system prompt editor — saved on blur via PATCH
 // /api/agents/[name]. The bridge daemon re-reads agent.json on every
@@ -372,6 +396,13 @@ const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'succe
       </UButton>
       <span v-if="detail" class="font-mono font-semibold truncate flex-1">
         🦍 {{ detail.agent.agentName }}
+      </span>
+      <span
+        class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
+        :class="nestOnline ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-800/50'"
+        :title="nestLabel"
+      >
+        {{ nestOnline ? '● live' : '○ poll' }}
       </span>
     </header>
 

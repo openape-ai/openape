@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb } from '../../../../database/drizzle'
 import { agents, agentSkills } from '../../../../database/schema'
 import { requireOwner } from '../../../../utils/auth'
+import { broadcastToOwner } from '../../../../utils/nest-registry'
 
 // Upsert a skill — name is the natural key (per agent). Body is the
 // full SKILL.md content the agent will land on disk after sync, so
@@ -65,5 +66,10 @@ export default defineEventHandler(async (event) => {
       updatedAt: now,
     })
   }
+  broadcastToOwner(owner.toLowerCase(), {
+    type: 'config-update',
+    agent_email: agent.email,
+  })
+
   return { ok: true, name: parsed.data.name }
 })

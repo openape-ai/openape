@@ -4,6 +4,7 @@ import toolCatalog from '../../tool-catalog.json'
 import { useDb } from '../../database/drizzle'
 import { agents } from '../../database/schema'
 import { requireOwner } from '../../utils/auth'
+import { broadcastToOwner } from '../../utils/nest-registry'
 
 const KNOWN_TOOL_NAMES = new Set<string>(
   (toolCatalog as { tools: Array<{ name: string }> }).tools.map(t => t.name),
@@ -56,5 +57,19 @@ export default defineEventHandler(async (event) => {
   if (result.length === 0) {
     throw createError({ statusCode: 404, statusMessage: 'agent not found' })
   }
-  return result[0]
+
+  // Fan-out: any connected nest for this owner gets a config-update
+  // ping carrying the agent's email. The nest re-syncs the named
+  // agent (`apes agents sync` as <name>, YOLO-allowed, no
+  // grant-prompt) which writes fresh agent.json + SOUL.md + skills
+  // to disk within ~1s. Bridge picks them up on the next thread.
+  // Zero connected nests → silent no-op; the legacy 5-min poll is
+  // still running and will catch up at the next tick.
+  const agent = result[0]!
+  broadcastToOwner(agent.ownerEmail, {
+    type: 'config-update',
+    agent_email: agent.email,
+  })
+
+  return agent
 })
