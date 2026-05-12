@@ -128,7 +128,7 @@ export class ThreadSession {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_result: ${name}`)
             void setStatus(null)
           },
-          onToolError: ({ name, error }) => {
+          onToolError: ({ name, error }: { name: string, error: string }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_error: ${name} → ${error}`)
             void setStatus(null)
           },

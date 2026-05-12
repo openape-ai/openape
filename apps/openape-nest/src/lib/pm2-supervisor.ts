@@ -135,9 +135,11 @@ export class Pm2Supervisor {
     }
   }
 
-  /** Best-effort cleanup — called on Nest shutdown. We don't kill
+  /**
+   * Best-effort cleanup — called on Nest shutdown. We don't kill
    *  the per-agent pm2-daemons; they should keep running so bridges
-   *  stay alive across Nest restarts. No-op for now. */
+   *  stay alive across Nest restarts. No-op for now.
+   */
   async stopAll(): Promise<void> {
     /* deliberately empty — per-agent pm2 outlives the Nest */
   }
@@ -194,7 +196,8 @@ export class Pm2Supervisor {
     }
   }
 
-  /** Run a pm2 subcommand AS the agent — escapes-helper does the
+  /**
+   * Run a pm2 subcommand AS the agent — escapes-helper does the
    *  setuid switch, then exec's pm2 in the agent's uid.
    *
    *  cwd: the agent process inherits cwd from the spawning Nest
