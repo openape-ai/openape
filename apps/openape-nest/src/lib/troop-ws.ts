@@ -58,8 +58,10 @@ export interface TroopWsOptions {
   troopUrl?: string
   apesBin: string
   log: (line: string) => void
-  /** package.json version of @openape/nest — surfaces in the troop UI's
-   *  online-badge tooltip and in audit logs. */
+  /**
+   * package.json version of @openape/nest — surfaces in the troop UI's
+   *  online-badge tooltip and in audit logs.
+   */
   version?: string
 }
 
@@ -222,10 +224,12 @@ export class TroopWs {
       //   "✔ Registered as <email>"
       const match = stdout.match(/Registered as\s+(\S+@\S+)/)
       const agentEmail = match?.[1]
+      this.opts.log(`troop-ws: spawn-result ${frame.name} ok agent=${agentEmail ?? '?'}`)
       this.send({ type: 'spawn-result', intent_id: frame.intent_id, ok: true, agent_email: agentEmail })
     }
     catch (err) {
       const error = err instanceof Error ? err.message : String(err)
+      this.opts.log(`troop-ws: spawn-result ${frame.name} FAIL: ${error}`)
       this.send({ type: 'spawn-result', intent_id: frame.intent_id, ok: false, error })
     }
   }
@@ -257,8 +261,23 @@ export class TroopWs {
 
 function runWithCapture(bin: string, args: string[]): Promise<{ stdout: string, stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+    // `apes agents spawn` ends up starting a pm2 daemon for the new
+    // agent, and pm2 inherits stdio FDs from its parent chain. Node's
+    // execFile won't resolve until those FDs close — so without a
+    // timeout the promise hangs forever even though the spawn is
+    // already "done" from the user's POV. troop-sync uses the same
+    // 60s cap for the same reason. We bump to 120s here because
+    // first-time spawns also have an npm-install step.
+    execFile(bin, args, { maxBuffer: 4 * 1024 * 1024, timeout: 120_000 }, (err, stdout, stderr) => {
       if (err) {
+        // `signal: 'SIGTERM'` means we hit the timeout. Treat that as
+        // "spawn likely succeeded but stdio never closed" — caller
+        // verifies via the agent's troop-sync result anyway.
+        const isTimeout = (err as { signal?: string }).signal === 'SIGTERM'
+        if (isTimeout) {
+          resolve({ stdout: stdout.toString(), stderr: stderr.toString() })
+          return
+        }
         const msg = stderr.toString() || err.message
         reject(new Error(msg.split('\n').filter(Boolean).slice(-3).join(' / ')))
         return
