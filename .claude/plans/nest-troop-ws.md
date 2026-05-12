@@ -165,11 +165,11 @@ Auth-Handshake (auf `wss://troop.openape.ai/api/nest-ws?token=…`):
 
 ## Progress
 
-- [ ] `[YYYY-MM-DD HH:MM]` Milestone 1: WS-Endpoint in troop + Echo-Test
-- [ ] `[YYYY-MM-DD HH:MM]` Milestone 2: Nest WS-client mit reconnect
-- [ ] `[YYYY-MM-DD HH:MM]` Milestone 3: Config-update push-flow
-- [ ] `[YYYY-MM-DD HH:MM]` Milestone 4: Spawn-intent flow + UI
-- [ ] `[YYYY-MM-DD HH:MM]` Milestone 5: Online-Badge + Status-API
+- [x] `[2026-05-12]` Milestone 1: WS-Endpoint in troop + Echo-Test — `server/routes/api/nest-ws.ts` + nest-registry + spawn-intents + 11 unit tests
+- [x] `[2026-05-12]` Milestone 2: Nest WS-client mit reconnect — `src/lib/troop-ws.ts` wired into nest's index.ts
+- [x] `[2026-05-12]` Milestone 3: Config-update push-flow — PATCH/PUT/DELETE handlers broadcastToOwner; nest re-syncs via `apes run --as <name> -- apes agents sync`
+- [x] `[2026-05-12]` Milestone 4: Spawn-intent flow + UI — `/api/agents/spawn-intent` POST + `/api/agents/spawn-intent/:id` GET + `SpawnAgentDialog.vue` + "+ Spawn agent" CTA on agents-index
+- [x] `[2026-05-12]` Milestone 5: Online-Badge + Status-API — `/api/nest/hosts` GET + ● live / ○ poll badge on agent-detail header
 
 ## Surprises & Discoveries
 
