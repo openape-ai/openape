@@ -1,5 +1,20 @@
 # @openape/nest
 
+## 2.1.1
+
+### Patch Changes
+
+- [`6f4b48b`](https://github.com/openape-ai/openape/commit/6f4b48ba1b636608aca8d86f76afb6004e04651b) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix WS spawn-intent handler hanging on `execFile`: `apes agents spawn`
+  starts a pm2 daemon that inherits stdio FDs, so Node's `execFile()`
+  never resolves and the `spawn-result` frame was never sent back. Cap
+  the spawn at 120s (matching `troop-sync`'s 60s pattern, with extra
+  budget for the npm-install on first spawn) and treat the SIGTERM
+  timeout as a non-error since the agent provisioning already
+  completed by then.
+
+  Also logs the spawn-result outcome to the nest log on both
+  branches so future failures are diagnosable without tcpdump.
+
 ## 2.1.0
 
 ### Minor Changes
