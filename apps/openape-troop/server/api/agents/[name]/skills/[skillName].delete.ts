@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../../../database/drizzle'
 import { agents, agentSkills } from '../../../../database/schema'
 import { requireOwner } from '../../../../utils/auth'
+import { broadcastToOwner } from '../../../../utils/nest-registry'
 
 // Delete a skill (hard delete — to "soft disable" use PUT with
 // `enabled: false`). After the next sync the agent host's
@@ -31,5 +32,10 @@ export default defineEventHandler(async (event) => {
   if (deleted.length === 0) {
     throw createError({ statusCode: 404, statusMessage: 'skill not found' })
   }
+  broadcastToOwner(owner.toLowerCase(), {
+    type: 'config-update',
+    agent_email: agent.email,
+  })
+
   return { ok: true, name: deleted[0]!.name }
 })

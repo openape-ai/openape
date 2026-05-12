@@ -3,7 +3,13 @@ export default defineNuxtConfig({
   // asyncContext is required for `useEvent()` to resolve in Vercel
   // Serverless and is good practice on traditional servers too — see
   // openape-monorepo MEMORY.md for the gotcha.
-  nitro: { experimental: { asyncContext: true } },
+  // websocket: true enables the crossws WS server, required for the
+  // /api/nest-ws control-plane endpoint that lets local nest daemons
+  // push instant config-updates + receive spawn-intents (see
+  // .claude/plans/nest-troop-ws.md). asyncContext stays on for
+  // useEvent()-based session lookups in PATCH handlers that hook
+  // the broadcast on the way out.
+  nitro: { experimental: { asyncContext: true, websocket: true } },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-sp'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
