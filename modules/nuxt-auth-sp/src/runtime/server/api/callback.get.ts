@@ -41,7 +41,13 @@ export default defineEventHandler(async (event) => {
       authorizationDetails: result.authorizationDetails,
     })
 
-    return sendRedirect(event, '/dashboard')
+    // Where to land after a successful login. SPs override via the
+    // `openapeSp.postLoginRedirect` module option (default `/dashboard`
+    // for back-compat). Keeping a single source of truth here so
+    // `OpenApeAuth.vue`'s already-logged-in fast-path and the callback
+    // exit agree on the destination.
+    const { postLoginRedirect } = getSpConfig()
+    return sendRedirect(event, postLoginRedirect || '/dashboard')
   }
   catch (err: unknown) {
     clearFlowState(event)
