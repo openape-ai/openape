@@ -1,5 +1,6 @@
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import { parseAgentEmail } from '../../utils/agent-email'
 import { registerNestPeer, touchNestPeer, unregisterNestPeerById } from '../../utils/nest-registry'
 import { resolveSpawnIntent } from '../../utils/spawn-intents'
 
@@ -17,11 +18,21 @@ import { resolveSpawnIntent } from '../../utils/spawn-intents'
 //   - spawn-intent { intent_id, name, bridge?, soul?, skills? }
 //   - reload-bridge { name }                 — pm2 reload, no fresh sync
 //
-// Auth model: same DDISA-JWT pattern as chat's WS — the bearer is
-// signed by id.openape.ai's JWKS. We require `act: human` because
-// nests are operated by their owner, not by an agent. (Agents have
-// their own per-room WS to chat.openape.ai; this surface is the
-// owner's mission-control channel.)
+// Auth model: same DDISA-JWT pattern as chat's WS — bearer signed
+// by id.openape.ai's JWKS. We accept two flavours of caller:
+//
+//   - `act: human` — owner-direct connection (UI/dev tooling).
+//     ownerEmail = JWT `sub`.
+//   - `act: agent` — the nest itself, signed with its own DDISA
+//     keypair (see `apes nest enroll`). The agent email encodes
+//     its owner (`<name>-<hash>+<owner-local>+<owner-domain>@id…`),
+//     so we resolve ownerEmail from parseAgentEmail. This is the
+//     normal daemon path — the nest reads its act:agent JWT from
+//     `~/.openape/nest/.config/apes/auth.json` and uses it as
+//     bearer here.
+//
+// Either way the WS connection is owner-scoped — broadcasts and
+// spawn-intents fan out per ownerEmail.
 
 interface DDISAClaims {
   sub?: string
@@ -43,8 +54,17 @@ const authByPeerId = new Map<string, AuthCtx>()
 async function authenticateUpgrade(token: string): Promise<AuthCtx> {
   const { payload } = await verifyJWT<DDISAClaims>(token, jwks())
   if (!payload.sub) throw new Error('token missing sub')
-  if (payload.act !== 'human') throw new Error('only human bearers may open a nest control channel')
-  return { ownerEmail: payload.sub }
+  if (payload.act === 'human') {
+    return { ownerEmail: payload.sub.toLowerCase() }
+  }
+  if (payload.act === 'agent') {
+    const parsed = parseAgentEmail(payload.sub)
+    if (!parsed) {
+      throw new Error('agent token sub does not match the agent+owner email pattern')
+    }
+    return { ownerEmail: parsed.ownerEmail }
+  }
+  throw new Error('token must be act:human or act:agent')
 }
 
 interface HelloFrame { type: 'hello', host_id: string, hostname: string, version: string }

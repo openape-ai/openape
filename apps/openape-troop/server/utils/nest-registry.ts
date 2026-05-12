@@ -14,14 +14,18 @@ export interface NestPeer {
   hostId: string
   hostname: string
   version: string
-  /** Wall-clock seconds at last hello / heartbeat — drives the
+  /**
+   * Wall-clock seconds at last hello / heartbeat — drives the
    *  online-badge in the troop UI + the "is this peer stale" cleanup
-   *  in close handlers. */
+   *  in close handlers.
+   */
   lastSeenAt: number
   /** Send a frame to this peer. Returns false if the socket is gone. */
   send: (frame: Record<string, unknown>) => boolean
-  /** Stable identifier for the underlying crossws peer; used as the
-   *  cleanup key when the WS close handler fires. */
+  /**
+   * Stable identifier for the underlying crossws peer; used as the
+   *  cleanup key when the WS close handler fires.
+   */
   peerId: string
 }
 
