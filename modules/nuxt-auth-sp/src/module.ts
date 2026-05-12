@@ -55,6 +55,15 @@ export interface ModuleOptions {
   openapeUrl: string
   fallbackIdpUrl: string
   routes: boolean
+  /**
+   * Where to send the user after a successful login (in `OpenApeAuth.vue`'s
+   * already-logged-in onMounted check + after the OIDC callback exchange).
+   * Path is treated as same-origin; full URLs are valid for off-site
+   * redirects. Default: `/dashboard` (back-compat for openape-chat which
+   * has that page; troop, which doesn't, overrides to `/`).
+   * Env: `NUXT_OPENAPE_SP_POST_LOGIN_REDIRECT`.
+   */
+  postLoginRedirect: string
   manifest?: ManifestConfig
 }
 
@@ -73,6 +82,7 @@ export default defineNuxtModule<ModuleOptions>({
     openapeUrl: '',
     fallbackIdpUrl: 'https://id.openape.at',
     routes: true,
+    postLoginRedirect: '/dashboard',
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)

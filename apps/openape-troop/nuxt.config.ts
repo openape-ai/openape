@@ -50,6 +50,10 @@ export default defineNuxtConfig({
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET || 'change-me-troop-secret-at-least-32-chars-long',
     openapeUrl: process.env.NUXT_OPENAPE_URL ?? '',
     fallbackIdpUrl: process.env.NUXT_OPENAPE_SP_FALLBACK_IDP_URL || 'https://id.openape.ai',
+    // troop's root page is the agent list — there's no /dashboard.
+    // Without this the SP module's default would 404 after every
+    // successful OIDC callback.
+    postLoginRedirect: '/',
   },
 
   runtimeConfig: {
