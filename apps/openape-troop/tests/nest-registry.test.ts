@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  _internal,
+  _nestRegistryInternal,
   broadcastToOwner,
   getNestPeer,
   listNestPeersForOwner,
@@ -26,7 +26,7 @@ function fakePeer(opts: { owner: string, host: string, peerId: string }) {
 }
 
 afterEach(() => {
-  _internal.peersByKey.clear()
+  _nestRegistryInternal.peersByKey.clear()
 })
 
 describe('nest registry', () => {

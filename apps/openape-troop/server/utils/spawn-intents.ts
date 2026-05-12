@@ -55,5 +55,7 @@ export function getSpawnIntent(id: string): { result?: SpawnIntentResult, create
 }
 
 // Test-only escape hatch — lets unit tests start each case from a
-// known-clean registry without process restart.
-export const _internal = { intents }
+// known-clean registry without process restart. Unique name to
+// avoid colliding with nest-registry.ts (Nuxt server auto-imports
+// scan this directory and warn on duplicate exports).
+export const _spawnIntentsInternal = { intents }

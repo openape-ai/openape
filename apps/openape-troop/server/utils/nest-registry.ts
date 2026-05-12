@@ -79,5 +79,7 @@ export function broadcastToOwner(ownerEmail: string, frame: Record<string, unkno
   return sent
 }
 
-// Exported for tests.
-export const _internal = { peersByKey }
+// Exported for tests. Unique name to avoid colliding with the
+// equivalent symbol in spawn-intents.ts (Nuxt server auto-imports
+// scan this directory and warn on duplicate exports).
+export const _nestRegistryInternal = { peersByKey }

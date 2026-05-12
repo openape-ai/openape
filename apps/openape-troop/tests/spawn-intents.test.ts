@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  _internal,
+  _spawnIntentsInternal,
   createSpawnIntent,
   getSpawnIntent,
   resolveSpawnIntent,
 } from '../server/utils/spawn-intents'
 
 afterEach(() => {
-  _internal.intents.clear()
+  _spawnIntentsInternal.intents.clear()
 })
 
 describe('spawn-intents registry', () => {
