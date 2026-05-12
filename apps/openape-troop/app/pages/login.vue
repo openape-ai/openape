@@ -18,6 +18,7 @@ useSeoMeta({ title: 'Sign in' })
             title="Sign in to Troop"
             subtitle="Enter your email to manage your agents"
             button-text="Continue"
+            post-login-redirect="/"
           />
         </UCard>
       </div>
