@@ -17,7 +17,9 @@
 
 export interface ParsedAgentEmail {
   agentName: string
+  ownerLocalpart: string
   ownerDomain: string
+  ownerEmail: string
 }
 
 const OWNER_HASH_RE = /^(.+)-([a-f0-9]{8})$/
@@ -32,16 +34,22 @@ export function parseAgentEmail(email: string): ParsedAgentEmail | null {
   if (parts.length < 3) return null
 
   const namePart = parts[0]!
+  const ownerLocalpart = parts[1]!
   // Owner-domain is everything after the second `+`, joined back with
   // `+` in case of weird edge cases (shouldn't happen for valid
   // domains but we don't want to lose data).
   const ownerDomain = parts.slice(2).join('+').replace(/_/g, '.')
-  if (!ownerDomain || !namePart) return null
+  if (!ownerDomain || !ownerLocalpart || !namePart) return null
 
   // Strip the 8-char ownerHash suffix if present so the stored
   // agentName matches what the user typed.
   const m = namePart.match(OWNER_HASH_RE)
   const agentName = m ? m[1]! : namePart
 
-  return { agentName, ownerDomain }
+  return {
+    agentName,
+    ownerLocalpart,
+    ownerDomain,
+    ownerEmail: `${ownerLocalpart}@${ownerDomain}`,
+  }
 }
