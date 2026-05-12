@@ -142,9 +142,44 @@ async function loadInitial() {
   await loadMessages()
 }
 
+// Scrolling reliably to the bottom is harder than it looks — the
+// message list contains messages whose final height depends on font
+// load, emoji-presentation swaps, and (most importantly) the typing
+// cursor pulsing into a real reply. A single scrollTo on the value
+// of scrollHeight measured right after `messages.value = rows` lands
+// short on the first paint. The two-rAF dance below gives the browser
+// one frame to lay out, one frame to settle, then scrolls.
+/**
+ * Strip DDISA agent-email scaffolding for display:
+ *   igor30-cb6bf26a+patrick+hofmann_eco@id.openape.ai → igor30
+ *   patrick@hofmann.eco → patrick
+ * Mirrors the helper inside MessageBubble.vue — keeping the room title
+ * format aligned with how the per-message header renders is what makes
+ * the bubble's "igor30 🤖" actually feel like the room it's in.
+ */
+function extractDisplayName(email: string): string {
+  if (email.endsWith('@id.openape.ai') && email.includes('+')) {
+    const local = email.split('+')[0]!
+    const dash = local.lastIndexOf('-')
+    return dash > 0 ? local.slice(0, dash) : local
+  }
+  return email.split('@')[0] ?? email
+}
+
+const titleDisplay = computed(() => {
+  const raw = roomInfo.value?.name ?? roomId.value
+  if (!raw.includes(' ↔ ')) return raw
+  return raw.split(' ↔ ').map(extractDisplayName).join(' ↔ ')
+})
+
 function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   if (!scrollEl.value) return
-  scrollEl.value.scrollTo({ top: scrollEl.value.scrollHeight, behavior })
+  const el = scrollEl.value
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior })
+    })
+  })
 }
 
 function addReactionLocal(r: Reaction) {
@@ -335,7 +370,7 @@ async function createThread(): Promise<void> {
 
 <template>
   <div class="min-h-dvh flex flex-col">
-    <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+    <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950">
       <UButton
         to="/"
         icon="i-lucide-arrow-left"
@@ -345,7 +380,7 @@ async function createThread(): Promise<void> {
         aria-label="Back to rooms"
       />
       <h1 class="font-semibold flex-1 truncate">
-        {{ roomInfo?.name ?? roomId }}
+        {{ titleDisplay }}
       </h1>
       <UButton
         v-if="roomInfo"
@@ -363,7 +398,7 @@ async function createThread(): Promise<void> {
 
     <nav
       v-if="roomInfo && visibleThreads.length"
-      class="sticky top-[var(--chat-header-height)] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur overflow-x-auto"
+      class="sticky top-[var(--chat-header-height)] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950 overflow-x-auto"
       aria-label="Threads"
     >
       <button
