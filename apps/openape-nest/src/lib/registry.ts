@@ -39,14 +39,22 @@ interface RegistryFile {
   agents: AgentEntry[]
 }
 
-// The nest daemon's launchd plist sets HOME=~/.openape/nest, so
-// homedir() already points at the nest's data dir. Joining
-// `.openape/nest/agents.json` on top of that produces a doubly-nested
-// path (`~/.openape/nest/.openape/nest/agents.json`) that the YOLO
-// log search and humans never find. Keep the registry directly under
-// the data dir.
-const REGISTRY_DIR = homedir()
-export const REGISTRY_PATH = join(REGISTRY_DIR, 'agents.json')
+// Registry path resolution — kept in lockstep with
+// `packages/apes/src/lib/nest-registry.ts:resolveRegistryPath()`
+// so the writer (apes-cli during `apes agents spawn`) and the
+// reader (this daemon) target the same file. Phase G migrated the
+// canonical location to `/var/openape/nest/agents.json` (group-readable
+// by `_openape_nest`); pre-migration installs still keep the file
+// under the nest's HOME=~/.openape/nest/. Drift between writer and
+// reader manifests as "spawned agent never picked up by supervisor"
+// — exactly the bug this resolves.
+function resolveRegistryPath(): string {
+  if (existsSync('/var/openape/nest/agents.json')) return '/var/openape/nest/agents.json'
+  if (existsSync('/var/openape/nest')) return '/var/openape/nest/agents.json'
+  return join(homedir(), 'agents.json')
+}
+export const REGISTRY_PATH = resolveRegistryPath()
+const REGISTRY_DIR = REGISTRY_PATH.replace(/\/agents\.json$/, '')
 
 function emptyRegistry(): RegistryFile {
   return { version: 1, agents: [] }
