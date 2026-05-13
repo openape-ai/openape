@@ -41,6 +41,11 @@ export interface ThreadSessionDeps {
    * concrete `ToolDefinition[]`.
    */
   resolveConfig: () => { systemPrompt: string, tools: string[] }
+  /**
+   * Agent's own DDISA email — used to classify backfilled messages:
+   * `senderEmail === selfEmail` → role='assistant', else → 'user'.
+   */
+  selfEmail: string
   maxSteps: number
   /** Logger sink — bridge typically forwards to stderr. */
   log: (line: string) => void
@@ -50,6 +55,14 @@ export class ThreadSession {
   private active: ActiveTurn | undefined
   private queue: Array<{ body: string, replyToMessageId: string }> = []
   private history: ChatMessage[] = []
+  /**
+   * Whether we've already backfilled history from the chat server.
+   * Done lazily on the first turn so a freshly-created ThreadSession
+   * (e.g. after a bridge restart) sees the full conversation context,
+   * not just the message that woke it up. We skip the message that
+   * triggered the turn — runLoop adds it via `userMessage`.
+   */
+  private backfilled = false
 
   constructor(private deps: ThreadSessionDeps) {}
 
@@ -118,6 +131,14 @@ export class ThreadSession {
     // that synced after this thread opened still takes effect on
     // this very turn — without dropping the message history.
     const { systemPrompt, tools } = this.deps.resolveConfig()
+
+    // Backfill history from the chat server on the first turn after
+    // this ThreadSession was created. Without this the agent only
+    // remembers messages received via WS since the bridge process
+    // booted — a restart wipes context. Done after posting the
+    // placeholder (so the user immediately sees the typing indicator)
+    // and before runLoop (so it gets the full context).
+    await this.backfillHistoryOnce(replyToMessageId, body)
     try {
       const result = await runLoop({
         config: this.deps.runtimeConfig,
@@ -164,6 +185,39 @@ export class ThreadSession {
       const message = err instanceof Error ? err.message : String(err)
       this.deps.log(`runtime error (room=${this.deps.roomId} thread=${this.deps.threadId}): ${message}`)
       await this.failTurn(`(runtime error: ${message})`)
+    }
+  }
+
+  /**
+   * Fetch recent chat history for this thread and seed `this.history`.
+   * Idempotent — only runs once per ThreadSession instance. Skips the
+   * placeholder we just posted plus the inbound message that triggered
+   * this turn (runLoop's `userMessage` handles that one).
+   *
+   * Failures are non-fatal: we log and continue with empty history.
+   * That preserves the pre-backfill behaviour rather than failing the
+   * turn over a transient chat-server hiccup.
+   */
+  private async backfillHistoryOnce(currentMessageId: string, currentBody: string): Promise<void> {
+    if (this.backfilled) return
+    this.backfilled = true
+    try {
+      const rows = await this.deps.chat.listMessages(this.deps.roomId, this.deps.threadId, 50)
+      // The list returns oldest-first. Drop:
+      //   - the current inbound message (runLoop adds it via userMessage)
+      //   - our own placeholder (empty body, streaming=true, just posted)
+      //   - any other empty body (cron task placeholders mid-stream)
+      for (const row of rows) {
+        if (row.id === currentMessageId) continue
+        if (!row.body || row.body.length === 0) continue
+        if (row.body === currentBody && row.senderEmail !== this.deps.selfEmail) continue
+        const role: ChatMessage['role'] = row.senderEmail === this.deps.selfEmail ? 'assistant' : 'user'
+        this.history.push({ role, content: row.body })
+      }
+      this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] backfilled ${this.history.length} message(s) from chat history`)
+    }
+    catch (err) {
+      this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] backfill failed (continuing with empty history): ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
