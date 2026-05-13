@@ -1,5 +1,34 @@
 # @openape/nest
 
+## 2.1.2
+
+### Patch Changes
+
+- [#408](https://github.com/openape-ai/openape/pull/408) [`c854588`](https://github.com/openape-ai/openape/commit/c854588c9607fae1f9a64cfce74287e7a166a6ba) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix the nest daemon reading a stale `agents.json`. Phase G moved
+  the canonical registry to `/var/openape/nest/agents.json` (system
+  location, group-readable by `_openape_nest`) and the apes-cli's
+  `apes agents spawn` writes there. But the nest daemon was still
+  reading `~/.openape/nest/agents.json` (per-user, pre-Phase-G
+  location), so freshly spawned agents never showed up in the
+  in-process supervisor — bridges never started, no first-sync to
+  troop, and the spawned agent stayed invisible in the troop UI even
+  though it existed at the IdP.
+
+  Now uses the same `resolveRegistryPath()` logic as
+  `packages/apes/src/lib/nest-registry.ts`: prefer
+  `/var/openape/nest/agents.json` if present, fall back to the
+  per-user path otherwise.
+
+- [#410](https://github.com/openape-ai/openape/pull/410) [`65e2237`](https://github.com/openape-ai/openape/commit/65e2237f2f35c818655bc32794c292f95deef099) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Test-time safety guard: `OPENAPE_NEST_REGISTRY_PATH` env override
+  in `resolveRegistryPath()`. Without it, `pnpm test` on a dev
+  machine that has a real nest installed (the post-Phase-G
+  `/var/openape/nest/` directory exists) hits the real production
+  registry — and the existing "shrugs off corrupt JSON" vitest case
+  writes `{not json` to whatever `REGISTRY_PATH` resolves to.
+  Happened in practice once and lost the production agents.json
+  until manual reconstruction. The vitest setup now sets the
+  override so the test stays sandboxed to its tmpdir.
+
 ## 2.1.1
 
 ### Patch Changes
