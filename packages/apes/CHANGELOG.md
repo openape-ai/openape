@@ -1,5 +1,20 @@
 # @openape/apes
 
+## 1.22.1
+
+### Patch Changes
+
+- [`2bc11e1`](https://github.com/openape-ai/openape/commit/2bc11e1fdab2fdd5b0dbaa44c7594c919f9b5683) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes nest install --bridge-model <m>` now writes the
+  `APE_CHAT_BRIDGE_MODEL=<m>` line to BOTH `~/litellm/.env` and the
+  nest's own `~/.openape/nest/litellm/.env`. Previously it only wrote
+  the first. Since the nest daemon's launchd plist pins
+  `HOME=~/.openape/nest`, every nest-driven spawn (TroopWs handler →
+  `apes agents spawn`) read the per-nest litellm/.env — which lacked
+  the model line — so the bridge for the new agent crash-looped with
+  `fatal: APE_CHAT_BRIDGE_MODEL is not set` on every boot. Patrick-
+  shell-driven spawns worked because they read `~/litellm/.env`
+  directly.
+
 ## 1.22.0
 
 ### Minor Changes
