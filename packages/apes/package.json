@@ -31,23 +31,23 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/proxy": "workspace:*",
-    "citty": "^0.1.6",
+    "citty": "^0.2.2",
     "consola": "^3.4.2",
     "giget": "^2.0.0",
     "@lydell/node-pty": "1.2.0-beta.12",
     "shell-quote": "^1.8.3",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@openape/server": "workspace:*",
     "@types/node": "^25.3.5",
     "@types/shell-quote": "^1.7.5",
     "@vitest/coverage-istanbul": "^2.1.9",
-    "h3": "^1.15.0",
+    "h3": "^1.15.11",
     "jose": "^5.9.0",
     "tsup": "^8.5.1",
     "typescript": "^5.8.2",
