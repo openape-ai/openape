@@ -1,5 +1,15 @@
 # @openape/ape-agent
 
+## 2.5.1
+
+### Patch Changes
+
+- [`48bc852`](https://github.com/openape-ai/openape/commit/48bc8524587a04cb096e9a3d1adb397028659296) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Rebuild — `@openape/ape-agent@2.4.0` shipped without the
+  `backfillHistoryOnce` + `listMessages` code (stale dist). Verified
+  locally: clean `pnpm build` produces a bundle containing the
+  backfill paths; the previously published 2.4.0 didn't. No code
+  change beyond the rebuild.
+
 ## 2.5.0
 
 ### Minor Changes
