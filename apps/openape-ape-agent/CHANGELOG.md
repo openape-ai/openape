@@ -1,5 +1,19 @@
 # @openape/ape-agent
 
+## 2.5.0
+
+### Minor Changes
+
+- [#411](https://github.com/openape-ai/openape/pull/411) [`b8e7a97`](https://github.com/openape-ai/openape/commit/b8e7a977c6f3e2eb3b2506e57bf5a5e86e25cd66) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Backfill chat history from the server when a ThreadSession is first
+  created. Without this, a bridge restart left the agent with empty
+  `history` — it would respond to the next message without knowing
+  anything that happened earlier in the same thread, even though the
+  chat server has the full transcript. Now the first turn after
+  construction fetches the last 50 messages via
+  `GET /api/rooms/:id/messages?thread_id=…` and seeds them into
+  history. Failures are non-fatal: the bridge logs and continues with
+  empty history (matching the pre-backfill behaviour).
+
 ## 2.4.0
 
 ### Minor Changes
