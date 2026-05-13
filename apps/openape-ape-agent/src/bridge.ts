@@ -345,6 +345,7 @@ class Bridge {
           }),
         }
       },
+      selfEmail: this.selfEmail,
       maxSteps: this.cfg.maxSteps,
       log,
     })
