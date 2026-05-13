@@ -102,31 +102,37 @@ function installAdapter(): boolean {
 }
 
 /**
- * Write `APE_CHAT_BRIDGE_MODEL=<value>` to `~/litellm/.env`. The same
+ * Write `APE_CHAT_BRIDGE_MODEL=<value>` to `~/litellm/.env` AND to
+ * the nest's own `litellm/.env` (under `NEST_DATA_DIR`). The same
  * file resolveBridgeConfig (in lib/llm-bridge.ts) reads at
- * `apes [nest|agents] spawn` time. Idempotent: replaces the
- * line in place if it already exists, appends otherwise. Creates the
- * file (and ~/litellm/) on first call.
+ * `apes [nest|agents] spawn` time — but it resolves the path via
+ * `homedir()`, so:
  *
- * Why ~/litellm/.env and not the central /etc/openape/litellm.env:
- * fresh installs (no privilege-isolation migration yet) only have the
- * user-home file. The central file is the optional post-migration
- * upgrade — see migrate-to-service-user.sh which symlinks both
- * locations to /etc/openape/litellm.env so writing to ~/litellm/.env
- * keeps working for both layouts.
+ *   - Patrick-driven spawn (`apes agents spawn …` from a shell)
+ *     reads `~/litellm/.env`.
+ *   - Nest-driven spawn (TroopWs handler running as the daemon)
+ *     reads `~/.openape/nest/litellm/.env` because the launchd plist
+ *     pins `HOME=NEST_DATA_DIR` for the daemon process.
+ *
+ * Writing to both keeps the model default consistent between the
+ * two entry points — without this, freshly-installed nests had no
+ * `APE_CHAT_BRIDGE_MODEL` line and the bridge crash-looped on every
+ * spawn-from-troop-UI with `fatal: APE_CHAT_BRIDGE_MODEL is not set`.
+ *
+ * Idempotent: replaces an existing line in place, appends otherwise.
  */
 function writeBridgeModelDefault(model: string): void {
-  const envDir = join(homedir(), 'litellm')
-  const envFile = join(envDir, '.env')
-  mkdirSync(envDir, { recursive: true })
-  let lines: string[] = []
-  if (existsSync(envFile)) {
-    lines = readFileSync(envFile, 'utf8').split('\n').filter(l => !l.startsWith('APE_CHAT_BRIDGE_MODEL='))
+  for (const envDir of [join(homedir(), 'litellm'), join(NEST_DATA_DIR, 'litellm')]) {
+    const envFile = join(envDir, '.env')
+    mkdirSync(envDir, { recursive: true })
+    let lines: string[] = []
+    if (existsSync(envFile)) {
+      lines = readFileSync(envFile, 'utf8').split('\n').filter(l => !l.startsWith('APE_CHAT_BRIDGE_MODEL='))
+    }
+    lines.push(`APE_CHAT_BRIDGE_MODEL=${model}`)
+    while (lines.length > 0 && lines.at(-1)!.trim() === '') lines.pop()
+    writeFileSync(envFile, `${lines.join('\n')}\n`, { mode: 0o600 })
   }
-  lines.push(`APE_CHAT_BRIDGE_MODEL=${model}`)
-  // Trim trailing blanks then ensure file ends with one newline
-  while (lines.length > 0 && lines.at(-1)!.trim() === '') lines.pop()
-  writeFileSync(envFile, `${lines.join('\n')}\n`, { mode: 0o600 })
 }
 
 function findBinary(name: string): string {
