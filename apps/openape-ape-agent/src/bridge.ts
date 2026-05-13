@@ -330,16 +330,21 @@ class Bridge {
       threadId,
       chat: this.chat,
       runtimeConfig: this.runtimeConfig(),
-      // Tools resolve from agent.json (latest sync from troop) on
-      // every new thread, so owner edits in the troop UI take
-      // effect after the next sync without a bridge restart.
-      // SOUL.md + skills are merged into the system prompt the same
-      // way — picked up per-thread without restart.
-      tools: resolveTools(this.cfg.tools),
-      systemPrompt: composeSystemPrompt({
-        base: resolveSystemPrompt(this.cfg.systemPrompt),
-        enabledTools: resolveTools(this.cfg.tools),
-      }),
+      // Resolve tools + systemPrompt on every turn from agent.json
+      // (latest sync from troop). Owner edits in the troop UI thus
+      // take effect on the very next message in an existing thread —
+      // not just on a freshly-opened one. SOUL.md + skills get merged
+      // into the system prompt the same way.
+      resolveConfig: () => {
+        const tools = resolveTools(this.cfg.tools)
+        return {
+          tools,
+          systemPrompt: composeSystemPrompt({
+            base: resolveSystemPrompt(this.cfg.systemPrompt),
+            enabledTools: tools,
+          }),
+        }
+      },
       maxSteps: this.cfg.maxSteps,
       log,
     })
