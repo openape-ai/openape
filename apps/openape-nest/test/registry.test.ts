@@ -7,6 +7,13 @@ let tmp: string
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'nest-registry-'))
+  // OPENAPE_NEST_REGISTRY_PATH override is mandatory — without it
+  // resolveRegistryPath() falls back to checking `/var/openape/nest/`,
+  // which on a dev box hosting a real nest install means every
+  // write in this test (including the deliberately-corrupt
+  // "{not json" case) clobbers the production registry. We lived
+  // through that exact outage once — see #408 follow-up.
+  vi.stubEnv('OPENAPE_NEST_REGISTRY_PATH', join(tmp, 'agents.json'))
   vi.stubEnv('HOME', tmp)
   vi.resetModules()
 })
