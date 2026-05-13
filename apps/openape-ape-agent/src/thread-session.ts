@@ -10,7 +10,7 @@
 // alive. Per-thread message history that used to live in the
 // subprocess's RpcSessionMap now lives on the ThreadSession itself.
 
-import type { ChatMessage, RuntimeConfig, ToolDefinition } from '@openape/apes'
+import type { ChatMessage, RuntimeConfig } from '@openape/apes'
 import { runLoop, taskTools } from '@openape/apes'
 import type { ChatApi } from './chat-api'
 import type { Throttle } from './throttle'
@@ -31,8 +31,16 @@ export interface ThreadSessionDeps {
   chat: ChatApi
   /** LiteLLM proxy + model — the bridge resolves these from its env. */
   runtimeConfig: RuntimeConfig
-  systemPrompt: string
-  tools: string[]
+  /**
+   * Resolve systemPrompt + tools at the start of every turn rather
+   * than freezing them at construction. Lets owner edits in the
+   * troop UI (which sync to `~/.openape/agent/agent.json` via
+   * `apes agents sync`) take effect on the next message in an
+   * existing thread — not just on freshly-opened threads.
+   * `tools` is the string list that `taskTools()` resolves to the
+   * concrete `ToolDefinition[]`.
+   */
+  resolveConfig: () => { systemPrompt: string, tools: string[] }
   maxSteps: number
   /** Logger sink — bridge typically forwards to stderr. */
   log: (line: string) => void
@@ -42,14 +50,13 @@ export class ThreadSession {
   private active: ActiveTurn | undefined
   private queue: Array<{ body: string, replyToMessageId: string }> = []
   private history: ChatMessage[] = []
-  private resolvedTools: ToolDefinition[]
 
-  constructor(private deps: ThreadSessionDeps) {
-    this.resolvedTools = taskTools(deps.tools)
-  }
+  constructor(private deps: ThreadSessionDeps) {}
 
-  /** No-op placeholder kept for API compatibility with the previous
-   *  RPC-listener model where dispose() detached the listener. */
+  /**
+   * No-op placeholder kept for API compatibility with the previous
+   *  RPC-listener model where dispose() detached the listener.
+   */
   dispose(): void {}
 
   /** Forward an inbound chat message to the runtime. Queues if a turn is in flight. */
@@ -106,12 +113,17 @@ export class ThreadSession {
     // Run the agent loop in-process. Same code path the legacy
     // `apes agents serve --rpc` subprocess used; we just call it
     // directly instead of marshaling through stdio.
+    //
+    // Resolve config NOW (not at construction) so a troop-UI edit
+    // that synced after this thread opened still takes effect on
+    // this very turn — without dropping the message history.
+    const { systemPrompt, tools } = this.deps.resolveConfig()
     try {
       const result = await runLoop({
         config: this.deps.runtimeConfig,
-        systemPrompt: this.deps.systemPrompt,
+        systemPrompt,
         userMessage: body,
-        tools: this.resolvedTools,
+        tools: taskTools(tools),
         maxSteps: this.deps.maxSteps,
         history: this.history,
         handlers: {
