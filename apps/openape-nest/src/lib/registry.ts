@@ -45,10 +45,15 @@ interface RegistryFile {
 // reader (this daemon) target the same file. Phase G migrated the
 // canonical location to `/var/openape/nest/agents.json` (group-readable
 // by `_openape_nest`); pre-migration installs still keep the file
-// under the nest's HOME=~/.openape/nest/. Drift between writer and
-// reader manifests as "spawned agent never picked up by supervisor"
-// — exactly the bug this resolves.
+// under the nest's HOME=~/.openape/nest/.
+//
+// `OPENAPE_NEST_REGISTRY_PATH` overrides everything — mandatory so
+// `pnpm test` on a dev machine that has a real nest installed (the
+// post-Phase-G `/var/openape/nest/` exists) doesn't have the
+// vitest "corrupt-json" case clobber production data. Production
+// setups don't set the override; this is purely a test-time guard.
 function resolveRegistryPath(): string {
+  if (process.env.OPENAPE_NEST_REGISTRY_PATH) return process.env.OPENAPE_NEST_REGISTRY_PATH
   if (existsSync('/var/openape/nest/agents.json')) return '/var/openape/nest/agents.json'
   if (existsSync('/var/openape/nest')) return '/var/openape/nest/agents.json'
   return join(homedir(), 'agents.json')
