@@ -124,8 +124,10 @@ function readSystemPrompt(): string {
 }
 
 export interface CronRunnerDeps {
-  /** Resolved at bridge boot — model + LiteLLM proxy details. The
-   * cron runner shares it with chat threads. */
+  /**
+   * Resolved at bridge boot — model + LiteLLM proxy details. The
+   * cron runner shares it with chat threads.
+   */
   runtimeConfig: RuntimeConfig
   chat: ChatApi
   /** Owner email — where DMs go. Resolved from the contacts list at fire time. */
