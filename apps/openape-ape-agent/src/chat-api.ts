@@ -12,6 +12,25 @@ export interface PostedMessage {
   createdAt: number
 }
 
+/**
+ * One row from `GET /api/rooms/:id/messages?thread_id=...`. Used by
+ * the bridge to backfill chat history into a freshly-created
+ * ThreadSession so the agent doesn't 'forget' the conversation
+ * after a process restart.
+ */
+export interface HistoryMessage {
+  id: string
+  roomId: string
+  threadId: string
+  senderEmail: string
+  senderAct: 'human' | 'agent'
+  body: string
+  replyTo: string | null
+  createdAt: number
+  /** Server snake-case field — tolerated as fallback. */
+  reply_to?: string | null
+}
+
 export interface ContactView {
   peerEmail: string
   myStatus: 'accepted' | 'pending' | 'blocked'
@@ -46,6 +65,20 @@ export class ChatApi {
       body: payload,
     })
     return result
+  }
+
+  /**
+   * Fetch the most recent `limit` messages in a thread, oldest-first.
+   * Used by ThreadSession to seed `history` so the agent has the
+   * full conversation context after a bridge restart — otherwise it
+   * only sees messages that arrived via WS since the process boot.
+   */
+  async listMessages(roomId: string, threadId: string, limit = 50): Promise<HistoryMessage[]> {
+    const url = `${this.endpoint}/api/rooms/${encodeURIComponent(roomId)}/messages?thread_id=${encodeURIComponent(threadId)}&limit=${limit}`
+    return await ofetch<HistoryMessage[]>(url, {
+      method: 'GET',
+      headers: { Authorization: await this.bearer() },
+    })
   }
 
   async requestContact(peerEmail: string): Promise<ContactView> {
