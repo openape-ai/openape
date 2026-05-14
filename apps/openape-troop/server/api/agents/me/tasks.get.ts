@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
     .select({
       systemPrompt: agents.systemPrompt,
       tools: agents.tools,
-      soul: agents.soul,
     })
     .from(agents)
     .where(eq(agents.email, agentEmail))
@@ -42,7 +41,6 @@ export default defineEventHandler(async (event) => {
     system_prompt: agent?.systemPrompt ?? '',
     // tools[] = whitelist for chat-bridge runtime + cron task fallback.
     tools: agent?.tools ?? [],
-    soul: agent?.soul ?? '',
     skills: skillRows,
     tasks: taskList,
   }

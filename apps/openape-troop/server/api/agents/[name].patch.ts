@@ -15,12 +15,11 @@ const KNOWN_TOOL_NAMES = new Set<string>(
 // are agent-side state set on first sync and shouldn't be
 // owner-mutable. Add fields here as the owner-facing surface grows.
 const bodySchema = z.object({
-  system_prompt: z.string().max(8000).optional(),
-  // SOUL.md content — always-on persona / rules. Bigger cap than
-  // system_prompt because owners may inline policy + style guides
-  // here, and the agent only loads it once per turn (not per tool
-  // call).
-  soul: z.string().max(32_000).optional(),
+  // 32KB cap — system_prompt absorbed the role of the old SOUL.md
+  // field, so owners may inline longer markdown personas / policy
+  // guides here. The bridge reads it on every turn (cheap — small
+  // file read, no LLM round-trip).
+  system_prompt: z.string().max(32_000).optional(),
   tools: z.array(z.string()).optional().refine(
     arr => arr === undefined || arr.every(t => KNOWN_TOOL_NAMES.has(t)),
     { message: 'tools list contains unknown tool names — see /api/tool-catalog' },
@@ -46,7 +45,6 @@ export default defineEventHandler(async (event) => {
   const updates: Record<string, unknown> = {}
   if (body.data.system_prompt !== undefined) updates.systemPrompt = body.data.system_prompt
   if (body.data.tools !== undefined) updates.tools = body.data.tools
-  if (body.data.soul !== undefined) updates.soul = body.data.soul
 
   const result = await db
     .update(agents)
