@@ -1,6 +1,10 @@
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
+import { and, eq } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import { useDb } from '../../database/drizzle'
+import { agents } from '../../database/schema'
 import { parseAgentEmail } from '../../utils/agent-email'
+import { resolveDestroyIntent } from '../../utils/destroy-intents'
 import { registerNestPeer, touchNestPeer, unregisterNestPeerById } from '../../utils/nest-registry'
 import { resolveSpawnIntent } from '../../utils/spawn-intents'
 
@@ -12,10 +16,12 @@ import { resolveSpawnIntent } from '../../utils/spawn-intents'
 //   - hello { host_id, hostname, version }   — must be the first message
 //   - heartbeat                              — bumps lastSeenAt, no reply
 //   - spawn-result { intent_id, ok, agent_email?, error? }
+//   - destroy-result { intent_id, ok, name, error? }
 //
 // Frames out (troop → nest):
 //   - config-update { agent_email }          — nest re-syncs the named agent
 //   - spawn-intent { intent_id, name, bridge?, soul?, skills? }
+//   - destroy-intent { intent_id, name }     — `apes agents destroy --force`
 //   - reload-bridge { name }                 — pm2 reload, no fresh sync
 //
 // Auth model: same DDISA-JWT pattern as chat's WS — bearer signed
@@ -76,7 +82,19 @@ interface SpawnResultFrame {
   agent_email?: string
   error?: string
 }
-type InboundFrame = HelloFrame | HeartbeatFrame | SpawnResultFrame | { type: string }
+interface DestroyResultFrame {
+  type: 'destroy-result'
+  intent_id: string
+  ok: boolean
+  /**
+   * Agent name we asked the nest to destroy — echoed back so we
+   *  can drop the row from the troop DB without re-reading the
+   *  intent payload.
+   */
+  name: string
+  error?: string
+}
+type InboundFrame = HelloFrame | HeartbeatFrame | SpawnResultFrame | DestroyResultFrame | { type: string }
 
 function parseFrame(raw: unknown): InboundFrame | null {
   const text = typeof raw === 'string'
@@ -157,6 +175,26 @@ export default defineWebSocketHandler({
         agentEmail: f.agent_email,
         error: f.error,
       })
+      return
+    }
+    if (frame.type === 'destroy-result') {
+      const f = frame as DestroyResultFrame
+      resolveDestroyIntent(f.intent_id, { ok: f.ok, error: f.error })
+      // On success, clear the troop-side DB row so the agent
+      // disappears from `/agents`. Best-effort — the auth ctx
+      // gives us the owner, and the row is scoped to that owner +
+      // name so we never affect another tenant. If the row is
+      // already gone (legacy agent never synced to troop), the
+      // delete is a no-op.
+      if (f.ok && f.name) {
+        const db = useDb()
+        const ownerEmail = ctx.ownerEmail.toLowerCase()
+        const name = f.name
+        void Promise.resolve(
+          db.delete(agents).where(and(eq(agents.ownerEmail, ownerEmail), eq(agents.agentName, name))),
+        ).catch(() => { /* ignore — orphaned UI is harmless */ })
+      }
+
     }
     // Unknown frame types get silently dropped — keeps the loop
     // forward-compatible when a newer nest sends a frame the troop
