@@ -1,5 +1,29 @@
 # @openape/ape-agent
 
+## 2.5.4
+
+### Patch Changes
+
+- [#421](https://github.com/openape-ai/openape/pull/421) [`050b2da`](https://github.com/openape-ai/openape/commit/050b2dacab0fc5e3b5a561ffde6bc57719cdcc39) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Retires the per-agent SOUL.md field — its job (long-form markdown
+  persona, always-on rules) is now part of `system_prompt`. One
+  concept instead of two overlapping ones. Cleaner UX: troop's
+  agent-detail page no longer has a separate SOUL.md card, and the
+  spawn-dialog presets pre-fill the merged system_prompt directly.
+
+  Limit bumps to 32KB (was 8KB) since system_prompt now carries the
+  content that used to live in SOUL.md.
+
+  Back-compat: existing `~/.openape/agent/SOUL.md` files on already-
+  deployed hosts keep being read by the bridge's `composeSystemPrompt`
+  until the operator clears them — so legacy agents don't lose their
+  persona on the @openape/ape-agent upgrade. `apes agents sync`
+  stops writing the file from this version on; the DB column is
+  kept as a tombstone (Drizzle no longer references it, a future
+  migration will DROP it).
+
+- Updated dependencies [[`050b2da`](https://github.com/openape-ai/openape/commit/050b2dacab0fc5e3b5a561ffde6bc57719cdcc39)]:
+  - @openape/apes@1.23.0
+
 ## 2.5.3
 
 ### Patch Changes
