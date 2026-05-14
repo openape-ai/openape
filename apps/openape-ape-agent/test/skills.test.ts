@@ -207,19 +207,25 @@ metadata:
   })
 
   describe('composeSystemPrompt', () => {
-    it('returns the base prompt unchanged when no SOUL + no skills + no tools', () => {
+    it('always prepends the bundled default persona, base prompt lands last', () => {
       // No SOUL.md written; tools=[] filters out every default skill that
-      // requires_tools.
+      // requires_tools. The default persona ships in the package and is
+      // always prepended — see ape-agent's default-persona.md.
       const out = composeSystemPrompt({ base: 'base prompt', home, enabledTools: [] })
-      expect(out).toBe('base prompt')
+      expect(out).toMatch(/^# Who you are/)
+      expect(out.endsWith('base prompt')).toBe(true)
     })
 
-    it('prepends SOUL.md when present', () => {
+    it('default persona comes first, then SOUL.md, then base when both are present', () => {
       mkdirSync(join(home, '.openape', 'agent'), { recursive: true })
       writeFileSync(soulPath(home), 'I am the soul.')
       const out = composeSystemPrompt({ base: 'base', home, enabledTools: [] })
-      expect(out.startsWith('I am the soul.')).toBe(true)
-      expect(out.endsWith('base')).toBe(true)
+      const personaIdx = out.indexOf('# Who you are')
+      const soulIdx = out.indexOf('I am the soul.')
+      const baseIdx = out.lastIndexOf('base')
+      expect(personaIdx).toBeGreaterThanOrEqual(0)
+      expect(soulIdx).toBeGreaterThan(personaIdx)
+      expect(baseIdx).toBeGreaterThan(soulIdx)
     })
 
     it('includes the available_skills block when a skill is eligible', () => {

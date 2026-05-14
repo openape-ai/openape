@@ -345,6 +345,13 @@ export function composeSystemPrompt(input: {
 }): string {
   const home = input.home ?? homedir()
   const parts: string[] = []
+  // Hidden baseline persona — bundled in this package as
+  // `default-persona.md`. Every agent gets it as the very first block
+  // of the system prompt, so even a brand-new agent with an empty
+  // owner-side system_prompt has a coherent "who am I" foundation.
+  // Adapted from OpenClaw's SOUL.md template.
+  const defaultPersona = readDefaultPersona()
+  if (defaultPersona) parts.push(defaultPersona)
   // SOUL.md was merged into `base` (system_prompt) — owners now author
   // a single markdown document there. readSoul() still exists for
   // legacy installs that haven't run `apes agents sync` post-merge;
@@ -358,4 +365,31 @@ export function composeSystemPrompt(input: {
   const base = input.base?.trim()
   if (base) parts.push(base)
   return parts.join('\n\n')
+}
+
+/**
+ * Read the bundled `default-persona.md` next to the published bundle.
+ * `bridge.mjs` sits in `dist/`; the file ships at the package root
+ * via the `files` array in package.json. Returns null when the file
+ * isn't present (older installs, broken layout) — composeSystemPrompt
+ * silently degrades to the no-persona case.
+ */
+let _defaultPersonaCache: string | null | undefined
+function readDefaultPersona(): string | null {
+  if (_defaultPersonaCache !== undefined) return _defaultPersonaCache
+  try {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const path = resolve(here, '..', 'default-persona.md')
+    if (!existsSync(path)) {
+      _defaultPersonaCache = null
+      return null
+    }
+    const raw = readFileSync(path, 'utf8').trim()
+    _defaultPersonaCache = raw.length > 0 ? raw : null
+    return _defaultPersonaCache
+  }
+  catch {
+    _defaultPersonaCache = null
+    return null
+  }
 }
