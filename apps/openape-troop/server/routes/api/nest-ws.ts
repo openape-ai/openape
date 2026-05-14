@@ -20,7 +20,7 @@ import { resolveSpawnIntent } from '../../utils/spawn-intents'
 //
 // Frames out (troop → nest):
 //   - config-update { agent_email }          — nest re-syncs the named agent
-//   - spawn-intent { intent_id, name, bridge?, soul?, skills? }
+//   - spawn-intent { intent_id, name, bridge?, skills? }
 //   - destroy-intent { intent_id, name }     — `apes agents destroy --force`
 //   - reload-bridge { name }                 — pm2 reload, no fresh sync
 //

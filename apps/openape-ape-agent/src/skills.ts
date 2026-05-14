@@ -345,6 +345,11 @@ export function composeSystemPrompt(input: {
 }): string {
   const home = input.home ?? homedir()
   const parts: string[] = []
+  // SOUL.md was merged into `base` (system_prompt) — owners now author
+  // a single markdown document there. readSoul() still exists for
+  // legacy installs that haven't run `apes agents sync` post-merge;
+  // honour it if present so we don't strand existing personas, but
+  // new agents never write it.
   const soul = readSoul(home)
   if (soul) parts.push(soul)
   const skills = composeSkills(home, input.enabledTools)
