@@ -578,7 +578,8 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                 autoresize
                 size="lg"
                 class="w-full"
-                placeholder="Du bist Igor, ein loyaler kleiner Agent. Sprich kurz und auf Deutsch. Frag nach wenn etwas unklar ist."
+                :ui="{ base: 'w-full' }"
+                placeholder="Du bist … (Persönlichkeit, Stil, Grundregeln in 1–3 Sätzen)"
                 @blur="saveSystemPrompt"
               />
               <p class="text-xs text-muted mt-2">
@@ -656,10 +657,12 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               </p>
               <UTextarea
                 v-model="soulDraft"
-                placeholder="You are Patrick's agent. Be brief. Antworte standardmäßig auf Deutsch, technische Erklärungen auf Englisch."
+                placeholder="# Persona&#10;&#10;Du bist …&#10;&#10;## Always-on rules&#10;- antworte standardmäßig auf Deutsch&#10;- frag nach wenn etwas unklar ist"
                 :rows="6"
                 autoresize
                 :disabled="soulSaving"
+                class="w-full"
+                :ui="{ base: 'w-full' }"
               />
               <UAlert v-if="soulError" color="error" :title="soulError" class="mt-3" />
               <div v-if="soulDirty" class="flex justify-end mt-3">
