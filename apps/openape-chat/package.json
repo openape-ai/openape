@@ -7,9 +7,10 @@
     "postinstall": "nuxt prepare",
     "build": "nuxt build",
     "dev": "nuxt dev --port 3007",
-    "typecheck": "nuxi prepare && nuxt typecheck",
+    "nuxt-prepare": "nuxi prepare",
+    "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "nuxi prepare && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",

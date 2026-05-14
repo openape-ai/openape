@@ -12,7 +12,8 @@
     "postinstall": "nuxt prepare",
     "build": "nuxt build",
     "dev": "nuxt dev --port 3010",
-    "typecheck": "nuxi prepare && nuxt typecheck",
+    "nuxt-prepare": "nuxi prepare",
+    "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "test": "vitest run"
   },
