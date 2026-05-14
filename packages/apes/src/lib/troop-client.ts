@@ -54,11 +54,6 @@ export interface AgentTasksResponse {
    */
   tools: string[]
   /**
-   * Always-on persona / hard rules — markdown body that lands at
-   * `~/.openape/agent/SOUL.md` after sync. Empty string when unset.
-   */
-  soul: string
-  /**
    * Lazy-load skill catalog — only enabled rows from agent_skills.
    * Each one lands at `~/.openape/agent/skills/<name>/SKILL.md`.
    */

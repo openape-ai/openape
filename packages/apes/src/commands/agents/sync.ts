@@ -97,11 +97,10 @@ export const syncAgentCommand = defineCommand({
     })
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
 
-    const { system_prompt: systemPrompt, tools, soul, skills, tasks } = await client.listTasks()
+    const { system_prompt: systemPrompt, tools, skills, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
     consola.info(`Tools enabled: ${tools.length === 0 ? '(none)' : tools.join(', ')}`)
     consola.info(`Skills: ${skills.length === 0 ? '(none)' : skills.map(s => s.name).join(', ')}`)
-    consola.info(`SOUL.md: ${soul.length > 0 ? `${soul.length} chars` : '(empty)'}`)
 
     // Sync runs as ROOT in production (the launchd plist sets
     // UserName=root so it can write /Library/LaunchDaemons/ and
@@ -152,13 +151,12 @@ export const syncAgentCommand = defineCommand({
       chownToAgent(path)
     }
 
-    // SOUL.md — always-on persona. Write empty string deliberately
-    // (don't delete the file) so the agent runtime sees the owner's
-    // explicit decision to clear rules rather than treating it as
-    // "not yet synced".
-    const soulPath = join(agentDir, 'SOUL.md')
-    writeFileSync(soulPath, soul.endsWith('\n') ? soul : `${soul}\n`, { mode: 0o600 })
-    chownToAgent(soulPath)
+    // SOUL.md retired — the per-agent persona is now part of
+    // `systemPrompt` (above) which the bridge composes into the
+    // system message on every turn. Any pre-existing
+    // `~/.openape/agent/SOUL.md` file on disk is left in place so a
+    // legacy bridge / agent runtime that still reads it keeps
+    // working until upgraded; nothing here writes or overwrites it.
 
     // Skills mirror — one-way sync from troop. Anything currently
     // on disk that's not in the response gets pruned, so disabling

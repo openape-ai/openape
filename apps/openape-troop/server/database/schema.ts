@@ -30,13 +30,11 @@ export const agents = sqliteTable('agents', {
   // `/api/agents/:email/tools`). The chat-bridge reads this list
   // from `~/.openape/agent/agent.json` after each sync.
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
-  // Always-on persona / hard rules — rendered as the first block of
-  // the system prompt the LLM sees, ahead of skills + base system
-  // prompt. Free-form markdown; the OpenClaw `AGENTS.md` / `SOUL.md`
-  // pattern. Empty string means "no extra rules" — defaults are fine.
-  // Distributed to agents via `apes agents sync` which writes the
-  // body to `~/.openape/agent/SOUL.md`.
-  soul: text('soul').notNull().default(''),
+  // (legacy) `soul` text column still exists in the DB for back-compat
+  // with rows written before the SOUL.md + system_prompt merge. New code
+  // doesn't read or write it — the system_prompt above absorbed its role.
+  // Future migration can DROP COLUMN once we're confident no read path
+  // is left. Drizzle doesn't reference it, so it's a benign tombstone.
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
