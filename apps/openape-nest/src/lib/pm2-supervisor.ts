@@ -26,7 +26,7 @@
 // apes-run are the only sane channel.
 
 import { execFile } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -37,8 +37,32 @@ const execFileAsync = promisify(execFile)
 // when pm2 (running as the agent uid) opens the file. The Nest's
 // own private state stays under /var/openape/nest/ at mode 750;
 // these per-agent ecosystem files are mechanically generated and
-// hold no secrets, so 755 dir + 644 file is fine.
+// hold no secrets, so 2775 dir + 664 file is fine.
 const AGENTS_DIR = '/var/openape/agents'
+
+// `drwxrwsr-x` (group-write + setgid). Lets the nest daemon (running
+// as the human user, member of _openape_nest group) create + rewrite
+// per-agent files under here, while each agent's pm2 (running as
+// the agent uid, NOT in the group) still has world-read to load its
+// own ecosystem.config.js. Setgid propagates the parent's group on
+// every new entry, so a recursive chown elsewhere won't strand files
+// outside the group.
+const SHARED_DIR_MODE = 0o2775
+
+function ensureSharedDir(path: string): void {
+  // mkdir's mode is masked by the process umask — the setgid bit
+  // (S_ISGID) routinely gets stripped. Explicit chmod after the
+  // mkdir is the reliable way to set it.
+  mkdirSync(path, { recursive: true, mode: SHARED_DIR_MODE })
+  if (existsSync(path)) {
+    // Best-effort: if the dir already existed with stricter perms
+    // from a pre-fix install, repair it. If we lack permission (not
+    // group-owner / not root), the chmod fails silently and the
+    // operator needs to re-run `migrate-to-service-user.sh` once.
+    try { chmodSync(path, SHARED_DIR_MODE) }
+    catch { /* not group-owner; relies on out-of-band fix */ }
+  }
+}
 
 export interface Pm2SupervisorDeps {
   apesBin: string
@@ -145,18 +169,31 @@ export class Pm2Supervisor {
   }
 
   private async startOrReload(agentName: string): Promise<void> {
-    // Materialise the ecosystem file under /var/openape/nest/agents/
-    // (the Nest's data dir, owned by _openape_nest). The agent's pm2
-    // reads it via apes-run+escapes — escapes inherits ENV but the
-    // working dir flips to the agent's $HOME, so we use the absolute
-    // path.
-    // Ensure the parent + per-agent dirs are world-traversable so
-    // agents (different uids) can read their own ecosystem.config.js.
-    mkdirSync(AGENTS_DIR, { recursive: true, mode: 0o755 })
+    // Materialise the ecosystem file under /var/openape/agents/. The
+    // dir hierarchy here is shared between the nest daemon (writer,
+    // runs as the human user) and the agent's pm2 (reader, runs as
+    // the agent uid via apes-run+escapes). escapes inherits ENV but
+    // the working dir flips to the agent's $HOME, so absolute paths
+    // are mandatory.
+    //
+    // Perms model: parent `/var/openape/agents/` is pre-provisioned
+    // by `migrate-to-service-user.sh` as `_openape_nest:_openape_nest
+    // drwxrwsr-x` (group-write + setgid). The setgid bit propagates
+    // the group on every new entry, so the nest can mkdir/write here
+    // as a regular group member. ensureSharedDir below re-asserts the
+    // setgid + group-write bits on the parent because:
+    //   1. `mkdirSync(..., { mode })` gets masked by the process's
+    //      umask — the setgid bit usually doesn't survive,
+    //   2. previously-existing parent dirs from old installs may
+    //      still carry the pre-fix `drwxr-xr-x` perms; if Patrick is
+    //      in the group the chmodSync repairs them in place,
+    //      otherwise it silently fails and the operator runs
+    //      `migrate-to-service-user.sh` (which has root).
+    ensureSharedDir(AGENTS_DIR)
     const dir = join(AGENTS_DIR, agentName)
-    mkdirSync(dir, { recursive: true, mode: 0o755 })
+    ensureSharedDir(dir)
     const path = ecosystemPath(agentName)
-    writeFileSync(path, ecosystemContents(this.deps.apesBin, agentName), { mode: 0o644 })
+    writeFileSync(path, ecosystemContents(this.deps.apesBin, agentName), { mode: 0o664 })
 
     // Drop the per-agent start.sh next to the ecosystem file. Going
     // through a script (not a `bash -c "..."` one-liner) sidesteps
@@ -165,7 +202,7 @@ export class Pm2Supervisor {
     // anything past the script-string into positional args
     // ($0, $1, ...) — silently dropping the redirects we expected.
     const startPath = startScriptPath(agentName)
-    writeFileSync(startPath, startScriptContents(agentName), { mode: 0o755 })
+    writeFileSync(startPath, startScriptContents(agentName), { mode: 0o775 })
     void path
 
     // Run start.sh — pm2 startOrReload's exit code is unreliable
