@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "default-skills",
+    "default-persona.md",
     "README.md"
   ],
   "publishConfig": {
