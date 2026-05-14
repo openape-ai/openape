@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { useDb } from '../../../database/drizzle'
-import { memberships, messages, reactions, rooms, threads } from '../../../database/schema'
+import { contacts, memberships, messages, reactions, rooms, threads } from '../../../database/schema'
 import { resolveCaller } from '../../../utils/auth'
 
 // DELETE /api/rooms/:id — wipe the room and everything that points
@@ -63,6 +63,13 @@ export default defineEventHandler(async (event) => {
   await db.delete(messages).where(eq(messages.roomId, id))
   await db.delete(threads).where(eq(threads.roomId, id))
   await db.delete(memberships).where(eq(memberships.roomId, id))
+  // Detach contacts from this room id BEFORE deleting the room — the
+  // relationship stays (`accepted`/`accepted` rows untouched) but its
+  // `roomId` becomes null. `ensureDmRoomFor` provisions a fresh room
+  // on the next message from either side, so the chat is genuinely
+  // wiped + restartable. Without this, listContactsFor returns the
+  // stale id and the overview keeps a dead link in the list.
+  await db.update(contacts).set({ roomId: null }).where(eq(contacts.roomId, id))
   await db.delete(rooms).where(eq(rooms.id, id))
 
   return { ok: true }
