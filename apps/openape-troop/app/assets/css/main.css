@@ -1,2 +1,19 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+/* iOS Safari zooms into any input whose computed font-size is below
+ * 16px on focus — feels like the page jumps mid-interaction. Nuxt UI
+ * inputs default to a 14px size class on `size="md"` (the implicit
+ * default), so a tap on the agent-name field in the spawn dialog or
+ * the type-the-name confirm field in the destroy modal triggered it.
+ *
+ * Enforcing a 16px minimum on mobile keeps the input bigger than
+ * iOS's zoom threshold without affecting larger viewports (we keep
+ * `size="md"` everywhere; the rule below only widens the type-rule).
+ * `pointer: coarse` targets touch-first devices so a desktop laptop's
+ * narrow window doesn't accidentally get force-bumped fonts. */
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
