@@ -549,54 +549,60 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
         <!-- Agent-level system prompt — applies to every chat message
              AND every cron task run. Tasks supply the user-prompt
              (what to do); chat supplies the user-message (the human's
-             question). Saved on blur. -->
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold">
-                System prompt
-              </h2>
-              <UBadge v-if="systemPromptDirty" color="warning" variant="subtle" size="xs">
-                unsaved
-              </UBadge>
-              <UBadge v-else-if="systemPromptDraft" color="success" variant="subtle" size="xs">
-                set
-              </UBadge>
-              <UBadge v-else color="neutral" variant="subtle" size="xs">
-                empty
-              </UBadge>
+             question). Saved on blur. Collapsed by default to keep
+             the page compact on mobile; the summary-badge surfaces
+             the status (set / empty / unsaved) so users know which
+             sections deserve a tap. -->
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-message-square" class="text-muted size-4" />
+                <span class="font-medium">System prompt</span>
+                <UBadge v-if="systemPromptDirty" color="warning" variant="subtle" size="xs">
+                  unsaved
+                </UBadge>
+                <UBadge v-else-if="systemPromptDraft" color="success" variant="subtle" size="xs">
+                  set
+                </UBadge>
+                <UBadge v-else color="neutral" variant="subtle" size="xs">
+                  empty
+                </UBadge>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
+              <UTextarea
+                v-model="systemPromptDraft"
+                :rows="5"
+                autoresize
+                size="lg"
+                class="w-full"
+                placeholder="Du bist Igor, ein loyaler kleiner Agent. Sprich kurz und auf Deutsch. Frag nach wenn etwas unklar ist."
+                @blur="saveSystemPrompt"
+              />
+              <p class="text-xs text-muted mt-2">
+                Persönlichkeit, Stil, Grundregeln — gilt für jede Nachricht im Chat und für jeden Task-Run. Wird via Sync (~5min) auf den Agent-Host übertragen.
+              </p>
+              <UAlert v-if="systemPromptError" color="error" :title="systemPromptError" class="mt-3" />
+              <div v-if="systemPromptDirty" class="flex justify-end mt-3">
+                <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
+                  Save
+                </UButton>
+              </div>
             </div>
-          </template>
-          <UTextarea
-            v-model="systemPromptDraft"
-            :rows="5"
-            autoresize
-            size="lg"
-            class="w-full"
-            placeholder="Du bist Igor, ein loyaler kleiner Agent. Sprich kurz und auf Deutsch. Frag nach wenn etwas unklar ist."
-            @blur="saveSystemPrompt"
-          />
-          <p class="text-xs text-muted mt-2">
-            Persönlichkeit, Stil, Grundregeln — gilt für jede Nachricht im Chat und für jeden Task-Run. Wird via Sync (~5min) auf den Agent-Host übertragen.
-          </p>
-          <UAlert v-if="systemPromptError" color="error" :title="systemPromptError" class="mt-3" />
-          <div v-if="systemPromptDirty" class="flex justify-end mt-3">
-            <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
-              Save
-            </UButton>
-          </div>
+          </details>
         </UCard>
 
         <!-- Agent-level tool whitelist — controls which tools the chat-
              bridge exposes to the LLM during live thread turns. New
              agents start with all tools enabled; narrow as needed. -->
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold">
-                Tools
-              </h2>
-              <div class="flex items-center gap-2">
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-wrench" class="text-muted size-4" />
+                <span class="font-medium">Tools</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ toolsDraft.length }} selected
                 </UBadge>
@@ -604,111 +610,127 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                   unsaved
                 </UBadge>
               </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
+              <p class="text-xs text-muted mb-3">
+                Welche Tools darf der Agent im Chat verwenden? Default: alle. Nach
+                Speichern via Sync (~5min) auf den Agent-Host übertragen — kein
+                Bridge-Restart nötig (jeder neue Chat-Thread liest die Liste frisch).
+              </p>
+              <ToolPicker v-model="toolsDraft" :disabled="toolsSaving" />
+              <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
+              <div v-if="toolsDirty" class="flex justify-end mt-3">
+                <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
+                  Save tools
+                </UButton>
+              </div>
             </div>
-          </template>
-          <p class="text-xs text-muted mb-3">
-            Welche Tools darf der Agent im Chat verwenden? Default: alle. Nach
-            Speichern via Sync (~5min) auf den Agent-Host übertragen — kein
-            Bridge-Restart nötig (jeder neue Chat-Thread liest die Liste frisch).
-          </p>
-          <ToolPicker v-model="toolsDraft" :disabled="toolsSaving" />
-          <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
-          <div v-if="toolsDirty" class="flex justify-end mt-3">
-            <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
-              Save tools
-            </UButton>
-          </div>
+          </details>
         </UCard>
 
         <!-- SOUL.md — always-on persona / hard rules -->
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold">
-                SOUL.md
-              </h2>
-              <UBadge v-if="soulDirty" color="warning" variant="subtle" size="xs">
-                unsaved
-              </UBadge>
-              <UBadge v-else-if="soulDraft" color="success" variant="subtle" size="xs">
-                {{ soulDraft.length }} chars
-              </UBadge>
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-sparkles" class="text-muted size-4" />
+                <span class="font-medium">SOUL.md</span>
+                <UBadge v-if="soulDirty" color="warning" variant="subtle" size="xs">
+                  unsaved
+                </UBadge>
+                <UBadge v-else-if="soulDraft" color="success" variant="subtle" size="xs">
+                  {{ soulDraft.length }} chars
+                </UBadge>
+                <UBadge v-else color="neutral" variant="subtle" size="xs">
+                  empty
+                </UBadge>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
+              <p class="text-xs text-muted mb-3">
+                Always-on persona, language preferences, hard rules. Rendered as the first block of the
+                system prompt the LLM sees, ahead of skills + base system prompt. Markdown. Lands at
+                <code class="text-zinc-300">~/.openape/agent/SOUL.md</code> after the next sync (~5min).
+              </p>
+              <UTextarea
+                v-model="soulDraft"
+                placeholder="You are Patrick's agent. Be brief. Antworte standardmäßig auf Deutsch, technische Erklärungen auf Englisch."
+                :rows="6"
+                autoresize
+                :disabled="soulSaving"
+              />
+              <UAlert v-if="soulError" color="error" :title="soulError" class="mt-3" />
+              <div v-if="soulDirty" class="flex justify-end mt-3">
+                <UButton size="sm" color="primary" :loading="soulSaving" @click="saveSoul">
+                  Save SOUL.md
+                </UButton>
+              </div>
             </div>
-          </template>
-          <p class="text-xs text-muted mb-3">
-            Always-on persona, language preferences, hard rules. Rendered as the first block of the
-            system prompt the LLM sees, ahead of skills + base system prompt. Markdown. Lands at
-            <code class="text-zinc-300">~/.openape/agent/SOUL.md</code> after the next sync (~5min).
-          </p>
-          <UTextarea
-            v-model="soulDraft"
-            placeholder="You are Patrick's agent. Be brief. Antworte standardmäßig auf Deutsch, technische Erklärungen auf Englisch."
-            :rows="6"
-            autoresize
-            :disabled="soulSaving"
-          />
-          <UAlert v-if="soulError" color="error" :title="soulError" class="mt-3" />
-          <div v-if="soulDirty" class="flex justify-end mt-3">
-            <UButton size="sm" color="primary" :loading="soulSaving" @click="saveSoul">
-              Save SOUL.md
-            </UButton>
-          </div>
+          </details>
         </UCard>
 
         <!-- Skills — lazy-load SKILL.md catalog -->
         <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <div>
-                <h2 class="text-lg font-semibold">
-                  Skills
-                </h2>
-                <p class="text-xs text-muted mt-1">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-book-open" class="text-muted size-4" />
+                <span class="font-medium">Skills</span>
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  {{ skills.length }}
+                </UBadge>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="border-t border-(--ui-border)">
+              <div class="flex items-start justify-between gap-3 px-4 py-3">
+                <p class="text-xs text-muted">
                   Lazy-loaded SKILL.md instructions. The agent sees name + description in every
                   system prompt; the body is read on demand via the file.read tool when the task
                   matches.
                 </p>
+                <UButton color="primary" size="sm" icon="i-lucide-plus" :ui="{ base: 'shrink-0' }" @click="openCreateSkill">
+                  New skill
+                </UButton>
               </div>
-              <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openCreateSkill">
-                New skill
-              </UButton>
+              <UAlert v-if="skillsError" color="error" :title="skillsError" class="m-4" />
+              <div v-if="skills.length === 0" class="px-4 pb-6 pt-2 text-center text-muted text-sm">
+                No custom skills yet — the agent runs with the default skills bundled in
+                <code class="text-zinc-300">@openape/ape-agent</code> (one per built-in tool).
+              </div>
+              <ul v-else class="divide-y divide-(--ui-border)">
+                <li v-for="s in skills" :key="s.name">
+                  <button
+                    type="button"
+                    class="w-full text-left px-4 py-3 active:bg-zinc-900 transition-colors flex items-start gap-3"
+                    @click="openEditSkill(s)"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap mb-1">
+                        <span class="font-medium text-base">{{ s.name }}</span>
+                        <UBadge v-if="!s.enabled" color="neutral" variant="subtle" size="xs">
+                          disabled
+                        </UBadge>
+                      </div>
+                      <div class="text-xs text-muted line-clamp-2">
+                        {{ s.description }}
+                      </div>
+                    </div>
+                    <UButton
+                      size="sm"
+                      color="error"
+                      variant="ghost"
+                      icon="i-lucide-trash-2"
+                      aria-label="Delete skill"
+                      @click.stop="deleteSkill(s.name)"
+                    />
+                  </button>
+                </li>
+              </ul>
             </div>
-          </template>
-
-          <UAlert v-if="skillsError" color="error" :title="skillsError" class="m-4" />
-          <div v-if="skills.length === 0" class="p-6 text-center text-muted text-sm">
-            No custom skills yet — the agent runs with the default skills bundled in
-            <code class="text-zinc-300">@openape/ape-agent</code> (one per built-in tool).
-          </div>
-          <ul v-else class="divide-y divide-(--ui-border)">
-            <li v-for="s in skills" :key="s.name">
-              <button
-                type="button"
-                class="w-full text-left px-4 py-3 active:bg-zinc-900 transition-colors flex items-start gap-3"
-                @click="openEditSkill(s)"
-              >
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap mb-1">
-                    <span class="font-medium text-base">{{ s.name }}</span>
-                    <UBadge v-if="!s.enabled" color="neutral" variant="subtle" size="xs">
-                      disabled
-                    </UBadge>
-                  </div>
-                  <div class="text-xs text-muted line-clamp-2">
-                    {{ s.description }}
-                  </div>
-                </div>
-                <UButton
-                  size="sm"
-                  color="error"
-                  variant="ghost"
-                  icon="i-lucide-trash-2"
-                  aria-label="Delete skill"
-                  @click.stop="deleteSkill(s.name)"
-                />
-              </button>
-            </li>
-          </ul>
+          </details>
         </UCard>
 
         <!-- Skill editor modal -->
@@ -744,102 +766,119 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
 
         <!-- Tasks -->
         <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold">
-                Tasks
-              </h2>
-              <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openCreate">
-                New task
-              </UButton>
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-clock" class="text-muted size-4" />
+                <span class="font-medium">Tasks</span>
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  {{ detail.tasks.length }}
+                </UBadge>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="border-t border-(--ui-border)">
+              <div class="flex items-center justify-end px-4 py-3">
+                <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openCreate">
+                  New task
+                </UButton>
+              </div>
+              <div v-if="detail.tasks.length === 0" class="px-4 pb-6 text-center text-muted text-sm">
+                No tasks yet — tap "New task" to schedule the agent.
+              </div>
+              <ul v-else class="divide-y divide-(--ui-border)">
+                <li v-for="t in detail.tasks" :key="t.taskId">
+                  <button
+                    type="button"
+                    class="w-full text-left px-4 py-4 active:bg-zinc-900 transition-colors flex items-start gap-3"
+                    @click="openEdit(t)"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap mb-1">
+                        <span class="font-medium text-base">{{ t.name }}</span>
+                        <UBadge v-if="!t.enabled" color="neutral" variant="subtle" size="xs">
+                          disabled
+                        </UBadge>
+                      </div>
+                      <div class="flex items-center gap-2 text-xs text-muted">
+                        <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
+                        <code class="font-mono">{{ t.cron }}</code>
+                      </div>
+                      <p v-if="t.userPrompt" class="text-xs text-muted mt-1 line-clamp-2">
+                        {{ t.userPrompt }}
+                      </p>
+                      <div class="flex items-center gap-2 text-xs text-muted mt-1.5 flex-wrap">
+                        <span v-if="t.tools.length > 0" class="flex items-center gap-1">
+                          <UIcon name="i-lucide-wrench" class="size-3.5 shrink-0" />
+                          {{ t.tools.length }} {{ t.tools.length === 1 ? 'tool' : 'tools' }}
+                        </span>
+                        <span class="flex items-center gap-1">
+                          <UIcon name="i-lucide-list-checks" class="size-3.5 shrink-0" />
+                          max {{ t.maxSteps }} steps
+                        </span>
+                      </div>
+                    </div>
+                    <UButton
+                      variant="ghost"
+                      color="error"
+                      size="sm"
+                      icon="i-lucide-trash-2"
+                      :ui="{ base: 'shrink-0' }"
+                      @click.stop="remove(t)"
+                    />
+                  </button>
+                </li>
+              </ul>
             </div>
-          </template>
-
-          <div v-if="detail.tasks.length === 0" class="p-6 text-center text-muted text-sm">
-            No tasks yet — tap "New task" to schedule the agent.
-          </div>
-          <ul v-else class="divide-y divide-(--ui-border)">
-            <li v-for="t in detail.tasks" :key="t.taskId">
-              <button
-                type="button"
-                class="w-full text-left px-4 py-4 active:bg-zinc-900 transition-colors flex items-start gap-3"
-                @click="openEdit(t)"
-              >
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap mb-1">
-                    <span class="font-medium text-base">{{ t.name }}</span>
-                    <UBadge v-if="!t.enabled" color="neutral" variant="subtle" size="xs">
-                      disabled
-                    </UBadge>
-                  </div>
-                  <div class="flex items-center gap-2 text-xs text-muted">
-                    <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
-                    <code class="font-mono">{{ t.cron }}</code>
-                  </div>
-                  <p v-if="t.userPrompt" class="text-xs text-muted mt-1 line-clamp-2">
-                    {{ t.userPrompt }}
-                  </p>
-                  <div class="flex items-center gap-2 text-xs text-muted mt-1.5 flex-wrap">
-                    <span v-if="t.tools.length > 0" class="flex items-center gap-1">
-                      <UIcon name="i-lucide-wrench" class="size-3.5 shrink-0" />
-                      {{ t.tools.length }} {{ t.tools.length === 1 ? 'tool' : 'tools' }}
-                    </span>
-                    <span class="flex items-center gap-1">
-                      <UIcon name="i-lucide-list-checks" class="size-3.5 shrink-0" />
-                      max {{ t.maxSteps }} steps
-                    </span>
-                  </div>
-                </div>
-                <UButton
-                  variant="ghost"
-                  color="error"
-                  size="sm"
-                  icon="i-lucide-trash-2"
-                  :ui="{ base: 'shrink-0' }"
-                  @click.stop="remove(t)"
-                />
-              </button>
-            </li>
-          </ul>
+          </details>
         </UCard>
 
         <!-- Recent runs -->
         <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Recent runs
-            </h2>
-          </template>
-          <div v-if="detail.recentRuns.length === 0" class="p-6 text-center text-muted text-sm">
-            No runs yet.
-          </div>
-          <ul v-else class="divide-y divide-(--ui-border)">
-            <li v-for="r in detail.recentRuns" :key="r.id" class="px-4 py-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <UBadge :color="(statusColor[r.status] as any)" variant="subtle" size="xs">
-                      {{ r.status }}
-                    </UBadge>
-                    <code class="font-mono text-xs">{{ r.taskId }}</code>
-                    <span class="text-xs text-muted">
-                      {{ fmtDate(r.startedAt) }}
-                      <span v-if="r.finishedAt"> · {{ (r.finishedAt - r.startedAt).toFixed(0) }}s</span>
-                    </span>
-                  </div>
-                  <p v-if="r.finalMessage" class="text-sm mt-1 break-words">
-                    {{ r.finalMessage }}
-                  </p>
-                  <details v-if="r.trace" class="mt-1">
-                    <summary class="cursor-pointer text-xs text-muted">
-                      trace
-                    </summary>
-                    <pre class="text-xs mt-1 p-2 bg-(--ui-bg-elevated) rounded overflow-auto max-h-72">{{ JSON.stringify(r.trace, null, 2) }}</pre>
-                  </details>
-                </div>
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-history" class="text-muted size-4" />
+                <span class="font-medium">Recent runs</span>
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  {{ detail.recentRuns.length }}
+                </UBadge>
               </div>
-            </li>
-          </ul>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="border-t border-(--ui-border)">
+              <div v-if="detail.recentRuns.length === 0" class="px-4 py-6 text-center text-muted text-sm">
+                No runs yet.
+              </div>
+              <ul v-else class="divide-y divide-(--ui-border)">
+                <li v-for="r in detail.recentRuns" :key="r.id" class="px-4 py-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <UBadge :color="(statusColor[r.status] as any)" variant="subtle" size="xs">
+                          {{ r.status }}
+                        </UBadge>
+                        <code class="font-mono text-xs">{{ r.taskId }}</code>
+                        <span class="text-xs text-muted">
+                          {{ fmtDate(r.startedAt) }}
+                          <span v-if="r.finishedAt"> · {{ (r.finishedAt - r.startedAt).toFixed(0) }}s</span>
+                        </span>
+                      </div>
+                      <p v-if="r.finalMessage" class="text-sm mt-1 break-words">
+                        {{ r.finalMessage }}
+                      </p>
+                      <details v-if="r.trace" class="mt-1">
+                        <summary class="cursor-pointer text-xs text-muted">
+                          trace
+                        </summary>
+                        <pre class="text-xs mt-1 p-2 bg-(--ui-bg-elevated) rounded overflow-auto max-h-72">{{ JSON.stringify(r.trace, null, 2) }}</pre>
+                      </details>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </details>
         </UCard>
       </template>
 
