@@ -41,6 +41,12 @@ interface SpawnIntentFrame {
   skills?: Array<{ name: string, description: string, body: string }>
 }
 
+interface DestroyIntentFrame {
+  type: 'destroy-intent'
+  intent_id: string
+  name: string
+}
+
 interface ConfigUpdateFrame {
   type: 'config-update'
   agent_email: string
@@ -51,7 +57,7 @@ interface ReloadBridgeFrame {
   name: string
 }
 
-type InboundFrame = SpawnIntentFrame | ConfigUpdateFrame | ReloadBridgeFrame | { type: string }
+type InboundFrame = SpawnIntentFrame | DestroyIntentFrame | ConfigUpdateFrame | ReloadBridgeFrame | { type: string }
 
 export interface TroopWsOptions {
   /** Default: `wss://troop.openape.ai`. Override via env `OPENAPE_TROOP_WS_URL`. */
@@ -194,6 +200,10 @@ export class TroopWs {
       await this.handleSpawnIntent(frame as SpawnIntentFrame)
       return
     }
+    if (frame.type === 'destroy-intent') {
+      await this.handleDestroyIntent(frame as DestroyIntentFrame)
+      return
+    }
     if (frame.type === 'reload-bridge') {
       await this.handleReloadBridge(frame as ReloadBridgeFrame)
     }
@@ -231,6 +241,28 @@ export class TroopWs {
       const error = err instanceof Error ? err.message : String(err)
       this.opts.log(`troop-ws: spawn-result ${frame.name} FAIL: ${error}`)
       this.send({ type: 'spawn-result', intent_id: frame.intent_id, ok: false, error })
+    }
+  }
+
+  private async handleDestroyIntent(frame: DestroyIntentFrame): Promise<void> {
+    this.opts.log(`troop-ws: destroy-intent ${frame.name} (intent ${frame.intent_id})`)
+    // `apes agents destroy --force` does the full Phase-G teardown:
+    // de-register from IdP, pm2 delete the bridge, run the root
+    // teardown script (escapes-grant-gated — auto-approved by the
+    // nest's YOLO policy for `apes agents destroy *`), wipe the
+    // agent's home, leave the dscl record as a hidden tombstone.
+    // Same 120s timeout cap as spawn — the teardown's root script
+    // can be slow on a sluggy disk but always finishes well under
+    // that.
+    try {
+      await runWithCapture(this.opts.apesBin, ['agents', 'destroy', frame.name, '--force'])
+      this.opts.log(`troop-ws: destroy-result ${frame.name} ok`)
+      this.send({ type: 'destroy-result', intent_id: frame.intent_id, ok: true, name: frame.name })
+    }
+    catch (err) {
+      const error = err instanceof Error ? err.message : String(err)
+      this.opts.log(`troop-ws: destroy-result ${frame.name} FAIL: ${error}`)
+      this.send({ type: 'destroy-result', intent_id: frame.intent_id, ok: false, name: frame.name, error })
     }
   }
 
