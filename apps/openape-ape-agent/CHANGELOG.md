@@ -1,5 +1,22 @@
 # @openape/ape-agent
 
+## 2.6.0
+
+### Minor Changes
+
+- [#422](https://github.com/openape-ai/openape/pull/422) [`bd4e040`](https://github.com/openape-ai/openape/commit/bd4e04038894b3bf85bcf2976f0b53e9797e7c9a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Adds a hidden default persona that ships with the package and is
+  prepended to every agent's system prompt. Adapted from OpenClaw's
+  SOUL.md template — a short markdown document ("Be genuinely
+  helpful, not performatively helpful", "Have opinions", "Earn trust
+  through competence", boundaries + vibe + continuity). No owner-
+  facing surface; new agents inherit it for free and a fresh
+  ape-agent release rolls out persona updates everywhere on bridge
+  reload.
+
+  Owner-supplied `system_prompt` content is appended after the
+  default persona + skills block, so anything the owner writes still
+  takes the last word.
+
 ## 2.5.4
 
 ### Patch Changes
