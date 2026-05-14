@@ -51,7 +51,7 @@
     "jose": "^5.9.0",
     "tsup": "^8.5.1",
     "typescript": "^5.8.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.6"
   },
   "license": "MIT",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>",

@@ -37,7 +37,7 @@
     "@types/node": "^22.0.0",
     "@types/web-push": "^3.6.4",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.6",
     "vue-tsc": "^2.0.0"
   },
   "engines": {
