@@ -76,6 +76,23 @@ else
   echo "  WARN: $OLD_DATA_DIR not found, $NEW_DATA_DIR is empty"
 fi
 
+echo "=== 3b. Provision /var/openape/agents/ (pm2-supervisor work dir) ==="
+# The nest daemon runs as the human user (Patrick) but writes per-agent
+# pm2 ecosystem.config.js + start.sh files into /var/openape/agents/.
+# Patrick needs group-write so a non-root mkdir-then-write works; the
+# setgid bit on the parent makes new entries inherit GROUP_NAME so they
+# stay accessible after a recursive chown elsewhere. Without this the
+# pm2-supervisor logs "EACCES: permission denied, mkdir" on every
+# reconcile and bridges never start for agents spawned via the troop UI.
+AGENTS_DIR=/var/openape/agents
+mkdir -p $AGENTS_DIR
+chown $USER_NAME:$GROUP_NAME $AGENTS_DIR
+chmod 2775 $AGENTS_DIR   # drwxrwsr-x — group-write + setgid
+# Bring any existing subdirs (legacy agents from before this fix) in
+# line so the supervisor can rewrite their ecosystem files.
+find $AGENTS_DIR -mindepth 1 -type d -exec chmod 2775 {} \; 2>/dev/null || true
+find $AGENTS_DIR -mindepth 1 -type f -exec chmod g+rw {} \; 2>/dev/null || true
+
 echo "=== 4. Boot out user-domain plist if present ==="
 if [ -f "$USER_PLIST" ]; then
   launchctl bootout gui/501/ai.openape.nest 2>/dev/null || true
