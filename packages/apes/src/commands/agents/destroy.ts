@@ -151,26 +151,47 @@ export const destroyAgentCommand = defineCommand({
       }
       else {
         // Legacy path: home under /Users/, FDA-blocked. Need sudo
-        // + admin password to invoke sysadminctl.
+        // + admin password to invoke sysadminctl. If we're running
+        // headless (no TTY, no APES_ADMIN_PASSWORD) — typical for the
+        // troop-WS destroy path from the nest — degrade gracefully:
+        // skip the OS-side teardown so the rest of the destroy still
+        // proceeds (IdP de-register + nest-registry removal). The
+        // dscl record + home dir become orphans; operator cleans up
+        // later interactively with `apes agents destroy` from a shell.
         const sudo = whichBinary('sudo')
         if (!sudo) {
           throw new CliError('`sudo` not found on PATH; required for OS teardown.')
         }
         const adminUser = userInfo().username
-        const adminPassword = await collectAdminPassword({ adminUser })
-        const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
-        const scriptPath = join(scratch, 'teardown.sh')
+        let adminPassword: string
         try {
-          const script = buildDestroyTeardownScript({ name, homeDir, adminUser })
-          writeFileSync(scriptPath, script, { mode: 0o700 })
-          consola.start('Running teardown via sudo…')
-          execFileSync(sudo, ['-S', '--prompt=', '--', 'bash', scriptPath], {
-            input: `${adminPassword}\n${adminPassword}\n`,
-            stdio: ['pipe', 'inherit', 'inherit'],
-          })
+          adminPassword = await collectAdminPassword({ adminUser })
         }
-        finally {
-          rmSync(scratch, { recursive: true, force: true })
+        catch (err) {
+          const headless = !process.stdin.isTTY && !process.env.APES_ADMIN_PASSWORD
+          if (headless) {
+            consola.warn(`Legacy OS teardown for ${name} requires a TTY or APES_ADMIN_PASSWORD; skipping. Run \`apes agents destroy ${name}\` from a shell later to fully clean up /Users/${name} + dscl record.`)
+            adminPassword = ''
+          }
+          else {
+            throw err
+          }
+        }
+        if (adminPassword) {
+          const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
+          const scriptPath = join(scratch, 'teardown.sh')
+          try {
+            const script = buildDestroyTeardownScript({ name, homeDir, adminUser })
+            writeFileSync(scriptPath, script, { mode: 0o700 })
+            consola.start('Running teardown via sudo…')
+            execFileSync(sudo, ['-S', '--prompt=', '--', 'bash', scriptPath], {
+              input: `${adminPassword}\n${adminPassword}\n`,
+              stdio: ['pipe', 'inherit', 'inherit'],
+            })
+          }
+          finally {
+            rmSync(scratch, { recursive: true, force: true })
+          }
         }
       }
     }
