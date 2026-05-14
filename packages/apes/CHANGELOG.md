@@ -1,5 +1,21 @@
 # @openape/apes
 
+## 1.22.2
+
+### Patch Changes
+
+- [#417](https://github.com/openape-ai/openape/pull/417) [`6fabd6a`](https://github.com/openape-ai/openape/commit/6fabd6a98c4f665476b15efc7b87c2b1dce72d47) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes agents destroy` no longer fails outright when run headless
+  on a legacy agent (home under `/Users/`). The OS-side teardown
+  needs `sudo` + admin password (the FDA wall on /Users/ blocks the
+  escapes-root path), which requires a TTY or `APES_ADMIN_PASSWORD`
+  env. When neither is available — typical for the new troop-WS
+  destroy path where the nest daemon shells out to `apes agents
+destroy --force` — we now log a clear warning and skip just the
+  OS-side step. The IdP de-register + nest-registry removal still
+  run, so the agent stops working. Operator can re-run from a shell
+  later (`apes agents destroy <name>`) to fully clean up the dscl
+  record + home dir.
+
 ## 1.22.1
 
 ### Patch Changes
