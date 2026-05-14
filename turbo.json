@@ -6,15 +6,20 @@
       "outputs": ["dist/**", ".output/**", ".vercel/output/**"],
       "cache": true
     },
-    "typecheck": {
+    "nuxt-prepare": {
       "dependsOn": ["^build"],
+      "outputs": [".nuxt/**"],
+      "cache": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "nuxt-prepare"],
       "cache": true
     },
     "lint": {
       "cache": true
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "nuxt-prepare"],
       "cache": true
     },
     "dev": {
