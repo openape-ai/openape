@@ -28,6 +28,109 @@ async function loadHosts() {
 
 watch(open, (now) => { if (now) loadHosts() })
 
+// Quick-start system-prompt presets surfaced as a select-menu in the
+// dialog. Each one ships a German-language persona for a common
+// single-purpose workflow (mail triage, calendar, time tracking, …)
+// and references the right tools out of the agent's built-in fundus
+// rather than baking in any one user's name/accounts. The personal
+// bits (which O365 account, which folder, …) get stored by the
+// agent in ~/.openape/agent/MEMORY.md — a small per-agent persistent
+// memory the prompt teaches the LLM to maintain across turns.
+//
+// On submit, after the spawn-result lands, we PATCH the new agent
+// with the preset's system_prompt so the agent runs the right
+// persona from the first message. 'custom' = blank, user fills the
+// textarea themselves.
+interface SystemPromptPreset {
+  id: string
+  label: string
+  description: string
+  prompt: string
+}
+
+// Reused across every preset — establishes the per-agent persistent
+// memory pattern. Same shape as Claude's auto-memory: small file on
+// disk, read at the start of each turn, written when something
+// worth remembering across conversations comes up.
+const MEMORY_NOTE = `Persistente Notizen, Account-Namen, Standard-Filter und alles was du dir konversationsübergreifend merken willst, schreibst du nach ~/.openape/agent/MEMORY.md (Markdown, lege es bei Bedarf neu an). Du liest das File am Beginn jeder Konversation und aktualisierst es wenn der Owner dir neue dauerhafte Vorgaben gibt.`
+
+const PRESETS: SystemPromptPreset[] = [
+  {
+    id: 'custom',
+    label: 'Custom (leer)',
+    description: 'Eigenen System-Prompt schreiben oder später im Agent-Detail setzen.',
+    prompt: '',
+  },
+  {
+    id: 'calendar',
+    label: '📅 Kalender-Assistent',
+    description: 'Tagesüberblick am Morgen, Hinweise zu Verschiebungen / Konflikten.',
+    prompt: `Du bist ein Kalender-Assistent. Du gibst werktags am Morgen einen Tagesüberblick per DM und meldest dich bei kurzfristigen Terminverschiebungen oder Konflikten. Halte dich kurz und antworte auf Deutsch.
+
+Tools: das bash-Tool ist dein Hauptwerkzeug — ruf damit das passende CLI auf, das der Owner für seinen Kalender nutzt (z.B. o365-cli für Microsoft 365 oder gcalcli für Google). Falls noch keines konfiguriert ist, frag den Owner nach dem CLI-Namen und dem zu verwendenden Account.
+
+${MEMORY_NOTE}`,
+  },
+  {
+    id: 'mail-triage',
+    label: '📬 Mail-Triage',
+    description: 'Sichtet ungelesene Mails, priorisiert Action / Important / FYI / Spam.',
+    prompt: `Du bist ein Mail-Triage-Assistent. Du sichtest die Inbox, fasst neue ungelesene Mails zusammen und priorisierst nach Action / Important / FYI / Spam. Top-5-Übersicht per DM, max. eine Zeile pro Mail (Absender · Betreff · Empfehlung). Knapp, deutsche Sprache.
+
+Tools: bash. Nutz dafür o365-cli (für Microsoft 365) oder ein anderes Mail-CLI das auf dem Host installiert ist — z.B. \`o365-cli mail list --account <name> --json --unread --limit 50\` für die Inbox-Übersicht.
+
+Account-Namen sind nicht vorgegeben — frag den Owner beim ersten Mal welche(n) er triagieren möchte, und merke dir diese in MEMORY.md.
+
+${MEMORY_NOTE}`,
+  },
+  {
+    id: 'time-tracker',
+    label: '⏱ Zeiterfassung',
+    description: 'Wertet activity-logs aus, fasst Stunden pro Projekt / Firma zusammen.',
+    prompt: `Du bist ein Zeiterfassungs-Assistent. Du liest die activity-logs des Owners (Format: JSONL pro Tag, eine Zeile pro logged action mit \`ts, project, company, type, action\`), gruppierst nach Firma + Projekt und meldest pro Tag eine Markdown-Tabelle: Firma / Projekt / Stunden / Stichworte.
+
+Tools: bash und file.read. Der Owner sagt dir beim ersten Mal wo die logs liegen (z.B. ~/.claude/activity-logs/YYYY-MM-DD.jsonl) — merke dir den Pfad in MEMORY.md. Sind keine logs für den abgefragten Zeitraum da: sag es klar statt zu erfinden.
+
+${MEMORY_NOTE}`,
+  },
+  {
+    id: 'file-organizer',
+    label: '📁 File-Verwalter',
+    description: 'Überprüft Downloads, schlägt Verschiebungen vor, räumt auf Anfrage auf.',
+    prompt: `Du bist ein File-Verwalter. Du überprüfst regelmäßig den Downloads-Ordner des Owners und schlägst sinnvolle Verschiebungen vor (PDFs in den Dokumenten-Ordner, Bilder in den Pictures-Ordner, Code-Archive in den Code-Ordner, …). Auf explizite Anfrage räumst du aktiv auf — vor jedem rm fragst du nochmal nach.
+
+Tools: bash, file.read, file.write. Frag den Owner beim ersten Mal nach seinen bevorzugten Zielordnern und Ausnahmen (z.B. "PDF-Rechnungen separat") und schreibe das Mapping in MEMORY.md.
+
+${MEMORY_NOTE}`,
+  },
+  {
+    id: 'reminder-bot',
+    label: '🔔 Wiedervorlage-Bot',
+    description: 'Checkt fällige Tasks/Erinnerungen und meldet anstehende per DM.',
+    prompt: `Du bist ein Wiedervorlage-Bot. Du checkst täglich am Morgen die offenen Tasks und Erinnerungen des Owners und meldest per DM die, deren due_at oder remind_at im nächsten Tag fällig wird. Format pro Task: "● <title> (fällig <DD.MM. HH:MM>) — <kurzer Kontext>". Knapp, deutsche Sprache.
+
+Tools: bash (für ape-tasks und andere CLI-basierte Task-Quellen) oder http.get (für REST-APIs). Welche Quelle benutzt wird, sagt dir der Owner beim ersten Mal — merke sie dir samt Filter (status=open,doing) in MEMORY.md.
+
+${MEMORY_NOTE}`,
+  },
+  {
+    id: 'daily-summary',
+    label: '🗞 Daily Summary',
+    description: 'Synthetisiert activity-logs + tasks + Termine zu einem End-of-day Bericht.',
+    prompt: `Du bist ein Daily-Summary-Bot. Jeden Werktag am Abend fasst du zusammen:
+1. Was wurde heute gemacht? (Quelle: activity-logs)
+2. Was wurde abgeschlossen? (Tasks mit status=done heute)
+3. Was steht morgen an? (offene Tasks + Kalender)
+
+Format: drei kurze Abschnitte (Heute / Erledigt / Morgen), je 3-5 Bulletpoints. Deutsche Sprache.
+
+Tools: bash, file.read, http.get. Welche konkreten Pfade / APIs / Accounts der Owner verwendet (welcher Kalender, welcher Task-Tracker, welche Log-Datei) fragst du beim ersten Mal ab und speicherst es in MEMORY.md.
+
+${MEMORY_NOTE}`,
+  },
+]
+const selectedPreset = ref<string>('custom')
+
 // Reset form whenever the dialog opens. We don't pre-fill from the
 // previous spawn — names are unique per owner so reusing would
 // guarantee a 409 anyway, and the bridge config is per-agent.
@@ -37,17 +140,32 @@ const form = ref({
   bridge_key: '',
   bridge_base_url: '',
   bridge_model: '',
+  system_prompt: '',
 })
 const submitting = ref(false)
 const intentId = ref('')
+const spawnedName = ref('')
 const result = ref<null | { ok: boolean, agent_email?: string, error?: string }>(null)
 const pollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 watch(open, (now) => {
   if (!now) return
-  form.value = { name: '', host_id: '', bridge_key: '', bridge_base_url: '', bridge_model: '' }
+  form.value = { name: '', host_id: '', bridge_key: '', bridge_base_url: '', bridge_model: '', system_prompt: '' }
+  selectedPreset.value = 'custom'
   intentId.value = ''
+  spawnedName.value = ''
   result.value = null
+})
+
+watch(selectedPreset, (id) => {
+  const preset = PRESETS.find(p => p.id === id)
+  if (!preset) return
+  // Only overwrite the textarea when the user hasn't typed anything
+  // custom yet. Otherwise the preset switch would silently nuke their
+  // edits. Empty selection always overwrites (it's the explicit reset).
+  if (!form.value.system_prompt || PRESETS.some(p => p.prompt === form.value.system_prompt)) {
+    form.value.system_prompt = preset.prompt
+  }
 })
 
 const canSubmit = computed(() =>
@@ -69,6 +187,7 @@ async function submit() {
     if (form.value.bridge_model) body.bridge_model = form.value.bridge_model
     const res = await ($fetch as any)('/api/agents/spawn-intent', { method: 'POST', body })
     intentId.value = res.intent_id
+    spawnedName.value = form.value.name
     pollResult()
   }
   catch (err: any) {
@@ -84,13 +203,35 @@ async function pollResult() {
   try {
     const res = await ($fetch as any)(`/api/agents/spawn-intent/${intentId.value}`)
     if (res.pending) {
-      // Patrick is still on the approve-grant screen on his iPhone.
+      // Owner is still on the approve-grant screen on their phone.
       // Re-check in 2s. The intent map auto-prunes after 30min so we
       // don't poll forever — but the UI dialog will close on dismiss.
       pollTimer.value = setTimeout(pollResult, 2000)
       return
     }
     result.value = { ok: res.ok, agent_email: res.agent_email, error: res.error }
+    // On success, persist the chosen system_prompt to the troop DB.
+    // The agent picks it up on its next sync (~5min) or sooner via
+    // the WS config-update broadcast that already fires on PATCH.
+    // We don't fail the whole spawn over a save error here — the
+    // agent exists, the user can still edit the prompt from the
+    // detail page.
+    if (res.ok && form.value.system_prompt) {
+      try {
+        await ($fetch as any)(`/api/agents/${encodeURIComponent(spawnedName.value)}`, {
+          method: 'PATCH',
+          body: { system_prompt: form.value.system_prompt },
+        })
+      }
+      catch (err: any) {
+        // Surface but don't overwrite the success state.
+        result.value = {
+          ok: true,
+          agent_email: res.agent_email,
+          error: `Agent spawned but system_prompt save failed: ${err?.data?.statusMessage || err?.message || 'unknown'} — set it manually on the agent page.`,
+        }
+      }
+    }
   }
   catch (err: any) {
     result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'poll failed' }
@@ -105,9 +246,14 @@ function close() {
 </script>
 
 <template>
-  <UModal v-model:open="open">
+  <UModal
+    v-model:open="open"
+    :ui="{
+      content: 'sm:max-w-md max-h-[90vh] flex flex-col',
+    }"
+  >
     <template #content>
-      <div class="p-5 space-y-4">
+      <div class="p-5 space-y-4 overflow-y-auto">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-lg font-semibold">
@@ -140,6 +286,24 @@ function close() {
           <UInput v-model="form.name" placeholder="igor31" :disabled="!!intentId" />
         </UFormField>
 
+        <UFormField label="Preset" description="Quick-start system prompt. You can tweak the textarea below or pick 'Custom' for a blank slate.">
+          <USelect
+            v-model="selectedPreset"
+            :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
+            :disabled="!!intentId"
+          />
+        </UFormField>
+
+        <UFormField label="System prompt" description="Was der Agent immer im Kopf hat. Edits hier kommen mit dem nächsten Sync auf den Host — du kannst auch später auf der Agent-Seite anpassen.">
+          <UTextarea
+            v-model="form.system_prompt"
+            :rows="6"
+            autoresize
+            :disabled="!!intentId"
+            placeholder="Du bist …"
+          />
+        </UFormField>
+
         <details class="text-xs text-muted">
           <summary class="cursor-pointer select-none">
             Bridge overrides (optional)
@@ -149,7 +313,7 @@ function close() {
               <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
             </UFormField>
             <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
-              <UInput v-model="form.bridge_base_url" placeholder="https://iurio.headwai.org/openai" :disabled="!!intentId" />
+              <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
             </UFormField>
             <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
               <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
@@ -164,7 +328,7 @@ function close() {
               Waiting for DDISA approval…
             </div>
             <div class="text-xs text-muted mt-1">
-              Check your iPhone — Patrick approves the as=root grant in the OpenApe app. This dialog updates automatically when the spawn completes.
+              Approve the as=root grant in the OpenApe app on your phone. This dialog updates automatically when the spawn completes.
             </div>
           </div>
         </div>
