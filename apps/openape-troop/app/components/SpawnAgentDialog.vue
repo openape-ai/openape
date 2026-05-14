@@ -301,6 +301,8 @@ function close() {
             autoresize
             :disabled="!!intentId"
             placeholder="Du bist …"
+            class="w-full"
+            :ui="{ base: 'w-full' }"
           />
         </UFormField>
 
