@@ -22,9 +22,6 @@ interface Agent {
    *  to the LLM during live thread turns. Defaults to all known tools
    *  on first sync; owner narrows here. */
   tools: string[]
-  /** Always-on persona / hard rules — markdown. Lands at
-   *  `~/.openape/agent/SOUL.md` after sync. */
-  soul: string
   firstSeenAt: number | null
   lastSeenAt: number | null
   createdAt: number
@@ -171,37 +168,6 @@ async function saveTools() {
   }
   finally {
     toolsSaving.value = false
-  }
-}
-
-// SOUL.md — always-on persona / hard rules. Saved on demand via the
-// same PATCH endpoint as system_prompt. Larger cap than system_prompt
-// (32KB vs 8KB) because owners may inline policy + style guides.
-const soulDraft = ref('')
-const soulSaving = ref(false)
-const soulError = ref('')
-const soulDirty = computed(() => soulDraft.value !== (detail.value?.agent.soul ?? ''))
-
-watch(detail, (d) => {
-  if (d) soulDraft.value = d.agent.soul ?? ''
-}, { immediate: true })
-
-async function saveSoul() {
-  if (!soulDirty.value) return
-  soulSaving.value = true
-  soulError.value = ''
-  try {
-    await ($fetch as any)(`/api/agents/${agentName.value}`, {
-      method: 'PATCH',
-      body: { soul: soulDraft.value },
-    })
-    if (detail.value) detail.value.agent.soul = soulDraft.value
-  }
-  catch (err: any) {
-    soulError.value = err?.data?.statusMessage || err?.message || 'save failed'
-  }
-  finally {
-    soulSaving.value = false
   }
 }
 
@@ -624,50 +590,6 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               <div v-if="toolsDirty" class="flex justify-end mt-3">
                 <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
                   Save tools
-                </UButton>
-              </div>
-            </div>
-          </details>
-        </UCard>
-
-        <!-- SOUL.md — always-on persona / hard rules -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-sparkles" class="text-muted size-4" />
-                <span class="font-medium">SOUL.md</span>
-                <UBadge v-if="soulDirty" color="warning" variant="subtle" size="xs">
-                  unsaved
-                </UBadge>
-                <UBadge v-else-if="soulDraft" color="success" variant="subtle" size="xs">
-                  {{ soulDraft.length }} chars
-                </UBadge>
-                <UBadge v-else color="neutral" variant="subtle" size="xs">
-                  empty
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
-              <p class="text-xs text-muted mb-3">
-                Always-on persona, language preferences, hard rules. Rendered as the first block of the
-                system prompt the LLM sees, ahead of skills + base system prompt. Markdown. Lands at
-                <code class="text-zinc-300">~/.openape/agent/SOUL.md</code> after the next sync (~5min).
-              </p>
-              <UTextarea
-                v-model="soulDraft"
-                placeholder="# Persona&#10;&#10;Du bist …&#10;&#10;## Always-on rules&#10;- antworte standardmäßig auf Deutsch&#10;- frag nach wenn etwas unklar ist"
-                :rows="6"
-                autoresize
-                :disabled="soulSaving"
-                class="w-full"
-                :ui="{ base: 'w-full' }"
-              />
-              <UAlert v-if="soulError" color="error" :title="soulError" class="mt-3" />
-              <div v-if="soulDirty" class="flex justify-end mt-3">
-                <UButton size="sm" color="primary" :loading="soulSaving" @click="saveSoul">
-                  Save SOUL.md
                 </UButton>
               </div>
             </div>
