@@ -29,8 +29,15 @@ const { data: contacts, refresh: refreshContacts } = await useFetch<ContactRow[]
 const incoming = computed(() => (contacts.value ?? [])
   .filter(c => c.myStatus === 'pending' && c.theirStatus === 'accepted')
   .sort((a, b) => b.requestedAt - a.requestedAt))
+// Connected = mutual + has an active room. After a delete, the
+// contact stays in the DB (the friendship is intact) but its
+// `roomId` is null until the next message provisions a fresh
+// room — see `ensureDmRoomFor`. We filter those out of the list
+// so the deleted chat disappears from the overview immediately;
+// agent contacts naturally come back when the bridge posts the
+// next message (it calls ensureDmRoomFor before sending).
 const connected = computed(() => (contacts.value ?? [])
-  .filter(c => c.connected)
+  .filter(c => c.connected && c.roomId)
   .sort((a, b) => (b.acceptedAt ?? 0) - (a.acceptedAt ?? 0)))
 const outgoing = computed(() => (contacts.value ?? [])
   .filter(c => c.myStatus === 'accepted' && c.theirStatus === 'pending')
@@ -133,96 +140,18 @@ function isAgent(email: string): boolean {
   return email.endsWith('@id.openape.ai')
 }
 
-// ── Room delete (swipe on mobile, hover-button on desktop) ──
+// ── Room delete (kebab-menu on every device) ──
 //
-// Per-row swipe state: how far the row has been dragged left, in
-// pixels. The contact-row inside Connected uses transform translateX
-// of -swipeOffset, revealing a red Delete action behind it. Threshold
-// past which the delete action becomes the dominant gesture (we keep
-// the row snapped open instead of letting it return) is
-// SWIPE_REVEAL_PX; past SWIPE_COMMIT_PX a release fires the delete
-// directly without a separate tap. Desktop ignores all of this — the
-// hover variant uses a plain button visible at sm: breakpoint.
-const SWIPE_REVEAL_PX = 80
-const SWIPE_COMMIT_PX = 180
-const swipeOffsets = ref<Record<string, number>>({})
-interface SwipeState {
-  roomId: string
-  startX: number
-  startY: number
-  // Once we've decided this drag is horizontal (i.e. a swipe, not a
-  // vertical scroll), `committed` flips true and we preventDefault on
-  // subsequent move events to keep iOS Safari from competing for the
-  // gesture. Until then, scrolling wins.
-  committed: boolean
-  // Initial offset at touchstart so a half-open row keeps dragging
-  // from where it sits instead of jumping back to 0.
-  startOffset: number
-}
-let activeSwipe: SwipeState | null = null
-
-function onRowPointerDown(roomId: string, ev: PointerEvent): void {
-  if (ev.pointerType !== 'touch') return
-  activeSwipe = {
-    roomId,
-    startX: ev.clientX,
-    startY: ev.clientY,
-    committed: false,
-    startOffset: swipeOffsets.value[roomId] ?? 0,
-  }
-}
-
-function onRowPointerMove(roomId: string, ev: PointerEvent): void {
-  if (!activeSwipe || activeSwipe.roomId !== roomId) return
-  const dx = ev.clientX - activeSwipe.startX
-  const dy = ev.clientY - activeSwipe.startY
-  // First-move heuristic: if vertical movement dominates, this is a
-  // scroll, abandon the swipe. Otherwise lock in as a swipe and don't
-  // give up until pointer-up.
-  if (!activeSwipe.committed) {
-    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8) {
-      activeSwipe = null
-      return
-    }
-    if (Math.abs(dx) > 8) {
-      activeSwipe.committed = true
-    }
-    else {
-      return
-    }
-  }
-  // Clamp 0..(SWIPE_COMMIT_PX + 60) so the row can't drag off-screen
-  // and gives a nice "rubber-band" feel past the threshold.
-  const next = Math.max(0, Math.min(SWIPE_COMMIT_PX + 60, activeSwipe.startOffset - dx))
-  swipeOffsets.value = { ...swipeOffsets.value, [roomId]: next }
-}
-
-function onRowPointerUp(roomId: string): void {
-  if (!activeSwipe || activeSwipe.roomId !== roomId) return
-  const offset = swipeOffsets.value[roomId] ?? 0
-  activeSwipe = null
-  if (offset >= SWIPE_COMMIT_PX) {
-    // Dragged far enough → commit the delete directly. The row snaps
-    // closed by the deletion (it disappears from the list).
-    swipeOffsets.value = { ...swipeOffsets.value, [roomId]: 0 }
-    void requestDeleteRoom(roomId)
-    return
-  }
-  // Past the reveal threshold: leave snapped open so the user can
-  // tap the Delete pill. Below: snap closed.
-  swipeOffsets.value = {
-    ...swipeOffsets.value,
-    [roomId]: offset >= SWIPE_REVEAL_PX ? SWIPE_REVEAL_PX : 0,
-  }
-}
-
-function closeSwipe(roomId: string): void {
-  swipeOffsets.value = { ...swipeOffsets.value, [roomId]: 0 }
-}
+// The first cut used a swipe gesture on touch + hover-button on
+// desktop. Swipe was unreliable (iOS Safari competing for scroll
+// gestures, false-positive deletes from a fast scroll-flick). Kebab
+// is the universal alternative: visible icon at the right of every
+// row, tap → small popover with the destructive action. Same input
+// affordance everywhere.
 
 // Delete-confirm modal state. We don't auto-delete on tap because a
-// chat can be irrecoverable (no undo, no soft-delete in v1) — confirm
-// guards against a wrong-row swipe-and-tap on a phone.
+// chat is irrecoverable (no undo, no soft-delete in v1) — confirm
+// guards against a wrong-row tap on a phone.
 const confirmDelete = ref<{ roomId: string, peerEmail: string } | null>(null)
 const confirmDeleteOpen = computed({
   get: () => confirmDelete.value !== null,
@@ -350,57 +279,46 @@ async function doDelete(): Promise<void> {
           <li
             v-for="c of connected"
             :key="c.peerEmail"
-            class="relative overflow-hidden group/row"
+            class="flex items-stretch"
           >
-            <!-- Delete action behind the row. On mobile this gets
-                 revealed by swiping left; on desktop it slides in on
-                 hover as a "ghost" hint (group-hover translates the
-                 content above by a few px so the trash peeks out). -->
-            <button
+            <NuxtLink
               v-if="c.roomId"
-              type="button"
-              class="absolute inset-y-0 right-0 px-5 bg-red-600 text-white text-sm font-medium flex items-center gap-2"
-              aria-label="Delete chat"
-              @click="requestDeleteRoom(c.roomId!)"
+              :to="`/rooms/${c.roomId}`"
+              class="flex-1 min-w-0 px-4 py-3 hover:bg-zinc-900 active:bg-zinc-800 transition-colors"
             >
-              <UIcon name="i-lucide-trash-2" class="size-4 shrink-0" />
-              <span class="hidden sm:inline">Delete</span>
-            </button>
-            <!-- The swipeable content. On pointer-down (touch only)
-                 we track the gesture, on move we offset, on up we
-                 commit or snap back. Desktop pointer-down is ignored
-                 — hover reveals the same Delete pill via a small
-                 translate on group-hover. -->
-            <div
-              class="relative bg-zinc-950 transition-transform duration-150 ease-out group-hover/row:-translate-x-12 motion-reduce:transition-none"
-              :style="(swipeOffsets[c.roomId ?? ''] ?? 0) > 0 ? { transform: `translateX(-${swipeOffsets[c.roomId ?? ''] ?? 0}px)`, transitionDuration: '0ms' } : undefined"
-              @pointerdown="c.roomId && onRowPointerDown(c.roomId, $event)"
-              @pointermove="c.roomId && onRowPointerMove(c.roomId, $event)"
-              @pointerup="c.roomId && onRowPointerUp(c.roomId)"
-              @pointercancel="c.roomId && onRowPointerUp(c.roomId)"
-            >
-              <NuxtLink
-                v-if="c.roomId"
-                :to="`/rooms/${c.roomId}`"
-                class="block px-4 py-3 hover:bg-zinc-900 active:bg-zinc-800 transition-colors"
-                @click="closeSwipe(c.roomId)"
-              >
-                <div class="flex items-center gap-3">
-                  <UIcon
-                    :name="isAgent(c.peerEmail) ? 'i-lucide-bot' : 'i-lucide-user'"
-                    class="text-zinc-500 size-5 shrink-0"
-                  />
-                  <div class="flex-1 min-w-0">
-                    <div class="font-medium truncate">
-                      {{ shortEmail(c.peerEmail) }}
-                    </div>
-                    <div class="text-xs text-zinc-500 truncate">
-                      {{ c.peerEmail }}
-                    </div>
+              <div class="flex items-center gap-3">
+                <UIcon
+                  :name="isAgent(c.peerEmail) ? 'i-lucide-bot' : 'i-lucide-user'"
+                  class="text-zinc-500 size-5 shrink-0"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium truncate">
+                    {{ shortEmail(c.peerEmail) }}
+                  </div>
+                  <div class="text-xs text-zinc-500 truncate">
+                    {{ c.peerEmail }}
                   </div>
                 </div>
-              </NuxtLink>
-            </div>
+              </div>
+            </NuxtLink>
+            <!-- Kebab menu. Same affordance on every device — the
+                 swipe variant was too easy to mis-fire on a scroll-
+                 flick. Single tap opens a small action sheet; one
+                 destructive action for now (Delete chat), space for
+                 more if/when needed (Mute, Archive, …). -->
+            <UDropdownMenu
+              v-if="c.roomId"
+              :items="[[{ label: 'Delete chat', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => requestDeleteRoom(c.roomId!) }]]"
+              :popper="{ placement: 'bottom-end' }"
+            >
+              <button
+                type="button"
+                class="px-3 self-stretch flex items-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
+                aria-label="More actions"
+              >
+                <UIcon name="i-lucide-ellipsis-vertical" class="size-5" />
+              </button>
+            </UDropdownMenu>
           </li>
         </ul>
       </section>
