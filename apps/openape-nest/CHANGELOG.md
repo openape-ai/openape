@@ -1,5 +1,15 @@
 # @openape/nest
 
+## 2.2.0
+
+### Minor Changes
+
+- [#415](https://github.com/openape-ai/openape/pull/415) [`2d3374d`](https://github.com/openape-ai/openape/commit/2d3374d56e70861df48ea120368b5538ed36c652) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Handle `destroy-intent` frames from troop: runs
+  `apes agents destroy --force` for the named agent, then sends a
+  `destroy-result` frame back. Pairs with the new "Delete agent"
+  button in the troop UI — owners can wipe an agent from any device
+  without SSHing into the host.
+
 ## 2.1.3
 
 ### Patch Changes
