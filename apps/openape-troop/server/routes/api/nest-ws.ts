@@ -1,12 +1,15 @@
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
 import { and, eq } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import toolCatalog from '../../tool-catalog.json'
 import { useDb } from '../../database/drizzle'
 import { agents } from '../../database/schema'
 import { parseAgentEmail } from '../../utils/agent-email'
 import { resolveDestroyIntent } from '../../utils/destroy-intents'
 import { registerNestPeer, touchNestPeer, unregisterNestPeerById } from '../../utils/nest-registry'
 import { resolveSpawnIntent } from '../../utils/spawn-intents'
+
+const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }> }).tools.map(t => t.name)
 
 // Control-plane WS for local nest daemons. Each connected peer
 // represents a Mac (or any host) running `openape-nest`, owned by
@@ -175,6 +178,40 @@ export default defineWebSocketHandler({
         agentEmail: f.agent_email,
         error: f.error,
       })
+      // Pre-insert a stub row in the agents table so the troop UI's
+      // refresh on dialog-close picks up the new agent immediately.
+      // Without this there's a race: spawn-result arrives before the
+      // bridge has booted + done its first /api/agents/me/sync, so
+      // the UI refresh hits an empty list and the user has to bounce
+      // through another agent's detail page to trigger a re-fetch.
+      //
+      // The bridge's first-sync handler does an INSERT-or-UPDATE
+      // keyed on `email`, so our stub here gets enriched with
+      // host_id / hostname / pubkey on the next sync (~5s after
+      // spawn completes). We seed `tools` to the full catalog —
+      // identical default as sync.post.ts uses for first-time rows.
+      if (f.ok && f.agent_email) {
+        const parsed = parseAgentEmail(f.agent_email)
+        if (parsed && parsed.ownerEmail.toLowerCase() === ctx.ownerEmail.toLowerCase()) {
+          const db = useDb()
+          const now = Math.floor(Date.now() / 1000)
+          const agentEmail = f.agent_email
+          void Promise.resolve(
+            db.insert(agents).values({
+              email: agentEmail,
+              ownerEmail: ctx.ownerEmail.toLowerCase(),
+              agentName: parsed.agentName,
+              hostId: null,
+              hostname: null,
+              pubkeySsh: null,
+              tools: ALL_TOOL_NAMES,
+              firstSeenAt: null,
+              lastSeenAt: null,
+              createdAt: now,
+            }).onConflictDoNothing(),
+          ).catch(() => { /* ignore — bridge sync will retry the upsert */ })
+        }
+      }
       return
     }
     if (frame.type === 'destroy-result') {
