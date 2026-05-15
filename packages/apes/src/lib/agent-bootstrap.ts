@@ -305,9 +305,30 @@ NAME=${shQuote(name)}
 HOME_DIR=${shQuote(homeDir)}
 SHELL_PATH=${shQuote(shellPath)}
 
+# Tombstone-reuse: \`apes agents destroy\` leaves the dscl user
+# record behind (opendirectoryd refuses \`dscl . -delete\` from
+# escapes' setuid-root context without admin auth, so we accept the
+# stranded record as a harmless tombstone — see
+# runPhaseGTeardownInProcess). When the operator re-spawns with the
+# same name, we recycle the tombstone instead of refusing: if the
+# previously-recorded home dir is gone from disk (matching the
+# Phase-G teardown's \`rm -rf\`), we reuse the existing UID +
+# overwrite the home. If the home is still on disk it's a real,
+# live agent — refuse.
+TOMBSTONE_REUSE=0
 if dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
-  echo "User $NAME already exists; refusing to overwrite." >&2
-  exit 1
+  EXISTING_HOME=$(dscl . -read "/Users/$NAME" NFSHomeDirectory 2>/dev/null | awk '/NFSHomeDirectory:/ {print $2}')
+  if [ -n "$EXISTING_HOME" ] && [ -d "$EXISTING_HOME" ]; then
+    echo "User $NAME already exists with a live home at $EXISTING_HOME; refusing to overwrite." >&2
+    exit 1
+  fi
+  NEXT_UID=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
+  if [ -z "$NEXT_UID" ]; then
+    echo "User $NAME exists but has no UniqueID; record is malformed, refusing to recycle." >&2
+    exit 1
+  fi
+  echo "Recycling tombstone dscl record for $NAME (uid=$NEXT_UID, prior home $EXISTING_HOME — gone)"
+  TOMBSTONE_REUSE=1
 fi
 
 # Phase G: agent home dirs live under /var/openape/homes/, not
@@ -316,24 +337,30 @@ fi
 mkdir -p /var/openape/homes
 chmod 755 /var/openape/homes
 
-# Pick the next free UID in the [200, 500) hidden service-account range.
-# Starts the running max at 199 so an empty range yields 200 after the
-# floor check; otherwise NEXT_UID = max(existing in-range UIDs) + 1.
-NEXT_UID=199
-for uid in $(dscl . -list /Users UniqueID | awk '$2 >= 200 && $2 < 500 {print $2}'); do
-  if [ "$uid" -ge "$NEXT_UID" ]; then
-    NEXT_UID=$((uid + 1))
+if [ "$TOMBSTONE_REUSE" = "0" ]; then
+  # Pick the next free UID in the [200, 500) hidden service-account range.
+  # Starts the running max at 199 so an empty range yields 200 after the
+  # floor check; otherwise NEXT_UID = max(existing in-range UIDs) + 1.
+  NEXT_UID=199
+  for uid in $(dscl . -list /Users UniqueID | awk '$2 >= 200 && $2 < 500 {print $2}'); do
+    if [ "$uid" -ge "$NEXT_UID" ]; then
+      NEXT_UID=$((uid + 1))
+    fi
+  done
+  if [ "$NEXT_UID" -lt 200 ]; then
+    NEXT_UID=200
   fi
-done
-if [ "$NEXT_UID" -lt 200 ]; then
-  NEXT_UID=200
-fi
-if [ "$NEXT_UID" -ge 500 ]; then
-  echo "No free UID in [200, 500) — refusing to clobber a real user." >&2
-  exit 1
+  if [ "$NEXT_UID" -ge 500 ]; then
+    echo "No free UID in [200, 500) — refusing to clobber a real user." >&2
+    exit 1
+  fi
+
+  dscl . -create "/Users/$NAME"
 fi
 
-dscl . -create "/Users/$NAME"
+# Idempotent attribute writes — \`dscl . -create\` on an existing
+# property overwrites in place, so the tombstone-reuse path lands
+# the same end-state as a fresh create.
 dscl . -create "/Users/$NAME" UserShell "$SHELL_PATH"
 dscl . -create "/Users/$NAME" RealName "OpenApe Agent $NAME"
 dscl . -create "/Users/$NAME" UniqueID "$NEXT_UID"
