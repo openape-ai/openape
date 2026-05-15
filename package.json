@@ -34,6 +34,7 @@
     "overrides": {
       "eslint": "^9.35.0",
       "defu": ">=6.1.5",
+      "devalue": ">=5.8.1",
       "drizzle-orm": ">=0.45.2",
       "flatted": ">=3.4.2",
       "lodash": "^4.17.21",
