@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^3.2.9"
   },
   "peerDependencies": {
     "vue": "^3.5.0"
