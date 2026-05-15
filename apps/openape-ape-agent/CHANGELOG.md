@@ -1,5 +1,12 @@
 # @openape/ape-agent
 
+## 2.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`bfcf215`](https://github.com/openape-ai/openape/commit/bfcf215ccb54894daf89494349cdc580ae38460e)]:
+  - @openape/apes@1.24.0
+
 ## 2.6.0
 
 ### Minor Changes
