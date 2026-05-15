@@ -38,7 +38,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@nuxt/kit": "^3.21.1",
+    "@nuxt/kit": "^4.4.4",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "defu": "^6.1.7"
