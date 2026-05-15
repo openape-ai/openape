@@ -7,7 +7,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
-import { AGENT_NAME_REGEX, buildDestroyTeardownScript, buildPhaseGTeardownScript } from '../../lib/agent-bootstrap'
+import { AGENT_NAME_REGEX, buildDestroyTeardownScript, runPhaseGTeardownInProcess } from '../../lib/agent-bootstrap'
 import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
 import { removeNestAgent } from '../../lib/nest-registry'
 import { readPasswordSilent } from '../../lib/silent-password'
@@ -42,6 +42,10 @@ export const destroyAgentCommand = defineCommand({
       type: 'boolean',
       description: 'Skip OS-side teardown. Useful for CI where the agent has no OS user.',
     },
+    'root-stage': {
+      type: 'boolean',
+      description: 'Internal — destroy.ts re-invokes itself via `apes run --as root --` with this flag set, then runs only the Phase-G teardown (rm home, launchctl bootout, kill processes). Skips IdP + auth + interactive prompts since those already ran in the outer pass.',
+    },
   },
   async run({ args }) {
     const name = args.name as string
@@ -49,6 +53,20 @@ export const destroyAgentCommand = defineCommand({
       throw new CliError(
         `Invalid agent name "${name}". Must match /^[a-z][a-z0-9-]{0,23}$/.`,
       )
+    }
+
+    // Inner re-entry: this process IS root (escapes-setuid'd via the
+    // outer `apes run --as root --`). Skip auth + IdP + prompts and
+    // just do the privileged ops. The outer pass already removed the
+    // IdP record and the nest-registry row by the time it called us.
+    if (args['root-stage']) {
+      if (process.geteuid?.() !== 0) {
+        throw new CliError('--root-stage was passed but this process is not running as root. Refusing to continue.')
+      }
+      const homeDir = readMacOSUser(name)?.homeDir ?? `/var/openape/homes/${name}`
+      consola.start(`Running teardown for ${name} (Phase-G, root-stage)…`)
+      runPhaseGTeardownInProcess({ name, homeDir })
+      return
     }
 
     const auth = loadAuth()
@@ -136,16 +154,28 @@ export const destroyAgentCommand = defineCommand({
         // longer exists. Operators can run `sudo sysadminctl
         // -deleteUser <name>` interactively later if they want full
         // cleanup.
-        const scratch = mkdtempSync(join(tmpdir(), `apes-destroy-${name}-`))
-        const scriptPath = join(scratch, 'teardown.sh')
-        try {
-          const script = buildPhaseGTeardownScript({ name, homeDir })
-          writeFileSync(scriptPath, script, { mode: 0o700 })
-          consola.start('Running teardown (Phase G — no admin password needed)…')
-          execFileSync('apes', ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
+        //
+        // Re-enter ourselves as root via `apes run --as root --`
+        // instead of writing+executing a temp bash script. The
+        // resulting DDISA grant request reads
+        //   `apes agents destroy <name> --force --root-stage`
+        // which is semantic + matches the existing nest YOLO pattern
+        // `apes agents destroy *` for zero-prompt auto-approval.
+        // The inner re-entry detects --root-stage and runs just the
+        // Phase-G teardown ops via runPhaseGTeardownInProcess().
+        if (process.geteuid?.() === 0) {
+          // Already root (rare — `apes agents destroy` invoked from
+          // inside a setuid-root context like a CI runner with
+          // sudo). Do the teardown directly, no second escalation.
+          consola.start('Running teardown (Phase G — already root, no grant needed)…')
+          runPhaseGTeardownInProcess({ name, homeDir })
         }
-        finally {
-          rmSync(scratch, { recursive: true, force: true })
+        else {
+          consola.start('Running teardown (Phase G — no admin password needed)…')
+          execFileSync('apes', [
+            'run', '--as', 'root', '--wait', '--',
+            'apes', 'agents', 'destroy', name, '--force', '--root-stage',
+          ], { stdio: 'inherit' })
         }
         consola.info(`dscl record /Users/${name} kept as tombstone (hidden, no home). Run \`sudo sysadminctl -deleteUser ${name}\` to fully remove.`)
       }
