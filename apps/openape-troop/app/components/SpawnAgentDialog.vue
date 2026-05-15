@@ -131,6 +131,41 @@ ${MEMORY_NOTE}`,
 ]
 const selectedPreset = ref<string>('custom')
 
+// Curated 100-name pool surfaced behind a 🎲 button + a "pick from
+// list" dropdown. The agent-name regex caps at 24 chars / [a-z0-9-]
+// so every entry here stays inside that ceiling. Themes: primates,
+// Greek/Norse myth, nature, sci-fi AI, stars, birds, cute everyday.
+// One placeholder rotates on every dialog-open so users don't see
+// "igor31" on repeat.
+const AGENT_NAME_POOL: readonly string[] = [
+  // Primates / classic ape characters
+  'koko', 'caesar', 'kong', 'bonobo', 'lemur', 'mowgli', 'tarzan', 'simba', 'baloo', 'hanuman',
+  // Mythology
+  'zeus', 'atlas', 'hermes', 'iris', 'apollo', 'thor', 'odin', 'freya', 'loki', 'hades',
+  'gaia', 'helios', 'selene', 'orion', 'athena', 'ares', 'artemis', 'hera', 'jove', 'anubis',
+  // Nature / botany
+  'aspen', 'river', 'sage', 'basil', 'cedar', 'willow', 'fern', 'juniper', 'ivy', 'moss',
+  'brook', 'hazel', 'briar', 'dune', 'fir', 'alder', 'birch', 'clover', 'daisy', 'rose',
+  // Sci-fi AIs / robots
+  'hal', 'jarvis', 'friday', 'tars', 'neo', 'trinity', 'cortana', 'gerty', 'samantha', 'eve',
+  'dolores', 'ash', 'bishop', 'glados', 'wheatley',
+  // Stars + space
+  'vega', 'lyra', 'nova', 'rigel', 'sirius', 'polaris', 'andromeda', 'hydra', 'draco', 'cygnus',
+  'perseus', 'pegasus', 'comet', 'halley', 'kepler',
+  // Birds
+  'falcon', 'raven', 'magpie', 'owl', 'sparrow', 'finch', 'kestrel', 'swift', 'robin', 'wren',
+  // Cute everyday
+  'pepper', 'pixel', 'marble', 'pretzel', 'biscuit', 'cookie', 'ginger', 'honey', 'plum', 'peanut',
+]
+
+function randomName(): string {
+  return AGENT_NAME_POOL[Math.floor(Math.random() * AGENT_NAME_POOL.length)]!
+}
+
+// Rotates each time the dialog opens — placeholder hints at the
+// 100-name pool without committing to any single label.
+const placeholderName = ref<string>(randomName())
+
 // Reset form whenever the dialog opens. We don't pre-fill from the
 // previous spawn — names are unique per owner so reusing would
 // guarantee a 409 anyway, and the bridge config is per-agent.
@@ -155,7 +190,15 @@ watch(open, (now) => {
   intentId.value = ''
   spawnedName.value = ''
   result.value = null
+  placeholderName.value = randomName()
 })
+
+// 🎲 button beside the name input — fills the field with a random
+// pool pick. Clicking it again rolls a new name. Owners who prefer
+// typing their own ignore the button entirely.
+function rollName(): void {
+  form.value.name = randomName()
+}
 
 watch(selectedPreset, (id) => {
   const preset = PRESETS.find(p => p.id === id)
@@ -282,8 +325,39 @@ function close() {
           />
         </UFormField>
 
-        <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars">
-          <UInput v-model="form.name" placeholder="igor31" :disabled="!!intentId" />
+        <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
+          <div class="flex items-stretch gap-2">
+            <UInput
+              v-model="form.name"
+              :placeholder="placeholderName"
+              :disabled="!!intentId"
+              class="flex-1"
+              :ui="{ base: 'w-full' }"
+            />
+            <UButton
+              type="button"
+              variant="soft"
+              color="neutral"
+              icon="i-lucide-dices"
+              aria-label="Roll a random name"
+              :disabled="!!intentId"
+              @click="rollName"
+            />
+            <UDropdownMenu
+              :items="[AGENT_NAME_POOL.map(n => ({ label: n, onSelect: () => { form.name = n } }))]"
+              :popper="{ placement: 'bottom-end' }"
+              :ui="{ content: 'max-h-80 overflow-y-auto' }"
+            >
+              <UButton
+                type="button"
+                variant="soft"
+                color="neutral"
+                icon="i-lucide-list"
+                aria-label="Pick from name list"
+                :disabled="!!intentId"
+              />
+            </UDropdownMenu>
+          </div>
         </UFormField>
 
         <UFormField label="Preset" description="Quick-start system prompt. You can tweak the textarea below or pick 'Custom' for a blank slate.">
