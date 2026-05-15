@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer'
+import { execFileSync } from 'node:child_process'
 import { createPrivateKey, sign } from 'node:crypto'
+import { rmSync } from 'node:fs'
 import { exchangeWithDelegation } from '@openape/cli-auth'
 import { loadAuth } from '../config'
 import { apiFetch, getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../http'
@@ -437,6 +439,73 @@ export interface DestroyTeardownScriptInput {
  * Result: fully scriptable destroy without an interactive admin
  * password prompt.
  */
+/**
+ * Phase-G teardown — Node implementation. The shell variant
+ * (`buildPhaseGTeardownScript` below) is kept for back-compat but
+ * unused in the new flow: instead of `apes run --as root -- bash
+ * <tempScript>`, the destroy command does `apes run --as root --
+ * apes agents destroy <name> --force --root-stage`, then this
+ * function runs the same ops directly in-process when re-invoked
+ * as root. Net effect: the DDISA grant request reads
+ * "apes agents destroy <name> --force --root-stage" (matches the
+ * existing `apes agents destroy *` YOLO pattern) instead of an
+ * opaque `bash /var/folders/.../teardown.sh`.
+ *
+ * Caller invariant: process.geteuid() === 0. The shell script
+ * tolerated being called as non-root by no-op'ing on the privileged
+ * lines; this version trusts the caller to have already escalated
+ * via `apes run --as root`.
+ */
+export function runPhaseGTeardownInProcess(input: { name: string, homeDir: string }): void {
+  const { name, homeDir } = input
+
+  // Read agent's UID via dscl. Same approach as the shell version —
+  // dscl . -read /Users/<name> UniqueID emits "UniqueID: <n>".
+  let uid: string | null = null
+  try {
+    const out = execFileSync('/usr/bin/dscl', ['.', '-read', `/Users/${name}`, 'UniqueID'], { encoding: 'utf8' })
+    const m = out.match(/UniqueID:\s*(\d+)/)
+    if (m) uid = m[1]!
+  }
+  catch { /* dscl returns non-zero when the user doesn't exist — that's fine */ }
+
+  if (uid) {
+    // bootout the user-domain launchd + kill any live processes
+    // owned by the agent uid. Both allowed to fail (no live session
+    // is the common case after a clean spawn). We swallow failures
+    // identically to the shell script's `|| true`.
+    try { execFileSync('/bin/launchctl', ['bootout', `user/${uid}`], { stdio: 'ignore' }) }
+    catch { /* no live session — fine */ }
+    try { execFileSync('/usr/bin/pkill', ['-9', '-u', uid], { stdio: 'ignore' }) }
+    catch { /* no live procs — fine */ }
+  }
+
+  // Per-agent ecosystem files written by the Nest's pm2-supervisor.
+  const agentDir = `/var/openape/agents/${name}`
+  try { rmSync(agentDir, { recursive: true, force: true }) }
+  catch { /* nothing to remove */ }
+
+  // Home dir lives under /var/openape/homes/ — no FDA wall, root can
+  // rm directly. Same safety check as the shell script: refuse on
+  // empty / root-fs paths so a misconfigured agent.json can't nuke
+  // the filesystem.
+  if (homeDir && homeDir !== '/' && homeDir.startsWith('/var/openape/homes/')) {
+    try { rmSync(homeDir, { recursive: true, force: true }) }
+    catch { /* already gone */ }
+  }
+
+  // dscl record stays as a tombstone — opendirectoryd rejects the
+  // delete from escapes' setuid-root context without admin auth, so
+  // the user record sticks around hidden (IsHidden=1) with a stale
+  // NFSHomeDirectory. Operators run `sudo sysadminctl -deleteUser
+  // <name>` interactively later if they want full cleanup.
+  // eslint-disable-next-line no-console
+  console.log(`OK Phase-G teardown done for ${name} (dscl record kept as tombstone)`)
+}
+
+// Legacy: bash-script version of the same teardown. Kept as a
+// reference until we've verified the in-process variant covers all
+// the edge cases in production; no caller in this repo uses it.
 export function buildPhaseGTeardownScript(input: { name: string, homeDir: string }): string {
   const { name, homeDir } = input
   return `#!/bin/bash
