@@ -25,6 +25,32 @@ import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
+import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
+import { isDarwin, macOSUsernameForAgent, readMacOSUser } from '../lib/macos-user'
+
+/**
+ * Map an agent name (`igor`) to its macOS username (`openape-agent-igor`)
+ * when the prefixed dscl record exists. Returns the input unchanged for:
+ *   - non-Darwin platforms (escapes-helper isn't macOS-specific in theory)
+ *   - non-agent values like `root`, `_postgres`, etc.
+ *   - legacy agents that pre-date the prefix (the prefixed record is
+ *     absent, so we fall through and let escapes setuid to the plain
+ *     name — backward-compatible)
+ *
+ * The mapping is transparent to all callers: nest/troop-ws.ts,
+ * pm2-supervisor.ts, allow.ts and operators typing `apes run --as
+ * igor` keep working without knowing about the prefix.
+ */
+function resolveRunAsTarget(runAs: string | undefined): string | undefined {
+  if (!runAs) return runAs
+  if (!isDarwin()) return runAs
+  if (!AGENT_NAME_REGEX.test(runAs)) return runAs
+  // Already prefixed (operator typed the full macOS username) — pass through.
+  if (runAs.startsWith('openape-agent-')) return runAs
+  const prefixed = macOSUsernameForAgent(runAs)
+  if (readMacOSUser(prefixed)) return prefixed
+  return runAs
+}
 
 /**
  * Returns true when the caller asked for the legacy blocking path via
@@ -606,7 +632,7 @@ async function runAudienceMode(
   const grantsUrl = await getGrantsEndpoint(idp)
   const command = action.split(' ')
   const targetHost = (args.host as string) || hostname()
-  const runAs = (args.as as string | undefined) ?? undefined
+  const runAs = resolveRunAsTarget((args.as as string | undefined) ?? undefined)
 
   // Step 0: Reuse path — look for an existing approved 'timed' /
   // 'always' grant that matches our command exactly, instead of

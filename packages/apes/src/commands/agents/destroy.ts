@@ -8,7 +8,7 @@ import { getIdpUrl, loadAuth } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
 import { AGENT_NAME_REGEX, buildDestroyTeardownScript, runPhaseGTeardownInProcess } from '../../lib/agent-bootstrap'
-import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { isDarwin, lookupMacOSUserForAgent, macOSUsernameForAgent, whichBinary } from '../../lib/macos-user'
 import { removeNestAgent } from '../../lib/nest-registry'
 import { readPasswordSilent } from '../../lib/silent-password'
 
@@ -63,9 +63,11 @@ export const destroyAgentCommand = defineCommand({
       if (process.geteuid?.() !== 0) {
         throw new CliError('--root-stage was passed but this process is not running as root. Refusing to continue.')
       }
-      const homeDir = readMacOSUser(name)?.homeDir ?? `/var/openape/homes/${name}`
+      const resolved = lookupMacOSUserForAgent(name)
+      const macOSUsername = resolved?.name ?? macOSUsernameForAgent(name)
+      const homeDir = resolved?.homeDir ?? `/var/openape/homes/${macOSUsername}`
       consola.start(`Running teardown for ${name} (Phase-G, root-stage)…`)
-      runPhaseGTeardownInProcess({ name, homeDir })
+      runPhaseGTeardownInProcess({ name, homeDir, macOSUsername })
       return
     }
 
@@ -82,11 +84,11 @@ export const destroyAgentCommand = defineCommand({
     const idpAgent = owned.find(u => u.name === name)
     const idpExists = idpAgent !== undefined
 
-    const osUser = isDarwin() ? readMacOSUser(name) : null
+    const osUser = isDarwin() ? lookupMacOSUserForAgent(name) : null
     const osUserExists = !args['keep-os-user'] && osUser !== null
 
     if (!idpExists && !osUserExists) {
-      consola.info(`Nothing to destroy: no IdP agent and no OS user named "${name}".`)
+      consola.info(`Nothing to destroy: no IdP agent and no OS user for "${name}".`)
       return
     }
 
@@ -94,7 +96,7 @@ export const destroyAgentCommand = defineCommand({
       const consequences: string[] = []
       if (osUserExists) {
         const home = osUser?.homeDir ?? `/Users/${name}`
-        consequences.push(`• Remove macOS user ${name} and rm -rf ${home}`)
+        consequences.push(`• Remove macOS user ${osUser?.name ?? name} and rm -rf ${home}`)
       }
       if (idpExists) {
         consequences.push(args.soft
@@ -139,7 +141,17 @@ export const destroyAgentCommand = defineCommand({
     }
 
     if (osUserExists) {
-      const homeDir = osUser?.homeDir ?? `/Users/${name}`
+      const macOSUsername = osUser?.name ?? macOSUsernameForAgent(name)
+      // Fallback path depends on which dscl record we matched:
+      // legacy bare-name records live under /Users/<name>, new
+      // prefixed records under /var/openape/homes/<macOSUsername>.
+      // The dscl record's NFSHomeDirectory is the source of truth
+      // when present; the fallback only fires when it's missing
+      // (mostly fixture-driven test paths).
+      const fallbackHome = macOSUsername.startsWith('openape-agent-')
+        ? `/var/openape/homes/${macOSUsername}`
+        : `/Users/${macOSUsername}`
+      const homeDir = osUser?.homeDir ?? fallbackHome
       const isPhaseG = homeDir.startsWith('/var/openape/homes/')
 
       if (isPhaseG) {
@@ -168,7 +180,7 @@ export const destroyAgentCommand = defineCommand({
           // inside a setuid-root context like a CI runner with
           // sudo). Do the teardown directly, no second escalation.
           consola.start('Running teardown (Phase G — already root, no grant needed)…')
-          runPhaseGTeardownInProcess({ name, homeDir })
+          runPhaseGTeardownInProcess({ name, homeDir, macOSUsername })
         }
         else {
           consola.start('Running teardown (Phase G — no admin password needed)…')
@@ -177,7 +189,7 @@ export const destroyAgentCommand = defineCommand({
             'apes', 'agents', 'destroy', name, '--force', '--root-stage',
           ], { stdio: 'inherit' })
         }
-        consola.info(`dscl record /Users/${name} kept as tombstone (hidden, no home). Run \`sudo sysadminctl -deleteUser ${name}\` to fully remove.`)
+        consola.info(`dscl record /Users/${macOSUsername} kept as tombstone (hidden, no home). Run \`sudo apes agents cleanup-orphans\` to sweep accumulated tombstones.`)
       }
       else {
         // Legacy path: home under /Users/, FDA-blocked. Need sudo
