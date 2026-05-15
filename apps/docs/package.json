@@ -37,7 +37,7 @@
     "@nuxt/eslint": "^1.15.1",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.2.4",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.6"
   },
   "author": "Patrick Hofmann",
   "engines": {
