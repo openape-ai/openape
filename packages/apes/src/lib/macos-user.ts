@@ -15,6 +15,80 @@ export function isDarwin(): boolean {
 }
 
 /**
+ * Prefix every spawned macOS service user with this string so
+ * `cleanup-orphans`, operator tooling, and any future `dscl . -list
+ * /Users` audit can identify OpenApe-managed accounts at a glance
+ * without scanning the full UID range. Agent-facing surfaces (email,
+ * troop UI, bridge data dir, `apes agents list`) keep the bare agent
+ * name — the prefix lives only at the macOS layer.
+ */
+export const MACOS_USER_PREFIX = 'openape-agent-'
+
+export function macOSUsernameForAgent(agentName: string): string {
+  return `${MACOS_USER_PREFIX}${agentName}`
+}
+
+/**
+ * Resolve the macOS user record for an agent, trying the prefixed
+ * name first (new spawns) and falling back to the bare agent name
+ * (pre-prefix agents). Returns null when neither exists. Used by
+ * destroy / run --as / list so legacy agents keep working
+ * transparently.
+ */
+export function lookupMacOSUserForAgent(agentName: string): MacOSUserSummary | null {
+  return readMacOSUser(macOSUsernameForAgent(agentName)) ?? readMacOSUser(agentName)
+}
+
+export interface OrphanRecord {
+  /** dscl record name (e.g. `openape-agent-igor`). */
+  name: string
+  uid: number | null
+  /** The NFSHomeDirectory the record points at — already verified to be missing. */
+  homeDir: string
+}
+
+/**
+ * Enumerate dscl user records that look like OpenApe agent tombstones:
+ * either prefixed with `openape-agent-`, or whose home dir is under
+ * `/var/openape/homes/` (legacy agents pre-prefix). A record counts as
+ * orphaned when its NFSHomeDirectory does not exist on disk anymore —
+ * matching the post-destroy state that opendirectoryd refuses to clean
+ * up from escapes' setuid-root audit-session.
+ *
+ * Caller invariant: process is running with admin audit-session
+ * (i.e. invoked under interactive `sudo`). The dscl/readFile calls
+ * themselves don't strictly need root, but the cleanup pass that
+ * consumes this list does.
+ */
+export function listOrphanedAgentRecords(): OrphanRecord[] {
+  if (!isDarwin()) return []
+  let output: string
+  try {
+    output = execFileSync('dscl', ['.', '-list', '/Users', 'NFSHomeDirectory'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  }
+  catch { return [] }
+
+  const orphans: OrphanRecord[] = []
+  for (const line of output.split('\n')) {
+    // dscl emits "<name>\t<homeDir>" — but the separator can collapse
+    // to runs of whitespace, so split on /\s+/ and take first + last.
+    const parts = line.trim().split(/\s+/)
+    if (parts.length < 2) continue
+    const name = parts[0]!
+    const homeDir = parts.slice(1).join(' ')
+    const looksLikeAgent = name.startsWith(MACOS_USER_PREFIX) || homeDir.startsWith('/var/openape/homes/')
+    if (!looksLikeAgent) continue
+    if (existsSync(homeDir)) continue
+    const record = readMacOSUser(name)
+    orphans.push({ name, uid: record?.uid ?? null, homeDir })
+  }
+  return orphans
+}
+
+/**
  * Read a single user via `dscl . -read /Users/<name>`.
  * Returns null when the user doesn't exist (dscl exits non-zero with a
  * `eDSRecordNotFound`-style error). Any other error propagates.

@@ -3,7 +3,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { CliError } from '../../errors'
 import { AGENT_NAME_REGEX } from '../../lib/agent-bootstrap'
-import { isDarwin, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { isDarwin, lookupMacOSUserForAgent, whichBinary } from '../../lib/macos-user'
 
 export const allowAgentCommand = defineCommand({
   meta: {
@@ -35,8 +35,8 @@ export const allowAgentCommand = defineCommand({
     if (!isDarwin()) {
       throw new CliError('`apes agents allow` is currently macOS-only.')
     }
-    if (!readMacOSUser(agent)) {
-      throw new CliError(`No macOS user "${agent}" — has the agent been spawned?`)
+    if (!lookupMacOSUserForAgent(agent)) {
+      throw new CliError(`No macOS user for agent "${agent}" — has it been spawned?`)
     }
     const apes = whichBinary('apes')
     if (!apes) throw new CliError('`apes` not found on PATH.')

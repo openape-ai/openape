@@ -13,6 +13,13 @@ vi.mock('../src/lib/macos-user.js', () => ({
   isDarwin: vi.fn(() => true),
   listMacOSUserNames: vi.fn(() => new Set(['agent-a', 'patrick'])),
   readMacOSUser: vi.fn(),
+  // list.ts uses the prefix-aware lookup; for the test fixtures only
+  // `agent-a` has a macOS record, and it's the bare (legacy) form.
+  lookupMacOSUserForAgent: vi.fn((name: string) =>
+    name === 'agent-a' ? { name: 'agent-a', uid: 250, shell: '/bin/zsh', homeDir: '/Users/agent-a' } : null,
+  ),
+  macOSUsernameForAgent: vi.fn((n: string) => `openape-agent-${n}`),
+  MACOS_USER_PREFIX: 'openape-agent-',
   whichBinary: vi.fn(),
   isShellRegistered: vi.fn(),
 }))

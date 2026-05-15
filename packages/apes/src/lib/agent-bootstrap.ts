@@ -199,6 +199,15 @@ export async function issueAgentToken(input: {
 
 export interface SpawnSetupScriptInput {
   name: string
+  /**
+   * macOS username for the dscl record + chown ops. Prefixed with
+   * `openape-agent-` (see MACOS_USER_PREFIX) so operators can audit
+   * `dscl . -list /Users` and `apes agents cleanup-orphans` can
+   * recognise OpenApe-managed accounts without UID-range heuristics.
+   * Kept separate from `name` so the bare agent name stays visible
+   * on user-facing surfaces (email, troop UI, bridge data dir).
+   */
+  macOSUsername: string
   homeDir: string
   shellPath: string
   privateKeyPem: string
@@ -253,7 +262,7 @@ function shHeredoc(content: string): string {
 }
 
 export function buildSpawnSetupScript(input: SpawnSetupScriptInput): string {
-  const { name, homeDir, shellPath } = input
+  const { name, macOSUsername, homeDir, shellPath } = input
 
   // Trailing newline on PEM keeps OpenSSL happy. JSON files we write as-is.
   const privatePemForHeredoc = input.privateKeyPem.endsWith('\n')
@@ -302,6 +311,7 @@ set -euo pipefail
 export PATH="/usr/sbin:/usr/bin:/bin:/sbin:/opt/homebrew/bin:/usr/local/bin"
 
 NAME=${shQuote(name)}
+MACOS_USER=${shQuote(macOSUsername)}
 HOME_DIR=${shQuote(homeDir)}
 SHELL_PATH=${shQuote(shellPath)}
 
@@ -316,18 +326,18 @@ SHELL_PATH=${shQuote(shellPath)}
 # overwrite the home. If the home is still on disk it's a real,
 # live agent — refuse.
 TOMBSTONE_REUSE=0
-if dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
-  EXISTING_HOME=$(dscl . -read "/Users/$NAME" NFSHomeDirectory 2>/dev/null | awk '/NFSHomeDirectory:/ {print $2}')
+if dscl . -read "/Users/$MACOS_USER" >/dev/null 2>&1; then
+  EXISTING_HOME=$(dscl . -read "/Users/$MACOS_USER" NFSHomeDirectory 2>/dev/null | awk '/NFSHomeDirectory:/ {print $2}')
   if [ -n "$EXISTING_HOME" ] && [ -d "$EXISTING_HOME" ]; then
-    echo "User $NAME already exists with a live home at $EXISTING_HOME; refusing to overwrite." >&2
+    echo "User $MACOS_USER already exists with a live home at $EXISTING_HOME; refusing to overwrite." >&2
     exit 1
   fi
-  NEXT_UID=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
+  NEXT_UID=$(dscl . -read "/Users/$MACOS_USER" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
   if [ -z "$NEXT_UID" ]; then
-    echo "User $NAME exists but has no UniqueID; record is malformed, refusing to recycle." >&2
+    echo "User $MACOS_USER exists but has no UniqueID; record is malformed, refusing to recycle." >&2
     exit 1
   fi
-  echo "Recycling tombstone dscl record for $NAME (uid=$NEXT_UID, prior home $EXISTING_HOME — gone)"
+  echo "Recycling tombstone dscl record for $MACOS_USER (uid=$NEXT_UID, prior home $EXISTING_HOME — gone)"
   TOMBSTONE_REUSE=1
 fi
 
@@ -355,18 +365,18 @@ if [ "$TOMBSTONE_REUSE" = "0" ]; then
     exit 1
   fi
 
-  dscl . -create "/Users/$NAME"
+  dscl . -create "/Users/$MACOS_USER"
 fi
 
 # Idempotent attribute writes — \`dscl . -create\` on an existing
 # property overwrites in place, so the tombstone-reuse path lands
 # the same end-state as a fresh create.
-dscl . -create "/Users/$NAME" UserShell "$SHELL_PATH"
-dscl . -create "/Users/$NAME" RealName "OpenApe Agent $NAME"
-dscl . -create "/Users/$NAME" UniqueID "$NEXT_UID"
-dscl . -create "/Users/$NAME" PrimaryGroupID 20
-dscl . -create "/Users/$NAME" NFSHomeDirectory "$HOME_DIR"
-dscl . -create "/Users/$NAME" IsHidden 1
+dscl . -create "/Users/$MACOS_USER" UserShell "$SHELL_PATH"
+dscl . -create "/Users/$MACOS_USER" RealName "OpenApe Agent $NAME"
+dscl . -create "/Users/$MACOS_USER" UniqueID "$NEXT_UID"
+dscl . -create "/Users/$MACOS_USER" PrimaryGroupID 20
+dscl . -create "/Users/$MACOS_USER" NFSHomeDirectory "$HOME_DIR"
+dscl . -create "/Users/$MACOS_USER" IsHidden 1
 
 mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
 
@@ -374,7 +384,7 @@ cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
 cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
 ${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTroopBlock(input.troop)}
-chown -R "$NAME:staff" "$HOME_DIR"
+chown -R "$MACOS_USER:staff" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
 chmod 600 "$HOME_DIR/.ssh/id_ed25519"
@@ -385,7 +395,7 @@ if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
   chmod 600 "$HOME_DIR/.config/openape/claude-token.env"
 fi
 
-echo "OK $NAME uid=$NEXT_UID home=$HOME_DIR"
+echo "OK $NAME (macOS user $MACOS_USER) uid=$NEXT_UID home=$HOME_DIR"
 ${buildBridgeBootstrapBlock(input.bridge, name)}${buildTroopBootstrapBlock(input.troop, name)}`
 }
 
@@ -483,14 +493,19 @@ export interface DestroyTeardownScriptInput {
  * lines; this version trusts the caller to have already escalated
  * via `apes run --as root`.
  */
-export function runPhaseGTeardownInProcess(input: { name: string, homeDir: string }): void {
+export function runPhaseGTeardownInProcess(input: { name: string, homeDir: string, macOSUsername?: string }): void {
   const { name, homeDir } = input
+  // macOSUsername is the dscl record name; for new agents it's
+  // `openape-agent-<name>`, for legacy pre-prefix agents it's just
+  // <name>. Callers pass it explicitly; if absent we fall back to
+  // the agent name so the legacy code path still resolves.
+  const macOSUser = input.macOSUsername ?? name
 
   // Read agent's UID via dscl. Same approach as the shell version —
-  // dscl . -read /Users/<name> UniqueID emits "UniqueID: <n>".
+  // dscl . -read /Users/<user> UniqueID emits "UniqueID: <n>".
   let uid: string | null = null
   try {
-    const out = execFileSync('/usr/bin/dscl', ['.', '-read', `/Users/${name}`, 'UniqueID'], { encoding: 'utf8' })
+    const out = execFileSync('/usr/bin/dscl', ['.', '-read', `/Users/${macOSUser}`, 'UniqueID'], { encoding: 'utf8' })
     const m = out.match(/UniqueID:\s*(\d+)/)
     if (m) uid = m[1]!
   }
@@ -524,10 +539,10 @@ export function runPhaseGTeardownInProcess(input: { name: string, homeDir: strin
   // dscl record stays as a tombstone — opendirectoryd rejects the
   // delete from escapes' setuid-root context without admin auth, so
   // the user record sticks around hidden (IsHidden=1) with a stale
-  // NFSHomeDirectory. Operators run `sudo sysadminctl -deleteUser
-  // <name>` interactively later if they want full cleanup.
+  // NFSHomeDirectory. Run `sudo apes agents cleanup-orphans` from a
+  // shell later to sysadminctl-deleteUser the accumulated tombstones.
   // eslint-disable-next-line no-console
-  console.log(`OK Phase-G teardown done for ${name} (dscl record kept as tombstone)`)
+  console.log(`OK Phase-G teardown done for ${name} (dscl record /Users/${macOSUser} kept as tombstone)`)
 }
 
 // Legacy: bash-script version of the same teardown. Kept as a
