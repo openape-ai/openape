@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { useDb } from '../../../database/drizzle'
-import { contacts, memberships, messages, reactions, rooms, threads } from '../../../database/schema'
-import { resolveCaller } from '../../../utils/auth'
+import { useDb } from '../../database/drizzle'
+import { contacts, memberships, messages, reactions, rooms, threads } from '../../database/schema'
+import { resolveCaller } from '../../utils/auth'
 
 // DELETE /api/rooms/:id — wipe the room and everything that points
 // at it. Members-only: any current member can delete; non-members get
@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
     .select({ id: messages.id })
     .from(messages)
     .where(eq(messages.roomId, id))
-  ).map(r => r.id)
+  ).map((r: { id: string }) => r.id)
 
   if (msgIds.length > 0) {
     // Drizzle's SQLite driver chokes on giant IN-lists; we have
