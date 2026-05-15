@@ -43,6 +43,12 @@ const DEFAULT_ALLOW_PATTERNS = [
   // glob below limits the auto-approval to that exact lifecycle path
   // — `bash *` would be unsafe.
   'bash *apes-spawn-*setup.sh',
+  // Sibling of the spawn one — `apes agents destroy` runs the same
+  // shape: `apes run --as root --wait -- bash <tempdir>/apes-destroy-
+  // <name>-XXXX/teardown.sh`. Without this the destroy-from-troop flow
+  // pops a per-call grant prompt even though the outer
+  // `apes agents destroy *` is already auto-approved.
+  'bash *apes-destroy-*teardown.sh',
   // Bridge invocation. The grant request escapes-helper sends to the
   // IdP contains the *inner* command only — `apes run --as <agent> --`
   // is the wrapper that gets unwrapped before grant creation. So the
