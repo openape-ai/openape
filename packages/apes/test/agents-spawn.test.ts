@@ -16,6 +16,8 @@ const macosUserMock = {
   whichBinary: vi.fn((name: string) => `/usr/local/bin/${name}`),
   isShellRegistered: vi.fn(() => true),
   listMacOSUserNames: vi.fn(() => new Set<string>()),
+  macOSUsernameForAgent: vi.fn((n: string) => `openape-agent-${n}`),
+  MACOS_USER_PREFIX: 'openape-agent-',
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
