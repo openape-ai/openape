@@ -3,7 +3,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError } from '../../errors'
 import { apiFetch } from '../../http'
-import { isDarwin, listMacOSUserNames, readMacOSUser } from '../../lib/macos-user'
+import { isDarwin, listMacOSUserNames, lookupMacOSUserForAgent, macOSUsernameForAgent } from '../../lib/macos-user'
 
 interface IdpUser {
   email: string
@@ -46,21 +46,30 @@ export const listAgentsCommand = defineCommand({
       : all.filter(u => u.isActive !== false)
 
     const osUsers = isDarwin() ? listMacOSUserNames() : new Set<string>()
-    // Resolve actual NFSHomeDirectory from dscl per agent — Phase G
-    // agents are at /var/openape/homes/<name>, legacy at /Users/<name>.
-    const homeOf = (name: string): string | null => {
-      if (!osUsers.has(name)) return null
-      const u = readMacOSUser(name)
-      return u?.homeDir ?? `/Users/${name}`
+    // Resolve macOS state per agent, checking both the prefixed
+    // (`openape-agent-<name>`) and bare (`<name>`) dscl records so
+    // legacy pre-prefix agents keep showing up in the table.
+    const osStateOf = (agentName: string): { osUser: boolean, home: string | null } => {
+      const u = lookupMacOSUserForAgent(agentName)
+      if (u) return { osUser: true, home: u.homeDir }
+      // listMacOSUserNames covers ad-hoc records that dscl-read can't see
+      // (e.g. names with unusual characters) — keep it as a sentinel.
+      if (osUsers.has(macOSUsernameForAgent(agentName)) || osUsers.has(agentName)) {
+        return { osUser: true, home: null }
+      }
+      return { osUser: false, home: null }
     }
 
-    const rows = filtered.map(u => ({
-      name: u.name,
-      email: u.email,
-      isActive: u.isActive !== false,
-      osUser: osUsers.has(u.name),
-      home: homeOf(u.name),
-    }))
+    const rows = filtered.map((u) => {
+      const os = osStateOf(u.name)
+      return {
+        name: u.name,
+        email: u.email,
+        isActive: u.isActive !== false,
+        osUser: os.osUser,
+        home: os.home,
+      }
+    })
 
     if (args.json) {
       process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`)

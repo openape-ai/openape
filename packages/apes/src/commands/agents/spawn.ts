@@ -26,7 +26,7 @@ import {
   captureHostBinDirs,
   resolveBridgeConfig,
 } from '../../lib/llm-bridge'
-import { isDarwin, isShellRegistered, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { isDarwin, isShellRegistered, macOSUsernameForAgent, readMacOSUser, whichBinary } from '../../lib/macos-user'
 import { upsertNestAgent } from '../../lib/nest-registry'
 
 function readMacOSUidOrNull(name: string): number | null {
@@ -134,23 +134,31 @@ export const spawnAgentCommand = defineCommand({
       )
     }
 
-    const existing = readMacOSUser(name)
+    // macOSUsername is the dscl record name + chown target. Prefixed
+    // (`openape-agent-<name>`) so `cleanup-orphans` and any operator
+    // running `dscl . -list /Users` can spot OpenApe-managed accounts
+    // immediately. Agent-facing surfaces (email, troop UI, bridge data
+    // dir, `apes agents list`) stay on the bare `name`. Legacy agents
+    // (pre-prefix) keep working via `lookupMacOSUserForAgent` which
+    // falls through to the unprefixed lookup.
+    const macOSUsername = macOSUsernameForAgent(name)
+    const existing = readMacOSUser(macOSUsername) ?? readMacOSUser(name)
     if (existing) {
-      throw new CliError(`macOS user "${name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
+      throw new CliError(`macOS user "${existing.name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
     }
 
     // Phase G (#sim-arch): hidden service-account agents live under
-    // /var/openape/homes/<name>, matching macOS convention for hidden
-    // services (_www → /var/empty, _postgres → /var/empty, our own
-    // _openape_nest → /var/openape/nest). Keeps /Users/ for real
-    // human accounts only — Finder, TimeMachine, Migration Assistant
-    // stop seeing agents.
+    // /var/openape/homes/<macOSUsername>, matching macOS convention
+    // for hidden services (_www → /var/empty, _postgres → /var/empty,
+    // our own _openape_nest → /var/openape/nest). Keeps /Users/ for
+    // real human accounts only — Finder, TimeMachine, Migration
+    // Assistant stop seeing agents.
     //
-    // The dscl record stays at /Users/<name> (that's the dscl
-    // namespace, not a filesystem path) — only the NFSHomeDirectory
-    // attribute changes. setup.sh below interpolates this into the
-    // dscl create call.
-    const homeDir = `/var/openape/homes/${name}`
+    // The dscl record stays at /Users/<macOSUsername> (that's the
+    // dscl namespace, not a filesystem path) — only the
+    // NFSHomeDirectory attribute changes. setup.sh below interpolates
+    // both into the dscl create call.
+    const homeDir = `/var/openape/homes/${macOSUsername}`
     const scratch = mkdtempSync(join(tmpdir(), `apes-spawn-${name}-`))
     const scriptPath = join(scratch, 'setup.sh')
 
@@ -237,6 +245,7 @@ export const spawnAgentCommand = defineCommand({
 
       const script = buildSpawnSetupScript({
         name,
+        macOSUsername,
         homeDir,
         shellPath: loginShell,
         privateKeyPem: privatePem,
@@ -277,7 +286,7 @@ export const spawnAgentCommand = defineCommand({
       // watches agents.json and reconciles its pm2-supervisor when
       // it sees a new entry — bridge starts within a second.
       try {
-        const uid = readMacOSUidOrNull(name)
+        const uid = readMacOSUidOrNull(macOSUsername) ?? readMacOSUidOrNull(name)
         upsertNestAgent({
           name,
           uid: uid ?? -1,

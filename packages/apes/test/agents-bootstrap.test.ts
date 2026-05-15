@@ -95,7 +95,8 @@ describe('CLAUDE_SETTINGS_JSON', () => {
 describe('buildSpawnSetupScript', () => {
   const baseInput = {
     name: 'agent-a',
-    homeDir: '/Users/agent-a',
+    macOSUsername: 'openape-agent-agent-a',
+    homeDir: '/var/openape/homes/openape-agent-agent-a',
     shellPath: '/usr/local/bin/ape-shell',
     privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEADBEEF\n-----END PRIVATE KEY-----\n',
     publicKeySshLine: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBz1WSDX',
@@ -110,11 +111,12 @@ describe('buildSpawnSetupScript', () => {
       claudeOauthToken: null,
     })
     expect(script).toContain(`NAME='agent-a'`)
-    expect(script).toContain(`HOME_DIR='/Users/agent-a'`)
+    expect(script).toContain(`MACOS_USER='openape-agent-agent-a'`)
+    expect(script).toContain(`HOME_DIR='/var/openape/homes/openape-agent-agent-a'`)
     expect(script).toContain(`SHELL_PATH='/usr/local/bin/ape-shell'`)
-    expect(script).toContain('dscl . -create "/Users/$NAME" UserShell "$SHELL_PATH"')
+    expect(script).toContain('dscl . -create "/Users/$MACOS_USER" UserShell "$SHELL_PATH"')
     expect(script).toContain('mkdir -p "$HOME_DIR/.claude/hooks"')
-    expect(script).toContain('chown -R "$NAME:staff" "$HOME_DIR"')
+    expect(script).toContain('chown -R "$MACOS_USER:staff" "$HOME_DIR"')
     expect(script).toContain('chmod 600 "$HOME_DIR/.config/apes/auth.json"')
     expect(script).toMatch(/refusing to overwrite/i)
     expect(script).toContain('IsHidden 1')

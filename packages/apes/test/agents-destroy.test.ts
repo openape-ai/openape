@@ -15,6 +15,13 @@ const macosUserMock = {
   whichBinary: vi.fn((name: string) => `/usr/local/bin/${name}`),
   listMacOSUserNames: vi.fn(() => new Set<string>()),
   isShellRegistered: vi.fn(),
+  // destroy.ts looks up the dscl record by trying the prefixed name
+  // first and falling back to the bare agent name. The tests still
+  // drive a single mock (`readMacOSUser`) so route the lookup through
+  // it — both lookups in the helper share the same fixture state.
+  lookupMacOSUserForAgent: vi.fn(),
+  macOSUsernameForAgent: vi.fn((n: string) => `openape-agent-${n}`),
+  MACOS_USER_PREFIX: 'openape-agent-',
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
@@ -44,6 +51,10 @@ describe('apes agents destroy', () => {
     vi.clearAllMocks()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     macosUserMock.readMacOSUser.mockReturnValue(null)
+    // Route lookup through readMacOSUser so each test's
+    // `macosUserMock.readMacOSUser.mockReturnValue(...)` lines drive
+    // both the legacy and the prefix-aware lookup paths uniformly.
+    macosUserMock.lookupMacOSUserForAgent.mockImplementation(() => macosUserMock.readMacOSUser())
     macosUserMock.isDarwin.mockReturnValue(true)
     // The OS-teardown path collects the local admin password; CI never
     // has a TTY so we set the env-var resolution path explicitly. Tests
