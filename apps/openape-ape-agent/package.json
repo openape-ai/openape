@@ -31,8 +31,8 @@
     "@openape/cli-auth": "workspace:*",
     "jose": "catalog:",
     "ofetch": "^1.4.1",
-    "ws": "^8.18.0",
-    "yaml": "^2.8.0"
+    "ws": "^8.20.1",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
