@@ -1,6 +1,7 @@
 import type { JWTPayload } from 'jose'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { signCliToken } from '../../utils/cli-token'
+import { resolveIssuerForToken } from '../../utils/ddisa-issuer'
 
 interface ExchangeBody {
   subject_token?: string
@@ -40,10 +41,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'subject_token required' })
   }
 
-  const idpUrl = useRuntimeConfig().public.idpUrl as string
-  if (!idpUrl) {
-    throw createError({ statusCode: 500, statusMessage: 'IdP URL not configured' })
+  // DDISA: resolve the authoritative issuer from the SUBJECT's domain
+  // (protocol sp-data-access.md §2.1) — never a hardcoded/configured single
+  // issuer, no allowlist. Behaviour-preserving: domains without a DDISA
+  // record (or pointing at id.openape.ai) resolve to id.openape.ai as before.
+  const resolved = await resolveIssuerForToken(body.subject_token)
+  if (!resolved) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'subject_token has no usable subject claim',
+      data: { detail: 'Expected sub to be an email address.' },
+    })
   }
+  const idpUrl = resolved.issuer
 
   let claims: JWTPayload
   try {
