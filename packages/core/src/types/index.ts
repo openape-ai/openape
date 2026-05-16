@@ -249,6 +249,12 @@ export interface OpenApeAuthZClaims {
   permissions?: string[]
   /** Structured authorization details */
   authorization_details?: OpenApeAuthorizationDetail[]
+  /** Delegation scopes — present for delegation grants so a relying party
+   * can enforce them offline (protocol sp-data-access.md §5). */
+  scope?: string[]
+  /** Delegate identity (delegation grants only) — the actor acting on
+   * behalf of `sub`, per delegation.md. Provenance for the relying party. */
+  delegate?: string
   /** Command hash */
   cmd_hash?: string
   /** Plaintext command array (for apes grant-token mode) */
