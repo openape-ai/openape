@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 
@@ -81,18 +81,14 @@ const effectiveDuration = computed(() => {
   if (selectedGrantType.value !== 'timed') return void 0
   return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
 })
-onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    const returnTo = `/grant-approval?${new URLSearchParams(route.query).toString()}`
-    await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
-    return
-  }
+async function loadGrant() {
   if (!grantId.value) {
     error.value = 'Missing grant_id parameter'
     loading.value = false
     return
   }
+  loading.value = true
+  error.value = ''
   try {
     grant.value = await $fetch(`/api/grants/${grantId.value}`)
     // Initialize widening selection to exact (0) for every detail so the
@@ -110,6 +106,42 @@ onMounted(async () => {
   }
   finally {
     loading.value = false
+  }
+}
+
+// Refetch when the grant_id changes — happens when a push notification
+// navigates an already-mounted page from one grant to another (Vue reuses
+// the component since the path is identical, so onMounted won't fire).
+watch(grantId, async (next, prev) => {
+  if (next && next !== prev && user.value) await loadGrant()
+})
+
+// Refetch when the PWA returns to the foreground. A grant may have been
+// approved/denied/expired on another device; without this the page would
+// keep showing stale data after the user taps the push and the existing
+// window is focused.
+function onVisibilityChange() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible' && user.value && grantId.value) {
+    loadGrant()
+  }
+}
+
+onMounted(async () => {
+  await fetchUser()
+  if (!user.value) {
+    const returnTo = `/grant-approval?${new URLSearchParams(route.query).toString()}`
+    await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+    return
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+  await loadGrant()
+})
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 })
 async function handleApprove() {

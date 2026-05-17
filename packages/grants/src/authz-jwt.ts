@@ -57,6 +57,12 @@ export async function issueAuthzJWT(
     approval: grantType,
     ...(grant.request.permissions ? { permissions: grant.request.permissions } : {}),
     ...(grant.request.authorization_details ? { authorization_details: grant.request.authorization_details } : {}),
+    // Delegation grants: surface scopes + delegate inline so a relying party
+    // can enforce offline (protocol sp-data-access.md §5). Additive — only
+    // present for delegations; non-delegation grants (incl. the apes-cli
+    // login token, which is NOT issued via this function) are unchanged.
+    ...(grant.request.scopes ? { scope: grant.request.scopes } : {}),
+    ...(grant.request.delegate ? { delegate: grant.request.delegate } : {}),
     ...(grant.request.cmd_hash ? { cmd_hash: grant.request.cmd_hash } : {}),
     ...(grant.request.command ? { command: grant.request.command } : {}),
     ...(grant.request.execution_context ? { execution_context: grant.request.execution_context } : {}),

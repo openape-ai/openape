@@ -390,7 +390,9 @@ describe('commands/run async default', () => {
   describe('runAudienceMode', () => {
     it('async default: prints info, no poll, no escapes exec', async () => {
       const { apiFetch } = await import('../src/http.js')
-      vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'aud-1', status: 'pending' } as any)
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
+        .mockResolvedValueOnce({ id: 'aud-1', status: 'pending' } as any)
 
       const { execFileSync } = await import('node:child_process')
 
@@ -400,8 +402,8 @@ describe('commands/run async default', () => {
         args: { shell: false, wait: false, approval: 'once', 'escapes-path': 'escapes' } as any,
       } as any))
 
-      // Only the grant-create call; no poll, no token fetch
-      expect(apiFetch).toHaveBeenCalledTimes(1)
+      // One reuse-lookup + one grant-create call; no poll, no token fetch
+      expect(apiFetch).toHaveBeenCalledTimes(2)
       expect(execFileSync).not.toHaveBeenCalled()
       assertAsyncInfoBlock('aud-1')
     })
@@ -409,6 +411,7 @@ describe('commands/run async default', () => {
     it('--wait flag: polls, fetches token, pipes to escapes', async () => {
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
         .mockResolvedValueOnce({ id: 'aud-2', status: 'pending' } as any) // create
         .mockResolvedValueOnce({ status: 'pending' } as any) // poll 1
         .mockResolvedValueOnce({ status: 'approved' } as any) // poll 2
@@ -449,7 +452,9 @@ describe('commands/run async default', () => {
     // call site, so one driving path is representative.
     async function driveRun(expectedExitCode: number = 75) {
       const { apiFetch } = await import('../src/http.js')
-      vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'grant-mode-test', status: 'pending' } as any)
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
+        .mockResolvedValueOnce({ id: 'grant-mode-test', status: 'pending' } as any)
 
       const { runCommand } = await import('../src/commands/run.js')
       await expectCliExit(
@@ -1010,6 +1015,7 @@ describe('commands/run async default', () => {
       process.env.APES_SHELL_WRAPPER = '1'
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
         .mockResolvedValueOnce({ id: 'escapes-grant', status: 'pending' } as any)
         .mockResolvedValueOnce({ status: 'approved' } as any)
         .mockResolvedValueOnce({ authz_jwt: 'jwt-tok' } as any)
@@ -1048,7 +1054,9 @@ describe('commands/run async default', () => {
   describe('async exit code (APES_ASYNC_EXIT_CODE)', () => {
     async function driveAsyncExit(expectedCode: number) {
       const { apiFetch } = await import('../src/http.js')
-      vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'exit-test', status: 'pending' } as any)
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
+        .mockResolvedValueOnce({ id: 'exit-test', status: 'pending' } as any)
 
       const { runCommand } = await import('../src/commands/run.js')
       await expectCliExit(
@@ -1120,6 +1128,7 @@ describe('commands/run async default', () => {
       process.env.APES_ASYNC_EXIT_CODE = '99'
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
         .mockResolvedValueOnce({ id: 'sync-test', status: 'pending' } as any)
         .mockResolvedValueOnce({ status: 'approved' } as any)
         .mockResolvedValueOnce({ authz_jwt: 'jwt-sync' } as any)

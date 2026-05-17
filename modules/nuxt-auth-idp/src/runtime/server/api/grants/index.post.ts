@@ -4,6 +4,7 @@ import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHas
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
+import { runGrantPendingHooks } from '../../utils/grant-pending-hooks'
 import { runPreApprovalHooks } from '../../utils/pre-approval-hooks'
 import { createProblemError } from '../../utils/problem'
 
@@ -220,6 +221,13 @@ export default defineEventHandler(async (event) => {
       const similarResult = findSimilarCliGrants(body, existingGrants)
       if (similarResult) {
         const grant = await createGrant(body, grantStore)
+        // Grant landed in pending state and needs human approval —
+        // fan out a push / mail / etc. via registered hooks.
+        // Fire-and-forget so a slow notification doesn't delay the
+        // grant-creation response.
+        void runGrantPendingHooks(grant).catch(err =>
+          console.warn('[grants/post] pending-hook failed:', err),
+        )
         setResponseStatus(event, 201)
         return { ...grant, similar_grants: similarResult }
       }
@@ -227,6 +235,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const grant = await createGrant(body, grantStore)
+  // Grant landed in pending state — notify the human.
+  void runGrantPendingHooks(grant).catch(err =>
+    console.warn('[grants/post] pending-hook failed:', err),
+  )
   setResponseStatus(event, 201)
   return grant
 })

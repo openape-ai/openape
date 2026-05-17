@@ -1,0 +1,40 @@
+version: 2
+# Auto-bump dependencies so security advisories don't pile up on a
+# frozen lockfile. The `security` workflow catches what slips through;
+# dependabot is the proactive side.
+updates:
+  # npm + pnpm-workspace dependencies. `directory: /` covers the root
+  # package.json AND every workspace member transparently — pnpm's
+  # workspace protocol resolves automatically.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 10
+    # Group minor/patch bumps so we don't drown in noise. Major bumps
+    # come as separate PRs because they may break downstream consumers
+    # (we publish multiple @openape/* packages — careful coordination).
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+
+  # GitHub Actions versions in our workflow files. Same cadence as npm
+  # so all dependency churn lands on one day a week.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

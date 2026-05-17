@@ -74,6 +74,44 @@ describe('parseDDISARecord', () => {
     expect(result?.mode).toBe('open')
   })
 
+  it('rejects an idp= URL that is not https:// (#281)', () => {
+    // DNS poisoning attack vector: a TXT record claiming
+    // `idp=http://attacker.example` — every SP downstream would
+    // then fetch JWKS over plaintext from a hostile origin.
+    expect(parseDDISARecord('v=ddisa1 idp=http://idp.example.com')).toBeNull()
+    expect(parseDDISARecord('v=ddisa1 idp=javascript:alert(1)')).toBeNull()
+    expect(parseDDISARecord('v=ddisa1 idp=ftp://idp.example.com')).toBeNull()
+    expect(parseDDISARecord('v=ddisa1 idp=not-a-url')).toBeNull()
+  })
+
+  it('rejects an empty idp= value', () => {
+    expect(parseDDISARecord('v=ddisa1 idp=')).toBeNull()
+  })
+
+  it('rejects an idp= URL with embedded credentials', () => {
+    // `https://attacker:x@idp.victim.com` — the credentials travel
+    // with whatever consumer copies the raw string forward.
+    expect(parseDDISARecord('v=ddisa1 idp=https://attacker:secret@idp.victim.com')).toBeNull()
+  })
+
+  it('rejects an idp= URL with non-ASCII hostnames (IDN homograph defence)', () => {
+    // `idp.example` looks legit but the `а` is Cyrillic U+0430.
+    expect(parseDDISARecord('v=ddisa1 idp=https://idp.exаmple.com')).toBeNull()
+  })
+
+  it('accepts http:// only when OPENAPE_DDISA_ALLOW_HTTP=1 is set (dev escape hatch)', () => {
+    const orig = process.env.OPENAPE_DDISA_ALLOW_HTTP
+    try {
+      process.env.OPENAPE_DDISA_ALLOW_HTTP = '1'
+      const r = parseDDISARecord('v=ddisa1 idp=http://localhost:3000')
+      expect(r?.idp).toBe('http://localhost:3000')
+    }
+    finally {
+      if (orig === undefined) delete process.env.OPENAPE_DDISA_ALLOW_HTTP
+      else process.env.OPENAPE_DDISA_ALLOW_HTTP = orig
+    }
+  })
+
   it('returns null for empty string', () => {
     expect(parseDDISARecord('')).toBeNull()
   })

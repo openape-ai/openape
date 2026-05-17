@@ -25,6 +25,11 @@ export const loginCommand = defineCommand({
     description: 'Authenticate with an OpenApe IdP',
   },
   args: {
+    user: {
+      type: 'positional',
+      required: false,
+      description: 'Agent email (e.g. patrick@hofmann.eco). Extracted from <key>.pub comment if omitted.',
+    },
     idp: {
       type: 'string',
       description: 'IdP URL (e.g. https://id.openape.at). Auto-discovered via DDISA DNS if omitted.',
@@ -35,26 +40,59 @@ export const loginCommand = defineCommand({
     },
     email: {
       type: 'string',
-      description: 'Agent email. Extracted from <key>.pub comment if omitted.',
+      description: 'Same as the positional email — flag form for backwards compatibility.',
     },
     browser: {
       type: 'boolean',
       description: 'Force browser (PKCE) login even if an SSH key exists',
     },
+    force: {
+      type: 'boolean',
+      description: 'Override DDISA mismatch warnings (use with care)',
+    },
   },
   async run({ args }) {
+    // Positional `user` and the legacy `--email` flag both set email.
+    // Positional wins when both are present (it's the new ergonomic form).
+    const emailArg = (typeof args.user === 'string' && args.user.includes('@'))
+      ? args.user
+      : (typeof args.email === 'string' ? args.email : undefined)
+
     const resolved = await resolveLoginInputs({
       key: args.key,
       idp: args.idp,
-      email: args.email,
+      email: emailArg,
       browser: args.browser,
     })
+
+    if (resolved.ddisaMismatch && !args.force) {
+      const { dnsIdp, chosenIdp, domain } = resolved.ddisaMismatch
+      throw new CliError(
+        `IdP mismatch for ${domain}.\n\n`
+        + `  Authoritative DDISA: ${dnsIdp}\n`
+        + `  You selected:        ${chosenIdp}\n\n`
+        + `Logging in against a different IdP than DDISA points to means SPs that\n`
+        + `trust the DDISA-resolved IdP (e.g. preview.openape.ai) will reject the\n`
+        + `resulting token with "IdP mismatch".\n\n`
+        + `Fix one of:\n`
+        + `  • Drop --idp/APES_IDP/config.defaults.idp — DDISA will auto-pick ${dnsIdp}\n`
+        + `  • Update _ddisa.${domain} if ${chosenIdp} is genuinely the correct IdP\n`
+        + `  • Re-run with --force to authenticate anyway (NOT recommended)`,
+      )
+    }
+    if (resolved.ddisaMismatch && args.force) {
+      consola.warn(
+        `Bypassing DDISA mismatch — ${resolved.ddisaMismatch.domain} resolves to `
+        + `${resolved.ddisaMismatch.dnsIdp}, but you forced ${resolved.ddisaMismatch.chosenIdp}.`,
+      )
+    }
 
     if (resolved.keyPath) {
       if (!resolved.email) {
         throw new CliError(
-          `Agent email required for key-based login. Add an email comment to `
-          + `${resolved.keyPath}.pub (ssh-keygen -C <email>) or pass --email <agent-email>.`,
+          `Agent email required for key-based login. Pass it as a positional `
+          + `(\`apes login <email>\`), set --email, or add an email comment to `
+          + `${resolved.keyPath}.pub via ssh-keygen -C <email>.`,
         )
       }
       if (!resolved.idp) {
@@ -246,17 +284,17 @@ async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
 
   const { token, expires_in } = await authResp.json() as { token: string, expires_in: number }
 
+  // Persist the absolute key path on auth.json so any cli-auth consumer
+  // (chat-bridge, ape-tasks, ape-plans, …) can refresh the agent token
+  // in-process without shelling out to `apes login`. See issue #259.
+  const absoluteKeyPath = resolvePath(keyPath.replace(/^~/, homedir()))
   saveAuth({
     idp,
     access_token: token,
     email: agentEmail,
     expires_at: Math.floor(Date.now() / 1000) + (expires_in || 3600),
+    key_path: absoluteKeyPath,
   })
-
-  // Persist the resolved key path + email to config.toml so future apes/ape-shell
-  // invocations can auto-refresh via Ed25519 challenge-response without a new
-  // `apes login`. Merge with existing config so [defaults] is preserved.
-  const absoluteKeyPath = resolvePath(keyPath.replace(/^~/, homedir()))
   const existingConfig = loadConfig()
   saveConfig({
     ...existingConfig,

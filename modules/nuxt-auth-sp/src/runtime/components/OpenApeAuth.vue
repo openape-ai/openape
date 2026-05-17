@@ -1,9 +1,21 @@
 <script setup>
-defineProps({
+import { onMounted, ref } from 'vue'
+import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
+import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
+
+const props = defineProps({
   title: { type: String, required: false, default: 'Sign in' },
   subtitle: { type: String, required: false, default: 'Enter your email to continue' },
   buttonText: { type: String, required: false, default: 'Continue' },
   placeholder: { type: String, required: false, default: 'you@example.com' },
+  /**
+   * Where to navigate when the user is already signed in (the
+   * onMounted fast-path). Server-side OIDC callback uses its own
+   * config (`openapeSp.postLoginRedirect`); this prop is just the
+   * client-side equivalent so SPs without a `/dashboard` page
+   * (e.g. troop) don't 404 on re-visit while signed in.
+   */
+  postLoginRedirect: { type: String, required: false, default: '/dashboard' },
 })
 const emit = defineEmits(['error'])
 const { user, loading, fetchUser, login } = useOpenApeAuth()
@@ -14,10 +26,11 @@ const route = useRoute()
 onMounted(async () => {
   await fetchUser()
   if (user.value) {
-    navigateTo('/dashboard')
+    navigateTo(props.postLoginRedirect)
   }
-  if (route.query.error) {
-    error.value = String(route.query.error)
+  if (typeof route.query.error === 'string' && route.query.error) {
+    const code = route.query.error
+    error.value = DEFAULT_OAUTH_ERROR_MESSAGES[code] ?? `Login failed: ${code}.`
   }
 })
 async function handleSubmit() {

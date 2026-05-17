@@ -1,0 +1,107 @@
+import { sql } from 'drizzle-orm'
+import { useDb } from '../database/drizzle'
+
+// Auto-create tables at startup. Pattern mirrors apps/openape-free-idp:
+// idempotent CREATE TABLE IF NOT EXISTS so a fresh DB just works on first
+// boot and existing prod DBs aren't disturbed.
+export default defineNitroPlugin(async () => {
+  if (process.env.OPENAPE_E2E === '1') return
+
+  try {
+    const db = useDb()
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_by_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_rooms_created_by ON rooms(created_by_email)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS memberships (
+      room_id TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at INTEGER NOT NULL,
+      PRIMARY KEY (room_id, user_email)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_memberships_user_email ON memberships(user_email)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      thread_id TEXT,
+      sender_email TEXT NOT NULL,
+      sender_act TEXT NOT NULL,
+      body TEXT NOT NULL,
+      reply_to TEXT,
+      created_at INTEGER NOT NULL,
+      edited_at INTEGER
+    )`)
+    // ALTER for existing prod rows (CREATE TABLE IF NOT EXISTS skips when
+    // table exists; the new column has to be added separately).
+    try {
+      await db.run(sql`ALTER TABLE messages ADD COLUMN thread_id TEXT`)
+    }
+    catch {
+      // Already added in a prior boot — sqlite throws on duplicate column.
+    }
+    // Streaming-aware messages — separates "agent live-typing" (chunked
+    // PATCHes that arrive while the LLM is mid-completion) from "human
+    // edited after the fact". Without this, every agent message shows
+    // "(edited)" because the chat-bridge's stream-throttle PATCHes the
+    // body once per ~300ms while text_delta events stream in.
+    try { await db.run(sql`ALTER TABLE messages ADD COLUMN streaming INTEGER NOT NULL DEFAULT 0`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE messages ADD COLUMN streaming_status TEXT`) }
+    catch { /* column exists */ }
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id, created_at)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS threads (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_by_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      archived_at INTEGER
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_threads_room ON threads(room_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS reactions (
+      message_id TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (message_id, user_email, emoji)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS contacts (
+      id TEXT PRIMARY KEY,
+      email_a TEXT NOT NULL,
+      email_b TEXT NOT NULL,
+      status_a TEXT NOT NULL,
+      status_b TEXT NOT NULL,
+      room_id TEXT,
+      requested_at INTEGER NOT NULL,
+      accepted_at INTEGER,
+      UNIQUE (email_a, email_b)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_contacts_email_a ON contacts(email_a)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_contacts_email_b ON contacts(email_b)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_email)`)
+  }
+  catch (err) {
+    console.error('[database] Table creation failed (tables may already exist):', err)
+  }
+})

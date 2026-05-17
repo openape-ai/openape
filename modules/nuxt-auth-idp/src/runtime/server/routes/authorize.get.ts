@@ -1,10 +1,11 @@
 // Canonical: @openape/server createAuthorizeHandler
-import type { AuthorizeParams } from '@openape/auth'
+import type { AuthorizeParams, ClientMetadataMode } from '@openape/auth'
 import type { ActorType, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
+import { useRuntimeConfig } from 'nitropack/runtime'
 import { extractDomain, resolveDDISA } from '@openape/core'
-import { evaluatePolicy, validateAuthorizeRequest } from '@openape/auth'
-import { approveGrant, createGrant, useGrant, validateDelegation } from '@openape/grants'
+import { evaluatePolicy, validateAuthorizeRequest, validateRedirectUri } from '@openape/auth'
+import { useGrant, validateDelegation } from '@openape/grants'
 import { tryBearerAuth } from '../utils/agent-auth'
 import { getAppSession } from '../utils/session'
 import { useIdpStores } from '../utils/stores'
@@ -62,6 +63,39 @@ export default defineEventHandler(async (event) => {
       }
     }
     throw createProblemError({ status: 400, title: error })
+  }
+
+  // SP redirect_uri validation per DDISA core.md §5.2.1 (#280).
+  //
+  // The IdP fetches the SP's published metadata at
+  // https://{client_id}/.well-known/oauth-client-metadata and verifies
+  // the request's redirect_uri matches one the SP itself declared. The
+  // SP — not the IdP — is the source of truth; this isn't a registry,
+  // it's structural enforcement of the spec's MUST. Rollout is
+  // permissive-by-default so existing SPs can publish their metadata
+  // without breaking; flip OPENAPE_IDP_SP_METADATA_MODE=strict once
+  // the rollout is complete.
+  //
+  // We do NOT redirect on this error: the request's redirect_uri is
+  // by definition untrusted at this point, so sending the user there
+  // would itself be the open-redirect we're trying to prevent.
+  const config = useRuntimeConfig()
+  const spMetadataMode = (config.openapeIdp?.spMetadataMode === 'strict')
+    ? 'strict' as ClientMetadataMode
+    : 'permissive' as ClientMetadataMode
+  const { clientMetadataStore } = useIdpStores()
+  const redirectErr = await validateRedirectUri(
+    params.client_id,
+    params.redirect_uri,
+    clientMetadataStore,
+    spMetadataMode,
+  )
+  if (redirectErr) {
+    throw createProblemError({
+      status: 400,
+      title: redirectErr.error,
+      detail: redirectErr.detail,
+    })
   }
 
   // Determine userId: Bearer Token (agent or human) or Human Session
@@ -132,44 +166,122 @@ export default defineEventHandler(async (event) => {
 
   const userDomain = extractDomain(userId)
   const ddisaRecord = await resolveDDISA(userDomain)
-  const policyMode = ddisaRecord?.mode ?? 'open'
-  const noopConsentStore = { hasConsent: async () => false, save: async () => {} }
-  const decision = await evaluatePolicy(policyMode, params.client_id, userId, noopConsentStore)
+  // DDISA core.md §5.6: when the user's `_ddisa.{domain}` TXT record
+  // omits `mode` (or no record exists at all), the IdP picks the
+  // default. The spec recommends prompting for consent. Defaulting to
+  // `open` would silently issue assertions for any SP that asks —
+  // safe only for users who deliberately opted into permissive mode
+  // via DNS, which is exactly the inverse of what a missing record
+  // means. We pass `undefined` through to evaluatePolicy whose
+  // `default:` branch returns `'consent'`.
+  const policyMode = ddisaRecord?.mode
+  const { consentStore, adminAllowlistStore } = useIdpStores()
+  const decision = await evaluatePolicy(policyMode, params.client_id, userId, consentStore, { adminAllowlistStore })
 
-  if (decision !== 'allow') {
+  if (decision === 'deny') {
+    // OAuth 2.0 §4.1.2.1 says we MUST eventually redirect back with
+    // error=access_denied — we honour that on the "Back to SP"
+    // button. But silently dropping the user there with a URL param
+    // they likely won't read is bad UX, especially for the
+    // allowlist-admin case where the user has a clear next step
+    // (ask their domain admin). For human flows we stash the deny
+    // context and route to /denied where the user sees a reason-
+    // specific message + back button. Bearer flows have no UI so
+    // they fall through to the spec-direct redirect.
+    if (!bearerPayload) {
+      const session = await getAppSession(event)
+      await session.update({
+        pendingDeny: {
+          params,
+          query: query as Record<string, string>,
+          // `policyMode` distinguishes "domain owner forbids this
+          // IdP entirely" (mode=deny) from "SP not allowlisted"
+          // (mode=allowlist-admin). The page renders different copy.
+          reason: policyMode === 'deny' ? 'mode-deny' : 'allowlist-admin-not-approved',
+          createdAt: Date.now(),
+        },
+      })
+      const deniedUrl = new URL('/denied', getRequestURL(event).origin)
+      deniedUrl.searchParams.set('client_id', params.client_id)
+      return sendRedirect(event, deniedUrl.pathname + deniedUrl.search)
+    }
+    // Bearer (agent) deny: redirect back to SP with the spec-defined
+    // error params. Include error_description so SP-side surface UI
+    // can render product-specific guidance instead of just the bare
+    // error code (RFC 6749 §4.1.2.1 "this parameter is OPTIONAL...
+    // intended for the developer").
     const redirectUrl = new URL(params.redirect_uri)
     redirectUrl.searchParams.set('error', 'access_denied')
+    redirectUrl.searchParams.set(
+      'error_description',
+      policyMode === 'deny'
+        ? 'Domain owner forbids this IdP for the user\'s email domain.'
+        : 'SP is not on the admin-curated allowlist for the user\'s email domain.',
+    )
     redirectUrl.searchParams.set('state', params.state)
     return sendRedirect(event, redirectUrl.toString())
   }
 
-  // Parse and process authorization_details (RFC 9396)
-  const authzDetails = parseAuthorizationDetails(String(query.authorization_details ?? ''))
-  let approvedDetails: OpenApeAuthorizationDetail[] | undefined
-
-  if (authzDetails.length > 0) {
-    const { grantStore } = useGrantStores()
-    approvedDetails = []
-
-    for (const detail of authzDetails) {
-      const grant = await createGrant({
-        requester: bearerPayload ? bearerPayload.sub : userId,
-        target_host: params.client_id,
-        audience: params.client_id,
-        grant_type: detail.approval ?? 'once',
-        permissions: [detail.type === 'openape_cli' ? detail.permission : detail.action],
-        ...(detail.type === 'openape_cli' ? { authorization_details: [detail] } : {}),
-        reason: detail.reason,
-      }, grantStore)
-
-      // Auto-approve: user consents by authenticating in the authorize flow
-      const approved = await approveGrant(grant.id, userId, grantStore)
-      approvedDetails.push({
-        ...detail,
-        grant_id: approved.id,
+  if (decision === 'consent') {
+    // DDISA core.md §2.3 `allowlist-user` mode: stash the original
+    // /authorize query in the session and redirect the user to the
+    // consent page. The page reads the stashed state, renders the SP
+    // info (using clientMetadataStore for verified-vs-unverified UI),
+    // and POSTs a CSRF-token-protected confirmation back. On approve
+    // the consent is persisted (so the user isn't asked again) and we
+    // bounce the user back to /authorize, which re-evaluates and now
+    // sees `decision === 'allow'`. See issue #301.
+    if (!bearerPayload) {
+      const session = await getAppSession(event)
+      const csrfToken = crypto.randomUUID()
+      await session.update({
+        pendingConsent: {
+          params,
+          query: query as Record<string, string>,
+          csrfToken,
+          createdAt: Date.now(),
+        },
       })
+      const consentUrl = new URL('/consent', getRequestURL(event).origin)
+      // The csrf token is *not* in the URL — only in the session, so
+      // it's never logged. The consent page POSTs the token from the
+      // form back, server compares against the session.
+      consentUrl.searchParams.set('client_id', params.client_id)
+      return sendRedirect(event, consentUrl.pathname + consentUrl.search)
     }
+    // Bearer flow can't show a consent UI — agents must use explicit
+    // grant API instead. Falls through to access_denied.
+    const redirectUrl = new URL(params.redirect_uri)
+    redirectUrl.searchParams.set('error', 'consent_required')
+    redirectUrl.searchParams.set('state', params.state)
+    return sendRedirect(event, redirectUrl.toString())
   }
+
+  // RFC 9396 `authorization_details` is intentionally NOT honoured in
+  // the /authorize GET path. The historical implementation auto-approved
+  // arbitrary grant details whenever the parameter was present, treating
+  // the user's existing IdP session as implicit consent. That meant a
+  // crafted URL — `<a href="https://idp/authorize?...&authorization_details=[<broad cli grant>]">` —
+  // could silently approve grants server-side via top-level GET navigation
+  // (cookies are SameSite=Lax by default), bypassing the approver-policy
+  // entirely. See security audit 2026-05-04 / GitHub issue #273.
+  //
+  // Until a proper consent UI lands (issue #273 follow-up), callers must
+  // use the explicit grant API: POST /api/grants to create the grant
+  // pending, then POST /api/grants/{id}/approve to approve it (which
+  // enforces the approver-policy as fixed in PR #284).
+  const rawAuthzDetails = String(query.authorization_details ?? '')
+  if (rawAuthzDetails.trim() && parseAuthorizationDetails(rawAuthzDetails).length > 0) {
+    throw createProblemError({
+      status: 400,
+      title: '`authorization_details` is not supported on /authorize',
+      detail:
+        'Use POST /api/grants to create the grant pending, then '
+        + 'POST /api/grants/{id}/approve via the approver-policy. '
+        + 'See https://github.com/openape-ai/openape/issues/273',
+    })
+  }
+  const approvedDetails: OpenApeAuthorizationDetail[] | undefined = undefined
 
   const code = crypto.randomUUID()
   await codeStore.save({

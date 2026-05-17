@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.16.0
+
+### Minor Changes
+
+- [#319](https://github.com/openape-ai/openape/pull/319) [`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Two small admin/DX additions:
+
+  - **`@openape/core`**: new `clearDNSCacheFor(domain)` helper alongside the existing `clearDNSCache()`. Lets a domain owner drop the IdP's in-memory cache for their domain right after they update their `_ddisa.{domain}` TXT record, without waiting for the 300s positive TTL.
+  - **`@openape/nuxt-auth-idp`**: the `decision === 'deny'` redirect for the bearer flow + the "back to SP" button on the `/denied` page now include an OAuth-spec `error_description` parameter alongside the bare `error=access_denied`. SPs can use this to render product-specific guidance instead of just the bare error code (`mode=deny` → "Domain owner forbids this IdP", `allowlist-admin` deny → "SP not on the admin-curated allowlist").
+
+## 0.15.0
+
+### Minor Changes
+
+- [`38c5c3c`](https://github.com/openape-ai/openape/commit/38c5c3cf1c2a4b11c4942e4e9eee6ddcec2deff9) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `resolveDDISA` now caches negative results too. Closes #306.
+
+  Previously, domains without a `_ddisa.{domain}` TXT record re-queried DNS (or DoH) on every call. That added latency on the happy path for users from non-DDISA domains and gave attackers a cheap DoS vector via crafted `/authorize?login_hint=foo@no-ddisa.com` requests.
+
+  Negative entries get a shorter TTL than positive ones (60s vs 300s default) so that a domain which _just_ added a DDISA record gets picked up promptly. Tunable per-call via the new `negativeCacheTTL` option on `ResolverOptions`. Constants: `DEFAULT_DNS_NEGATIVE_CACHE_TTL`.
+
+  Transient errors (DNS server failures, network unreachable) propagate as throws and are NOT cached — only verified "no records exist" answers are.
+
+## 0.14.0
+
+### Minor Changes
+
+- [#289](https://github.com/openape-ai/openape/pull/289) [`146a5a3`](https://github.com/openape-ai/openape/commit/146a5a3dd3960b42c7f40a0ece0f7c361934c323) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Validate the DDISA `idp=` URL on parse (closes #281).
+
+  `parseDDISARecord` previously accepted any string after `idp=`: `http://`, `javascript:`, IDN homograph hostnames, paths with embedded credentials. The IdP URL is the trust anchor for the entire DDISA flow — every SP that resolves it fetches JWKS from there and accepts the resulting assertions, so a poisoned DNS record (cache poisoning, on-path attacker, hostile registrar/registrant for a sub-tenant, dev environments without DNSSEC) redirected every login through an attacker IdP that the SP would happily trust.
+
+  The parser now rejects records whose `idp=` value isn't:
+
+  - a parseable URL,
+  - with `https:` protocol (or `http:` when `OPENAPE_DDISA_ALLOW_HTTP=1` is set — strictly a dev escape hatch),
+  - without embedded credentials (`user:pass@`),
+  - printable-ASCII only (defends against IDN homographs + RTL-override + null-byte injection — punycode hostnames are fine, they're already ASCII).
+
+  Five new tests pin each rejection class plus the dev-env escape hatch. Existing-record happy-path tests are unchanged: the original input string is returned untouched (no URL re-normalisation), so a record that was being read correctly before is still being read correctly.
+
 ## 0.13.2
 
 ### Patch Changes

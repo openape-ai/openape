@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { ChallengeStore as WebAuthnChallengeStore, CodeStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import type { AdminAllowlistStore, ChallengeStore as WebAuthnChallengeStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import type { ShapeStore } from '@openape/grants'
 import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
@@ -54,6 +54,18 @@ export function defineRefreshTokenStore(factory: (event: H3Event) => RefreshToke
 
 export function defineSshKeyStore(factory: (event: H3Event) => SshKeyStore) {
   registerStoreFactory('sshKeyStore', factory)
+}
+
+// Consent Store (DDISA allowlist-user mode, #301)
+
+export function defineConsentStore(factory: (event: H3Event) => ConsentStore) {
+  registerStoreFactory('consentStore', factory)
+}
+
+// Admin Allowlist Store (DDISA allowlist-admin mode, #307)
+
+export function defineAdminAllowlistStore(factory: (event: H3Event) => AdminAllowlistStore) {
+  registerStoreFactory('adminAllowlistStore', factory)
 }
 
 // Shape Store (Phase 1 — server-side shape registry)

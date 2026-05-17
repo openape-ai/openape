@@ -1,0 +1,56 @@
+{
+  "name": "@openape/ape-agent",
+  "version": "2.6.2",
+  "description": "OpenApe agent runtime: per-agent process that connects to chat.openape.ai, runs the LLM loop with tools + cron tasks, and streams replies back to owners.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "bin": {
+    "ape-agent": "./dist/bridge.mjs",
+    "openape-chat-bridge": "./dist/bridge.mjs"
+  },
+  "files": [
+    "dist",
+    "default-skills",
+    "default-persona.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openape/apes": "workspace:*",
+    "@openape/cli-auth": "workspace:*",
+    "jose": "catalog:",
+    "ofetch": "^1.4.1",
+    "ws": "^8.18.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "^8.5.13",
+    "eslint": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "openape",
+    "agent",
+    "runtime",
+    "ddisa",
+    "apes"
+  ]
+}

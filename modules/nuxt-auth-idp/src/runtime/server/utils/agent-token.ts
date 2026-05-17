@@ -1,4 +1,4 @@
-import type { ActorType } from '@openape/core'
+import type { ActorType, DelegationActClaim } from '@openape/core'
 import type { KeyLike } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
 
@@ -16,8 +16,16 @@ export const DEFAULT_CLI_AUDIENCE = 'apes-cli'
 
 export interface AuthTokenPayload {
   sub: string
-  act: ActorType
+  /** Either a simple actor-type string ('human' | 'agent') for direct
+   * tokens, or a structured DDISA DelegationActClaim object for
+   * delegated tokens minted via /api/oauth/token-exchange. The
+   * structured form's `sub` field is the email of the actor (delegate).
+   */
+  act: ActorType | DelegationActClaim
   aud?: string
+  /** Set on delegated tokens — the id of the delegation grant that
+   * authorised this token-exchange. */
+  delegation_grant?: string
 }
 
 export async function issueAuthToken(
@@ -49,8 +57,15 @@ export async function verifyAuthToken(
     algorithms: ['EdDSA'],
   })
 
-  const act = payload.act
-  if (act !== 'agent' && act !== 'human') {
+  const rawAct = payload.act
+  let act: ActorType | DelegationActClaim
+  if (rawAct === 'agent' || rawAct === 'human') {
+    act = rawAct
+  }
+  else if (rawAct && typeof rawAct === 'object' && typeof (rawAct as DelegationActClaim).sub === 'string') {
+    act = rawAct as DelegationActClaim
+  }
+  else {
     throw new Error('Invalid act claim')
   }
 
@@ -58,6 +73,7 @@ export async function verifyAuthToken(
     sub: payload.sub as string,
     act,
     ...(typeof payload.aud === 'string' ? { aud: payload.aud } : {}),
+    ...(typeof payload.delegation_grant === 'string' ? { delegation_grant: payload.delegation_grant } : {}),
   }
 }
 

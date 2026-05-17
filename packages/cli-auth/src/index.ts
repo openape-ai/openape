@@ -18,6 +18,7 @@
  */
 
 export { getAuthorizedBearer, type AuthorizedBearerOptions } from './bearer.js'
+export { exchangeWithDelegation, type DelegationExchangeRequest, type DelegationExchangeResponse } from './delegation-exchange.js'
 export { exchangeForSpToken, type ExchangeRequest } from './exchange.js'
 export { ensureFreshIdpAuth } from './refresh.js'
 export {

@@ -1,0 +1,489 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+interface Message {
+  id: string
+  roomId: string
+  threadId: string
+  senderEmail: string
+  senderAct: 'human' | 'agent'
+  body: string
+  replyTo: string | null
+  createdAt: number
+  editedAt: number | null
+  // Agent-only: true while the bridge is mid-stream. Distinguishes
+  // "still being typed" from "fully posted, then later edited" so the
+  // (edited) badge doesn't fire on every token chunk.
+  streaming?: boolean
+  // Agent-only: ephemeral "what is the agent doing right now"
+  // (e.g. "🔧 time.now"). Rendered as a subtitle under the typing
+  // cursor; cleared when the tool finishes or streaming ends.
+  streamingStatus?: string | null
+}
+
+interface Reaction {
+  messageId: string
+  userEmail: string
+  emoji: string
+  createdAt: number
+}
+
+interface Thread {
+  id: string
+  roomId: string
+  name: string
+  createdByEmail: string
+  createdAt: number
+  archivedAt: number | null
+}
+
+const route = useRoute()
+const roomId = computed(() => route.params.id as string)
+
+const { user, fetchUser } = useOpenApeAuth()
+await fetchUser()
+if (!user.value && import.meta.client) navigateTo('/login')
+
+interface RoomInfo {
+  id: string
+  name: string
+  // Only `dm` after the channels removal in #276 — kept as a union
+  // of one so future room kinds can be added back without breaking
+  // the discriminator pattern.
+  kind: 'dm'
+  createdByEmail: string
+  createdAt: number
+  role: 'member' | 'admin'
+}
+
+const messages = ref<Message[]>([])
+const reactions = ref<Map<string, Reaction[]>>(new Map())
+const loading = ref(true)
+const scrollEl = ref<HTMLElement>()
+const roomInfo = ref<RoomInfo | null>(null)
+const roomError = ref<string | null>(null)
+const membersOpen = ref(false)
+const threads = ref<Thread[]>([])
+const activeThreadId = ref<string | null>(null)
+const newThreadName = ref('')
+const showNewThread = ref(false)
+
+useHead({
+  title: () => roomInfo.value?.name ?? 'Room',
+})
+
+async function loadRoomInfo() {
+  roomError.value = null
+  try {
+    roomInfo.value = await $fetch<RoomInfo>(`/api/rooms/${roomId.value}`)
+  }
+  catch (err) {
+    const status = (err as { statusCode?: number })?.statusCode
+    if (status === 404) {
+      roomError.value = 'Raum für diesen User nicht verfügbar.'
+    }
+    else if (status === 401) {
+      navigateTo('/login')
+    }
+    else {
+      roomError.value = err instanceof Error ? err.message : 'Could not load room info.'
+    }
+    roomInfo.value = null
+  }
+}
+
+async function loadThreads(): Promise<void> {
+  if (!roomInfo.value) {
+    threads.value = []
+    activeThreadId.value = null
+    return
+  }
+  // Server lazily creates a "main" thread on first GET for legacy rooms,
+  // so the result is guaranteed non-empty for any room the caller is in.
+  const rows = await $fetch<Thread[]>(`/api/rooms/${roomId.value}/threads`)
+  threads.value = rows
+  // Deep-link via `?thread=<id>` (set by the SW notificationclick when
+  // a push lands and the user taps it). If the requested thread doesn't
+  // exist (or was archived), fall through to the first-open default.
+  const queryThread = typeof route.query.thread === 'string' ? route.query.thread : null
+  if (queryThread && rows.some(t => t.id === queryThread)) {
+    activeThreadId.value = queryThread
+    return
+  }
+  if (!activeThreadId.value || !rows.some(t => t.id === activeThreadId.value)) {
+    const firstOpen = rows.find(t => !t.archivedAt) ?? rows[0]
+    activeThreadId.value = firstOpen?.id ?? null
+  }
+}
+
+async function loadMessages() {
+  if (!roomInfo.value || !activeThreadId.value) {
+    messages.value = []
+    loading.value = false
+    return
+  }
+  loading.value = true
+  try {
+    const rows = await $fetch<Message[]>(`/api/rooms/${roomId.value}/messages`, {
+      query: { limit: 50, thread_id: activeThreadId.value },
+    })
+    messages.value = rows
+  }
+  finally {
+    loading.value = false
+    await nextTick()
+    scrollToBottom('instant')
+  }
+}
+
+async function loadInitial() {
+  await loadRoomInfo()
+  await loadThreads()
+  await loadMessages()
+}
+
+// Scrolling reliably to the bottom is harder than it looks — the
+// message list contains messages whose final height depends on font
+// load, emoji-presentation swaps, and (most importantly) the typing
+// cursor pulsing into a real reply. A single scrollTo on the value
+// of scrollHeight measured right after `messages.value = rows` lands
+// short on the first paint. The two-rAF dance below gives the browser
+// one frame to lay out, one frame to settle, then scrolls.
+/**
+ * Strip DDISA agent-email scaffolding for display:
+ *   igor30-cb6bf26a+patrick+hofmann_eco@id.openape.ai → igor30
+ *   patrick@hofmann.eco → patrick
+ * Mirrors the helper inside MessageBubble.vue — keeping the room title
+ * format aligned with how the per-message header renders is what makes
+ * the bubble's "igor30 🤖" actually feel like the room it's in.
+ */
+function extractDisplayName(email: string): string {
+  if (email.endsWith('@id.openape.ai') && email.includes('+')) {
+    const local = email.split('+')[0]!
+    const dash = local.lastIndexOf('-')
+    return dash > 0 ? local.slice(0, dash) : local
+  }
+  return email.split('@')[0] ?? email
+}
+
+const titleDisplay = computed(() => {
+  const raw = roomInfo.value?.name ?? roomId.value
+  if (!raw.includes(' ↔ ')) return raw
+  return raw.split(' ↔ ').map(extractDisplayName).join(' ↔ ')
+})
+
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
+  if (!scrollEl.value) return
+  const el = scrollEl.value
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior })
+    })
+  })
+}
+
+function addReactionLocal(r: Reaction) {
+  const list = reactions.value.get(r.messageId) ?? []
+  if (!list.some(x => x.userEmail === r.userEmail && x.emoji === r.emoji)) {
+    list.push(r)
+    reactions.value.set(r.messageId, list)
+    reactions.value = new Map(reactions.value)
+  }
+}
+
+function removeReactionLocal(messageId: string, userEmail: string, emoji: string) {
+  const list = reactions.value.get(messageId)
+  if (!list) return
+  const next = list.filter(r => !(r.userEmail === userEmail && r.emoji === emoji))
+  if (next.length === 0) reactions.value.delete(messageId)
+  else reactions.value.set(messageId, next)
+  reactions.value = new Map(reactions.value)
+}
+
+const chat = useChat()
+let off: (() => void) | undefined
+
+// Tell the server which surface we're looking at so it can suppress push
+// notifications for messages that would just be noise (we already see
+// the message stream in this thread). Re-fire on visibility change and
+// after WS reconnect so server-side state stays in sync.
+function sendFocus() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState !== 'visible') return
+  if (!roomId.value) return
+  chat.send({
+    type: 'focus',
+    room_id: roomId.value,
+    ...(activeThreadId.value ? { thread_id: activeThreadId.value } : {}),
+  })
+}
+function sendBlur() {
+  chat.send({ type: 'blur' })
+}
+function onVisibilityChange() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'visible') sendFocus()
+  else sendBlur()
+}
+
+onMounted(async () => {
+  chat.connect()
+  await loadInitial()
+  sendFocus()
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+  off = chat.on((frame) => {
+    if (frame.room_id !== roomId.value) return
+    if (frame.type === 'message') {
+      const m = frame.payload as Message
+      // Only append messages that belong to the currently-viewed thread.
+      // Other threads still get the broadcast (so a future "unread badge"
+      // hook can pick it up here without server changes), but the active
+      // message list stays scoped.
+      if (m.threadId && m.threadId !== activeThreadId.value) return
+      if (!messages.value.some(x => x.id === m.id)) {
+        messages.value.push(m)
+        nextTick(() => scrollToBottom())
+      }
+    }
+    else if (frame.type === 'edit') {
+      const m = frame.payload as Message
+      const idx = messages.value.findIndex(x => x.id === m.id)
+      if (idx >= 0) messages.value[idx] = m
+    }
+    else if (frame.type === 'reaction') {
+      addReactionLocal(frame.payload as Reaction)
+    }
+    else if (frame.type === 'reaction-removed') {
+      const p = frame.payload as { messageId: string, userEmail: string, emoji: string }
+      removeReactionLocal(p.messageId, p.userEmail, p.emoji)
+    }
+    else if (frame.type === 'membership-removed') {
+      const p = frame.payload as { roomId: string, userEmail: string, thread?: Thread }
+      // Two flavours: (a) a member was removed from the room — if it's
+      // me, navigate out; (b) a thread was archived — refresh the
+      // thread list so the tab disappears (or moves to "Archived").
+      if (p.thread) {
+        void loadThreads()
+        return
+      }
+      if (p.userEmail === user.value?.sub) {
+        navigateTo('/')
+      }
+    }
+    else if (frame.type === 'membership-changed') {
+      const p = frame.payload as {
+        roomId: string
+        userEmail?: string
+        role?: 'member' | 'admin'
+        thread?: Thread
+      }
+      // Either a role change for a member (existing v1 behaviour) or a
+      // new/renamed thread (Phase B). Disambiguate via payload shape.
+      if (p.thread) {
+        void loadThreads()
+        return
+      }
+      if (p.userEmail === user.value?.sub && p.role && roomInfo.value) {
+        roomInfo.value = { ...roomInfo.value, role: p.role }
+      }
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  off?.()
+  sendBlur()
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
+})
+
+watch(roomId, loadInitial)
+watch(activeThreadId, () => { void loadMessages(); sendFocus() })
+// Re-emit focus after a reconnect — the server lost our prior state
+// when the WS dropped, otherwise the silent-tab window would notify
+// for messages we're actively viewing.
+watch(() => chat.connected.value, (now) => { if (now) sendFocus() })
+
+async function send(body: string) {
+  if (!activeThreadId.value) return
+  await $fetch(`/api/rooms/${roomId.value}/messages`, {
+    method: 'POST',
+    body: { body, thread_id: activeThreadId.value },
+  })
+}
+
+async function react(messageId: string, emoji: string) {
+  if (!user.value?.sub) return
+  addReactionLocal({ messageId, userEmail: user.value.sub, emoji, createdAt: Math.floor(Date.now() / 1000) })
+  await $fetch(`/api/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: { emoji },
+  })
+}
+
+async function unreact(messageId: string, emoji: string) {
+  if (!user.value?.sub) return
+  removeReactionLocal(messageId, user.value.sub, emoji)
+  await $fetch(`/api/messages/${messageId}/reactions`, {
+    method: 'DELETE',
+    query: { emoji },
+  })
+}
+
+function reactionsFor(messageId: string) {
+  const list = reactions.value.get(messageId) ?? []
+  if (list.length === 0) return []
+  const myEmail = user.value?.sub
+  const counts = new Map<string, { count: number, mine: boolean }>()
+  for (const r of list) {
+    const cur = counts.get(r.emoji) ?? { count: 0, mine: false }
+    cur.count += 1
+    if (r.userEmail === myEmail) cur.mine = true
+    counts.set(r.emoji, cur)
+  }
+  return Array.from(counts.entries(), ([emoji, c]) => ({ emoji, ...c }))
+}
+
+const visibleThreads = computed(() => threads.value.filter(t => !t.archivedAt))
+
+async function selectThread(id: string): Promise<void> {
+  if (activeThreadId.value === id) return
+  activeThreadId.value = id
+}
+
+async function createThread(): Promise<void> {
+  const name = newThreadName.value.trim()
+  if (!name) return
+  const created = await $fetch<Thread>(`/api/rooms/${roomId.value}/threads`, {
+    method: 'POST',
+    body: { name },
+  })
+  newThreadName.value = ''
+  showNewThread.value = false
+  await loadThreads()
+  activeThreadId.value = created.id
+}
+</script>
+
+<template>
+  <div class="min-h-dvh flex flex-col">
+    <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-3 py-3 border-b border-zinc-800 bg-zinc-950">
+      <UButton
+        to="/"
+        icon="i-lucide-arrow-left"
+        size="sm"
+        color="neutral"
+        variant="ghost"
+        aria-label="Back to rooms"
+      />
+      <h1 class="font-semibold flex-1 truncate">
+        {{ titleDisplay }}
+      </h1>
+      <UButton
+        v-if="roomInfo"
+        icon="i-lucide-users"
+        size="sm"
+        color="neutral"
+        variant="ghost"
+        aria-label="View members"
+        @click="membersOpen = true"
+      />
+      <span class="text-xs px-2 py-0.5 rounded-full" :class="chat.connected.value ? 'text-emerald-400' : 'text-zinc-500'">
+        {{ chat.connected.value ? '● live' : '○ offline' }}
+      </span>
+    </header>
+
+    <nav
+      v-if="roomInfo && visibleThreads.length"
+      class="sticky top-[var(--chat-header-height)] z-10 flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950 overflow-x-auto"
+      aria-label="Threads"
+    >
+      <button
+        v-for="t of visibleThreads"
+        :key="t.id"
+        type="button"
+        class="shrink-0 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors"
+        :class="activeThreadId === t.id
+          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+          : 'text-zinc-400 border border-transparent hover:bg-zinc-900'"
+        @click="selectThread(t.id)"
+      >
+        {{ t.name }}
+      </button>
+      <button
+        type="button"
+        class="shrink-0 px-3 py-1.5 rounded-full text-sm text-zinc-400 border border-zinc-800 hover:bg-zinc-900"
+        aria-label="New thread"
+        @click="showNewThread = !showNewThread"
+      >
+        +
+      </button>
+    </nav>
+
+    <div
+      v-if="showNewThread"
+      class="px-3 py-2 border-b border-zinc-800 flex gap-2"
+    >
+      <UInput
+        v-model="newThreadName"
+        placeholder="Thread name…"
+        size="sm"
+        class="flex-1"
+        @keydown.enter="createThread"
+      />
+      <UButton size="sm" color="primary" :disabled="!newThreadName.trim()" @click="createThread">
+        Create
+      </UButton>
+      <UButton
+        size="sm"
+        color="neutral"
+        variant="ghost"
+        @click="showNewThread = false; newThreadName = ''"
+      >
+        Cancel
+      </UButton>
+    </div>
+
+    <main ref="scrollEl" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+      <div v-if="roomError" class="max-w-sm mx-auto py-12 text-center space-y-3">
+        <UIcon name="i-lucide-circle-alert" class="size-10 text-zinc-600 mx-auto" />
+        <p class="text-sm text-zinc-400">
+          {{ roomError }}
+        </p>
+        <UButton to="/" color="neutral" variant="soft" size="sm">
+          Back to rooms
+        </UButton>
+      </div>
+
+      <template v-else>
+        <p v-if="loading" class="text-center text-sm text-zinc-500 py-8">
+          Loading…
+        </p>
+        <p v-else-if="!messages.length" class="text-center text-sm text-zinc-500 py-8">
+          No messages yet. Be the first.
+        </p>
+        <MessageBubble
+          v-for="m of messages"
+          :key="m.id"
+          :message="m"
+          :reactions="reactionsFor(m.id)"
+          :my-email="user?.sub"
+          @react="emoji => react(m.id, emoji)"
+          @unreact="emoji => unreact(m.id, emoji)"
+        />
+      </template>
+    </main>
+
+    <SendBox v-if="roomInfo && activeThreadId" @send="send" />
+
+    <MemberManager
+      v-if="roomInfo"
+      v-model:open="membersOpen"
+      :room-id="roomId"
+      :my-email="user?.sub"
+    />
+  </div>
+</template>

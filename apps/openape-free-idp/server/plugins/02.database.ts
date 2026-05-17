@@ -137,6 +137,64 @@ export default defineNitroPlugin(async () => {
     // /api/grants and /api/standing-grants call 500s on existing prod DBs.
     try { await db.run(sql`ALTER TABLE grants ADD COLUMN decided_by_standing_grant TEXT`) }
     catch { /* already present */ }
+
+    // Web Push subscriptions for grant-approval notifications. Endpoint is
+    // the browser-push-service URL (stable per browser install) and serves
+    // as the natural primary key; the helper upserts on it so re-subscribing
+    // the same browser doesn't create duplicate rows.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user_email ON push_subscriptions(user_email)`)
+
+    // DDISA allowlist-user consents (#301). One row per (user, SP)
+    // pair the user has approved on the consent screen. PK is
+    // composite — re-approval is an upsert on grantedAt; revocation
+    // is a DELETE.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS consents (
+      user_email TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      granted_at INTEGER NOT NULL,
+      PRIMARY KEY (user_email, client_id)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_consents_user_email ON consents(user_email)`)
+
+    // DNS-rooted admin claim (#307). Each user can mint a random
+    // secret which they publish at _openape-admin-{idp}.{their-domain}
+    // to claim root admin status for that domain. We store only
+    // sha256(secret); the cleartext is shown to the user once.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS admin_claim_secrets (
+      user_email TEXT NOT NULL,
+      secret_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      PRIMARY KEY (user_email, secret_hash)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_admin_claim_user ON admin_claim_secrets(user_email)`)
+
+    // Operators — DB-stored admins for a specific domain, promoted
+    // by a DNS-rooted root admin via the admin UI.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS operators (
+      user_email TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      promoted_by TEXT NOT NULL,
+      promoted_at INTEGER NOT NULL,
+      PRIMARY KEY (user_email, domain)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_operators_domain ON operators(domain)`)
+
+    // mode=allowlist-admin SP allowlist, scoped per domain.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS admin_allowlist (
+      domain TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      approved_by TEXT NOT NULL,
+      approved_at INTEGER NOT NULL,
+      PRIMARY KEY (domain, client_id)
+    )`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)

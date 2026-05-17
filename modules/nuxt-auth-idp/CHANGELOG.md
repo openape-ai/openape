@@ -1,5 +1,313 @@
 # Changelog
 
+## 0.28.0
+
+### Minor Changes
+
+- [#377](https://github.com/openape-ai/openape/pull/377) [`6c342c7`](https://github.com/openape-ai/openape/commit/6c342c75046e25eb364accaf2fa47e675be9c93f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix backwards push-notification logic. Previously every freshly-inserted grant fired a Web Push to the approver — including grants that the YOLO/standing-grant pre-approval hook was about to auto-approve, because the pre-approval logic runs AFTER the initial grant save. Result felt inverted from the human's perspective: auto-approved grants pinged, while pending grants requesting their own attention often did not (because the human's user row has no `approver` field, so push fan-out was skipped entirely under the old "humans don't approve their own grants" assumption).
+
+  Two fixes shipped:
+
+  1. **New `defineGrantPendingHook`** extension point in the module. The `POST /api/grants` handler invokes it only on the fall-through path where the grant remains pending after every pre-approval / standing-grant / similarity check has had its say. The drizzle store no longer fires push directly from `save()`.
+
+  2. **Approver resolution** now treats the requester themselves as the recipient when no explicit `approver` row is set (the case for humans). Humans need to know about their own pending grants because they ARE their own approver in the UI.
+
+  Net effect: pushes go to the right person at the right moment.
+
+## 0.27.0
+
+### Minor Changes
+
+- [#371](https://github.com/openape-ai/openape/pull/371) [`bf67c11`](https://github.com/openape-ai/openape/commit/bf67c1163961a8803a2621cab58ef2fed1497c8d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `AuthTokenPayload.act` and `verifyAuthToken` now accept the structured `DelegationActClaim` shape (`{ sub: string }`) emitted by the IdP's `/api/oauth/token-exchange` endpoint, in addition to the existing `'human' | 'agent'` strings. Tokens minted via token-exchange carry both `sub` (the delegator) and `act.sub` (the delegate); downstream consumers can do owner-attribution from the token alone. The `delegation_grant` claim (the id of the delegation that authorised the exchange) is also surfaced for audit.
+
+  Existing direct-issuance tokens (act=`agent` | `human`) are unchanged; only the verifier was extended to widen the accepted shape. `verifyAgentToken` (the strict "caller must be an agent" path) keeps its narrow contract.
+
+  Plus: enroll.post.ts has expanded comments documenting the three owner-attribution paths (delegated token, direct agent, direct human) — the transitive-ownership lookup is preserved as a soft-deprecated fallback for Nest setups that haven't yet created a delegation grant; the path becomes a no-op for tokens minted via token-exchange (where `sub` is already the human owner).
+
+- [#369](https://github.com/openape-ai/openape/pull/369) [`4788d4a`](https://github.com/openape-ai/openape/commit/4788d4a82f2fbaec1677ca104df0732aed62313f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add RFC 8693 OAuth Token Exchange endpoint (`POST /api/oauth/token-exchange`). Lets a delegate (typically an agent like the local Nest) act on behalf of a delegator (typically the human owner) at IdP-level. Inputs: `subject_token` (delegator's access token), `actor_token` (delegate's access token), `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, optional `audience` and `delegation_grant_id`. Output: a fresh access token with `sub=delegator` and `act={sub:delegate}` so downstream verifiers can do owner-attribution from the token alone — no server-side heuristics. Looks up the delegation grant either by explicit id or by scanning the delegator's approved grants for one matching delegate + audience.
+
+### Patch Changes
+
+- [#370](https://github.com/openape-ai/openape/pull/370) [`8ca96f1`](https://github.com/openape-ai/openape/commit/8ca96f10f7a0a9c8adc5afa5c8fd863f62342f6c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Wire up delegation token-exchange end-to-end:
+
+  - **`@openape/cli-auth`** exports `exchangeWithDelegation()` — posts an actor token + (optional) delegation grant id to the IdP's `/api/oauth/token-exchange` and returns a delegated access token whose `sub` is the delegator.
+  - **`@openape/apes`** `registerAgentAtIdp()` now checks if the local caller is itself an agent. If yes, it lists the owner's approved grants, finds the first delegation grant for the `enroll-agent` audience, exchanges tokens, and presents the delegated access token as `Authorization: Bearer …` to `/api/enroll`. Falls back to the direct call (caller-as-requester) when no delegation is configured — the IdP's transitive-ownership lookup still covers that path until M3.
+  - **IdP token-exchange** (`@openape/nuxt-auth-idp`) accepts a `delegation_grant_id` without requiring a `subject_token`: when the grant id is provided, the delegator identity is derived from `grant.delegator` and `subject_token` becomes optional (it can still be supplied for belt-and-suspenders verification, in which case its sub must match the grant's delegator).
+
+  The `subject_token`-only path (RFC 8693 strict mode) and the new `delegation_grant_id`-only path coexist on the same endpoint.
+
+## 0.26.1
+
+### Patch Changes
+
+- [#319](https://github.com/openape-ai/openape/pull/319) [`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Two small admin/DX additions:
+
+  - **`@openape/core`**: new `clearDNSCacheFor(domain)` helper alongside the existing `clearDNSCache()`. Lets a domain owner drop the IdP's in-memory cache for their domain right after they update their `_ddisa.{domain}` TXT record, without waiting for the 300s positive TTL.
+  - **`@openape/nuxt-auth-idp`**: the `decision === 'deny'` redirect for the bearer flow + the "back to SP" button on the `/denied` page now include an OAuth-spec `error_description` parameter alongside the bare `error=access_denied`. SPs can use this to render product-specific guidance instead of just the bare error code (`mode=deny` → "Domain owner forbids this IdP", `allowlist-admin` deny → "SP not on the admin-curated allowlist").
+
+- Updated dependencies [[`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c)]:
+  - @openape/core@0.16.0
+  - @openape/auth@0.10.1
+  - @openape/grants@0.11.5
+
+## 0.26.0
+
+### Minor Changes
+
+- [#315](https://github.com/openape-ai/openape/pull/315) [`f020dcc`](https://github.com/openape-ai/openape/commit/f020dcc108602858c3cfa6957deaa97e474a3aae) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Friendly deny page for the human authorize flow. Previously a `decision === 'deny'` (from `mode=deny` or an unapproved `mode=allowlist-admin` SP) silently bounced the user back to the SP with a URL-param error they wouldn't read. Now the IdP shows `/denied` with reason-specific copy ("Der Domain-Admin hat <SP> noch nicht freigegeben", "Bitte den Admin, …") and a "back to SP" button that completes the OAuth-spec redirect (RFC 6749 §4.1.2.1). Bearer flows skip the page — agents have no UI so they get the spec-direct redirect as before.
+
+  New routes: `/denied` (page), `GET /api/authorize/denied`, `POST /api/authorize/denied`.
+
+## 0.25.1
+
+### Patch Changes
+
+- [#314](https://github.com/openape-ai/openape/pull/314) [`113e224`](https://github.com/openape-ai/openape/commit/113e22442ad04cca588ba6a185f2d22aa60c397e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix: clicking "Anmelden" on the consent screen showed "Server did not return a redirect target." instead of completing the SP-login.
+
+  `consent.post` previously returned a `302 sendRedirect` and the page tried to read the `Location` header from a `fetch({ redirect: 'manual' })` response. Browsers turn 3xx responses under `redirect: 'manual'` into opaque-redirect responses whose headers are unreadable per the Fetch spec — so the consent page could never get the location. Now the handler returns `{ location: '...' }` JSON and the page does a top-level `window.location.assign`. Same trust boundary; same hop sequence; just survives the Fetch spec.
+
+## 0.25.0
+
+### Minor Changes
+
+- [#313](https://github.com/openape-ai/openape/pull/313) [`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - DDISA `mode=allowlist-admin` is now a real, plug-in-able feature. Closes #307.
+
+  **`@openape/auth`** gains `AdminAllowlistStore` + `InMemoryAdminAllowlistStore`. `evaluatePolicy` accepts an optional 5th `options` arg with `adminAllowlistStore`; with no store wired up the mode keeps its previous safe-deny behaviour.
+
+  **`@openape/nuxt-auth-idp`** wires the new store into `useIdpStores`, exposes a `defineAdminAllowlistStore(...)` registration helper, and adds two pluggable admin resolvers on `event.context`:
+
+  - `openapeAdminResolver(event, email): boolean` — overrides the env-config email allowlist for `requireAdmin`.
+  - `openapeRootAdminResolver(event, email): boolean` — strict tier for actions that must NOT be gateable by env config (e.g. operator promotion). New `requireRootAdmin` consults it; without one registered, fails closed.
+
+  Existing apps without these hooks set keep working — `requireAdmin` falls back to the legacy `OPENAPE_ADMIN_EMAILS` env list.
+
+### Patch Changes
+
+- Updated dependencies [[`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa)]:
+  - @openape/auth@0.10.0
+
+## 0.24.2
+
+### Patch Changes
+
+- [#310](https://github.com/openape-ai/openape/pull/310) [`f25a4e3`](https://github.com/openape-ai/openape/commit/f25a4e3dd24305597806bbc06b6dc1a10737fc7a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add `id="connected-services"` anchor to the Connected Services card on `/account` so consuming apps can deep-link to the SP-revoke section. Without it the section is the fourth of five on the page and easy to miss.
+
+- [#311](https://github.com/openape-ai/openape/pull/311) [`625663b`](https://github.com/openape-ai/openape/commit/625663bf7d3e9a4028b7ebb54615755cc9bb5f32) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Default policy mode for missing DDISA `mode` field is now `consent` (= prompt the user), not `open`. Closes #305.
+
+  Per DDISA core.md §5.6: when the user's `_ddisa.{domain}` TXT record omits the `mode` field — or when no DDISA record exists at all — the IdP picks the default. The spec recommends prompting for consent; defaulting to `open` would silently issue assertions for any SP that asks, which is the inverse of what a missing record should mean.
+
+  **Behavior change:** users without a DDISA record now see a consent screen on first login to a new SP. SPs they've already approved (stored in the consent store) still skip the prompt. Users who explicitly want permissive behavior can publish `mode=open` in their `_ddisa.{domain}` TXT record.
+
+- Updated dependencies [[`38c5c3c`](https://github.com/openape-ai/openape/commit/38c5c3cf1c2a4b11c4942e4e9eee6ddcec2deff9)]:
+  - @openape/core@0.15.0
+  - @openape/auth@0.9.2
+  - @openape/grants@0.11.4
+
+## 0.24.1
+
+### Patch Changes
+
+- [#309](https://github.com/openape-ai/openape/pull/309) [`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Security hardening of the SP-metadata consent flow. SP-controlled fields fetched from `/.well-known/oauth-client-metadata` are rendered by the IdP's consent UI; without sanitization a malicious SP could ship `javascript:` URIs in `policy_uri` / `tos_uri` and turn the IdP origin into an XSS sandbox at click time.
+
+  - `@openape/auth`: `createClientMetadataResolver` now normalizes every fetched (and operator-supplied) metadata document. URL fields (`logo_uri`, `policy_uri`, `tos_uri`, `client_uri`, `jwks_uri`) must parse as `http(s):` — anything else (`javascript:`, `data:`, `vbscript:`, …) is silently dropped. Display strings are length-capped (200 chars for names, 2000 for URLs).
+  - `@openape/nuxt-auth-idp`: the reference consent page and account-connections list no longer forward or render `logo_uri`. SP-supplied images are an unsanitisable surface (browser image-parser CVEs, fingerprinting, brand-spoofing) — deployers who want logos must override the page with their own UI.
+
+- [#308](https://github.com/openape-ai/openape/pull/308) [`d8fd4b3`](https://github.com/openape-ai/openape/commit/d8fd4b3a6796a566878e6dae831cdf4e806d9e54) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Register six previously-unregistered server route handlers so consuming apps actually expose them:
+
+  - `GET /api/authorize/consent` and `POST /api/authorize/consent` (used by the `/consent` page from the `allowlist-user` flow, #301)
+  - `GET /api/account/consents` and `DELETE /api/account/consents/:clientId` (self-service consent management)
+  - `GET /api/admin/delegations` and `DELETE /api/admin/delegations/:id` (admin)
+
+  The handler files existed under `runtime/server/api/` but were never wired up in the module's `addServerHandler` calls, so requests hit a 404 in production.
+
+- [#304](https://github.com/openape-ai/openape/pull/304) [`3bb4103`](https://github.com/openape-ai/openape/commit/3bb410365a690422eaa4fdd10b1f14a681853a55) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Register the `/consent` page so the DDISA `allowlist-user` flow can render its consent screen. Without this the page-route wasn't extended and the SP redirect from `/authorize` hit a 404.
+
+- Updated dependencies [[`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174)]:
+  - @openape/auth@0.9.1
+
+## 0.24.0
+
+### Minor Changes
+
+- [`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Connected services UI — list & revoke approved SPs (#301 follow-up).
+
+  Users running in DDISA `mode=allowlist-user` need to be able to walk back a previous consent. Without that, the consent screen was a one-way door.
+
+  - **`@openape/auth.ConsentStore`**: extended with `list(userId)` and `revoke(userId, clientId)`. `InMemoryConsentStore` gets the implementations + 4 unit tests pinning sort-order, scoping, and idempotent revoke.
+  - **`@openape/nuxt-auth-idp`**:
+    - `defineConsentStore` factory + auto-imported `createConsentStore` (unstorage default for module/playground/tests).
+    - `GET /api/account/consents` returns the approved SPs enriched with metadata (name + logo + verified flag); `DELETE /api/account/consents/:clientId` revokes.
+    - Account page (`/account`) gains a "Connected Services" card with the list + Widerrufen button per row. Verified SPs render their name/logo; unverified ones show the bare `client_id` plus an `unverifiziert` badge.
+  - **`apps/openape-free-idp`**: `consents` table in the schema (composite PK on `(user_email, client_id)`, `granted_at` integer), Drizzle store (`createDrizzleConsentStore`) wired through `defineConsentStore` in the idp-stores plugin. The `02.database.ts` boot plugin's `CREATE TABLE IF NOT EXISTS` is the migration path for live DBs.
+
+  Revoking sends the user back through the consent screen on the next /authorize against that SP, including unverified-warning UI if the SP didn't publish metadata.
+
+### Patch Changes
+
+- Updated dependencies [[`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df)]:
+  - @openape/auth@0.9.0
+
+## 0.23.0
+
+### Minor Changes
+
+- [#302](https://github.com/openape-ai/openape/pull/302) [`788a945`](https://github.com/openape-ai/openape/commit/788a9459170ec03427422c6d3d0f3daa5f266712) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Implement DDISA `allowlist-user` policy mode (consent screen) per core.md §2.3 (closes #301).
+
+  Previously: `evaluatePolicy` had the right logic for `allowlist-user`, but `authorize.get.ts` treated `decision === 'consent'` as an error (`access_denied` redirect) and used a `noopConsentStore` that always returned `hasConsent: false`. Net effect: any user with `mode=allowlist-user` in their `_ddisa.{domain}` TXT record was permanently locked out.
+
+  Now:
+
+  - **Real `ConsentStore`** backed by unstorage (default) with the same shape as `@openape/auth`'s in-memory implementation. Free-idp can swap in a Drizzle-backed version via the existing store-registry.
+  - **`authorize.get.ts` routing fixed**: `'deny'` still produces `access_denied`; `'consent'` stashes the original /authorize state in the user's session under `pendingConsent` (with a one-shot CSRF token) and redirects to `/consent`.
+  - **`/consent` page** (Vue) renders metadata-aware UI:
+    - SP that publishes `/.well-known/oauth-client-metadata` → "verified" tone with name + logo + policy/tos links
+    - SP that publishes nothing → "unverified" tone with explicit warning + de-emphasised primary action
+  - **`POST /api/authorize/consent`** validates CSRF token, persists consent (so subsequent /authorize calls skip the screen), drops the pending state from the session, and resumes the original /authorize flow.
+  - **Cancel** redirects the user to the SP's `redirect_uri` with `error=access_denied`.
+  - **TTL guard**: pending consent state expires after 5 min so a stale token can't be replayed across sessions.
+
+  Mode is **per-user-DNS**, not a global IdP toggle. Users opt in by setting their `_ddisa.{domain}` TXT record to `mode=allowlist-user`. Users who keep `mode=open` (or no TXT) see no consent screen — current behaviour preserved.
+
+  Adds optional RFC 7591 fields (`client_uri`, `logo_uri`, `policy_uri`, `tos_uri`, `contacts`) to `ClientMetadata` so the consent UI can render them.
+
+### Patch Changes
+
+- Updated dependencies [[`788a945`](https://github.com/openape-ai/openape/commit/788a9459170ec03427422c6d3d0f3daa5f266712)]:
+  - @openape/auth@0.8.1
+
+## 0.22.0
+
+### Minor Changes
+
+- [#300](https://github.com/openape-ai/openape/pull/300) [`f787da5`](https://github.com/openape-ai/openape/commit/f787da57a04e3f5ea57395c16278f24fd89c5ebc) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Enforce DDISA `core.md §5.2.1` `redirect_uri` validation against SP-published metadata (closes #280).
+
+  The IdP previously accepted any `redirect_uri` on `/authorize` — only `client_id` was checked for presence. The DDISA spec mandates: SPs MUST publish `/.well-known/oauth-client-metadata` (RFC 7591), and the IdP MUST verify `redirect_uri` against the SP's `redirect_uris` array.
+
+  This isn't a centralised registry — it's the same DNS/HTTP-discoverable pattern DDISA uses for IdPs. SP is source-of-truth for its own callbacks; IdP fetches and validates.
+
+  Implementation:
+
+  - **`@openape/auth`**: new `createClientMetadataResolver()` fetches and caches SP metadata (300s TTL, parallel to DDISA DNS cache). Falls back to legacy `/.well-known/sp-manifest.json` per the spec's migration note. New `validateRedirectUri()` does strict-equality matching (no path-prefix, no wildcards — RFC 6749 §3.1.2.2 + OAuth 2.0 Security BCP).
+  - **`@openape/nuxt-auth-idp`**: `/authorize` calls the resolver before issuing a code; rejects with 400 on mismatch.
+
+  **Rollout-safe defaults**:
+
+  - `spMetadataMode: 'permissive'` (default) tolerates unresolvable SP metadata so existing SPs keep working while they catch up. Explicit redirect_uri MISMATCH is always rejected though — permissive only forgives missing metadata.
+  - `spMetadataMode: 'strict'` once all SPs publish: also rejects unresolvable.
+  - Native CLIs (RFC 8252 public clients) without a domain go through a static `publicClients` map — `apes-cli` registered for the `localhost:9876` callback.
+
+  Env vars: `NUXT_OPENAPE_IDP_SP_METADATA_MODE`, `NUXT_OPENAPE_IDP_PUBLIC_CLIENTS` (JSON).
+
+  Follow-up: each OpenApe SP (chat, plans, tasks, preview) needs to publish its `oauth-client-metadata` file before strict mode can be enabled. Tracked separately.
+
+### Patch Changes
+
+- Updated dependencies [[`f787da5`](https://github.com/openape-ai/openape/commit/f787da57a04e3f5ea57395c16278f24fd89c5ebc)]:
+  - @openape/auth@0.8.0
+
+## 0.21.1
+
+### Patch Changes
+
+- [`8271991`](https://github.com/openape-ai/openape/commit/8271991f42d18a32b8dfd4e7306f6dd294d3a286) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Bundle of free-idp hardening fixes from the 2026-05-04 audit (closes #292, #293, #294, #295, #296).
+
+  - **#292**: extend `RE_AUTH_PATHS` rate-limit regex to cover `/api/{enroll,register,my-agents,push,users}` — paths that were uncapped for brute-force attacks.
+  - **#293**: defence-in-depth in `apps/openape-free-idp/server/api/test/session.post.ts` — additional `NODE_ENV !== 'production'` gate, plus `crypto.timingSafeEqual` instead of `!==` on the management-token compare.
+  - **#294**: `enroll.post.ts` derives agent emails with an 8-hex-char hash of the canonical owner email, eliminating the dot-collapse / sanitise collisions where `foo@example.com` and `foo@example_com` mapped to the same agent suffix.
+  - **#295**: `my-agents/[id].patch.ts` now validates the new SSH key BEFORE deleting old ones, then saves and prunes — agent is never without an authenticator on validation failure. Plus 1000-char length cap and explicit-shape check on the public key. `SshKeyStore.deleteAllForUser` gains an `exceptKeyId` option for the rotate-in-place flow; backwards-compatible (option is optional).
+  - **#296**: `push/subscribe.post.ts` rejects with 409 when the endpoint URL is already registered to a different account, and removes `userEmail` from the conflict-update SET clause. Closes the subscription-hijack path.
+
+- Updated dependencies [[`8271991`](https://github.com/openape-ai/openape/commit/8271991f42d18a32b8dfd4e7306f6dd294d3a286)]:
+  - @openape/auth@0.7.2
+
+## 0.21.0
+
+### Minor Changes
+
+- [`a5d6ad8`](https://github.com/openape-ai/openape/commit/a5d6ad8465102bcaa855523ad9bf2fdb74bb1b8b) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Close the passkey-graft account-takeover path (closes #291).
+
+  The unauthenticated `POST /api/webauthn/register/verify` flow used to APPEND a credential to a user that already had passkeys. Anyone with read-access to the user's mailbox (transient compromise, leaked dump, recycled provider, kiosk session) could therefore mail themselves a registration token, register their own passkey, and gain permanent first-class control of the account — surviving every password-reset / recovery flow because the attacker's passkey IS itself a first-class credential.
+
+  The verify endpoint now refuses to register a credential when the user already has at least one passkey and the request comes through the unauthenticated mail-token path. Legitimate flows continue to work:
+
+  - **First-time enrolment** (no user yet, or user but zero credentials): unchanged — the mail token is the only trust anchor possible when no credential exists.
+  - **Add a device while authenticated**: was already a separate endpoint (`POST /api/webauthn/credentials/add/verify`) that requires a fresh assertion against an existing credential.
+  - **Lost-everything recovery**: tracked in #297 — 72h email-hold flow with single-token semantics + push-broadcast, separate code path.
+
+  Four regression tests pin the gate.
+
+## 0.20.1
+
+### Patch Changes
+
+- Updated dependencies [[`146a5a3`](https://github.com/openape-ai/openape/commit/146a5a3dd3960b42c7f40a0ece0f7c361934c323)]:
+  - @openape/core@0.14.0
+  - @openape/auth@0.7.1
+  - @openape/grants@0.11.3
+
+## 0.20.0
+
+### Minor Changes
+
+- [#288](https://github.com/openape-ai/openape/pull/288) [`2d17d6a`](https://github.com/openape-ai/openape/commit/2d17d6a6d5ac6dd518786bfa0403430a5cbaea90) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix rate-limit bypass via spoofed `X-Forwarded-For` header (closes #279).
+
+  The IdP rate-limit on `/api/(session|auth|agent|webauthn)`, `/authorize`, and `/token` was keyed on `getRequestIP(event, { xForwardedFor: true })`. h3 returns the **leftmost** XFF value, which is attacker-controllable on every deployment topology that doesn't strip incoming XFF — including Vercel in many configs. Rotating the header per request let attackers slip past the 10/min cap and brute-force agent challenges, WebAuthn assertions, and enrol endpoints.
+
+  The plugin now keys on the socket peer by default. Operators behind a real proxy fleet opt in by setting `OPENAPE_RATE_LIMIT_TRUSTED_PROXIES` to a comma-separated CIDR list; when the request's direct peer is in that list the plugin walks the XFF chain right-to-left and returns the first non-trusted IP — the actual client. Attacker-injected leftmost values are now ignored.
+
+  11 new unit tests pin CIDR matching + the right-to-left walk + the default-safe behaviour. The IPv4 CIDR matcher is small and inlined; IPv6 CIDR is a future improvement (matched literally for now).
+
+## 0.19.3
+
+### Patch Changes
+
+- Updated dependencies [[`cbcffc7`](https://github.com/openape-ai/openape/commit/cbcffc74d7fe08520c1a18f2d546181446c1cfca)]:
+  - @openape/auth@0.7.0
+
+## 0.19.2
+
+### Patch Changes
+
+- [#285](https://github.com/openape-ai/openape/pull/285) [`83bd7f8`](https://github.com/openape-ai/openape/commit/83bd7f8c4493a24938a50563439e416eebaa62b0) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix CSRF auto-approval of `authorization_details` in `/authorize` GET (closes #273).
+
+  The `/authorize` GET handler used to parse RFC 9396 `authorization_details` from the query string and auto-approve them server-side, treating an existing IdP session as implicit consent. A crafted URL — `<a href="https://idp/authorize?…&authorization_details=[<broad cli grant>]">` — could therefore approve sweeping grants via top-level GET navigation (cookies are `SameSite=Lax` by default), bypassing the approver-policy entirely.
+
+  Until a proper consent UI lands, the parameter is rejected. Callers must use the explicit grant API: `POST /api/grants` to create the grant pending, then `POST /api/grants/{id}/approve` (which enforces the approver-policy fixed in PR #284). No production caller in this repo relied on the old combo — verified via grep.
+
+## 0.19.1
+
+### Patch Changes
+
+- [#284](https://github.com/openape-ai/openape/pull/284) [`adfdb25`](https://github.com/openape-ai/openape/commit/adfdb254547eba81dbd937eabba8cc8c66653949) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix grant approval bypass: agents could self-approve their own grants regardless of approver policy.
+
+  `approve.post.ts` previously had an `isRequester` short-circuit that let any caller approve a grant whose `requester === bearer.sub`. An agent armed with only its 1h IdP token could therefore mint authz_jwt for arbitrary audiences without the human owner ever being involved — defeating the entire DDISA delegation model.
+
+  The handler now resolves the approver policy correctly per the User type convention (`approver === undefined` means "owner, or self when there is no owner"):
+
+  - explicit approver set → only that approver (or owner) may approve
+  - approver unset, owner set → owner is the implicit approver (sub-user / agent path)
+  - approver unset, owner unset → top-level human, self-approval is implicit
+
+  Surfaced in the security audit on 2026-05-04.
+
+## 0.19.0
+
+### Minor Changes
+
+- [#220](https://github.com/openape-ai/openape/pull/220) [`23fa05b`](https://github.com/openape-ai/openape/commit/23fa05b5aea415330de60d622da1a61a7bb0ef17) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes/idp: `apes sessions list` and `apes sessions remove <id>` for self-service device management
+
+  You can now see and revoke your own refresh-token families across devices without admin privileges:
+
+  - `apes sessions list` — one row per `apes login` (one row per device), with familyId, clientId, createdAt, expiresAt
+  - `apes sessions remove <familyId>` — revokes that specific family. The device using it fails its next token refresh with `Token family revoked` and has to `apes login` again
+
+  Backed by two new IdP endpoints under `/api/me/sessions/…`:
+
+  - `GET /api/me/sessions` — lists the caller's families (filtered to `userId = sub` from the authenticated session/JWT)
+  - `DELETE /api/me/sessions/[familyId]` — ownership-checked: 404 if the family belongs to a different user, never 403, so users can't probe other users' familyIds
+
+  The pre-existing admin endpoints at `/api/admin/sessions` (cross-user, requires admin role) stay as-is.
+
 ## 0.18.1
 
 ### Patch Changes

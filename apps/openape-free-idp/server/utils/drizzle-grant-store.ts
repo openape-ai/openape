@@ -61,6 +61,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
   return {
     async save(grant) {
       const row = grantToRow(grant)
+
       await db.insert(grants).values(row).onConflictDoUpdate({
         target: grants.id,
         set: {
@@ -80,6 +81,16 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
           autoApprovalKind: row.autoApprovalKind,
         },
       })
+
+      // Push notifications are no longer fired here. The store's save()
+      // is called BEFORE the index.post.ts handler runs YOLO / standing
+      // grant decisions (which then set status='approved' via a follow-
+      // up updateStatus) — so a push fired here would always go out for
+      // auto-approved grants too, which is exactly the noise we want to
+      // suppress. The handler now fires the push explicitly only on the
+      // fall-through path where the grant remains pending after all
+      // pre-approval hooks have had their say. See `routePushAfterCreate`
+      // in modules/nuxt-auth-idp/src/runtime/server/api/grants/index.post.ts.
     },
 
     async findById(id) {

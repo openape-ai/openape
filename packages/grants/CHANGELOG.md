@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.5
+
+### Patch Changes
+
+- Updated dependencies [[`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c)]:
+  - @openape/core@0.16.0
+
+## 0.11.4
+
+### Patch Changes
+
+- Updated dependencies [[`38c5c3c`](https://github.com/openape-ai/openape/commit/38c5c3cf1c2a4b11c4942e4e9eee6ddcec2deff9)]:
+  - @openape/core@0.15.0
+
+## 0.11.3
+
+### Patch Changes
+
+- Updated dependencies [[`146a5a3`](https://github.com/openape-ai/openape/commit/146a5a3dd3960b42c7f40a0ece0f7c361934c323)]:
+  - @openape/core@0.14.0
+
 ## 0.11.2
 
 ### Patch Changes

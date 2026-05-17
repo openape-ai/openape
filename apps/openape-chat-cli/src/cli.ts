@@ -1,0 +1,48 @@
+import { defineCommand, runMain } from 'citty'
+import { ApiError } from './api'
+import { contactsCommand } from './commands/contacts'
+import { docsCommand } from './commands/docs'
+import { listCommand } from './commands/list'
+import { membersCommand } from './commands/members'
+import { roomsCommand } from './commands/rooms'
+import { sendCommand } from './commands/send'
+import { threadsCommand } from './commands/threads'
+import { watchCommand } from './commands/watch'
+import { whoamiCommand } from './commands/whoami'
+
+const VERSION = '0.2.0'
+
+const main = defineCommand({
+  meta: {
+    name: 'ape-chat',
+    version: VERSION,
+    description: 'CLI for chat.openape.ai — talk to humans and agents from the shell',
+  },
+  subCommands: {
+    whoami: whoamiCommand,
+    contacts: contactsCommand,
+    rooms: roomsCommand,
+    threads: threadsCommand,
+    send: sendCommand,
+    list: listCommand,
+    watch: watchCommand,
+    members: membersCommand,
+    docs: docsCommand,
+  },
+})
+
+runMain(main).catch((err: unknown) => {
+  if (err instanceof ApiError) {
+    process.stderr.write(`error: ${err.message}\n`)
+    if (err.status === 401) {
+      process.stderr.write('hint: run `apes login <email>` and try again\n')
+    }
+    process.exit(1)
+  }
+  if (err && typeof err === 'object' && 'message' in err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`)
+    process.exit(1)
+  }
+  process.stderr.write(`error: ${String(err)}\n`)
+  process.exit(1)
+})

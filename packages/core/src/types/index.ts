@@ -249,6 +249,12 @@ export interface OpenApeAuthZClaims {
   permissions?: string[]
   /** Structured authorization details */
   authorization_details?: OpenApeAuthorizationDetail[]
+  /** Delegation scopes — present for delegation grants so a relying party
+   * can enforce them offline (protocol sp-data-access.md §5). */
+  scope?: string[]
+  /** Delegate identity (delegation grants only) — the actor acting on
+   * behalf of `sub`, per delegation.md. Provenance for the relying party. */
+  delegate?: string
   /** Command hash */
   cmd_hash?: string
   /** Plaintext command array (for apes grant-token mode) */
@@ -352,8 +358,14 @@ export interface OpenApeManifest {
 
 /** DNS resolver options */
 export interface ResolverOptions {
-  /** Cache TTL in seconds (default: 300) */
+  /** Cache TTL in seconds for positive results (default: 300) */
   cacheTTL?: number
+  /**
+   * Cache TTL in seconds for negative results — domains with no
+   * DDISA record (default: 60). Shorter than positive TTL to let a
+   * domain that just added a record be picked up promptly.
+   */
+  negativeCacheTTL?: number
   /** DoH provider URL (for edge/browser) */
   dohProvider?: string
   /** Skip cache */

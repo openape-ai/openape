@@ -206,3 +206,78 @@ export const sshKeys = sqliteTable('ssh_keys', {
   index('idx_ssh_keys_user_email').on(table.userEmail),
   index('idx_ssh_keys_public_key').on(table.publicKey),
 ])
+
+// --- Milestone 7: Web Push for grant approvers ---
+// One row per (user, browser-install) pair. The endpoint URL is the
+// browser's push-service URL — stable per (browser, install) — and is
+// used as the natural primary key. p256dh + auth are the public keys
+// the server uses to encrypt push payloads; without them, web-push
+// can't deliver. Subscriptions are pruned when a 404/410 comes back
+// (browser uninstalled the PWA or revoked permission).
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  userEmail: text('user_email').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_push_subs_user_email').on(table.userEmail),
+])
+
+// --- DDISA allowlist-user consents (#301) ---
+// One row per (user, SP) pair the user has approved via the consent
+// screen. PK is composite — re-approving the same SP just refreshes
+// `granted_at`. Revocation is a DELETE; the user sees the consent
+// screen again on next /authorize.
+export const consents = sqliteTable('consents', {
+  userEmail: text('user_email').notNull(),
+  clientId: text('client_id').notNull(),
+  grantedAt: integer('granted_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.clientId] }),
+  index('idx_consents_user_email').on(table.userEmail),
+])
+
+// --- DNS-rooted admin claim (#307) ---
+// Each user can mint a random claim secret. To prove they're admin
+// for a domain they own, the user publishes a TXT record at
+// `_openape-admin-id-openape-ai.{user-domain}` containing the secret.
+// We store only sha256(secret) so a DB compromise doesn't expose
+// values that the attacker could plant in DNS to anoint themselves.
+// `revokedAt` is set when the user regenerates — stale rows are kept
+// for audit-trail of past claim secrets.
+export const adminClaimSecrets = sqliteTable('admin_claim_secrets', {
+  userEmail: text('user_email').notNull(),
+  secretHash: text('secret_hash').notNull(),
+  createdAt: integer('created_at').notNull(),
+  revokedAt: integer('revoked_at'),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.secretHash] }),
+  index('idx_admin_claim_user').on(table.userEmail),
+])
+
+// Operators are DB-stored admins for one specific email-domain. A
+// DNS-rooted root admin promotes them via the admin UI. They can do
+// everything an admin can do EXCEPT promote / demote other operators
+// — that gate uses requireRootAdmin.
+export const operators = sqliteTable('operators', {
+  userEmail: text('user_email').notNull(),
+  domain: text('domain').notNull(),
+  promotedBy: text('promoted_by').notNull(),
+  promotedAt: integer('promoted_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.userEmail, table.domain] }),
+  index('idx_operators_domain').on(table.domain),
+])
+
+// SPs that the root admin / an operator has admin-allowlisted for a
+// given domain (mode=allowlist-admin). Closes #307. Lookups are by
+// (domain, clientId); revocation is a DELETE.
+export const adminAllowlist = sqliteTable('admin_allowlist', {
+  domain: text('domain').notNull(),
+  clientId: text('client_id').notNull(),
+  approvedBy: text('approved_by').notNull(),
+  approvedAt: integer('approved_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.domain, table.clientId] }),
+])

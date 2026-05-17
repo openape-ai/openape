@@ -149,8 +149,17 @@ Goodbye.
 | `apes login` | PKCE browser login or ed25519 key-based agent login |
 | `apes logout` | Clear stored auth |
 | `apes whoami` | Show current identity |
-| `apes enroll` | Enroll an agent at the IdP |
+| `apes enroll` | Enroll an agent at the IdP (interactive, browser approval) |
 | `apes register-user` | Register a new human user |
+
+### Agents
+
+| Command | Description |
+|---|---|
+| `apes agents register --name <n> --public-key <line>` | Register an agent at the IdP using a public key supplied by the agent. Returns the assigned email so the agent can `apes login` from its own machine. |
+| `apes agents spawn <n>` | macOS-only. Provision a local agent end-to-end: macOS user, ed25519 keypair, IdP registration, agent token, ape-shell as login shell, Claude Code Bash hook. Privileged setup runs through `apes run --as root` (DDISA-approved). |
+| `apes agents list [--json] [--include-inactive]` | List agents owned by the current user, with local OS-user cross-reference. |
+| `apes agents destroy <n> [--force] [--soft] [--keep-os-user]` | Tear down an agent. Idempotent; safe for CI with `--force`. |
 
 ### Grants
 
@@ -184,6 +193,54 @@ Auth and config are stored in `~/.config/apes/`:
 apes config get defaults.idp
 apes config set defaults.idp https://id.example.com
 ```
+
+## Spawning ephemeral agents (macOS)
+
+`apes agents spawn <name>` provisions a complete local agent in one shot:
+
+```bash
+apes login patrick@hofmann.eco
+apes agents spawn agent-a
+# → DDISA approval prompt for the as=root grant (one-time per spawn)
+# → "Agent agent-a spawned. Run: apes run --as agent-a -- claude --session-name agent-a --dangerously-skip-permissions"
+
+apes agents list
+# NAME     EMAIL                                          ACTIVE  OS-USER  HOME
+# agent-a  agent-a+patrick+hofmann_eco@id.openape.ai      ✓       ✓        /Users/agent-a
+
+apes run --as agent-a -- claude --session-name agent-a --dangerously-skip-permissions
+# Claude Code runs as agent-a; every Bash tool call is rewritten to
+# `ape-shell -c <cmd>` by ~/.claude/hooks/bash-via-ape-shell.sh, so the
+# agent cannot run a shell command without an apes grant.
+
+apes agents destroy agent-a --force
+# → DDISA approval for the as=root teardown grant; agent and OS user are gone
+```
+
+Pre-flight requirements (one-time):
+
+```bash
+echo "$(which ape-shell)" | sudo tee -a /etc/shells
+# `escapes` (Rust setuid binary) installed on PATH for `apes run --as root`
+```
+
+For remote agents that run on another machine, register without provisioning:
+
+```bash
+# On the agent's machine:
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
+
+# On your machine (logged in as the parent):
+apes agents register --name agent-x --public-key "$(ssh agent-host cat ~/.ssh/id_ed25519.pub)" --json
+# → {"email":"agent-x+patrick+hofmann_eco@id.openape.ai","name":"agent-x","owner":"patrick@hofmann.eco","approver":"patrick@hofmann.eco","idp":"https://id.openape.ai"}
+
+# Tell the agent to log in:
+# apes login --idp https://id.openape.ai --email agent-x+patrick+hofmann_eco@id.openape.ai --key ~/.ssh/id_ed25519
+```
+
+`destroy --keep-os-user --force` reverses just the IdP side without invoking
+`apes run --as root`, so it's safe for CI loops where no DDISA approver is
+available.
 
 ## MCP Server
 

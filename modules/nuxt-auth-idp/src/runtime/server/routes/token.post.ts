@@ -25,7 +25,7 @@ function resolveUserClaimsFactory() {
   const { userStore } = useIdpStores()
   return async (userId: string, scope?: string) => {
     const scopes = parseScope(scope)
-    const claims: { email?: string, name?: string } = {}
+    const claims: { email?: string, name?: string, approver?: string } = {}
 
     const includeAll = scopes.size === 0
     const needsUser = includeAll || scopes.has('email') || scopes.has('profile')
@@ -38,6 +38,13 @@ function resolveUserClaimsFactory() {
         }
         if (includeAll || scopes.has('profile')) {
           claims.name = user.name
+        }
+        // Always surface approver when known so SPs (preview.openape.ai and
+        // future tools) can route push notifications and grant approvals
+        // without a server-to-server callback to the IdP. Undefined means
+        // the user has no separate approver (acts as their own).
+        if (user.approver) {
+          claims.approver = user.approver
         }
       }
     }

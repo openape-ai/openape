@@ -200,6 +200,31 @@ async function refreshOAuthToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Refresh the local IdP token if it has expired. Used by every code path
+ * that needs an access token — `apiFetch` for IdP-bound HTTP calls, plus
+ * any pure-introspection command (`apes whoami`, `apes config get …`)
+ * that previously only read local auth state and surfaced a stale
+ * "expired" without attempting renewal.
+ *
+ * Returns the fresh access token on success, or null when no refresh
+ * path is available (no agent key AND no refresh_token, or both refresh
+ * attempts failed). Callers decide what to do with null — `apiFetch`
+ * throws "Not authenticated", `whoami` falls back to the on-disk state.
+ */
+export async function ensureFreshToken(): Promise<string | null> {
+  const cached = getAuthToken()
+  if (cached) return cached
+
+  // Auto-refresh: priority (1) ed25519 agent key, (2) OAuth refresh_token.
+  // Agent-key first because it is concurrency-safe — every challenge is
+  // independent server-side, so parallel ape-shell spawns don't race.
+  const agentToken = await refreshAgentToken()
+  if (agentToken) return agentToken
+  const oauthToken = await refreshOAuthToken()
+  return oauthToken ?? null
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: {
@@ -209,16 +234,7 @@ export async function apiFetch<T = unknown>(
     token?: string
   } = {},
 ): Promise<T> {
-  let token = options.token || getAuthToken()
-
-  // Auto-refresh: priority (1) ed25519 agent key, (2) OAuth refresh_token.
-  // Agent-key first because it is concurrency-safe — every challenge is
-  // independent server-side, so parallel ape-shell spawns don't race.
-  if (!token) {
-    token = await refreshAgentToken()
-    if (!token)
-      token = await refreshOAuthToken()
-  }
+  const token = options.token ?? await ensureFreshToken()
 
   if (!token) {
     throw new Error('Not authenticated (token expired). Run `apes login` first.')

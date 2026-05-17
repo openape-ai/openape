@@ -57,6 +57,26 @@ async function handleLogout() {
             Berechtigungen
           </UButton>
           <UButton
+            to="/account#connected-services"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-link"
+          >
+            Verbundene Dienste
+          </UButton>
+          <UButton
+            to="/admin"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-shield"
+          >
+            Domain-Admin
+          </UButton>
+          <UButton
             color="neutral"
             variant="outline"
             size="lg"
@@ -68,6 +88,10 @@ async function handleLogout() {
             Abmelden
           </UButton>
         </div>
+
+        <ClientOnly>
+          <EnableNotifications />
+        </ClientOnly>
       </div>
     </UCard>
 

@@ -1,5 +1,81 @@
 # @openape/server
 
+## 0.3.10
+
+### Patch Changes
+
+- Updated dependencies [[`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c)]:
+  - @openape/core@0.16.0
+  - @openape/auth@0.10.1
+  - @openape/grants@0.11.5
+
+## 0.3.9
+
+### Patch Changes
+
+- Updated dependencies [[`2b1014b`](https://github.com/openape-ai/openape/commit/2b1014bcee0b2e431e80958578a20c1bb6369baa)]:
+  - @openape/auth@0.10.0
+
+## 0.3.8
+
+### Patch Changes
+
+- Updated dependencies [[`38c5c3c`](https://github.com/openape-ai/openape/commit/38c5c3cf1c2a4b11c4942e4e9eee6ddcec2deff9)]:
+  - @openape/core@0.15.0
+  - @openape/auth@0.9.2
+  - @openape/grants@0.11.4
+
+## 0.3.7
+
+### Patch Changes
+
+- Updated dependencies [[`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174)]:
+  - @openape/auth@0.9.1
+
+## 0.3.6
+
+### Patch Changes
+
+- Updated dependencies [[`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df)]:
+  - @openape/auth@0.9.0
+
+## 0.3.5
+
+### Patch Changes
+
+- Updated dependencies [[`788a945`](https://github.com/openape-ai/openape/commit/788a9459170ec03427422c6d3d0f3daa5f266712)]:
+  - @openape/auth@0.8.1
+
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies [[`f787da5`](https://github.com/openape-ai/openape/commit/f787da57a04e3f5ea57395c16278f24fd89c5ebc)]:
+  - @openape/auth@0.8.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [[`8271991`](https://github.com/openape-ai/openape/commit/8271991f42d18a32b8dfd4e7306f6dd294d3a286)]:
+  - @openape/auth@0.7.2
+
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`146a5a3`](https://github.com/openape-ai/openape/commit/146a5a3dd3960b42c7f40a0ece0f7c361934c323)]:
+  - @openape/core@0.14.0
+  - @openape/auth@0.7.1
+  - @openape/grants@0.11.3
+
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`cbcffc7`](https://github.com/openape-ai/openape/commit/cbcffc74d7fe08520c1a18f2d546181446c1cfca)]:
+  - @openape/auth@0.7.0
+
 ## 0.3.0
 
 ### Minor Changes

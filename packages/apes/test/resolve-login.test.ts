@@ -193,6 +193,72 @@ describe('resolveLoginInputs', () => {
     expect(warnSpy.mock.calls[0]?.[0]).toMatch(/Both APES_IDP and GRAPES_IDP/)
     warnSpy.mockRestore()
   })
+
+  describe('ddisaMismatch', () => {
+    it('flags mismatch when --idp differs from DDISA', async () => {
+      process.env.DDISA_MOCK_RECORDS = JSON.stringify({
+        'hofmann.example': { idp: 'https://id.openape.ai', mode: 'open' },
+      })
+      const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
+
+      const result = await resolveLoginInputs({
+        email: 'patrick@hofmann.example',
+        idp: 'https://id.openape.at',
+        browser: true, // skip key resolution to keep the test focused
+      })
+
+      expect(result.idp).toBe('https://id.openape.at')
+      expect(result.ddisaMismatch).toEqual({
+        dnsIdp: 'https://id.openape.ai',
+        chosenIdp: 'https://id.openape.at',
+        domain: 'hofmann.example',
+      })
+    })
+
+    it('no mismatch when --idp matches DDISA', async () => {
+      process.env.DDISA_MOCK_RECORDS = JSON.stringify({
+        'hofmann.example': { idp: 'https://id.openape.ai', mode: 'open' },
+      })
+      const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
+
+      const result = await resolveLoginInputs({
+        email: 'patrick@hofmann.example',
+        idp: 'https://id.openape.ai',
+        browser: true,
+      })
+
+      expect(result.ddisaMismatch).toBeUndefined()
+    })
+
+    it('no mismatch when IdP is auto-discovered from DDISA (no explicit override)', async () => {
+      process.env.DDISA_MOCK_RECORDS = JSON.stringify({
+        'hofmann.example': { idp: 'https://id.openape.ai', mode: 'open' },
+      })
+      const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
+
+      const result = await resolveLoginInputs({
+        email: 'patrick@hofmann.example',
+        browser: true,
+      })
+
+      expect(result.idp).toBe('https://id.openape.ai')
+      expect(result.ddisaMismatch).toBeUndefined()
+    })
+
+    it('no mismatch when domain has no DDISA record (fallback path)', async () => {
+      // No DDISA_MOCK_RECORDS — resolveDDISA returns null
+      const { resolveLoginInputs } = await import('../src/commands/auth/resolve-login')
+
+      const result = await resolveLoginInputs({
+        email: 'patrick@unknown.example',
+        idp: 'https://id.openape.at',
+        browser: true,
+      })
+
+      expect(result.idp).toBe('https://id.openape.at')
+      expect(result.ddisaMismatch).toBeUndefined()
+    })
+  })
 })
 
 describe('readPublicKeyComment', () => {

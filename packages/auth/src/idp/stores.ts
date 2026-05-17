@@ -35,6 +35,26 @@ export interface CodeStore {
 export interface ConsentStore {
   hasConsent: (userId: string, clientId: string) => Promise<boolean>
   save: (entry: ConsentEntry) => Promise<void>
+  /** All SPs the user has approved, sorted by `grantedAt` desc. */
+  list: (userId: string) => Promise<ConsentEntry[]>
+  /** Revoke consent for a specific SP. No-op if no consent existed. */
+  revoke: (userId: string, clientId: string) => Promise<void>
+}
+
+/**
+ * Backing store for the DDISA `mode=allowlist-admin` policy. The
+ * domain owner pre-approves which SPs may receive assertions for
+ * users in their domain; everything else is denied. Reads happen on
+ * the hot /authorize path; writes are app-specific (free-idp ships
+ * an admin UI, other IdPs may seed via config).
+ */
+export interface AdminAllowlistStore {
+  /**
+   * Is `clientId` allowlisted for users in `userDomain`? `userDomain`
+   * is the email-domain side of the user's identifier, not the SP's
+   * domain — the allowlist is scoped per-tenant-domain.
+   */
+  isAllowed: (userDomain: string, clientId: string) => Promise<boolean>
 }
 
 export interface KeyEntry {
@@ -136,6 +156,42 @@ export class InMemoryConsentStore implements ConsentStore {
 
   async save(entry: ConsentEntry): Promise<void> {
     this.consents.set(this.key(entry.userId, entry.clientId), entry)
+  }
+
+  async list(userId: string): Promise<ConsentEntry[]> {
+    const out: ConsentEntry[] = []
+    for (const entry of this.consents.values()) {
+      if (entry.userId === userId) out.push(entry)
+    }
+    out.sort((a, b) => b.grantedAt - a.grantedAt)
+    return out
+  }
+
+  async revoke(userId: string, clientId: string): Promise<void> {
+    this.consents.delete(this.key(userId, clientId))
+  }
+}
+
+/**
+ * Default in-memory implementation. Always denies — apps that want
+ * to support `mode=allowlist-admin` must provide a real store with
+ * a backing table and an admin UI to populate it. Free-idp ships
+ * one such impl; bare module consumers fall back to this.
+ */
+export class InMemoryAdminAllowlistStore implements AdminAllowlistStore {
+  private allowed = new Set<string>()
+
+  private key(userDomain: string, clientId: string): string {
+    return `${userDomain.toLowerCase()}:${clientId.toLowerCase()}`
+  }
+
+  async isAllowed(userDomain: string, clientId: string): Promise<boolean> {
+    return this.allowed.has(this.key(userDomain, clientId))
+  }
+
+  /** Test helper — not part of the public AdminAllowlistStore contract. */
+  add(userDomain: string, clientId: string): void {
+    this.allowed.add(this.key(userDomain, clientId))
   }
 }
 
@@ -363,7 +419,15 @@ export interface SshKeyStore {
   findByUser: (email: string) => Promise<SshKey[]>
   findByPublicKey: (publicKey: string) => Promise<SshKey | null>
   delete: (keyId: string) => Promise<void>
-  deleteAllForUser: (email: string) => Promise<void>
+  /**
+   * Delete every key for the user except (optionally) `exceptKeyId`.
+   * The exception is the safety hatch for "rotate one key into the
+   * place of another" flows: save the new one first, then call this
+   * with `exceptKeyId` set to the new id so the agent is never
+   * without an authenticator (see #295). Backwards-compatible — the
+   * options arg is optional.
+   */
+  deleteAllForUser: (email: string, opts?: { exceptKeyId?: string }) => Promise<void>
 }
 
 // --- Grant Challenge Store (ed25519 challenge-response) ---
@@ -459,9 +523,10 @@ export class InMemorySshKeyStore implements SshKeyStore {
     this.keys.delete(keyId)
   }
 
-  async deleteAllForUser(email: string): Promise<void> {
+  async deleteAllForUser(email: string, opts?: { exceptKeyId?: string }): Promise<void> {
+    const except = opts?.exceptKeyId
     for (const [id, key] of this.keys) {
-      if (key.userEmail === email) this.keys.delete(id)
+      if (key.userEmail === email && id !== except) this.keys.delete(id)
     }
   }
 }

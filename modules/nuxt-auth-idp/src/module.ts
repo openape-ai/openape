@@ -45,6 +45,29 @@ export interface ModuleOptions {
    * Env: `NUXT_OPENAPE_IDP_ALLOWED_FRAME_ANCESTORS`
    */
   allowedFrameAncestors: string
+  /**
+   * SP `redirect_uri` enforcement mode (DDISA core.md §5.2.1, #280).
+   *
+   *   - `permissive` (default): unresolvable SP metadata is allowed
+   *     through with a warn-log so SPs that haven't yet published
+   *     `/.well-known/oauth-client-metadata` keep working during
+   *     rollout. Explicit mismatch (metadata exists but redirect_uri
+   *     not in `redirect_uris`) is still rejected.
+   *   - `strict`: unresolvable metadata is also rejected. Use in
+   *     production once all SPs publish their metadata.
+   *
+   * Env: `NUXT_OPENAPE_IDP_SP_METADATA_MODE`
+   */
+  spMetadataMode: 'permissive' | 'strict'
+  /**
+   * Pre-registered "public clients" — native apps without a domain
+   * (RFC 8252). Pass either an object or a JSON string. The IdP uses
+   * this for `client_id`s without a `.` in them; everything else
+   * goes through the well-known fetch.
+   *
+   * Env: `NUXT_OPENAPE_IDP_PUBLIC_CLIENTS` (JSON string)
+   */
+  publicClients: string | Record<string, { client_id: string, redirect_uris: string[] }>
 }
 
 function resolveRoutes(routes: boolean | Partial<RoutesOptions> | undefined): RoutesOptions {
@@ -88,6 +111,8 @@ export default defineNuxtModule<ModuleOptions>({
     pages: true,
     federationProviders: '',
     allowedFrameAncestors: '',
+    spMetadataMode: 'permissive',
+    publicClients: '',
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
@@ -183,6 +208,8 @@ export default defineNuxtModule<ModuleOptions>({
           { name: 'openape-register', path: '/register', file: resolve('./runtime/pages/register.vue') },
           { name: 'openape-account', path: '/account', file: resolve('./runtime/pages/account.vue') },
           { name: 'openape-admin', path: '/admin', file: resolve('./runtime/pages/admin.vue') },
+          { name: 'openape-consent', path: '/consent', file: resolve('./runtime/pages/consent.vue') },
+          { name: 'openape-denied', path: '/denied', file: resolve('./runtime/pages/denied.vue') },
         ]
 
         if (grants.enablePages) {
@@ -223,6 +250,18 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/session/ssh-keys/:keyId', method: 'delete', handler: resolve('./runtime/server/api/session/ssh-keys/[keyId].delete') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
 
+      // Self-service Sessions — caller can list and revoke their own
+      // refresh-token families across devices. Lives in routeConfig.auth
+      // (not .admin) because every authenticated user gets these regardless
+      // of admin role.
+      addServerHandler({ route: '/api/me/sessions', handler: resolve('./runtime/server/api/me/sessions/index.get') })
+      addServerHandler({ route: '/api/me/sessions/:familyId', method: 'delete', handler: resolve('./runtime/server/api/me/sessions/[familyId].delete') })
+
+      // Self-service Consents — caller manages their own DDISA
+      // `allowlist-user` SP approvals (#301).
+      addServerHandler({ route: '/api/account/consents', handler: resolve('./runtime/server/api/account/consents/index.get') })
+      addServerHandler({ route: '/api/account/consents/:clientId', method: 'delete', handler: resolve('./runtime/server/api/account/consents/[clientId].delete') })
+
       // WebAuthn Registration
       addServerHandler({ route: '/api/webauthn/register/options', method: 'post', handler: resolve('./runtime/server/api/webauthn/register/options.post') })
       addServerHandler({ route: '/api/webauthn/register/verify', method: 'post', handler: resolve('./runtime/server/api/webauthn/register/verify.post') })
@@ -246,6 +285,14 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/.well-known/jwks.json', handler: resolve('./runtime/server/routes/well-known/jwks.json.get') })
       addServerHandler({ route: '/.well-known/openid-configuration', handler: resolve('./runtime/server/routes/well-known/openid-configuration.get') })
       addServerHandler({ route: '/userinfo', handler: resolve('./runtime/server/routes/userinfo.get') })
+
+      // DDISA `allowlist-user` consent endpoints used by the /consent page (#301).
+      addServerHandler({ route: '/api/authorize/consent', handler: resolve('./runtime/server/api/authorize/consent.get') })
+      addServerHandler({ route: '/api/authorize/consent', method: 'post', handler: resolve('./runtime/server/api/authorize/consent.post') })
+
+      // Friendly deny page used by `mode=deny` and unapproved-allowlist-admin (#307).
+      addServerHandler({ route: '/api/authorize/denied', handler: resolve('./runtime/server/api/authorize/denied.get') })
+      addServerHandler({ route: '/api/authorize/denied', method: 'post', handler: resolve('./runtime/server/api/authorize/denied.post') })
     }
 
     // Server route handlers — Admin
@@ -277,6 +324,10 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/admin/registration-urls', handler: resolve('./runtime/server/api/admin/registration-urls/index.get') })
       addServerHandler({ route: '/api/admin/registration-urls', method: 'post', handler: resolve('./runtime/server/api/admin/registration-urls/index.post') })
       addServerHandler({ route: '/api/admin/registration-urls/:token', method: 'delete', handler: resolve('./runtime/server/api/admin/registration-urls/[token].delete') })
+
+      // Admin Delegations
+      addServerHandler({ route: '/api/admin/delegations', handler: resolve('./runtime/server/api/admin/delegations/index.get') })
+      addServerHandler({ route: '/api/admin/delegations/:id', method: 'delete', handler: resolve('./runtime/server/api/admin/delegations/[id].delete') })
     }
 
     // Server route handlers — Grants

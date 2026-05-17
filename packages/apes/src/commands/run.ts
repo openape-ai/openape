@@ -25,6 +25,32 @@ import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
+import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
+import { isDarwin, macOSUsernameForAgent, readMacOSUser } from '../lib/macos-user'
+
+/**
+ * Map an agent name (`igor`) to its macOS username (`openape-agent-igor`)
+ * when the prefixed dscl record exists. Returns the input unchanged for:
+ *   - non-Darwin platforms (escapes-helper isn't macOS-specific in theory)
+ *   - non-agent values like `root`, `_postgres`, etc.
+ *   - legacy agents that pre-date the prefix (the prefixed record is
+ *     absent, so we fall through and let escapes setuid to the plain
+ *     name — backward-compatible)
+ *
+ * The mapping is transparent to all callers: nest/troop-ws.ts,
+ * pm2-supervisor.ts, allow.ts and operators typing `apes run --as
+ * igor` keep working without knowing about the prefix.
+ */
+function resolveRunAsTarget(runAs: string | undefined): string | undefined {
+  if (!runAs) return runAs
+  if (!isDarwin()) return runAs
+  if (!AGENT_NAME_REGEX.test(runAs)) return runAs
+  // Already prefixed (operator typed the full macOS username) — pass through.
+  if (runAs.startsWith('openape-agent-')) return runAs
+  const prefixed = macOSUsernameForAgent(runAs)
+  if (readMacOSUser(prefixed)) return prefixed
+  return runAs
+}
 
 /**
  * Returns true when the caller asked for the legacy blocking path via
@@ -606,6 +632,22 @@ async function runAudienceMode(
   const grantsUrl = await getGrantsEndpoint(idp)
   const command = action.split(' ')
   const targetHost = (args.host as string) || hostname()
+  const runAs = resolveRunAsTarget((args.as as string | undefined) ?? undefined)
+
+  // Step 0: Reuse path — look for an existing approved 'timed' /
+  // 'always' grant that matches our command exactly, instead of
+  // creating a new pending grant every call. The legacy behaviour
+  // (always create new) meant `apes run --as root --approval always`
+  // re-prompted on every invocation despite the always-grant being
+  // designed for reuse. Now: first call creates+approves once,
+  // subsequent calls fetch a fresh token off the same grant id.
+  const reusableId = await findReusableAudienceGrant({
+    grantsUrl, requester: auth.email, audience, command, targetHost, runAs,
+  })
+  if (reusableId) {
+    const { authz_jwt } = await apiFetch<{ authz_jwt: string }>(`${grantsUrl}/${reusableId}/token`, { method: 'POST' })
+    return executeWithGrantToken({ audience, command, args, token: authz_jwt })
+  }
 
   // Step 1: Request grant
   consola.info(`Requesting ${audience} grant on ${targetHost}: ${command.join(' ')}`)
@@ -618,7 +660,7 @@ async function runAudienceMode(
       grant_type: args.approval,
       command,
       reason: (args.reason as string) || command.join(' '),
-      ...(args.as ? { run_as: args.as } : {}),
+      ...(runAs ? { run_as: runAs } : {}),
     },
   })
   if (!shouldWaitForGrant(args)) {
@@ -627,23 +669,39 @@ async function runAudienceMode(
   }
 
   consola.success(`Grant requested: ${grant.id}`)
+  consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
 
-  // Step 2: Wait for approval
+  // Step 2: Wait for approval. Human-in-the-loop, so the budget is generous
+  // (15 min default). The poll loop MUST throw on timeout — if it falls
+  // through to the token-fetch below with status='pending', the server
+  // rejects with a confusing "Grant is not approved (status: pending)"
+  // and the user can't tell the timeout from a real auth error.
   consola.info('Waiting for approval...')
-  const maxWait = 300_000
+  const maxWait = 15 * 60 * 1000
   const interval = 3_000
   const start = Date.now()
+  let approved = false
 
   while (Date.now() - start < maxWait) {
     const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
     if (status.status === 'approved') {
       consola.success('Grant approved!')
+      approved = true
       break
     }
     if (status.status === 'denied' || status.status === 'revoked') {
       throw new CliError(`Grant ${status.status}.`)
     }
     await new Promise(r => setTimeout(r, interval))
+  }
+
+  if (!approved) {
+    const minutes = Math.round(maxWait / 60_000)
+    throw new CliError(
+      `Grant approval timed out after ${minutes} min (still pending). `
+      + `Check your DDISA inbox at ${idp}/grant-approval?grant_id=${grant.id} — `
+      + `if approved later, re-run the same \`apes run\` command and it will reuse the grant.`,
+    )
   }
 
   // Step 3: Get grant token
@@ -653,14 +711,23 @@ async function runAudienceMode(
   })
 
   // Step 4: Execute or output token
+  return executeWithGrantToken({ audience, command, args, token: authz_jwt })
+}
+
+function executeWithGrantToken(opts: {
+  audience: string
+  command: string[]
+  args: Record<string, unknown>
+  token: string
+}): void {
+  const { audience, command, args, token } = opts
   if (audience === 'escapes') {
     consola.info(`Executing: ${command.join(' ')}`)
     try {
       // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside
-      // the escapes pipe don't self-detect as ape-shell mode. Same
-      // rationale as execShellCommand above.
+      // the escapes pipe don't self-detect as ape-shell mode.
       const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
-      execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', authz_jwt, '--', ...command], {
+      execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', token, '--', ...command], {
         stdio: 'inherit',
         env: inheritedEnv,
       })
@@ -671,6 +738,64 @@ async function runAudienceMode(
     }
   }
   else {
-    process.stdout.write(authz_jwt)
+    process.stdout.write(token)
+  }
+}
+
+/**
+ * Look for an existing approved `timed`/`always` grant matching the
+ * current request exactly. Returns the grant id, or null if no
+ * reusable grant exists. Network/parse errors fall through to null
+ * (the caller then creates a fresh grant).
+ *
+ * Match criteria (all required):
+ *   - status === 'approved'
+ *   - grant_type !== 'once' (once-grants get consumed on use)
+ *   - audience matches
+ *   - target_host matches
+ *   - command array equals exactly
+ *   - run_as matches (or both undefined)
+ *   - not expired (if grant_type=timed)
+ */
+async function findReusableAudienceGrant(opts: {
+  grantsUrl: string
+  requester: string
+  audience: string
+  command: string[]
+  targetHost: string
+  runAs?: string
+}): Promise<string | null> {
+  try {
+    const grants = await apiFetch<{
+      data: Array<{
+        id: string
+        status: string
+        expires_at?: number
+        request: {
+          audience: string
+          target_host: string
+          grant_type: string
+          command?: string[]
+          run_as?: string
+        }
+      }>
+    }>(`${opts.grantsUrl}?requester=${encodeURIComponent(opts.requester)}&status=approved&limit=50`)
+    const now = Math.floor(Date.now() / 1000)
+    const match = grants.data.find((g) => {
+      const r = g.request
+      if (r.audience !== opts.audience) return false
+      if (r.target_host !== opts.targetHost) return false
+      if (r.grant_type === 'once') return false
+      if (r.grant_type === 'timed' && g.expires_at && g.expires_at <= now) return false
+      const cmd = r.command ?? []
+      if (cmd.length !== opts.command.length) return false
+      if (!cmd.every((c, i) => c === opts.command[i])) return false
+      if ((r.run_as ?? undefined) !== opts.runAs) return false
+      return true
+    })
+    return match?.id ?? null
+  }
+  catch {
+    return null
   }
 }

@@ -7,11 +7,22 @@ const FLOW_COOKIE = 'openape-flow'
 
 export function getSpConfig() {
   const config = useRuntimeConfig()
+  // The module's auto-generated runtime-config type doesn't always
+  // reflect new fields immediately during standalone typecheck of
+  // this module (a consumer-side `nuxi prepare` is what regenerates
+  // it). Cast to a forward-compatible shape so this file builds in
+  // isolation as well — at runtime the defu in module.ts always
+  // populates these.
+  const sp = config.openapeSp as unknown as Record<string, string | undefined>
   return {
-    clientId: (config.openapeSp.clientId || 'sp.example.com').trim(),
-    openapeUrl: (config.openapeSp.openapeUrl || '').trim(),
-    spName: (config.openapeSp.spName || 'OpenApe Service Provider').trim(),
-    fallbackIdpUrl: (config.openapeSp.fallbackIdpUrl || 'https://id.openape.at').trim(),
+    clientId: (sp.clientId || 'sp.example.com').trim(),
+    openapeUrl: (sp.openapeUrl || '').trim(),
+    spName: (sp.spName || 'OpenApe Service Provider').trim(),
+    fallbackIdpUrl: (sp.fallbackIdpUrl || 'https://id.openape.at').trim(),
+    // Default `/dashboard` matches the original hardcoded value so
+    // existing SPs (chat) keep working. troop overrides to `/` via
+    // its nuxt.config — see `openapeSp.postLoginRedirect`.
+    postLoginRedirect: (sp.postLoginRedirect || '/dashboard').trim(),
   }
 }
 

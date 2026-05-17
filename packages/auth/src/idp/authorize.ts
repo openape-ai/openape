@@ -1,5 +1,5 @@
 import type { PolicyMode } from '@openape/core'
-import type { ConsentStore } from './stores.js'
+import type { AdminAllowlistStore, ConsentStore } from './stores.js'
 
 export interface AuthorizeParams {
   client_id: string
@@ -38,6 +38,21 @@ export function validateAuthorizeRequest(params: AuthorizeParams): string | null
   return null
 }
 
+export interface EvaluatePolicyOptions {
+  /**
+   * Backing store for `mode=allowlist-admin`. When omitted, that
+   * mode falls through to a hard deny — same as before this option
+   * existed, preserving backward compat for callers that don't ship
+   * an admin allowlist.
+   */
+  adminAllowlistStore?: AdminAllowlistStore
+}
+
+function extractDomain(userId: string): string {
+  const at = userId.lastIndexOf('@')
+  return at < 0 ? '' : userId.slice(at + 1).toLowerCase()
+}
+
 /**
  * Evaluate policy: should the user be prompted for consent?
  */
@@ -46,6 +61,7 @@ export async function evaluatePolicy(
   clientId: string,
   userId: string,
   consentStore: ConsentStore,
+  options?: EvaluatePolicyOptions,
 ): Promise<'allow' | 'consent' | 'deny'> {
   switch (mode) {
     case 'open':
@@ -56,10 +72,17 @@ export async function evaluatePolicy(
       const hasConsent = await consentStore.hasConsent(userId, clientId)
       return hasConsent ? 'allow' : 'consent'
     }
-    case 'allowlist-admin':
-      // For the reference implementation, admin allowlist is not implemented
-      // In production, this would check an admin-managed list
-      return 'deny'
+    case 'allowlist-admin': {
+      // Domain-owner-curated SP allowlist. Without a store wired up,
+      // the safe answer is deny — the domain explicitly opted into
+      // a strict mode and we shouldn't silently relax it.
+      const store = options?.adminAllowlistStore
+      if (!store) return 'deny'
+      const userDomain = extractDomain(userId)
+      if (!userDomain) return 'deny'
+      const allowed = await store.isAllowed(userDomain, clientId)
+      return allowed ? 'allow' : 'deny'
+    }
     default:
       return 'consent'
   }

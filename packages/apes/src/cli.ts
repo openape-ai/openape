@@ -18,6 +18,9 @@ import { delegateCommand } from './commands/grants/delegate'
 import { delegationsCommand } from './commands/grants/delegations'
 import { delegationRevokeCommand } from './commands/grants/delegation-revoke'
 import { adminCommand } from './commands/admin/index'
+import { agentsCommand } from './commands/agents/index'
+import { nestCommand } from './commands/nest/index'
+import { yoloCommand } from './commands/yolo/index'
 import { adapterCommand } from './commands/adapter/index'
 import { runCommand } from './commands/run'
 import { proxyCommand } from './commands/proxy'
@@ -29,11 +32,14 @@ import { mcpCommand } from './commands/mcp/index'
 import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
 import { registerUserCommand } from './commands/register-user'
+import { utilsCommand } from './commands/utils/index'
+import { sessionsCommand } from './commands/sessions/index'
 import { dnsCheckCommand } from './commands/dns-check'
 import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
 import { CliError, CliExit } from './errors'
+import { maybeWarnStaleVersion } from './version-check'
 
 // Gracefully handle EPIPE when stdout is closed early (e.g. piped to `head`)
 process.stdout.on('error', (err: NodeJS.ErrnoException) => {
@@ -135,11 +141,16 @@ const main = defineCommand({
     enroll: enrollCommand,
     'register-user': registerUserCommand,
     'dns-check': dnsCheckCommand,
+    utils: utilsCommand,
+    sessions: sessionsCommand,
     login: loginCommand,
     logout: logoutCommand,
     whoami: whoamiCommand,
     health: healthCommand,
     grants: grantsCommand,
+    agents: agentsCommand,
+    nest: nestCommand,
+    yolo: yoloCommand,
     admin: adminCommand,
     run: runCommand,
     proxy: proxyCommand,
@@ -151,6 +162,44 @@ const main = defineCommand({
     workflows: workflowsCommand,
   },
 })
+
+// Auto-refresh: every command except those that don't need (or shouldn't
+// touch) existing auth gets a transparent token refresh before its handler
+// runs. Matches `ape-shell` behavior — users no longer need to re-`apes
+// login` when an SP rejects their token; the CLI rotates it on the next
+// invocation. login/logout obviously skip; init/enroll/register-user are
+// pre-auth bootstrap; dns-check/utils/explain/workflows are diagnostic and
+// offline-safe.
+const NO_REFRESH_COMMANDS = new Set([
+  'login', 'logout',
+  'init', 'enroll', 'register-user',
+  'dns-check', 'utils', 'explain', 'workflows',
+  '--help', '-h', 'help',
+  '--version', '-v',
+])
+
+async function maybeRefreshAuth(): Promise<void> {
+  const sub = process.argv[2]
+  if (!sub || NO_REFRESH_COMMANDS.has(sub)) return
+  const { loadAuth } = await import('./config.js')
+  if (!loadAuth()) return // not logged in — nothing to refresh
+  try {
+    const { ensureFreshToken } = await import('./http.js')
+    await ensureFreshToken()
+  }
+  catch {
+    // Refresh failures are non-fatal — the actual command will surface a
+    // proper auth error if the token is genuinely unusable.
+  }
+}
+
+await maybeRefreshAuth()
+
+// Stale-version notice. Synchronous cache read prints instantly when
+// we already know we're behind; the actual npm round-trip is bounded
+// to 2s by an AbortSignal so command startup never blocks for long.
+// Cached 24h, so this is a one-time cost per day.
+await maybeWarnStaleVersion(__VERSION__).catch(() => { /* never block */ })
 
 runMain(main).catch((err) => {
   if (err instanceof CliExit) {

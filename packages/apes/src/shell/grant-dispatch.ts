@@ -76,9 +76,19 @@ export async function requestGrantForShellLine(
     return { kind: 'denied', reason: 'No IdP URL configured. Run `apes login` first.' }
   }
 
+  // --- 0a. unconditional exit ---
+  // `exit` and `exit <code>` always succeed without approval. Getting OUT of
+  // the shell is a foot-gun if it requires a grant — agents and humans
+  // alike should be able to leave reliably even if everything else is
+  // broken (network down, IdP unreachable, expired token).
+  const trimmedLine = line.trim().replace(/;+$/, '').trim()
+  if (trimmedLine === 'exit' || /^exit \d+$/.test(trimmedLine)) {
+    return { kind: 'approved', grantId: 'shell-exit', mode: 'self' }
+  }
+
   const parsed = parseShellCommand(line)
 
-  // --- 0. apes self-dispatch shortcut ---
+  // --- 0b. apes self-dispatch shortcut ---
   // `apes <subcmd>` invocations from inside the ape-shell REPL are the
   // shell's own control surface — not a new user-authored action that
   // needs approval. See `apes-self-dispatch.ts` for the full rationale.
