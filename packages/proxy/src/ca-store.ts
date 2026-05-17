@@ -36,7 +36,10 @@ export function loadOrCreateCa(opts: LoadOrCreateCaOpts): CaBundle {
   // valueTagClass takes an asn1.Type value (the upstream @types annotation says
   // asn1.Class but node-forge's x509.js reads it from asn1.Type at runtime).
   const attrs = [
-    { name: 'commonName', value: opts.subjectCN, valueTagClass: forge.asn1.Type.UTF8 },
+    // @types/node-forge types valueTagClass as asn1.Class, but node-forge's
+    // x509.js reads it as an asn1.Type at runtime (see comment above). Cast to
+    // satisfy the too-narrow typing without changing runtime behaviour.
+    { name: 'commonName', value: opts.subjectCN, valueTagClass: forge.asn1.Type.UTF8 as unknown as forge.asn1.Class },
   ]
   cert.setSubject(attrs)
   cert.setIssuer(attrs)
@@ -78,7 +81,9 @@ export function mintLeafCert(ca: CaBundle, hostname: string): LeafCert {
   // crypto/x509 parser happy. The issuer attributes come straight from the
   // parsed CA, which is already UTF8-tagged.
   cert.setSubject([
-    { name: 'commonName', value: hostname, valueTagClass: forge.asn1.Type.UTF8 },
+    // See note in createCaCert: valueTagClass is an asn1.Type at runtime;
+    // cast around the too-narrow @types/node-forge annotation.
+    { name: 'commonName', value: hostname, valueTagClass: forge.asn1.Type.UTF8 as unknown as forge.asn1.Class },
   ])
   cert.setIssuer(caCert.subject.attributes)
   cert.setExtensions([
