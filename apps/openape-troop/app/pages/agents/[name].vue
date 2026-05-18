@@ -245,6 +245,58 @@ async function deleteSkill(name: string) {
   }
 }
 
+// Secrets — capability values bound to this agent. Listed by env name
+// + status only; troop never returns the value (it's sealed to the
+// agent). Add/rotate = PUT, revoke = DELETE (M2c endpoints).
+interface SecretRow { env: string, status: 'active' | 'revoked', created_at: number, updated_at: number, revoked_at: number | null }
+const secrets = ref<SecretRow[]>([])
+const secretsError = ref('')
+const newSecret = ref({ env: '', value: '' })
+const secretSaving = ref(false)
+
+async function loadSecrets() {
+  if (!agentName.value) return
+  secretsError.value = ''
+  try {
+    const res: { secrets: SecretRow[] } = await ($fetch as any)(`/api/agents/${agentName.value}/secrets`)
+    secrets.value = res.secrets
+  }
+  catch (err: any) { secretsError.value = err?.data?.statusMessage || err?.message || 'failed to load secrets' }
+}
+watch(detail, (d) => { if (d) loadSecrets() })
+
+async function saveSecret() {
+  if (!agentName.value || !newSecret.value.env || !newSecret.value.value) return
+  secretSaving.value = true
+  secretsError.value = ''
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}/secrets/${encodeURIComponent(newSecret.value.env)}`, {
+      method: 'PUT',
+      body: { value: newSecret.value.value },
+    })
+    newSecret.value = { env: '', value: '' }
+    await loadSecrets()
+  }
+  catch (err: any) {
+    secretsError.value = err?.data?.statusMessage || err?.message || 'save failed (the agent must have synced once after spawn)'
+  }
+  finally {
+    secretSaving.value = false
+  }
+}
+
+async function revokeSecret(env: string) {
+  if (!agentName.value) return
+  if (!confirm(`Revoke '${env}'? The agent's copy is cleared on its next connect.`)) return
+  try {
+    await ($fetch as any)(`/api/agents/${agentName.value}/secrets/${encodeURIComponent(env)}`, { method: 'DELETE' })
+    await loadSecrets()
+  }
+  catch (err: any) {
+    secretsError.value = err?.data?.statusMessage || err?.message || 'revoke failed'
+  }
+}
+
 // Task editor state
 const showEditor = ref(false)
 const editing = ref<{ taskId: string, isNew: boolean }>({ taskId: '', isNew: true })
@@ -688,6 +740,79 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             </div>
           </template>
         </UModal>
+
+        <!-- Secrets — capability values, sealed to the agent -->
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-key-round" class="text-muted size-4" />
+                <span class="font-medium">Secrets</span>
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  {{ secrets.filter(s => s.status === 'active').length }}
+                </UBadge>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="border-t border-(--ui-border)">
+              <p class="text-xs text-muted px-4 py-3">
+                Capability values for this agent. The value is sealed to the agent's key before it's stored — troop never keeps the plaintext and can't show it back. Set a value again to rotate it.
+              </p>
+              <UAlert v-if="secretsError" color="error" :title="secretsError" class="m-4" />
+              <ul v-if="secrets.length > 0" class="divide-y divide-(--ui-border)">
+                <li v-for="s in secrets" :key="s.env" class="px-4 py-3 flex items-center gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <code class="font-medium">{{ s.env }}</code>
+                      <UBadge :color="s.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
+                        {{ s.status }}
+                      </UBadge>
+                    </div>
+                  </div>
+                  <UButton
+                    v-if="s.status === 'active'"
+                    size="sm"
+                    color="error"
+                    variant="ghost"
+                    icon="i-lucide-trash-2"
+                    aria-label="Revoke secret"
+                    @click="revokeSecret(s.env)"
+                  />
+                </li>
+              </ul>
+              <div class="px-4 py-3 border-t border-(--ui-border) space-y-2">
+                <div class="flex items-stretch gap-2">
+                  <UInput
+                    v-model="newSecret.env"
+                    placeholder="ENV_NAME"
+                    class="flex-1"
+                    :ui="{ base: 'w-full' }"
+                    :disabled="secretSaving"
+                  />
+                  <UInput
+                    v-model="newSecret.value"
+                    type="password"
+                    placeholder="value"
+                    class="flex-1"
+                    :ui="{ base: 'w-full' }"
+                    :disabled="secretSaving"
+                  />
+                  <UButton
+                    color="primary"
+                    :loading="secretSaving"
+                    :disabled="!newSecret.env || !newSecret.value"
+                    @click="saveSecret"
+                  >
+                    Set
+                  </UButton>
+                </div>
+                <p class="text-[11px] text-muted">
+                  UPPER_SNAKE_CASE. Binding works once the agent has synced after spawn.
+                </p>
+              </div>
+            </div>
+          </details>
+        </UCard>
 
         <!-- Tasks -->
         <UCard :ui="{ body: 'p-0' }">
