@@ -98,6 +98,23 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_agent_task ON runs(agent_email, task_id)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)`)
+
+    // Agent Recipe M2c: capability broker. pubkey_x25519 = agent's
+    // encryption pubkey (reported on sync); agent_secrets holds
+    // sealed-at-rest capability values (plaintext never stored).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN pubkey_x25519 TEXT`)
+    }
+    catch { /* column exists */ }
+    await db.run(sql`CREATE TABLE IF NOT EXISTS agent_secrets (
+      agent_email TEXT NOT NULL,
+      env TEXT NOT NULL,
+      sealed TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      PRIMARY KEY (agent_email, env)
+    )`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)

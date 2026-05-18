@@ -18,6 +18,11 @@ export const agents = sqliteTable('agents', {
   hostId: text('host_id'),
   hostname: text('hostname'),
   pubkeySsh: text('pubkey_ssh'),
+  // Agent X25519 encryption public key (base64url DER), reported on
+  // sync (M2b writes it on the host). troop seals capability secrets
+  // to this key; only the agent's private key can open them. Null
+  // until the agent has synced at least once post-spawn.
+  pubkeyX25519: text('pubkey_x25519'),
   // Persona / behaviour rules that apply to every interaction with this
   // agent — both cron-driven task runs and live chat-bridge messages
   // inherit it as the LLM `system` message. Per-task `userPrompt` is
@@ -106,4 +111,22 @@ export const runs = sqliteTable('runs', {
 }, table => [
   index('idx_runs_agent_task').on(table.agentEmail, table.taskId),
   index('idx_runs_started').on(table.startedAt),
+])
+
+// agent_secrets — capability secrets bound to an agent, sealed at rest.
+// `sealed` is the JSON of an @openape/core SealedBox encrypted to the
+// agent's X25519 public key the moment the owner submitted the value;
+// troop never stores or logs the plaintext. Revoke is a soft tombstone
+// (`revoked_at` set, `sealed` cleared) so the next push clears the
+// agent's copy and the binding history stays auditable. Composite PK
+// (agent_email, env) — one binding per env var per agent.
+export const agentSecrets = sqliteTable('agent_secrets', {
+  agentEmail: text('agent_email').notNull(),
+  env: text('env').notNull(),
+  sealed: text('sealed'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  revokedAt: integer('revoked_at'),
+}, table => [
+  primaryKey({ columns: [table.agentEmail, table.env] }),
 ])
