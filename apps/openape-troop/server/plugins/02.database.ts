@@ -66,6 +66,12 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN soul TEXT NOT NULL DEFAULT ''`)
     }
     catch { /* column exists */ }
+    // Agent Recipe M5: owner-editable behaviour layer appended to the
+    // system prompt at sync (no re-deploy).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN user_addendum TEXT NOT NULL DEFAULT ''`)
+    }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
       agent_email TEXT NOT NULL,
       name TEXT NOT NULL,

@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../../database/drizzle'
 import { agents, agentSkills, tasks } from '../../../database/schema'
 import { requireAgent } from '../../../utils/auth'
+import { composeSystemPrompt } from '../../../utils/system-prompt'
 
 // Agent reads its own task list + agent-level config. No owner gate —
 // the JWT's sub is the agent email and we filter rows on it.
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const agent = await db
     .select({
       systemPrompt: agents.systemPrompt,
+      userAddendum: agents.userAddendum,
       tools: agents.tools,
     })
     .from(agents)
@@ -38,7 +40,7 @@ export default defineEventHandler(async (event) => {
     .from(agentSkills)
     .where(and(eq(agentSkills.agentEmail, agentEmail), eq(agentSkills.enabled, true)))
   return {
-    system_prompt: agent?.systemPrompt ?? '',
+    system_prompt: composeSystemPrompt(agent?.systemPrompt ?? '', agent?.userAddendum),
     // tools[] = whitelist for chat-bridge runtime + cron task fallback.
     tools: agent?.tools ?? [],
     skills: skillRows,
