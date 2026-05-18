@@ -121,6 +121,24 @@ describe('buildSpawnSetupScript', () => {
     expect(script).not.toContain('chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key"')
   })
 
+  it('allocates the lowest free UID, not max+1 (so a high UID does not wedge spawns)', () => {
+    const script = buildSpawnSetupScript({
+      ...baseInput,
+      claudeSettingsJson: null,
+      hookScriptSource: null,
+      claudeOauthToken: null,
+    })
+    // Scans for the first actually-unused UID in [200,500)…
+    expect(script).toContain('OCCUPIED_UIDS=')
+    expect(script).toMatch(/while \[ "\$candidate" -lt 500 \]/)
+    expect(script).toContain('grep -qx "$candidate"')
+    // …and must NOT be the old max(existing)+1 logic.
+    expect(script).not.toContain('NEXT_UID=199')
+    expect(script).not.toContain('NEXT_UID=$((uid + 1))')
+    // The genuine "range full" guard is still present.
+    expect(script).toContain('No free UID in [200, 500)')
+  })
+
   it('with claude hook: includes settings.json + hook script blocks', () => {
     const script = buildSpawnSetupScript({
       ...baseInput,
