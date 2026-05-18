@@ -7,6 +7,7 @@ import { CliError } from '../../errors'
 import { taskTools } from '../../lib/agent-tools'
 import { runLoop  } from '../../lib/agent-runtime'
 import type { RuntimeConfig } from '../../lib/agent-runtime'
+import { materializeSecrets } from '../../lib/agent-secrets-runtime'
 import { resolveTroopUrl, TroopClient  } from '../../lib/troop-client'
 import type { TaskSpec } from '../../lib/troop-client'
 
@@ -145,6 +146,9 @@ export const runAgentCommand = defineCommand({
   async run({ args }) {
     const taskId = args['task-id'] as string
     const auth = readAuth()
+    // Inject any capability secrets troop sealed to this agent before
+    // the task runs, so the agent's tools see them in process.env.
+    materializeSecrets({ log: l => consola.info(l) })
     const spec = readTaskSpec(taskId)
     const agentCfg = readAgentConfig()
     const config = readLitellmConfig(args.model as string | undefined)
