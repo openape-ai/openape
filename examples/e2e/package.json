@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@openape/server": "workspace:*",
-    "h3": "^1.15.0"
+    "h3": "^1.15.11"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

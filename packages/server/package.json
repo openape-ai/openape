@@ -34,7 +34,7 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
-    "h3": "^1.15.0",
+    "h3": "^1.15.11",
     "jose": "^5.9.0"
   },
   "devDependencies": {
