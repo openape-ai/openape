@@ -7,6 +7,7 @@ import { CliError } from '../../errors'
 import { taskTools } from '../../lib/agent-tools'
 import { runLoop, RpcSessionMap  } from '../../lib/agent-runtime'
 import type { RuntimeConfig } from '../../lib/agent-runtime'
+import { startSecretsWatcher } from '../../lib/agent-secrets-runtime'
 
 // `apes agents serve --rpc` — long-running stdio JSON server.
 // Replaces `pi --mode rpc` for chat-bridge's per-room subprocesses.
@@ -78,9 +79,14 @@ export const serveAgentCommand = defineCommand({
       catch { /* tolerate */ }
     }
 
+    // Materialize capability secrets and keep them live: troop can
+    // rotate/revoke while this long-running process is up (M2 v1
+    // live-hotswap). Log to stderr — stdout is the RPC channel.
+    const stopSecrets = startSecretsWatcher({ log: l => process.stderr.write(`${l}\n`) })
+
     const sessions = new RpcSessionMap()
     const evictTimer = setInterval(() => sessions.evictStale(), 5 * 60 * 1000)
-    process.on('exit', () => clearInterval(evictTimer))
+    process.on('exit', () => { clearInterval(evictTimer); stopSecrets() })
 
     const rl = createInterface({ input: process.stdin, terminal: false })
     rl.on('line', async (line) => {
