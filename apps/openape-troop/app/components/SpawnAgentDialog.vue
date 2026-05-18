@@ -331,10 +331,10 @@ function close() {
 <template>
   <UModal
     v-model:open="open"
-    :ui="{ content: 'sm:max-w-md max-h-[90vh] flex flex-col' }"
+    :ui="{ content: 'sm:max-w-md max-h-[92dvh] flex flex-col' }"
   >
     <template #content>
-      <div class="p-5 space-y-4 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-lg font-semibold">
@@ -558,20 +558,23 @@ function close() {
         <UAlert v-if="result?.ok && result.error" color="warning" title="Spawned with a note" :description="result.error" />
         <UAlert v-if="result && !result.ok" color="error" title="Failed" :description="result.error" />
 
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" :disabled="submitting" @click="close">
-            {{ result?.ok ? 'Close' : 'Cancel' }}
-          </UButton>
-          <UButton
-            v-if="!result?.ok"
-            color="primary"
-            :loading="submitting"
-            :disabled="!canSubmit"
-            @click="submit"
-          >
-            Spawn
-          </UButton>
-        </div>
+      </div>
+
+      <!-- Pinned footer: never scrolls out of reach and clears the
+           iOS home-indicator / browser chrome via the safe-area inset. -->
+      <div class="shrink-0 flex justify-end gap-2 border-t border-default bg-default px-5 sm:px-6 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+        <UButton variant="ghost" :disabled="submitting" @click="close">
+          {{ result?.ok ? 'Close' : 'Cancel' }}
+        </UButton>
+        <UButton
+          v-if="!result?.ok"
+          color="primary"
+          :loading="submitting"
+          :disabled="!canSubmit"
+          @click="submit"
+        >
+          Spawn
+        </UButton>
       </div>
     </template>
   </UModal>
