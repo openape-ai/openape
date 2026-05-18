@@ -100,8 +100,26 @@ describe('buildSpawnSetupScript', () => {
     shellPath: '/usr/local/bin/ape-shell',
     privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEADBEEF\n-----END PRIVATE KEY-----\n',
     publicKeySshLine: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBz1WSDX',
+    x25519PrivateKey: 'TUVfWDI1NTE5X1BSSVZBVEVfREVSX0ZBS0U',
+    x25519PublicKey: 'TUVfWDI1NTE5X1BVQkxJQ19ERVJfRkFLRQ',
     authJson: '{"idp":"https://id.openape.ai"}\n',
   }
+
+  it('writes the agent X25519 keypair with private key chmod 600', () => {
+    const script = buildSpawnSetupScript({
+      ...baseInput,
+      claudeSettingsJson: null,
+      hookScriptSource: null,
+      claudeOauthToken: null,
+    })
+    expect(script).toContain('mkdir -p "$HOME_DIR/.config/openape"')
+    expect(script).toContain('cat > "$HOME_DIR/.config/openape/agent-x25519.key"')
+    expect(script).toContain('cat > "$HOME_DIR/.config/openape/agent-x25519.key.pub"')
+    expect(script).toContain('chmod 600 "$HOME_DIR/.config/openape/agent-x25519.key"')
+    expect(script).toContain('chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key.pub"')
+    // private key never world-readable
+    expect(script).not.toContain('chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key"')
+  })
 
   it('with claude hook: includes settings.json + hook script blocks', () => {
     const script = buildSpawnSetupScript({

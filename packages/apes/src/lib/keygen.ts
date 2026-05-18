@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { generateKeyPairSync } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
+import { generateX25519KeyPair } from '@openape/core'
 import { loadEd25519PrivateKey } from '../ssh-key'
 
 export function resolveKeyPath(p: string): string {
@@ -57,6 +58,14 @@ export function generateAndSaveKey(keyPath: string): string {
 export interface GeneratedKeyPair {
   privatePem: string
   publicSshLine: string
+  /**
+   * Agent encryption keypair (X25519, base64url DER). Separate from the
+   * ed25519 auth key on purpose — auth signs, this one decrypts. troop
+   * seals capability secrets to `x25519PublicKey`; the agent opens them
+   * with `x25519PrivateKey`. See @openape/core sealed-box.
+   */
+  x25519PrivateKey: string
+  x25519PublicKey: string
 }
 
 export function generateKeyPairInMemory(): GeneratedKeyPair {
@@ -64,8 +73,11 @@ export function generateKeyPairInMemory(): GeneratedKeyPair {
   const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
   const jwk = publicKey.export({ format: 'jwk' }) as { x: string }
   const pubBytes = Buffer.from(jwk.x, 'base64url')
+  const enc = generateX25519KeyPair()
   return {
     privatePem,
     publicSshLine: buildSshEd25519Line(pubBytes),
+    x25519PrivateKey: enc.privateKey,
+    x25519PublicKey: enc.publicKey,
   }
 }

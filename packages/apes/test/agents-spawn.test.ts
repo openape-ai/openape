@@ -28,6 +28,8 @@ vi.mock('../src/lib/keygen.js', async () => {
     generateKeyPairInMemory: vi.fn(() => ({
       privatePem: '-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n',
       publicSshLine: 'ssh-ed25519 AAAAFAKE',
+      x25519PrivateKey: 'WDI1NTE5X1BSSVZfRkFLRQ',
+      x25519PublicKey: 'WDI1NTE5X1BVQl9GQUtF',
     })),
   }
 })
@@ -162,6 +164,8 @@ describe('apes agents spawn', () => {
     const buildArgs = bootstrapMock.buildSpawnSetupScript.mock.calls[0]![0] as any
     expect(buildArgs.claudeSettingsJson).toBe('{}') // hook included by default
     expect(buildArgs.shellPath).toBe('/bin/zsh')
+    expect(buildArgs.x25519PrivateKey).toBe('WDI1NTE5X1BSSVZfRkFLRQ')
+    expect(buildArgs.x25519PublicKey).toBe('WDI1NTE5X1BVQl9GQUtF')
 
     expect(writeFileSync).toHaveBeenCalledWith(
       '/tmp/apes-spawn-test/setup.sh',

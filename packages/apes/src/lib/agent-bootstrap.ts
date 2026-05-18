@@ -212,6 +212,15 @@ export interface SpawnSetupScriptInput {
   shellPath: string
   privateKeyPem: string
   publicKeySshLine: string
+  /**
+   * Agent X25519 keypair (base64url DER) for sealed capability secrets.
+   * The private key is written to `~/.config/openape/agent-x25519.key`
+   * (0600) so the agent runtime can open secrets troop sealed to its
+   * public key. The public key is written alongside (`.pub`, 0644) so
+   * the agent can report it to troop on sync.
+   */
+  x25519PrivateKey: string
+  x25519PublicKey: string
   authJson: string
   claudeSettingsJson: string | null
   hookScriptSource: string | null
@@ -383,13 +392,19 @@ mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
 cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
 cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
+mkdir -p "$HOME_DIR/.config/openape"
+cat > "$HOME_DIR/.config/openape/agent-x25519.key" ${shHeredoc(input.x25519PrivateKey)}
+cat > "$HOME_DIR/.config/openape/agent-x25519.key.pub" ${shHeredoc(input.x25519PublicKey)}
 ${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTroopBlock(input.troop)}
 chown -R "$MACOS_USER:staff" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
+chmod 700 "$HOME_DIR/.config/openape"
 chmod 600 "$HOME_DIR/.ssh/id_ed25519"
 chmod 644 "$HOME_DIR/.ssh/id_ed25519.pub"
 chmod 600 "$HOME_DIR/.config/apes/auth.json"
+chmod 600 "$HOME_DIR/.config/openape/agent-x25519.key"
+chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key.pub"
 if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
   chmod 700 "$HOME_DIR/.config/openape"
   chmod 600 "$HOME_DIR/.config/openape/claude-token.env"
