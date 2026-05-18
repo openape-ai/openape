@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- [#438](https://github.com/openape-ai/openape/pull/438) [`33f3e99`](https://github.com/openape-ai/openape/commit/33f3e99ddb408d24ae15e1b220d342f961ec8090) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Add anonymous X25519 sealed-box (`seal`, `open`, `openString`,
+  `generateX25519KeyPair`). Pure `node:crypto` (X25519 ECDH → HKDF-SHA256 →
+  AES-256-GCM), no external dependency. Used to encrypt agent secrets to a
+  recipient's public key so only the holder of the matching private key can
+  decrypt them.
+
 ## 0.16.0
 
 ### Minor Changes

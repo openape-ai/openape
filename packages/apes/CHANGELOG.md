@@ -1,5 +1,47 @@
 # @openape/apes
 
+## 1.25.0
+
+### Minor Changes
+
+- [#445](https://github.com/openape-ai/openape/pull/445) [`417adf3`](https://github.com/openape-ai/openape/commit/417adf3382902a8139154c6e06ca3817daf58571) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - New `apes agent deploy <repo>@<ref> [--param k=v] [--secret ENV=val]`
+  command: one-step Agent Recipe deploy. Calls troop's recipe-deploy
+  endpoint, waits for the agent to come online, then binds the declared
+  capability secrets (prompted interactively, or via `--secret` /
+  `--json`). The owner's `apes login` token authenticates.
+
+- [#443](https://github.com/openape-ai/openape/pull/443) [`9b909f0`](https://github.com/openape-ai/openape/commit/9b909f0ddf7e8c89a1fb4448a208985fb115f3eb) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - The agent runtime now materializes capability secrets: it opens the
+  sealed blobs in `~/.config/openape/secrets.d/` with its X25519 private
+  key and injects them into `process.env` so the agent's tools see them.
+  `apes agents run` does this once per task; `apes agents serve` watches
+  the dir so troop rotate/revoke takes effect live without a re-deploy.
+  The agent is the only place the plaintext ever exists.
+
+- [#440](https://github.com/openape-ai/openape/pull/440) [`f51f7e1`](https://github.com/openape-ai/openape/commit/f51f7e11a6f10150f588fd3a39c7673a324c2866) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes agents spawn` now also generates an X25519 encryption keypair for the
+  agent (separate from the ed25519 auth key). The private key is written to
+  `~/.config/openape/agent-x25519.key` (0600) and the public key alongside
+  (`.pub`, 0644), so troop can seal capability secrets to the agent's public
+  key and only the agent can open them.
+
+- [#430](https://github.com/openape-ai/openape/pull/430) [`931fb20`](https://github.com/openape-ai/openape/commit/931fb2049f132dbaf08a8cc1a25fcfef0617c35e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: add `apes agents cleanup-orphans` to delete tombstoned macOS user records left behind by `apes agents destroy` (run with `sudo` — opendirectoryd accepts sysadminctl-deleteUser when invoked under an interactive sudo admin audit-session). Detection covers both legacy `/var/openape/homes/<name>` and the new `openape-agent-*` prefix shape.
+
+  apes: spawn now provisions the macOS user as `openape-agent-<name>` (prefix lives only at the macOS layer — email, troop UI, bridge data dir, and `apes agents list` stay on the bare agent name). `apes run --as <agent>` resolves the prefix transparently; legacy pre-prefix agents keep working via a fall-through lookup.
+
+  nest: pm2-supervisor's start.sh resolves HOME via `$(whoami)` instead of a hard-coded `/Users/<agent>` dscl read, so it works regardless of the prefix shape.
+
+### Patch Changes
+
+- [#457](https://github.com/openape-ai/openape/pull/457) [`8141844`](https://github.com/openape-ai/openape/commit/81418447b4c93605fd47873559389ffc1d53bb47) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix agent spawn UID allocation. The setup script picked
+  `max(existing UID in [200,500)) + 1`, so once any agent landed on UID
+  499 every subsequent `apes agents spawn` failed with "No free UID in
+  [200, 500) — refusing to clobber a real user" even with 100+ UIDs
+  free. Now it scans for the lowest actually-unused UID in the range
+  (skipping agent users and macOS system accounts) and reuses gaps.
+- Updated dependencies [[`33f3e99`](https://github.com/openape-ai/openape/commit/33f3e99ddb408d24ae15e1b220d342f961ec8090)]:
+  - @openape/core@0.17.0
+  - @openape/grants@0.11.6
+  - @openape/proxy@0.4.4
+
 ## 1.24.1
 
 ### Patch Changes

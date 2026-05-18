@@ -1,5 +1,31 @@
 # @openape/nest
 
+## 2.3.0
+
+### Minor Changes
+
+- [#442](https://github.com/openape-ai/openape/pull/442) [`79a95b7`](https://github.com/openape-ai/openape/commit/79a95b77b9fe87729fc41b1ac5b8cfeb4c7eb7de) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - nest now relays capability secrets: it handles `secret-update` /
+  `secret-revoke` frames from troop by writing/removing an opaque sealed
+  blob in the agent's `~/.config/openape/secrets.d/<env>.blob` as the agent
+  user (blob piped via stdin, never argv). nest never opens the blob — it
+  is a blind relay; only the agent can decrypt it.
+
+### Patch Changes
+
+- [#430](https://github.com/openape-ai/openape/pull/430) [`931fb20`](https://github.com/openape-ai/openape/commit/931fb2049f132dbaf08a8cc1a25fcfef0617c35e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: add `apes agents cleanup-orphans` to delete tombstoned macOS user records left behind by `apes agents destroy` (run with `sudo` — opendirectoryd accepts sysadminctl-deleteUser when invoked under an interactive sudo admin audit-session). Detection covers both legacy `/var/openape/homes/<name>` and the new `openape-agent-*` prefix shape.
+
+  apes: spawn now provisions the macOS user as `openape-agent-<name>` (prefix lives only at the macOS layer — email, troop UI, bridge data dir, and `apes agents list` stay on the bare agent name). `apes run --as <agent>` resolves the prefix transparently; legacy pre-prefix agents keep working via a fall-through lookup.
+
+  nest: pm2-supervisor's start.sh resolves HOME via `$(whoami)` instead of a hard-coded `/Users/<agent>` dscl read, so it works regardless of the prefix shape.
+
+- [#455](https://github.com/openape-ai/openape/pull/455) [`aeee81d`](https://github.com/openape-ai/openape/commit/aeee81d5aff1bfc34929fad5fde537a4b5cb0dfd) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Surface the real spawn/sync failure instead of the JS stack tail. The
+  nest used to forward only the last 3 stderr lines, which for a failed
+  `apes` command are V8 stack frames (`at async runMain …`) — the actual
+  error message was discarded. Now stack frames are dropped and the
+  human-readable error lines are kept, so troop shows why a spawn failed.
+- Updated dependencies [[`33f3e99`](https://github.com/openape-ai/openape/commit/33f3e99ddb408d24ae15e1b220d342f961ec8090)]:
+  - @openape/core@0.17.0
+
 ## 2.2.0
 
 ### Minor Changes
