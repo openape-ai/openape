@@ -18,7 +18,7 @@ This is the reference Agent Recipe — see
 ## Deploy (one step)
 
 ```bash
-apes agent deploy github.com/openape-official-ape-agents/bluesky-summary@v0.1.0 \
+apes agent deploy github.com/openape-ai/bluesky-summary@v0.1.0 \
   --param topic="AI agents" \
   --secret BLUESKY_HANDLE=you.bsky.social \
   --secret BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
@@ -37,7 +37,7 @@ Bluesky app password. Sequence:
 git tag v0.1.0 && git push --tags
 
 # 2. deploy (creates the agent, schedules, binds the sealed secret)
-apes agent deploy github.com/openape-official-ape-agents/bluesky-summary@v0.1.0 \
+apes agent deploy github.com/openape-ai/bluesky-summary@v0.1.0 \
   --param topic="AI agents" --secret BLUESKY_HANDLE=you.bsky.social \
   --secret BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
 
