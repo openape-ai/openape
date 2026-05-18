@@ -3,12 +3,6 @@
 # Exit 0 = allow, Exit 2 = block
 
 MONOREPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-BRANCH=$(git -C "$MONOREPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
-
-# Not on main → allow everything
-if [ "$BRANCH" != "main" ]; then
-  exit 0
-fi
 
 # Tool input via stdin — extract file_path from tool_input
 INPUT=$(cat)
@@ -17,7 +11,25 @@ INPUT=$(cat)
 # Format: "tool_input":{"file_path":"/absolute/path/to/file",...}
 FILE_PATH=$(echo "$INPUT" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
-# If we can't determine the file, block (safe default on main)
+# Determine the branch of the WORKTREE that actually contains the target file
+# — NOT the primary monorepo checkout. The repo uses git worktrees (see
+# CLAUDE.md); checking $MONOREPO_DIR's HEAD would wrongly judge every
+# worktree edit against the primary tree's branch (usually main).
+if [ -n "$FILE_PATH" ]; then
+  FILE_DIR=$(dirname "$FILE_PATH")
+  BRANCH=$(git -C "$FILE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+fi
+# Fallbacks: file path unknown or not resolvable → judge by primary tree.
+if [ -z "$BRANCH" ]; then
+  BRANCH=$(git -C "$MONOREPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
+fi
+
+# Not on main → allow everything
+if [ "$BRANCH" != "main" ]; then
+  exit 0
+fi
+
+# On main and file unknown → block (safe default)
 if [ -z "$FILE_PATH" ]; then
   echo "BLOCKED: Du bist auf 'main' und die Zieldatei konnte nicht ermittelt werden." >&2
   echo "Starte mit:  /issue-start <nr>" >&2
