@@ -16,9 +16,9 @@ interface ContactRow {
 // OpenApeAuth component).
 const { user, fetchUser, logout: spLogout } = useOpenApeAuth()
 await fetchUser()
-if (!user.value && import.meta.client) {
-  navigateTo('/login')
-}
+// No redirect to a separate /login — an unauthenticated visitor gets
+// the email/login form inline on this page (see the v-if="!user"
+// block in the template). DDISA-SP login belongs on the start page.
 
 const { data: contacts, refresh: refreshContacts } = await useFetch<ContactRow[]>('/api/contacts', {
   default: () => [],
@@ -185,7 +185,21 @@ async function doDelete(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-dvh flex flex-col">
+  <div v-if="!user" class="min-h-dvh flex items-center justify-center p-6">
+    <div class="w-full max-w-sm space-y-6">
+      <div class="text-center space-y-2">
+        <h1 class="text-2xl font-semibold">
+          OpenApe Chat
+        </h1>
+        <p class="text-zinc-400 text-sm">
+          Team rooms and DMs for humans and agents.
+        </p>
+      </div>
+      <OpenApeAuth />
+    </div>
+  </div>
+
+  <div v-else class="min-h-dvh flex flex-col">
     <header class="safe-pt sticky top-0 z-10 flex items-center gap-2 px-4 py-3 border-b border-zinc-800 bg-zinc-950">
       <div class="flex-1 min-w-0">
         <h1 class="font-semibold text-lg leading-tight">
