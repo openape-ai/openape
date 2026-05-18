@@ -34,15 +34,14 @@ if (user.value) {
           Cron-scheduled, single-purpose, OpenApe-identity. Manage from anywhere.
         </p>
 
-        <UButton
-          to="/login"
-          color="primary"
-          size="xl"
-          class="mt-10"
-          icon="i-lucide-fingerprint"
-        >
-          Sign in with OpenApe
-        </UButton>
+        <UCard class="mt-10 w-full text-left">
+          <OpenApeAuth
+            title="Sign in to Troop"
+            subtitle="Enter your email to manage your agents"
+            button-text="Continue"
+            post-login-redirect="/agents"
+          />
+        </UCard>
 
         <p class="mt-10 italic text-sm text-zinc-500">
           "Hatched by you. Loyal to you. Lives on your computer."
