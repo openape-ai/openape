@@ -3,10 +3,11 @@ import { and, eq } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import toolCatalog from '../../tool-catalog.json'
 import { useDb } from '../../database/drizzle'
-import { agents } from '../../database/schema'
+import { agents, tasks } from '../../database/schema'
 import { parseAgentEmail } from '../../utils/agent-email'
 import { resolveDestroyIntent } from '../../utils/destroy-intents'
 import { registerNestPeer, touchNestPeer, unregisterNestPeerById } from '../../utils/nest-registry'
+import { takeRecipeDeploy } from '../../utils/recipe-deploys'
 import { resolveSpawnIntent } from '../../utils/spawn-intents'
 
 const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }> }).tools.map(t => t.name)
@@ -210,6 +211,39 @@ export default defineWebSocketHandler({
               createdAt: now,
             }).onConflictDoNothing(),
           ).catch(() => { /* ignore — bridge sync will retry the upsert */ })
+
+          // Agent Recipe (M3): if this spawn came from a recipe-deploy,
+          // apply the stashed plan — set the agent's system prompt to
+          // the materialized intent and create the schedule task rows.
+          // Capability secrets are bound separately by the owner (M2c).
+          const deploy = takeRecipeDeploy(f.intent_id)
+          if (deploy) {
+            const plan = deploy.plan
+            void Promise.resolve(
+              (async () => {
+                await db.update(agents)
+                  .set({ systemPrompt: plan.systemPrompt })
+                  .where(eq(agents.email, agentEmail))
+                for (const s of plan.schedules) {
+                  await db.insert(tasks).values({
+                    agentEmail,
+                    taskId: s.taskId,
+                    name: s.name,
+                    cron: s.cron,
+                    userPrompt: s.userPrompt,
+                    tools: s.tools,
+                    maxSteps: 10,
+                    enabled: true,
+                    createdAt: now,
+                    updatedAt: now,
+                  }).onConflictDoUpdate({
+                    target: [tasks.agentEmail, tasks.taskId],
+                    set: { name: s.name, cron: s.cron, userPrompt: s.userPrompt, tools: s.tools, updatedAt: now },
+                  })
+                }
+              })(),
+            ).catch(() => { /* best-effort — owner can re-deploy */ })
+          }
         }
       }
       return
