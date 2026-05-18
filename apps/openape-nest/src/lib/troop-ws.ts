@@ -16,17 +16,25 @@
 //   reload-bridge { name }          → pm2 reload openape-bridge-<name>,
 //                                     no sync (used after manual
 //                                     agent.json edits in rare cases).
+//   secret-update { agent_email, env, blob }
+//                                   → write the opaque sealed blob into
+//                                     the agent's ~/.config/openape/
+//                                     secrets.d/<env>.blob as the agent
+//                                     user (blind relay; M2d).
+//   secret-revoke { agent_email, env }
+//                                   → rm that blob.
 //
 // The 5-min `troop-sync.ts` polling loop stays running in parallel as
 // a cold-path fallback for whenever the WS connection is down (Mac
 // sleeping, troop deploying, flaky network).
 
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { hostname, networkInterfaces } from 'node:os'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import WebSocket from 'ws'
+import { agentNameFromEmail, planSecretRevoke, planSecretWrite } from './secret-relay'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1_000
@@ -57,7 +65,23 @@ interface ReloadBridgeFrame {
   name: string
 }
 
-type InboundFrame = SpawnIntentFrame | DestroyIntentFrame | ConfigUpdateFrame | ReloadBridgeFrame | { type: string }
+interface SecretUpdateFrame {
+  type: 'secret-update'
+  agent_email: string
+  env: string
+  /** Serialized sealed blob — relayed verbatim, nest never opens it. */
+  blob: string
+}
+
+interface SecretRevokeFrame {
+  type: 'secret-revoke'
+  agent_email: string
+  env: string
+}
+
+type InboundFrame
+  = | SpawnIntentFrame | DestroyIntentFrame | ConfigUpdateFrame | ReloadBridgeFrame
+    | SecretUpdateFrame | SecretRevokeFrame | { type: string }
 
 export interface TroopWsOptions {
   /** Default: `wss://troop.openape.ai`. Override via env `OPENAPE_TROOP_WS_URL`. */
@@ -206,20 +230,56 @@ export class TroopWs {
     }
     if (frame.type === 'reload-bridge') {
       await this.handleReloadBridge(frame as ReloadBridgeFrame)
+      return
+    }
+    if (frame.type === 'secret-update') {
+      await this.handleSecretUpdate(frame as SecretUpdateFrame)
+      return
+    }
+    if (frame.type === 'secret-revoke') {
+      await this.handleSecretRevoke(frame as SecretRevokeFrame)
     }
     // Unknown frame types: ignore. Forward-compat for future troop
     // versions that send frames an older nest doesn't recognize.
   }
 
   private async handleConfigUpdate(frame: ConfigUpdateFrame): Promise<void> {
-    // Map agent_email → local agent slug (the part before '+'/'-'-hash).
-    // We use the same convention agents/sync.ts has: `<name>-<hash>+<owner-local>+<owner-domain>@<idp>`.
-    const local = frame.agent_email.split('+')[0]
-    if (!local) return
-    const dash = local.lastIndexOf('-')
-    const name = dash > 0 ? local.slice(0, dash) : local
+    const name = agentNameFromEmail(frame.agent_email)
+    if (!name) return
     this.opts.log(`troop-ws: config-update for ${name} — running sync`)
     await this.runApes(['run', '--as', name, '--wait', '--', 'apes', 'agents', 'sync'], `config-update sync ${name}`)
+  }
+
+  private async handleSecretUpdate(frame: SecretUpdateFrame): Promise<void> {
+    const name = agentNameFromEmail(frame.agent_email)
+    if (!name) return
+    const plan = planSecretWrite(frame.env)
+    if (!plan.ok) {
+      this.opts.log(`troop-ws: secret-update ${frame.agent_email}/${frame.env} rejected: ${plan.reason}`)
+      return
+    }
+    // Blob goes via stdin, never argv — it stays out of the process
+    // list and nest never parses it (blind relay). Runs as the agent
+    // user so it lands in the agent's own home with mode 600.
+    this.opts.log(`troop-ws: secret-update ${name}/${frame.env}`)
+    try {
+      await runWithInput(this.opts.apesBin, ['run', '--as', name, '--wait', '--', 'sh', '-c', plan.script], frame.blob)
+    }
+    catch (err) {
+      this.opts.log(`troop-ws: secret-update ${name}/${frame.env} failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  private async handleSecretRevoke(frame: SecretRevokeFrame): Promise<void> {
+    const name = agentNameFromEmail(frame.agent_email)
+    if (!name) return
+    const plan = planSecretRevoke(frame.env)
+    if (!plan.ok) {
+      this.opts.log(`troop-ws: secret-revoke ${frame.agent_email}/${frame.env} rejected: ${plan.reason}`)
+      return
+    }
+    this.opts.log(`troop-ws: secret-revoke ${name}/${frame.env}`)
+    await this.runApes(['run', '--as', name, '--wait', '--', 'sh', '-c', plan.script], `secret-revoke ${name}/${frame.env}`)
   }
 
   private async handleSpawnIntent(frame: SpawnIntentFrame): Promise<void> {
@@ -316,6 +376,27 @@ function runWithCapture(bin: string, args: string[]): Promise<{ stdout: string, 
       }
       resolve({ stdout: stdout.toString(), stderr: stderr.toString() })
     })
+  })
+}
+
+/**
+ * Run `bin args` and feed `input` to its stdin (closing the stream so
+ * a `cat >file` script terminates). Used for the blind secret relay:
+ * the sealed blob is piped, never placed on argv. 30s cap — this is a
+ * tiny write, not a spawn/install.
+ */
+function runWithInput(bin: string, args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { stdio: ['pipe', 'ignore', 'pipe'], timeout: 30_000 })
+    let stderr = ''
+    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(stderr.split('\n').filter(Boolean).slice(-3).join(' / ') || `exit ${code}`))
+    })
+    child.stdin?.on('error', () => { /* child may exit before we finish writing; close handler reports it */ })
+    child.stdin?.end(input)
   })
 }
 
