@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
@@ -6,6 +9,8 @@ import { CliError } from '../errors.js'
 import { buildDefaultProxyConfigToml  } from '../proxy/config.js'
 import type { ProxyConfigOptions } from '../proxy/config.js'
 import { startEphemeralProxy } from '../proxy/local-proxy.js'
+import { buildTrustBundle, detectSystemCaPath } from '../proxy/trust-bundle.js'
+import type { TrustBundle } from '../proxy/trust-bundle.js'
 import { extractWrappedCommand } from '../shapes/index.js'
 
 /**
@@ -74,11 +79,36 @@ export const proxyCommand = defineCommand({
       throw new CliError('Usage: apes proxy -- <cmd> [args...]')
     }
 
+    // OPENAPE_PROXY (host:port) — long-running daemon path (Phase 6).
+    // The system-installed daemon already authenticates via its own
+    // auth.json, so we deliberately skip resolveProxyConfigOptions() here
+    // (no `apes login` required for the wrapping user). We do, however,
+    // need to teach the wrapped subprocess to trust the daemon's local
+    // CA so its TLS interception (mitmproxy-style) doesn't break.
+    const reuseHostPort = process.env.OPENAPE_PROXY
     const reuseUrl = process.env.OPENAPE_PROXY_URL
     let proxyUrl: string
+    let bundle: TrustBundle | null = null
     let close: (() => Promise<void>) | null = null
 
-    if (reuseUrl) {
+    if (reuseHostPort) {
+      proxyUrl = `http://${reuseHostPort}`
+      consola.info(`[apes proxy] using long-running daemon at ${proxyUrl}`)
+
+      const localCaPath = join(homedir(), '.openape', 'proxy', 'ca.crt')
+      if (!existsSync(localCaPath)) {
+        throw new CliError(
+          `OPENAPE_PROXY is set but no local CA found at ${localCaPath}. `
+          + `Start the daemon (sudo -u <agent> apes proxy --global < secrets.toml) first.`,
+        )
+      }
+      bundle = buildTrustBundle({
+        systemCaPath: detectSystemCaPath(),
+        localCaPath,
+      })
+      consola.debug(`[apes proxy] trust bundle: ${bundle.path}`)
+    }
+    else if (reuseUrl) {
       proxyUrl = reuseUrl
       consola.info(`[apes proxy] reusing existing proxy at ${proxyUrl}`)
     }
@@ -103,6 +133,15 @@ export const proxyCommand = defineCommand({
     //   it here means the wrapped command's Node code routes through the proxy
     //   without per-app ProxyAgent wiring.
     const noProxy = process.env.NO_PROXY ?? process.env.no_proxy ?? '127.0.0.1,localhost'
+    // When a trust bundle is built (OPENAPE_PROXY daemon path), point every
+    // common TLS-trust env var at it so the wrapped subprocess accepts the
+    // daemon's intercepted-TLS leaf certs without an OS-wide trust install.
+    // Each runtime/tooling reads a different variable:
+    //   NODE_EXTRA_CA_CERTS  Node.js (additive to the bundled Mozilla store)
+    //   SSL_CERT_FILE        OpenSSL (Python `requests`, libpq, many CLIs)
+    //   CURL_CA_BUNDLE       libcurl
+    //   REQUESTS_CA_BUNDLE   Python `requests` explicit override
+    //   GIT_SSL_CAINFO       Git's libcurl-backed HTTPS transport
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HTTPS_PROXY: proxyUrl,
@@ -114,31 +153,48 @@ export const proxyCommand = defineCommand({
       NO_PROXY: noProxy,
       no_proxy: noProxy,
       NODE_USE_ENV_PROXY: '1',
+      ...(bundle
+        ? {
+            NODE_EXTRA_CA_CERTS: bundle.path,
+            SSL_CERT_FILE: bundle.path,
+            CURL_CA_BUNDLE: bundle.path,
+            REQUESTS_CA_BUNDLE: bundle.path,
+            GIT_SSL_CAINFO: bundle.path,
+          }
+        : {}),
     }
 
-    const exitCode = await new Promise<number>((resolveExit) => {
-      const child = spawn(wrapped[0]!, wrapped.slice(1), {
-        stdio: 'inherit',
-        env: childEnv,
+    let exitCode: number
+    try {
+      exitCode = await new Promise<number>((resolveExit) => {
+        const child = spawn(wrapped[0]!, wrapped.slice(1), {
+          stdio: 'inherit',
+          env: childEnv,
+        })
+        const forward = (sig: NodeJS.Signals) => () => child.kill(sig)
+        const onSigint = forward('SIGINT')
+        const onSigterm = forward('SIGTERM')
+        process.on('SIGINT', onSigint)
+        process.on('SIGTERM', onSigterm)
+        child.once('exit', (code, signal) => {
+          process.off('SIGINT', onSigint)
+          process.off('SIGTERM', onSigterm)
+          if (signal) resolveExit(128 + (signalNumber(signal) ?? 0))
+          else resolveExit(code ?? 0)
+        })
+        child.once('error', (err) => {
+          consola.error(`[apes proxy] failed to spawn '${wrapped[0]}':`, err.message)
+          resolveExit(127)
+        })
       })
-      const forward = (sig: NodeJS.Signals) => () => child.kill(sig)
-      const onSigint = forward('SIGINT')
-      const onSigterm = forward('SIGTERM')
-      process.on('SIGINT', onSigint)
-      process.on('SIGTERM', onSigterm)
-      child.once('exit', (code, signal) => {
-        process.off('SIGINT', onSigint)
-        process.off('SIGTERM', onSigterm)
-        if (signal) resolveExit(128 + (signalNumber(signal) ?? 0))
-        else resolveExit(code ?? 0)
-      })
-      child.once('error', (err) => {
-        consola.error(`[apes proxy] failed to spawn '${wrapped[0]}':`, err.message)
-        resolveExit(127)
-      })
-    })
-
-    if (close) await close()
+    }
+    finally {
+      // Run cleanup on both happy and exception paths so a thrown error
+      // (or signal that aborts the await) doesn't leak the temp trust
+      // bundle or leave the ephemeral proxy running.
+      bundle?.cleanup()
+      if (close) await close()
+    }
 
     // Propagate the wrapped command's exit code without going through
     // CliExit + citty's runMain. `runMain` catches everything inside its own

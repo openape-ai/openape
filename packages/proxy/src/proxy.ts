@@ -1,13 +1,48 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import { createHash } from 'node:crypto'
-import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig } from './types.js'
+import type { AgentConfig, AuditEntry, MultiAgentProxyConfig, ProxyConfig, SecretsStore } from './types.js'
+import type { LeafCertCache } from './ca-store.js'
 import { evaluateRules } from './matcher.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { GrantsClient } from './grants-client.js'
 import { writeAudit } from './audit.js'
 import { checkEgress } from './ssrf.js'
 import { handleConnect } from './connect.js'
+
+/**
+ * Minimal fetch shape used for upstream calls. `typeof fetch` itself carries a
+ * `preconnect` static (Node 22+) which we don't use, so we narrow to the call
+ * signature to keep `MultiAgentProxyDeps.fetchImpl` easy to override in tests.
+ */
+export type UpstreamFetch = (input: Request | URL | string, init?: RequestInit) => Promise<Response>
+
+/**
+ * Optional dependencies injected into `createMultiAgentProxy`. Kept additive so
+ * existing single-call sites (legacy `createProxy`, `createNodeHandler`) keep
+ * working without supplying any of these.
+ */
+export interface MultiAgentProxyDeps {
+  /**
+   * In-memory secret lookup. When set, the forward-proxy fetch path consults
+   * the store right before forwarding and injects a header on a target match.
+   */
+  secretsStore?: SecretsStore
+  /**
+   * Override the upstream fetch implementation. Defaults to `globalThis.fetch`.
+   * Tests can pass a stub here when they need to assert the outgoing request
+   * shape without relying on `vi.spyOn(globalThis, 'fetch')`.
+   */
+  fetchImpl?: UpstreamFetch
+  /**
+   * Daemon mode: identity is implicit (loaded from `~/.config/apes/auth.json`
+   * at startup) so per-request `Proxy-Authorization` JWT extraction is
+   * skipped. The daemon's identity = `config.agents[0].email`. Inline mode
+   * (`apes proxy --` ephemeral case) leaves this unset and keeps the existing
+   * JWT-required path.
+   */
+  daemonMode?: boolean
+}
 
 /**
  * Compute a request hash that uniquely identifies the intent.
@@ -61,6 +96,7 @@ export function buildGrantsClients(config: MultiAgentProxyConfig): Map<string, G
 export function createMultiAgentProxy(
   config: MultiAgentProxyConfig,
   grantsClients: Map<string, GrantsClient> = buildGrantsClients(config),
+  deps: MultiAgentProxyDeps = {},
 ) {
   // Backwards-compat: if caller didn't pre-build the map, we build our own.
   // createNodeHandler always passes one in so the CONNECT handler can share it.
@@ -71,6 +107,12 @@ export function createMultiAgentProxy(
   }
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
+  const secretsStore = deps.secretsStore
+  const daemonMode = deps.daemonMode ?? false
+  // Bind to globalThis so `vi.spyOn(globalThis, 'fetch')` in tests intercepts
+  // the upstream call. Resolved per-call so spies installed after construction
+  // still take effect.
+  const fetchImpl: UpstreamFetch = deps.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
 
   return {
     port: Number.parseInt(config.proxy.listen.split(':')[1] || '9090'),
@@ -127,26 +169,34 @@ export function createMultiAgentProxy(
       // In multi-agent mode, we need the JWT to identify the agent first.
       // We try verification against each agent's IdP until one succeeds.
       let agentIdentity: { email: string, act: 'agent' } | null = null
-      try {
-        for (const agentConf of config.agents) {
-          agentIdentity = await verifyAgentAuth(
-            req.headers.get('proxy-authorization'),
-            agentConf.idp_url,
-            mandatoryAuth && config.agents.length === 1,
-          )
-          if (agentIdentity) break
-        }
-
-        // If mandatory auth and no identity found from any IdP
-        if (mandatoryAuth && !agentIdentity) {
-          throw new AuthError('JWT required')
-        }
+      if (daemonMode) {
+        // Identity is implicit — the daemon was started by/for one specific
+        // agent. The first (and only) agent in config.agents is the daemon's
+        // identity, loaded from `~/.config/apes/auth.json` at startup.
+        agentIdentity = { email: config.agents[0]!.email, act: 'agent' }
       }
-      catch (err) {
-        if (err instanceof AuthError) {
-          return new Response(`Unauthorized: ${err.message}`, { status: 401 })
+      else {
+        try {
+          for (const agentConf of config.agents) {
+            agentIdentity = await verifyAgentAuth(
+              req.headers.get('proxy-authorization'),
+              agentConf.idp_url,
+              mandatoryAuth && config.agents.length === 1,
+            )
+            if (agentIdentity) break
+          }
+
+          // If mandatory auth and no identity found from any IdP
+          if (mandatoryAuth && !agentIdentity) {
+            throw new AuthError('JWT required')
+          }
         }
-        throw err
+        catch (err) {
+          if (err instanceof AuthError) {
+            return new Response(`Unauthorized: ${err.message}`, { status: 401 })
+          }
+          throw err
+        }
       }
 
       // Find the matching agent config
@@ -203,7 +253,7 @@ export function createMultiAgentProxy(
       // ALLOW (no grant needed)
       if (action.type === 'allow') {
         writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list', grant_id: null })
-        return forwardRequest(req, targetUrl, bodyBuffer)
+        return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
       }
 
       // GRANT REQUIRED
@@ -229,7 +279,7 @@ export function createMultiAgentProxy(
           grant_id: existing.id,
           request_hash: requestHash,
         })
-        return forwardRequest(req, targetUrl, bodyBuffer)
+        return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
       }
 
       // No existing grant — behavior depends on default_action
@@ -296,7 +346,7 @@ export function createMultiAgentProxy(
             request_hash: requestHash,
             waited_ms: waitedMs,
           })
-          return forwardRequest(req, targetUrl, bodyBuffer)
+          return forwardRequest(req, targetUrl, targetParsed, bodyBuffer, secretsStore, fetchImpl)
         }
 
         writeAudit({
@@ -323,10 +373,35 @@ export function createMultiAgentProxy(
 }
 
 /**
+ * Optional dependencies forwarded by `createNodeHandler` to both the
+ * forward-proxy fetch path (`createMultiAgentProxy`) and the CONNECT path
+ * (`handleConnect`). Kept optional so existing zero-arg callers (legacy
+ * single-agent paths, simple multi-agent setups without secret injection or
+ * MITM) keep working unchanged.
+ */
+export interface NodeHandlerDeps {
+  /** In-memory secret lookup, forwarded to both the fetch and CONNECT paths. */
+  secretsStore?: SecretsStore
+  /**
+   * Per-host leaf cert cache backed by the daemon's CA bundle. Required (in
+   * combination with `secretsStore`) for CONNECT-MITM secret injection on
+   * HTTPS targets; absent → CONNECT stays an opaque TCP tunnel.
+   */
+  leafCache?: LeafCertCache
+  /**
+   * Daemon mode: skip per-request `Proxy-Authorization` JWT extraction on
+   * both the forward-proxy fetch path and the CONNECT path. Forwarded to
+   * `createMultiAgentProxy` and `handleConnect`. Inline (ephemeral) mode
+   * leaves this unset.
+   */
+  daemonMode?: boolean
+}
+
+/**
  * Create a node:http compatible handler for use with http.createServer().
  * Returns both a request handler and a CONNECT handler.
  */
-export function createNodeHandler(config: MultiAgentProxyConfig): {
+export function createNodeHandler(config: MultiAgentProxyConfig, deps: NodeHandlerDeps = {}): {
   handleRequest: (req: IncomingMessage, res: ServerResponse) => void
   handleConnect: (req: IncomingMessage, socket: Socket, head: Buffer) => void
 } {
@@ -335,7 +410,10 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
   // sharing, CONNECT-time grant_required rules couldn't reach the IdP in
   // multi-agent mode without duplicating constructor work.
   const grantsClients = buildGrantsClients(config)
-  const proxy = createMultiAgentProxy(config, grantsClients)
+  const proxy = createMultiAgentProxy(config, grantsClients, {
+    secretsStore: deps.secretsStore,
+    daemonMode: deps.daemonMode,
+  })
 
   return {
     handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -401,7 +479,11 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
     },
 
     handleConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
-      handleConnect(config, grantsClients, req, socket, head)
+      handleConnect(config, grantsClients, req, socket, head, {
+        secretsStore: deps.secretsStore,
+        leafCache: deps.leafCache,
+        daemonMode: deps.daemonMode,
+      })
     },
   }
 }
@@ -409,8 +491,19 @@ export function createNodeHandler(config: MultiAgentProxyConfig): {
 /**
  * Forward a request to the target URL.
  * Strips proxy-specific headers, preserves the rest.
+ *
+ * If a `secretsStore` is provided and a secret matches `targetParsed`, the
+ * configured header is rendered from the entry's template and set on the
+ * outgoing request (replacing any existing value with the same name).
  */
-async function forwardRequest(originalReq: Request, targetUrl: string, cachedBody?: ArrayBuffer | null): Promise<Response> {
+async function forwardRequest(
+  originalReq: Request,
+  targetUrl: string,
+  targetParsed: URL,
+  cachedBody: ArrayBuffer | null | undefined,
+  secretsStore: SecretsStore | undefined,
+  fetchImpl: UpstreamFetch,
+): Promise<Response> {
   const headers = new Headers(originalReq.headers)
   // Remove proxy-specific headers
   headers.delete('proxy-authorization')
@@ -418,16 +511,31 @@ async function forwardRequest(originalReq: Request, targetUrl: string, cachedBod
   // Don't send host of the proxy
   headers.delete('host')
 
+  // Inject hook: consult the secrets store after grant decisions and before
+  // forwarding. Logs are redacted — only name/header/method/url are printed,
+  // never the secret value or rendered template.
+  if (secretsStore) {
+    const match = secretsStore.findFor(targetParsed)
+    if (match) {
+      const rendered = match.template.replace(/\$\{value\}/g, match.value)
+      headers.set(match.header, rendered)
+      console.error(
+        `[openape-proxy] injected secret '${match.name}' into ${match.header} for ${originalReq.method} ${targetUrl}`,
+      )
+    }
+  }
+
   const body = cachedBody && cachedBody.byteLength > 0 ? cachedBody : null
 
   try {
-    const res = await fetch(targetUrl, {
+    const upstreamReq = new Request(targetUrl, {
       method: originalReq.method,
       headers,
       body,
       duplex: 'half',
       redirect: 'manual',
-    })
+    } as RequestInit)
+    const res = await fetchImpl(upstreamReq)
 
     // Stream the response back
     const responseHeaders = new Headers(res.headers)
