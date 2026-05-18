@@ -14,11 +14,30 @@ interface ContactRow {
 // Driven by the SP module's composable. `user` becomes null on 401, so a
 // missing session bounces to /login (which the module renders via its own
 // OpenApeAuth component).
-const { user, fetchUser, logout: spLogout } = useOpenApeAuth()
+const { user, loading, fetchUser, login, logout: spLogout } = useOpenApeAuth()
 await fetchUser()
 // No redirect to a separate /login — an unauthenticated visitor gets
 // the email/login form inline on this page (see the v-if="!user"
 // block in the template). DDISA-SP login belongs on the start page.
+
+const loginEmail = ref('')
+const loginError = ref('')
+const loggingIn = ref(false)
+async function handleLogin() {
+  loginError.value = ''
+  if (!loginEmail.value || !loginEmail.value.includes('@')) {
+    loginError.value = 'Bitte eine gültige Email-Adresse eingeben.'
+    return
+  }
+  loggingIn.value = true
+  try {
+    await login(loginEmail.value.trim())
+  }
+  catch (e: any) {
+    loginError.value = e?.data?.statusMessage || e?.message || 'Login fehlgeschlagen.'
+    loggingIn.value = false
+  }
+}
 
 const { data: contacts, refresh: refreshContacts } = await useFetch<ContactRow[]>('/api/contacts', {
   default: () => [],
@@ -195,7 +214,32 @@ async function doDelete(): Promise<void> {
           Team rooms and DMs for humans and agents.
         </p>
       </div>
-      <OpenApeAuth />
+      <form class="space-y-3" @submit.prevent="handleLogin">
+        <UInput
+          v-model="loginEmail"
+          type="email"
+          placeholder="you@example.com"
+          size="xl"
+          autocomplete="email"
+          icon="i-lucide-mail"
+          :disabled="loggingIn || loading"
+          class="w-full"
+          :ui="{ base: 'w-full' }"
+        />
+        <p v-if="loginError" class="text-sm text-red-400">
+          {{ loginError }}
+        </p>
+        <UButton
+          type="submit"
+          color="primary"
+          block
+          size="xl"
+          icon="i-lucide-fingerprint"
+          :loading="loggingIn || loading"
+        >
+          Sign in with OpenApe
+        </UButton>
+      </form>
     </div>
   </div>
 
