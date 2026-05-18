@@ -35,6 +35,11 @@ export const agents = sqliteTable('agents', {
   // `/api/agents/:email/tools`). The chat-bridge reads this list
   // from `~/.openape/agent/agent.json` after each sync.
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  // Free-text behaviour layer the owner can edit any time without a
+  // re-deploy; appended to systemPrompt at sync (see system-prompt.ts).
+  // For recipe agents systemPrompt is the (immutable) intent and this
+  // is the mutable augmentation. (Agent Recipe M5.)
+  userAddendum: text('user_addendum').notNull().default(''),
   // (legacy) `soul` text column still exists in the DB for back-compat
   // with rows written before the SOUL.md + system_prompt merge. New code
   // doesn't read or write it — the system_prompt above absorbed its role.
