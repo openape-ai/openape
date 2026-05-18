@@ -1,5 +1,16 @@
 # @openape/troop
 
+## 0.1.3
+
+### Patch Changes
+
+- [#431](https://github.com/openape-ai/openape/pull/431) [`eaac874`](https://github.com/openape-ai/openape/commit/eaac8744841cbe54a934a42007ea6722e9f4a537) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - troop: group agents by nest (host) on the `/agents` overview. Each nest gets a hostname header with agent count; agents within a nest stay createdAt-desc, and nests sort by most-recent activity. Freshly-spawned agents whose first sync hasn't filled in the host identity yet live under a "Pending first sync" group at the bottom.
+
+- Updated dependencies [[`33f3e99`](https://github.com/openape-ai/openape/commit/33f3e99ddb408d24ae15e1b220d342f961ec8090)]:
+  - @openape/core@0.17.0
+  - @openape/nuxt-auth-sp@0.10.1
+  - @openape/auth@0.10.2
+
 ## 0.1.2
 
 ### Patch Changes
