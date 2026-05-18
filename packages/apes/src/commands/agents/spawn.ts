@@ -164,7 +164,7 @@ export const spawnAgentCommand = defineCommand({
 
     try {
       consola.start(`Generating keypair for ${name}…`)
-      const { privatePem, publicSshLine } = generateKeyPairInMemory()
+      const { privatePem, publicSshLine, x25519PrivateKey, x25519PublicKey } = generateKeyPairInMemory()
 
       consola.start(`Registering agent at ${idp}…`)
       const registration = await registerAgentAtIdp({ name, publicKey: publicSshLine, idp })
@@ -250,6 +250,8 @@ export const spawnAgentCommand = defineCommand({
         shellPath: loginShell,
         privateKeyPem: privatePem,
         publicKeySshLine: publicSshLine,
+        x25519PrivateKey,
+        x25519PublicKey,
         authJson,
         claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
         hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
