@@ -13,3 +13,12 @@ export {
   generateNonce,
   generateState,
 } from './pkce.js'
+
+export {
+  generateX25519KeyPair,
+  open,
+  openString,
+  seal,
+  type SealedBox,
+  type X25519KeyPair,
+} from './sealed-box.js'
