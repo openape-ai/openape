@@ -20,6 +20,11 @@ const bodySchema = z.object({
   // guides here. The bridge reads it on every turn (cheap — small
   // file read, no LLM round-trip).
   system_prompt: z.string().max(32_000).optional(),
+  // Owner-editable free-text behaviour layer (Agent Recipe M5).
+  // Appended to system_prompt at sync — changing it takes effect on
+  // the next run, no re-deploy. For recipe agents this is the only
+  // prompt field the owner should touch (system_prompt = the intent).
+  user_addendum: z.string().max(32_000).optional(),
   tools: z.array(z.string()).optional().refine(
     arr => arr === undefined || arr.every(t => KNOWN_TOOL_NAMES.has(t)),
     { message: 'tools list contains unknown tool names — see /api/tool-catalog' },
@@ -44,6 +49,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   const updates: Record<string, unknown> = {}
   if (body.data.system_prompt !== undefined) updates.systemPrompt = body.data.system_prompt
+  if (body.data.user_addendum !== undefined) updates.userAddendum = body.data.user_addendum
   if (body.data.tools !== undefined) updates.tools = body.data.tools
 
   const result = await db
