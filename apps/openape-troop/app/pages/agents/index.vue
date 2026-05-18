@@ -39,6 +39,7 @@ const agents = ref<AgentRow[]>([])
 const loading = ref(true)
 const error = ref('')
 const showSpawn = ref(false)
+const showDeploy = ref(false)
 
 async function load() {
   loading.value = true
@@ -151,6 +152,15 @@ const nestGroups = computed<NestGroup[]>(() => {
           <span class="hidden sm:inline">Spawn agent</span>
         </UButton>
         <UButton
+          color="primary"
+          variant="soft"
+          size="sm"
+          icon="i-lucide-package"
+          @click="showDeploy = true"
+        >
+          <span class="hidden sm:inline">Deploy recipe</span>
+        </UButton>
+        <UButton
           variant="ghost"
           size="sm"
           icon="i-lucide-log-out"
@@ -162,6 +172,7 @@ const nestGroups = computed<NestGroup[]>(() => {
       </div>
     </header>
     <SpawnAgentDialog v-model:open="showSpawn" @update:open="(v) => { if (!v) load() }" />
+    <DeployRecipeDialog v-model:open="showDeploy" @update:open="(v) => { if (!v) load() }" />
 
     <main class="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
       <h2 class="text-2xl font-bold mb-1">
