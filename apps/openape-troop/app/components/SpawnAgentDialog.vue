@@ -19,7 +19,7 @@ async function loadHosts() {
   hostsError.value = ''
   try { hosts.value = await ($fetch as any)('/api/nest/hosts') }
   catch (err: any) {
-    hostsError.value = err?.data?.statusMessage || err?.message || 'failed to load nest hosts'
+    hostsError.value = err?.data?.statusMessage || err?.data?.message || err?.message || 'failed to load nest hosts'
   }
   finally {
     loadingHosts.value = false
@@ -257,7 +257,7 @@ async function submit() {
     pollResult()
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'spawn failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || 'spawn failed' }
   }
   finally {
     submitting.value = false
@@ -279,7 +279,7 @@ async function pollResult() {
     await bindSecrets(res.agent_email)
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'poll failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || 'poll failed' }
   }
 }
 
@@ -302,7 +302,7 @@ async function bindSecrets(agentEmail?: string) {
         }
         catch (err: any) {
           if (i === 39) {
-            result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.message}` }
+            result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.data?.message || err?.message}` }
             binding.value = false
             return
           }
