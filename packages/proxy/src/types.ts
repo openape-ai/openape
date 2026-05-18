@@ -61,3 +61,25 @@ export interface AuditEntry {
   waited_ms?: number
   error?: string
 }
+
+/** A single secret entry parsed from the daemon's stdin TOML payload. */
+export interface SecretEntry {
+  name: string
+  target: string
+  header: string
+  template: string
+  value: string
+}
+
+/** In-memory secret lookup, used by the inject hook. */
+export interface SecretsStore {
+  readonly entries: readonly SecretEntry[]
+  findFor: (target: URL) => SecretEntry | null
+}
+
+/** Daemon identity loaded from ~/.config/apes/auth.json. */
+export interface DaemonIdentity {
+  email: string
+  idpUrl: string
+  bearer: string
+}

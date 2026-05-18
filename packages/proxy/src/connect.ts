@@ -1,12 +1,35 @@
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { connect } from 'node:net'
-import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig } from './types.js'
+import type { AgentConfig, MultiAgentProxyConfig, ProxyConfig, SecretsStore } from './types.js'
 import { AuthError, verifyAgentAuth } from './auth.js'
 import { checkEgress } from './ssrf.js'
 import { writeAudit } from './audit.js'
 import { evaluateRules } from './matcher.js'
 import type { GrantsClient } from './grants-client.js'
+import type { LeafCertCache } from './ca-store.js'
+import { handleMitmConnect } from './mitm-connect.js'
+
+/**
+ * Optional MITM injection deps. When BOTH `secretsStore` and `leafCache` are
+ * present we terminate TLS in-process (CONNECT-MITM mode), inspect the inner
+ * HTTPS request, and inject the matching secret header before forwarding.
+ * When either is absent we fall back to the legacy raw TCP tunnel — opaque
+ * pipe, no secret injection (cleartext-only inject still happens via the
+ * forward-proxy fetch path).
+ */
+export interface ConnectMitmDeps {
+  secretsStore?: SecretsStore
+  leafCache?: LeafCertCache
+  upstreamRejectUnauthorized?: boolean
+  /**
+   * Daemon mode: skip per-request `Proxy-Authorization` JWT extraction on
+   * the CONNECT path. Identity is implicit — `config.agents[0]` is the
+   * daemon's loaded identity. Inline (`apes proxy --` ephemeral) mode keeps
+   * the existing JWT-required path.
+   */
+  daemonMode?: boolean
+}
 
 /**
  * Handle HTTP CONNECT requests for tunneling (used by HTTP_PROXY clients).
@@ -24,7 +47,8 @@ export async function handleConnect(
   grantsClients: Map<string, GrantsClient>,
   req: IncomingMessage,
   clientSocket: Socket,
-  _head: Buffer,
+  head: Buffer,
+  deps?: ConnectMitmDeps,
 ): Promise<void> {
   const target = req.url ?? ''
   const [host, portStr] = target.split(':')
@@ -72,48 +96,57 @@ export async function handleConnect(
   }
 
   const mandatoryAuth = config.proxy.mandatory_auth ?? false
+  const daemonMode = deps?.daemonMode ?? false
 
   // Auth check — CONNECT always requires auth in mandatory mode
   let agentEmail: string | undefined
-  try {
-    const authHeader = req.headers['proxy-authorization'] as string | undefined
-    let identity: { email: string, act: 'agent' } | null = null
+  if (daemonMode) {
+    // Identity is implicit — the daemon was started by/for one specific
+    // agent. The first (and only) agent in config.agents is the daemon's
+    // identity, loaded from `~/.config/apes/auth.json` at startup.
+    agentEmail = config.agents[0]?.email
+  }
+  else {
+    try {
+      const authHeader = req.headers['proxy-authorization'] as string | undefined
+      let identity: { email: string, act: 'agent' } | null = null
 
-    for (const agentConf of config.agents) {
-      identity = await verifyAgentAuth(
-        authHeader ?? null,
-        agentConf.idp_url,
-        mandatoryAuth && config.agents.length === 1,
-      )
-      if (identity) break
+      for (const agentConf of config.agents) {
+        identity = await verifyAgentAuth(
+          authHeader ?? null,
+          agentConf.idp_url,
+          mandatoryAuth && config.agents.length === 1,
+        )
+        if (identity) break
+      }
+
+      if (mandatoryAuth && !identity) {
+        throw new AuthError('JWT required')
+      }
+
+      agentEmail = identity?.email
+
+      // Verify agent is known
+      if (agentEmail) {
+        const known = config.agents.find(a => a.email === agentEmail)
+        if (!known) {
+          clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+          clientSocket.destroy()
+          return
+        }
+      }
+      else if (config.agents.length > 1) {
+        throw new AuthError('JWT required for multi-agent proxy')
+      }
     }
-
-    if (mandatoryAuth && !identity) {
-      throw new AuthError('JWT required')
-    }
-
-    agentEmail = identity?.email
-
-    // Verify agent is known
-    if (agentEmail) {
-      const known = config.agents.find(a => a.email === agentEmail)
-      if (!known) {
-        clientSocket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    catch (err) {
+      if (err instanceof AuthError) {
+        clientSocket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         clientSocket.destroy()
         return
       }
+      throw err
     }
-    else if (config.agents.length > 1) {
-      throw new AuthError('JWT required for multi-agent proxy')
-    }
-  }
-  catch (err) {
-    if (err instanceof AuthError) {
-      clientSocket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      clientSocket.destroy()
-      return
-    }
-    throw err
   }
 
   // SSRF / reachability check. We split the two outcomes:
@@ -250,6 +283,57 @@ export async function handleConnect(
   else {
     // 'allow' — log and continue.
     writeAudit({ ...baseAudit, action: 'allow', rule: 'allow-list' })
+  }
+
+  // CONNECT-MITM mode: when both a secrets store and a leaf-cert cache are
+  // wired in, terminate TLS in-process so we can inspect the inner request
+  // and inject the matching secret header before forwarding upstream. The
+  // 200-Established line is OUR responsibility here — `handleMitmConnect`
+  // assumes the client is already in TLS-handshake mode on the socket.
+  // Without both deps we keep the legacy opaque TCP pipe (inline mode); the
+  // IdP system-bypass branch above also stays on the legacy path so we never
+  // MITM the proxy's own auth traffic.
+  if (deps?.secretsStore && deps?.leafCache) {
+    // Pause to avoid data races between our 200-write and TLSSocket wrap. The
+    // TLSSocket constructor in `handleMitmConnect` calls `resume()` once it has
+    // attached its read pipeline.
+    clientSocket.pause()
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+    // Push any bytes the http parser already captured after the CONNECT headers
+    // back into the socket so the TLSSocket sees them as the start of the
+    // ClientHello. Rare for CONNECT but possible if the client pipelines.
+    if (head.length > 0) {
+      clientSocket.unshift(head)
+    }
+    const store = deps.secretsStore
+    handleMitmConnect({
+      clientSocket,
+      host,
+      port,
+      leafCache: deps.leafCache,
+      upstreamRejectUnauthorized: deps.upstreamRejectUnauthorized,
+      onRequest: (mreq) => {
+        // `mreq.host` is the SNI hostname only — `port` is carried separately
+        // because handleMitmConnect splits CONNECT host:port at the boundary.
+        // Reattach a non-default port so secret target globs like
+        // `host:port/*` can match (the matcher's `targetString` keeps explicit
+        // non-default ports verbatim).
+        const portSuffix = port === 443 ? '' : `:${port}`
+        const targetUrl = new URL(`https://${mreq.host}${portSuffix}${mreq.path}`)
+        const match = store.findFor(targetUrl)
+        if (!match) return { type: 'forward', mutatedHeaders: new Map() }
+        const rendered = match.template.replace(/\$\{value\}/g, match.value)
+        // Redacted log line — only name/header/method/url, never the secret.
+        console.error(
+          `[openape-proxy] injected secret '${match.name}' into ${match.header} for ${mreq.method} ${targetUrl.href}`,
+        )
+        return {
+          type: 'forward',
+          mutatedHeaders: new Map([[match.header.toLowerCase(), rendered]]),
+        }
+      },
+    })
+    return
   }
 
   tunnel(host, port, clientSocket)
