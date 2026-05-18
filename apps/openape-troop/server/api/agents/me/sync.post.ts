@@ -24,6 +24,10 @@ const bodySchema = z.object({
   // we cross-check the two below.
   owner_email: z.string().email(),
   pubkey_ssh: z.string().min(20).max(4000).optional(),
+  // Agent X25519 encryption pubkey (base64url DER, ~48 chars). troop
+  // seals capability secrets to it. Optional for back-compat with
+  // pre-M2b agents that don't have one yet.
+  pubkey_x25519: z.string().min(20).max(200).optional(),
 })
 
 // Agent self-introduction. Called on first sync (after spawn) and
@@ -85,6 +89,7 @@ export default defineEventHandler(async (event) => {
       hostname: body.data.hostname,
       ownerEmail: body.data.owner_email.toLowerCase(),
       pubkeySsh: body.data.pubkey_ssh ?? existing.pubkeySsh,
+      pubkeyX25519: body.data.pubkey_x25519 ?? existing.pubkeyX25519,
       tools: toolsBackfill,
       lastSeenAt: now,
     }).where(eq(agents.email, agentEmail))
@@ -98,6 +103,7 @@ export default defineEventHandler(async (event) => {
     hostId: body.data.host_id,
     hostname: body.data.hostname,
     pubkeySsh: body.data.pubkey_ssh ?? null,
+    pubkeyX25519: body.data.pubkey_x25519 ?? null,
     // Default-all-tools on first sync. Owner can later narrow via UI.
     tools: ALL_TOOL_NAMES,
     firstSeenAt: now,
