@@ -1,11 +1,32 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
-const { user, fetchUser } = useOpenApeAuth()
+const { user, loading, fetchUser, login } = useOpenApeAuth()
 await fetchUser()
 
 if (user.value) {
   await navigateTo('/agents')
+}
+
+const email = ref('')
+const error = ref('')
+const submitting = ref(false)
+
+async function handleLogin() {
+  error.value = ''
+  if (!email.value || !email.value.includes('@')) {
+    error.value = 'Bitte eine gültige Email-Adresse eingeben.'
+    return
+  }
+  submitting.value = true
+  try {
+    await login(email.value.trim())
+  }
+  catch (e: any) {
+    error.value = e?.data?.statusMessage || e?.message || 'Login fehlgeschlagen.'
+    submitting.value = false
+  }
 }
 </script>
 
@@ -34,14 +55,32 @@ if (user.value) {
           Cron-scheduled, single-purpose, OpenApe-identity. Manage from anywhere.
         </p>
 
-        <UCard class="mt-10 w-full text-left">
-          <OpenApeAuth
-            title="Sign in to Troop"
-            subtitle="Enter your email to manage your agents"
-            button-text="Continue"
-            post-login-redirect="/agents"
+        <form class="mt-10 w-full space-y-3" @submit.prevent="handleLogin">
+          <UInput
+            v-model="email"
+            type="email"
+            placeholder="you@example.com"
+            size="xl"
+            autocomplete="email"
+            icon="i-lucide-mail"
+            :disabled="submitting || loading"
+            class="w-full"
+            :ui="{ base: 'w-full' }"
           />
-        </UCard>
+          <p v-if="error" class="text-sm text-red-400 text-left">
+            {{ error }}
+          </p>
+          <UButton
+            type="submit"
+            color="primary"
+            block
+            size="xl"
+            icon="i-lucide-fingerprint"
+            :loading="submitting || loading"
+          >
+            Sign in with OpenApe
+          </UButton>
+        </form>
 
         <p class="mt-10 italic text-sm text-zinc-500">
           "Hatched by you. Loyal to you. Lives on your computer."
