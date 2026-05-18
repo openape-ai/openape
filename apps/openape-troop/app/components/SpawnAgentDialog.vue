@@ -28,6 +28,26 @@ async function loadHosts() {
 
 watch(open, (now) => { if (now) loadHosts() })
 
+// Source of the agent: a blank agent you configure by hand, or a
+// one-step deploy from an Agent Recipe repo (pinned ref). Recipe mode
+// folds what used to be a separate deploy dialog into this flow.
+const mode = ref<'blank' | 'recipe'>('blank')
+
+// Curated recipe index — pick from the list or choose "Custom…" and
+// paste any github.com/<owner>/<name>@<ref>. The list carries no
+// special trust; capabilities are always consented explicitly.
+interface RecipeIndexEntry { id: string, label: string, repo_ref: string, hint: string }
+const RECIPE_INDEX: RecipeIndexEntry[] = [
+  {
+    id: 'bluesky-summary',
+    label: 'Bluesky feed summary',
+    repo_ref: 'github.com/openape-official-ape-agents/bluesky-summary@v0.1.0',
+    hint: 'Twice-daily digest of your Bluesky home timeline. Param: topic. Secrets: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD.',
+  },
+]
+const CUSTOM_RECIPE = '__custom__'
+const selectedRecipe = ref<string>(CUSTOM_RECIPE)
+
 // Quick-start system-prompt presets surfaced as a select-menu in the
 // dialog. Each one ships a German-language persona for a common
 // single-purpose workflow (mail triage, calendar, time tracking, …)
@@ -162,13 +182,8 @@ function randomName(): string {
   return AGENT_NAME_POOL[Math.floor(Math.random() * AGENT_NAME_POOL.length)]!
 }
 
-// Rotates each time the dialog opens — placeholder hints at the
-// 100-name pool without committing to any single label.
 const placeholderName = ref<string>(randomName())
 
-// Reset form whenever the dialog opens. We don't pre-fill from the
-// previous spawn — names are unique per owner so reusing would
-// guarantee a 409 anyway, and the bridge config is per-agent.
 const form = ref({
   name: '',
   host_id: '',
@@ -177,25 +192,42 @@ const form = ref({
   bridge_model: '',
   system_prompt: '',
 })
+
+// Recipe-mode form + deploy state.
+const recipeForm = ref({ repo_ref: '', params: '' })
+interface DeployResponse {
+  intent_id: string
+  agent_name: string
+  ref: string
+  required_capabilities: string[]
+  schedules: Array<{ task_id: string, cron: string, name: string }>
+}
+const deployRes = ref<DeployResponse | null>(null)
+const secretValues = ref<Record<string, string>>({})
+
 const submitting = ref(false)
 const intentId = ref('')
 const spawnedName = ref('')
 const result = ref<null | { ok: boolean, agent_email?: string, error?: string }>(null)
+const binding = ref(false)
 const pollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 watch(open, (now) => {
   if (!now) return
+  mode.value = 'blank'
   form.value = { name: '', host_id: '', bridge_key: '', bridge_base_url: '', bridge_model: '', system_prompt: '' }
+  recipeForm.value = { repo_ref: '', params: '' }
+  selectedRecipe.value = CUSTOM_RECIPE
   selectedPreset.value = 'custom'
+  deployRes.value = null
+  secretValues.value = {}
   intentId.value = ''
   spawnedName.value = ''
   result.value = null
+  binding.value = false
   placeholderName.value = randomName()
 })
 
-// 🎲 button beside the name input — fills the field with a random
-// pool pick. Clicking it again rolls a new name. Owners who prefer
-// typing their own ignore the button entirely.
 function rollName(): void {
   form.value.name = randomName()
 }
@@ -203,38 +235,69 @@ function rollName(): void {
 watch(selectedPreset, (id) => {
   const preset = PRESETS.find(p => p.id === id)
   if (!preset) return
-  // Only overwrite the textarea when the user hasn't typed anything
-  // custom yet. Otherwise the preset switch would silently nuke their
-  // edits. Empty selection always overwrites (it's the explicit reset).
   if (!form.value.system_prompt || PRESETS.some(p => p.prompt === form.value.system_prompt)) {
     form.value.system_prompt = preset.prompt
   }
 })
 
-const canSubmit = computed(() =>
-  !submitting.value
-  && !intentId.value
-  && form.value.name.length > 0
-  && /^[a-z][a-z0-9-]{0,23}$/.test(form.value.name)
-  && hosts.value.length > 0,
-)
+watch(selectedRecipe, (id) => {
+  const entry = RECIPE_INDEX.find(r => r.id === id)
+  if (entry) recipeForm.value.repo_ref = entry.repo_ref
+  else if (id === CUSTOM_RECIPE) recipeForm.value.repo_ref = ''
+})
+
+const canSubmit = computed(() => {
+  if (submitting.value || intentId.value || hosts.value.length === 0) return false
+  if (mode.value === 'blank') {
+    return form.value.name.length > 0 && /^[a-z][a-z0-9-]{0,23}$/.test(form.value.name)
+  }
+  return /.+@.+/.test(recipeForm.value.repo_ref.trim())
+})
+
+// `KEY=value` per line → record. Blank lines ignored.
+function parseParams(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) throw new Error(`bad param line: "${line}" (expected KEY=value)`)
+    out[line.slice(0, eq).trim()] = line.slice(eq + 1)
+  }
+  return out
+}
 
 async function submit() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
-    const body: Record<string, string> = { name: form.value.name }
-    if (form.value.host_id) body.host_id = form.value.host_id
-    if (form.value.bridge_key) body.bridge_key = form.value.bridge_key
-    if (form.value.bridge_base_url) body.bridge_base_url = form.value.bridge_base_url
-    if (form.value.bridge_model) body.bridge_model = form.value.bridge_model
-    const res = await ($fetch as any)('/api/agents/spawn-intent', { method: 'POST', body })
-    intentId.value = res.intent_id
-    spawnedName.value = form.value.name
-    pollResult()
+    if (mode.value === 'blank') {
+      const body: Record<string, string> = { name: form.value.name }
+      if (form.value.host_id) body.host_id = form.value.host_id
+      if (form.value.bridge_key) body.bridge_key = form.value.bridge_key
+      if (form.value.bridge_base_url) body.bridge_base_url = form.value.bridge_base_url
+      if (form.value.bridge_model) body.bridge_model = form.value.bridge_model
+      const res = await ($fetch as any)('/api/agents/spawn-intent', { method: 'POST', body })
+      intentId.value = res.intent_id
+      spawnedName.value = form.value.name
+      pollResult()
+    }
+    else {
+      let params: Record<string, string>
+      try { params = parseParams(recipeForm.value.params) }
+      catch (e: any) { result.value = { ok: false, error: e.message }; submitting.value = false; return }
+      const body: Record<string, unknown> = { repo_ref: recipeForm.value.repo_ref.trim(), params }
+      if (form.value.host_id) body.host_id = form.value.host_id
+      const res: DeployResponse = await ($fetch as any)('/api/agents/recipe-deploy', { method: 'POST', body })
+      deployRes.value = res
+      for (const env of res.required_capabilities) secretValues.value[env] = ''
+      intentId.value = res.intent_id
+      spawnedName.value = res.agent_name
+      pollResult()
+    }
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'spawn failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'failed' }
   }
   finally {
     submitting.value = false
@@ -246,39 +309,76 @@ async function pollResult() {
   try {
     const res = await ($fetch as any)(`/api/agents/spawn-intent/${intentId.value}`)
     if (res.pending) {
-      // Owner is still on the approve-grant screen on their phone.
-      // Re-check in 2s. The intent map auto-prunes after 30min so we
-      // don't poll forever — but the UI dialog will close on dismiss.
       pollTimer.value = setTimeout(pollResult, 2000)
       return
     }
-    result.value = { ok: res.ok, agent_email: res.agent_email, error: res.error }
-    // On success, persist the chosen system_prompt to the troop DB.
-    // The agent picks it up on its next sync (~5min) or sooner via
-    // the WS config-update broadcast that already fires on PATCH.
-    // We don't fail the whole spawn over a save error here — the
-    // agent exists, the user can still edit the prompt from the
-    // detail page.
-    if (res.ok && form.value.system_prompt) {
-      try {
-        await ($fetch as any)(`/api/agents/${encodeURIComponent(spawnedName.value)}`, {
-          method: 'PATCH',
-          body: { system_prompt: form.value.system_prompt },
-        })
-      }
-      catch (err: any) {
-        // Surface but don't overwrite the success state.
-        result.value = {
-          ok: true,
-          agent_email: res.agent_email,
-          error: `Agent spawned but system_prompt save failed: ${err?.data?.statusMessage || err?.message || 'unknown'} — set it manually on the agent page.`,
+    if (!res.ok) {
+      result.value = { ok: false, agent_email: res.agent_email, error: res.error }
+      return
+    }
+    if (mode.value === 'blank') {
+      result.value = { ok: true, agent_email: res.agent_email }
+      // Persist the chosen system_prompt — non-fatal if it fails, the
+      // agent exists and the prompt is editable on the detail page.
+      if (form.value.system_prompt) {
+        try {
+          await ($fetch as any)(`/api/agents/${encodeURIComponent(spawnedName.value)}`, {
+            method: 'PATCH',
+            body: { system_prompt: form.value.system_prompt },
+          })
+        }
+        catch (err: any) {
+          result.value = {
+            ok: true,
+            agent_email: res.agent_email,
+            error: `Agent spawned but system_prompt save failed: ${err?.data?.statusMessage || err?.message || 'unknown'} — set it manually on the agent page.`,
+          }
         }
       }
+    }
+    else {
+      await bindSecrets(res.agent_email)
     }
   }
   catch (err: any) {
     result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'poll failed' }
   }
+}
+
+async function bindSecrets(agentEmail?: string) {
+  const res = deployRes.value
+  if (!res) return
+  binding.value = true
+  for (const env of res.required_capabilities) {
+    const value = secretValues.value[env]
+    if (!value) {
+      result.value = { ok: false, error: `no value entered for ${env} — you can bind it later on the agent page` }
+      binding.value = false
+      return
+    }
+    // The agent's first sync (its X25519 pubkey) can lag spawn-result
+    // by a few seconds → retry on 404/409.
+    let bound = false
+    for (let i = 0; i < 40 && !bound; i++) {
+      try {
+        await ($fetch as any)(`/api/agents/${encodeURIComponent(res.agent_name)}/secrets/${encodeURIComponent(env)}`, {
+          method: 'PUT',
+          body: { value },
+        })
+        bound = true
+      }
+      catch (err: any) {
+        if (i === 39) {
+          result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.message}` }
+          binding.value = false
+          return
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+  }
+  binding.value = false
+  result.value = { ok: true, agent_email: agentEmail }
 }
 
 function close() {
@@ -291,9 +391,7 @@ function close() {
 <template>
   <UModal
     v-model:open="open"
-    :ui="{
-      content: 'sm:max-w-md max-h-[90vh] flex flex-col',
-    }"
+    :ui="{ content: 'sm:max-w-md max-h-[90vh] flex flex-col' }"
   >
     <template #content>
       <div class="p-5 space-y-4 overflow-y-auto">
@@ -303,7 +401,7 @@ function close() {
               Spawn agent
             </h3>
             <p class="text-xs text-muted">
-              Runs <code>apes agents spawn</code> on the selected Mac. You'll get a DDISA grant request on your iPhone — approve to complete.
+              A blank agent you configure, or a one-step deploy from an Agent Recipe. You'll get a DDISA grant request on your iPhone — approve to complete.
             </p>
           </div>
           <UButton variant="ghost" size="sm" icon="i-lucide-x" :disabled="submitting" @click="close" />
@@ -317,6 +415,29 @@ function close() {
           description="Start the nest daemon on a Mac (apes nest install + run) and refresh. The legacy `apes nest spawn` CLI path still works as a fallback."
         />
 
+        <UFormField label="Source">
+          <UButtonGroup class="w-full">
+            <UButton
+              :variant="mode === 'blank' ? 'solid' : 'outline'"
+              :color="mode === 'blank' ? 'primary' : 'neutral'"
+              class="flex-1 justify-center"
+              :disabled="!!intentId"
+              @click="mode = 'blank'"
+            >
+              Blank agent
+            </UButton>
+            <UButton
+              :variant="mode === 'recipe' ? 'solid' : 'outline'"
+              :color="mode === 'recipe' ? 'primary' : 'neutral'"
+              class="flex-1 justify-center"
+              :disabled="!!intentId"
+              @click="mode = 'recipe'"
+            >
+              From recipe
+            </UButton>
+          </UButtonGroup>
+        </UFormField>
+
         <UFormField v-if="hosts.length > 1" label="Host" description="You have multiple Macs connected — pick the one to spawn on.">
           <USelect
             v-model="form.host_id"
@@ -325,92 +446,157 @@ function close() {
           />
         </UFormField>
 
-        <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
-          <div class="flex items-stretch gap-2">
-            <UInput
-              v-model="form.name"
-              :placeholder="placeholderName"
-              :disabled="!!intentId"
-              class="flex-1"
-              :ui="{ base: 'w-full' }"
-            />
-            <UButton
-              type="button"
-              variant="soft"
-              color="neutral"
-              icon="i-lucide-dices"
-              aria-label="Roll a random name"
-              :disabled="!!intentId"
-              @click="rollName"
-            />
-            <UDropdownMenu
-              :items="[AGENT_NAME_POOL.map(n => ({ label: n, onSelect: () => { form.name = n } }))]"
-              :popper="{ placement: 'bottom-end' }"
-              :ui="{ content: 'max-h-80 overflow-y-auto' }"
-            >
+        <!-- Blank-agent fields -->
+        <template v-if="mode === 'blank'">
+          <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
+            <div class="flex items-stretch gap-2">
+              <UInput
+                v-model="form.name"
+                :placeholder="placeholderName"
+                :disabled="!!intentId"
+                class="flex-1"
+                :ui="{ base: 'w-full' }"
+              />
               <UButton
                 type="button"
                 variant="soft"
                 color="neutral"
-                icon="i-lucide-list"
-                aria-label="Pick from name list"
+                icon="i-lucide-dices"
+                aria-label="Roll a random name"
                 :disabled="!!intentId"
+                @click="rollName"
               />
-            </UDropdownMenu>
+              <UDropdownMenu
+                :items="[AGENT_NAME_POOL.map(n => ({ label: n, onSelect: () => { form.name = n } }))]"
+                :popper="{ placement: 'bottom-end' }"
+                :ui="{ content: 'max-h-80 overflow-y-auto' }"
+              >
+                <UButton
+                  type="button"
+                  variant="soft"
+                  color="neutral"
+                  icon="i-lucide-list"
+                  aria-label="Pick from name list"
+                  :disabled="!!intentId"
+                />
+              </UDropdownMenu>
+            </div>
+          </UFormField>
+
+          <UFormField label="Preset" description="Quick-start system prompt. You can tweak the textarea below or pick 'Custom' for a blank slate.">
+            <USelect
+              v-model="selectedPreset"
+              :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
+              :disabled="!!intentId"
+            />
+          </UFormField>
+
+          <UFormField label="System prompt" description="Was der Agent immer im Kopf hat. Edits hier kommen mit dem nächsten Sync auf den Host — du kannst auch später auf der Agent-Seite anpassen.">
+            <UTextarea
+              v-model="form.system_prompt"
+              :rows="6"
+              autoresize
+              :disabled="!!intentId"
+              placeholder="Du bist …"
+              class="w-full"
+              :ui="{ base: 'w-full' }"
+            />
+          </UFormField>
+
+          <details class="text-xs text-muted">
+            <summary class="cursor-pointer select-none">
+              Bridge overrides (optional)
+            </summary>
+            <div class="space-y-3 mt-3">
+              <UFormField label="LITELLM_API_KEY" description="Defaults to ~/litellm/.env on the host.">
+                <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
+              </UFormField>
+              <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
+                <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
+              </UFormField>
+              <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
+                <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
+              </UFormField>
+            </div>
+          </details>
+        </template>
+
+        <!-- Recipe fields -->
+        <template v-else>
+          <UFormField label="Recipe" description="Pick a curated recipe or choose Custom to paste any pinned repo.">
+            <USelect
+              v-model="selectedRecipe"
+              :items="[
+                ...RECIPE_INDEX.map(r => ({ label: r.label, value: r.id, description: r.hint })),
+                { label: 'Custom…', value: CUSTOM_RECIPE, description: 'Paste any github.com/<owner>/<name>@<ref>' },
+              ]"
+              :disabled="!!intentId"
+            />
+          </UFormField>
+
+          <UFormField label="Repository" description="github.com/<owner>/<name>@<tag|commit> — the pinned ref is mandatory.">
+            <UInput
+              v-model="recipeForm.repo_ref"
+              placeholder="github.com/openape-official-ape-agents/bluesky-summary@v0.1.0"
+              :disabled="!!intentId || selectedRecipe !== CUSTOM_RECIPE"
+              class="w-full"
+              :ui="{ base: 'w-full' }"
+            />
+          </UFormField>
+
+          <UFormField label="Params" description="One KEY=value per line (recipe params, e.g. topic=AI agents).">
+            <UTextarea
+              v-model="recipeForm.params"
+              :rows="3"
+              autoresize
+              :disabled="!!intentId"
+              placeholder="topic=AI agents"
+              class="w-full"
+              :ui="{ base: 'w-full' }"
+            />
+          </UFormField>
+
+          <div v-if="deployRes && deployRes.required_capabilities.length > 0" class="space-y-3">
+            <p class="text-xs text-muted">
+              This recipe needs the following secrets. They are sealed to the agent before they are stored — troop never keeps the plaintext. You can also change them later on the agent's page.
+            </p>
+            <UFormField
+              v-for="env in deployRes.required_capabilities"
+              :key="env"
+              :label="env"
+            >
+              <UInput
+                v-model="secretValues[env]"
+                type="password"
+                :disabled="binding || !!result?.ok"
+                placeholder="secret value"
+                class="w-full"
+                :ui="{ base: 'w-full' }"
+              />
+            </UFormField>
           </div>
-        </UFormField>
-
-        <UFormField label="Preset" description="Quick-start system prompt. You can tweak the textarea below or pick 'Custom' for a blank slate.">
-          <USelect
-            v-model="selectedPreset"
-            :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
-            :disabled="!!intentId"
-          />
-        </UFormField>
-
-        <UFormField label="System prompt" description="Was der Agent immer im Kopf hat. Edits hier kommen mit dem nächsten Sync auf den Host — du kannst auch später auf der Agent-Seite anpassen.">
-          <UTextarea
-            v-model="form.system_prompt"
-            :rows="6"
-            autoresize
-            :disabled="!!intentId"
-            placeholder="Du bist …"
-            class="w-full"
-            :ui="{ base: 'w-full' }"
-          />
-        </UFormField>
-
-        <details class="text-xs text-muted">
-          <summary class="cursor-pointer select-none">
-            Bridge overrides (optional)
-          </summary>
-          <div class="space-y-3 mt-3">
-            <UFormField label="LITELLM_API_KEY" description="Defaults to ~/litellm/.env on the host.">
-              <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
-            </UFormField>
-            <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
-              <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
-            </UFormField>
-            <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
-              <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
-            </UFormField>
+          <div v-if="deployRes && deployRes.schedules.length > 0" class="text-xs text-muted">
+            Schedules:
+            <code v-for="s in deployRes.schedules" :key="s.task_id" class="ml-1">{{ s.cron }}</code>
           </div>
-        </details>
+        </template>
 
         <div v-if="intentId && !result" class="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm flex items-start gap-2">
           <UIcon name="i-lucide-loader-circle" class="animate-spin shrink-0 size-4 mt-0.5" />
           <div>
             <div class="font-medium">
-              Waiting for DDISA approval…
+              {{ binding ? 'Binding secrets…' : 'Waiting for DDISA approval…' }}
             </div>
             <div class="text-xs text-muted mt-1">
-              Approve the as=root grant in the OpenApe app on your phone. This dialog updates automatically when the spawn completes.
+              {{ binding
+                ? 'Sealing each value to the agent and pushing it.'
+                : 'Approve the as=root grant in the OpenApe app on your phone. This dialog updates automatically.' }}
             </div>
           </div>
         </div>
 
-        <UAlert v-if="result?.ok" color="success" :title="`Spawned: ${result.agent_email ?? form.name}`" />
-        <UAlert v-if="result && !result.ok" color="error" title="Spawn failed" :description="result.error" />
+        <UAlert v-if="result?.ok" color="success" :title="`Spawned: ${result.agent_email ?? spawnedName}`" />
+        <UAlert v-if="result && !result.ok" color="error" title="Failed" :description="result.error" />
 
         <div class="flex justify-end gap-2">
           <UButton variant="ghost" :disabled="submitting" @click="close">
@@ -423,7 +609,7 @@ function close() {
             :disabled="!canSubmit"
             @click="submit"
           >
-            Spawn
+            {{ mode === 'recipe' ? 'Deploy' : 'Spawn' }}
           </UButton>
         </div>
       </div>
