@@ -357,19 +357,23 @@ mkdir -p /var/openape/homes
 chmod 755 /var/openape/homes
 
 if [ "$TOMBSTONE_REUSE" = "0" ]; then
-  # Pick the next free UID in the [200, 500) hidden service-account range.
-  # Starts the running max at 199 so an empty range yields 200 after the
-  # floor check; otherwise NEXT_UID = max(existing in-range UIDs) + 1.
-  NEXT_UID=199
-  for uid in $(dscl . -list /Users UniqueID | awk '$2 >= 200 && $2 < 500 {print $2}'); do
-    if [ "$uid" -ge "$NEXT_UID" ]; then
-      NEXT_UID=$((uid + 1))
+  # Pick the LOWEST free UID in the [200, 500) hidden service-account
+  # range. We must skip every occupied UID — agent users AND the many
+  # macOS system _* accounts — and reuse gaps. The old code took
+  # max(existing)+1, so a single agent landing on 499 wedged every
+  # future spawn ("No free UID") even with 100+ UIDs free. Now we scan
+  # for the first actually-unused UID.
+  OCCUPIED_UIDS=$(dscl . -list /Users UniqueID | awk '$2 >= 200 && $2 < 500 {print $2}' | sort -n -u)
+  NEXT_UID=""
+  candidate=200
+  while [ "$candidate" -lt 500 ]; do
+    if ! printf '%s\n' "$OCCUPIED_UIDS" | grep -qx "$candidate"; then
+      NEXT_UID=$candidate
+      break
     fi
+    candidate=$((candidate + 1))
   done
-  if [ "$NEXT_UID" -lt 200 ]; then
-    NEXT_UID=200
-  fi
-  if [ "$NEXT_UID" -ge 500 ]; then
+  if [ -z "$NEXT_UID" ]; then
     echo "No free UID in [200, 500) — refusing to clobber a real user." >&2
     exit 1
   fi
