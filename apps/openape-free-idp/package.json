@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
-    "@libsql/client": "^0.14.0",
-    "@nuxt/ui": "^4.4.0",
+    "@libsql/client": "^0.17.3",
+    "@nuxt/ui": "^4.7.1",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
