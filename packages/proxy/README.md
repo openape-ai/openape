@@ -31,6 +31,16 @@ openape-proxy --config config.toml
 openape-proxy --config config.toml --dry-run   # Log only, no blocking
 ```
 
+## Daemon mode (long-running, with secret injection)
+
+Run as a long-lived per-agent daemon that injects credentials into outgoing HTTPS requests. The agent's process never sees plaintext credentials — the proxy holds them in its own memory and adds them to matching requests after they leave the agent.
+
+```bash
+sudo -u agent_iurio openape-proxy --global --port 18789 < ~/.secrets-iurio.toml
+```
+
+See [`docs/proxy-secrets.md`](../../docs/proxy-secrets.md) for the trust model and the full setup runbook.
+
 ## Configuration
 
 Configuration uses TOML format:

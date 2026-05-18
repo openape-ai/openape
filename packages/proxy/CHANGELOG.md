@@ -1,5 +1,11 @@
 # @openape/proxy
 
+## Unreleased
+
+### Minor Changes
+
+- Daemon mode (`openape-proxy --global`) for long-running per-agent proxies. Reads a secrets TOML from stdin and injects matching tokens into HTTPS requests via subprocess-scoped TLS-MITM, so the agent process never sees plaintext credentials. See `docs/proxy-secrets.md`.
+
 ## 0.4.3
 
 ### Patch Changes
