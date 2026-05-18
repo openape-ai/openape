@@ -370,8 +370,19 @@ function runWithCapture(bin: string, args: string[]): Promise<{ stdout: string, 
           resolve({ stdout: stdout.toString(), stderr: stderr.toString() })
           return
         }
-        const msg = stderr.toString() || err.message
-        reject(new Error(msg.split('\n').filter(Boolean).slice(-3).join(' / ')))
+        // Surface the *actual* failure. `apes` prints the real
+        // message and then a V8 stack; a blind tail-slice used to
+        // keep only the stack frames ("at async runMain …"), which
+        // is useless for diagnosing a failed spawn. Drop pure stack
+        // frames, keep the human-readable error lines.
+        const raw = (stderr.toString().trim() || stdout.toString().trim() || err.message)
+        const meaningful = raw
+          .split('\n')
+          .map(l => l.replace(/\s+$/, ''))
+          .filter(l => l.trim() && !/^\s*at\s/.test(l))
+        const picked = (meaningful.length > 0 ? meaningful : raw.split('\n').filter(Boolean))
+        const msg = picked.slice(-15).join('\n').slice(-2500)
+        reject(new Error(msg || err.message))
         return
       }
       resolve({ stdout: stdout.toString(), stderr: stderr.toString() })
