@@ -24,6 +24,13 @@ export interface DeploySchedule {
 export interface DeployPlan {
   agentName: string
   systemPrompt: string
+  /**
+   * Optional free-text behaviour layer the owner typed alongside the
+   * recipe. Applied as the agent's user_addendum (M5) so the recipe
+   * intent stays the immutable base and the owner's prompt is purely
+   * additive — no special-casing, recipe + spawn coexist.
+   */
+  userAddendum?: string
   schedules: DeploySchedule[]
   requiredCapabilities: string[]
 }
@@ -40,7 +47,16 @@ function agentNameFromRecipe(name: string): string {
  * task whose user prompt is the (interpolated) schedule description or
  * a sensible default.
  */
-export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe): DeployPlan {
+export interface DeployPlanOptions {
+  /** Use this agent name instead of deriving it from the recipe (the
+   *  owner named the agent in the spawn dialog — recipe is additive). */
+  agentName?: string
+  /** Free-text prompt the owner added; becomes the agent's
+   *  user_addendum on top of the recipe intent. */
+  userAddendum?: string
+}
+
+export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, opts: DeployPlanOptions = {}): DeployPlan {
   const schedules: DeploySchedule[] = mat.schedules.map((s, i) => ({
     taskId: `recipe-${i}`,
     name: s.description ?? `${recipe.name} #${i + 1}`,
@@ -49,8 +65,9 @@ export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe): D
     tools: [...RECIPE_AGENT_TOOLS],
   }))
   return {
-    agentName: agentNameFromRecipe(recipe.name),
+    agentName: opts.agentName ? agentNameFromRecipe(opts.agentName) : agentNameFromRecipe(recipe.name),
     systemPrompt: mat.intent,
+    ...(opts.userAddendum ? { userAddendum: opts.userAddendum } : {}),
     schedules,
     requiredCapabilities: recipe.capabilities.map(c => c.env),
   }

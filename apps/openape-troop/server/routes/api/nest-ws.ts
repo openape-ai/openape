@@ -222,7 +222,10 @@ export default defineWebSocketHandler({
             void Promise.resolve(
               (async () => {
                 await db.update(agents)
-                  .set({ systemPrompt: plan.systemPrompt })
+                  .set({
+                    systemPrompt: plan.systemPrompt,
+                    ...(plan.userAddendum !== undefined ? { userAddendum: plan.userAddendum } : {}),
+                  })
                   .where(eq(agents.email, agentEmail))
                 for (const s of plan.schedules) {
                   await db.insert(tasks).values({

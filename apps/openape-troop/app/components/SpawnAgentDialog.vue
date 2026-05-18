@@ -28,59 +28,38 @@ async function loadHosts() {
 
 watch(open, (now) => { if (now) loadHosts() })
 
-// Source of the agent: a blank agent you configure by hand, or a
-// one-step deploy from an Agent Recipe repo (pinned ref). Recipe mode
-// folds what used to be a separate deploy dialog into this flow.
-const mode = ref<'blank' | 'recipe'>('blank')
-
+// One extensible spawn form — no modes. Every agent has a name and
+// (optionally) a system prompt. A recipe is purely *additive*: an
+// always-available collapsible section. Secrets is likewise always
+// available. No special case.
+//
 // Curated recipe index — pick from the list or choose "Custom…" and
-// paste any github.com/<owner>/<name>@<ref>. The list carries no
-// special trust; capabilities are always consented explicitly.
-interface RecipeIndexEntry { id: string, label: string, repo_ref: string, hint: string }
+// paste any github.com/<owner>/<name>@<ref>. `caps` lets the recipe
+// pre-declare which secrets to add; if a recipe doesn't, the Help
+// button points at its repo where the README documents them.
+interface RecipeIndexEntry { id: string, label: string, repo_ref: string, repo_url: string, hint: string, caps: string[] }
+const RECIPE_NONE = '__none__'
+const RECIPE_CUSTOM = '__custom__'
 const RECIPE_INDEX: RecipeIndexEntry[] = [
   {
     id: 'bluesky-summary',
     label: 'Bluesky feed summary',
-    repo_ref: 'github.com/openape-official-ape-agents/bluesky-summary@v0.1.0',
-    hint: 'Twice-daily digest of your Bluesky home timeline. Param: topic. Secrets: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD.',
+    repo_ref: 'github.com/openape-ai/bluesky-summary@v0.1.0',
+    repo_url: 'https://github.com/openape-ai/bluesky-summary',
+    hint: 'Twice-daily digest of your Bluesky home timeline. Param: topic.',
+    caps: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
   },
 ]
-const CUSTOM_RECIPE = '__custom__'
-const selectedRecipe = ref<string>(CUSTOM_RECIPE)
+const selectedRecipe = ref<string>(RECIPE_NONE)
+const recipeForm = ref({ repo_ref: '', params: '' })
 
-// Quick-start system-prompt presets surfaced as a select-menu in the
-// dialog. Each one ships a German-language persona for a common
-// single-purpose workflow (mail triage, calendar, time tracking, …)
-// and references the right tools out of the agent's built-in fundus
-// rather than baking in any one user's name/accounts. The personal
-// bits (which O365 account, which folder, …) get stored by the
-// agent in ~/.openape/agent/MEMORY.md — a small per-agent persistent
-// memory the prompt teaches the LLM to maintain across turns.
-//
-// On submit, after the spawn-result lands, we PATCH the new agent
-// with the preset's system_prompt so the agent runs the right
-// persona from the first message. 'custom' = blank, user fills the
-// textarea themselves.
-interface SystemPromptPreset {
-  id: string
-  label: string
-  description: string
-  prompt: string
-}
-
-// Reused across every preset — establishes the per-agent persistent
-// memory pattern. Same shape as Claude's auto-memory: small file on
-// disk, read at the start of each turn, written when something
-// worth remembering across conversations comes up.
+// Free-text persona presets — fill the system-prompt textarea. With a
+// recipe this rides along as the additive user_addendum; without one
+// it is the agent's system prompt.
+interface SystemPromptPreset { id: string, label: string, description: string, prompt: string }
 const MEMORY_NOTE = `Persistente Notizen, Account-Namen, Standard-Filter und alles was du dir konversationsübergreifend merken willst, schreibst du nach ~/.openape/agent/MEMORY.md (Markdown, lege es bei Bedarf neu an). Du liest das File am Beginn jeder Konversation und aktualisierst es wenn der Owner dir neue dauerhafte Vorgaben gibt.`
-
 const PRESETS: SystemPromptPreset[] = [
-  {
-    id: 'custom',
-    label: 'Custom (leer)',
-    description: 'Eigenen System-Prompt schreiben oder später im Agent-Detail setzen.',
-    prompt: '',
-  },
+  { id: 'custom', label: 'Custom (leer)', description: 'Eigenen System-Prompt schreiben oder später im Agent-Detail setzen.', prompt: '' },
   {
     id: 'calendar',
     label: '📅 Kalender-Assistent',
@@ -97,9 +76,7 @@ ${MEMORY_NOTE}`,
     description: 'Sichtet ungelesene Mails, priorisiert Action / Important / FYI / Spam.',
     prompt: `Du bist ein Mail-Triage-Assistent. Du sichtest die Inbox, fasst neue ungelesene Mails zusammen und priorisierst nach Action / Important / FYI / Spam. Top-5-Übersicht per DM, max. eine Zeile pro Mail (Absender · Betreff · Empfehlung). Knapp, deutsche Sprache.
 
-Tools: bash. Nutz dafür o365-cli (für Microsoft 365) oder ein anderes Mail-CLI das auf dem Host installiert ist — z.B. \`o365-cli mail list --account <name> --json --unread --limit 50\` für die Inbox-Übersicht.
-
-Account-Namen sind nicht vorgegeben — frag den Owner beim ersten Mal welche(n) er triagieren möchte, und merke dir diese in MEMORY.md.
+Tools: bash. Nutz dafür o365-cli (für Microsoft 365) oder ein anderes Mail-CLI das auf dem Host installiert ist.
 
 ${MEMORY_NOTE}`,
   },
@@ -107,29 +84,9 @@ ${MEMORY_NOTE}`,
     id: 'time-tracker',
     label: '⏱ Zeiterfassung',
     description: 'Wertet activity-logs aus, fasst Stunden pro Projekt / Firma zusammen.',
-    prompt: `Du bist ein Zeiterfassungs-Assistent. Du liest die activity-logs des Owners (Format: JSONL pro Tag, eine Zeile pro logged action mit \`ts, project, company, type, action\`), gruppierst nach Firma + Projekt und meldest pro Tag eine Markdown-Tabelle: Firma / Projekt / Stunden / Stichworte.
+    prompt: `Du bist ein Zeiterfassungs-Assistent. Du liest die activity-logs des Owners (JSONL pro Tag), gruppierst nach Firma + Projekt und meldest pro Tag eine Markdown-Tabelle: Firma / Projekt / Stunden / Stichworte.
 
-Tools: bash und file.read. Der Owner sagt dir beim ersten Mal wo die logs liegen (z.B. ~/.claude/activity-logs/YYYY-MM-DD.jsonl) — merke dir den Pfad in MEMORY.md. Sind keine logs für den abgefragten Zeitraum da: sag es klar statt zu erfinden.
-
-${MEMORY_NOTE}`,
-  },
-  {
-    id: 'file-organizer',
-    label: '📁 File-Verwalter',
-    description: 'Überprüft Downloads, schlägt Verschiebungen vor, räumt auf Anfrage auf.',
-    prompt: `Du bist ein File-Verwalter. Du überprüfst regelmäßig den Downloads-Ordner des Owners und schlägst sinnvolle Verschiebungen vor (PDFs in den Dokumenten-Ordner, Bilder in den Pictures-Ordner, Code-Archive in den Code-Ordner, …). Auf explizite Anfrage räumst du aktiv auf — vor jedem rm fragst du nochmal nach.
-
-Tools: bash, file.read, file.write. Frag den Owner beim ersten Mal nach seinen bevorzugten Zielordnern und Ausnahmen (z.B. "PDF-Rechnungen separat") und schreibe das Mapping in MEMORY.md.
-
-${MEMORY_NOTE}`,
-  },
-  {
-    id: 'reminder-bot',
-    label: '🔔 Wiedervorlage-Bot',
-    description: 'Checkt fällige Tasks/Erinnerungen und meldet anstehende per DM.',
-    prompt: `Du bist ein Wiedervorlage-Bot. Du checkst täglich am Morgen die offenen Tasks und Erinnerungen des Owners und meldest per DM die, deren due_at oder remind_at im nächsten Tag fällig wird. Format pro Task: "● <title> (fällig <DD.MM. HH:MM>) — <kurzer Kontext>". Knapp, deutsche Sprache.
-
-Tools: bash (für ape-tasks und andere CLI-basierte Task-Quellen) oder http.get (für REST-APIs). Welche Quelle benutzt wird, sagt dir der Owner beim ersten Mal — merke sie dir samt Filter (status=open,doing) in MEMORY.md.
+Tools: bash und file.read. Der Owner sagt dir beim ersten Mal wo die logs liegen — merke dir den Pfad in MEMORY.md.
 
 ${MEMORY_NOTE}`,
   },
@@ -137,51 +94,31 @@ ${MEMORY_NOTE}`,
     id: 'daily-summary',
     label: '🗞 Daily Summary',
     description: 'Synthetisiert activity-logs + tasks + Termine zu einem End-of-day Bericht.',
-    prompt: `Du bist ein Daily-Summary-Bot. Jeden Werktag am Abend fasst du zusammen:
-1. Was wurde heute gemacht? (Quelle: activity-logs)
-2. Was wurde abgeschlossen? (Tasks mit status=done heute)
-3. Was steht morgen an? (offene Tasks + Kalender)
+    prompt: `Du bist ein Daily-Summary-Bot. Jeden Werktag am Abend fasst du zusammen: 1. Was wurde heute gemacht? 2. Was wurde abgeschlossen? 3. Was steht morgen an? Drei kurze Abschnitte, je 3-5 Bulletpoints, deutsche Sprache.
 
-Format: drei kurze Abschnitte (Heute / Erledigt / Morgen), je 3-5 Bulletpoints. Deutsche Sprache.
-
-Tools: bash, file.read, http.get. Welche konkreten Pfade / APIs / Accounts der Owner verwendet (welcher Kalender, welcher Task-Tracker, welche Log-Datei) fragst du beim ersten Mal ab und speicherst es in MEMORY.md.
+Tools: bash, file.read, http.get. Welche Pfade / APIs / Accounts der Owner verwendet, fragst du beim ersten Mal ab und speicherst es in MEMORY.md.
 
 ${MEMORY_NOTE}`,
   },
 ]
 const selectedPreset = ref<string>('custom')
 
-// Curated 100-name pool surfaced behind a 🎲 button + a "pick from
-// list" dropdown. The agent-name regex caps at 24 chars / [a-z0-9-]
-// so every entry here stays inside that ceiling. Themes: primates,
-// Greek/Norse myth, nature, sci-fi AI, stars, birds, cute everyday.
-// One placeholder rotates on every dialog-open so users don't see
-// "igor31" on repeat.
 const AGENT_NAME_POOL: readonly string[] = [
-  // Primates / classic ape characters
   'koko', 'caesar', 'kong', 'bonobo', 'lemur', 'mowgli', 'tarzan', 'simba', 'baloo', 'hanuman',
-  // Mythology
   'zeus', 'atlas', 'hermes', 'iris', 'apollo', 'thor', 'odin', 'freya', 'loki', 'hades',
   'gaia', 'helios', 'selene', 'orion', 'athena', 'ares', 'artemis', 'hera', 'jove', 'anubis',
-  // Nature / botany
   'aspen', 'river', 'sage', 'basil', 'cedar', 'willow', 'fern', 'juniper', 'ivy', 'moss',
   'brook', 'hazel', 'briar', 'dune', 'fir', 'alder', 'birch', 'clover', 'daisy', 'rose',
-  // Sci-fi AIs / robots
   'hal', 'jarvis', 'friday', 'tars', 'neo', 'trinity', 'cortana', 'gerty', 'samantha', 'eve',
   'dolores', 'ash', 'bishop', 'glados', 'wheatley',
-  // Stars + space
   'vega', 'lyra', 'nova', 'rigel', 'sirius', 'polaris', 'andromeda', 'hydra', 'draco', 'cygnus',
   'perseus', 'pegasus', 'comet', 'halley', 'kepler',
-  // Birds
   'falcon', 'raven', 'magpie', 'owl', 'sparrow', 'finch', 'kestrel', 'swift', 'robin', 'wren',
-  // Cute everyday
   'pepper', 'pixel', 'marble', 'pretzel', 'biscuit', 'cookie', 'ginger', 'honey', 'plum', 'peanut',
 ]
-
 function randomName(): string {
   return AGENT_NAME_POOL[Math.floor(Math.random() * AGENT_NAME_POOL.length)]!
 }
-
 const placeholderName = ref<string>(randomName())
 
 const form = ref({
@@ -193,36 +130,28 @@ const form = ref({
   system_prompt: '',
 })
 
-// Recipe-mode form + deploy state.
-const recipeForm = ref({ repo_ref: '', params: '' })
-interface DeployResponse {
-  intent_id: string
-  agent_name: string
-  ref: string
-  required_capabilities: string[]
-  schedules: Array<{ task_id: string, cron: string, name: string }>
-}
-const deployRes = ref<DeployResponse | null>(null)
-const secretValues = ref<Record<string, string>>({})
+// Secrets the owner wants bound to the agent. Always available; a
+// chosen recipe pre-seeds the env names it declares.
+const secrets = ref<Array<{ env: string, value: string }>>([])
 
 const submitting = ref(false)
 const intentId = ref('')
 const spawnedName = ref('')
+const requiredCaps = ref<string[]>([])
 const result = ref<null | { ok: boolean, agent_email?: string, error?: string }>(null)
 const binding = ref(false)
 const pollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 watch(open, (now) => {
   if (!now) return
-  mode.value = 'blank'
   form.value = { name: '', host_id: '', bridge_key: '', bridge_base_url: '', bridge_model: '', system_prompt: '' }
-  recipeForm.value = { repo_ref: '', params: '' }
-  selectedRecipe.value = CUSTOM_RECIPE
   selectedPreset.value = 'custom'
-  deployRes.value = null
-  secretValues.value = {}
+  selectedRecipe.value = RECIPE_NONE
+  recipeForm.value = { repo_ref: '', params: '' }
+  secrets.value = []
   intentId.value = ''
   spawnedName.value = ''
+  requiredCaps.value = []
   result.value = null
   binding.value = false
   placeholderName.value = randomName()
@@ -240,21 +169,48 @@ watch(selectedPreset, (id) => {
   }
 })
 
+const selectedRecipeEntry = computed(() => RECIPE_INDEX.find(r => r.id === selectedRecipe.value) ?? null)
+
+// Picking a curated recipe fills the repo + pre-seeds its declared
+// secret rows (only those not already present). Switching away drops
+// auto-seeded empty rows so the section stays clean.
 watch(selectedRecipe, (id) => {
   const entry = RECIPE_INDEX.find(r => r.id === id)
-  if (entry) recipeForm.value.repo_ref = entry.repo_ref
-  else if (id === CUSTOM_RECIPE) recipeForm.value.repo_ref = ''
-})
-
-const canSubmit = computed(() => {
-  if (submitting.value || intentId.value || hosts.value.length === 0) return false
-  if (mode.value === 'blank') {
-    return form.value.name.length > 0 && /^[a-z][a-z0-9-]{0,23}$/.test(form.value.name)
+  if (entry) {
+    recipeForm.value.repo_ref = entry.repo_ref
+    for (const env of entry.caps) {
+      if (!secrets.value.some(s => s.env === env)) secrets.value.push({ env, value: '' })
+    }
   }
-  return /.+@.+/.test(recipeForm.value.repo_ref.trim())
+  else if (id === RECIPE_CUSTOM) {
+    recipeForm.value.repo_ref = ''
+  }
+  else {
+    // RECIPE_NONE
+    recipeForm.value.repo_ref = ''
+    secrets.value = secrets.value.filter(s => s.value !== '' || !RECIPE_INDEX.some(r => r.caps.includes(s.env)))
+  }
 })
 
-// `KEY=value` per line → record. Blank lines ignored.
+const recipeRepoUrl = computed(() => {
+  if (selectedRecipeEntry.value) return selectedRecipeEntry.value.repo_url
+  const ref = recipeForm.value.repo_ref.trim()
+  if (!ref) return ''
+  const slug = ref.replace(/^https?:\/\//, '').replace(/^github\.com\//, '').split('@')[0]
+  return slug && slug.includes('/') ? `https://github.com/${slug}` : ''
+})
+
+const hasRecipe = computed(() => recipeForm.value.repo_ref.trim().length > 0)
+
+const canSubmit = computed(() =>
+  !submitting.value
+  && !intentId.value
+  && form.value.name.length > 0
+  && /^[a-z][a-z0-9-]{0,23}$/.test(form.value.name)
+  && hosts.value.length > 0
+  && (!hasRecipe.value || /.+@.+/.test(recipeForm.value.repo_ref.trim())),
+)
+
 function parseParams(text: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const raw of text.split(/\r?\n/)) {
@@ -267,37 +223,41 @@ function parseParams(text: string): Record<string, string> {
   return out
 }
 
+function addSecretRow() {
+  secrets.value.push({ env: '', value: '' })
+}
+function removeSecretRow(i: number) {
+  secrets.value.splice(i, 1)
+}
+
 async function submit() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
-    if (mode.value === 'blank') {
-      const body: Record<string, string> = { name: form.value.name }
-      if (form.value.host_id) body.host_id = form.value.host_id
-      if (form.value.bridge_key) body.bridge_key = form.value.bridge_key
-      if (form.value.bridge_base_url) body.bridge_base_url = form.value.bridge_base_url
-      if (form.value.bridge_model) body.bridge_model = form.value.bridge_model
-      const res = await ($fetch as any)('/api/agents/spawn-intent', { method: 'POST', body })
-      intentId.value = res.intent_id
-      spawnedName.value = form.value.name
-      pollResult()
-    }
-    else {
+    const body: Record<string, unknown> = { name: form.value.name }
+    if (form.value.host_id) body.host_id = form.value.host_id
+    if (form.value.bridge_key) body.bridge_key = form.value.bridge_key
+    if (form.value.bridge_base_url) body.bridge_base_url = form.value.bridge_base_url
+    if (form.value.bridge_model) body.bridge_model = form.value.bridge_model
+    if (form.value.system_prompt) body.system_prompt = form.value.system_prompt
+    if (hasRecipe.value) {
       let params: Record<string, string>
       try { params = parseParams(recipeForm.value.params) }
       catch (e: any) { result.value = { ok: false, error: e.message }; submitting.value = false; return }
-      const body: Record<string, unknown> = { repo_ref: recipeForm.value.repo_ref.trim(), params }
-      if (form.value.host_id) body.host_id = form.value.host_id
-      const res: DeployResponse = await ($fetch as any)('/api/agents/recipe-deploy', { method: 'POST', body })
-      deployRes.value = res
-      for (const env of res.required_capabilities) secretValues.value[env] = ''
-      intentId.value = res.intent_id
-      spawnedName.value = res.agent_name
-      pollResult()
+      body.recipe = { repo_ref: recipeForm.value.repo_ref.trim(), params }
     }
+    const res = await ($fetch as any)('/api/agents/spawn-intent', { method: 'POST', body })
+    intentId.value = res.intent_id
+    spawnedName.value = form.value.name
+    requiredCaps.value = res.required_capabilities ?? []
+    // Make sure every recipe-declared capability has a row to fill.
+    for (const env of requiredCaps.value) {
+      if (!secrets.value.some(s => s.env === env)) secrets.value.push({ env, value: '' })
+    }
+    pollResult()
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'spawn failed' }
   }
   finally {
     submitting.value = false
@@ -316,29 +276,7 @@ async function pollResult() {
       result.value = { ok: false, agent_email: res.agent_email, error: res.error }
       return
     }
-    if (mode.value === 'blank') {
-      result.value = { ok: true, agent_email: res.agent_email }
-      // Persist the chosen system_prompt — non-fatal if it fails, the
-      // agent exists and the prompt is editable on the detail page.
-      if (form.value.system_prompt) {
-        try {
-          await ($fetch as any)(`/api/agents/${encodeURIComponent(spawnedName.value)}`, {
-            method: 'PATCH',
-            body: { system_prompt: form.value.system_prompt },
-          })
-        }
-        catch (err: any) {
-          result.value = {
-            ok: true,
-            agent_email: res.agent_email,
-            error: `Agent spawned but system_prompt save failed: ${err?.data?.statusMessage || err?.message || 'unknown'} — set it manually on the agent page.`,
-          }
-        }
-      }
-    }
-    else {
-      await bindSecrets(res.agent_email)
-    }
+    await bindSecrets(res.agent_email)
   }
   catch (err: any) {
     result.value = { ok: false, error: err?.data?.statusMessage || err?.message || 'poll failed' }
@@ -346,39 +284,41 @@ async function pollResult() {
 }
 
 async function bindSecrets(agentEmail?: string) {
-  const res = deployRes.value
-  if (!res) return
-  binding.value = true
-  for (const env of res.required_capabilities) {
-    const value = secretValues.value[env]
-    if (!value) {
-      result.value = { ok: false, error: `no value entered for ${env} — you can bind it later on the agent page` }
-      binding.value = false
-      return
-    }
-    // The agent's first sync (its X25519 pubkey) can lag spawn-result
-    // by a few seconds → retry on 404/409.
-    let bound = false
-    for (let i = 0; i < 40 && !bound; i++) {
-      try {
-        await ($fetch as any)(`/api/agents/${encodeURIComponent(res.agent_name)}/secrets/${encodeURIComponent(env)}`, {
-          method: 'PUT',
-          body: { value },
-        })
-        bound = true
-      }
-      catch (err: any) {
-        if (i === 39) {
-          result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.message}` }
-          binding.value = false
-          return
+  const toBind = secrets.value.filter(s => s.env && s.value)
+  const missingRequired = requiredCaps.value.filter(env => !toBind.some(s => s.env === env))
+  if (toBind.length > 0) {
+    binding.value = true
+    for (const { env, value } of toBind) {
+      // The agent's first sync (X25519 pubkey) can lag spawn-result by
+      // a few seconds → retry on 404/409.
+      let bound = false
+      for (let i = 0; i < 40 && !bound; i++) {
+        try {
+          await ($fetch as any)(`/api/agents/${encodeURIComponent(spawnedName.value)}/secrets/${encodeURIComponent(env)}`, {
+            method: 'PUT',
+            body: { value },
+          })
+          bound = true
         }
-        await new Promise(r => setTimeout(r, 3000))
+        catch (err: any) {
+          if (i === 39) {
+            result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.message}` }
+            binding.value = false
+            return
+          }
+          await new Promise(r => setTimeout(r, 3000))
+        }
       }
     }
+    binding.value = false
   }
-  binding.value = false
-  result.value = { ok: true, agent_email: agentEmail }
+  result.value = {
+    ok: true,
+    agent_email: agentEmail,
+    error: missingRequired.length > 0
+      ? `Spawned. Still missing secrets ${missingRequired.join(', ')} — add them on the agent page.`
+      : undefined,
+  }
 }
 
 function close() {
@@ -401,7 +341,7 @@ function close() {
               Spawn agent
             </h3>
             <p class="text-xs text-muted">
-              A blank agent you configure, or a one-step deploy from an Agent Recipe. You'll get a DDISA grant request on your iPhone — approve to complete.
+              Name + prompt are the base. A recipe and secrets are optional, additive layers — expand them if you need them. You'll get a DDISA grant request on your iPhone — approve to complete.
             </p>
           </div>
           <UButton variant="ghost" size="sm" icon="i-lucide-x" :disabled="submitting" @click="close" />
@@ -412,31 +352,8 @@ function close() {
           v-else-if="!loadingHosts && hosts.length === 0"
           color="warning"
           title="No connected nest"
-          description="Start the nest daemon on a Mac (apes nest install + run) and refresh. The legacy `apes nest spawn` CLI path still works as a fallback."
+          description="Start the nest daemon on a Mac (apes nest install + run) and refresh."
         />
-
-        <UFormField label="Source">
-          <UButtonGroup class="w-full">
-            <UButton
-              :variant="mode === 'blank' ? 'solid' : 'outline'"
-              :color="mode === 'blank' ? 'primary' : 'neutral'"
-              class="flex-1 justify-center"
-              :disabled="!!intentId"
-              @click="mode = 'blank'"
-            >
-              Blank agent
-            </UButton>
-            <UButton
-              :variant="mode === 'recipe' ? 'solid' : 'outline'"
-              :color="mode === 'recipe' ? 'primary' : 'neutral'"
-              class="flex-1 justify-center"
-              :disabled="!!intentId"
-              @click="mode = 'recipe'"
-            >
-              From recipe
-            </UButton>
-          </UButtonGroup>
-        </UFormField>
 
         <UFormField v-if="hosts.length > 1" label="Host" description="You have multiple Macs connected — pick the one to spawn on.">
           <USelect
@@ -446,140 +363,182 @@ function close() {
           />
         </UFormField>
 
-        <!-- Blank-agent fields -->
-        <template v-if="mode === 'blank'">
-          <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
-            <div class="flex items-stretch gap-2">
-              <UInput
-                v-model="form.name"
-                :placeholder="placeholderName"
+        <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
+          <div class="flex items-stretch gap-2">
+            <UInput
+              v-model="form.name"
+              :placeholder="placeholderName"
+              :disabled="!!intentId"
+              class="flex-1"
+              :ui="{ base: 'w-full' }"
+            />
+            <UButton
+              type="button"
+              variant="soft"
+              color="neutral"
+              icon="i-lucide-dices"
+              aria-label="Roll a random name"
+              :disabled="!!intentId"
+              @click="rollName"
+            />
+            <UDropdownMenu
+              :items="[AGENT_NAME_POOL.map(n => ({ label: n, onSelect: () => { form.name = n } }))]"
+              :popper="{ placement: 'bottom-end' }"
+              :ui="{ content: 'max-h-80 overflow-y-auto' }"
+            >
+              <UButton
+                type="button"
+                variant="soft"
+                color="neutral"
+                icon="i-lucide-list"
+                aria-label="Pick from name list"
                 :disabled="!!intentId"
+              />
+            </UDropdownMenu>
+          </div>
+        </UFormField>
+
+        <UFormField label="Preset" description="Quick-start prompt. Tweak the textarea or pick 'Custom' for a blank slate.">
+          <USelect
+            v-model="selectedPreset"
+            :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
+            :disabled="!!intentId"
+          />
+        </UFormField>
+
+        <UFormField label="System prompt" description="With a recipe this is added on top of the recipe's intent (user_addendum) — editable later without re-deploy.">
+          <UTextarea
+            v-model="form.system_prompt"
+            :rows="5"
+            autoresize
+            :disabled="!!intentId"
+            placeholder="Du bist …"
+            class="w-full"
+            :ui="{ base: 'w-full' }"
+          />
+        </UFormField>
+
+        <!-- Recipe — always available, collapsed, additive -->
+        <details class="rounded border border-(--ui-border) px-3 py-2">
+          <summary class="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-package" class="size-4 text-muted" />
+            Recipe <span class="text-xs text-muted font-normal">(optional, additive)</span>
+          </summary>
+          <div class="space-y-3 mt-3">
+            <UFormField label="Recipe" description="Pick a curated recipe, Custom for any pinned repo, or None.">
+              <USelect
+                v-model="selectedRecipe"
+                :items="[
+                  { label: 'None', value: RECIPE_NONE },
+                  ...RECIPE_INDEX.map(r => ({ label: r.label, value: r.id, description: r.hint })),
+                  { label: 'Custom…', value: RECIPE_CUSTOM, description: 'Paste any github.com/<owner>/<name>@<ref>' },
+                ]"
+                :disabled="!!intentId"
+              />
+            </UFormField>
+            <template v-if="selectedRecipe !== RECIPE_NONE">
+              <UFormField label="Repository" description="github.com/<owner>/<name>@<tag|commit> — the pinned ref is mandatory.">
+                <div class="flex items-stretch gap-2">
+                  <UInput
+                    v-model="recipeForm.repo_ref"
+                    placeholder="github.com/openape-ai/bluesky-summary@v0.1.0"
+                    :disabled="!!intentId || selectedRecipe !== RECIPE_CUSTOM"
+                    class="flex-1"
+                    :ui="{ base: 'w-full' }"
+                  />
+                  <UButton
+                    v-if="recipeRepoUrl"
+                    type="button"
+                    variant="soft"
+                    color="neutral"
+                    icon="i-lucide-help-circle"
+                    :to="recipeRepoUrl"
+                    target="_blank"
+                    aria-label="Open recipe repo (docs + required secrets)"
+                  />
+                </div>
+              </UFormField>
+              <UFormField label="Params" description="One KEY=value per line (recipe params, e.g. topic=AI agents).">
+                <UTextarea
+                  v-model="recipeForm.params"
+                  :rows="2"
+                  autoresize
+                  :disabled="!!intentId"
+                  placeholder="topic=AI agents"
+                  class="w-full"
+                  :ui="{ base: 'w-full' }"
+                />
+              </UFormField>
+            </template>
+          </div>
+        </details>
+
+        <!-- Secrets — always available, collapsed -->
+        <details class="rounded border border-(--ui-border) px-3 py-2" :open="secrets.length > 0">
+          <summary class="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-key-round" class="size-4 text-muted" />
+            Secrets <span class="text-xs text-muted font-normal">({{ secrets.length }})</span>
+          </summary>
+          <div class="space-y-2 mt-3">
+            <p class="text-xs text-muted">
+              Sealed to the agent before they're stored — troop never keeps the plaintext. A chosen recipe pre-fills the names it needs; you can add more. Also editable later on the agent's page.
+            </p>
+            <div v-for="(s, i) in secrets" :key="i" class="flex items-stretch gap-2">
+              <UInput
+                v-model="s.env"
+                placeholder="ENV_NAME"
+                :disabled="!!intentId"
+                class="flex-1"
+                :ui="{ base: 'w-full' }"
+              />
+              <UInput
+                v-model="s.value"
+                type="password"
+                placeholder="value"
+                :disabled="binding || !!result?.ok"
                 class="flex-1"
                 :ui="{ base: 'w-full' }"
               />
               <UButton
                 type="button"
-                variant="soft"
-                color="neutral"
-                icon="i-lucide-dices"
-                aria-label="Roll a random name"
+                variant="ghost"
+                color="error"
+                icon="i-lucide-trash-2"
+                aria-label="Remove secret"
                 :disabled="!!intentId"
-                @click="rollName"
+                @click="removeSecretRow(i)"
               />
-              <UDropdownMenu
-                :items="[AGENT_NAME_POOL.map(n => ({ label: n, onSelect: () => { form.name = n } }))]"
-                :popper="{ placement: 'bottom-end' }"
-                :ui="{ content: 'max-h-80 overflow-y-auto' }"
-              >
-                <UButton
-                  type="button"
-                  variant="soft"
-                  color="neutral"
-                  icon="i-lucide-list"
-                  aria-label="Pick from name list"
-                  :disabled="!!intentId"
-                />
-              </UDropdownMenu>
             </div>
-          </UFormField>
-
-          <UFormField label="Preset" description="Quick-start system prompt. You can tweak the textarea below or pick 'Custom' for a blank slate.">
-            <USelect
-              v-model="selectedPreset"
-              :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
+            <UButton
+              type="button"
+              variant="soft"
+              color="neutral"
+              size="sm"
+              icon="i-lucide-plus"
               :disabled="!!intentId"
-            />
-          </UFormField>
-
-          <UFormField label="System prompt" description="Was der Agent immer im Kopf hat. Edits hier kommen mit dem nächsten Sync auf den Host — du kannst auch später auf der Agent-Seite anpassen.">
-            <UTextarea
-              v-model="form.system_prompt"
-              :rows="6"
-              autoresize
-              :disabled="!!intentId"
-              placeholder="Du bist …"
-              class="w-full"
-              :ui="{ base: 'w-full' }"
-            />
-          </UFormField>
-
-          <details class="text-xs text-muted">
-            <summary class="cursor-pointer select-none">
-              Bridge overrides (optional)
-            </summary>
-            <div class="space-y-3 mt-3">
-              <UFormField label="LITELLM_API_KEY" description="Defaults to ~/litellm/.env on the host.">
-                <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
-              </UFormField>
-              <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
-                <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
-              </UFormField>
-              <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
-                <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
-              </UFormField>
-            </div>
-          </details>
-        </template>
-
-        <!-- Recipe fields -->
-        <template v-else>
-          <UFormField label="Recipe" description="Pick a curated recipe or choose Custom to paste any pinned repo.">
-            <USelect
-              v-model="selectedRecipe"
-              :items="[
-                ...RECIPE_INDEX.map(r => ({ label: r.label, value: r.id, description: r.hint })),
-                { label: 'Custom…', value: CUSTOM_RECIPE, description: 'Paste any github.com/<owner>/<name>@<ref>' },
-              ]"
-              :disabled="!!intentId"
-            />
-          </UFormField>
-
-          <UFormField label="Repository" description="github.com/<owner>/<name>@<tag|commit> — the pinned ref is mandatory.">
-            <UInput
-              v-model="recipeForm.repo_ref"
-              placeholder="github.com/openape-official-ape-agents/bluesky-summary@v0.1.0"
-              :disabled="!!intentId || selectedRecipe !== CUSTOM_RECIPE"
-              class="w-full"
-              :ui="{ base: 'w-full' }"
-            />
-          </UFormField>
-
-          <UFormField label="Params" description="One KEY=value per line (recipe params, e.g. topic=AI agents).">
-            <UTextarea
-              v-model="recipeForm.params"
-              :rows="3"
-              autoresize
-              :disabled="!!intentId"
-              placeholder="topic=AI agents"
-              class="w-full"
-              :ui="{ base: 'w-full' }"
-            />
-          </UFormField>
-
-          <div v-if="deployRes && deployRes.required_capabilities.length > 0" class="space-y-3">
-            <p class="text-xs text-muted">
-              This recipe needs the following secrets. They are sealed to the agent before they are stored — troop never keeps the plaintext. You can also change them later on the agent's page.
-            </p>
-            <UFormField
-              v-for="env in deployRes.required_capabilities"
-              :key="env"
-              :label="env"
+              @click="addSecretRow"
             >
-              <UInput
-                v-model="secretValues[env]"
-                type="password"
-                :disabled="binding || !!result?.ok"
-                placeholder="secret value"
-                class="w-full"
-                :ui="{ base: 'w-full' }"
-              />
+              Add secret
+            </UButton>
+          </div>
+        </details>
+
+        <details class="text-xs text-muted">
+          <summary class="cursor-pointer select-none">
+            Bridge overrides (optional)
+          </summary>
+          <div class="space-y-3 mt-3">
+            <UFormField label="LITELLM_API_KEY" description="Defaults to ~/litellm/.env on the host.">
+              <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
+            </UFormField>
+            <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
+              <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
+            </UFormField>
+            <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
+              <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
             </UFormField>
           </div>
-          <div v-if="deployRes && deployRes.schedules.length > 0" class="text-xs text-muted">
-            Schedules:
-            <code v-for="s in deployRes.schedules" :key="s.task_id" class="ml-1">{{ s.cron }}</code>
-          </div>
-        </template>
+        </details>
 
         <div v-if="intentId && !result" class="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm flex items-start gap-2">
           <UIcon name="i-lucide-loader-circle" class="animate-spin shrink-0 size-4 mt-0.5" />
@@ -595,7 +554,8 @@ function close() {
           </div>
         </div>
 
-        <UAlert v-if="result?.ok" color="success" :title="`Spawned: ${result.agent_email ?? spawnedName}`" />
+        <UAlert v-if="result?.ok && !result.error" color="success" :title="`Spawned: ${result.agent_email ?? spawnedName}`" />
+        <UAlert v-if="result?.ok && result.error" color="warning" title="Spawned with a note" :description="result.error" />
         <UAlert v-if="result && !result.ok" color="error" title="Failed" :description="result.error" />
 
         <div class="flex justify-end gap-2">
@@ -609,7 +569,7 @@ function close() {
             :disabled="!canSubmit"
             @click="submit"
           >
-            {{ mode === 'recipe' ? 'Deploy' : 'Spawn' }}
+            Spawn
           </UButton>
         </div>
       </div>

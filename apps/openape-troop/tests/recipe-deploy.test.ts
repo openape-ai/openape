@@ -47,6 +47,23 @@ describe('buildDeployPlan', () => {
     expect(plan.schedules[1]!.userPrompt).toMatch(/Run your configured task/)
   })
 
+  it('honours an agent-name override + additive userAddendum (recipe is additive to a named spawn)', () => {
+    const rec = recipe()
+    const mat = materializeRecipe(rec, { topic: 'AI agents' })
+    if (!mat.ok) throw new Error(mat.reason)
+    const plan = buildDeployPlan(rec, mat.value, { agentName: 'my-own-name', userAddendum: 'Focus on negatives.' })
+    expect(plan.agentName).toBe('my-own-name')
+    expect(plan.systemPrompt).toBe('Summarize the Bluesky feed about AI agents.')
+    expect(plan.userAddendum).toBe('Focus on negatives.')
+  })
+
+  it('omits userAddendum when none is given (back-compat with the M4 CLI path)', () => {
+    const rec = recipe()
+    const mat = materializeRecipe(rec, { topic: 'x' })
+    if (!mat.ok) throw new Error(mat.reason)
+    expect(buildDeployPlan(rec, mat.value).userAddendum).toBeUndefined()
+  })
+
   it('caps the agent name at the spawn-intent slug limit', () => {
     const rec = { ...recipe(), name: 'a-very-long-recipe-name-way-over-limit' }
     const mat = materializeRecipe(rec, { topic: 'x' })
