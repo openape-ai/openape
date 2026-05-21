@@ -47,7 +47,7 @@
     "@openape/server": "workspace:*",
     "@types/node": "^25.3.5",
     "@types/shell-quote": "^1.7.5",
-    "@vitest/coverage-istanbul": "^2.1.9",
+    "@vitest/coverage-istanbul": "^4.1.7",
     "h3": "^1.15.0",
     "jose": "^5.9.0",
     "tsup": "^8.5.1",

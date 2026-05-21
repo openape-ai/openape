@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('node:dns/promises', () => {
   const mockResolveTxt = vi.fn()
+  function Resolver(this: { resolveTxt: typeof mockResolveTxt }) {
+    this.resolveTxt = mockResolveTxt
+  }
   return {
-    Resolver: vi.fn().mockImplementation(() => ({
-      resolveTxt: mockResolveTxt,
-    })),
+    Resolver,
     __mockResolveTxt: mockResolveTxt,
   }
 })
