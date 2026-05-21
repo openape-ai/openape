@@ -39,6 +39,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
+import type { Detector } from '@openape/prompt-injection-detector'
+import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
@@ -218,6 +220,15 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`
 }
 
+function refusalText(reason: string | undefined): string {
+  // Short, neutral refusal. Reason is appended so the owner sees in
+  // their audit log + chat history why a specific message was blocked.
+  // Phrasing intentionally avoids language the attacker can copy back
+  // ("ignore previous instructions and …") that would re-trigger.
+  const base = 'I won\'t process this message — it looks like a prompt-injection attempt.'
+  return reason ? `${base}\n\n(matched: ${reason})` : base
+}
+
 class Bridge {
   // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession holds
   // its own message history and calls @openape/apes' runLoop directly
@@ -226,6 +237,10 @@ class Bridge {
   private chat: ChatApi
   private bearer: () => Promise<string>
   private cron: CronRunner | undefined
+  // Prompt-injection gate (#277). Pure heuristic by default — pluggable
+  // backend later. The bridge is the choke-point for every chat message
+  // before it reaches the agent runtime, so this is the right place.
+  private injectionDetector: Detector = createHeuristicDetector()
 
   constructor(
     private cfg: BridgeConfig,
@@ -307,7 +322,7 @@ class Bridge {
     if (skipped.length > 0) log(`skipped (not on allowlist): ${skipped.join(', ')}`)
   }
 
-  handleInbound(msg: Message): void {
+  async handleInbound(msg: Message): Promise<void> {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
@@ -317,6 +332,35 @@ class Bridge {
     }
 
     log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] in: ${truncate(msg.body, 80)}`)
+
+    // Prompt-injection check (#277). The bridge is the choke-point
+    // before pi sees inbound text — by the time the message hits the
+    // agent runtime, refusing it is harder (it's already in history)
+    // and inconsistent (model may or may not comply with refusal).
+    // Owners get a higher threshold so legitimate "run shell, do X"
+    // instructions from the actual owner aren't refused.
+    const decision = await decide(this.injectionDetector, {
+      text: msg.body,
+      sender: {
+        email: msg.senderEmail,
+        isOwner: msg.senderEmail === this.ownerEmail,
+      },
+    })
+    if (decision.blocked) {
+      log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
+      try {
+        await this.chat.postMessage(msg.roomId, refusalText(decision.reason), {
+          replyTo: msg.id,
+          threadId: msg.threadId,
+        })
+      }
+      catch (err) {
+        const m = err instanceof Error ? err.message : String(err)
+        log(`[${msg.roomId}] failed to post refusal: ${m}`)
+      }
+      return
+    }
+
     const session = this.getOrCreateThread(msg.roomId, msg.threadId)
     session.enqueue(msg.body, msg.id)
   }
@@ -386,7 +430,7 @@ class Bridge {
         try { frame = JSON.parse(text) as WsFrame }
         catch { return }
         if (frame.type !== 'message') return
-        this.handleInbound(frame.payload as unknown as Message)
+        void this.handleInbound(frame.payload as unknown as Message)
       })
 
       ws.on('close', () => {

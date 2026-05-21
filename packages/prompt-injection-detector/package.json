@@ -1,0 +1,52 @@
+{
+  "name": "@openape/prompt-injection-detector",
+  "version": "0.1.0",
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
+  },
+  "description": "Pure prompt-injection classifier for OpenApe chat-bridge. Heuristic by default, pluggable LLM backend. Input: text + sender context. Output: { score: 0..1, reason? }.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape.git",
+    "directory": "packages/prompt-injection-detector"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --no-coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsup": "^8.3.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "openape",
+    "prompt-injection",
+    "ai-security",
+    "llm-safety"
+  ]
+}
