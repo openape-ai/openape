@@ -598,8 +598,8 @@ importers:
   modules/nuxt-auth-idp:
     dependencies:
       '@nuxt/kit':
-        specifier: ^3.16.0
-        version: 3.21.5(magicast@0.5.3)
+        specifier: ^4.4.6
+        version: 4.4.6(magicast@0.5.3)
       '@openape/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -662,8 +662,8 @@ importers:
   modules/nuxt-auth-sp:
     dependencies:
       '@nuxt/kit':
-        specifier: ^3.21.1
-        version: 3.21.5(magicast@0.5.3)
+        specifier: ^4.4.6
+        version: 4.4.6(magicast@0.5.3)
       '@openape/auth':
         specifier: workspace:*
         version: link:../../packages/auth
