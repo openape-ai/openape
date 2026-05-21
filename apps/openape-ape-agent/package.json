@@ -29,6 +29,7 @@
   "dependencies": {
     "@openape/apes": "workspace:*",
     "@openape/cli-auth": "workspace:*",
+    "@openape/prompt-injection-detector": "workspace:*",
     "jose": "catalog:",
     "ofetch": "^1.4.1",
     "ws": "^8.18.0",
