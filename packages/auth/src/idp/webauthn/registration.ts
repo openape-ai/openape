@@ -16,11 +16,11 @@ export function uint8ArrayToBase64URL(bytes: Uint8Array): string {
   return btoa(binary).replace(RE_PLUS, '-').replace(RE_SLASH, '_').replace(RE_EQUALS, '')
 }
 
-export function base64URLToUint8Array(base64url: string): Uint8Array {
+export function base64URLToUint8Array(base64url: string): Uint8Array<ArrayBuffer> {
   const base64 = base64url.replace(RE_DASH, '+').replace(RE_UNDERSCORE, '/')
   const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
   const binary = atob(padded)
-  const bytes = new Uint8Array(binary.length)
+  const bytes = new Uint8Array(new ArrayBuffer(binary.length))
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }

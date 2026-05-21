@@ -61,5 +61,5 @@ export interface RPConfig {
   origin: string
   requireUserVerification?: boolean
   residentKey?: 'preferred' | 'required' | 'discouraged'
-  attestationType?: 'none' | 'indirect' | 'direct' | 'enterprise'
+  attestationType?: 'none' | 'direct' | 'enterprise'
 }

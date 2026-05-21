@@ -38,7 +38,7 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
-    "@simplewebauthn/browser": "^11",
+    "@simplewebauthn/browser": "^13",
     "defu": "^6.1.7",
     "jose": "^5.9.0"
   },
