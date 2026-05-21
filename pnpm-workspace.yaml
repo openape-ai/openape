@@ -12,7 +12,7 @@ catalog:
   '@antfu/eslint-config': ^7.6.1
   '@types/node': ^22.19.13
   '@changesets/cli': ^2.30.0
-  nuxt: ^4.3.1
+  nuxt: ^4.4.6
   '@nuxt/kit': ^3.21.1
   '@nuxt/module-builder': ^1.0.2
   vue: ^3.5.30
