@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
-    "@libsql/client": "^0.14.0",
-    "@nuxt/ui": "^4.4.0",
+    "@libsql/client": "^0.17.3",
+    "@nuxt/ui": "^4.7.1",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
@@ -28,7 +28,7 @@
     "@sentry/nuxt": "^10.47.0",
     "@vite-pwa/nuxt": "^1.0.4",
     "drizzle-orm": "^0.44.7",
-    "nuxt": "^4.0.0",
+    "nuxt": "^4.4.6",
     "resend": "^4.0.0",
     "tailwindcss": "^4.0.0",
     "web-push": "^3.6.7"
