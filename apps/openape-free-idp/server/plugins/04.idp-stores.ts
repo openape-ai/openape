@@ -9,6 +9,7 @@ import { createDrizzleKeyStore } from '../utils/drizzle-key-store'
 import { createDrizzleSshKeyStore } from '../utils/drizzle-ssh-key-store'
 import { createDrizzleConsentStore } from '../utils/drizzle-consent-store'
 import { createDrizzleAdminAllowlistStore } from '../utils/drizzle-admin-allowlist-store'
+import { createDrizzleRecoveryStore } from '../utils/drizzle-recovery-store'
 
 export default defineNitroPlugin(() => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -37,4 +38,7 @@ export default defineNitroPlugin(() => {
 
   // DDISA allowlist-admin SP allowlist (#307)
   defineAdminAllowlistStore(() => createDrizzleAdminAllowlistStore())
+
+  // Account-recovery 72h-hold (#297)
+  defineRecoveryStore(() => createDrizzleRecoveryStore())
 })

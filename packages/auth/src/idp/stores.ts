@@ -573,3 +573,99 @@ export class InMemoryKeyStore implements KeyStore {
     this.initialized = true
   }
 }
+
+// --- Account Recovery (#297) ---
+//
+// 72h-mail-hold flow that replaces the closed self-service add-credential
+// path (#291). The mechanism is inversive: the legitimate owner doesn't
+// have to PROVE ownership — they just need to log in once during the
+// 72h cooldown from any existing device, which cancels any pending
+// recovery (the "active-owner veto").
+//
+// All timestamps are ms-epoch.
+
+export interface RecoveryToken {
+  token: string
+  email: string
+  createdAt: number
+  /**
+   * Earliest time the token may be used to enrol a new credential.
+   * The mandatory delay is the defence: nobody legitimate is
+   * inconvenienced by waiting 72h on a recovery they themselves
+   * initiated, and the time-window is exactly what gives the active
+   * owner a chance to notice and cancel.
+   */
+  usableAt: number
+  /**
+   * Hard expiry. After this the token is invalid regardless. Set so
+   * that there's a reasonable window for legitimate users to act
+   * after the cooldown ends.
+   */
+  expiresAt: number
+  cancelled: boolean
+  cancelledAt?: number
+  cancelledReason?: string
+  consumed: boolean
+  /** IP that initiated the recovery. Audit only. */
+  requestIp?: string
+  /** User-Agent header from the request. Audit only. */
+  requestUserAgent?: string
+}
+
+export interface RecoveryStore {
+  /** Persist a freshly-issued recovery token. */
+  save: (token: RecoveryToken) => Promise<void>
+  /** Lookup by token id. Returns null for unknown, expired, cancelled, or consumed tokens. */
+  find: (token: string) => Promise<RecoveryToken | null>
+  /** All active (uncancelled, unconsumed, unexpired) tokens for an email. */
+  listActiveForEmail: (email: string) => Promise<RecoveryToken[]>
+  /** Mark a single token as consumed (after a successful enrolment). */
+  markConsumed: (token: string) => Promise<void>
+  /** Cancel every active token for an email. Returns the count cancelled. Called on every successful login (the active-owner veto). */
+  cancelAllForEmail: (email: string, reason: string) => Promise<number>
+}
+
+export class InMemoryRecoveryStore implements RecoveryStore {
+  private tokens = new Map<string, RecoveryToken>()
+
+  async save(token: RecoveryToken): Promise<void> {
+    this.tokens.set(token.token, token)
+  }
+
+  async find(token: string): Promise<RecoveryToken | null> {
+    const entry = this.tokens.get(token)
+    if (!entry) return null
+    if (entry.cancelled || entry.consumed) return null
+    if (entry.expiresAt < Date.now()) return null
+    return entry
+  }
+
+  async listActiveForEmail(email: string): Promise<RecoveryToken[]> {
+    const now = Date.now()
+    return [...this.tokens.values()].filter(t =>
+      t.email === email && !t.cancelled && !t.consumed && t.expiresAt >= now)
+  }
+
+  async markConsumed(token: string): Promise<void> {
+    const entry = this.tokens.get(token)
+    if (entry) {
+      entry.consumed = true
+      this.tokens.set(token, entry)
+    }
+  }
+
+  async cancelAllForEmail(email: string, reason: string): Promise<number> {
+    const now = Date.now()
+    let count = 0
+    for (const [key, entry] of this.tokens) {
+      if (entry.email !== email || entry.cancelled || entry.consumed) continue
+      if (entry.expiresAt < now) continue
+      entry.cancelled = true
+      entry.cancelledAt = now
+      entry.cancelledReason = reason
+      this.tokens.set(key, entry)
+      count++
+    }
+    return count
+  }
+}
