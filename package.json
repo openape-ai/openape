@@ -58,7 +58,7 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "catalog:",
     "@libsql/client": "^0.17.3",
-    "@vitest/coverage-istanbul": "^2.1.9",
+    "@vitest/coverage-istanbul": "^4.1.7",
     "drizzle-orm": "^0.44.7",
     "eslint": "catalog:",
     "smol-toml": "^1.6.0",
