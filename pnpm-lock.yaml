@@ -610,8 +610,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/grants
       '@simplewebauthn/browser':
-        specifier: ^11
-        version: 11.0.0
+        specifier: ^13
+        version: 13.3.0
       defu:
         specifier: '>=6.1.5'
         version: 6.1.7
@@ -775,8 +775,8 @@ importers:
         specifier: ^13
         version: 13.3.0
       '@simplewebauthn/types':
-        specifier: ^11
-        version: 11.0.0
+        specifier: ^12
+        version: 12.0.0
       jose:
         specifier: ^5.9.0
         version: 5.10.0
@@ -4499,15 +4499,15 @@ packages:
   '@simple-git/argv-parser@1.1.1':
     resolution: {integrity: sha512-Q9lBcfQ+VQCpQqGJFHe5yooOS5hGdLFFbJ5R+R5aDsnkPCahtn1hSkMcORX65J2Z5lxSkD0lQorMsncuBQxYUw==}
 
-  '@simplewebauthn/browser@11.0.0':
-    resolution: {integrity: sha512-KEGCStrl08QC2I561BzxqGiwoknblP6O1YW7jApdXLPtIqZ+vgJYAv8ssLCdm1wD8HGAHd49CJLkUF8X70x/pg==}
+  '@simplewebauthn/browser@13.3.0':
+    resolution: {integrity: sha512-BE/UWv6FOToAdVk0EokzkqQQDOWtNydYlY6+OrmiZ5SCNmb41VehttboTetUM3T/fr6EAFYVXjz4My2wg230rQ==}
 
   '@simplewebauthn/server@13.3.0':
     resolution: {integrity: sha512-MLHYFrYG8/wK2i+86XMhiecK72nMaHKKt4bo+7Q1TbuG9iGjlSdfkPWKO5ZFE/BX+ygCJ7pr8H/AJeyAj1EaTQ==}
     engines: {node: '>=20.0.0'}
 
-  '@simplewebauthn/types@11.0.0':
-    resolution: {integrity: sha512-b2o0wC5u2rWts31dTgBkAtSNKGX0cvL6h8QedNsKmj8O4QoLFQFR3DBVBUlpyVEhYKA+mXGUaXbcOc4JdQ3HzA==}
+  '@simplewebauthn/types@12.0.0':
+    resolution: {integrity: sha512-q6y8MkoV8V8jB4zzp18Uyj2I7oFp2/ONL8c3j8uT06AOWu3cIChc1au71QYHrP2b+xDapkGTiv+9lX7xkTlAsA==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@sindresorhus/base62@1.0.0':
@@ -15496,9 +15496,7 @@ snapshots:
     dependencies:
       '@simple-git/args-pathspec': 1.0.3
 
-  '@simplewebauthn/browser@11.0.0':
-    dependencies:
-      '@simplewebauthn/types': 11.0.0
+  '@simplewebauthn/browser@13.3.0': {}
 
   '@simplewebauthn/server@13.3.0':
     dependencies:
@@ -15511,7 +15509,7 @@ snapshots:
       '@peculiar/asn1-x509': 2.7.0
       '@peculiar/x509': 1.14.3
 
-  '@simplewebauthn/types@11.0.0': {}
+  '@simplewebauthn/types@12.0.0': {}
 
   '@sindresorhus/base62@1.0.0': {}
 

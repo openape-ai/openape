@@ -28,7 +28,7 @@ export interface ModuleOptions {
   rpHostAllowList: string
   requireUserVerification: boolean
   residentKey: 'preferred' | 'required' | 'discouraged'
-  attestationType: 'none' | 'indirect' | 'direct' | 'enterprise'
+  attestationType: 'none' | 'direct' | 'enterprise'
   grants: Partial<GrantsOptions>
   routes: boolean | Partial<RoutesOptions>
   pages: boolean
