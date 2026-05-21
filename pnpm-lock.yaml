@@ -12,9 +12,6 @@ catalogs:
     '@changesets/cli':
       specifier: ^2.30.0
       version: 2.31.0
-    '@nuxt/kit':
-      specifier: ^3.21.6
-      version: 3.21.6
     '@types/node':
       specifier: ^22.19.13
       version: 22.19.19
@@ -601,8 +598,8 @@ importers:
   modules/nuxt-auth-idp:
     dependencies:
       '@nuxt/kit':
-        specifier: ^3.21.6
-        version: 3.21.6(magicast@0.5.3)
+        specifier: ^4.4.6
+        version: 4.4.6(magicast@0.5.3)
       '@openape/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -665,8 +662,8 @@ importers:
   modules/nuxt-auth-sp:
     dependencies:
       '@nuxt/kit':
-        specifier: 'catalog:'
-        version: 3.21.6(magicast@0.5.3)
+        specifier: ^4.4.6
+        version: 4.4.6(magicast@0.5.3)
       '@openape/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -13135,7 +13132,7 @@ snapshots:
 
   '@nuxt/devtools-kit@3.2.4(magicast@0.5.3)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))':
     dependencies:
-      '@nuxt/kit': 4.4.5(magicast@0.5.3)
+      '@nuxt/kit': 4.4.6(magicast@0.5.3)
       execa: 8.0.1
       vite: 8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0)
     transitivePeerDependencies:
@@ -13143,7 +13140,7 @@ snapshots:
 
   '@nuxt/devtools-kit@3.2.4(magicast@0.5.3)(vite@8.0.14(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))':
     dependencies:
-      '@nuxt/kit': 4.4.5(magicast@0.5.3)
+      '@nuxt/kit': 4.4.6(magicast@0.5.3)
       execa: 8.0.1
       vite: 8.0.14(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0)
     transitivePeerDependencies:
@@ -20214,7 +20211,7 @@ snapshots:
 
   nuxt-site-config-kit@3.2.21(magicast@0.5.3)(vue@3.5.34(typescript@5.9.3)):
     dependencies:
-      '@nuxt/kit': 4.4.5(magicast@0.5.3)
+      '@nuxt/kit': 4.4.6(magicast@0.5.3)
       pkg-types: 2.3.1
       site-config-stack: 3.2.21(vue@3.5.34(typescript@5.9.3))
       std-env: 3.10.0
@@ -20226,7 +20223,7 @@ snapshots:
   nuxt-site-config@3.2.21(magicast@0.5.3)(vite@8.0.14(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))(vue@3.5.34(typescript@5.9.3)):
     dependencies:
       '@nuxt/devtools-kit': 3.2.4(magicast@0.5.3)(vite@8.0.14(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
-      '@nuxt/kit': 4.4.5(magicast@0.5.3)
+      '@nuxt/kit': 4.4.6(magicast@0.5.3)
       h3: 1.15.11
       nuxt-site-config-kit: 3.2.21(magicast@0.5.3)(vue@3.5.34(typescript@5.9.3))
       pathe: 2.0.3
