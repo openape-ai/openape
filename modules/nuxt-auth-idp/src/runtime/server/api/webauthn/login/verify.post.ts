@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required fields: challengeToken, response' })
   }
 
-  const { challengeStore, credentialStore, userStore } = useIdpStores()
+  const { challengeStore, credentialStore, userStore, recoveryStore } = useIdpStores()
   const rpConfig = getRPConfig()
 
   const challenge = await challengeStore.consume(body.challengeToken)
@@ -48,6 +48,16 @@ export default defineEventHandler(async (event) => {
   const user = await userStore.findByEmail(credential.userEmail)
   if (!user) {
     throw createProblemError({ status: 400, title: 'User not found' })
+  }
+
+  // Active-owner veto for any pending recovery (#297). A successful
+  // login from an existing credential proves the user still has access,
+  // so any in-flight recovery is presumptively unauthorised. Silent —
+  // surfacing the cancellation count here would leak the existence of
+  // a recovery attempt; the audit log (future) is the right place.
+  const cancelled = await recoveryStore.cancelAllForEmail(user.email, 'cancelled-by-successful-login')
+  if (cancelled > 0) {
+    console.warn('[openape-idp] cancelled pending recovery on login', { email: user.email, count: cancelled })
   }
 
   // Create session

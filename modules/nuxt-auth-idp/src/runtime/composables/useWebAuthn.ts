@@ -98,5 +98,45 @@ export function useWebAuthn() {
     }
   }
 
-  return { error, loading, registerWithToken, login, addDevice }
+  async function recoverWithToken(
+    token: string,
+    opts?: { deviceName?: string, invalidateOthers?: boolean },
+  ) {
+    error.value = ''
+    loading.value = true
+    try {
+      const { options, challengeToken } = await $fetch<{ options: any, challengeToken: string }>(
+        '/api/recovery/options',
+        { method: 'POST', body: { token } },
+      )
+
+      const response = await startRegistration({ optionsJSON: options })
+
+      const result = await $fetch<{ ok: boolean, email: string, credentialId: string, invalidateOthers: boolean }>(
+        '/api/recovery/verify',
+        {
+          method: 'POST',
+          body: {
+            token,
+            challengeToken,
+            response,
+            deviceName: opts?.deviceName,
+            invalidateOthers: opts?.invalidateOthers ?? true,
+          },
+        },
+      )
+
+      return result
+    }
+    catch (err: unknown) {
+      const e = err as { data?: { statusMessage?: string, title?: string, detail?: string }, message?: string }
+      error.value = e.data?.detail ?? e.data?.title ?? e.data?.statusMessage ?? e.message ?? 'Recovery failed'
+      throw err
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  return { error, loading, registerWithToken, login, addDevice, recoverWithToken }
 }

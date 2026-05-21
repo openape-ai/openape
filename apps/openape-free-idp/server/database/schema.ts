@@ -281,3 +281,25 @@ export const adminAllowlist = sqliteTable('admin_allowlist', {
 }, table => [
   primaryKey({ columns: [table.domain, table.clientId] }),
 ])
+
+// Account-recovery 72h-hold tokens (#297). Issued by /api/recovery/request,
+// only usable after `usable_at` (72h cooldown), invalidated by either an
+// active-owner login or an explicit cancel. Audit columns survive consumption
+// for forensics — the row stays in place, the `consumed`/`cancelled` flags
+// just flip.
+export const recoveryTokens = sqliteTable('recovery_tokens', {
+  token: text('token').primaryKey(),
+  email: text('email').notNull(),
+  createdAt: integer('created_at').notNull(),
+  usableAt: integer('usable_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  cancelled: integer('cancelled', { mode: 'boolean' }).notNull().default(false),
+  cancelledAt: integer('cancelled_at'),
+  cancelledReason: text('cancelled_reason'),
+  consumed: integer('consumed', { mode: 'boolean' }).notNull().default(false),
+  requestIp: text('request_ip'),
+  requestUserAgent: text('request_user_agent'),
+}, table => [
+  index('idx_recovery_tokens_email').on(table.email),
+  index('idx_recovery_tokens_expires_at').on(table.expiresAt),
+])

@@ -57,3 +57,70 @@ export async function sendRegistrationEmail(email: string, registerUrl: string) 
   }
   console.info(`[email] registration email queued id=${data?.id ?? 'unknown'} to=${email}`)
 }
+
+export async function sendRecoveryEmail(
+  email: string,
+  recoveryUrl: string,
+  usableAt: number,
+  cancelUrl: string,
+) {
+  const config = useRuntimeConfig()
+  const resend = getResend()
+  const usableAtIso = `${new Date(usableAt).toISOString().replace('T', ' ').slice(0, 16)} UTC`
+
+  // The mail also serves as the warning-broadcast: even if the user
+  // didn't initiate the recovery, this is their notification + cancel
+  // link. Keep the cancel CTA visually equal to the recovery CTA so a
+  // confused-but-authentic owner can act without fumbling.
+  const { data, error } = await resend.emails.send({
+    from: config.resendFrom,
+    to: email,
+    subject: 'Konto-Wiederherstellung angefordert — OpenApe',
+    html: `
+      <div style="font-family: 'Public Sans', system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+          <span style="font-size: 32px;">🦍</span>
+          <span style="font-size: 20px; font-weight: bold; margin-left: 8px; color: #f5f5f5;">OpenApe</span>
+        </div>
+        <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px;">
+          <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Wiederherstellung deines Kontos</h2>
+          <p style="color: #a1a1aa; margin: 0 0 16px 0; font-size: 14px; line-height: 1.6;">
+            Jemand hat angefordert, das Konto <strong style="color: #f5f5f5;">${email}</strong> wiederherzustellen.
+          </p>
+          <p style="color: #a1a1aa; margin: 0 0 24px 0; font-size: 14px; line-height: 1.6;">
+            Wenn <strong>du</strong> das nicht warst: melde dich von einem deiner bestehenden Geräte an —
+            das hebt die Wiederherstellung automatisch auf. Oder klicke direkt unten auf "Wiederherstellung abbrechen".
+          </p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${cancelUrl}" style="display: inline-block; background: #18181b; color: #f5f5f5; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; border: 1px solid #f97316;">
+              Wiederherstellung abbrechen
+            </a>
+          </div>
+          <p style="color: #a1a1aa; margin: 32px 0 16px 0; font-size: 14px; line-height: 1.6;">
+            Wenn du es <strong>warst</strong>: aus Sicherheitsgründen kannst du erst ab
+            <strong style="color: #f5f5f5;">${usableAtIso}</strong> einen neuen Passkey hinterlegen
+            (72-Stunden-Schutz). Bewahre diesen Link bis dahin auf.
+          </p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${recoveryUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+              Passkey neu hinterlegen
+            </a>
+          </div>
+          <p style="color: #71717a; margin: 24px 0 0 0; font-size: 12px;">
+            Dieser Link ist bis ${usableAtIso} und 14 Tage darüber hinaus gültig.
+          </p>
+        </div>
+      </div>
+    `,
+  })
+
+  if (error) {
+    console.error('[email] resend recovery failed for', email, 'from', config.resendFrom, error)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Email delivery failed',
+      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
+    })
+  }
+  console.info(`[email] recovery email queued id=${data?.id ?? 'unknown'} to=${email}`)
+}
