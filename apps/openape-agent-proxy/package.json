@@ -18,9 +18,9 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
-    "@nuxt/ui": "^4.4.0",
+    "@nuxt/ui": "^4.7.1",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "nuxt": "^4.0.0",
+    "nuxt": "^4.4.6",
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
