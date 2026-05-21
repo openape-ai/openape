@@ -1,12 +1,17 @@
 import type { H3Event } from 'h3'
 import { getHeader } from 'h3'
 import type { AgentTokenPayload, AuthTokenPayload } from './agent-token'
-import { verifyAgentToken, verifyAuthToken } from './agent-token'
+import { DEFAULT_CLI_AUDIENCE, verifyAgentToken, verifyAuthToken } from './agent-token'
 import { getIdpIssuer, useIdpStores } from './stores'
 import { createProblemError } from './problem'
 
 // --- Generalized bearer auth (accepts both agent and human tokens) ---
 
+// Enforces `aud='apes-cli'` (#283 item 2). Without an audience check,
+// any IdP-issued token (id_tokens, delegation tokens, future client-
+// credentials) verified against the same signing key would be accepted,
+// removing a defence-in-depth layer that downstream service providers
+// already enforce on /api/cli/exchange.
 export async function tryBearerAuth(event: H3Event): Promise<AuthTokenPayload | null> {
   const authHeader = getHeader(event, 'authorization')
   if (!authHeader?.startsWith('Bearer '))
@@ -17,7 +22,7 @@ export async function tryBearerAuth(event: H3Event): Promise<AuthTokenPayload | 
   const signingKey = await keyStore.getSigningKey()
 
   try {
-    return await verifyAuthToken(token, getIdpIssuer(), signingKey.publicKey)
+    return await verifyAuthToken(token, getIdpIssuer(), signingKey.publicKey, DEFAULT_CLI_AUDIENCE)
   }
   catch (err) {
     console.warn('[openape-idp] Bearer token verification failed:', err instanceof Error ? err.message : String(err))

@@ -68,6 +68,13 @@ export default defineNitroPlugin(async () => {
       archived_at INTEGER
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_threads_room ON threads(room_id, created_at)`)
+    // Partial unique index — prevents duplicate ACTIVE main threads in a
+    // single room (#283 item 5). Without it, two concurrent first-message
+    // sends can race the existence check in ensureMainThread, both INSERT
+    // a 'main' thread, then bridge spawns two pi sessions for the same
+    // conversation. Archived threads are allowed to coexist with the new
+    // active one.
+    await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_room_active_name ON threads(room_id, name) WHERE archived_at IS NULL`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS reactions (
       message_id TEXT NOT NULL,
