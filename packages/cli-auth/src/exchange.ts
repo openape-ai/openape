@@ -64,8 +64,12 @@ export async function exchangeForSpToken(
     throw new AuthError(0, `Exchange response from ${url} missing access_token`)
   }
 
+  // Short fallback when an SP omits both claims (#283 item 3). The old
+  // 30-day default cached misbehaving SPs effectively forever; an hour
+  // is short enough that revocation upstream catches up while still
+  // covering the common case where a server forgets to set the field.
   const expiresAt = response.expires_at
-    ?? (response.expires_in ? now + response.expires_in : now + 3600 * 24 * 30)
+    ?? (response.expires_in ? now + response.expires_in : now + 3600)
 
   const token: SpToken = {
     endpoint: request.endpoint,

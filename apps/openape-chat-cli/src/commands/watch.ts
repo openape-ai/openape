@@ -69,11 +69,18 @@ async function connectAndPump(
   filterRoomId: string | undefined,
   json: boolean,
 ): Promise<void> {
+  // Mint a short-lived HS256 ws-token (#283 item 4) instead of putting
+  // the full IdP JWT in the URL. The IdP token has hours of lifetime
+  // and full scope; the ws-token expires in 5min and is only valid
+  // for the WS upgrade. Without this, the JWT lands in nginx/Vercel
+  // access logs, proxy buffers, and error traces.
   const bearer = await getChatBearer()
-  // Mint a fresh token per connect so we ride out long-running streams
-  // across IdP-token refreshes (the token sits in the URL — chat.openape.ai
-  // verifies it once at upgrade-time and reuses the resulting Caller).
-  const token = bearer.replace(/^Bearer\s+/i, '')
+  const wsTokenUrl = wsUrl.replace(/\/api\/ws$/, '/api/ws-token').replace(/^ws/, 'http')
+  const wsTokenResp = await fetch(wsTokenUrl, { headers: { Authorization: bearer } })
+  if (!wsTokenResp.ok) {
+    throw new Error(`Failed to mint ws-token: ${wsTokenResp.status} ${wsTokenResp.statusText}`)
+  }
+  const { token } = (await wsTokenResp.json()) as { token: string }
   const url = `${wsUrl}?token=${encodeURIComponent(token)}`
   const ws = new WebSocket(url)
 
