@@ -25,7 +25,7 @@ describe('serveJWKS', () => {
     expect(response.headers.get('Content-Type')).toBe('application/json')
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600')
 
-    const body = await response.json()
+    const body = await response.json() as { keys: { kid: string }[] }
     expect(body.keys).toHaveLength(1)
     expect(body.keys[0].kid).toBe('key-1')
   })

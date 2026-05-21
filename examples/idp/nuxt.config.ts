@@ -17,7 +17,7 @@ export default defineNuxtConfig({
     rpOrigin: process.env.NUXT_OPENAPE_RP_ORIGIN || 'http://localhost:3000',
     requireUserVerification: process.env.NUXT_OPENAPE_REQUIRE_USER_VERIFICATION === 'true',
     residentKey: (process.env.NUXT_OPENAPE_RESIDENT_KEY as 'preferred' | 'required' | 'discouraged') || 'preferred',
-    attestationType: (process.env.NUXT_OPENAPE_ATTESTATION_TYPE as 'none' | 'indirect' | 'direct' | 'enterprise') || 'none',
+    attestationType: (process.env.NUXT_OPENAPE_ATTESTATION_TYPE as 'none' | 'direct' | 'enterprise') || 'none',
   },
   nitro: {
     storage: {
