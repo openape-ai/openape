@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { AdminAllowlistStore, ChallengeStore as WebAuthnChallengeStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import type { AdminAllowlistStore, ChallengeStore as WebAuthnChallengeStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RecoveryStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import type { ShapeStore } from '@openape/grants'
 import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
@@ -66,6 +66,12 @@ export function defineConsentStore(factory: (event: H3Event) => ConsentStore) {
 
 export function defineAdminAllowlistStore(factory: (event: H3Event) => AdminAllowlistStore) {
   registerStoreFactory('adminAllowlistStore', factory)
+}
+
+// Recovery Token Store (account-recovery 72h-hold, #297)
+
+export function defineRecoveryStore(factory: (event: H3Event) => RecoveryStore) {
+  registerStoreFactory('recoveryStore', factory)
 }
 
 // Shape Store (Phase 1 — server-side shape registry)

@@ -206,6 +206,7 @@ export default defineNuxtModule<ModuleOptions>({
         const modulePages = [
           { name: 'openape-login', path: '/login', file: resolve('./runtime/pages/login.vue') },
           { name: 'openape-register', path: '/register', file: resolve('./runtime/pages/register.vue') },
+          { name: 'openape-recover', path: '/recover', file: resolve('./runtime/pages/recover.vue') },
           { name: 'openape-account', path: '/account', file: resolve('./runtime/pages/account.vue') },
           { name: 'openape-admin', path: '/admin', file: resolve('./runtime/pages/admin.vue') },
           { name: 'openape-consent', path: '/consent', file: resolve('./runtime/pages/consent.vue') },
