@@ -40,6 +40,7 @@ const PACKAGES = [
   { name: '@openape/vue-components', dir: 'packages/vue-components' },
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
+  { name: '@openape/prompt-injection-detector', dir: 'packages/prompt-injection-detector' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
   { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
