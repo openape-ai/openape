@@ -1,5 +1,13 @@
 # @openape/chat
 
+## 0.2.16
+
+### Patch Changes
+
+- Updated dependencies [[`1ce5fd6`](https://github.com/openape-ai/openape/commit/1ce5fd68d147967fbf5c30afed84d2f241bcfbab)]:
+  - @openape/auth@0.11.0
+  - @openape/nuxt-auth-sp@0.10.2
+
 ## 0.2.15
 
 ### Patch Changes
@@ -129,7 +137,6 @@
 - [#287](https://github.com/openape-ai/openape/pull/287) [`42787d3`](https://github.com/openape-ai/openape/commit/42787d3e6513802850396742e3101f0e9a48dac2) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Remove the `kind:'channel'` rooms model and associated mutation endpoints (closes #276).
 
   Phase A already migrated the chat UI to a 1:1-DM-only model (rooms are auto-created by the contact-accept flow), but the server still exposed enough surface to attack:
-
   - `POST /api/rooms` (channel-creation) — any authenticated user could enrol arbitrary emails as members; the targets immediately saw the attacker-named "channel" plus Web Push notifications with arbitrary 140-char text. Perfect phishing channel routed via chat.openape.ai.
   - `POST /api/rooms/:id/members` — admins could add any email and promote them to admin without a contact relationship.
   - `PATCH/DELETE /api/rooms/:id/members/:email` — same blast radius for role changes / kicks.
@@ -152,7 +159,6 @@
 ### Minor Changes
 
 - [#256](https://github.com/openape-ai/openape/pull/256) [`e77ba19`](https://github.com/openape-ai/openape/commit/e77ba19f595ec72f628f0b274b02a5a307269b77) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase B: multiple parallel threads per chat room (ChatGPT-style sessions per contact).
-
   - Server: new `threads` table + `messages.thread_id` column. New endpoints `GET/POST /api/rooms/:id/threads`, `PATCH/DELETE /api/threads/:id`. `messages.get` accepts `thread_id` filter; `messages.post` accepts `thread_id` and falls back to a lazily-created `main` thread for back-compat with existing rooms. Contacts auto-create the main thread on DM creation.
   - Bridge: pi-RPC sessions are now keyed by `(roomId, threadId)` so parallel conversations with the same human stay in independent contexts. Inbound messages without `threadId` are dropped (server guarantees the field).
   - CLI: new `ape-chat threads {list|new|use|rename|archive}` command, plus `--thread` flags on `send` and `list`. Active thread is remembered per-room in `~/.openape/auth-chat.json`.

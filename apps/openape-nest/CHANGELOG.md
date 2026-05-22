@@ -1,5 +1,12 @@
 # @openape/nest
 
+## 2.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`1ce5fd6`](https://github.com/openape-ai/openape/commit/1ce5fd68d147967fbf5c30afed84d2f241bcfbab)]:
+  - @openape/cli-auth@0.4.1
+
 ## 2.3.0
 
 ### Minor Changes
@@ -50,7 +57,6 @@ denied` on every reconcile and bridges never started for agents
   spawned via the troop UI.
 
   Two-tier fix:
-
   - `migrate-to-service-user.sh` pre-creates `/var/openape/agents/`
     with the right perms (root-only operation, runs at install/upgrade).
   - `pm2-supervisor.ts` re-asserts the setgid bit on every reconcile
@@ -110,7 +116,6 @@ denied` on every reconcile and bridges never started for agents
 - [`6478668`](https://github.com/openape-ai/openape/commit/647866829fc34ba9722659f9093b7f4271f215b6) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Adds a persistent WebSocket connection to the troop server. While
   the existing 5-minute sync-poll keeps running as a fallback, the
   new control-plane lets the troop server push two kinds of frames:
-
   - `config-update` — fired whenever the owner edits an agent's
     prompt / tools / SOUL / skills in the troop UI. The nest
     immediately runs `apes run --as <name> -- apes agents sync`, so
@@ -138,7 +143,6 @@ denied` on every reconcile and bridges never started for agents
 - [#388](https://github.com/openape-ai/openape/pull/388) [`713305a`](https://github.com/openape-ai/openape/commit/713305a363384a01e05d241738f4fae5d0fdc9a2) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase G follow-up: `apes nest destroy <name>` (and `apes agents destroy`) is now fully scriptable for Phase G+ agents — no admin-password prompt, no TTY required.
 
   Detection: if the agent's `NFSHomeDirectory` (read from dscl) starts with `/var/openape/homes/`, the new `buildPhaseGTeardownScript` runs via `apes run --as root` and:
-
   - launchctl bootout + pkill
   - rm -rf /var/openape/homes/<name> (no FDA wall on /var/, root just does it)
   - rm -rf /var/openape/agents/<name> (per-agent ecosystem files)
@@ -167,13 +171,11 @@ denied` on every reconcile and bridges never started for agents
 - [`8803401`](https://github.com/openape-ai/openape/commit/880340194b1c16d0ee9cd42d154ff16ee1951864) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase F of the architecture simplification (#sim-arch): drop the intent-channel entirely. The Nest is now a pure observer with three responsibilities — pm2-supervisor, troop-sync, and registry-watcher (`fs.watch` on `agents.json`).
 
   **What changed**:
-
   - The apes-cli's `apes nest spawn|destroy|list` no longer drops files into `/var/openape/nest/intents/` and polls for responses. They directly shell out to `apes run --as root -- apes agents spawn|destroy <name>` (which already requires a DDISA root grant — Patrick approves once with `--approval always` on his identity, then silent reuse).
   - `apes agents spawn` and `apes agents destroy` write to the Nest's `agents.json` registry themselves before exiting (new `lib/nest-registry.ts` helper).
   - The Nest's `fs.watch` on `agents.json` triggers reconcile within ~1s of any change. pm2 starts the bridge for new entries; pm2-deletes the bridge for removed ones.
 
   **What was removed**:
-
   - `apps/openape-nest/src/lib/intent-channel.ts` (~200 LOC)
   - `apps/openape-nest/src/api/agents.ts`
   - `packages/apes/src/lib/nest-intent.ts`
@@ -187,7 +189,6 @@ denied` on every reconcile and bridges never started for agents
 ### Patch Changes
 
 - [#385](https://github.com/openape-ai/openape/pull/385) [`56e5c66`](https://github.com/openape-ai/openape/commit/56e5c66ab00f8d579def86be1ae23d28214aa3a7) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix Phase E pm2-supervisor: three issues that conspired to make `pm2 startOrReload` silently fail when invoked from the Nest:
-
   1. **`bash -c '<inline cmd>'` arg-quoting** — escapes-helper passes the command-array to bash as separate argv; `bash -c` then treats only the first item as the script body and the rest as `$0`/`$1`/... so redirects + sub-args got dropped silently. Switched to a per-agent `start.sh` wrapper script (mode 755) committed at spawn time.
 
   2. **`process.cwd()` EACCES** — the Nest's cwd is `/var/openape/nest` (mode 750, \_openape_nest only). After escapes setuid to the agent uid, Node's startup `uv_cwd()` failed with EACCES because the agent can't read the inherited cwd. Set `cwd: '/tmp'` on the supervisor's spawn so the new uid lands in a world-readable dir.
@@ -219,7 +220,6 @@ denied` on every reconcile and bridges never started for agents
   ```
 
   **What you get**:
-
   - `pm2 list` / `pm2 logs` / `pm2 monit` work natively per agent (`su -m agentx -c 'pm2 list'`)
   - Per-agent `~/.pm2/logs/<bridge>-out-N.log` with built-in rotation
   - Each agent's pm2-daemon is its own crash domain
@@ -243,14 +243,12 @@ denied` on every reconcile and bridges never started for agents
   **Why no HTTP**: the DDISA-grant gating at the HTTP boundary required a `nest spawn` grant per call; humans have no YOLO so each spawn would have re-prompted. Filesystem permissions sidestep that without losing security: anyone with shell access as Patrick can already do `apes run --as root --` directly.
 
   **Removed**:
-
   - `lib/auth.ts` (HTTP Bearer JWT verifier, JWKS cache)
   - `tests/auth-negative.sh` (smoke test for the HTTP auth, no longer applicable)
   - `apes nest status` command (consolidated into `apes nest list`)
   - `nest-grant-flow.ts` (grant request + reuse logic for the now-deleted HTTP path)
 
   **Added**:
-
   - `apps/openape-nest/src/lib/intent-channel.ts` — directory-watcher
   - `packages/apes/src/lib/nest-intent.ts` — CLI-side intent dispatcher
   - `OPENAPE_NEST_INTENT_DIR` env override for tests / non-default installs
@@ -282,7 +280,6 @@ denied` on every reconcile and bridges never started for agents
 - [#366](https://github.com/openape-ai/openape/pull/366) [`89aeb30`](https://github.com/openape-ai/openape/commit/89aeb30807068866c03e22bb2b769b760d3a721a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Nest API now requires DDISA grant tokens for read endpoints. `apes nest list` and `apes nest status` go through the grant flow: request a `nest list`/`nest status` grant (audience `nest`), reuse any existing approved 'always'/'timed' grant for the exact same command, otherwise prompt the human once with `grant_type: 'always'` so subsequent calls reuse silently. The grant token is presented as `Authorization: Bearer …` to the Nest, which verifies it against the IdP's JWKS and matches the embedded `command` claim against the route. Each call leaves an audit record at the IdP. Mutating endpoints (POST /agents, DELETE /agents/:name) keep the unauthenticated path for now — gated in the next release. New audience `nest` registered in the audience-bucket whitelist (commands bucket).
 
 - [#367](https://github.com/openape-ai/openape/pull/367) [`78e6b87`](https://github.com/openape-ai/openape/commit/78e6b8717ce8d874d315dfab8d929c08ba3b98e0) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Mutating Nest endpoints (`POST /agents`, `DELETE /agents/:name`) now require DDISA grant tokens. New CLI commands:
-
   - `apes nest spawn <name>` — provisions an agent via the Nest. Grant `command` is just `['nest','spawn']` (no name baked in), so a single human approval covers all future spawns. Trade-off: a compromised local process running as the human can spawn arbitrary agents under that grant. Acceptable because spawn is reversible (`apes nest destroy`) and creates auditable IdP records.
   - `apes nest destroy <name>` — tears down an agent. Grant `command` IS per-name (`['nest','destroy','<name>']`) deliberately, so destroying any specific agent is its own approval — destructive ops keep tighter scoping.
 
@@ -295,7 +292,6 @@ denied` on every reconcile and bridges never started for agents
 ### Patch Changes
 
 - [#363](https://github.com/openape-ai/openape/pull/363) [`a25180a`](https://github.com/openape-ai/openape/commit/a25180abb6d718881ace7b1776f136ee36e1554e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix nest bridge supervisor — three bugs that conspired to flood the human with approval prompts on every supervisor restart:
-
   1. **Wrong YOLO pattern**: The default nest YOLO allow-pattern was `apes run --as * -- openape-chat-bridge`, but escapes-helper unwraps the `apes run --as <agent> --` prefix before submitting the grant request to the IdP. So the actual target string the YOLO evaluator saw was just `openape-chat-bridge`. The pattern is now `openape-chat-bridge` (just the inner command) — `apes nest authorize` re-runs apply the corrected default.
 
   2. **Missing `--wait`**: The supervisor invoked `apes run --as <agent> -- openape-chat-bridge` without `--wait`. Even when YOLO auto-approved the grant server-side, the CLI returned exit 75 (EX_TEMPFAIL) the moment the grant was created — before the CLI observed the approval. Added `--wait` to mirror the spawn-handler.
@@ -316,7 +312,6 @@ denied` on every reconcile and bridges never started for agents
   **New package** `@openape/nest`: HTTP daemon on `127.0.0.1:9091` with `/agents` (POST/DELETE/GET) and `/status` endpoints; persistent registry at `~/.openape/nest/agents.json`; supervisor for chat-bridge children with bounded backoff restart.
 
   **New `@openape/apes` verbs**:
-
   - `apes nest install` — writes `~/Library/LaunchAgents/ai.openape.nest.plist`, bootstraps it, prints next-step instructions for the always-grant
   - `apes nest status` — talks to the daemon, lists supervised processes
   - `apes nest uninstall` — bootouts + removes the plist (registry preserved)

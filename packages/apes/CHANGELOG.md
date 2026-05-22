@@ -1,5 +1,12 @@
 # @openape/apes
 
+## 1.25.1
+
+### Patch Changes
+
+- Updated dependencies [[`1ce5fd6`](https://github.com/openape-ai/openape/commit/1ce5fd68d147967fbf5c30afed84d2f241bcfbab)]:
+  - @openape/cli-auth@0.4.1
+
 ## 1.25.0
 
 ### Minor Changes
@@ -65,7 +72,6 @@
   temp bash script. Instead the command re-invokes itself via
   `apes run --as root -- apes agents destroy <name> --force --root-stage`
   and runs the privileged ops (launchctl bootout, pkill, rm -rf home
-
   - ecosystem-config dirs) directly in Node when re-entered as root.
 
   DDISA grant request now reads
@@ -142,14 +148,12 @@ destroy --force` — we now log a clear warning and skip just the
   Default skills for the six built-in tool families (`time`, `http`, `file`, `tasks`, `mail`, `bash`) ship bundled with the package under `default-skills/`. They get merged with agent-side skills (same-name agent skill wins) and filtered against the agent's enabled tools — a skill whose `requires_tools` aren't enabled is dropped from the prompt.
 
   **`@openape/apes`** — `apes agents sync` now writes:
-
   - `~/.openape/agent/SOUL.md` (from troop's `soul` column)
   - `~/.openape/agent/skills/<name>/SKILL.md` for each enabled row in troop's `agent_skills` table
 
   The sync is a one-way mirror: rows deleted/disabled in troop get pruned from disk on the next sync. Existing agents pick up the feature on first sync after the deploy; their SOUL is empty and their skills list is empty until the owner adds some in the troop UI.
 
   **Troop** (separate app, not versioned here) adds:
-
   - `agents.soul TEXT NOT NULL DEFAULT ''`
   - new `agent_skills` table: `(agent_email, name)` primary key, `description`, `body`, `enabled`
   - `PATCH /api/agents/:name` accepts `soul: string`
@@ -190,7 +194,6 @@ destroy --force` — we now log a clear warning and skip just the
   the rest of the CLI surface (`apes`, `ape-tasks`, `ape-agent`).
 
   **Migration:**
-
   - `npm i -g @openape/ape-agent@latest` — installs both the new
     canonical binary `ape-agent` and the legacy `openape-chat-bridge`
     alias (same script).
@@ -211,7 +214,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#390](https://github.com/openape-ai/openape/pull/390) [`35d19af`](https://github.com/openape-ai/openape/commit/35d19af86afc4236c2b9afdfd0b8b65e385b70b4) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Per-agent tool whitelist — owner-controlled via troop, default all-tools-enabled on first sync.
 
   **What changed**:
-
   - `openape-troop`: `agents` table gains a `tools text` column (JSON string array, defaults to `'[]'` for legacy rows). New agents on first sync get the full `tool-catalog.json` list as their default — owner narrows via `PATCH /api/agents/<name>` (the existing endpoint now also accepts `tools: string[]`).
   - `GET /api/agents/me/tasks` returns the agent's `tools[]` alongside `system_prompt` and `tasks`.
   - `apes agents sync` writes the resolved tool list into `~/.openape/agent/agent.json` (alongside `systemPrompt`).
@@ -238,7 +240,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#388](https://github.com/openape-ai/openape/pull/388) [`713305a`](https://github.com/openape-ai/openape/commit/713305a363384a01e05d241738f4fae5d0fdc9a2) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase G follow-up: `apes nest destroy <name>` (and `apes agents destroy`) is now fully scriptable for Phase G+ agents — no admin-password prompt, no TTY required.
 
   Detection: if the agent's `NFSHomeDirectory` (read from dscl) starts with `/var/openape/homes/`, the new `buildPhaseGTeardownScript` runs via `apes run --as root` and:
-
   - launchctl bootout + pkill
   - rm -rf /var/openape/homes/<name> (no FDA wall on /var/, root just does it)
   - rm -rf /var/openape/agents/<name> (per-agent ecosystem files)
@@ -267,13 +268,11 @@ destroy --force` — we now log a clear warning and skip just the
 - [`8803401`](https://github.com/openape-ai/openape/commit/880340194b1c16d0ee9cd42d154ff16ee1951864) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase F of the architecture simplification (#sim-arch): drop the intent-channel entirely. The Nest is now a pure observer with three responsibilities — pm2-supervisor, troop-sync, and registry-watcher (`fs.watch` on `agents.json`).
 
   **What changed**:
-
   - The apes-cli's `apes nest spawn|destroy|list` no longer drops files into `/var/openape/nest/intents/` and polls for responses. They directly shell out to `apes run --as root -- apes agents spawn|destroy <name>` (which already requires a DDISA root grant — Patrick approves once with `--approval always` on his identity, then silent reuse).
   - `apes agents spawn` and `apes agents destroy` write to the Nest's `agents.json` registry themselves before exiting (new `lib/nest-registry.ts` helper).
   - The Nest's `fs.watch` on `agents.json` triggers reconcile within ~1s of any change. pm2 starts the bridge for new entries; pm2-deletes the bridge for removed ones.
 
   **What was removed**:
-
   - `apps/openape-nest/src/lib/intent-channel.ts` (~200 LOC)
   - `apps/openape-nest/src/api/agents.ts`
   - `packages/apes/src/lib/nest-intent.ts`
@@ -287,7 +286,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Patch Changes
 
 - [#385](https://github.com/openape-ai/openape/pull/385) [`56e5c66`](https://github.com/openape-ai/openape/commit/56e5c66ab00f8d579def86be1ae23d28214aa3a7) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix Phase E pm2-supervisor: three issues that conspired to make `pm2 startOrReload` silently fail when invoked from the Nest:
-
   1. **`bash -c '<inline cmd>'` arg-quoting** — escapes-helper passes the command-array to bash as separate argv; `bash -c` then treats only the first item as the script body and the rest as `$0`/`$1`/... so redirects + sub-args got dropped silently. Switched to a per-agent `start.sh` wrapper script (mode 755) committed at spawn time.
 
   2. **`process.cwd()` EACCES** — the Nest's cwd is `/var/openape/nest` (mode 750, \_openape_nest only). After escapes setuid to the agent uid, Node's startup `uv_cwd()` failed with EACCES because the agent can't read the inherited cwd. Set `cwd: '/tmp'` on the supervisor's spawn so the new uid lands in a world-readable dir.
@@ -313,7 +311,6 @@ destroy --force` — we now log a clear warning and skip just the
   ```
 
   **What you get**:
-
   - `pm2 list` / `pm2 logs` / `pm2 monit` work natively per agent (`su -m agentx -c 'pm2 list'`)
   - Per-agent `~/.pm2/logs/<bridge>-out-N.log` with built-in rotation
   - Each agent's pm2-daemon is its own crash domain
@@ -353,14 +350,12 @@ destroy --force` — we now log a clear warning and skip just the
   **Why no HTTP**: the DDISA-grant gating at the HTTP boundary required a `nest spawn` grant per call; humans have no YOLO so each spawn would have re-prompted. Filesystem permissions sidestep that without losing security: anyone with shell access as Patrick can already do `apes run --as root --` directly.
 
   **Removed**:
-
   - `lib/auth.ts` (HTTP Bearer JWT verifier, JWKS cache)
   - `tests/auth-negative.sh` (smoke test for the HTTP auth, no longer applicable)
   - `apes nest status` command (consolidated into `apes nest list`)
   - `nest-grant-flow.ts` (grant request + reuse logic for the now-deleted HTTP path)
 
   **Added**:
-
   - `apps/openape-nest/src/lib/intent-channel.ts` — directory-watcher
   - `packages/apes/src/lib/nest-intent.ts` — CLI-side intent dispatcher
   - `OPENAPE_NEST_INTENT_DIR` env override for tests / non-default installs
@@ -376,7 +371,6 @@ destroy --force` — we now log a clear warning and skip just the
   The bridge previously spawned `apes agents serve --rpc` as a long-lived stdio JSON-RPC subprocess and dispatched each turn through it. Now it imports `runLoop` from `@openape/apes` directly. Same loop, no IPC overhead, no second process to keep alive. Per-thread message history that used to live in the subprocess's `RpcSessionMap` now lives on each `ThreadSession` itself.
 
   `@openape/apes` exposes the runtime surface for in-process use:
-
   - `runLoop`, `RpcSessionMap` (classes/functions)
   - `ChatMessage`, `RunOptions`, `RunResult`, `RuntimeConfig`, `RunStreamHandlers`, `TraceEntry`, `ToolDefinition` (types)
   - `taskTools`, `TOOLS` (helpers)
@@ -416,7 +410,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Patch Changes
 
 - [#373](https://github.com/openape-ai/openape/pull/373) [`fe2a756`](https://github.com/openape-ai/openape/commit/fe2a756541583b075e0a259908c5d0ab105a610f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Three small code-debt fixes:
-
   1. **`apes grants delegate --approval`** now actually works. The CLI was sending `approval: <value>` in the request body but the server reads `grant_type`. Result: every delegation got `grant_type: 'once'` regardless of `--approval timed|always`. Now the body uses the wire name `grant_type`. (CLI flag stays `--approval` for UX continuity — that's the term humans see in the IdP grant-approval UI.)
 
   2. **`registerAgentAtIdp` audit logs**. When an agent enrolls, the code paths `tryDelegatedEnrollToken` either succeeds (logs `[agent-bootstrap] using delegated token from grant <id> (sub=<owner>, act=<delegate>)`) or falls back (logs `[agent-bootstrap] no enroll-agent delegation from <owner> to <delegate> — falling back to direct enroll`). Surfaces during rollout whether the new token-exchange path is firing or whether the IdP's transitive-ownership fallback in `/api/enroll` is still doing the work.
@@ -428,7 +421,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#370](https://github.com/openape-ai/openape/pull/370) [`8ca96f1`](https://github.com/openape-ai/openape/commit/8ca96f10f7a0a9c8adc5afa5c8fd863f62342f6c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Wire up delegation token-exchange end-to-end:
-
   - **`@openape/cli-auth`** exports `exchangeWithDelegation()` — posts an actor token + (optional) delegation grant id to the IdP's `/api/oauth/token-exchange` and returns a delegated access token whose `sub` is the delegator.
   - **`@openape/apes`** `registerAgentAtIdp()` now checks if the local caller is itself an agent. If yes, it lists the owner's approved grants, finds the first delegation grant for the `enroll-agent` audience, exchanges tokens, and presents the delegated access token as `Authorization: Bearer …` to `/api/enroll`. Falls back to the direct call (caller-as-requester) when no delegation is configured — the IdP's transitive-ownership lookup still covers that path until M3.
   - **IdP token-exchange** (`@openape/nuxt-auth-idp`) accepts a `delegation_grant_id` without requiring a `subject_token`: when the grant id is provided, the delegator identity is derived from `grant.delegator` and `subject_token` becomes optional (it can still be supplied for belt-and-suspenders verification, in which case its sub must match the grant's delegator).
@@ -438,7 +430,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#366](https://github.com/openape-ai/openape/pull/366) [`89aeb30`](https://github.com/openape-ai/openape/commit/89aeb30807068866c03e22bb2b769b760d3a721a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Nest API now requires DDISA grant tokens for read endpoints. `apes nest list` and `apes nest status` go through the grant flow: request a `nest list`/`nest status` grant (audience `nest`), reuse any existing approved 'always'/'timed' grant for the exact same command, otherwise prompt the human once with `grant_type: 'always'` so subsequent calls reuse silently. The grant token is presented as `Authorization: Bearer …` to the Nest, which verifies it against the IdP's JWKS and matches the embedded `command` claim against the route. Each call leaves an audit record at the IdP. Mutating endpoints (POST /agents, DELETE /agents/:name) keep the unauthenticated path for now — gated in the next release. New audience `nest` registered in the audience-bucket whitelist (commands bucket).
 
 - [#367](https://github.com/openape-ai/openape/pull/367) [`78e6b87`](https://github.com/openape-ai/openape/commit/78e6b8717ce8d874d315dfab8d929c08ba3b98e0) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Mutating Nest endpoints (`POST /agents`, `DELETE /agents/:name`) now require DDISA grant tokens. New CLI commands:
-
   - `apes nest spawn <name>` — provisions an agent via the Nest. Grant `command` is just `['nest','spawn']` (no name baked in), so a single human approval covers all future spawns. Trade-off: a compromised local process running as the human can spawn arbitrary agents under that grant. Acceptable because spawn is reversible (`apes nest destroy`) and creates auditable IdP records.
   - `apes nest destroy <name>` — tears down an agent. Grant `command` IS per-name (`['nest','destroy','<name>']`) deliberately, so destroying any specific agent is its own approval — destructive ops keep tighter scoping.
 
@@ -449,7 +440,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Patch Changes
 
 - [#363](https://github.com/openape-ai/openape/pull/363) [`a25180a`](https://github.com/openape-ai/openape/commit/a25180abb6d718881ace7b1776f136ee36e1554e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix nest bridge supervisor — three bugs that conspired to flood the human with approval prompts on every supervisor restart:
-
   1. **Wrong YOLO pattern**: The default nest YOLO allow-pattern was `apes run --as * -- openape-chat-bridge`, but escapes-helper unwraps the `apes run --as <agent> --` prefix before submitting the grant request to the IdP. So the actual target string the YOLO evaluator saw was just `openape-chat-bridge`. The pattern is now `openape-chat-bridge` (just the inner command) — `apes nest authorize` re-runs apply the corrected default.
 
   2. **Missing `--wait`**: The supervisor invoked `apes run --as <agent> -- openape-chat-bridge` without `--wait`. Even when YOLO auto-approved the grant server-side, the CLI returned exit 75 (EX_TEMPFAIL) the moment the grant was created — before the CLI observed the approval. Added `--wait` to mirror the spawn-handler.
@@ -469,7 +459,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#359](https://github.com/openape-ai/openape/pull/359) [`68e8f16`](https://github.com/openape-ai/openape/commit/68e8f164e97538ee919d097ec798dd3a315c4e9b) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - New top-level `apes yolo` command for managing YOLO-policies on DDISA agents you own:
-
   - `apes yolo set <email> --mode allow-list --allow "apes agents spawn *,..."` — write/update policy
   - `apes yolo show <email>` — read current policy (--json for scripts)
   - `apes yolo clear <email>` — remove policy (subsequent grants need human approval)
@@ -489,7 +478,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#356](https://github.com/openape-ai/openape/pull/356) [`7fc3ebe`](https://github.com/openape-ai/openape/commit/7fc3ebef37a9a096052bdfebfc5ac37534fd1326) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Stage 1.5/1.6/1.7 of the Nest plan: zero-prompt spawn via Nest-as-DDISA-Agent + YOLO-policy.
-
   - `apes nest enroll`: registers the local nest as its own DDISA-agent (`nest-<host>+<owner>+<dom>@id.openape.ai`), keypair + auth.json under `~/.openape/nest/.config/apes/`. Owner is the human user; uses the existing `registerAgentAtIdp` + `issueAgentToken` flow.
 
   - `apes nest authorize` (rewritten): PUTs a YOLO-policy on the nest-agent's email at `id.openape.ai/api/users/<nest-email>/yolo-policy` with mode=`allow-list` and default allow_patterns covering `apes agents spawn|destroy|sync` plus the bridge-supervisor invocation. Patterns are bash-style globs evaluated against the joined command line, matching the existing yolo_policies semantics.
@@ -515,7 +503,6 @@ destroy --force` — we now log a clear warning and skip just the
   **New package** `@openape/nest`: HTTP daemon on `127.0.0.1:9091` with `/agents` (POST/DELETE/GET) and `/status` endpoints; persistent registry at `~/.openape/nest/agents.json`; supervisor for chat-bridge children with bounded backoff restart.
 
   **New `@openape/apes` verbs**:
-
   - `apes nest install` — writes `~/Library/LaunchAgents/ai.openape.nest.plist`, bootstraps it, prints next-step instructions for the always-grant
   - `apes nest status` — talks to the daemon, lists supervised processes
   - `apes nest uninstall` — bootouts + removes the plist (registry preserved)
@@ -527,7 +514,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Patch Changes
 
 - [#350](https://github.com/openape-ai/openape/pull/350) [`07a8346`](https://github.com/openape-ai/openape/commit/07a834625f076d0d1faa8e6c551c38e4f81fa95d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix two issues that surfaced on first cron-task DM:
-
   1. **Tool names rejected by ChatGPT API**: catalog tool names like `time.now` failed the Responses API's `^[a-zA-Z0-9_-]+$` pattern via LiteLLM. Wire-encode dots to underscores when sending tools to the LLM (`time.now` → `time_now`); decode the model's tool_call back to the local catalog name.
 
   2. **Task DMs landing in main thread instead of dedicated thread**: cron-runner now explicitly POSTs `/api/rooms/<id>/threads` with the task's name on first run, then reuses the returned threadId for every subsequent run of that task.
@@ -593,7 +579,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Patch Changes
 
 - [#337](https://github.com/openape-ai/openape/pull/337) [`06b4f10`](https://github.com/openape-ai/openape/commit/06b4f106b04a4e66ee9af9a058448961728ea35e) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix `apes agents spawn` exiting nonzero after macOS user creation. Two related bugs:
-
   1. **`$NAME` unbound inside `su - $NAME -c '...'`**: the inner shell starts fresh and doesn't inherit `NAME` from setup.sh. With `set -u`, the first `$NAME` reference inside the single-quoted block crashed the inner shell, propagated through `set -e` in setup.sh, and made the whole spawn fail despite the user being created. Fix: interpolate the literal name at TS-template time so the inner shell never sees a bash variable.
 
   2. **`launchctl bootstrap gui/<uid>` fails for hidden service accounts**: spawned agents have `IsHidden=1` and never log in graphically, so the user's `gui/<uid>` launchd domain doesn't exist. `bootstrap` fails with "Domain does not support specified action". Fix: prefix with `launchctl asuser <uid>` (run as root in setup.sh) which bootstraps launchd for that uid first, then the inner bootstrap runs in the now-existing domain.
@@ -613,7 +598,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#331](https://github.com/openape-ai/openape/pull/331) [`f941d7b`](https://github.com/openape-ai/openape/commit/f941d7b212aa3c4ce6301d134ff6076ae6520365) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - **BREAKING**: SP renamed from `tribe` to `troop` ("troop" is the primatologically-correct collective for apes).
 
   Migration for self-hosted agents:
-
   - Env var: `OPENAPE_TRIBE_URL` → `OPENAPE_TROOP_URL`
   - Default URL: `https://tribe.openape.ai` → `https://troop.openape.ai`
   - launchd plist labels: `openape.tribe.sync.<agent>` → `openape.troop.sync.<agent>`,
@@ -627,7 +611,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#329](https://github.com/openape-ai/openape/pull/329) [`dd146a7`](https://github.com/openape-ai/openape/commit/dd146a739d11e5a1d63d4ee5def57957c52fcbee) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Troop agent runtime + sync (M4-M6 of openape-troop). New CLI subcommands:
-
   - `apes agents sync` — pulls task list from `troop.openape.ai`, reconciles `~/Library/LaunchAgents/openape.troop.<agent>.<task>.plist`, caches task specs to `~/.openape/agent/tasks/`
   - `apes agents run <task_id>` — launchd-invoked one-shot: loads cached spec, runs the LiteLLM tool-call loop, posts a run record to troop
   - `apes agents serve --rpc` — long-running stdio RPC server (replaces `pi --mode rpc` for chat-bridge in M8); line-delimited JSON in/out, conversation memory keyed by `session_id`
@@ -635,7 +618,6 @@ destroy --force` — we now log a clear warning and skip just the
   Built-in tools shipped: `time.now`, `http.get/post`, `file.read/write` (jailed to $HOME), `tasks.list/create` (via @openape/ape-tasks), `mail.list/search` (via o365-cli).
 
   `apes agents spawn` integration:
-
   - Installs `~/Library/LaunchAgents/openape.troop.sync.<agent>.plist` (every 5min, RunAtLoad fires immediately) so the agent registers at troop within seconds of spawn
   - Drops `@mariozechner/pi-coding-agent` from the bun-install step (chat-bridge spawns `apes agents serve --rpc` directly in M8)
   - Drops the pi-extension write at `~/.pi/agent/extensions/litellm.ts`
@@ -678,7 +660,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#260](https://github.com/openape-ai/openape/pull/260) [`6539c9b`](https://github.com/openape-ai/openape/commit/6539c9b290b9d9f062f54dfdf5378957ee668018) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - In-process Ed25519 challenge-response refresh for agent IdP tokens (closes #259).
 
   Agent tokens have no `refresh_token` — the IdP's `/agent/authenticate` endpoint deliberately doesn't issue one. Before this change, `ensureFreshIdpAuth` threw `NotLoggedInError` when an agent token expired, which left the chat-bridge daemon in a 1-hour crash-restart loop: launchd's KeepAlive bounced the process every time the cached token aged out, the start.sh shell-out re-ran `apes login` to mint a fresh one, and the cycle repeated.
-
   - **`@openape/cli-auth`** now refreshes agent tokens in-process. When `auth.json.refresh_token` is missing but `key_path` (or `~/.ssh/id_ed25519`) is present, `ensureFreshIdpAuth` signs a new challenge against the IdP's `/agent/challenge` + `/agent/authenticate` endpoints — same flow `apes login --key` uses — and persists the rotated token. The chat-bridge daemon now stays connected across the 1h expiry boundary.
   - **`@openape/apes`**: `apes login` and `apes agents spawn` write `key_path` into auth.json so any cli-auth consumer (chat-bridge, ape-tasks, ape-plans, …) inherits the in-process refresh capability for free. `saveAuth` merges with existing fields so older spawns retain `owner_email` across logins (mirrors PR #257's cli-auth fix). `start.sh` no longer shells out to `apes login` at boot — the install is now ~3-5s instead of doing the legacy refresh dance.
   - **`@openape/cli-auth`** new public types: `IdpAuth.key_path` (optional, absolute path to the Ed25519 signing key).
@@ -696,7 +677,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#253](https://github.com/openape-ai/openape/pull/253) [`1b05c4b`](https://github.com/openape-ai/openape/commit/1b05c4b0c3b9cb61e353979d1b66e3b4670cf22d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase A frontend + CLI:
-
   - chat.openape.ai webapp shows contacts (incoming pending, connected, outgoing pending) with accept/decline/cancel actions and an "Add contact" dialog. Mobile-first. Live-updates via WS membership-\* frames.
   - `@openape/ape-chat`: new `contacts list / add / accept / remove` subcommand.
   - `@openape/apes`: new `apes agents allow <agent> <peer-email>` — adds peer to the agent's bridge-allowlist file so the bridge auto-accepts that peer's contact request.
@@ -753,7 +733,6 @@ destroy --force` — we now log a clear warning and skip just the
 ### Minor Changes
 
 - [#237](https://github.com/openape-ai/openape/pull/237) [`7fe49ef`](https://github.com/openape-ai/openape/commit/7fe49ef0ca5f3f42dfa810a475c6e6971f785efc) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Polish `apes agents spawn --bridge` for production use:
-
   - Bridge plist now installed as a system-wide LaunchDaemon at `/Library/LaunchDaemons/eco.hofmann.apes.bridge.<agent>.plist` with `<UserName>` set to the agent. Boots without anyone being logged in (the previous LaunchAgent in `~/Library/LaunchAgents/` couldn't bootstrap into a non-existent gui domain for hidden service accounts). Cleanup added to `destroy`.
   - Bridge `start.sh` now self-installs both `@openape/chat-bridge` and `@mariozechner/pi-coding-agent` via npm into a per-user `~/.npm-global` prefix, plus drops the litellm pi extension if missing. Idempotent. No more manual per-agent setup.
   - Added `--bridge-room <name>` flag: after spawn, creates (or finds) a chat.openape.ai room with the given name and adds the new agent as a member, using the spawning user's IdP bearer. Soft-fails with a hint if chat is unreachable.
@@ -799,7 +778,6 @@ destroy --force` — we now log a clear warning and skip just the
   `runAudienceMode`'s wait-loop used to fall through silently on timeout — straight to the token-fetch — and the server then rejected with "Grant is not approved (status: pending)" because… well, it wasn't. Users had no way to tell timeout from a real auth failure.
 
   Two changes:
-
   - Track whether the loop exited via approval (break) or timeout (condition false). On timeout, throw `CliError("Grant approval timed out after Xmin (still pending). Check inbox at <url>…")` instead of falling through.
   - Bump the default wait budget from 5 min to 15 min. Human-in-the-loop approvals over phone notifications routinely take longer than 5 min.
 
@@ -838,7 +816,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [`6673c4b`](https://github.com/openape-ai/openape/commit/6673c4b718ad3c8f3c37734b6e41cb6fd53beeff) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes agents spawn` defaults to `/bin/zsh` (not ape-shell) + `exit` always succeeds in ape-shell
 
   Two related changes that backtrack from making ape-shell the default login shell for spawned agents:
-
   - **`apes agents spawn <name>` now defaults `--shell` to `/bin/zsh`** (macOS modern default) instead of `$(which ape-shell)`. Pass `--shell $(which ape-shell)` to opt the agent's macOS user into the grant-mediated REPL as login shell. Rationale: ape-shell intercepts every command through the grant flow, which trips on interactive niceties (terminal control sequences from Warp/iTerm, etc.) — bash/zsh as login shell with Claude's hook still routing Claude-issued commands through ape-shell is the safer default.
   - **`exit` (and `exit <code>`) in the ape-shell REPL always bypasses approval.** Getting OUT of the shell is a foot-gun if it requires a grant — agents and humans alike should be able to leave reliably even when the IdP is unreachable, the token has expired, or anything else has gone wrong.
 
@@ -851,12 +828,10 @@ destroy --force` — we now log a clear warning and skip just the
 - [#220](https://github.com/openape-ai/openape/pull/220) [`23fa05b`](https://github.com/openape-ai/openape/commit/23fa05b5aea415330de60d622da1a61a7bb0ef17) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes/idp: `apes sessions list` and `apes sessions remove <id>` for self-service device management
 
   You can now see and revoke your own refresh-token families across devices without admin privileges:
-
   - `apes sessions list` — one row per `apes login` (one row per device), with familyId, clientId, createdAt, expiresAt
   - `apes sessions remove <familyId>` — revokes that specific family. The device using it fails its next token refresh with `Token family revoked` and has to `apes login` again
 
   Backed by two new IdP endpoints under `/api/me/sessions/…`:
-
   - `GET /api/me/sessions` — lists the caller's families (filtered to `userId = sub` from the authenticated session/JWT)
   - `DELETE /api/me/sessions/[familyId]` — ownership-checked: 404 if the family belongs to a different user, never 403, so users can't probe other users' familyIds
 
@@ -881,7 +856,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#218](https://github.com/openape-ai/openape/pull/218) [`d8fb15c`](https://github.com/openape-ai/openape/commit/d8fb15cf3eeddd6d30f8f24ea7763a5347d87892) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes login <email>` accepts the email as a positional argument, and DDISA mismatches refuse to log in unless `--force` is passed
 
   Two UX improvements to `apes login`:
-
   - **Positional email**: `apes login patrick@hofmann.eco` now works directly. The legacy `--email` flag stays around as an alias.
   - **DDISA mismatch guard**: when an explicit `--idp` (or `APES_IDP` env, or `defaults.idp` in config.toml) selects a different IdP than the email's domain DDISA record points at, the login refuses with a clear diagnostic. Pass `--force` to bypass. This catches the foot-gun where `apes login --idp https://id.openape.at` produces a token that downstream SPs (e.g. `preview.openape.ai`, `chat.openape.ai`) reject with "IdP mismatch" because they trust the DDISA-resolved IdP instead. Auto-discovered IdPs (no explicit override) bypass the guard since by definition they can't mismatch.
 
@@ -902,7 +876,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [#198](https://github.com/openape-ai/openape/pull/198) [`0d33173`](https://github.com/openape-ai/openape/commit/0d33173c3db3ca9fb0bc78486042ef93857312c3) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: `apes agents destroy` now uses `sysadminctl -deleteUser` and runs the IdP DELETE before the long-blocking `apes run --as root --wait`
 
   Two follow-up fixes to the v0.15.0 destroy flow surfaced during real-world use:
-
   - **`dscl . -delete` failed silently** and left orphaned macOS user records. The teardown script wrapped the call in `2>/dev/null || true` so a failure (Open Directory metadata still attached, etc.) was swallowed without trace — the home dir was `rm -rf`'d but `dscl . -read /Users/<n>` still returned a record afterwards. Now the script prefers `sysadminctl -deleteUser` (the canonical macOS API, which also removes Open Directory metadata), falls back to `dscl . -delete` only if `sysadminctl` is missing, propagates failures with a clear stderr message, and post-verifies the record is gone before printing `OK destroyed`.
 
   - **Token-expiry between the two destroy phases** stranded the IdP record when the approver took longer than the access-token TTL to approve the as=root grant. The IdP DELETE on `/api/my-agents/<id>` ran _after_ the long-blocking `apes run --as root --wait` call, so for PKCE-only logins (no refresh path) the parent token had already expired by then. Now the IdP DELETE/PATCH happens _before_ the escapes call — the token is fresh from preflight, the long approval wait happens after all IdP I/O is done. Idempotency is preserved: re-running destroy on a partially-cleaned agent skips the absent half cleanly.
@@ -924,7 +897,6 @@ destroy --force` — we now log a clear warning and skip just the
 - [`fea3cae`](https://github.com/openape-ai/openape/commit/fea3cae2185d2cbd763572bb9d7f9e85f0e9841f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - apes: new `apes agents` namespace for managing owned agents end-to-end (`register`, `spawn`, `list`, `destroy`)
 
   Adds a four-command surface so spawning + tearing down ephemeral agents is no longer a hand-assembly job:
-
   - `apes agents register --name <n> --public-key '<line>'` — parent-authenticated `POST /api/enroll`. Returns the assigned agent email so a remote agent can `apes login` from its own machine using the matching private key. No keypair generation, no token issuance.
   - `apes agents spawn <n>` (macOS only) — provisions a local agent in one shot: generates an ed25519 keypair, registers it at the IdP, issues an agent access token, then runs a bash setup script under `apes run --as root` that creates a hidden macOS service user, places `~/.ssh/id_ed25519`, writes `~/.config/apes/auth.json`, sets `ape-shell` as login shell, and (unless `--no-claude-hook`) drops a Claude Code PreToolUse hook that rewrites every Bash tool call to `ape-shell -c '<cmd>'`. One DDISA approval per spawn, no `sudo` involved.
   - `apes agents list [--json] [--include-inactive]` — `GET /api/my-agents` with local `/Users` cross-reference so orphaned IdP agents (no OS user) show as `OS-USER ✗`.
@@ -981,7 +953,6 @@ failed, response 403` on a denied grant), `apes proxy` printed a bare
   The proxy used to append a JSONL audit record to a local file (default
   `~/.local/state/openape/proxy-audit.jsonl`, configurable via
   `proxy.audit_log`). Two problems with that:
-
   1. **It can't function as an audit trail.** Anything written on the agent's
      host is also writable by the agent — there's no integrity story we'd be
      willing to put in front of a reviewer. Local files are debugging data, not
@@ -999,7 +970,6 @@ failed, response 403` on a denied grant), `apes proxy` printed a bare
   audit view will be exposed there in a follow-up.
 
   Removed surfaces:
-
   - `proxy.audit_log` config field (TOML) — silently ignored if still present in
     legacy configs; nothing reads it.
   - `initAudit()` export from `@openape/proxy` — now no-op semantics, function
@@ -1023,7 +993,6 @@ failed, response 403` on a denied grant), `apes proxy` printed a bare
   Closes the gap where the YOLO/Allow/Deny config on `id.openape.ai/agents/<email>`
   (Web tab) had no effect on `apes proxy --` invocations. Two reasons it
   previously didn't work:
-
   1. **The ephemeral proxy never asked the IdP.** Default config used
      `default_action="allow"` with no `[[grant_required]]` rule, so unmatched
      hosts went straight through. The IdP grant flow was unreachable.
@@ -1032,7 +1001,6 @@ failed, response 403` on a denied grant), `apes proxy` printed a bare
      `(email, audience='ape-proxy')` couldn't match the user's real policy row.
 
   Both fixed:
-
   - `apes proxy --` now reads the cached `~/.config/apes/auth.json` (already
     populated by `apes login`). When found: `agent_email` becomes the user's
     real agent email, `idp_url` becomes the IdP they logged in against, and
@@ -1098,7 +1066,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Wider tool coverage for the env-var-based egress mediation. Previously
   only `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY` (uppercase) were set.
   Now also: `https_proxy` / `http_proxy` / `no_proxy` (lowercase, libcurl
-
   - many Python tools), `ALL_PROXY` / `all_proxy` (curl, rsync, ftp), and
     `NODE_USE_ENV_PROXY=1` (Node 24+ native `fetch` via undici).
 
@@ -1129,7 +1096,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   which is now spawned as a child process per invocation.
 
   Two lifecycle modes:
-
   1. **Ephemeral (default):** `apes proxy --` spawns a new `openape-proxy` child
      bound to a random free port on `127.0.0.1`, runs the wrapped command with
      `HTTPS_PROXY` / `HTTP_PROXY` pointing at it, kills the proxy on wrapped-
@@ -1180,7 +1146,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Upstream `node-pty` ships prebuilt binaries only for darwin and win32. Linux users had to compile via `node-gyp`, which means Python + a working C++ toolchain on every install. `@lydell/node-pty` distributes per-platform binaries (`@lydell/node-pty-darwin-arm64`, `-darwin-x64`, `-linux-arm64`, `-linux-x64`, `-win32-arm64`, `-win32-x64`) via `optionalDependencies`, the same pattern as `esbuild`, `swc`, and `lightningcss`. npm/pnpm only resolves the matching platform's binary tarball; no install scripts, no compilation, no toolchain dependency.
 
   Side effects:
-
   - Removes the `postinstall` perm-fix hack (`scripts/fix-node-pty-perms.mjs`); the per-platform packages preserve the spawn-helper exec bit through pnpm 10's tarball extraction.
   - Removes `node-pty` from the root `pnpm.onlyBuiltDependencies` allowlist.
 
@@ -1246,7 +1211,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   **Safety layers:**
-
   - Forced `risk: "high"` on every generic grant
   - Forced `exact_command: true` — grant is bound to the exact argv hash
   - Single-use by default (enforced by IdP `usedAt` timestamp)
@@ -1258,7 +1222,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   restores the legacy hard-fail behaviour.
 
   **Compatibility:**
-
   - Existing shapes are unaffected — generic-fallback only activates when
     `loadAdapter()` throws "No adapter found".
   - The synthetic path bypasses `resolveCommand()` entirely and feeds a
@@ -1271,7 +1234,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
     behaviour are unchanged.
 
   **New public surface (`@openape/apes`):**
-
   - `shapes/generic.ts`: `buildGenericAdapter`, `buildGenericResolved`,
     `isGenericResolved`, `GENERIC_OPERATION_ID`
   - `shapes/adapters.ts`: `resolveGenericOrReject`
@@ -1320,7 +1282,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 ### Minor Changes
 
 - [#106](https://github.com/openape-ai/openape/pull/106) [`9b5557e`](https://github.com/openape-ai/openape/commit/9b5557e3b2622ad5a4df1529f3ecf21a223d195a) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Align apes with the escapes naming and MIT-relicensed escapes repo:
-
   - `APES_IDP` is now the canonical env var for the IdP URL. `GRAPES_IDP`
     remains as a deprecated alias — it still works, but emits a warning.
     When both are set, `APES_IDP` wins.
@@ -1359,7 +1320,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Patrick's Vorschlag war die richtige strukturelle Antwort: _"Inform User about the open Grant and retry with `apes grants run <id> --wait` until User approved."_
 
   Statt dass der Agent die Polling-Schleife selbst orchestriert, ruft er einmal `apes grants run <id> --wait` und die CLI blockiert intern bis approved/denied/timeout. Das passt zu **jedem** Execution-Modell:
-
   - **Chat-Agents (turn-based)**: ein einzelner Tool-Call der blockt, openclaw's `yieldMs` + `notifyOnExit` Mechanik resumed den Agent wenn das Kommando fertig ist
   - **Persistent-Background-Worker**: ein single call der bis zur Auflösung blockt, keine Loop-State-Machine nötig
   - **Script-Konsumenten**: ein single call, dann `$?` prüfen — der sauberste CI-Workflow
@@ -1380,14 +1340,14 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 
   export async function pollGrantUntilResolved(
     idp: string,
-    grantId: string
+    grantId: string,
   ): Promise<PollOutcome> {
     const intervalMs = getPollIntervalSeconds() * 1000;
     const maxMs = getPollMaxMinutes() * 60_000;
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       const grant = await apiFetch<{ status: string }>(
-        `${grantsEndpoint}/${grantId}`
+        `${grantsEndpoint}/${grantId}`,
       );
       if (grant.status === "approved") return { kind: "approved" };
       if (
@@ -1467,7 +1427,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ### 4. openclaw's yield-and-resume Mechanik als perfekter Fit
 
   Die Flow-Dynamik für openclaw wird:
-
   1. User: _"Führe `date` aus"_
   2. Agent ruft `ape-shell -c "date"` → exit 75 + grant info
   3. Agent liest "For agents: tell user + run `apes grants run xyz --wait`"
@@ -1486,7 +1445,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Test-Manifest
 
   ### Neue Tests in `commands-grants-run.test.ts` (7 Tests)
-
   1. **Regression guard**: ohne `--wait` bleibt pending → error Verhalten
   2. `--wait` + pending → poll → approved → dispatch shapes grant
   3. `--wait` + pending → poll → denied → CliError
@@ -1500,7 +1458,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   8 existierende "async info block audience mode" Tests geupdated: die alten `expect(out).toContain('every 10s')` Assertions werden durch Assertions auf die neue Text-Struktur ersetzt (`For agents:`, `apes grants run X --wait`, `exit code 75`, `EX_TEMPFAIL`). Zusätzliche Regression-Guard: `APES_GRANT_POLL_INTERVAL` darf NICHT mehr in den agent-text leaken (da es jetzt internes CLI-Detail ist).
 
   ### Regression
-
   - `shell-grant-dispatch.test.ts`: 27/27 green (unberührt)
   - `commands-run-async.test.ts`: 43/43 green
   - `commands-grants-run.test.ts`: 15/15 green (8 baseline + 7 neu)
@@ -1546,7 +1503,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Openclaw (und analoge Agent-Wrapper) sehen jetzt einen `failed`-annotierten tool-result mit allen bisherigen Output-Zeilen, inklusive dem expliziten "For agents: poll..." Block. Der Agent liest den Output aufmerksamer und folgt den Instruktionen.
 
   **Unverändert:**
-
   - `--wait` Flag / `APE_WAIT=1` → immer exit 0 on erfolgreichem Exec, wie bisher
   - Cache-Hits (`findExistingGrant` oder session-grant-reuse) → immer exit 0, command läuft sofort durch
   - Die self-dispatch shortcut für `apes <subcmd>` in ape-shell → immer exit 0 (weil direkt execShellCommand, kein pending grant)
@@ -1576,7 +1532,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Valid range ist POSIX exit code space (0–255).
 
   ## Warum 75 und nicht 1, 2, oder -1
-
   - **1** = POSIX "general error". Agenten und CI-Pipelines lesen das als "etwas ist schiefgegangen" ohne Spezifität. Falsches Signal — es ist kein Fehler, es ist ein erwarteter pending state.
   - **2** = lose Konvention für "shell usage error" oder "misuse of shell builtins" (bash, git). Würde als user's fault interpretiert. Auch falsch.
   - **-1** ist in POSIX nicht gültig — shells truncieren zu 255. Nicht portabel.
@@ -1628,7 +1583,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   ## Test plan
-
   - [x] 11 new tests in `packages/apes/test/commands-run-async.test.ts` `async exit code (APES_ASYNC_EXIT_CODE)` describe block:
     - default 75 (EX_TEMPFAIL)
     - `APES_ASYNC_EXIT_CODE=0` restores legacy
@@ -1647,7 +1601,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   - [x] Pre-commit hook (turbo lint + typecheck): green
 
   ## Files touched
-
   - `packages/apes/src/commands/run.ts` — new `getAsyncExitCode()` helper, `throw new CliExit(getAsyncExitCode())` at all four async-exit sites (`runShellMode` session, `tryAdapterModeFromShell`, `runAdapterMode`, `runAudienceMode`)
   - `packages/apes/src/config.ts` — new `defaults.async_exit_code?: string` field in `ApesConfig` interface
   - `packages/apes/test/commands-run-async.test.ts` — new `expectCliExit` helper + 20 existing tests wrapped + 11 new exit code tests
@@ -1669,7 +1622,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Unter 0.9.2 kriegen Subcommands wie `apes grants run <id>` den self-dispatch shortcut im REPL (`shell/grant-dispatch.ts`) — sie bypassen den Grant-Flow weil sie als trusted shell-internal gelten. Aber der gleiche Check lebt **nicht** im one-shot Pfad (`commands/run.ts runShellMode`), den `ape-shell -c "<cmd>"` trifft nachdem `rewriteApeShellArgs` es zu `apes run --shell -- bash -c <cmd>` umschreibt.
 
   Für openclaw's Polling-Flow heißt das konkret:
-
   1. Openclaw spawnt `ape-shell -c "apes grants status <date-grant-id> --json"` als Child-Prozess
   2. Wird rewritten zu `apes run --shell -- bash -c "apes grants status <date-grant-id> --json"`
   3. `runShellMode` ruft `tryAdapterModeFromShell` — versucht den apes-Adapter zu laden
@@ -1735,7 +1687,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   **11 neue Tests** in `packages/apes/test/commands-run-async.test.ts` in zwei neuen describe-Blöcken:
 
   ### `runShellMode apes self-dispatch shortcut` (9 Tests)
-
   1. `apes grants status <id>` bypasses grant flow, execs directly
   2. `apes grants run <id>` bypasses (the bootstrap case)
   3. `apes whoami` bypasses
@@ -1747,12 +1698,10 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   9. `curl example.com` (non-apes) does NOT self-dispatch
 
   ### `execShellCommand APES_SHELL_WRAPPER env strip` (2 Tests)
-
   10. Strips `APES_SHELL_WRAPPER` from the bash child env when self-dispatching
   11. Strips `APES_SHELL_WRAPPER` from the escapes pipe in `runAudienceMode --wait` mode
 
   **Regression:**
-
   - `shell-grant-dispatch.test.ts`: **27/27 green** (0.9.2 baseline preserved via shared module)
   - `commands-run-async.test.ts`: **32/32 green** (21 baseline + 11 new)
   - Full `@openape/apes` suite via turbo: **41 files / 477 green** (466 baseline from 0.9.3 + 11 new)
@@ -1839,7 +1788,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Konsistenz-Stabilität für Scripts
 
   Die drei Core-Label-Zeilen bleiben in beiden Modes enthalten und finden sich in jedem Output:
-
   - Die URL enthält immer `grant-approval?grant_id=<uuid>`
   - Die Status-Zeile enthält immer `apes grants status <uuid>`
   - Die Execute-Zeile enthält immer `apes grants run <uuid>`
@@ -1849,7 +1797,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Test-Manifest
 
   11 neue Tests in `packages/apes/test/commands-run-async.test.ts` im neuen `async info block audience mode` describe:
-
   1. Default (kein env, keine config): agent mode mit polling protocol
   2. `APES_USER=human`: short block, kein polling
   3. `APES_USER=agent`: wie default
@@ -1905,7 +1852,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   Nur drei Subcommands rechtfertigen shell-level Gating:
-
   - **`run`** — spawnt arbiträre Executables; das ist der Kernzweck des Grant-Systems.
   - **`fetch`** — forwarded den Bearer-Token an user-kontrollierte URLs; könnte Credentials exfiltrieren.
   - **`mcp`** — bindet einen Network-Port und serves eine persistente API.
@@ -1927,7 +1873,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Aufgegeben: shell-level Gating für `apes admin`, `apes register-user`, `apes enroll`. Diese Commands waren vorher via Grant-Flow gated, sind jetzt shell-internal.
 
   **Das ist sicher**, weil jeder dieser Commands server-side auth-gated ist:
-
   - `apes admin *` verlangt einen `management_token` in `config.toml`. Ohne Token → 401/403 vom IdP. Mit Token → User hat bereits out-of-band den Admin-Status zugewiesen bekommen; das shell-grant fügt keine zusätzliche Information hinzu.
   - `apes register-user` verlangt denselben `management_token`. Gleiche Logik.
   - `apes enroll` kreiert einen lokalen Ed25519-Keypair und hittet den public Enrollment-Endpoint. Der Enrollment-Endpoint verlangt Approval durch einen Admin — also auch server-side gated.
@@ -1941,7 +1886,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Test-Bilanz
 
   12 neue Tests in `packages/apes/test/shell-grant-dispatch.test.ts`:
-
   - 7 self-dispatch tests: `apes whoami`, `apes grants run <id>`, `apes grants list`, `apes adapter install curl`, `apes admin users list`, `apes config set foo bar`, `apes health`
   - 3 still-gated tests: `apes run -- echo hello`, `apes fetch https://example.com`, `apes mcp server`
   - 1 compound regression guard: `apes whoami | grep alice` → gated via session path (compound short-circuits the self-dispatch)
@@ -1954,7 +1898,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#94](https://github.com/openape-ai/openape/pull/94) [`b0c55bd`](https://github.com/openape-ai/openape/commit/b0c55bdd9190df730b4c13a62ef078380a4e84ab) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(apes): `apes grants status` zeigt wieder die richtigen Felder
 
   Drei pre-existing Display-Bugs in `apes grants status <id>`:
-
   1. **`Requester: undefined`** — das Kommando las `grant.requester`, aber die IdP-Response hat `requester` unter dem verschachtelten `request`-Objekt (`grant.request.requester`). Fix: lese aus der richtigen Stelle; wenn leer, wird die Zeile übersprungen statt `undefined` zu drucken.
 
   2. **`Owner: undefined`** — ein `owner`-Feld existiert überhaupt nicht auf dem `GET /grants/<id>` Endpoint. War ein Holdover aus einem früheren API-Shape. Komplett entfernt.
@@ -1964,12 +1907,10 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   4. **`Decided at: 1776154298`** — Timestamps kamen als Unix-Sekunden (Zahl), wurden aber als Strings gedruckt (Rohzahl auf dem Terminal). Alle Zeitstempel (`created_at`, `decided_at`, `used_at`, `expires_at`) werden jetzt als ISO-8601 formatiert via `new Date(ts * 1000).toISOString()`.
 
   Als Bonus zeigt der Output jetzt zwei neue Felder die für den Debugging-Usecase nützlich sind und vorher fehlten:
-
   - **`Audience:`** — zeigt ob es ein `shapes` / `escapes` / `ape-shell` Grant ist (wichtig seit der Introduction des `apes grants run <id>` Subcommands in 0.9.0, der nach Audience dispatcht)
   - **`Host:`** — zeigt den `target_host`, wichtig für Session-Grants die host-gebunden sind
 
   Sowie:
-
   - **`Used at:`** — neu, zeigt wann ein once-Grant consumed wurde (nützlich um zu unterscheiden ob ein Grant `used` ist weil der User ihn ausgeführt hat oder weil er geblendet wurde)
   - **`Created:`** — neu, der Creation-Timestamp war vorher nicht sichtbar
 
@@ -2014,7 +1955,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ### Neuer Subcommand: `apes grants run <id>`
 
   Führt einen approved Grant aus. Dispatcht nach Grant-Typ:
-
   - **Shapes-Grants**: lädt den Adapter lokal, re-resolved den `ResolvedCommand` gegen den recorded `execution_context.adapter_digest` (wirft bei mismatch), holt den Token via `fetchGrantToken`, und führt via `verifyAndExecute` aus.
   - **Escapes-Grants** (`audience === 'escapes'`): holt das `authz_jwt` und pipet an `escapes --grant <jwt> -- <cmd>`.
   - **Legacy `ape-shell` Session-Grants**: nicht re-executable — der Command gibt einen klaren Hinweis aus (session grants waren single-use gegen eine spezifische `bash -c` Zeile; der User soll stattdessen den Original-Aufruf wiederholen, der dann via `findExistingGrant` timed/always-Grants wiederverwendet).
@@ -2022,7 +1962,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Status-Gates: `pending` → Hinweis + approve-URL, `denied`/`revoked` → Error, `used` → Error ("already been used — request a new one"), `approved` → dispatch.
 
   ### Override für Legacy-Workflows
-
   - **`apes run --wait`** / **`ape-shell -c --wait ...`** (CLI flag): erzwingt altes blockierendes Verhalten.
   - **`APE_WAIT=1`** (env var): gleiches Ergebnis aus der Umgebung heraus, für Fälle wo Flags nicht durchgereicht werden können (z.B. sshd-login-shell, cron, `$SHELL -c` aus einem Binary).
 
@@ -2125,7 +2064,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   Reports:
-
   - `apes` binary version
   - Config dir and auth file locations
   - Auth identity, type (human/agent), IdP, token expiry (UTC + local)
@@ -2171,7 +2109,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#89](https://github.com/openape-ai/openape/pull/89) [`b924c30`](https://github.com/openape-ai/openape/commit/b924c30530accfe88c0cc01d5354e418cc5f1daa) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(apes): grant-shell UX — visible cache/approval state and `apes` subcommand routing from the REPL
 
   Three related fixes that make the ape-shell grant flow observable and self-consistent.
-
   1. **`apes <subcommand>` inside the interactive REPL no longer errors with "unsupported invocation".** Root cause was that the `ape-shell` wrapper script exports `APES_SHELL_WRAPPER=1` into its node process env so `rewriteApeShellArgs` can detect wrapper invocation — but that env var was then leaked, unfiltered, into the bash pty child spawned by `PtyBridge`. Any `apes` subcommand the user typed inside that bash re-read the var from its inherited env, self-detected as ape-shell mode, and rejected its argv. `PtyBridge` now strips `APES_SHELL_WRAPPER` from the env it passes to `pty.spawn`.
 
   2. **Grant cache hits now emit a visible reuse line**, so the user can tell that a command was allowed because a pre-approved grant was reused rather than because the gating layer was bypassed. Both the adapter-grant path (which already logged a reuse line) and the session-grant path (which was silent) now print `Reusing ...`. Both lines can be suppressed by exporting `APES_QUIET_GRANT_REUSE=1` for power users who want a clean stream.
@@ -2222,7 +2159,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#50](https://github.com/openape-ai/openape/pull/50) [`68c6998`](https://github.com/openape-ai/openape/commit/68c69987122e05d396db3431d5ff3993b71db5b9) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat(apes): smart defaults for `apes login`
 
   `apes login` now auto-detects all three inputs via a fallback cascade (flag → env → config → derivation):
-
   - **Key:** defaults to `~/.ssh/id_ed25519` when present
   - **Email:** extracted from `<key>.pub` comment (set via `ssh-keygen -C <email>`) when the comment contains `@`
   - **IdP:** discovered via DDISA DNS (`_ddisa.<email-domain>`) using `resolveDDISA` from `@openape/core`
@@ -2240,7 +2176,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Every line a user types in `ape-shell` is now gated through the apes grant flow **before** it reaches the persistent bash pty. Adapter-backed commands (single-token, matching a shapes adapter) get a structured grant with resource chain and permission. Compound commands, commands without an adapter, or lines where adapter resolution fails fall back to a generic `ape-shell` session grant. Existing timed/always session grants for the same target host are reused.
 
   Refactors `verifyAndExecute` in `packages/apes/src/shapes/grants.ts` into three exported pieces:
-
   - `verifyAndConsume(token, resolved)` — verifies the JWT, checks authorization details against the resolved command, and marks the grant as consumed on the IdP. Does NOT execute anything.
   - `executeResolvedViaExec(resolved)` — runs the resolved command via `execFileSync` with inherited stdio (the legacy one-shot path).
   - `verifyAndExecute(token, resolved)` — preserved as before; composes the two above.
@@ -2276,7 +2211,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#70](https://github.com/openape-ai/openape/pull/70) [`880df9f`](https://github.com/openape-ai/openape/commit/880df9f7ea5034e145a498ec203f6c99d32783dc) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat(apes): audit logging for interactive shell sessions (M5 of ape-shell interactive mode)
 
   Every interactive `ape-shell` session is now recorded in `~/.config/apes/audit.jsonl` with the following event types:
-
   - `shell-session-start` — session id (16 random hex chars), host, requester email
   - `shell-session-line` — per line: seq number, literal line, grant id, grant mode (adapter/session), status (executing/denied)
   - `shell-session-line-done` — per completed line: seq number, exit code
@@ -2289,7 +2223,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#57](https://github.com/openape-ai/openape/pull/57) [`da8f875`](https://github.com/openape-ai/openape/commit/da8f8758e7af6b04ca58436a3b1d86255ee4b71f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(apes): adapter lookup normalizes absolute paths and matches on executable
 
   `ape-shell` / `apes run --shell` previously failed to resolve a shapes adapter when the parsed command started with an absolute path (`/usr/local/bin/o365-cli`) or when the registry entry's `id` differed from its `executable` field. Both cases fell back silently to a generic `bash -c` session grant.
-
   - `loadOrInstallAdapter` now normalizes the input with `basename()` before any lookup.
   - `findAdapter` matches both `id` and `executable`, so a binary name like `o365-cli` resolves to its registry entry (`id: "o365"`). Backward compatible — `id`-based lookups keep working.
   - After auto-install, the adapter is reloaded under the registry `id`, not the executable name.
@@ -2309,7 +2242,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   The call site now normalizes `parsed.executable` via `basename()` before passing it into `resolveCommand`. `resolveCommand` itself stays strict.
 
 - [#75](https://github.com/openape-ai/openape/pull/75) [`5779de8`](https://github.com/openape-ai/openape/commit/5779de85fb514a0311564c40a9b259024d7f2bea) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Transparent session auto-refresh — no more hourly `apes login`.
-
   - `apes login --key <path>` now persists the resolved absolute key path and agent email
     to `~/.config/apes/config.toml` so every subsequent `apes` / `ape-shell` invocation
     can auto-refresh its access token via Ed25519 challenge-response, without the user
@@ -2337,7 +2269,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Expands `packages/apes/README.md` with the interactive REPL workflow, the login-shell install recipe (`/etc/shells` + `chsh`), and explicit documentation that the one-shot `ape-shell -c "<cmd>"` path continues to work unchanged under `SHELL=$(which ape-shell)`.
 
   Adds `packages/apes/test/shell-login-integration.test.ts` — a spawned-subprocess test that builds the CLI, symlinks it as `ape-shell` in a tmp dir, and asserts:
-
   1. `ape-shell -c "echo hello"` reaches the one-shot rewrite path and exits (no REPL loop, no hang)
   2. `ape-shell --version` prints a versioned banner
   3. `SHELL=<path-to-ape-shell> bash -c "…"` still works as a non-regression smoke check
@@ -2347,7 +2278,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   When `ape-shell` is set as a user's login shell via `chsh`, the kernel invokes it **before** any rc file has run. The CLI's `#!/usr/bin/env node` shebang then fails with `env: node: No such file or directory` in environments where node lives in an nvm path that is only added to `PATH` by `.bashrc`/`.zshrc`.
 
   Fixes:
-
   - New `packages/apes/scripts/ape-shell-wrapper.sh` bash wrapper that hoists Homebrew / `/usr/local/bin` / nvm onto `PATH` before exec-ing node with the real `cli.js`. Uses `exec -a "$0"` to preserve the original argv[0] (including the leading dash login/sshd prepend to signal "login shell") so interactive-mode detection still works.
   - `rewriteApeShellArgs` now also accepts an optional `argv0` second parameter and honors `process.env.APES_SHELL_WRAPPER=1` as a detection signal. When either is set, invocation is recognized as ape-shell even though `argv[1]` is now the path to `cli.js` (not literal `ape-shell`).
   - `cli.ts` passes `process.argv0` through so the wrapper path sees login-shell dash detection correctly.
@@ -2365,7 +2295,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 - [#72](https://github.com/openape-ai/openape/pull/72) [`13d68b2`](https://github.com/openape-ai/openape/commit/13d68b298a855df201987dd09c8722a6ffd17f97) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(apes): E2E polish for interactive shell lifecycle (M7 of ape-shell interactive mode)
 
   Final polish of the interactive `ape-shell` REPL:
-
   - **Clean shutdown on SIGTERM / SIGHUP** — `gracefulShutdown` handler kills the bash child, closes the audit session, restores the terminal out of raw mode, and stops the REPL in one idempotent sweep. Previously a kill signal could leave the terminal in raw mode.
   - **Emergency TTY restore** — `process.on('exit', …)` handler restores stdin's raw mode flag even if a crash or unhandled exception short-circuits the normal cleanup.
   - **Clean teardown on success** — all signal handlers and the resize listener are unregistered in the `finally` block of `runInteractiveShell`, preventing listener leaks if the function is called more than once in a process.
@@ -2404,7 +2333,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 ### Minor Changes
 
 - Add `init`, `enroll`, and `dns-check` commands for 3-minute onboarding
-
   - `apes init --sp/--idp`: scaffold SP or IdP projects from GitHub templates via giget
   - `apes enroll`: agent enrollment with browser handoff and Ed25519 challenge polling
   - `apes dns-check <domain>`: validate DDISA DNS TXT records and verify IdP discovery

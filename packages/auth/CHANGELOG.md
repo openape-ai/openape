@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0
+
+### Minor Changes
+
+- [`1ce5fd6`](https://github.com/openape-ai/openape/commit/1ce5fd68d147967fbf5c30afed84d2f241bcfbab) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Account-recovery store + SimpleWebAuthn v13 adoption.
+  - Add `RecoveryToken` / `RecoveryStore` types + `InMemoryRecoveryStore`
+    for the 72h-mail-hold recovery flow ([#297](https://github.com/openape-ai/openape/issues/297)).
+  - Adopt `@simplewebauthn/server` v13: drop the removed `'indirect'`
+    attestation-conveyance value from `RPConfig.attestationType`, bump
+    `@simplewebauthn/types` to v12, and make `base64URLToUint8Array`
+    return `Uint8Array<ArrayBuffer>` for the tightened v13 credential
+    types ([#268](https://github.com/openape-ai/openape/issues/268)).
+
 ## 0.10.2
 
 ### Patch Changes
@@ -23,7 +36,6 @@
   **`@openape/auth`** gains `AdminAllowlistStore` + `InMemoryAdminAllowlistStore`. `evaluatePolicy` accepts an optional 5th `options` arg with `adminAllowlistStore`; with no store wired up the mode keeps its previous safe-deny behaviour.
 
   **`@openape/nuxt-auth-idp`** wires the new store into `useIdpStores`, exposes a `defineAdminAllowlistStore(...)` registration helper, and adds two pluggable admin resolvers on `event.context`:
-
   - `openapeAdminResolver(event, email): boolean` — overrides the env-config email allowlist for `requireAdmin`.
   - `openapeRootAdminResolver(event, email): boolean` — strict tier for actions that must NOT be gateable by env config (e.g. operator promotion). New `requireRootAdmin` consults it; without one registered, fails closed.
 
@@ -41,7 +53,6 @@
 ### Patch Changes
 
 - [#309](https://github.com/openape-ai/openape/pull/309) [`779d8ae`](https://github.com/openape-ai/openape/commit/779d8ae64d00fb7ffaff89275c7c53df51308174) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Security hardening of the SP-metadata consent flow. SP-controlled fields fetched from `/.well-known/oauth-client-metadata` are rendered by the IdP's consent UI; without sanitization a malicious SP could ship `javascript:` URIs in `policy_uri` / `tos_uri` and turn the IdP origin into an XSS sandbox at click time.
-
   - `@openape/auth`: `createClientMetadataResolver` now normalizes every fetched (and operator-supplied) metadata document. URL fields (`logo_uri`, `policy_uri`, `tos_uri`, `client_uri`, `jwks_uri`) must parse as `http(s):` — anything else (`javascript:`, `data:`, `vbscript:`, …) is silently dropped. Display strings are length-capped (200 chars for names, 2000 for URLs).
   - `@openape/nuxt-auth-idp`: the reference consent page and account-connections list no longer forward or render `logo_uri`. SP-supplied images are an unsanitisable surface (browser image-parser CVEs, fingerprinting, brand-spoofing) — deployers who want logos must override the page with their own UI.
 
@@ -52,7 +63,6 @@
 - [`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Connected services UI — list & revoke approved SPs (#301 follow-up).
 
   Users running in DDISA `mode=allowlist-user` need to be able to walk back a previous consent. Without that, the consent screen was a one-way door.
-
   - **`@openape/auth.ConsentStore`**: extended with `list(userId)` and `revoke(userId, clientId)`. `InMemoryConsentStore` gets the implementations + 4 unit tests pinning sort-order, scoping, and idempotent revoke.
   - **`@openape/nuxt-auth-idp`**:
     - `defineConsentStore` factory + auto-imported `createConsentStore` (unstorage default for module/playground/tests).
@@ -71,7 +81,6 @@
   Previously: `evaluatePolicy` had the right logic for `allowlist-user`, but `authorize.get.ts` treated `decision === 'consent'` as an error (`access_denied` redirect) and used a `noopConsentStore` that always returned `hasConsent: false`. Net effect: any user with `mode=allowlist-user` in their `_ddisa.{domain}` TXT record was permanently locked out.
 
   Now:
-
   - **Real `ConsentStore`** backed by unstorage (default) with the same shape as `@openape/auth`'s in-memory implementation. Free-idp can swap in a Drizzle-backed version via the existing store-registry.
   - **`authorize.get.ts` routing fixed**: `'deny'` still produces `access_denied`; `'consent'` stashes the original /authorize state in the user's session under `pendingConsent` (with a one-shot CSRF token) and redirects to `/consent`.
   - **`/consent` page** (Vue) renders metadata-aware UI:
@@ -96,12 +105,10 @@
   This isn't a centralised registry — it's the same DNS/HTTP-discoverable pattern DDISA uses for IdPs. SP is source-of-truth for its own callbacks; IdP fetches and validates.
 
   Implementation:
-
   - **`@openape/auth`**: new `createClientMetadataResolver()` fetches and caches SP metadata (300s TTL, parallel to DDISA DNS cache). Falls back to legacy `/.well-known/sp-manifest.json` per the spec's migration note. New `validateRedirectUri()` does strict-equality matching (no path-prefix, no wildcards — RFC 6749 §3.1.2.2 + OAuth 2.0 Security BCP).
   - **`@openape/nuxt-auth-idp`**: `/authorize` calls the resolver before issuing a code; rejects with 400 on mismatch.
 
   **Rollout-safe defaults**:
-
   - `spMetadataMode: 'permissive'` (default) tolerates unresolvable SP metadata so existing SPs keep working while they catch up. Explicit redirect_uri MISMATCH is always rejected though — permissive only forgives missing metadata.
   - `spMetadataMode: 'strict'` once all SPs publish: also rejects unresolvable.
   - Native CLIs (RFC 8252 public clients) without a domain go through a static `publicClients` map — `apes-cli` registered for the `localhost:9876` callback.
@@ -115,7 +122,6 @@
 ### Patch Changes
 
 - [`8271991`](https://github.com/openape-ai/openape/commit/8271991f42d18a32b8dfd4e7306f6dd294d3a286) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Bundle of free-idp hardening fixes from the 2026-05-04 audit (closes #292, #293, #294, #295, #296).
-
   - **#292**: extend `RE_AUTH_PATHS` rate-limit regex to cover `/api/{enroll,register,my-agents,push,users}` — paths that were uncapped for brute-force attacks.
   - **#293**: defence-in-depth in `apps/openape-free-idp/server/api/test/session.post.ts` — additional `NODE_ENV !== 'production'` gate, plus `crypto.timingSafeEqual` instead of `!==` on the management-token compare.
   - **#294**: `enroll.post.ts` derives agent emails with an 8-hex-char hash of the canonical owner email, eliminating the dot-collapse / sanitise collisions where `foo@example.com` and `foo@example_com` mapped to the same agent suffix.
