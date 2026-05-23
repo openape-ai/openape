@@ -23,11 +23,17 @@ intent: |
   (auth, secrets, migrations, deploy/CI config, payments, data deletion),
   say so explicitly — it will require human approval.
 
+# A deployment targets exactly one forge (the `forge` param), so only the
+# matching token is needed — both are optional and the deploy binds
+# whichever you supply via --secret. GitHub → GH_TOKEN, Azure DevOps →
+# AZ_PAT. Other forges: add the capability your forge adapter reads.
 capabilities:
   - env: GH_TOKEN
     prefer: local
+    optional: true
   - env: AZ_PAT
     prefer: local
+    optional: true
 
 params:
   - name: repo

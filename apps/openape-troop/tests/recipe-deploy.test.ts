@@ -47,6 +47,34 @@ describe('buildDeployPlan', () => {
     expect(plan.schedules[1]!.userPrompt).toMatch(/Run your configured task/)
   })
 
+  it('excludes optional capabilities from requiredCapabilities (multi-forge recipe)', () => {
+    const manifest = `
+name: coding-agent
+kind: agent
+intent: Code on {{repo}}.
+capabilities:
+  - env: GH_TOKEN
+    optional: true
+  - env: AZ_PAT
+    optional: true
+  - env: LLM_API_KEY
+params:
+  - name: repo
+    type: string
+    required: true
+schedules:
+  - cron: "*/10 * * * *"
+`
+    const r = parseRecipe(manifest)
+    if (!r.ok) throw new Error(r.reason)
+    const mat = materializeRecipe(r.value, { repo: 'x/y' })
+    if (!mat.ok) throw new Error(mat.reason)
+    const plan = buildDeployPlan(r.value, mat.value)
+    // Only the non-optional capability is required at deploy time; the
+    // forge tokens are offered, not demanded.
+    expect(plan.requiredCapabilities).toEqual(['LLM_API_KEY'])
+  })
+
   it('honours an agent-name override + additive userAddendum (recipe is additive to a named spawn)', () => {
     const rec = recipe()
     const mat = materializeRecipe(rec, { topic: 'AI agents' })

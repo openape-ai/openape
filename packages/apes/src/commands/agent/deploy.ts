@@ -26,10 +26,28 @@ export function missingCapabilities(required: string[], provided: Record<string,
   return required.filter(env => !(env in provided))
 }
 
-function asArray(v: unknown): string[] {
-  if (Array.isArray(v)) return v as string[]
-  if (typeof v === 'string' && v.length > 0) return [v]
-  return []
+// citty 0.2.2 coerces a repeated `type:'string'` flag to its LAST value
+// only (`--param a=1 --param b=2` → "b=2"), silently dropping earlier
+// occurrences. Collect every occurrence straight from the raw argv so
+// multiple --param / --secret flags all survive. Handles both
+// `--flag value` and `--flag=value` forms.
+export function collectFlag(rawArgs: string[], name: string): string[] {
+  const out: string[] = []
+  const long = `--${name}`
+  for (let i = 0; i < rawArgs.length; i++) {
+    const a = rawArgs[i]!
+    if (a === long) {
+      const v = rawArgs[i + 1]
+      if (v !== undefined && !v.startsWith('--')) {
+        out.push(v)
+        i++
+      }
+    }
+    else if (a.startsWith(`${long}=`)) {
+      out.push(a.slice(long.length + 1))
+    }
+  }
+  return out
 }
 
 interface DeployResponse {
@@ -63,11 +81,11 @@ export const deployAgentCommand = defineCommand({
     'host-id': { type: 'string', description: 'Target nest host_id (default: first connected)' },
     json: { type: 'boolean', description: 'Machine-readable output, no prompts' },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const repoRef = args.repo as string
     if (!repoRef) throw new CliError('usage: apes agent deploy <repo>@<ref> [--param k=v] [--secret ENV=val]')
-    const params = parseKeyValues(asArray(args.param))
-    const secrets = parseKeyValues(asArray(args.secret))
+    const params = parseKeyValues(collectFlag(rawArgs, 'param'))
+    const secrets = parseKeyValues(collectFlag(rawArgs, 'secret'))
     const json = !!args.json
 
     const token = (await ensureFreshIdpAuth()).access_token
@@ -103,8 +121,10 @@ export const deployAgentCommand = defineCommand({
 
     // Wait for the agent to come online (spawn-result), then bind the
     // sealed secrets. Binding 409s until the agent's first sync reports
-    // its X25519 pubkey, so we retry with backoff.
-    if (deploy.required_capabilities.length > 0) {
+    // its X25519 pubkey, so we retry with backoff. We bind whenever there
+    // are secrets to seal — including optional capabilities the caller
+    // supplied via --secret, which never appear in required_capabilities.
+    if (Object.keys(secrets).length > 0) {
       if (!json) consola.start('Waiting for the agent to come online…')
       let online = false
       for (let i = 0; i < 90 && !online; i++) {
