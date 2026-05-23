@@ -24,6 +24,13 @@ const capabilitySchema = z.object({
   // broker and owns the lifecycle; `prefer` is a hint only.
   env: z.string().min(1).regex(/^[A-Z][A-Z0-9_]*$/, 'capability env must be UPPER_SNAKE_CASE'),
   prefer: z.enum(['proxy', 'local']).optional(),
+  // A recipe that supports several backends (e.g. a coding agent that can
+  // target different forges) declares a capability per backend but needs
+  // only the one matching the deploy. Optional capabilities are offered,
+  // never required: deploy binds them when supplied and skips them
+  // otherwise. The agent surfaces a clear runtime error if it later needs
+  // a credential that was never bound.
+  optional: z.boolean().default(false),
   description: z.string().optional(),
 })
 
