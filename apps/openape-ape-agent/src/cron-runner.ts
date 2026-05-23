@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeConfig } from '@openape/apes'
-import { runLoop, taskTools } from '@openape/apes'
+import { runApeShell, runLoop, taskTools } from '@openape/apes'
 import type { ChatApi } from './chat-api'
 
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
@@ -39,6 +39,12 @@ interface TaskSpec {
   tools: string[]
   maxSteps: number
   enabled: boolean
+  // Deterministic tasks (e.g. the coding-agent's issue poll): when set,
+  // the runner executes this command via the gated ape-shell path
+  // instead of an LLM runLoop — no model round-trip just to fire a fixed
+  // command. Used by the coding-agent recipe's schedule to run
+  // `apes agents code --poll-label …`.
+  command?: string
 }
 
 interface CronExpr {
@@ -293,8 +299,33 @@ export class CronRunner {
   private async runTask(
     sessionId: string,
     systemPrompt: string,
-    spec: { tools: string[], maxSteps: number, userPrompt: string },
+    spec: { tools: string[], maxSteps: number, userPrompt: string, command?: string },
   ): Promise<void> {
+    // Deterministic command task (e.g. coding-agent poll) — run it via
+    // the gated ape-shell path, no LLM round-trip. The command itself
+    // (apes agents code …) drives the LLM coding loop internally.
+    if (spec.command) {
+      try {
+        const res = await runApeShell(spec.command, 30 * 60 * 1000)
+        const turn = this.pending.get(sessionId)
+        if (!turn) return
+        turn.status = res.exit_code === 0 ? 'ok' : 'error'
+        turn.accumulated = `\`${spec.command}\` exited ${res.exit_code}\n\n${(res.stdout || res.stderr).slice(0, 4000)}`
+        await this.finaliseRun(turn, 1)
+        await this.postResult(sessionId, turn)
+        this.pending.delete(sessionId)
+      }
+      catch (err) {
+        const turn = this.pending.get(sessionId)
+        if (!turn) return
+        turn.status = 'error'
+        turn.accumulated = `(command error: ${err instanceof Error ? err.message : String(err)})`
+        await this.finaliseRun(turn, 0)
+        await this.postResult(sessionId, turn)
+        this.pending.delete(sessionId)
+      }
+      return
+    }
     try {
       const result = await runLoop({
         config: this.deps.runtimeConfig,
