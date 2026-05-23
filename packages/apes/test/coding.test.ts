@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge, shq } from '../src/lib/coding/forge'
-import { classifyChange, decideMerge, DEFAULT_MERGE_POLICY, globToRegExp, matchesAny } from '../src/lib/coding/merge-policy'
+import { classifyChange, decideMerge, globToRegExp, matchesAny, SECURE_DEFAULT_POLICY } from '../src/lib/coding/merge-policy'
+import type { MergePolicy } from '../src/lib/coding/merge-policy'
 import { buildBranchName, buildTaskPrompt, slugify } from '../src/lib/coding/issue-task'
 import { BudgetExceededError, BudgetTracker } from '../src/lib/coding/budget'
 import { gateMerge } from '../src/lib/coding/review-gate'
@@ -60,26 +61,42 @@ describe('forge: command builders', () => {
 })
 
 describe('merge-policy', () => {
+  // A repo's OWN policy (would live in its .openape/coding.json) — the
+  // library ships no opinionated path lists.
+  const POL: MergePolicy = {
+    autoMergeEnabled: true,
+    autoPaths: ['**/*.md', '.changeset/**'],
+    riskPaths: ['**/auth/**', 'packages/proxy/**'],
+  }
+
   it('globToRegExp handles ** / * / literals', () => {
     expect(globToRegExp('**/auth/**').test('packages/x/auth/login.ts')).toBe(true)
     expect(globToRegExp('**/*.md').test('docs/readme.md')).toBe(true)
     expect(globToRegExp('packages/proxy/**').test('packages/proxy/src/a.ts')).toBe(true)
     expect(globToRegExp('**/*.md').test('src/a.ts')).toBe(false)
-    expect(matchesAny('a/b/auth/c.ts', DEFAULT_MERGE_POLICY.riskPaths)).toBe(true)
+    expect(matchesAny('a/b/auth/c.ts', POL.riskPaths)).toBe(true)
   })
 
-  it('classifies chore / code / risk', () => {
-    expect(classifyChange(['docs/x.md', '.changeset/y.md'])).toBe('chore')
-    expect(classifyChange(['packages/apes/src/lib/coding/verify.ts'])).toBe('code')
-    expect(classifyChange(['packages/auth/src/x.ts'])).toBe('risk')
-    expect(classifyChange(['docs/x.md', 'packages/auth/src/x.ts'])).toBe('risk') // risk wins
-    expect(classifyChange([])).toBe('code') // empty = conservative
+  it('classifies chore / code / risk against the repo policy', () => {
+    expect(classifyChange(['docs/x.md', '.changeset/y.md'], POL)).toBe('chore')
+    expect(classifyChange(['packages/apes/src/lib/coding/verify.ts'], POL)).toBe('code')
+    expect(classifyChange(['packages/auth/src/x.ts'], POL)).toBe('risk')
+    expect(classifyChange(['docs/x.md', 'packages/auth/src/x.ts'], POL)).toBe('risk') // risk wins
+    expect(classifyChange([], POL)).toBe('code') // empty = conservative
   })
 
-  it('decideMerge maps class → gates', () => {
-    expect(decideMerge(['docs/a.md'])).toMatchObject({ classification: 'chore', autoMerge: true, needsReview: false, needsHuman: false })
-    expect(decideMerge(['src/a.ts'])).toMatchObject({ classification: 'code', autoMerge: true, needsReview: true, needsHuman: false })
-    expect(decideMerge(['packages/proxy/x.ts'])).toMatchObject({ classification: 'risk', autoMerge: false, needsHuman: true })
+  it('secure default: no policy → nothing auto-merges, human required', () => {
+    // SECURE_DEFAULT_POLICY has autoMergeEnabled:false and no globs.
+    expect(decideMerge(['docs/a.md'])).toMatchObject({ autoMerge: false, needsHuman: true })
+    expect(decideMerge(['src/a.ts'])).toMatchObject({ autoMerge: false, needsHuman: true })
+    expect(SECURE_DEFAULT_POLICY.autoMergeEnabled).toBe(false)
+    expect(SECURE_DEFAULT_POLICY.riskPaths).toEqual([])
+  })
+
+  it('decideMerge maps class → gates when the repo opts in', () => {
+    expect(decideMerge(['docs/a.md'], POL)).toMatchObject({ classification: 'chore', autoMerge: true, needsReview: false, needsHuman: false })
+    expect(decideMerge(['src/a.ts'], POL)).toMatchObject({ classification: 'code', autoMerge: true, needsReview: true, needsHuman: false })
+    expect(decideMerge(['packages/proxy/x.ts'], POL)).toMatchObject({ classification: 'risk', autoMerge: false, needsHuman: true })
   })
 })
 
@@ -115,21 +132,31 @@ describe('budget', () => {
 })
 
 describe('review-gate', () => {
+  const POL: MergePolicy = {
+    autoMergeEnabled: true,
+    autoPaths: ['**/*.md'],
+    riskPaths: ['**/auth/**'],
+  }
   const approve = async () => ({ approved: true, reason: 'lgtm' })
   const block = async () => ({ approved: false, reason: 'nope' })
 
   it('risk → human, no reviewer call', async () => {
-    const out = await gateMerge(decideMerge(['packages/auth/x.ts']), { prRef: 1, diff: '' }, approve)
+    const out = await gateMerge(decideMerge(['packages/auth/x.ts'], POL), { prRef: 1, diff: '' }, approve)
     expect(out).toMatchObject({ armMerge: false, awaitingHuman: true })
   })
 
   it('chore → arm without reviewer', async () => {
-    const out = await gateMerge(decideMerge(['a.md']), { prRef: 1, diff: '' }, block)
+    const out = await gateMerge(decideMerge(['a.md'], POL), { prRef: 1, diff: '' }, block)
     expect(out.armMerge).toBe(true)
   })
 
   it('code → reviewer gates', async () => {
-    expect((await gateMerge(decideMerge(['src/a.ts']), { prRef: 1, diff: 'd' }, approve)).armMerge).toBe(true)
-    expect((await gateMerge(decideMerge(['src/a.ts']), { prRef: 1, diff: 'd' }, block)).armMerge).toBe(false)
+    expect((await gateMerge(decideMerge(['src/a.ts'], POL), { prRef: 1, diff: 'd' }, approve)).armMerge).toBe(true)
+    expect((await gateMerge(decideMerge(['src/a.ts'], POL), { prRef: 1, diff: 'd' }, block)).armMerge).toBe(false)
+  })
+
+  it('secure default (no repo policy) → human even for chore', async () => {
+    const out = await gateMerge(decideMerge(['a.md']), { prRef: 1, diff: '' }, approve)
+    expect(out).toMatchObject({ armMerge: false, awaitingHuman: true })
   })
 })
