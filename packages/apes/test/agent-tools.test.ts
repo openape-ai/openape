@@ -8,7 +8,7 @@ import { _internal as wtInternal } from '../src/lib/agent-tools/git-worktree'
 
 describe('tool registry', () => {
   it('TOOLS has the expected keys', () => {
-    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'file.edit', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search', 'bash', 'git.worktree']) {
+    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'file.edit', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search', 'bash', 'git.worktree', 'verify', 'forge.pr.create', 'forge.pr.merge', 'forge.pr.status', 'forge.issue.get']) {
       expect(TOOLS[name]).toBeDefined()
     }
   })

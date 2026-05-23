@@ -72,6 +72,36 @@
       "description": "Manage isolated git worktrees for coding tasks: create (clone-if-needed + worktree on a new branch under ~/work/<task_id>), remove, list. Git operations go through the DDISA grant cycle (git-shape).",
       "inputs": "{ action: 'create'|'remove'|'list', repo?: string, task_id?: string, branch?: string }",
       "risk": "high"
+    },
+    {
+      "name": "verify",
+      "description": "Run the verification command (tests/build/lint) in a worktree and report pass/fail. The coding loop must not open or merge a PR on failure. Gated like bash.",
+      "inputs": "{ cwd: string, command: string, timeout_ms?: number }",
+      "risk": "medium"
+    },
+    {
+      "name": "forge.pr.create",
+      "description": "Open a pull request on GitHub (gh) or Azure DevOps (az). Provider via `forge` or auto-detected from `remote`. Gated.",
+      "inputs": "{ forge?: 'github'|'azure', remote?: string, title: string, body: string, head: string, base?: string }",
+      "risk": "high"
+    },
+    {
+      "name": "forge.pr.merge",
+      "description": "Merge a PR or arm merge-when-green (auto). Never bypasses required checks — branch protection is the server-side gate. Gated.",
+      "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string, auto?: boolean, squash?: boolean, delete_branch?: boolean }",
+      "risk": "high"
+    },
+    {
+      "name": "forge.pr.status",
+      "description": "Fetch a PR's state, checks, and review decision. Gated (read).",
+      "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string }",
+      "risk": "low"
+    },
+    {
+      "name": "forge.issue.get",
+      "description": "Fetch an issue (GitHub) or work-item (Azure) — title, body, labels. Gated (read).",
+      "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string }",
+      "risk": "low"
     }
   ]
 }
