@@ -5,14 +5,16 @@ import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge 
 
 // Resolve the forge from an explicit param or a remote URL. The
 // recipe/orchestration usually passes `forge` directly; `remote` is the
-// auto-detect fallback (git remote get-url origin).
+// auto-detect fallback (git remote get-url origin). Any registered
+// adapter id is accepted (github/azure built-in, plus anything added via
+// registerForge) — getForge() validates downstream.
 function resolveForge(a: { forge?: unknown, remote?: unknown }): Forge {
-  if (a.forge === 'github' || a.forge === 'azure') return a.forge
+  if (typeof a.forge === 'string' && a.forge !== '') return a.forge
   if (typeof a.remote === 'string') return detectForge(a.remote)
-  throw new Error('provide forge ("github"|"azure") or a remote URL to detect it')
+  throw new Error('provide a forge id (e.g. github, azure, or a registered adapter) or a remote URL to detect it')
 }
 
-const forgeParam = { type: 'string', enum: ['github', 'azure'], description: 'Target forge. Omit to auto-detect from `remote`.' }
+const forgeParam = { type: 'string', description: 'Target forge id (github, azure, or a registered adapter). Omit to auto-detect from `remote`.' }
 const remoteParam = { type: 'string', description: 'git remote URL — used to auto-detect the forge when `forge` is omitted.' }
 
 export const forgeTools: ToolDefinition[] = [

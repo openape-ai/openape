@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge, shq } from '../src/lib/coding/forge'
+import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge, listForges, registerForge, shq } from '../src/lib/coding/forge'
+import type { ForgeAdapter } from '../src/lib/coding/forge'
 import { classifyChange, decideMerge, globToRegExp, matchesAny, SECURE_DEFAULT_POLICY } from '../src/lib/coding/merge-policy'
 import type { MergePolicy } from '../src/lib/coding/merge-policy'
 import { buildBranchName, buildTaskPrompt, slugify } from '../src/lib/coding/issue-task'
@@ -7,17 +8,43 @@ import { BudgetExceededError, BudgetTracker } from '../src/lib/coding/budget'
 import { gateMerge } from '../src/lib/coding/review-gate'
 
 describe('forge: detect + escape', () => {
-  it('detects github / azure / rejects unknown', () => {
+  it('detects built-in github / azure', () => {
     expect(detectForge('https://github.com/openape-ai/openape.git')).toBe('github')
     expect(detectForge('git@github.com:openape-ai/openape.git')).toBe('github')
     expect(detectForge('https://dev.azure.com/org/proj/_git/repo')).toBe('azure')
     expect(detectForge('https://org.visualstudio.com/proj/_git/repo')).toBe('azure')
-    expect(() => detectForge('https://gitlab.com/x/y.git')).toThrow(/unsupported forge/)
+  })
+
+  it('unknown remote → helpful error listing registered forges (not a hard 2-provider lock)', () => {
+    expect(() => detectForge('https://example.org/x/y.git')).toThrow(/no forge adapter matches/)
+    expect(() => detectForge('https://example.org/x/y.git')).toThrow(/registerForge/)
   })
 
   it('shq escapes embedded single quotes safely', () => {
     expect(shq('plain')).toBe('\'plain\'')
     expect(shq('it\'s')).toBe('\'it\'\\\'\'s\'')
+  })
+})
+
+describe('forge: extensibility (Bitbucket/GitLab/Gitea not locked out)', () => {
+  it('registerForge adds a custom forge — detect + build work', () => {
+    const bitbucket: ForgeAdapter = {
+      id: 'bitbucket',
+      matchesRemote: url => /bitbucket\.org/i.test(url),
+      prCreate: i => `bb pr create --title ${shq(i.title)} --source ${shq(i.head)}`,
+      prMerge: i => `bb pr merge ${String(i.ref)}`,
+      prStatus: ref => `bb pr show ${String(ref)}`,
+      issueGet: ref => `bb issue show ${String(ref)}`,
+    }
+    registerForge(bitbucket)
+    expect(listForges()).toContain('bitbucket')
+    expect(detectForge('https://bitbucket.org/team/repo.git')).toBe('bitbucket')
+    expect(buildPrCreate({ forge: 'bitbucket', title: 'T', body: 'B', head: 'feat/x' }))
+      .toBe('bb pr create --title \'T\' --source \'feat/x\'')
+  })
+
+  it('unknown forge id → error names how to add one', () => {
+    expect(() => buildPrStatus('gitea', 1)).toThrow(/unknown forge 'gitea'/)
   })
 })
 
