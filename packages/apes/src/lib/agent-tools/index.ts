@@ -13,6 +13,7 @@
 
 import { bashTools } from './bash'
 import { fileTools } from './file'
+import { gitWorktreeTools } from './git-worktree'
 import { httpTools } from './http'
 import { mailTools } from './mail'
 import { tasksTools } from './tasks'
@@ -34,6 +35,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   ...tasksTools,
   ...mailTools,
   ...bashTools,
+  ...gitWorktreeTools,
 ]
 
 export const TOOLS: Record<string, ToolDefinition> = Object.fromEntries(

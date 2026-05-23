@@ -69,6 +69,53 @@ export const fileTools: ToolDefinition[] = [
       return { path: p, bytes: Buffer.byteLength(a.content, 'utf8') }
     },
   },
+  {
+    name: 'file.edit',
+    description: 'Replace an exact substring in a file under the agent\'s home directory. Prefer this over file.write for edits — it touches only the changed region instead of rewriting the whole file. `old_string` must appear exactly once unless `replace_all` is true. Path traversal blocked, 1MB max.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Path relative to $HOME (or absolute under $HOME).' },
+        old_string: { type: 'string', description: 'Exact text to replace. Include enough surrounding context to be unique unless replace_all is set.' },
+        new_string: { type: 'string', description: 'Replacement text. Must differ from old_string.' },
+        replace_all: { type: 'boolean', description: 'Replace every occurrence instead of requiring a unique match. Default false.' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    },
+    execute: async (args: unknown) => {
+      const a = args as { path?: unknown, old_string?: unknown, new_string?: unknown, replace_all?: unknown }
+      if (typeof a.old_string !== 'string' || a.old_string === '') {
+        throw new Error('old_string must be a non-empty string')
+      }
+      if (typeof a.new_string !== 'string') {
+        throw new TypeError('new_string must be a string')
+      }
+      if (a.old_string === a.new_string) {
+        throw new Error('old_string and new_string are identical — nothing to change')
+      }
+      const replaceAll = a.replace_all === true
+      const p = jailPath(a.path)
+      const before = readFileSync(p, 'utf8')
+
+      const occurrences = before.split(a.old_string).length - 1
+      if (occurrences === 0) {
+        throw new Error('old_string not found in file')
+      }
+      if (occurrences > 1 && !replaceAll) {
+        throw new Error(`old_string occurs ${occurrences} times — pass replace_all:true or add surrounding context to make it unique`)
+      }
+
+      const after = replaceAll
+        ? before.split(a.old_string).join(a.new_string)
+        : before.replace(a.old_string, a.new_string)
+
+      if (Buffer.byteLength(after, 'utf8') > MAX_BYTES) {
+        throw new Error(`result exceeds ${MAX_BYTES} byte cap`)
+      }
+      writeFileSync(p, after, { encoding: 'utf8' })
+      return { path: p, replacements: replaceAll ? occurrences : 1 }
+    },
+  },
 ]
 
 export const _internal = { jailPath }
