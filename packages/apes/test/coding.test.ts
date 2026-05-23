@@ -6,6 +6,7 @@ import type { MergePolicy } from '../src/lib/coding/merge-policy'
 import { buildBranchName, buildTaskPrompt, slugify } from '../src/lib/coding/issue-task'
 import { BudgetExceededError, BudgetTracker } from '../src/lib/coding/budget'
 import { gateMerge } from '../src/lib/coding/review-gate'
+import { extractWorkflowPaths, parseCodeowners } from '../src/lib/coding/derive-policy'
 
 describe('forge: detect + escape', () => {
   it('detects built-in github / azure', () => {
@@ -124,6 +125,55 @@ describe('merge-policy', () => {
     expect(decideMerge(['docs/a.md'], POL)).toMatchObject({ classification: 'chore', autoMerge: true, needsReview: false, needsHuman: false })
     expect(decideMerge(['src/a.ts'], POL)).toMatchObject({ classification: 'code', autoMerge: true, needsReview: true, needsHuman: false })
     expect(decideMerge(['packages/proxy/x.ts'], POL)).toMatchObject({ classification: 'risk', autoMerge: false, needsHuman: true })
+  })
+})
+
+describe('derive-policy: signals over hand-maintained lists', () => {
+  it('extracts deploy-workflow paths (block form), ignores paths-ignore', () => {
+    const wf = [
+      'name: Deploy',
+      'on:',
+      '  push:',
+      '    branches: [main]',
+      '    paths:',
+      '      - \'apps/openape-free-idp/**\'',
+      '      - packages/auth/**',
+      '    paths-ignore:',
+      '      - \'**/*.md\'',
+      'jobs:',
+      '  deploy:',
+      '    runs-on: ubuntu',
+    ].join('\n')
+    const paths = extractWorkflowPaths(wf)
+    expect(paths).toContain('apps/openape-free-idp/**')
+    expect(paths).toContain('packages/auth/**')
+    expect(paths).not.toContain('**/*.md') // paths-ignore is not a risk filter
+  })
+
+  it('extracts inline-array paths', () => {
+    expect(extractWorkflowPaths('    paths: [\'apps/x/**\', "packages/y/**"]'))
+      .toEqual(['apps/x/**', 'packages/y/**'])
+  })
+
+  it('parses CODEOWNERS patterns (dir → **, root-anchor stripped, comments/owners skipped)', () => {
+    const co = [
+      '# owners',
+      '/packages/auth/ @team-sec',
+      'apps/proxy/** @ops',
+      '*.tf @infra',
+      '@just-an-owner-line',
+      '',
+    ].join('\n')
+    const paths = parseCodeowners(co)
+    expect(paths).toContain('packages/auth/**')
+    expect(paths).toContain('apps/proxy/**')
+    expect(paths).toContain('*.tf')
+    expect(paths).not.toContain('@just-an-owner-line')
+  })
+
+  it('derived globs feed straight into classifyChange as risk', () => {
+    const derived = extractWorkflowPaths('    paths:\n      - \'apps/free-idp/**\'')
+    expect(classifyChange(['apps/free-idp/server/x.ts'], { autoMergeEnabled: true, autoPaths: [], riskPaths: derived })).toBe('risk')
   })
 })
 
