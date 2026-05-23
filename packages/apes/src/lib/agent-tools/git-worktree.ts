@@ -1,7 +1,30 @@
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
+import process from 'node:process'
 import type { ToolDefinition } from './index'
 import { runApeShell } from './ape-shell-exec'
+
+// Worktree + clone roots. Default to ~/work and ~/repos but are
+// configurable per deployment via OPENAPE_CODING_WORK_DIR /
+// OPENAPE_CODING_REPOS_DIR (set by the recipe/nest). Must stay under
+// $HOME — the OS-confinement boundary the whole coding sandbox relies on.
+function jailedRoot(envVar: string, fallbackName: string): string {
+  const home = homedir()
+  const raw = process.env[envVar]
+  const dir = raw ? resolve(raw) : resolve(home, fallbackName)
+  if (dir !== home && !dir.startsWith(`${home}/`)) {
+    throw new Error(`${envVar} (${dir}) must resolve inside the agent's home`)
+  }
+  return dir
+}
+
+function workRoot(): string {
+  return jailedRoot('OPENAPE_CODING_WORK_DIR', 'work')
+}
+
+function reposRoot(): string {
+  return jailedRoot('OPENAPE_CODING_REPOS_DIR', 'repos')
+}
 
 // Worktree lifecycle for the coding agent. All git invocations go
 // through the gated ape-shell path (runApeShell) — `git worktree add`
@@ -48,7 +71,7 @@ export function resolveRepo(repo: unknown): { source: string; baseDir: string; i
     const parts = tail.split(/[/:]/).filter(Boolean).slice(-2)
     const base = parts.join('-').replace(/[^\w.-]/g, '')
     if (!base) throw new Error('could not derive a clone name from repo URL')
-    return { source: repo, baseDir: resolve(home, 'repos', base), isUrl: true }
+    return { source: repo, baseDir: resolve(reposRoot(), base), isUrl: true }
   }
   // Local path — jail under $HOME.
   const candidate = repo.startsWith('~/') ? resolve(home, repo.slice(2)) : resolve(home, repo)
@@ -59,7 +82,7 @@ export function resolveRepo(repo: unknown): { source: string; baseDir: string; i
 }
 
 export function worktreePathFor(taskId: string): string {
-  return resolve(homedir(), 'work', assertTaskId(taskId))
+  return resolve(workRoot(), assertTaskId(taskId))
 }
 
 const q = (s: string): string => `'${s}'` // safe: callers validate charset first
@@ -73,7 +96,7 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
     ? `if [ ! -d ${q(baseDir)}/.git ]; then git clone ${q(source)} ${q(baseDir)}; fi`
     : `test -d ${q(baseDir)}/.git`
   return [
-    `mkdir -p ${q(resolve(homedir(), 'repos'))} ${q(resolve(homedir(), 'work'))}`,
+    `mkdir -p ${q(reposRoot())} ${q(workRoot())}`,
     clone,
     `git -C ${q(baseDir)} fetch --quiet || true`,
     `git -C ${q(baseDir)} worktree add -b ${q(br)} ${q(wt)}`,
@@ -89,8 +112,7 @@ export function buildRemoveCommand(repo: unknown, taskId: string): string {
 }
 
 export function buildListCommand(): string {
-  const work = resolve(homedir(), 'work')
-  return `ls -1 ${q(work)} 2>/dev/null || true`
+  return `ls -1 ${q(workRoot())} 2>/dev/null || true`
 }
 
 export const gitWorktreeTools: ToolDefinition[] = [
