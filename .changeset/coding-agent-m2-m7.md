@@ -12,3 +12,5 @@ Coding-agent pipeline (M2–M7): a `coding/` library + gated tools that take the
 - **M7 review-gate** (`coding/review-gate.ts`) — gates auto-merge on an injected reviewer-agent verdict for code-class changes.
 
 All shell-touching paths route through the shared gated `runApeShell`. Pure logic is unit-tested; orchestration into the runLoop/cron + the live reviewer-agent dispatch is the integration layer.
+
+- **No baked policy anywhere**: branch naming is a configurable template (`buildBranchName(issue, naming)`), the task prompt is composed from the recipe persona (`buildTaskPrompt(issue, { persona, instructions })`), merge strategy is opt-in (no forced `--squash`), and the worktree/clone roots are env-configurable (`OPENAPE_CODING_WORK_DIR`/`OPENAPE_CODING_REPOS_DIR`, default ~/work + ~/repos, jailed to $HOME).

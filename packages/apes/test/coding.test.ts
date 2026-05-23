@@ -65,8 +65,11 @@ describe('forge: command builders', () => {
     expect(cmd).toContain('--target-branch \'main\'')
   })
 
-  it('gh pr merge: --auto + --squash by default', () => {
-    expect(buildPrMerge({ forge: 'github', ref: 123, auto: true })).toBe('gh pr merge \'123\' --squash --auto')
+  it('gh pr merge: no strategy flag unless squash:true (merge strategy is repo policy)', () => {
+    // Default: no --squash — the repo's own default merge strategy applies.
+    expect(buildPrMerge({ forge: 'github', ref: 123, auto: true })).toBe('gh pr merge \'123\' --auto')
+    // Opt in explicitly.
+    expect(buildPrMerge({ forge: 'github', ref: 123, auto: true, squash: true })).toBe('gh pr merge \'123\' --squash --auto')
     expect(buildPrMerge({ forge: 'github', ref: 'feat/x', deleteBranch: true })).toContain('--delete-branch')
   })
 
@@ -200,11 +203,28 @@ describe('issue-task', () => {
     expect(() => buildBranchName({ number: 'abc', title: 'x' })).toThrow(/issue number required/)
   })
 
+  it('branch name follows a configurable template (not a baked convention)', () => {
+    expect(buildBranchName({ number: 42, title: 'Fix login' }, { template: '{type}-{number}', defaultType: 'bugfix' }))
+      .toBe('bugfix-42')
+    expect(buildBranchName({ number: 'AB#9', title: 'X' }, { template: 'feature/{number}-{slug}', defaultType: 'feature' }))
+      .toBe('feature/9-x')
+  })
+
   it('task prompt references the issue', () => {
     const p = buildTaskPrompt({ number: 42, title: 'Fix login', body: 'It breaks' })
     expect(p).toContain('#42')
     expect(p).toContain('It breaks')
     expect(p).toContain('open a PR')
+  })
+
+  it('task prompt is composed from the recipe persona, not a baked script', () => {
+    const p = buildTaskPrompt(
+      { number: 7, title: 'Add X' },
+      { persona: 'You are Linda, the IURIO release bot.', instructions: 'Custom: do the thing.' },
+    )
+    expect(p.startsWith('You are Linda, the IURIO release bot.')).toBe(true)
+    expect(p).toContain('Issue #7: Add X')
+    expect(p).toContain('Custom: do the thing.')
   })
 })
 

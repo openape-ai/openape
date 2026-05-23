@@ -51,6 +51,9 @@ export interface PrMergeInput {
   forge: Forge
   ref: string | number // GitHub: PR number or branch; others: PR/MR id
   auto?: boolean // arm "merge when checks pass" instead of immediate merge
+  // Merge strategy is REPO policy, not ours. Only force squash when the
+  // caller/recipe explicitly asks (squash:true); otherwise we add no
+  // strategy flag and the forge/repo default applies.
   squash?: boolean
   deleteBranch?: boolean
 }
@@ -81,7 +84,7 @@ const githubAdapter: ForgeAdapter = {
     const ref = String(i.ref)
     const refTok = ID_RE.test(ref) ? ref : assertBranch(ref)
     const parts = ['gh', 'pr', 'merge', shq(refTok)]
-    if (i.squash !== false) parts.push('--squash')
+    if (i.squash === true) parts.push('--squash')
     if (i.auto) parts.push('--auto')
     if (i.deleteBranch) parts.push('--delete-branch')
     return parts.join(' ')
@@ -108,7 +111,7 @@ const azureAdapter: ForgeAdapter = {
     const parts = ['az', 'repos', 'pr', 'update', '--id', id]
     if (i.auto) parts.push('--auto-complete', 'true')
     else parts.push('--status', 'completed')
-    if (i.squash !== false) parts.push('--merge-commit-message-style', 'squash')
+    if (i.squash === true) parts.push('--merge-commit-message-style', 'squash')
     if (i.deleteBranch) parts.push('--delete-source-branch', 'true')
     return parts.join(' ')
   },
