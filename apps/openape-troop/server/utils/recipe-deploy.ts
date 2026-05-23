@@ -69,7 +69,7 @@ export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, op
     systemPrompt: mat.intent,
     ...(opts.userAddendum ? { userAddendum: opts.userAddendum } : {}),
     schedules,
-    requiredCapabilities: recipe.capabilities.map(c => c.env),
+    requiredCapabilities: recipe.capabilities.filter(c => !c.optional).map(c => c.env),
   }
 }
 
