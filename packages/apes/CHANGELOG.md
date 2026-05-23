@@ -1,5 +1,24 @@
 # @openape/apes
 
+## 1.26.0
+
+### Minor Changes
+
+- [#466](https://github.com/openape-ai/openape/pull/466) [`50f9530`](https://github.com/openape-ai/openape/commit/50f9530194a5c5b0ecb8e765e7f607dc77374075) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Coding-agent integration layer (INT-1/INT-2): `coding/coding-loop.ts` orchestrator ties M1–M7 into one run (issue → worktree → LLM coding loop → verify → PR → policy-gated merge). The LLM does the coding (file.edit/bash/verify, NOT pr.merge); the orchestrator owns branch/worktree/PR/merge-gate and arms `--auto` (merge-when-green) only after the risk + reviewer gates pass. `coding/llm-review.ts` provides LLM-backed `RiskAssessorFn` + `ReviewerFn` (fail-safe: unsure → risky/blocked). All I/O injected → unit-tested without a live LLM or git. Plus a `coding-agent` example recipe (`examples/agent-recipes/coding-agent/`).
+
+- [#464](https://github.com/openape-ai/openape/pull/464) [`e6c122b`](https://github.com/openape-ai/openape/commit/e6c122bcbe432636d1a3a573bdf28b19ac4db835) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Coding-agent primitives (M1): `file.edit` (structured substring replace, OS-confined to $HOME, no grant) and `git.worktree` (create/remove/list isolated worktrees under ~/work via the gated ape-shell path). Extracts the shared `runApeShell` gated-exec helper so every shell-touching tool routes through the same DDISA grant + shapes checkpoint. Both tools registered in the runtime registry + tool-catalog.json.
+
+- [#465](https://github.com/openape-ai/openape/pull/465) [`35fd645`](https://github.com/openape-ai/openape/commit/35fd64528407b4a73253c4210ca99aab38aff0bf) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Coding-agent pipeline (M2–M7): a `coding/` library + gated tools that take the agent from issue to mergeable PR.
+  - **M2 verify** (`coding/verify.ts`, tool `verify`) — runs the recipe's test/build command in a worktree via the gated path; non-zero exit blocks the PR/merge phase.
+  - **M3 forge** (`coding/forge.ts`, tools `forge.pr.create|merge|status`, `forge.issue.get`) — provider-agnostic PR/issue ops via a **pluggable adapter registry**. GitHub (`gh`) + Azure DevOps (`az`) ship built-in; `registerForge()` adds any other (GitLab/Bitbucket/Gitea/self-hosted) — no closed enum locking teams out. Merge supports `--auto` (merge-when-green) and never bypasses required checks.
+  - **M4 issue→task** (`coding/issue-task.ts`) — pure branch-name + run-prompt derivation from an issue/work-item.
+  - **M5 merge-policy** (`coding/merge-policy.ts`) — classifies a diff (chore/code/risk) and decides the merge gate (B+C-Overlay). The library hard-codes ZERO risk knowledge. A change is risk only when (1) the AGENT judges it risky (`AgentRiskAssessment`, the primary semantic source — catches what no glob can), (2) the repo declares it in `.openape/coding.json`, or (3) it's derived from existing repo signals (deploy-workflow `paths:` filters + CODEOWNERS via `derive-policy.ts`). Secure by default: `autoMergeEnabled` false until the repo opts in.
+  - **M6 budget** (`coding/budget.ts`) — per-task token + wall-clock budget with a kill-switch.
+  - **M7 review-gate** (`coding/review-gate.ts`) — gates auto-merge on an injected reviewer-agent verdict for code-class changes.
+
+  All shell-touching paths route through the shared gated `runApeShell`. Pure logic is unit-tested; orchestration into the runLoop/cron + the live reviewer-agent dispatch is the integration layer.
+  - **No baked policy anywhere**: branch naming is a configurable template (`buildBranchName(issue, naming)`), the task prompt is composed from the recipe persona (`buildTaskPrompt(issue, { persona, instructions })`), merge strategy is opt-in (no forced `--squash`), and the worktree/clone roots are env-configurable (`OPENAPE_CODING_WORK_DIR`/`OPENAPE_CODING_REPOS_DIR`, default ~/work + ~/repos, jailed to $HOME).
+
 ## 1.25.1
 
 ### Patch Changes
