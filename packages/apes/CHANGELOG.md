@@ -1,5 +1,28 @@
 # @openape/apes
 
+## 1.28.1
+
+### Patch Changes
+
+- [#471](https://github.com/openape-ai/openape/pull/471) [`7c6c225`](https://github.com/openape-ai/openape/commit/7c6c225562cb01ccab42461d746f07b051fcaaac) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - feat(coding-agent): deterministic, headless cron poll via task `command`
+
+  Recipe schedules can now carry an explicit `command`. troop threads it
+  through materialize → deploy plan → the `tasks.command` column → the
+  agent's task sync, and the cron-runner executes it via the gated
+  ape-shell path with no LLM round-trip. Crucially, a command task fires
+  headless — it no longer requires an active owner chat room, so the
+  coding-agent's `*/10` poll runs autonomously (clone → worktree → edit →
+  verify → PR) without anyone accepting a contact in chat first.
+
+- [#470](https://github.com/openape-ai/openape/pull/470) [`3f7bc96`](https://github.com/openape-ai/openape/commit/3f7bc96af7d462eed3b9d97e97fc1d1efade8185) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(agent deploy): collect repeated `--param`/`--secret` flags from raw argv
+
+  citty 0.2.2 coerces a repeated `type:'string'` flag to its last value only,
+  so `apes agent deploy --param repo=… --param forge=…` silently dropped every
+  param but the last and troop rejected the deploy with "missing required
+  param". Deploy now parses all occurrences straight from `ctx.rawArgs`. Also
+  bind supplied secrets even when no capability is strictly required, so
+  optional capabilities passed via `--secret` are still sealed to the agent.
+
 ## 1.28.0
 
 ### Minor Changes
