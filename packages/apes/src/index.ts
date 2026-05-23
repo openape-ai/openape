@@ -62,3 +62,5 @@ export type {
 } from './lib/agent-runtime'
 export { taskTools, TOOLS } from './lib/agent-tools'
 export type { ToolDefinition } from './lib/agent-tools'
+export { runApeShell } from './lib/agent-tools/ape-shell-exec'
+export type { ApeShellResult } from './lib/agent-tools/ape-shell-exec'

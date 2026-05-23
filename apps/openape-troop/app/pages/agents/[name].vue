@@ -135,6 +135,38 @@ async function saveSystemPrompt() {
   }
 }
 
+// Set / update the recipe on this existing agent (INT-4). Re-materializes
+// <repo>@<ref> and applies its intent + toolset live (no respawn).
+const recipeRef = ref('')
+const recipeParams = ref('{}')
+const recipeSaving = ref(false)
+const recipeError = ref('')
+const recipeResult = ref<{ ref: string, required_capabilities: string[] } | null>(null)
+
+async function applyRecipe() {
+  if (!recipeRef.value.trim()) return
+  recipeSaving.value = true
+  recipeError.value = ''
+  recipeResult.value = null
+  try {
+    let params: Record<string, unknown> = {}
+    if (recipeParams.value.trim()) params = JSON.parse(recipeParams.value)
+    const res = await ($fetch as any)(`/api/agents/${agentName.value}/recipe`, {
+      method: 'POST',
+      body: { repo_ref: recipeRef.value.trim(), params },
+    })
+    recipeResult.value = { ref: res.ref, required_capabilities: res.required_capabilities ?? [] }
+    // Refresh the system prompt the editor shows.
+    if (detail.value) detail.value.agent.systemPrompt = (await ($fetch as any)(`/api/agents/${agentName.value}`)).agent.systemPrompt
+  }
+  catch (err: any) {
+    recipeError.value = err?.data?.statusMessage || err?.message || 'apply failed'
+  }
+  finally {
+    recipeSaving.value = false
+  }
+}
+
 // Agent-level tool whitelist editor — saved on toggle via PATCH
 // /api/agents/[name] with `tools: string[]`. The bridge re-reads the
 // list from agent.json on every new chat thread, so changes
@@ -607,6 +639,41 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               <div v-if="systemPromptDirty" class="flex justify-end mt-3">
                 <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
                   Save
+                </UButton>
+              </div>
+            </div>
+          </details>
+        </UCard>
+
+        <!-- Set / update the recipe on this existing agent (INT-4).
+             Re-materializes <repo>@<ref> and applies its intent + tools
+             live; the nest re-syncs within ~1s. -->
+        <UCard :ui="{ body: 'p-0' }">
+          <details class="group">
+            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 text-sm">
+                <UIcon name="i-lucide-package" class="text-muted size-4" />
+                <span class="font-medium">Recipe</span>
+              </div>
+              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border) space-y-3">
+              <UFormField label="Recipe ref" description="owner/repo@ref (pinned), e.g. openape-ai/coding-agent@main">
+                <UInput v-model="recipeRef" placeholder="openape-ai/coding-agent@main" class="w-full" :ui="{ base: 'w-full' }" />
+              </UFormField>
+              <UFormField label="Params (JSON)" description="e.g. {&quot;repo&quot;:&quot;https://github.com/openape-ai/openape.git&quot;,&quot;forge&quot;:&quot;github&quot;}">
+                <UTextarea v-model="recipeParams" :rows="2" class="w-full" :ui="{ base: 'w-full' }" />
+              </UFormField>
+              <UAlert v-if="recipeError" color="error" :title="recipeError" />
+              <UAlert
+                v-if="recipeResult"
+                color="success"
+                :title="`Applied ${recipeResult.ref}`"
+                :description="recipeResult.required_capabilities.length ? `Bind secrets: ${recipeResult.required_capabilities.join(', ')}` : 'No new secrets required.'"
+              />
+              <div class="flex justify-end">
+                <UButton size="sm" color="primary" :loading="recipeSaving" :disabled="!recipeRef.trim()" @click="applyRecipe">
+                  Set / update recipe
                 </UButton>
               </div>
             </div>
