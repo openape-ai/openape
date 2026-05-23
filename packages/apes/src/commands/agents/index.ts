@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import { allowAgentCommand } from './allow'
 import { cleanupOrphansCommand } from './cleanup-orphans'
+import { codeAgentCommand } from './code'
 import { destroyAgentCommand } from './destroy'
 import { listAgentsCommand } from './list'
 import { registerAgentCommand } from './register'
@@ -12,7 +13,7 @@ import { syncAgentCommand } from './sync'
 export const agentsCommand = defineCommand({
   meta: {
     name: 'agents',
-    description: 'Manage owned agents (register, spawn, list, destroy, allow, sync, run, serve, cleanup-orphans)',
+    description: 'Manage owned agents (register, spawn, list, destroy, allow, sync, run, serve, code, cleanup-orphans)',
   },
   subCommands: {
     register: registerAgentCommand,
@@ -23,6 +24,7 @@ export const agentsCommand = defineCommand({
     sync: syncAgentCommand,
     run: runAgentCommand,
     serve: serveAgentCommand,
+    code: codeAgentCommand,
     'cleanup-orphans': cleanupOrphansCommand,
   },
 })
