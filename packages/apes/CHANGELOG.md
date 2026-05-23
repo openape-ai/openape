@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.27.0
+
+### Minor Changes
+
+- [#467](https://github.com/openape-ai/openape/pull/467) [`373909c`](https://github.com/openape-ai/openape/commit/373909c27dfbb6b09025af9e4d8015f72126358c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - `apes agents code` — the coding-agent trigger entrypoint. Runs one coding task (`--issue <ref> --repo <url> [--forge]`) or polls a label (`--poll-label`), wiring the orchestrator (`runCodingTask`) with the LLM reviewer + risk assessor, the coding toolset (file.\*/bash/verify/forge-read — no pr.merge), and per-repo policy resolved from the cloned worktree (`.openape/coding.json` + derived signals). The recipe's cron schedule calls this in `--poll-label` mode. Also: `runCodingTask` now accepts `resolvePolicy(worktree)` to load policy lazily from the clone.
+
 ## 1.26.0
 
 ### Minor Changes
