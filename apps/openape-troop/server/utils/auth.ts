@@ -20,7 +20,13 @@ import { createRemoteJWKS, verifyJWT } from '@openape/core'
 interface DDISAClaims {
   sub?: string
   act?: 'human' | 'agent' | string
+  aud?: string | string[]
 }
+
+// Audience of tokens the `apes` CLI carries (IdP DEFAULT_CLI_AUDIENCE).
+// Owner-bearer auth only accepts CLI-scoped human tokens — not arbitrary
+// tokens minted for other purposes (#283 aud-scoping).
+const CLI_AUDIENCE = 'apes-cli'
 
 let _jwksCache: ReturnType<typeof createRemoteJWKS> | null = null
 
@@ -42,15 +48,34 @@ function problem(status: number, title: string): never {
 }
 
 /**
- * Resolve owner email from the @openape/nuxt-auth-sp session cookie.
- * Throws 401 if no session or the session is missing claims.sub.
+ * Resolve the owner email. Two transports for the SAME identity:
+ *   1. The browser session cookie (DDISA OAuth callback) — the UI path.
+ *   2. A Bearer DDISA *human* token with aud='apes-cli' — the CLI path
+ *      (`apes agent deploy`, etc.). Verified against the IdP JWKS; the
+ *      act='human' + aud='apes-cli' checks (#283) prevent an agent token
+ *      or a token minted for another purpose from acting as the owner.
+ * Throws 401 if neither yields an owner.
  */
 export async function requireOwner(event: H3Event): Promise<string> {
   const session = await getSpSession(event)
-  const claims = (session.data as { claims?: DDISAClaims })?.claims
-  const email = claims?.sub
-  if (!email) problem(401, 'Authentication required')
-  return email
+  const sessionEmail = (session.data as { claims?: DDISAClaims })?.claims?.sub
+  if (sessionEmail) return sessionEmail
+
+  const auth = getHeader(event, 'Authorization')
+  if (auth?.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice(7).trim()
+    const idpUrl = useRuntimeConfig().public.idpUrl as string
+    try {
+      const result = await verifyJWT(token, getJwks(), { issuer: idpUrl })
+      const claims = result.payload as DDISAClaims
+      const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
+      if (claims.act === 'human' && auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
+        return claims.sub
+      }
+    }
+    catch { /* fall through to 401 */ }
+  }
+  problem(401, 'Authentication required')
 }
 
 /**
