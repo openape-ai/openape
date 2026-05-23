@@ -37,11 +37,18 @@ params:
     type: string
     required: true
 
-# Poll for assigned issues. The cron-driven trigger fetches issues
-# labelled for the agent and runs one coding task each.
+# Poll for assigned issues every 10 minutes. The schedule description is
+# the task the agent runs: an explicit, deterministic command. Run it via
+# your bash tool exactly as written and report the outcome — do not
+# improvise. (When the cron task carries a `command` field the runner
+# executes it directly without this LLM round-trip; the wording here is
+# the portable fallback.)
 schedules:
   - cron: "*/10 * * * *"
-    description: poll {{repo}} for assigned issues and work them
+    description: |
+      Run exactly this shell command via your bash tool and report the result,
+      nothing else:
+        apes agents code --poll-label agent --repo {{repo}} --forge {{forge}}
 
 user_addendum: true
 
