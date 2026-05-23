@@ -8,7 +8,7 @@ import { _internal as wtInternal } from '../src/lib/agent-tools/git-worktree'
 
 describe('tool registry', () => {
   it('TOOLS has the expected keys', () => {
-    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'edit_file', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search', 'bash', 'git_worktree']) {
+    for (const name of ['time.now', 'http.get', 'http.post', 'file.read', 'file.write', 'file.edit', 'tasks.list', 'tasks.create', 'mail.list', 'mail.search', 'bash', 'git.worktree']) {
       expect(TOOLS[name]).toBeDefined()
     }
   })
@@ -92,7 +92,7 @@ describe('edit_file', () => {
 
   it('replaces a unique substring', async () => {
     await withTempFile('hello world\n', async (rel, abs) => {
-      const r = await TOOLS.edit_file!.execute({ path: rel, old_string: 'world', new_string: 'there' }) as Record<string, unknown>
+      const r = await TOOLS['file.edit']!.execute({ path: rel, old_string: 'world', new_string: 'there' }) as Record<string, unknown>
       expect(r.replacements).toBe(1)
       expect(readFileSync(abs, 'utf8')).toBe('hello there\n')
     })
@@ -100,22 +100,22 @@ describe('edit_file', () => {
 
   it('errors when old_string is absent', async () => {
     await withTempFile('abc', async (rel) => {
-      await expect(TOOLS.edit_file!.execute({ path: rel, old_string: 'xyz', new_string: 'q' })).rejects.toThrow(/not found/)
+      await expect(TOOLS['file.edit']!.execute({ path: rel, old_string: 'xyz', new_string: 'q' })).rejects.toThrow(/not found/)
     })
   })
 
   it('errors on ambiguous match unless replace_all', async () => {
     await withTempFile('a a a', async (rel, abs) => {
-      await expect(TOOLS.edit_file!.execute({ path: rel, old_string: 'a', new_string: 'b' })).rejects.toThrow(/occurs 3 times/)
-      const r = await TOOLS.edit_file!.execute({ path: rel, old_string: 'a', new_string: 'b', replace_all: true }) as Record<string, unknown>
+      await expect(TOOLS['file.edit']!.execute({ path: rel, old_string: 'a', new_string: 'b' })).rejects.toThrow(/occurs 3 times/)
+      const r = await TOOLS['file.edit']!.execute({ path: rel, old_string: 'a', new_string: 'b', replace_all: true }) as Record<string, unknown>
       expect(r.replacements).toBe(3)
       expect(readFileSync(abs, 'utf8')).toBe('b b b')
     })
   })
 
   it('rejects identical old/new and out-of-home paths', async () => {
-    await expect(TOOLS.edit_file!.execute({ path: 'x', old_string: 's', new_string: 's' })).rejects.toThrow(/identical/)
-    await expect(TOOLS.edit_file!.execute({ path: '/etc/hosts', old_string: 'a', new_string: 'b' })).rejects.toThrow(/outside the agent's home/)
+    await expect(TOOLS['file.edit']!.execute({ path: 'x', old_string: 's', new_string: 's' })).rejects.toThrow(/identical/)
+    await expect(TOOLS['file.edit']!.execute({ path: '/etc/hosts', old_string: 'a', new_string: 'b' })).rejects.toThrow(/outside the agent's home/)
   })
 })
 

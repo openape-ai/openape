@@ -95,7 +95,7 @@ export function buildListCommand(): string {
 
 export const gitWorktreeTools: ToolDefinition[] = [
   {
-    name: 'git_worktree',
+    name: 'git.worktree',
     description: 'Manage isolated git worktrees for coding tasks. action=create clones the repo (cached under ~/repos) and adds a fresh worktree under ~/work/<task_id> on a new branch. action=remove tears it down. action=list shows current task worktrees. Git operations go through the DDISA grant cycle (git-shape).',
     parameters: {
       type: 'object',

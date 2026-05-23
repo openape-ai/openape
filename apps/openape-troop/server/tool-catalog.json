@@ -62,13 +62,13 @@
       "risk": "high"
     },
     {
-      "name": "edit_file",
+      "name": "file.edit",
       "description": "Replace an exact substring in a file under the agent's home directory. Touches only the changed region instead of rewriting the whole file. old_string must appear once unless replace_all is set. Path traversal blocked, OS-confined to $HOME (no grant).",
       "inputs": "{ path: string, old_string: string, new_string: string, replace_all?: boolean }",
       "risk": "low"
     },
     {
-      "name": "git_worktree",
+      "name": "git.worktree",
       "description": "Manage isolated git worktrees for coding tasks: create (clone-if-needed + worktree on a new branch under ~/work/<task_id>), remove, list. Git operations go through the DDISA grant cycle (git-shape).",
       "inputs": "{ action: 'create'|'remove'|'list', repo?: string, task_id?: string, branch?: string }",
       "risk": "high"

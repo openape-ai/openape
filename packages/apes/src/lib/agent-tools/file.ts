@@ -70,7 +70,7 @@ export const fileTools: ToolDefinition[] = [
     },
   },
   {
-    name: 'edit_file',
+    name: 'file.edit',
     description: 'Replace an exact substring in a file under the agent\'s home directory. Prefer this over file.write for edits — it touches only the changed region instead of rewriting the whole file. `old_string` must appear exactly once unless `replace_all` is true. Path traversal blocked, 1MB max.',
     parameters: {
       type: 'object',
