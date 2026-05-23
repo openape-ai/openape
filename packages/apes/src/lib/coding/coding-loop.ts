@@ -23,7 +23,7 @@ import { buildPrCreate, buildPrMerge  } from './forge'
 import type { Forge } from './forge'
 import type { IssueRef, BranchNaming  } from './issue-task'
 import { buildBranchName, buildTaskPrompt } from './issue-task'
-import { decideMerge } from './merge-policy'
+import { decideMerge, SECURE_DEFAULT_POLICY } from './merge-policy'
 import type { MergeDecision, MergePolicy, RiskAssessorFn } from './merge-policy'
 import { gateMerge } from './review-gate'
 import type { ReviewerFn } from './review-gate'
@@ -46,7 +46,11 @@ export interface CodingTaskDeps {
   tools: ToolDefinition[]
   persona: string
   maxSteps: number
-  policy: MergePolicy
+  // Static policy, OR resolvePolicy to load it from the cloned worktree
+  // (e.g. the repo's .openape/coding.json + derived signals). When both
+  // are absent the secure default applies (auto-merge off).
+  policy?: MergePolicy
+  resolvePolicy?: (worktree: string) => Promise<MergePolicy>
   reviewer: ReviewerFn
   riskAssessor: RiskAssessorFn
   branchNaming?: BranchNaming
@@ -95,6 +99,12 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
     return { branch, worktree, runStatus: 'error', changedFiles: [], outcome: 'run-failed', reason: `worktree create failed: ${wt.stderr.slice(0, 300)}` }
   }
 
+  // Resolve the merge policy from the cloned repo (config + derived
+  // signals), or use the static one, or the secure default.
+  const policy = deps.resolvePolicy
+    ? await deps.resolvePolicy(worktree)
+    : (deps.policy ?? SECURE_DEFAULT_POLICY)
+
   // 2. LLM does the coding (it has file.*/bash/verify; NOT pr.merge).
   const prompt = buildTaskPrompt(input.issue, { persona: deps.persona })
   const run = await loop({
@@ -119,7 +129,7 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
 
   // 4. Risk + merge decision (agent judgment ∪ config/derived).
   const agentRisk = await deps.riskAssessor({ paths: changedFiles, diff })
-  const decision = decideMerge(changedFiles, deps.policy, agentRisk)
+  const decision = decideMerge(changedFiles, policy, agentRisk)
   log(`[coding] decision=${decision.classification} (${decision.reason})`)
 
   // 5. Commit + push + open the PR (orchestrator owns this).
