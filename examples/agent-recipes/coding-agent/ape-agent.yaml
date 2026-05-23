@@ -43,18 +43,17 @@ params:
     type: string
     required: true
 
-# Poll for assigned issues every 10 minutes. The schedule description is
-# the task the agent runs: an explicit, deterministic command. Run it via
-# your bash tool exactly as written and report the outcome — do not
-# improvise. (When the cron task carries a `command` field the runner
-# executes it directly without this LLM round-trip; the wording here is
-# the portable fallback.)
+# Poll for assigned issues every 10 minutes. `command` makes this
+# deterministic: the agent's cron-runner executes it via the gated
+# ape-shell path — no chat room, no LLM round-trip, no contact-acceptance
+# needed. `description` is the human-readable fallback (and what an older
+# runner without command-support would hand to the LLM verbatim).
 schedules:
   - cron: "*/10 * * * *"
+    command: apes agents code --poll-label agent --repo {{repo}} --forge {{forge}}
     description: |
-      Run exactly this shell command via your bash tool and report the result,
-      nothing else:
-        apes agents code --poll-label agent --repo {{repo}} --forge {{forge}}
+      Poll {{repo}} for open issues labelled `agent` and, for each, run the
+      coding pipeline (worktree → edit → verify → PR). Never self-merge.
 
 user_addendum: true
 

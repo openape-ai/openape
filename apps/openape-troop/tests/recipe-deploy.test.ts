@@ -75,6 +75,37 @@ schedules:
     expect(plan.requiredCapabilities).toEqual(['LLM_API_KEY'])
   })
 
+  it('threads an interpolated schedule command onto the deploy plan', () => {
+    const manifest = `
+name: coding-agent
+kind: agent
+intent: Code on {{repo}}.
+params:
+  - name: repo
+    type: string
+    required: true
+schedules:
+  - cron: "*/10 * * * *"
+    command: apes agents code --poll-label agent --repo {{repo}}
+    description: Poll {{repo}} for issues.
+`
+    const r = parseRecipe(manifest)
+    if (!r.ok) throw new Error(r.reason)
+    const mat = materializeRecipe(r.value, { repo: 'x/y' })
+    if (!mat.ok) throw new Error(mat.reason)
+    // materialize interpolates the command's {{repo}} placeholder
+    expect(mat.value.schedules[0]!.command).toBe('apes agents code --poll-label agent --repo x/y')
+    const plan = buildDeployPlan(r.value, mat.value)
+    expect(plan.schedules[0]!.command).toBe('apes agents code --poll-label agent --repo x/y')
+  })
+
+  it('leaves command undefined for chat-style schedules', () => {
+    const rec = recipe()
+    const mat = materializeRecipe(rec, { topic: 'x' })
+    if (!mat.ok) throw new Error(mat.reason)
+    expect(buildDeployPlan(rec, mat.value).schedules[0]!.command).toBeUndefined()
+  })
+
   it('honours an agent-name override + additive userAddendum (recipe is additive to a named spawn)', () => {
     const rec = recipe()
     const mat = materializeRecipe(rec, { topic: 'AI agents' })

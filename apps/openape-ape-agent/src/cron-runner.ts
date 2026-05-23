@@ -164,7 +164,9 @@ export class CronRunner {
     taskId: string
     taskName: string
     accumulated: string
-    roomId: string
+    // Undefined for headless command tasks that fire with no owner room —
+    // they still run and record a troop run, they just skip the DM.
+    roomId?: string
     status: 'ok' | 'error' | 'pending'
     runId?: string
   }>()
@@ -254,7 +256,11 @@ export class CronRunner {
     const contacts = await this.deps.chat.listContacts().catch(() => [])
     const ownerLower = this.deps.ownerEmail.toLowerCase()
     const room = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower && c.connected && c.roomId)
-    if (!room?.roomId) {
+    // A deterministic command task runs headless — it drives its own work
+    // (e.g. opening a PR) and doesn't need an owner room to exist. Only
+    // LLM/chat tasks require a room to DM their result into. When a room
+    // IS present we still post the command's summary there as a courtesy.
+    if (!spec.command && !room?.roomId) {
       this.deps.log(`task ${spec.taskId} fired but no active owner room — skipping DM (accept the contact in chat)`)
       return
     }
@@ -289,7 +295,7 @@ export class CronRunner {
       this.deps.log(`troop startRun ${spec.taskId} error: ${err instanceof Error ? err.message : String(err)}`)
     }
 
-    this.pending.set(sessionId, { taskId: spec.taskId, taskName: spec.name, accumulated: '', roomId: room.roomId, status: 'pending', runId })
+    this.pending.set(sessionId, { taskId: spec.taskId, taskName: spec.name, accumulated: '', roomId: room?.roomId ?? undefined, status: 'pending', runId })
     this.deps.log(`task ${spec.taskId} fired (session=${sessionId}, run=${runId ?? 'no-troop'})`)
 
     // Run the agent loop in-process. No subprocess, no RPC.
@@ -380,7 +386,15 @@ export class CronRunner {
     }
   }
 
-  private async postResult(sid: string, turn: { taskId: string, taskName: string, accumulated: string, roomId: string, status: 'ok' | 'error' | 'pending' }): Promise<void> {
+  private async postResult(sid: string, turn: { taskId: string, taskName: string, accumulated: string, roomId?: string, status: 'ok' | 'error' | 'pending' }): Promise<void> {
+    // Headless command task with no owner room — nothing to DM into. The
+    // run is already recorded in troop; the work reports through its own
+    // channel (e.g. a PR), so just log and move on.
+    if (!turn.roomId) {
+      this.deps.log(`task ${turn.taskId} ran headless (no owner room) — DM skipped`)
+      return
+    }
+    const roomId = turn.roomId
     const prefix = turn.status === 'error' ? '❌' : '✅'
     const text = turn.accumulated.trim() || (turn.status === 'error' ? '(crashed)' : '(no output)')
     const body = `${prefix} *${turn.taskName}*\n\n${text}`.slice(0, 9000)
@@ -391,7 +405,7 @@ export class CronRunner {
     // thread, fanning out everything into one stream).
     if (!threadId) {
       try {
-        const created = await this.deps.chat.createThread(turn.roomId, turn.taskName || turn.taskId)
+        const created = await this.deps.chat.createThread(roomId, turn.taskName || turn.taskId)
         threadId = created.id
         this.taskThreads.set(turn.taskId, threadId)
         this.persistTaskThreads()
@@ -402,7 +416,7 @@ export class CronRunner {
       }
     }
     try {
-      const posted = await this.deps.chat.postMessage(turn.roomId, body, threadId ? { threadId } : {})
+      const posted = await this.deps.chat.postMessage(roomId, body, threadId ? { threadId } : {})
       this.deps.log(`task DM posted (session=${sid}, ${turn.accumulated.length} chars, thread=${posted.threadId})`)
     }
     catch (err) {
