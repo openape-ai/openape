@@ -13,11 +13,13 @@
 
 import { bashTools } from './bash'
 import { fileTools } from './file'
+import { forgeTools } from './forge'
 import { gitWorktreeTools } from './git-worktree'
 import { httpTools } from './http'
 import { mailTools } from './mail'
 import { tasksTools } from './tasks'
 import { timeTools } from './time'
+import { verifyTools } from './verify'
 
 export interface ToolDefinition {
   name: string
@@ -36,6 +38,8 @@ const ALL_TOOLS: ToolDefinition[] = [
   ...mailTools,
   ...bashTools,
   ...gitWorktreeTools,
+  ...verifyTools,
+  ...forgeTools,
 ]
 
 export const TOOLS: Record<string, ToolDefinition> = Object.fromEntries(
