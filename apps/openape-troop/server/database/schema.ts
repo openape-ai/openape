@@ -69,6 +69,11 @@ export const tasks = sqliteTable('tasks', {
   name: text('name').notNull(),
   cron: text('cron').notNull(),
   userPrompt: text('user_prompt').notNull(),
+  // Optional deterministic shell command. When set, the cron-runner
+  // executes it via the gated ape-shell path (no LLM round-trip, no chat
+  // room needed) and `userPrompt` is only the human-readable fallback.
+  // Used by the coding-agent recipe's poll schedule.
+  command: text('command'),
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>(),
   maxSteps: integer('max_steps').notNull().default(10),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
