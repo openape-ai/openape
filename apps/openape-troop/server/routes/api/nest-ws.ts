@@ -234,6 +234,7 @@ export default defineWebSocketHandler({
                     name: s.name,
                     cron: s.cron,
                     userPrompt: s.userPrompt,
+                    command: s.command ?? null,
                     tools: s.tools,
                     maxSteps: 10,
                     enabled: true,
@@ -241,7 +242,7 @@ export default defineWebSocketHandler({
                     updatedAt: now,
                   }).onConflictDoUpdate({
                     target: [tasks.agentEmail, tasks.taskId],
-                    set: { name: s.name, cron: s.cron, userPrompt: s.userPrompt, tools: s.tools, updatedAt: now },
+                    set: { name: s.name, cron: s.cron, userPrompt: s.userPrompt, command: s.command ?? null, tools: s.tools, updatedAt: now },
                   })
                 }
               })(),

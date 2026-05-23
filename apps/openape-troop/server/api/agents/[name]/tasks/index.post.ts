@@ -14,6 +14,10 @@ const bodySchema = z.object({
   // (set on the agent itself) provides persona/style; the task-level
   // userPrompt provides the concrete job.
   user_prompt: z.string().min(1).max(8000),
+  // Optional deterministic shell command. When set, the cron-runner runs
+  // it via the gated ape-shell path instead of an LLM turn; user_prompt is
+  // then just the human-readable fallback.
+  command: z.string().min(1).max(8000).optional(),
   tools: z.array(z.string()),
   max_steps: z.number().int().min(1).max(50).default(10),
   enabled: z.boolean().default(true),
@@ -54,6 +58,7 @@ export default defineEventHandler(async (event) => {
     name: body.data.name,
     cron: body.data.cron,
     userPrompt: body.data.user_prompt,
+    command: body.data.command ?? null,
     tools: t.tools,
     maxSteps: body.data.max_steps,
     enabled: body.data.enabled,
@@ -65,6 +70,7 @@ export default defineEventHandler(async (event) => {
       name: body.data.name,
       cron: body.data.cron,
       userPrompt: body.data.user_prompt,
+      command: body.data.command ?? null,
       tools: t.tools,
       maxSteps: body.data.max_steps,
       enabled: body.data.enabled,

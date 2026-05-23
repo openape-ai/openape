@@ -18,6 +18,8 @@ export interface DeploySchedule {
   name: string
   cron: string
   userPrompt: string
+  /** Deterministic shell command (gated ape-shell, no LLM). Optional. */
+  command?: string
   tools: string[]
 }
 
@@ -59,9 +61,10 @@ export interface DeployPlanOptions {
 export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, opts: DeployPlanOptions = {}): DeployPlan {
   const schedules: DeploySchedule[] = mat.schedules.map((s, i) => ({
     taskId: `recipe-${i}`,
-    name: s.description ?? `${recipe.name} #${i + 1}`,
+    name: s.description ?? s.command ?? `${recipe.name} #${i + 1}`,
     cron: s.cron,
     userPrompt: s.description ?? 'Run your configured task as described in your instructions.',
+    ...(s.command ? { command: s.command } : {}),
     tools: [...RECIPE_AGENT_TOOLS],
   }))
   return {

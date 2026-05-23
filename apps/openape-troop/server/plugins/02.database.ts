@@ -90,6 +90,13 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE tasks ADD COLUMN user_prompt TEXT NOT NULL DEFAULT ''`)
     }
     catch { /* column exists (either via fresh create or from rename above) */ }
+    // Deterministic command tasks: the cron-runner runs `command` via the
+    // gated ape-shell path instead of an LLM turn. Nullable — chat-style
+    // tasks leave it unset and fall back to user_prompt.
+    try {
+      await db.run(sql`ALTER TABLE tasks ADD COLUMN command TEXT`)
+    }
+    catch { /* column exists */ }
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS runs (
       id TEXT PRIMARY KEY,

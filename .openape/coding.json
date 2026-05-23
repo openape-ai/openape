@@ -1,0 +1,10 @@
+{
+  "verify": "pnpm install --frozen-lockfile && pnpm turbo run typecheck test",
+  "branchConvention": "fix/issue-<number>-<slug> for bug fixes, feat/issue-<number>-<slug> for features",
+  "notes": "Autonomous coding agent config (openape coding-agent). The agent reads `verify` to know how to gate a change (no PR until it passes) and `mergePolicy` to know what it may merge. It never self-merges; the orchestrator owns the merge gate.",
+  "mergePolicy": {
+    "autoMergeEnabled": false,
+    "autoPaths": [],
+    "riskPaths": []
+  }
+}

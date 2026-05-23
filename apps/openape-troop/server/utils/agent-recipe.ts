@@ -37,6 +37,11 @@ const capabilitySchema = z.object({
 const scheduleSchema = z.object({
   cron: z.string().min(1),
   description: z.string().optional(),
+  // An explicit shell command for deterministic, LLM-free polling. When
+  // set, the agent's cron-runner executes it via the gated ape-shell path
+  // (no chat room / no model call) and `description` is the human-readable
+  // fallback. `{{param}}` placeholders are interpolated like everything else.
+  command: z.string().optional(),
 })
 
 const recipeSchema = z.object({
@@ -223,7 +228,13 @@ export function materializeRecipe(
   for (const s of recipe.schedules) {
     const desc = s.description ? interpolate(s.description, params) : null
     if (desc && !desc.ok) return desc
-    schedules.push({ cron: s.cron, ...(desc ? { description: desc.value } : {}) })
+    const cmd = s.command ? interpolate(s.command, params) : null
+    if (cmd && !cmd.ok) return cmd
+    schedules.push({
+      cron: s.cron,
+      ...(desc ? { description: desc.value } : {}),
+      ...(cmd ? { command: cmd.value } : {}),
+    })
   }
 
   return { ok: true, value: { recipe, params, intent: intent.value, schedules, tools } }
