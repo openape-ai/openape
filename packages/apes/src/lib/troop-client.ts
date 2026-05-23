@@ -21,6 +21,13 @@ export interface TaskSpec {
    * and served separately at sync time (see `AgentTasksResponse`).
    */
   userPrompt: string
+  /**
+   * Optional deterministic shell command. When present, the cron-runner
+   * executes it via the gated ape-shell path (no LLM turn, no chat room)
+   * and `userPrompt` is just the human-readable fallback. Carried through
+   * `apes agents sync` into the per-task cache the cron-runner reads.
+   */
+  command?: string | null
   tools: string[]
   maxSteps: number
   enabled: boolean
