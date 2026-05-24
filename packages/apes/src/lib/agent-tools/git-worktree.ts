@@ -95,11 +95,21 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
   const clone = isUrl
     ? `if [ ! -d ${q(baseDir)}/.git ]; then git clone ${q(source)} ${q(baseDir)}; fi`
     : `test -d ${q(baseDir)}/.git`
+  // A polling agent re-attempts the same issue (same task id → same branch
+  // + worktree path) on every tick, so creation must be idempotent: tear
+  // down any leftover worktree from a prior run, then add fresh with `-B`
+  // (create-or-reset the branch). The cleanup group never fails the chain.
+  const reset = [
+    `git -C ${q(baseDir)} worktree remove --force ${q(wt)} 2>/dev/null || true`,
+    `git -C ${q(baseDir)} worktree prune 2>/dev/null || true`,
+    `rm -rf ${q(wt)} 2>/dev/null || true`,
+  ].join('; ')
   return [
     `mkdir -p ${q(reposRoot())} ${q(workRoot())}`,
     clone,
     `git -C ${q(baseDir)} fetch --quiet || true`,
-    `git -C ${q(baseDir)} worktree add -b ${q(br)} ${q(wt)}`,
+    `{ ${reset}; }`,
+    `git -C ${q(baseDir)} worktree add -B ${q(br)} ${q(wt)}`,
     `echo ${q(wt)}`,
   ].join(' && ')
 }
