@@ -1,5 +1,19 @@
 # @openape/apes
 
+## 1.28.6
+
+### Patch Changes
+
+- [#477](https://github.com/openape-ai/openape/pull/477) [`2ca7be9`](https://github.com/openape-ai/openape/commit/2ca7be92370c34eabd59d4c0a4ecea3290ef3fc8) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(forge): pass repo to issueGet so the poll can fetch issues pre-clone
+
+  The coding agent's poll calls `fetchIssue` BEFORE cloning the repo, but
+  the GitHub forge adapter built `gh issue view <n> --json …` with no
+  `--repo`, so `gh` tried to infer the repo from the (unrelated) CWD and
+  failed with `fatal: not a git repository`. `issueGet` (and `buildIssueGet`
+  / `forge.issue.get`) now take the repo and emit `--repo <remote>`; the
+  poll passes its `--repo`. Azure work-items are org/project-scoped so the
+  arg is ignored there.
+
 ## 1.28.5
 
 ### Patch Changes
