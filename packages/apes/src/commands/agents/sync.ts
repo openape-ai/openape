@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import { readAgentEncryptionPublicKey } from '../../lib/agent-secrets-runtime'
 import { CliError } from '../../errors'
 import { getHostId, getHostname } from '../../lib/macos-host'
 import { resolveTroopUrl, TroopClient } from '../../lib/troop-client'
@@ -90,12 +91,19 @@ export const syncAgentCommand = defineCommand({
 
     consola.start(`Syncing ${agentName} (${host}, hostId ${hostId.slice(0, 8)}…) with ${troopUrl}`)
 
+    // Report the agent's X25519 public key so troop's capability broker
+    // can seal secrets to it. Without this every sealed bind 409s with
+    // "no X25519 public key yet". The keypair is written at spawn; we read
+    // the public half from ~/.config/openape/agent-x25519.key.pub.
+    const pubkeyX25519 = readAgentEncryptionPublicKey() ?? undefined
     const sync = await client.sync({
       hostname: host,
       hostId,
       ownerEmail: auth.owner_email,
+      ...(pubkeyX25519 ? { pubkeyX25519 } : {}),
     })
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
+    if (!pubkeyX25519) consola.warn('No X25519 public key found on disk — sealed capability secrets cannot be bound until the agent is re-spawned.')
 
     const { system_prompt: systemPrompt, tools, skills, tasks } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)

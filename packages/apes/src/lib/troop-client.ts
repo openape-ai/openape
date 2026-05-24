@@ -110,7 +110,7 @@ export class TroopClient {
     return await res.json() as T
   }
 
-  sync(input: { hostname: string, hostId: string, ownerEmail: string, pubkeySsh?: string }): Promise<SyncResponse> {
+  sync(input: { hostname: string, hostId: string, ownerEmail: string, pubkeySsh?: string, pubkeyX25519?: string }): Promise<SyncResponse> {
     return this.request('/api/agents/me/sync', {
       method: 'POST',
       body: JSON.stringify({
@@ -118,6 +118,11 @@ export class TroopClient {
         host_id: input.hostId,
         owner_email: input.ownerEmail,
         ...(input.pubkeySsh ? { pubkey_ssh: input.pubkeySsh } : {}),
+        // Without this the agent's encryption pubkey never reaches troop,
+        // so every sealed-capability bind 409s ("no X25519 public key
+        // yet"). The keypair is written at spawn (agent-bootstrap); we
+        // just have to report the public half here.
+        ...(input.pubkeyX25519 ? { pubkey_x25519: input.pubkeyX25519 } : {}),
       }),
     })
   }
