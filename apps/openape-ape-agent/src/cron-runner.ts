@@ -120,6 +120,19 @@ function readTaskSpecs(): TaskSpec[] {
   return out
 }
 
+// Render a command task's result keeping BOTH streams (tailed, so the
+// operative error — usually last — survives the cap). `stdout || stderr`
+// alone hid failures whose only signal was on stderr.
+function composeTaskOutput(command: string, exitCode: number, stdout: string, stderr: string): string {
+  const tail = (s: string, n: number): string => (s.length > n ? `…${s.slice(-n)}` : s)
+  const parts = [`\`${command}\` exited ${exitCode}`]
+  const out = stdout.trim()
+  const err = stderr.trim()
+  if (out) parts.push(`stdout:\n${tail(out, 2500)}`)
+  if (err) parts.push(`stderr:\n${tail(err, 2500)}`)
+  return parts.join('\n\n')
+}
+
 function readSystemPrompt(): string {
   if (!existsSync(AGENT_CONFIG_PATH)) return ''
   try {
@@ -316,7 +329,11 @@ export class CronRunner {
         const turn = this.pending.get(sessionId)
         if (!turn) return
         turn.status = res.exit_code === 0 ? 'ok' : 'error'
-        turn.accumulated = `\`${spec.command}\` exited ${res.exit_code}\n\n${(res.stdout || res.stderr).slice(0, 4000)}`
+        // Keep BOTH streams: a command can fail with everything on stderr
+        // (e.g. a thrown CliError) while stdout holds only early progress —
+        // `stdout || stderr` would then hide the actual failure. Show the
+        // tail so the operative error (usually last) survives the cap.
+        turn.accumulated = composeTaskOutput(spec.command, res.exit_code, res.stdout, res.stderr)
         await this.finaliseRun(turn, 1)
         await this.postResult(sessionId, turn)
         this.pending.delete(sessionId)
