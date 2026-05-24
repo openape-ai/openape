@@ -193,7 +193,13 @@ function shqMsg(issue: IssueRef): string {
 // auth via `origin`. GIT_TERMINAL_PROMPT=0 turns a missing credential into a
 // fast failure instead of a hang on a credential prompt.
 function buildPushCommand(forge: string, repo: string, worktree: string, branch: string): string {
-  const base = `GIT_TERMINAL_PROMPT=0 git -C '${worktree}'`
+  // `-c credential.helper=` disables ALL credential helpers for this push.
+  // The token URL already authenticates, so no helper is needed for `get`;
+  // critically it also stops git from calling the inherited osxkeychain
+  // helper on `store` after a successful push, which hangs headless (no GUI
+  // for the agent user). GIT_TERMINAL_PROMPT=0 makes a missing credential a
+  // fast failure rather than a prompt-hang.
+  const base = `GIT_TERMINAL_PROMPT=0 git -C '${worktree}' -c credential.helper=`
   if (forge === 'github') {
     const slug = repo.replace(/^[a-z]+:\/\/[^/]+\//i, '').replace(/\.git$/, '').replace(/['"\s]/g, '')
     return `${base} push "https://x-access-token:\${GH_TOKEN}@github.com/${slug}.git" '${branch}'`

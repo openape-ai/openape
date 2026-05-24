@@ -110,8 +110,11 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
   // block. Point credential.helper at $GH_TOKEN (read from the gated shell's
   // env at push time, never stored) so every git operation authenticates
   // without a prompt. GitHub-only; other forges keep their default helper.
+  // First RESET the helper list (the empty value clears the inherited
+  // osxkeychain helper — otherwise git still calls it on `store` and hangs
+  // headless), then add ours that supplies $GH_TOKEN from the env.
   const ghAuth = /github\.com/i.test(source)
-    ? `git -C ${q(baseDir)} config credential.helper '!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'`
+    ? `git -C ${q(baseDir)} config credential.helper '' && git -C ${q(baseDir)} config --add credential.helper '!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'`
     : 'true'
   return [
     `mkdir -p ${q(reposRoot())} ${q(workRoot())}`,
