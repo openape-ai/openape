@@ -7,6 +7,7 @@ import { consola } from 'consola'
 import type { RuntimeConfig } from '../../lib/agent-runtime'
 import { taskTools } from '../../lib/agent-tools'
 import { runApeShell } from '../../lib/agent-tools/ape-shell-exec'
+import { materializeSecrets } from '../../lib/agent-secrets-runtime'
 import { runCodingTask } from '../../lib/coding/coding-loop'
 import { buildIssueGet, detectForge } from '../../lib/coding/forge'
 import type { Forge } from '../../lib/coding/forge'
@@ -86,6 +87,18 @@ export const codeAgentCommand = defineCommand({
   async run({ args }) {
     const repo = args.repo as string
     const forge: Forge = (args.forge as string) || detectForge(repo)
+
+    // Inject sealed capability secrets (e.g. GH_TOKEN / AZ_PAT) into this
+    // process's env so the forge CLIs we shell out to are authenticated.
+    // The cron-runner invokes us as the agent user, so the blobs + the
+    // X25519 key in ~/.config/openape are readable. Best-effort: no key /
+    // no blobs just means nothing to inject. Without this, `gh` runs
+    // unauthenticated and silently returns an empty issue list.
+    try {
+      const { applied } = materializeSecrets()
+      if (applied.length > 0) consola.info(`Capabilities available: ${applied.join(', ')}`)
+    }
+    catch { /* no secrets to materialize */ }
     const config = readLitellmConfig(args.model as string | undefined)
     const persona = readPersona(args['persona-file'] as string | undefined)
     const maxSteps = Number(args['max-steps']) > 0 ? Number(args['max-steps']) : 40
@@ -107,7 +120,17 @@ export const codeAgentCommand = defineCommand({
     if (args['poll-label']) {
       const slug = repo.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '')
       const list = await runApeShell(`gh issue list --repo ${slug} --label '${args['poll-label']}' --state open --json number --jq '.[].number'`)
-      refs.push(...list.stdout.split('\n').map(s => s.trim()).filter(Boolean))
+      if (list.exit_code !== 0) {
+        throw new CliError(`gh issue list failed (exit ${list.exit_code}): ${(list.stderr || list.stdout).slice(0, 300)}`)
+      }
+      // `gh` exits 0 with empty stdout when it is unauthenticated, which
+      // would otherwise look identical to "no matching issues". Detect that
+      // explicitly so a missing GH_TOKEN is a loud error, not a silent no-op.
+      if (list.stdout.trim() === '' && /gh auth login|GH_TOKEN/i.test(list.stderr)) {
+        throw new CliError('gh is not authenticated (no GH_TOKEN). The agent\'s GH_TOKEN capability is not materialized — bind it via the deploy/secrets flow.')
+      }
+      // Keep only numeric issue ids — defensive against any stray line.
+      refs.push(...list.stdout.split('\n').map(s => s.trim()).filter(s => /^\d+$/.test(s)))
       if (refs.length === 0) { consola.info('no open issues with that label'); return }
     }
     else if (args.issue) {
