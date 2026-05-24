@@ -47,6 +47,8 @@ describe('runCodingTask orchestrator', () => {
     expect(r.decision?.classification).toBe('chore')
     expect(reviewer).not.toHaveBeenCalled()
     expect(calls.some(c => c.includes('pr merge') || c.includes('auto-complete') || c.includes('--auto'))).toBe(true)
+    // github push authenticates non-interactively via the inline token URL
+    expect(calls.some(c => c.includes('push') && c.includes('x-access-token:') && c.includes('@github.com/') && c.includes('GIT_TERMINAL_PROMPT=0'))).toBe(true)
   })
 
   it('code change → reviewer approves → auto-armed', async () => {
