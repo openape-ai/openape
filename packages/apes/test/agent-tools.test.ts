@@ -143,10 +143,13 @@ describe('git_worktree command builders', () => {
     expect(wtInternal.assertBranch('feat/x-1')).toBe('feat/x-1')
   })
 
-  it('builds a create command that clones-if-needed and adds the worktree', () => {
+  it('builds a create command that clones-if-needed and adds the worktree (idempotent)', () => {
     const cmd = wtInternal.buildCreateCommand('https://github.com/openape-ai/openape.git', 'issue-42', 'fix/issue-42')
     expect(cmd).toContain('git clone')
-    expect(cmd).toContain(`worktree add -b 'fix/issue-42' '${home}/work/issue-42'`)
+    // -B (create-or-reset) + a teardown of any leftover worktree, so a
+    // polling agent's repeat attempts on the same issue don't collide.
+    expect(cmd).toContain(`worktree add -B 'fix/issue-42' '${home}/work/issue-42'`)
+    expect(cmd).toContain(`worktree remove --force '${home}/work/issue-42'`)
   })
 
   it('builds remove + list commands', () => {
