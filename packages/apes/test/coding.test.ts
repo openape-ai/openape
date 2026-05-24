@@ -84,6 +84,10 @@ describe('forge: command builders', () => {
     expect(buildPrStatus('azure', 7)).toContain('az repos pr show --id 7')
     expect(buildIssueGet('github', 7)).toContain('gh issue view 7 --json')
     expect(buildIssueGet('azure', 7)).toContain('az boards work-item show --id 7')
+    // With a repo (issue lookup before clone): --repo must be present so
+    // `gh` doesn't depend on the CWD being the target repo.
+    expect(buildIssueGet('github', 7, 'https://github.com/o/n.git'))
+      .toContain('gh issue view 7 --repo \'https://github.com/o/n.git\' --json')
   })
 
   it('rejects injection in branch', () => {

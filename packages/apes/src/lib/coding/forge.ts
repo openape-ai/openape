@@ -66,7 +66,11 @@ export interface ForgeAdapter {
   prCreate: (input: PrCreateInput) => string
   prMerge: (input: PrMergeInput) => string
   prStatus: (ref: string | number) => string
-  issueGet: (ref: string | number) => string
+  // `repo` is the target remote (URL or owner/name). Required for issue
+  // lookups that run BEFORE the repo is cloned (e.g. the poll's
+  // fetchIssue), where the CWD is not the repo — without it `gh issue
+  // view` errors "not a git repository" / resolves the wrong repo.
+  issueGet: (ref: string | number, repo?: string) => string
 }
 
 // --- Built-in adapters ---
@@ -94,7 +98,7 @@ const githubAdapter: ForgeAdapter = {
     const refTok = ID_RE.test(r) ? r : assertBranch(r)
     return `gh pr view ${shq(refTok)} --json state,mergeStateStatus,statusCheckRollup,reviewDecision`
   },
-  issueGet: ref => `gh issue view ${assertId(ref)} --json number,title,body,labels`,
+  issueGet: (ref, repo) => `gh issue view ${assertId(ref)}${repo ? ` --repo ${shq(repo)}` : ''} --json number,title,body,labels`,
 }
 
 const azureAdapter: ForgeAdapter = {
@@ -116,7 +120,10 @@ const azureAdapter: ForgeAdapter = {
     return parts.join(' ')
   },
   prStatus: ref => `az repos pr show --id ${assertId(ref)}`,
-  issueGet: ref => `az boards work-item show --id ${assertId(ref)}`,
+  // Azure work items are org/project-scoped, not repo-scoped, so `repo`
+  // doesn't apply here — the caller's `az` config (defaults.organization/
+  // project) resolves it.
+  issueGet: (ref, _repo) => `az boards work-item show --id ${assertId(ref)}`,
 }
 
 // --- Registry ---
@@ -173,8 +180,8 @@ export function buildPrStatus(forge: Forge, ref: string | number): string {
   return getForge(forge).prStatus(ref)
 }
 
-export function buildIssueGet(forge: Forge, ref: string | number): string {
-  return getForge(forge).issueGet(ref)
+export function buildIssueGet(forge: Forge, ref: string | number, repo?: string): string {
+  return getForge(forge).issueGet(ref, repo)
 }
 
 export const _internal = { shq, assertBranch, assertId, githubAdapter, azureAdapter, registry }
