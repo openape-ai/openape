@@ -77,6 +77,19 @@ describe('runCodingTask orchestrator', () => {
     expect(r.outcome).toBe('awaiting-human')
   })
 
+  it('push failure → run-failed, never reports a PR', async () => {
+    const { fn } = mockShell({ changed: ['docs/readme.md'] })
+    // Make the push step fail (e.g. missing auth) — must not masquerade
+    // as a successful PR / awaiting-human.
+    const shell = vi.fn(async (cmd: string) => {
+      if (cmd.includes('push')) return { stdout: '', stderr: 'fatal: could not read Username', exit_code: 128 }
+      return fn(cmd)
+    })
+    const r = await runCodingTask(input, baseDeps({ shell }))
+    expect(r.outcome).toBe('run-failed')
+    expect(r.reason).toMatch(/push failed/)
+  })
+
   it('no changes → run-failed (no empty PR)', async () => {
     const { fn } = mockShell({ changed: [] })
     const r = await runCodingTask(input, baseDeps({ shell: fn }))
