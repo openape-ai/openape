@@ -1,6 +1,6 @@
 {
   "name": "@openape/apes",
-  "version": "1.28.6",
+  "version": "1.28.7",
   "turbo": {
     "tags": [
       "publishable"
