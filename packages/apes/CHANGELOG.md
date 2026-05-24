@@ -1,5 +1,19 @@
 # @openape/apes
 
+## 1.28.7
+
+### Patch Changes
+
+- [`b96ae7c`](https://github.com/openape-ai/openape/commit/b96ae7c3dafe7366621d12ea9698f4c02927c6f7) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(coding): make worktree creation idempotent for the polling agent
+
+  The coding agent polls the same issue every tick, mapping it to the same
+  task id → same branch + worktree path. `git worktree add -b` then failed
+  on the second attempt with "a branch named '…' already exists", so a
+  re-poll could never make progress once a prior run left a worktree
+  behind. Creation now tears down any leftover worktree (remove --force +
+  prune + rm) and uses `-B` to create-or-reset the branch, so repeat
+  attempts start clean.
+
 ## 1.28.6
 
 ### Patch Changes
