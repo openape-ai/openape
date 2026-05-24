@@ -1,5 +1,12 @@
 # @openape/ape-agent
 
+## 2.8.3
+
+### Patch Changes
+
+- Updated dependencies [[`8249b43`](https://github.com/openape-ai/openape/commit/8249b432231d5b3d51a1bc292ddb49bf421e3353)]:
+  - @openape/apes@1.28.3
+
 ## 2.8.2
 
 ### Patch Changes
