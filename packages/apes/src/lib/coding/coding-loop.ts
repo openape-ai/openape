@@ -145,7 +145,13 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
   if (commitRes.exit_code !== 0) {
     return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `commit failed: ${(commitRes.stderr || commitRes.stdout).slice(0, 300)}` }
   }
-  const pushRes = await shell(`git -C '${worktree}' -c credential.helper='!gh auth git-credential' push -u origin '${branch}'`)
+  // Push with the capability token inline so it authenticates without an
+  // interactive credential prompt (the gh credential helper doesn't reach
+  // through the gated shell reliably). GIT_TERMINAL_PROMPT=0 makes a missing
+  // credential fail fast instead of hanging. `$GH_TOKEN` is expanded by the
+  // gated shell, where the materialized token lives — it never appears in
+  // this process's argv. Non-GitHub forges keep their own CLI auth (origin).
+  const pushRes = await shell(buildPushCommand(input.forge, input.repo, worktree, branch))
   if (pushRes.exit_code !== 0) {
     return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `push failed: ${(pushRes.stderr || pushRes.stdout).slice(0, 300)}` }
   }
@@ -179,4 +185,18 @@ function prBody(issue: IssueRef): string {
 }
 function shqMsg(issue: IssueRef): string {
   return `'${prTitle(issue).replace(/'/g, '\'\\\'\'')}'`
+}
+
+// Non-interactive authenticated push. GitHub: inline the capability token
+// (double-quoted so the gated shell — not this process — expands $GH_TOKEN;
+// it never lands in argv or .git/config). Other forges keep their CLI's own
+// auth via `origin`. GIT_TERMINAL_PROMPT=0 turns a missing credential into a
+// fast failure instead of a hang on a credential prompt.
+function buildPushCommand(forge: string, repo: string, worktree: string, branch: string): string {
+  const base = `GIT_TERMINAL_PROMPT=0 git -C '${worktree}'`
+  if (forge === 'github') {
+    const slug = repo.replace(/^[a-z]+:\/\/[^/]+\//i, '').replace(/\.git$/, '').replace(/['"\s]/g, '')
+    return `${base} push "https://x-access-token:\${GH_TOKEN}@github.com/${slug}.git" '${branch}'`
+  }
+  return `${base} push -u origin '${branch}'`
 }
