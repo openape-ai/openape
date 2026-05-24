@@ -132,10 +132,28 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
   const decision = decideMerge(changedFiles, policy, agentRisk)
   log(`[coding] decision=${decision.classification} (${decision.reason})`)
 
-  // 5. Commit + push + open the PR (orchestrator owns this).
-  await shell(`git -C '${worktree}' commit -m ${shqMsg(input.issue)} && git -C '${worktree}' push -u origin '${branch}'`)
+  // 5. Commit + push + open the PR (orchestrator owns this). Each step is
+  //    checked: a freshly-spawned agent has no git identity and `git push`
+  //    over HTTPS needs the forge token, so a silent failure here must NOT
+  //    masquerade as a successful PR. Identity is a commit-author default
+  //    (overridable via GIT_AUTHOR_*); push auth rides the gh credential
+  //    helper, which reads the materialized GH_TOKEN from the env.
+  const authorEmail = process.env.GIT_AUTHOR_EMAIL || 'coding-agent@openape.ai'
+  const authorName = process.env.GIT_AUTHOR_NAME || 'OpenApe Coding Agent'
+  const ident = `-c user.email='${authorEmail.replace(/'/g, '')}' -c user.name='${authorName.replace(/'/g, '')}'`
+  const commitRes = await shell(`git -C '${worktree}' ${ident} commit -m ${shqMsg(input.issue)}`)
+  if (commitRes.exit_code !== 0) {
+    return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `commit failed: ${(commitRes.stderr || commitRes.stdout).slice(0, 300)}` }
+  }
+  const pushRes = await shell(`git -C '${worktree}' -c credential.helper='!gh auth git-credential' push -u origin '${branch}'`)
+  if (pushRes.exit_code !== 0) {
+    return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `push failed: ${(pushRes.stderr || pushRes.stdout).slice(0, 300)}` }
+  }
   const prCmd = buildPrCreate({ forge: input.forge, title: prTitle(input.issue), body: prBody(input.issue), head: branch })
   const prRes = await shell(`cd '${worktree}' && ${prCmd}`)
+  if (prRes.exit_code !== 0) {
+    return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `pr create failed: ${(prRes.stderr || prRes.stdout).slice(0, 300)}` }
+  }
   const prRef = (prRes.stdout.match(/\/pull\/(\d+)|!(\d+)|\bpr\/(\d+)/i)?.slice(1).find(Boolean)) ?? branch
 
   // 6. Merge gate. Human/risk → stop. Code → reviewer. Chore → arm.
