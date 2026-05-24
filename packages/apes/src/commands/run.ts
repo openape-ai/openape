@@ -84,6 +84,28 @@ function getUserMode(): ApesUserMode {
   return 'agent'
 }
 
+// When apes runs a wrapped command for an agent (ape-shell / `apes run --
+// <cmd>`), the agent captures THIS process's stdout as the command's
+// result. The wrapped command's own output reaches fd 1 directly
+// (execFileSync stdio:'inherit'), but apes's own diagnostics — grant
+// requests, adapter installs, "Fetching grant token", etc., emitted via
+// consola and console.log — also write to the JS-level stdout stream and
+// would corrupt that result (e.g. `gh … --jq '.[].number'` returning
+// "ℹ Requesting grant…\n473"). Point JS-level stdout writes at stderr for
+// the duration so the captured result is exactly the wrapped command's
+// output. The wrapped command (fd 1) is unaffected; the grant-token
+// branch keeps its token on real stdout via writeRealStdout. Human mode
+// is untouched — diagnostics stay on stdout for interactive use.
+let writeRealStdout: (s: string) => void = (s) => { process.stdout.write(s) }
+
+function routeDiagnosticsToStderrForWrappedAgentRun(): void {
+  const original = process.stdout.write.bind(process.stdout)
+  writeRealStdout = (s) => { original(s) }
+  process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) =>
+    (process.stderr.write as (c: string | Uint8Array, ...a: unknown[]) => boolean)(chunk, ...rest)
+  ) as typeof process.stdout.write
+}
+
 // Poll interval + max-minutes helpers live in `../grant-poll.ts` so they
 // are shared with the CLI-side wait loop in `commands/grants/run.ts --wait`.
 // See that module for the full rationale; in this file we only need the
@@ -246,6 +268,12 @@ export const runCommand = defineCommand({
   },
   async run({ rawArgs, args }) {
     const wrappedCommand = extractWrappedCommand(rawArgs ?? [])
+
+    // Agent capturing a wrapped command's stdout — keep apes diagnostics
+    // off it (see routeDiagnosticsToStderrForWrappedAgentRun).
+    if (wrappedCommand.length > 0 && getUserMode() === 'agent') {
+      routeDiagnosticsToStderrForWrappedAgentRun()
+    }
 
     if (args.shell && wrappedCommand.length > 0) {
       // Shell mode: ape-shell -c "command" → apes run --shell -- bash -c "command"
@@ -738,7 +766,9 @@ function executeWithGrantToken(opts: {
     }
   }
   else {
-    process.stdout.write(token)
+    // The token IS the intended result for non-escapes audiences, so it
+    // must reach real stdout even when diagnostics were routed to stderr.
+    writeRealStdout(token)
   }
 }
 
