@@ -61,9 +61,11 @@ function readPersona(file?: string): string {
   return DEFAULT_PERSONA
 }
 
-async function fetchIssue(forge: Forge, ref: string): Promise<IssueRef> {
-  const res = await runApeShell(buildIssueGet(forge, ref))
-  if (res.exit_code !== 0) throw new CliError(`could not fetch issue ${ref}: ${res.stderr.slice(0, 200)}`)
+async function fetchIssue(forge: Forge, ref: string, repo: string): Promise<IssueRef> {
+  // Pass repo explicitly: fetchIssue runs before the clone, so the CWD is
+  // not the target repo and `gh issue view` would otherwise fail.
+  const res = await runApeShell(buildIssueGet(forge, ref, repo))
+  if (res.exit_code !== 0) throw new CliError(`could not fetch issue ${ref}: ${(res.stderr || res.stdout).slice(0, 200)}`)
   const j = JSON.parse(res.stdout) as { number?: number, id?: number, title?: string, fields?: { 'System.Title'?: string }, body?: string }
   const number = j.number ?? j.id ?? Number(ref)
   const title = j.title ?? j.fields?.['System.Title'] ?? `issue ${ref}`
@@ -141,7 +143,7 @@ export const codeAgentCommand = defineCommand({
     }
 
     for (const ref of refs) {
-      const issue = await fetchIssue(forge, ref)
+      const issue = await fetchIssue(forge, ref, repo)
       consola.start(`coding issue #${issue.number}: ${issue.title}`)
       const result = await runCodingTask({ issue, repo, forge }, deps)
       consola.box(`#${issue.number} -> ${result.outcome}\nPR: ${result.prRef ?? '(none)'}\n${result.reason}`)
