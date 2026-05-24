@@ -69,6 +69,7 @@ describe('TroopClient', () => {
       hostId: 'AAAA-BBBB',
       ownerEmail: 'patrick@example.com',
       pubkeySsh: 'ssh-ed25519 …',
+      pubkeyX25519: 'x25519-pub-key',
     })
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('http://localhost:3010/api/agents/me/sync')
@@ -79,7 +80,18 @@ describe('TroopClient', () => {
       host_id: 'AAAA-BBBB',
       owner_email: 'patrick@example.com',
       pubkey_ssh: 'ssh-ed25519 …',
+      // Without this the capability broker can never seal secrets to the
+      // agent — every bind 409s. Regression guard.
+      pubkey_x25519: 'x25519-pub-key',
     })
+  })
+
+  it('omits pubkey_x25519 when not provided', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ first_sync: false }), { status: 200 }))
+    const client = new TroopClient('http://localhost:3010', 'jwt')
+    await client.sync({ hostname: 'm', hostId: 'h', ownerEmail: 'o@e.com' })
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string)
+    expect(body).not.toHaveProperty('pubkey_x25519')
   })
 
   it('startRun maps task_id, finaliseRun PATCHes the run id', async () => {
