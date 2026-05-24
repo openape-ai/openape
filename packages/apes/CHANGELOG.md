@@ -1,5 +1,20 @@
 # @openape/apes
 
+## 1.28.8
+
+### Patch Changes
+
+- [#479](https://github.com/openape-ai/openape/pull/479) [`0db46c8`](https://github.com/openape-ai/openape/commit/0db46c88a20fb8458e770a2bc8cd641a948710ba) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - fix(coding): set git identity + push auth, and check commit/push/PR exit codes
+
+  A freshly-spawned agent has no git identity, and `git push` over HTTPS
+  needs the forge token — so the coding loop's commit/push silently failed
+  and, because it didn't check exit codes, still reported `awaiting-human`
+  with no PR ever created. The loop now: commits with a default author
+  identity (overridable via `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`), pushes
+  through the `gh` credential helper (which reads the materialized
+  GH_TOKEN), and returns `run-failed` with the real error if commit, push,
+  or `pr create` fails — never a phantom PR.
+
 ## 1.28.7
 
 ### Patch Changes
