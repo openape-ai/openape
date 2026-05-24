@@ -573,8 +573,12 @@ async function runAdapterMode(
 
   // If caller wants to run as another user (e.g. root), auto-switch to the escapes audience flow.
   // Adapter mode (Shapes) is user-level and cannot elevate privileges.
+  // Pass the argv array through so commands carrying shell metacharacters
+  // or spaces (e.g. `sh -c "mkdir … && cat > …"` from the nest secret
+  // relay) survive intact — joining to a string and re-splitting on spaces
+  // would shatter them and escapes would reject the mangled argv (exit 64).
   if (args.as) {
-    await runAudienceMode('escapes', command.join(' '), args)
+    await runAudienceMode('escapes', command.join(' '), args, command)
     return
   }
 
@@ -650,6 +654,11 @@ async function runAudienceMode(
   audience: string,
   action: string,
   args: Record<string, unknown>,
+  // When provided, the exact argv to authorize + execute. Avoids the
+  // lossy `action.split(' ')` round-trip for commands whose arguments
+  // contain spaces or shell metacharacters (the `--as` wrapped-command
+  // path). `action` is still used for the human-readable grant display.
+  commandArgv?: string[],
 ) {
   const auth = loadAuth()
   if (!auth) {
@@ -658,7 +667,7 @@ async function runAudienceMode(
 
   const idp = getIdpUrl(args.idp as string | undefined)!
   const grantsUrl = await getGrantsEndpoint(idp)
-  const command = action.split(' ')
+  const command = commandArgv ?? action.split(' ')
   const targetHost = (args.host as string) || hostname()
   const runAs = resolveRunAsTarget((args.as as string | undefined) ?? undefined)
 
