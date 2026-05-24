@@ -15,6 +15,9 @@ import { openString } from '@openape/core'
 const CONFIG_DIR = join(homedir(), '.config', 'openape')
 export const SECRETS_DIR = join(CONFIG_DIR, 'secrets.d')
 export const X25519_KEY_PATH = join(CONFIG_DIR, 'agent-x25519.key')
+// Public half written alongside the private key at spawn (agent-bootstrap).
+// Reported to troop on sync so the capability broker can seal secrets to it.
+export const X25519_PUBKEY_PATH = `${X25519_KEY_PATH}.pub`
 
 function envNameFromFile(file: string): string | null {
   if (!file.endsWith('.blob')) return null
@@ -25,6 +28,12 @@ function envNameFromFile(file: string): string | null {
 export function readAgentEncryptionKey(keyPath = X25519_KEY_PATH): string | null {
   if (!existsSync(keyPath)) return null
   const k = readFileSync(keyPath, 'utf8').trim()
+  return k.length > 0 ? k : null
+}
+
+export function readAgentEncryptionPublicKey(pubPath = X25519_PUBKEY_PATH): string | null {
+  if (!existsSync(pubPath)) return null
+  const k = readFileSync(pubPath, 'utf8').trim()
   return k.length > 0 ? k : null
 }
 
