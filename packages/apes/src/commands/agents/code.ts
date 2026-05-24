@@ -42,9 +42,15 @@ function readLitellmConfig(model?: string): RuntimeConfig {
   for (const k of ['LITELLM_API_KEY', 'LITELLM_MASTER_KEY', 'LITELLM_BASE_URL']) {
     if (process.env[k]) env[k] = process.env[k]!
   }
-  const apiKey = env.LITELLM_API_KEY || env.LITELLM_MASTER_KEY
   const apiBase = (env.LITELLM_BASE_URL || 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
-  if (!apiKey) throw new CliError('No LITELLM_API_KEY / LITELLM_MASTER_KEY in ~/litellm/.env or env.')
+  // A LiteLLM proxy bound to loopback can run keyless (any local process
+  // already has host access), so a localhost base URL needs no token — the
+  // proxy ignores the Authorization header. This lets an agent run with no
+  // litellm config at all (the default base is loopback). A remote base
+  // URL still requires a key.
+  const isLoopback = /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:\/|$)/.test(apiBase)
+  const apiKey = env.LITELLM_API_KEY || env.LITELLM_MASTER_KEY || (isLoopback ? 'sk-loopback-noauth' : '')
+  if (!apiKey) throw new CliError('No LITELLM_API_KEY / LITELLM_MASTER_KEY for non-loopback LITELLM_BASE_URL.')
   return { apiBase, apiKey, model: model || process.env.APE_CHAT_BRIDGE_MODEL || 'claude-haiku-4-5' }
 }
 
