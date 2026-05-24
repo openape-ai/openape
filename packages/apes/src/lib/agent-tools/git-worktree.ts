@@ -104,9 +104,19 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
     `git -C ${q(baseDir)} worktree prune 2>/dev/null || true`,
     `rm -rf ${q(wt)} 2>/dev/null || true`,
   ].join('; ')
+  // Non-interactive GitHub auth for the clone (shared by all its worktrees).
+  // A spawned agent's git defaults to credential.helper=osxkeychain, which
+  // hangs headless (no GUI) — so ANY `git push` the LLM runs itself would
+  // block. Point credential.helper at $GH_TOKEN (read from the gated shell's
+  // env at push time, never stored) so every git operation authenticates
+  // without a prompt. GitHub-only; other forges keep their default helper.
+  const ghAuth = /github\.com/i.test(source)
+    ? `git -C ${q(baseDir)} config credential.helper '!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'`
+    : 'true'
   return [
     `mkdir -p ${q(reposRoot())} ${q(workRoot())}`,
     clone,
+    ghAuth,
     `git -C ${q(baseDir)} fetch --quiet || true`,
     `{ ${reset}; }`,
     `git -C ${q(baseDir)} worktree add -B ${q(br)} ${q(wt)}`,
