@@ -83,7 +83,10 @@ export const forgeTools: ToolDefinition[] = [
     },
     execute: async (args: unknown) => {
       const a = args as { forge?: unknown, remote?: unknown, ref: string }
-      return await runApeShell(buildIssueGet(resolveForge(a), a.ref))
+      // Pass the remote so the lookup works even when the CWD isn't the
+      // target repo (e.g. before a clone).
+      const repo = typeof a.remote === 'string' ? a.remote : undefined
+      return await runApeShell(buildIssueGet(resolveForge(a), a.ref, repo))
     },
   },
 ]
