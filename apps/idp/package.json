@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
-    "@nuxt/ui": "^4.7.1",
+    "@nuxt/ui": "^4.8.0",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",

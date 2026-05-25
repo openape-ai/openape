@@ -18,9 +18,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.90",
+    "@iconify-json/lucide": "^1.2.109",
     "@libsql/client": "^0.17.3",
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "4.8.0",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",

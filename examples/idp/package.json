@@ -12,7 +12,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "4.8.0",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/unstorage-s3-driver": "workspace:*",
     "aws4fetch": "^1.0.20",

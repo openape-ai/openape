@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@nuxt/module-builder": "^1.0.2",
-    "@nuxt/ui": "^4.7.1",
+    "@nuxt/ui": "^4.8.0",
     "@types/node": "^22.19.13",
     "nuxt": "^4.4.6",
     "tailwindcss": "^4.2.1",
