@@ -1,86 +1,24 @@
 // `apes nest install` — bootstrap the local nest-daemon.
 //
 // Stage 1 MVP: the daemon runs as the human user (a future stage will
-// migrate to a dedicated `_openape_nest` service-account). Setup is
-// three things:
-//
-//   1. Write ~/Library/LaunchAgents/ai.openape.nest.plist (user domain
-//      — autostarts at login, KeepAlive=true)
-//   2. `launchctl bootstrap` the plist into the user-launchd domain
-//   3. Print instructions for the always-grant the user needs to
-//      approve once at id.openape.ai/grant-approval
+// migrate to a dedicated `_openape_nest` service-account). The
+// platform-specific bits (plist on macOS / systemd unit on Linux) live
+// behind `getHostPlatform().installNestSupervisor`. The command here
+// keeps the platform-neutral setup: writing the shapes adapter,
+// seeding the bridge-model env, resolving binary paths, and the
+// post-install human-facing instructions.
 //
 // Idempotent — re-running on an already-installed nest just re-bootstraps
 // (effectively a restart).
 
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir, userInfo } from 'node:os'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import { getHostPlatform } from '../../lib/host-platform'
 import { APES_AGENTS_ADAPTER_TOML } from './apes-agents-adapter'
 import { NEST_DATA_DIR } from './enroll'
-
-const PLIST_LABEL = 'ai.openape.nest'
-
-function plistPath(): string {
-  return join(homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`)
-}
-
-function escape(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-interface PlistArgs {
-  nestBin: string
-  apesBin: string
-  /** macOS user home — used for log file path + PATH (where bun lives). */
-  userHome: string
-  /**
-   * Nest data dir — `HOME` for the daemon process so apes-cli reads
-   * the nest's own auth.json (not the human's) when invoking
-   * subprocesses like `apes run --as root -- apes agents spawn`.
-   */
-  nestHome: string
-  port: number
-}
-
-function buildPlist(args: PlistArgs): string {
-  const logsDir = join(args.userHome, 'Library', 'Logs')
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${escape(PLIST_LABEL)}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${escape(args.nestBin)}</string>
-  </array>
-  <key>WorkingDirectory</key>
-  <string>${escape(args.nestHome)}</string>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>ThrottleInterval</key>
-  <integer>10</integer>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>HOME</key><string>${escape(args.nestHome)}</string>
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <key>OPENAPE_NEST_PORT</key><string>${args.port}</string>
-    <key>OPENAPE_APES_BIN</key><string>${escape(args.apesBin)}</string>
-  </dict>
-  <key>StandardOutPath</key>
-  <string>${escape(logsDir)}/openape-nest.log</string>
-  <key>StandardErrorPath</key>
-  <string>${escape(logsDir)}/openape-nest.log</string>
-</dict>
-</plist>
-`
-}
 
 /**
  * Bundled `apes-agents` shapes adapter — written into
@@ -172,7 +110,7 @@ export const installNestCommand = defineCommand({
     const nestBin = findBinary('openape-nest')
     const apesBin = findBinary('apes')
 
-    consola.info(`Installing nest at ${plistPath()}`)
+    consola.info(`Installing nest supervisor`)
     consola.info(`  nest binary: ${nestBin}`)
     consola.info(`  apes binary: ${apesBin}`)
     consola.info(`  HTTP port:   ${port}`)
@@ -185,35 +123,19 @@ export const installNestCommand = defineCommand({
     // Adapter first — capability-grants need it.
     installAdapter()
 
-    mkdirSync(join(homeDir, 'Library', 'LaunchAgents'), { recursive: true })
-
     // nest-data-dir is HOME for the daemon — apes-cli subprocesses
     // it spawns (apes run --as root --) read auth.json from the nest's
     // own enrolled identity, not the human's, so YOLO-policy on the
     // nest-agent gates them.
     mkdirSync(NEST_DATA_DIR, { recursive: true })
-    const desired = buildPlist({ nestBin, apesBin, userHome: homeDir, nestHome: NEST_DATA_DIR, port })
-    let existing = ''
-    try { existing = readFileSync(plistPath(), 'utf8') }
-    catch { /* not yet installed */ }
 
-    if (existing !== desired) {
-      writeFileSync(plistPath(), desired, { mode: 0o644 })
-      consola.success('Wrote launchd plist')
-    }
-    else {
-      consola.info('plist already up to date')
-    }
-
-    // Idempotent (re)load. bootout silently no-ops if the job isn't
-    // loaded yet; bootstrap fails loud if the plist has a syntax error,
-    // which is what we want.
-    const uid = userInfo().uid
-    try {
-      execFileSync('/bin/launchctl', ['bootout', `gui/${uid}/${PLIST_LABEL}`], { stdio: 'ignore' })
-    }
-    catch { /* not loaded */ }
-    execFileSync('/bin/launchctl', ['bootstrap', `gui/${uid}`, plistPath()], { stdio: 'inherit' })
+    await getHostPlatform().installNestSupervisor({
+      nestBin,
+      apesBin,
+      userHome: homeDir,
+      nestHome: NEST_DATA_DIR,
+      port,
+    })
     consola.success(`Nest daemon bootstrapped — http://127.0.0.1:${port}`)
 
     consola.info('')
