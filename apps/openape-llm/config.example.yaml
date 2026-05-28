@@ -1,0 +1,39 @@
+# Example LiteLLM proxy config for the OpenApe pod.
+#
+# Inside the pod the proxy binds 127.0.0.1:4000 (compose-private
+# network) — all agents reach it via http://openape-llm:4000/v1 (compose
+# service-name resolution) or http://127.0.0.1:4000/v1 on the host
+# when published.
+#
+# Copy this to your own config.yaml and supply real API keys via env
+# (LiteLLM expands ${ENV_NAME} at load time). For a hatched cloud
+# instance, the seed-secrets flow injects these.
+
+model_list:
+  # ChatGPT via Patrick's OAuth — same setup as the macOS host.
+  - model_name: gpt-5.4
+    litellm_params:
+      model: chatgpt/gpt-5.4
+      api_key: ${CHATGPT_OAUTH_TOKEN}
+
+  - model_name: gpt-5.4-pro
+    litellm_params:
+      model: chatgpt/gpt-5.4-pro
+      api_key: ${CHATGPT_OAUTH_TOKEN}
+
+  # Anthropic Claude — direct API.
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: ${ANTHROPIC_API_KEY}
+
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: anthropic/claude-opus-4-7
+      api_key: ${ANTHROPIC_API_KEY}
+
+# The pod network is the trust boundary — master_key matches what the
+# nest seeds into /var/lib/openape/nest/litellm/.env so agents can
+# authenticate.
+general_settings:
+  master_key: ${LITELLM_MASTER_KEY}
