@@ -50,11 +50,15 @@ function agentNameFromRecipe(name: string): string {
  * a sensible default.
  */
 export interface DeployPlanOptions {
-  /** Use this agent name instead of deriving it from the recipe (the
-   *  owner named the agent in the spawn dialog — recipe is additive). */
+  /**
+   * Use this agent name instead of deriving it from the recipe (the
+   *  owner named the agent in the spawn dialog — recipe is additive).
+   */
   agentName?: string
-  /** Free-text prompt the owner added; becomes the agent's
-   *  user_addendum on top of the recipe intent. */
+  /**
+   * Free-text prompt the owner added; becomes the agent's
+   *  user_addendum on top of the recipe intent.
+   */
   userAddendum?: string
 }
 
