@@ -5,7 +5,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { readAgentEncryptionPublicKey } from '../../lib/agent-secrets-runtime'
 import { CliError } from '../../errors'
-import { getHostId, getHostname } from '../../lib/macos-host'
+import { getHostPlatform } from '../../lib/host-platform'
 import { resolveTroopUrl, TroopClient } from '../../lib/troop-client'
 
 interface AuthJson {
@@ -80,8 +80,9 @@ export const syncAgentCommand = defineCommand({
     const troopUrl = resolveTroopUrl(args['troop-url'] as string | undefined)
     const client = new TroopClient(troopUrl, auth.access_token)
 
-    const hostId = getHostId()
-    const host = getHostname()
+    const platform = getHostPlatform()
+    const hostId = platform.getHostId()
+    const host = platform.getHostname()
     if (!hostId) {
       throw new CliError('Could not read IOPlatformUUID — is this macOS? Troop sync only works on macOS for v1.')
     }

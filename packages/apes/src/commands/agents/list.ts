@@ -3,7 +3,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError } from '../../errors'
 import { apiFetch } from '../../http'
-import { isDarwin, listMacOSUserNames, lookupMacOSUserForAgent, macOSUsernameForAgent } from '../../lib/macos-user'
+import { getHostPlatform, isDarwin } from '../../lib/host-platform'
 
 interface IdpUser {
   email: string
@@ -45,16 +45,17 @@ export const listAgentsCommand = defineCommand({
       ? all
       : all.filter(u => u.isActive !== false)
 
-    const osUsers = isDarwin() ? listMacOSUserNames() : new Set<string>()
-    // Resolve macOS state per agent, checking both the prefixed
-    // (`openape-agent-<name>`) and bare (`<name>`) dscl records so
-    // legacy pre-prefix agents keep showing up in the table.
+    const platform = getHostPlatform()
+    const osUsers = isDarwin() ? platform.listAgentUserNames() : new Set<string>()
+    // Resolve OS state per agent, checking both the prefixed
+    // (`openape-agent-<name>`) and bare (`<name>`) records so legacy
+    // pre-prefix agents keep showing up in the table.
     const osStateOf = (agentName: string): { osUser: boolean, home: string | null } => {
-      const u = lookupMacOSUserForAgent(agentName)
+      const u = platform.lookupAgentUser(agentName)
       if (u) return { osUser: true, home: u.homeDir }
-      // listMacOSUserNames covers ad-hoc records that dscl-read can't see
-      // (e.g. names with unusual characters) — keep it as a sentinel.
-      if (osUsers.has(macOSUsernameForAgent(agentName)) || osUsers.has(agentName)) {
+      // listAgentUserNames covers ad-hoc records that the read path can't
+      // see (e.g. names with unusual characters) — keep it as a sentinel.
+      if (osUsers.has(platform.agentUsername(agentName)) || osUsers.has(agentName)) {
         return { osUser: true, home: null }
       }
       return { osUser: false, home: null }
