@@ -21,6 +21,24 @@ const macosUserMock = {
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
+// The host-platform indirection replaces direct imports of macOS helpers
+// in production code. Mock its surface here too so the tests can flip
+// isDarwin / control the agent-user lookups deterministically.
+const hostPlatformMock = {
+  isDarwin: vi.fn(() => true),
+  isLinux: vi.fn(() => false),
+  getHostPlatform: vi.fn(() => ({
+    getHostId: () => 'host-id',
+    getHostname: () => 'host',
+    agentUsername: (n: string) => macosUserMock.macOSUsernameForAgent(n),
+    lookupAgentUser: () => null,
+    readAgentUser: () => macosUserMock.readMacOSUser(),
+    listAgentUserNames: () => macosUserMock.listMacOSUserNames(),
+    listOrphanAgentUsers: () => [],
+  })),
+}
+vi.mock('../src/lib/host-platform/index.js', () => hostPlatformMock)
+
 vi.mock('../src/lib/keygen.js', async () => {
   const actual = await vi.importActual<typeof import('../src/lib/keygen.js')>('../src/lib/keygen.js')
   return {
@@ -97,6 +115,7 @@ describe('apes agents spawn', () => {
     macosUserMock.readMacOSUser.mockReturnValue(null)
     macosUserMock.whichBinary.mockImplementation((name: string) => `/usr/local/bin/${name}`)
     macosUserMock.isShellRegistered.mockReturnValue(true)
+    hostPlatformMock.isDarwin.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -113,6 +132,7 @@ describe('apes agents spawn', () => {
 
   it('rejects on non-darwin platforms', async () => {
     macosUserMock.isDarwin.mockReturnValue(false)
+    hostPlatformMock.isDarwin.mockReturnValue(false)
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({
       args: { name: 'agent-a' },
