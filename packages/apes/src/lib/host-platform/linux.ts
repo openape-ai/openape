@@ -1,37 +1,35 @@
-// Linux HostPlatform impl — placeholder. Filled in Milestone B alongside
-// `escapes-linux` + the container nest. All methods throw until then,
-// except `listOrphanAgentUsers` which legitimately has no concept on
-// Linux (userdel + groupdel are clean — no tombstones).
+// Linux HostPlatform impl. Identity + agent-user lookup go through
+// `getent` + `/etc/machine-id`; supervisor + privileged-exec go through
+// systemd + sudo. The agent-user lifecycle (create / destroy) is NOT a
+// platform method — it's an orchestration concern in commands/agents/*
+// that builds a bash script and hands it to `runPrivilegedBash`.
 //
-// IMPORTANT: keep this module side-effect-free at top level — it is
-// imported on macOS too (the factory in ./index picks lazily).
+// IMPORTANT: side-effect-free at top level — imported on macOS too.
 
-import type {
-  AgentUserSummary,
-  ExecResult,
-  HostPlatform,
-  NestSupervisorSpec,
-  OrphanRecord,
-} from './index'
-
-function notImplemented(method: string): never {
-  throw new Error(`linuxHostPlatform.${method} not implemented (Milestone B)`)
-}
+import { getLinuxHostId, getLinuxHostname } from './linux-host'
+import { listLinuxUserNames, readLinuxUser } from './linux-user'
+import { runAsAgentUserOnLinux, runPrivilegedBashOnLinux } from './linux-exec'
+import { installNestSupervisorOnLinux, uninstallNestSupervisorOnLinux } from './linux-nest'
+import type { AgentUserSummary, HostPlatform, OrphanRecord } from './index'
 
 export const linuxHostPlatform: HostPlatform = {
-  getHostId: () => notImplemented('getHostId'),
-  getHostname: () => notImplemented('getHostname'),
+  getHostId: getLinuxHostId,
+  getHostname: getLinuxHostname,
 
-  agentUsername: (_n: string) => notImplemented('agentUsername'),
-  lookupAgentUser: (_n: string): AgentUserSummary | null => notImplemented('lookupAgentUser'),
-  readAgentUser: (_n: string): AgentUserSummary | null => notImplemented('readAgentUser'),
-  listAgentUserNames: (): Set<string> => notImplemented('listAgentUserNames'),
-  // No tombstone concept on Linux — userdel + groupdel are clean. Safe default.
+  // No prefix on Linux — the agent name IS the OS username. In the
+  // container, the OpenApe namespace IS the namespace; no need to
+  // disambiguate with `openape-agent-`. (Linux limits usernames to
+  // 32 chars, so a prefix would also reject longer agent names.)
+  agentUsername: (agentName: string) => agentName,
+  lookupAgentUser: (agentName: string): AgentUserSummary | null => readLinuxUser(agentName),
+  readAgentUser: (osName: string): AgentUserSummary | null => readLinuxUser(osName),
+  listAgentUserNames: listLinuxUserNames,
+  // No tombstone concept on Linux — userdel + groupdel are clean.
   listOrphanAgentUsers: (): OrphanRecord[] => [],
 
-  installNestSupervisor: async (_s: NestSupervisorSpec): Promise<void> => notImplemented('installNestSupervisor'),
-  uninstallNestSupervisor: async (): Promise<void> => notImplemented('uninstallNestSupervisor'),
+  installNestSupervisor: installNestSupervisorOnLinux,
+  uninstallNestSupervisor: uninstallNestSupervisorOnLinux,
 
-  runPrivilegedBash: async (_script: string): Promise<void> => notImplemented('runPrivilegedBash'),
-  runAsAgentUser: async (_n: string, _argv: string[]): Promise<ExecResult> => notImplemented('runAsAgentUser'),
+  runPrivilegedBash: runPrivilegedBashOnLinux,
+  runAsAgentUser: runAsAgentUserOnLinux,
 }
