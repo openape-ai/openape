@@ -1,0 +1,5 @@
+# Operator-specific runtime files — kept untracked.
+.env
+.env.*
+!.env.example
+litellm.yaml
