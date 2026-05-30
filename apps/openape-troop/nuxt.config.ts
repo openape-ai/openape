@@ -10,12 +10,34 @@ export default defineNuxtConfig({
   // useEvent()-based session lookups in PATCH handlers that hook
   // the broadcast on the way out.
   nitro: { experimental: { asyncContext: true, websocket: true } },
-  modules: ['@nuxt/ui', '@openape/nuxt-auth-sp'],
+  modules: ['@nuxt/ui', '@openape/nuxt-auth-sp', '@nuxtjs/i18n'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
   devServer: { port: 3010 },
   compatibilityDate: '2025-01-01',
   colorMode: { preference: 'dark' },
+
+  // Browser-detected DE/EN with cookie persistence. `strategy: 'no_prefix'`
+  // keeps URLs locale-agnostic — switching language never changes the URL
+  // (troop has no SEO need for /de/agents vs /en/agents). The cookie key
+  // is namespaced to avoid colliding with the SP-session cookie.
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'en',
+    locales: [
+      { code: 'en', name: 'English', file: 'en.json' },
+      { code: 'de', name: 'Deutsch', file: 'de.json' },
+    ],
+    lazy: true,
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'troop-locale',
+      fallbackLocale: 'en',
+      redirectOn: 'root',
+      alwaysRedirect: false,
+    },
+    bundle: { optimizeTranslationDirective: false },
+  },
 
   app: {
     head: {
