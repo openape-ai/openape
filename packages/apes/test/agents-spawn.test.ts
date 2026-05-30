@@ -24,6 +24,8 @@ vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 // The host-platform indirection replaces direct imports of macOS helpers
 // in production code. Mock its surface here too so the tests can flip
 // isDarwin / control the agent-user lookups deterministically.
+const runPrivilegedBashMock = vi.fn(async () => {})
+
 const hostPlatformMock = {
   isDarwin: vi.fn(() => true),
   isLinux: vi.fn(() => false),
@@ -35,6 +37,10 @@ const hostPlatformMock = {
     readAgentUser: () => macosUserMock.readMacOSUser(),
     listAgentUserNames: () => macosUserMock.listMacOSUserNames(),
     listOrphanAgentUsers: () => [],
+    runPrivilegedBash: runPrivilegedBashMock,
+    runAsAgentUser: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
+    installNestSupervisor: vi.fn(async () => {}),
+    uninstallNestSupervisor: vi.fn(async () => {}),
   })),
 }
 vi.mock('../src/lib/host-platform/index.js', () => hostPlatformMock)
@@ -163,10 +169,7 @@ describe('apes agents spawn', () => {
     })).rejects.toThrow(/escapes/)
   })
 
-  it('happy path: registers, issues token, runs setup via apes run --as root, cleans up', async () => {
-    const { execFileSync } = await import('node:child_process')
-    const { rmSync, writeFileSync } = await import('node:fs')
-
+  it('happy path: registers, issues token, runs setup via platform.runPrivilegedBash', async () => {
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await (spawnAgentCommand as any).run({ args: { name: 'agent-a' } })
 
@@ -187,18 +190,11 @@ describe('apes agents spawn', () => {
     expect(buildArgs.x25519PrivateKey).toBe('WDI1NTE5X1BSSVZfRkFLRQ')
     expect(buildArgs.x25519PublicKey).toBe('WDI1NTE5X1BVQl9GQUtF')
 
-    expect(writeFileSync).toHaveBeenCalledWith(
-      '/tmp/apes-spawn-test/setup.sh',
-      '#!/bin/bash\necho setup\n',
-      { mode: 0o700 },
-    )
-
-    expect(execFileSync).toHaveBeenCalledTimes(1)
-    const [bin, argv] = vi.mocked(execFileSync).mock.calls[0]!
-    expect(bin).toBe('/usr/local/bin/apes')
-    expect(argv).toEqual(['run', '--as', 'root', '--wait', '--', 'bash', '/tmp/apes-spawn-test/setup.sh'])
-
-    expect(rmSync).toHaveBeenCalledWith('/tmp/apes-spawn-test', { recursive: true, force: true })
+    // The spawn script flows to the host platform's privileged-exec boundary;
+    // the boundary itself (tmp file + apes run --as root --wait --) is the
+    // platform's responsibility and unit-tested separately.
+    expect(runPrivilegedBashMock).toHaveBeenCalledTimes(1)
+    expect(runPrivilegedBashMock).toHaveBeenCalledWith('#!/bin/bash\necho setup\n')
   })
 
   it('--no-claude-hook passes nulls for the claude settings + hook source', async () => {
@@ -210,14 +206,12 @@ describe('apes agents spawn', () => {
     expect(buildArgs.hookScriptSource).toBeNull()
   })
 
-  it('cleans up the scratch dir even when escapes fails', async () => {
-    const { execFileSync } = await import('node:child_process')
-    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('approval denied') })
-    const { rmSync } = await import('node:fs')
+  it('propagates errors when runPrivilegedBash fails', async () => {
+    runPrivilegedBashMock.mockImplementationOnce(async () => { throw new Error('approval denied') })
 
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({ args: { name: 'agent-a' } })).rejects.toThrow(/approval denied/)
-
-    expect(rmSync).toHaveBeenCalledWith('/tmp/apes-spawn-test', { recursive: true, force: true })
+    // Tmp-dir lifecycle is owned by runPrivilegedBash; the spawn command no
+    // longer manages a scratch dir of its own.
   })
 })

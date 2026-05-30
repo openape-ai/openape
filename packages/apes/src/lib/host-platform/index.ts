@@ -34,46 +34,17 @@ export interface OrphanRecord {
   homeDir: string
 }
 
-export interface CreateAgentUserSpec {
-  agentName: string
-  /** Authorized SSH key (ed25519) for the agent's session. */
-  sshPublicKey: string
-  /** X25519 capability seal pubkey (base64). Optional pre-M2. */
-  encryptionPublicKey?: string
-  /** True when re-spawning over an existing account (idempotent path). */
-  respawn?: boolean
-}
-
-export interface DestroyAgentUserSpec {
-  agentName: string
-  /**
-   * Leave the user record as a tombstone instead of deleting it.
-   * macOS: forced true under the FDA-less audit-session — `cleanup-orphans`
-   * later sweeps from interactive sudo. Linux: ignored; `userdel` succeeds.
-   */
-  keepTombstone?: boolean
-}
-
-export interface BridgeSupervisorSpec {
-  agentName: string
-  agentUsername: string
-  homeDir: string
-  /** PATH + OPENAPE_* env vars passed to the ape-agent invocation. */
-  env: Record<string, string>
-}
-
-export interface SyncSupervisorSpec {
-  agentName: string
-  agentUsername: string
-  homeDir: string
-}
-
 export interface NestSupervisorSpec {
-  /** User the nest runs as (macOS: `_openape_nest`, Linux: `openape`). */
-  user: string
-  homeDir: string
-  /** UID for launchctl user-domain lookup (macOS only). */
-  uid?: number
+  /** Absolute path to the `openape-nest` binary. */
+  nestBin: string
+  /** Absolute path to the `apes` binary (passed via env to subprocesses). */
+  apesBin: string
+  /** Human user's home directory (where launchd writes the per-user agent). */
+  userHome: string
+  /** The nest's own data dir — becomes `HOME` for the daemon process. */
+  nestHome: string
+  /** HTTP port the nest API listens on. */
+  port: number
 }
 
 export interface ExecResult {
@@ -101,24 +72,18 @@ export interface HostPlatform {
   /** Tombstone records. macOS only; Linux returns []. */
   listOrphanAgentUsers: () => OrphanRecord[]
 
-  // Agent users — lifecycle (privileged)
-  createAgentUser: (spec: CreateAgentUserSpec) => Promise<AgentUserSummary>
-  destroyAgentUser: (spec: DestroyAgentUserSpec) => Promise<void>
-
-  // Supervisor — per-agent bridge
-  installBridgeSupervisor: (spec: BridgeSupervisorSpec) => Promise<void>
-  removeBridgeSupervisor: (agentName: string) => Promise<void>
-  restartBridgeSupervisor: (agentName: string) => Promise<void>
-
-  // Supervisor — per-agent troop-sync (Linux may collapse this into the bridge unit)
-  installSyncSupervisor: (spec: SyncSupervisorSpec) => Promise<void>
-  removeSyncSupervisor: (agentName: string) => Promise<void>
-
-  // Supervisor — the nest itself
+  // Supervisor — the host-local nest itself
   installNestSupervisor: (spec: NestSupervisorSpec) => Promise<void>
-  uninstallNestSupervisor: (spec: NestSupervisorSpec) => Promise<void>
+  uninstallNestSupervisor: () => Promise<void>
 
-  // Run-as (sandboxed exec inside an agent's account)
+  // Privileged execution boundary (root + per-agent-user). On macOS these
+  // route through `apes run --as <user> --wait`; on Linux they map to
+  // sudo/userspec inside the container or namespaced exec on the host.
+  // Per-agent createAgentUser / destroyAgentUser stay in commands/agents/*
+  // as orchestration; they shell into `runPrivilegedBash` with the
+  // already-built script. This keeps the interface a thin OS-escalation
+  // boundary rather than a sprawling user-lifecycle facade.
+  runPrivilegedBash: (script: string) => Promise<void>
   runAsAgentUser: (agentName: string, argv: string[]) => Promise<ExecResult>
 }
 

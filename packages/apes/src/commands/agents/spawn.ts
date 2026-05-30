@@ -1,7 +1,3 @@
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
@@ -161,8 +157,6 @@ export const spawnAgentCommand = defineCommand({
     // NFSHomeDirectory attribute changes. setup.sh below interpolates
     // both into the dscl create call.
     const homeDir = `/var/openape/homes/${macOSUsername}`
-    const scratch = mkdtempSync(join(tmpdir(), `apes-spawn-${name}-`))
-    const scriptPath = join(scratch, 'setup.sh')
 
     try {
       consola.start(`Generating keypair for ${name}…`)
@@ -261,29 +255,15 @@ export const spawnAgentCommand = defineCommand({
         bridge,
         troop,
       })
-      writeFileSync(scriptPath, script, { mode: 0o700 })
-
-      // Skip the second escalation if we're already root. This happens
-      // when `apes nest spawn` (or any wrapper) invokes us via
-      // `apes run --as root -- apes agents spawn` — the outer `apes
-      // run` already obtained Patrick's grant + escapes-setuid us to
-      // root, so an inner `apes run --as root` would just request a
-      // second redundant grant. Direct call to bash skips that and
-      // gets us down to ONE approval per spawn (the outer one).
-      const alreadyRoot = process.getuid?.() === 0
-      if (alreadyRoot) {
-        consola.start('Running privileged setup directly (already root)…')
-        execFileSync('bash', [scriptPath], { stdio: 'inherit' })
-      }
-      else {
-        consola.start('Running privileged setup as root via `apes run --as root --wait`…')
+      // runPrivilegedBash short-circuits to a direct bash exec when we're
+      // already root (nest → `apes run --as root -- apes agents spawn`
+      // already obtained the grant); otherwise it routes through
+      // `apes run --as root --wait` for the DDISA grant cycle.
+      consola.start('Running privileged setup…')
+      if (process.getuid?.() !== 0) {
         consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
-        // --wait is critical: without it `apes run --as root` returns
-        // exit 75 (pending) immediately, which we'd interpret as
-        // failure and which would leave a dangling grant referencing
-        // a scratch dir we'd cleaned up in the finally below.
-        execFileSync(apes, ['run', '--as', 'root', '--wait', '--', 'bash', scriptPath], { stdio: 'inherit' })
       }
+      await platform.runPrivilegedBash(script)
 
       // Phase F: register in the Nest's registry directly (replaces
       // the old intent-channel handler in the Nest). The Nest
@@ -326,7 +306,7 @@ export const spawnAgentCommand = defineCommand({
       console.log(`  apes run --as ${name} -- claude --session-name ${name} --dangerously-skip-permissions`)
     }
     finally {
-      rmSync(scratch, { recursive: true, force: true })
+      // runPrivilegedBash owns the tmp-script lifecycle; nothing to clean here.
     }
   },
 })
