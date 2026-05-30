@@ -128,6 +128,35 @@ export default defineNitroPlugin(async () => {
       revoked_at INTEGER,
       PRIMARY KEY (agent_email, env)
     )`)
+
+    // chats — one persistent "main session" per (owner, agent) pair.
+    // Lazily inserted on first message either side sends.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      agent_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_message_at INTEGER
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_chats_owner_agent
+      ON chats (owner_email, agent_email)`)
+
+    // chat_messages — the conversation log. role='human'|'agent'.
+    // streaming=true while the agent's bridge is streaming a response
+    // (PATCH updates the row in place without bumping edited_at).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      edited_at INTEGER,
+      streaming INTEGER NOT NULL DEFAULT 0,
+      streaming_status TEXT,
+      reply_to TEXT
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_created
+      ON chat_messages (chat_id, created_at)`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)
