@@ -1,0 +1,13 @@
+{
+  "app": {
+    "title": "troop"
+  },
+  "locale": {
+    "english": "Englisch",
+    "german": "Deutsch"
+  },
+  "login": {
+    "email": "E-Mail",
+    "submit": "Anmelden"
+  }
+}
