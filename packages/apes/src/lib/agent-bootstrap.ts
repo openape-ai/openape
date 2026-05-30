@@ -560,7 +560,7 @@ export function runPhaseGTeardownInProcess(input: { name: string, homeDir: strin
   // the user record sticks around hidden (IsHidden=1) with a stale
   // NFSHomeDirectory. Run `sudo apes agents cleanup-orphans` from a
   // shell later to sysadminctl-deleteUser the accumulated tombstones.
-  // eslint-disable-next-line no-console
+
   console.log(`OK Phase-G teardown done for ${name} (dscl record /Users/${macOSUser} kept as tombstone)`)
 }
 

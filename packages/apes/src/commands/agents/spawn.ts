@@ -26,12 +26,13 @@ import {
   captureHostBinDirs,
   resolveBridgeConfig,
 } from '../../lib/llm-bridge'
-import { isDarwin, isShellRegistered, macOSUsernameForAgent, readMacOSUser, whichBinary } from '../../lib/macos-user'
+import { isShellRegistered, whichBinary } from '../../lib/macos-user'
+import { getHostPlatform, isDarwin } from '../../lib/host-platform'
 import { upsertNestAgent } from '../../lib/nest-registry'
 
 function readMacOSUidOrNull(name: string): number | null {
   try {
-    const u = readMacOSUser(name)
+    const u = getHostPlatform().readAgentUser(name)
     return u?.uid ?? null
   }
   catch { return null }
@@ -141,8 +142,9 @@ export const spawnAgentCommand = defineCommand({
     // dir, `apes agents list`) stay on the bare `name`. Legacy agents
     // (pre-prefix) keep working via `lookupMacOSUserForAgent` which
     // falls through to the unprefixed lookup.
-    const macOSUsername = macOSUsernameForAgent(name)
-    const existing = readMacOSUser(macOSUsername) ?? readMacOSUser(name)
+    const platform = getHostPlatform()
+    const macOSUsername = platform.agentUsername(name)
+    const existing = platform.readAgentUser(macOSUsername) ?? platform.readAgentUser(name)
     if (existing) {
       throw new CliError(`macOS user "${existing.name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
     }

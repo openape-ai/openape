@@ -8,7 +8,8 @@ import { getIdpUrl, loadAuth } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { apiFetch } from '../../http'
 import { AGENT_NAME_REGEX, buildDestroyTeardownScript, runPhaseGTeardownInProcess } from '../../lib/agent-bootstrap'
-import { isDarwin, lookupMacOSUserForAgent, macOSUsernameForAgent, whichBinary } from '../../lib/macos-user'
+import { whichBinary } from '../../lib/macos-user'
+import { getHostPlatform, isDarwin } from '../../lib/host-platform'
 import { removeNestAgent } from '../../lib/nest-registry'
 import { readPasswordSilent } from '../../lib/silent-password'
 
@@ -63,8 +64,9 @@ export const destroyAgentCommand = defineCommand({
       if (process.geteuid?.() !== 0) {
         throw new CliError('--root-stage was passed but this process is not running as root. Refusing to continue.')
       }
-      const resolved = lookupMacOSUserForAgent(name)
-      const macOSUsername = resolved?.name ?? macOSUsernameForAgent(name)
+      const platform = getHostPlatform()
+      const resolved = platform.lookupAgentUser(name)
+      const macOSUsername = resolved?.name ?? platform.agentUsername(name)
       const homeDir = resolved?.homeDir ?? `/var/openape/homes/${macOSUsername}`
       consola.start(`Running teardown for ${name} (Phase-G, root-stage)…`)
       runPhaseGTeardownInProcess({ name, homeDir, macOSUsername })
@@ -84,7 +86,7 @@ export const destroyAgentCommand = defineCommand({
     const idpAgent = owned.find(u => u.name === name)
     const idpExists = idpAgent !== undefined
 
-    const osUser = isDarwin() ? lookupMacOSUserForAgent(name) : null
+    const osUser = isDarwin() ? getHostPlatform().lookupAgentUser(name) : null
     const osUserExists = !args['keep-os-user'] && osUser !== null
 
     if (!idpExists && !osUserExists) {
@@ -141,7 +143,7 @@ export const destroyAgentCommand = defineCommand({
     }
 
     if (osUserExists) {
-      const macOSUsername = osUser?.name ?? macOSUsernameForAgent(name)
+      const macOSUsername = osUser?.name ?? getHostPlatform().agentUsername(name)
       // Fallback path depends on which dscl record we matched:
       // legacy bare-name records live under /Users/<name>, new
       // prefixed records under /var/openape/homes/<macOSUsername>.
