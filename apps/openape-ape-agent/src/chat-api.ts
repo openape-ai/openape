@@ -41,6 +41,22 @@ export interface ContactView {
 
 const MAX_BODY = 10_000
 
+/**
+ * Structural type both ChatApi (chat.openape.ai) and TroopChatApi
+ * (troop's native chat) satisfy. The bridge's consumers (cron-runner,
+ * thread-session) take this so they don't care which backend is in
+ * play; the choice is made once at construction in bridge.ts.
+ */
+export interface ChatBackend {
+  postMessage: (roomId: string, body: string, opts?: { replyTo?: string, threadId?: string, streaming?: boolean }) => Promise<PostedMessage>
+  listMessages: (roomId: string, threadId: string, limit?: number) => Promise<HistoryMessage[]>
+  patchMessage: (messageId: string, opts?: { body?: string, streaming?: boolean, streamingStatus?: string | null }) => Promise<void>
+  listContacts: () => Promise<ContactView[]>
+  requestContact: (peerEmail: string) => Promise<ContactView>
+  acceptContact: (peerEmail: string) => Promise<ContactView>
+  createThread: (roomId: string, name: string) => Promise<{ id: string, name: string }>
+}
+
 export class ChatApi {
   constructor(private endpoint: string, private bearer: () => Promise<string>) {}
 

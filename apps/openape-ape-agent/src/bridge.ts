@@ -45,6 +45,7 @@ import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
 import { ChatApi } from './chat-api'
+import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { composeSystemPrompt } from './skills'
@@ -116,12 +117,6 @@ interface Message {
   editedAt: number | null
 }
 
-interface WsFrame {
-  type: string
-  room_id: string
-  payload: Record<string, unknown>
-}
-
 interface BridgeConfig {
   endpoint: string
   apesBin: string
@@ -130,6 +125,18 @@ interface BridgeConfig {
   tools: string[]
   maxSteps: number
   roomFilter?: string
+  /**
+   * Which backend hosts the chat surface this bridge connects to.
+   * `chat` (default) targets chat.openape.ai's shape: WS at /api/ws,
+   * room+thread model, contact handshake. `troop` targets troop's
+   * native 1:1-per-(owner,agent) chat: WS at /_ws/chat, one synthetic
+   * thread, no contact dance. Set via `OPENAPE_BRIDGE_TARGET`.
+   *
+   * The two backends are not wire-compatible — the bridge picks the
+   * ChatApi impl + WS path + frame translation at startup, so a flip
+   * needs a bridge restart (pm2 restart openape-bridge-<name>).
+   */
+  target: 'chat' | 'troop'
 }
 
 /**
@@ -188,6 +195,8 @@ function readConfig(): BridgeConfig {
     )
   }
 
+  const targetRaw = (process.env.OPENAPE_BRIDGE_TARGET ?? 'chat').toLowerCase()
+  const target: BridgeConfig['target'] = targetRaw === 'troop' ? 'troop' : 'chat'
   return {
     endpoint: (process.env.APE_CHAT_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
     apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
@@ -196,6 +205,7 @@ function readConfig(): BridgeConfig {
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
     roomFilter: process.env.APE_CHAT_BRIDGE_ROOM,
+    target,
   }
 }
 
@@ -234,7 +244,12 @@ class Bridge {
   // its own message history and calls @openape/apes' runLoop directly
   // (no stdio JSON-RPC subprocess — see thread-session.ts).
   private threads = new Map<string, ThreadSession>()
-  private chat: ChatApi
+  // ChatApi and TroopChatApi expose the same surface (postMessage /
+  // listMessages / patchMessage / listContacts / requestContact /
+  // acceptContact / createThread) so the rest of the bridge calls
+  // through a structurally-typed reference without caring which
+  // backend is in play. Picked at construction time from cfg.target.
+  private chat: ChatApi | TroopChatApi
   private bearer: () => Promise<string>
   private cron: CronRunner | undefined
   // Prompt-injection gate (#277). Pure heuristic by default — pluggable
@@ -251,7 +266,9 @@ class Bridge {
       const idp = await ensureFreshIdpAuth()
       return `Bearer ${idp.access_token}`
     }
-    this.chat = new ChatApi(this.cfg.endpoint, this.bearer)
+    this.chat = this.cfg.target === 'troop'
+      ? new TroopChatApi(this.cfg.endpoint, this.bearer)
+      : new ChatApi(this.cfg.endpoint, this.bearer)
     // The cron runner ticks every 60s, fires matching tasks via the
     // same in-process runLoop the chat threads use, posts results as
     // DMs through the existing chat WebSocket connection. Replaces the
@@ -320,6 +337,30 @@ class Bridge {
     }
     if (accepted.length > 0) log(`accepted: ${accepted.join(', ')}`)
     if (skipped.length > 0) log(`skipped (not on allowlist): ${skipped.join(', ')}`)
+  }
+
+  /**
+   * Translate troop's chat-frame payload shape into the
+   * chat.openape.ai-style Message the rest of this bridge expects.
+   * Troop's payload uses `role` (human|agent) + `chatId` + no
+   * senderEmail; the bridge's handleInbound checks
+   * `senderEmail === selfEmail` to skip its own echoes, so we
+   * synthesize the email from role (agent → self, human → owner).
+   * threadId is the synthetic 'main' because troop has no threads.
+   */
+  private translateTroopPayload(chatId: string, payload: Record<string, unknown>): Message {
+    const role = payload.role === 'agent' ? 'agent' : 'human'
+    return {
+      id: String(payload.id ?? ''),
+      roomId: chatId || String(payload.chatId ?? ''),
+      threadId: 'main',
+      senderEmail: role === 'agent' ? this.selfEmail : this.ownerEmail,
+      senderAct: role,
+      body: typeof payload.body === 'string' ? payload.body : '',
+      replyTo: typeof payload.replyTo === 'string' ? payload.replyTo : null,
+      createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Math.floor(Date.now() / 1000),
+      editedAt: typeof payload.editedAt === 'number' ? payload.editedAt : null,
+    }
   }
 
   async handleInbound(msg: Message): Promise<void> {
@@ -399,7 +440,8 @@ class Bridge {
 
   async pumpOnce(): Promise<void> {
     const bearer = await this.bearer()
-    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}/api/ws?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
+    const wsPath = this.cfg.target === 'troop' ? '/_ws/chat' : '/api/ws'
+    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}${wsPath}?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
     const ws = new WebSocket(wsUrl)
     return new Promise<void>((resolve, reject) => {
       let pingTimer: NodeJS.Timeout | undefined
@@ -426,11 +468,19 @@ class Bridge {
           ? data
           : Buffer.isBuffer(data) ? data.toString('utf8') : ''
         if (!text) return
-        let frame: WsFrame
-        try { frame = JSON.parse(text) as WsFrame }
+        let frame: { type?: string, room_id?: string, chat_id?: string, payload?: Record<string, unknown> }
+        try { frame = JSON.parse(text) as typeof frame }
         catch { return }
-        if (frame.type !== 'message') return
-        void this.handleInbound(frame.payload as unknown as Message)
+        if (frame.type !== 'message' || !frame.payload) return
+        // Frame translation: troop ships `{chat_id, payload:
+        // {id,chatId,role,body,...}}` while chat.openape.ai ships
+        // `{room_id, payload:{id,roomId,threadId,senderEmail,senderAct,
+        //  body,...}}`. Normalize to the bridge's chat.openape.ai-style
+        // Message shape so handleInbound stays target-agnostic.
+        const msg: Message = this.cfg.target === 'troop'
+          ? this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
+          : (frame.payload as unknown as Message)
+        void this.handleInbound(msg)
       })
 
       ws.on('close', () => {
