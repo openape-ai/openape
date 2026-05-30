@@ -31,8 +31,18 @@ function capStdio(s: string): string {
 }
 
 export function runApeShell(cmd: string, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<ApeShellResult> {
+  // Container escape hatch: inside the OpenApe pod the container itself
+  // IS the sandbox (kernel namespaces + read-only FS overlays) — there's
+  // no DDISA layer to gate against, no upstream owner to approve grants,
+  // and `ape-shell` would fail at the auth.json check. When
+  // OPENAPE_BYPASS_APE_SHELL is set, exec the command via plain bash and
+  // surface stdout/stderr/exit_code in the same shape.
+  const bypass = process.env.OPENAPE_BYPASS_APE_SHELL === '1'
+  const [execBin, execArgs] = bypass
+    ? ['/bin/bash', ['-c', cmd]] as const
+    : [BIN, ['-c', cmd]] as const
   return new Promise<ApeShellResult>((resolveResult) => {
-    const child = spawn(BIN, ['-c', cmd], {
+    const child = spawn(execBin, execArgs, {
       env: { ...process.env, APE_WAIT: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -64,7 +74,7 @@ export function runApeShell(cmd: string, timeoutMs: number = DEFAULT_TIMEOUT_MS)
           stderr: '',
           exit_code: -1,
           error: spawnError.message,
-          hint: `Could not exec '${BIN}'. The agent host needs @openape/apes installed globally so ape-shell is on PATH.`,
+          hint: `Could not exec '${execBin}'. The agent host needs @openape/apes installed globally so ape-shell is on PATH (or set OPENAPE_BYPASS_APE_SHELL=1 to skip the gated shell entirely — meant for the OpenApe pod where the container IS the sandbox).`,
         })
         return
       }
