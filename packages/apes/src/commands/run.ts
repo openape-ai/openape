@@ -26,7 +26,7 @@ import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
-import { isDarwin, macOSUsernameForAgent, readMacOSUser } from '../lib/macos-user'
+import { getHostPlatform, isDarwin } from '../lib/host-platform'
 
 /**
  * Map an agent name (`igor`) to its macOS username (`openape-agent-igor`)
@@ -47,8 +47,9 @@ function resolveRunAsTarget(runAs: string | undefined): string | undefined {
   if (!AGENT_NAME_REGEX.test(runAs)) return runAs
   // Already prefixed (operator typed the full macOS username) — pass through.
   if (runAs.startsWith('openape-agent-')) return runAs
-  const prefixed = macOSUsernameForAgent(runAs)
-  if (readMacOSUser(prefixed)) return prefixed
+  const platform = getHostPlatform()
+  const prefixed = platform.agentUsername(runAs)
+  if (platform.readAgentUser(prefixed)) return prefixed
   return runAs
 }
 

@@ -37,8 +37,10 @@ interface RegistryFile {
   agents: AgentEntry[]
 }
 
-/** Resolve the registry path. Prefers the post-migration system
- *  location; falls back to the per-user location otherwise. */
+/**
+ * Resolve the registry path. Prefers the post-migration system
+ *  location; falls back to the per-user location otherwise.
+ */
 export function resolveRegistryPath(): string {
   if (existsSync('/var/openape/nest/agents.json')) return '/var/openape/nest/agents.json'
   if (existsSync('/var/openape/nest')) return '/var/openape/nest/agents.json'
