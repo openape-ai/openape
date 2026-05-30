@@ -153,11 +153,11 @@ export class ThreadSession {
             this.active.accumulated += delta
             this.active.throttle.schedule()
           },
-          onToolCall: ({ name }) => {
+          onToolCall: ({ name }: { name: string }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_call: ${name}`)
             void setStatus(`🔧 ${name}`)
           },
-          onToolResult: ({ name }) => {
+          onToolResult: ({ name }: { name: string }) => {
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_result: ${name}`)
             void setStatus(null)
           },
