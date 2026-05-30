@@ -142,6 +142,7 @@ const nestGroups = computed<NestGroup[]>(() => {
         </h1>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <LocaleSwitcher />
         <UButton
           color="primary"
           size="sm"

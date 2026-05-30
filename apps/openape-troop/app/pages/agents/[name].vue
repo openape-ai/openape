@@ -515,6 +515,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
       >
         {{ nestOnline ? '● live' : '○ poll' }}
       </span>
+      <LocaleSwitcher />
     </header>
 
     <main class="px-4 sm:px-6 py-4 sm:py-6 max-w-4xl mx-auto space-y-4 sm:space-y-6">
