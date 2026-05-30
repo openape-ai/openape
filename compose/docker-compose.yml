@@ -80,6 +80,11 @@ services:
       LITELLM_BASE_URL: http://openape-llm:4000/v1
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-loopback}
       APE_CHAT_BRIDGE_MODEL: ${APE_CHAT_BRIDGE_MODEL:-claude-haiku-4-5}
+      # Container is the sandbox — no DDISA/escapes layer. Tells the
+      # nest's pm2-supervisor to shell to `sudo -u <agent>` instead of
+      # `apes run --as <agent>`, and the agent-tool runApeShell helper
+      # to exec via /bin/bash instead of the gated ape-shell.
+      OPENAPE_BYPASS_APE_SHELL: "1"
 
 volumes:
   openape-nest-data:
