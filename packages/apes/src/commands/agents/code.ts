@@ -112,6 +112,14 @@ export const codeAgentCommand = defineCommand({
     const maxSteps = Number(args['max-steps']) > 0 ? Number(args['max-steps']) : 40
     const tools = taskTools(CODING_TOOLS)
 
+    // streamAggregate: historical workaround for the LiteLLM
+    // chatgpt-OAuth non-stream bug. Patched in our litellm fork
+    // (patrick-hofmann/litellm PR #1: aggregate output_item.done into
+    // the completed response), so the OpenApe pod runs fine without
+    // it. Keep the flag for stock-upstream LiteLLM deployments; opt
+    // in via OPENAPE_STREAM_AGGREGATE=1. Defaults off.
+    const streamAggregate = process.env.OPENAPE_STREAM_AGGREGATE === '1'
+
     const deps = {
       runtimeConfig: config,
       tools,
@@ -121,6 +129,7 @@ export const codeAgentCommand = defineCommand({
       reviewer: createLlmReviewer(config),
       riskAssessor: createLlmRiskAssessor(config),
       log: (l: string) => consola.info(l),
+      streamAggregate,
     }
 
     // Determine the issue list (single or poll).
