@@ -37,6 +37,11 @@ services:
       - "127.0.0.1:4000:4000"
     volumes:
       - ./litellm.yaml:/etc/litellm/config.yaml:ro
+      # ChatGPT OAuth state — when the operator uses the `chatgpt/`
+      # litellm provider, this is where the access/refresh tokens
+      # live (litellm reads them from $HOME/.config/litellm/chatgpt/).
+      # Optional: omit for Anthropic/OpenAI-only setups.
+      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt:ro
     environment:
       LITELLM_HOST: 0.0.0.0
       LITELLM_PORT: "4000"
