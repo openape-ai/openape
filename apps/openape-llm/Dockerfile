@@ -26,14 +26,23 @@ FROM python:3.12-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        git \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Pin litellm to a known-good release line. 1.84+ ships the `chatgpt/`
-# provider (Codex-style OAuth — what the OpenApe host setup uses).
-# Bump deliberately — LiteLLM moves fast and minor versions occasionally
-# break provider auth flows.
-RUN pip install --no-cache-dir 'litellm[proxy]==1.84.0'
+# Install from our LiteLLM fork (patrick-hofmann/litellm) on the
+# fix/chatgpt-non-stream-output-aggregate branch. The fork carries the
+# fix for the upstream chatgpt-provider bug where /v1/chat/completions
+# fails with `'ResponsesAPIResponse' object has no attribute 'output'` —
+# upstream's response.completed event ships an empty output array; the
+# fix aggregates the intermediate response.output_item.done events into
+# the final response.
+#
+# git+ssh would need keys baked in, so use the public https git url with
+# pip's [proxy] extra still resolved from PyPI (pip auto-installs the
+# fork's pyproject.toml deps).
+RUN pip install --no-cache-dir \
+    'litellm[proxy] @ git+https://github.com/patrick-hofmann/litellm.git@fix/chatgpt-non-stream-output-aggregate'
 
 ENV LITELLM_HOST=0.0.0.0
 ENV LITELLM_PORT=4000
