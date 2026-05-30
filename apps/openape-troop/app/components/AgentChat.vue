@@ -249,8 +249,13 @@ onBeforeUnmount(() => stopPolling())
 .agent-chat {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 70vh;
+  /* Mobile-first: take the bulk of the viewport so the chat doesn't
+     feel cramped between header + other agent sections. dvh handles
+     the iOS URL bar resize correctly; vh stays as a fallback. The
+     90 / 80 split gives the agent-details accordion a peek-of-card
+     hint at the bottom so the operator knows there's more below. */
+  height: 80vh;
+  height: 80dvh;
   max-width: 720px;
   margin: 0 auto;
   width: 100%;
@@ -395,6 +400,9 @@ onBeforeUnmount(() => stopPolling())
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
+  /* Make sure the composer is the bottom row of the chat container
+     even when the messages list has no overflow yet (empty chat). */
+  margin-top: auto;
 }
 .composer textarea {
   flex: 1 1 auto;
@@ -402,12 +410,15 @@ onBeforeUnmount(() => stopPolling())
   border: 1px solid #d1d5db;
   border-radius: 22px;
   padding: 0.625rem 0.875rem;
+  /* 1rem = 16px on iOS prevents the auto-zoom on focus that makes the
+     textarea look "squeezed" in screenshots. Minimum height bumped so
+     the input doesn't collapse to a single-char-tall pill when empty. */
   font-size: 1rem;
   line-height: 1.4;
   font-family: inherit;
   outline: none;
+  min-height: 44px;
   max-height: 140px;
-  /* iOS bumps font to 16px to avoid the auto-zoom; 1rem ≈ 16px */
 }
 .composer textarea:focus {
   border-color: #f97316;
