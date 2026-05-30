@@ -100,3 +100,4 @@ See `.claude/CLAUDE.md` for the full dependency graph and tech stack details.
 ## DDISA Protocol
 
 OpenAPE implements the DDISA protocol. Changes to protocol-relevant packages (core, auth, grants, nuxt-auth-idp, nuxt-auth-sp) must be checked against the spec in `openape-ai/protocol`. No silent deviations.
+<!-- container-coder F final E2E -->
