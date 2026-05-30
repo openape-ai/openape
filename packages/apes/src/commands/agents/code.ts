@@ -112,6 +112,17 @@ export const codeAgentCommand = defineCommand({
     const maxSteps = Number(args['max-steps']) > 0 ? Number(args['max-steps']) : 40
     const tools = taskTools(CODING_TOOLS)
 
+    // streamAggregate: the chatgpt-OAuth provider in LiteLLM 1.84+
+    // returns an empty body on non-stream chat/completions (the bug
+    // routes the upstream call through the responses API but never
+    // aggregates the SSE deltas back). Streaming + local aggregate
+    // works with every provider LiteLLM ships, and the apes runtime
+    // joins the deltas into the same shape the non-stream code path
+    // expects — same downstream behaviour. Opt in via
+    // OPENAPE_STREAM_AGGREGATE=1 (defaults on for the container coder
+    // where ChatGPT-OAuth is the standard route).
+    const streamAggregate = (process.env.OPENAPE_STREAM_AGGREGATE ?? '1') !== '0'
+
     const deps = {
       runtimeConfig: config,
       tools,
@@ -121,6 +132,7 @@ export const codeAgentCommand = defineCommand({
       reviewer: createLlmReviewer(config),
       riskAssessor: createLlmRiskAssessor(config),
       log: (l: string) => consola.info(l),
+      streamAggregate,
     }
 
     // Determine the issue list (single or poll).

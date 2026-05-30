@@ -68,6 +68,18 @@ export interface RunOptions {
   // Test seam — replace fetch (we always use the global fetch in
   // production). Tests pass a mock that returns canned responses.
   fetchImpl?: typeof fetch
+  /**
+   * Send `stream: true` to the LiteLLM proxy and aggregate the SSE
+   * chunks locally into a single non-stream response. Workaround for
+   * LiteLLM's chatgpt-OAuth provider whose non-stream `/v1/chat/
+   * completions` returns an empty body (the chatgpt upstream only
+   * emits content via the responses-API streaming path; the bridge
+   * back to chat/completions fails to aggregate). Streaming + local
+   * aggregation produces a correct response with every provider
+   * LiteLLM ships, so this flag is safe to enable globally — it
+   * defaults off only to keep existing JSON-fixture tests intact.
+   */
+  streamAggregate?: boolean
 }
 
 interface OpenAIChoice {
@@ -85,6 +97,57 @@ function previewJson(value: unknown, max = 500): string {
   return s.length > max ? `${s.slice(0, max)}…` : s
 }
 
+// Stream aggregator — parses the SSE chunks LiteLLM emits when
+// `stream:true` is set and folds them into the same OpenAIChatResponse
+// shape the non-stream path returns. Handles two delta kinds:
+//   - text content: simple concatenation
+//   - tool_calls: keyed by `index`, the id arrives first, then the
+//     function.name, then function.arguments piece by piece
+// Used by the chatgpt-OAuth pod path (see RunOptions.streamAggregate).
+async function aggregateChatStream(res: Response): Promise<OpenAIChatResponse> {
+  if (!res.body) throw new Error('LiteLLM streaming response had no body')
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  let content = ''
+  const toolCalls = new Map<number, { id: string, type: 'function', function: { name: string, arguments: string } }>()
+  let finishReason: string | undefined
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    while (true) {
+      const nl = buf.indexOf('\n')
+      if (nl === -1) break
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
+      let chunk: { choices?: Array<{ delta?: { content?: string, tool_calls?: Array<{ index?: number, id?: string, function?: { name?: string, arguments?: string } }> }, finish_reason?: string }> }
+      try { chunk = JSON.parse(payload) }
+      catch { continue }
+      const ch0 = chunk.choices?.[0]
+      const delta = ch0?.delta
+      if (delta?.content) content += delta.content
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0
+          const existing = toolCalls.get(idx) ?? { id: '', type: 'function' as const, function: { name: '', arguments: '' } }
+          if (tc.id) existing.id = tc.id
+          if (tc.function?.name) existing.function.name = tc.function.name
+          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments
+          toolCalls.set(idx, existing)
+        }
+      }
+      if (ch0?.finish_reason) finishReason = ch0.finish_reason
+    }
+  }
+  const message: ChatMessage = { role: 'assistant', content: content || null }
+  if (toolCalls.size > 0) message.tool_calls = Array.from(toolCalls.values())
+  return { choices: [{ message, finish_reason: finishReason }] }
+}
+
 export async function runLoop(opts: RunOptions): Promise<RunResult> {
   const fetchFn = opts.fetchImpl ?? fetch
   const trace: TraceEntry[] = []
@@ -96,23 +159,27 @@ export async function runLoop(opts: RunOptions): Promise<RunResult> {
   const tools = asOpenAiTools(opts.tools)
 
   for (let step = 1; step <= opts.maxSteps; step++) {
+    const requestBody = {
+      model: opts.config.model,
+      messages,
+      ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+      ...(opts.streamAggregate ? { stream: true } : {}),
+    }
     const res = await fetchFn(`${opts.config.apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'authorization': `Bearer ${opts.config.apiKey}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({
-        model: opts.config.model,
-        messages,
-        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-      }),
+      body: JSON.stringify(requestBody),
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(`LiteLLM ${res.status}: ${text.slice(0, 500)}`)
     }
-    const data = await res.json() as OpenAIChatResponse
+    const data = opts.streamAggregate
+      ? await aggregateChatStream(res)
+      : await res.json() as OpenAIChatResponse
     const choice = data.choices?.[0]
     if (!choice) throw new Error('LiteLLM response had no choices')
 
