@@ -119,6 +119,14 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
     maxSteps: deps.maxSteps,
     streamAggregate: deps.streamAggregate,
   })
+  // Dump the LLM/tool trace when OPENAPE_VERBOSE_TRACE is set — useful
+  // when a coder run produces "no changes" and we need to see exactly
+  // which tool calls the LLM attempted + which failed.
+  if (process.env.OPENAPE_VERBOSE_TRACE === '1') {
+    for (const t of run.trace) {
+      log(`[trace] step=${t.step} type=${t.type}${t.tool ? ` tool=${t.tool}` : ''} ${t.preview}`)
+    }
+  }
   if (run.status !== 'ok') {
     return { branch, worktree, runStatus: 'error', changedFiles: [], outcome: 'run-failed', reason: `coding loop errored after ${run.stepCount} steps` }
   }
