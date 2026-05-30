@@ -60,6 +60,10 @@ export interface CodingTaskDeps {
   shell?: ShellFn
   runLoopImpl?: (opts: RunOptions) => Promise<RunResult>
   log?: (line: string) => void
+  // Forwarded to runLoop — enables SSE stream + local aggregate. Set
+  // by the container coder to work around LiteLLM's chatgpt-OAuth
+  // non-stream bug. See RunOptions.streamAggregate.
+  streamAggregate?: boolean
 }
 
 export type MergeOutcome = 'auto-armed' | 'awaiting-human' | 'reviewer-blocked' | 'run-failed'
@@ -113,6 +117,7 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
     userMessage: `${prompt}\n\nWorktree: ${worktree}`,
     tools: deps.tools,
     maxSteps: deps.maxSteps,
+    streamAggregate: deps.streamAggregate,
   })
   if (run.status !== 'ok') {
     return { branch, worktree, runStatus: 'error', changedFiles: [], outcome: 'run-failed', reason: `coding loop errored after ${run.stepCount} steps` }
