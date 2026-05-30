@@ -29,9 +29,11 @@ RUN apt-get update \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Pin litellm to a known-good release line. Bump deliberately — LiteLLM
-# moves fast and minor versions occasionally break provider auth flows.
-RUN pip install --no-cache-dir 'litellm[proxy]==1.55.3'
+# Pin litellm to a known-good release line. 1.84+ ships the `chatgpt/`
+# provider (Codex-style OAuth — what the OpenApe host setup uses).
+# Bump deliberately — LiteLLM moves fast and minor versions occasionally
+# break provider auth flows.
+RUN pip install --no-cache-dir 'litellm[proxy]==1.84.0'
 
 ENV LITELLM_HOST=0.0.0.0
 ENV LITELLM_PORT=4000
@@ -40,8 +42,10 @@ ENV LITELLM_CONFIG=/etc/litellm/config.yaml
 EXPOSE 4000
 
 # Healthcheck — LiteLLM exposes /health/liveliness (their spelling).
+# python is the only HTTP client guaranteed in this image; wget/curl
+# aren't installed in python:3.12-slim.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget --quiet --spider http://127.0.0.1:4000/health/liveliness || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness').read()" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sh", "-c", "litellm --config \"$LITELLM_CONFIG\" --host \"$LITELLM_HOST\" --port \"$LITELLM_PORT\""]
