@@ -24,6 +24,28 @@ vi.mock('../src/lib/macos-user.js', () => ({
   isShellRegistered: vi.fn(),
 }))
 
+// Production code now imports isDarwin + getHostPlatform from the new
+// host-platform module instead of macos-user. Without this mock, CI on
+// Linux invokes linuxHostPlatform methods that throw "not implemented".
+vi.mock('../src/lib/host-platform/index.js', () => ({
+  isDarwin: vi.fn(() => true),
+  isLinux: vi.fn(() => false),
+  getHostPlatform: vi.fn(() => ({
+    getHostId: () => 'host-id',
+    getHostname: () => 'host',
+    agentUsername: (n: string) => `openape-agent-${n}`,
+    lookupAgentUser: (name: string) =>
+      name === 'agent-a' ? { name: 'agent-a', uid: 250, shell: '/bin/zsh', homeDir: '/Users/agent-a' } : null,
+    readAgentUser: () => null,
+    listAgentUserNames: () => new Set(['agent-a', 'patrick']),
+    listOrphanAgentUsers: () => [],
+    installNestSupervisor: vi.fn(async () => {}),
+    uninstallNestSupervisor: vi.fn(async () => {}),
+    runPrivilegedBash: vi.fn(async () => {}),
+    runAsAgentUser: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
+  })),
+}))
+
 const TWO_AGENTS = [
   { email: 'agent-a+patrick+hofmann_eco@id.openape.ai', name: 'agent-a', owner: 'patrick@hofmann.eco', approver: 'patrick@hofmann.eco', type: 'agent', isActive: true, createdAt: 1 },
   { email: 'agent-b+patrick+hofmann_eco@id.openape.ai', name: 'agent-b', owner: 'patrick@hofmann.eco', approver: 'patrick@hofmann.eco', type: 'agent', isActive: true, createdAt: 2 },
