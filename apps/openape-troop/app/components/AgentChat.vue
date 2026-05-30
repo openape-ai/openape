@@ -1,0 +1,485 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+const props = defineProps<{
+  agentName: string
+}>()
+
+interface ChatMessage {
+  id: string
+  roomId: string
+  threadId: string | null
+  senderEmail: string
+  senderAct: 'human' | 'agent'
+  body: string
+  createdAt: number
+  editedAt: number | null
+  streaming: boolean
+  streamingStatus: string | null
+}
+
+const messages = ref<ChatMessage[]>([])
+const roomId = ref<string | null>(null)
+const threadId = ref<string | null>(null)
+const loading = ref(true)
+const sending = ref(false)
+const error = ref<string | null>(null)
+const composer = ref('')
+const scrollRoot = ref<HTMLElement | null>(null)
+const composerEl = ref<HTMLTextAreaElement | null>(null)
+
+const empty = computed(() => !loading.value && messages.value.length === 0)
+
+async function load(): Promise<void> {
+  try {
+    const data = await ($fetch as any)(`/api/agents/${props.agentName}/chat-proxy`)
+    roomId.value = data.roomId
+    threadId.value = data.threadId
+    messages.value = data.messages
+    error.value = null
+    await nextTick()
+    scrollToBottom()
+  }
+  catch (err: any) {
+    const status = err?.statusCode ?? err?.status
+    if (status === 412) {
+      error.value = 'Chat session not initialised. Open chat.openape.ai once in this browser to sign in, then come back.'
+    }
+    else {
+      error.value = err?.data?.statusMessage || err?.message || 'failed to load chat'
+    }
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+function startPolling(): void {
+  // 2.5s polling while the tab is visible — fast enough for "live"
+  // feeling without hammering the proxy. Pauses on visibilitychange
+  // (browser tabs in background are throttled anyway).
+  stopPolling()
+  pollTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    void load()
+  }, 2500)
+}
+function stopPolling(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function send(): Promise<void> {
+  const body = composer.value.trim()
+  if (!body || sending.value || !roomId.value || !threadId.value) return
+  sending.value = true
+  // Optimistic: drop the message into the local view immediately so the
+  // user sees their text right after pressing send; the next poll will
+  // reconcile with the server's canonical row (matching `id`).
+  const localId = `local-${Date.now()}`
+  messages.value.push({
+    id: localId,
+    roomId: roomId.value,
+    threadId: threadId.value,
+    senderEmail: '__local__',
+    senderAct: 'human',
+    body,
+    createdAt: Math.floor(Date.now() / 1000),
+    editedAt: null,
+    streaming: false,
+    streamingStatus: null,
+  })
+  composer.value = ''
+  await nextTick()
+  scrollToBottom()
+  try {
+    await ($fetch as any)(`/api/agents/${props.agentName}/chat-proxy/messages`, {
+      method: 'POST',
+      body: { room_id: roomId.value, thread_id: threadId.value, body },
+    })
+    // Wait one tick + poll-cycle for the server-side row to land,
+    // then reload — that replaces the optimistic local row with the
+    // canonical one (avoiding the placeholder lingering after the
+    // round-trip completed).
+    await load()
+  }
+  catch (err: any) {
+    error.value = err?.data?.statusMessage || err?.message || 'failed to send'
+    // Roll back the optimistic insert.
+    messages.value = messages.value.filter(m => m.id !== localId)
+  }
+  finally {
+    sending.value = false
+    composerEl.value?.focus()
+  }
+}
+
+function scrollToBottom(): void {
+  const el = scrollRoot.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+}
+
+function onComposerKey(e: KeyboardEvent): void {
+  // Enter = send, Shift+Enter = newline. ChatGPT convention.
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    void send()
+  }
+}
+
+function formatTs(unixSec: number): string {
+  const d = new Date(unixSec * 1000)
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  if (sameDay) return `${hh}:${mm}`
+  return `${d.toLocaleDateString()} ${hh}:${mm}`
+}
+
+watch(() => props.agentName, () => {
+  loading.value = true
+  messages.value = []
+  void load()
+})
+
+onMounted(() => {
+  void load().then(() => startPolling())
+})
+onBeforeUnmount(() => stopPolling())
+</script>
+
+<template>
+  <div class="agent-chat">
+    <div
+      v-if="error"
+      class="banner banner-error"
+    >
+      {{ error }}
+      <button
+        v-if="loading === false"
+        class="banner-action"
+        @click="error = null; loading = true; void load()"
+      >
+        Retry
+      </button>
+    </div>
+
+    <div
+      ref="scrollRoot"
+      class="scroll"
+    >
+      <div
+        v-if="loading"
+        class="state state-loading"
+      >
+        Loading chat…
+      </div>
+      <div
+        v-else-if="empty"
+        class="state state-empty"
+      >
+        <p class="empty-title">
+          Noch keine Nachrichten
+        </p>
+        <p class="empty-sub">
+          Schreib dem Agent unten — die Antwort landet hier oben.
+        </p>
+      </div>
+
+      <ul
+        v-else
+        class="messages"
+      >
+        <li
+          v-for="m in messages"
+          :key="m.id"
+          class="msg" :class="[`msg-${m.senderAct}`]"
+        >
+          <div class="bubble">
+            <div
+              v-if="m.streaming && !m.body"
+              class="typing"
+            >
+              <span /> <span /> <span />
+            </div>
+            <pre v-else class="body">{{ m.body }}</pre>
+            <div
+              v-if="m.streamingStatus"
+              class="status"
+            >
+              {{ m.streamingStatus }}
+            </div>
+          </div>
+          <div class="meta">
+            {{ formatTs(m.createdAt) }}<span v-if="m.editedAt"> · edited</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="composer">
+      <textarea
+        ref="composerEl"
+        v-model="composer"
+        rows="1"
+        placeholder="Schreib dem Agent…"
+        :disabled="sending || loading || !roomId"
+        @keydown="onComposerKey"
+      />
+      <button
+        class="send"
+        :disabled="!composer.trim() || sending || !roomId"
+        @click="send"
+      >
+        <span v-if="sending">…</span>
+        <svg v-else viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M3 11L21 3l-8 18-2-7-8-3z" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+/* Mobile-first ChatGPT-style: single column, max 720px on wide screens,
+   sticky composer at the bottom, soft bubbles, alternating alignment. */
+
+.agent-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 70vh;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  background: var(--ui-bg, #fafafa);
+}
+
+.banner {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.banner-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border-bottom: 1px solid #fecaca;
+}
+.banner-action {
+  margin-left: auto;
+  background: #991b1b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1rem;
+  /* iOS overscroll feels right with rubber-band on the chat list */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.state {
+  text-align: center;
+  color: #6b7280;
+  padding: 3rem 1rem;
+  font-size: 0.875rem;
+}
+.empty-title {
+  font-weight: 500;
+  margin: 0 0 0.25rem;
+}
+.empty-sub {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 86%;
+}
+.msg-human {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.msg-agent {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.bubble {
+  padding: 0.625rem 0.875rem;
+  border-radius: 18px;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  word-wrap: break-word;
+  position: relative;
+}
+.msg-human .bubble {
+  background: #f97316;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+.msg-agent .bubble {
+  background: #fff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 4px;
+}
+
+.body {
+  margin: 0;
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+.status {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 0;
+}
+.typing span {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  opacity: 0.35;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing span:nth-child(2) { animation-delay: 0.15s; }
+.typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.35; }
+  40% { transform: scale(1); opacity: 0.85; }
+}
+
+.meta {
+  margin-top: 0.1875rem;
+  font-size: 0.6875rem;
+  color: #9ca3af;
+  padding: 0 0.5rem;
+}
+
+.composer {
+  flex: 0 0 auto;
+  padding: 0.625rem 0.75rem calc(env(safe-area-inset-bottom, 0) + 0.625rem);
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.composer textarea {
+  flex: 1 1 auto;
+  resize: none;
+  border: 1px solid #d1d5db;
+  border-radius: 22px;
+  padding: 0.625rem 0.875rem;
+  font-size: 1rem;
+  line-height: 1.4;
+  font-family: inherit;
+  outline: none;
+  max-height: 140px;
+  /* iOS bumps font to 16px to avoid the auto-zoom; 1rem ≈ 16px */
+}
+.composer textarea:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+}
+.composer textarea:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.send {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #f97316;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.send:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+.send:not(:disabled):active {
+  background: #ea580c;
+}
+
+@media (min-width: 768px) {
+  .agent-chat {
+    height: 75vh;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .agent-chat {
+    background: #0a0a0a;
+  }
+  .msg-agent .bubble {
+    background: #1f1f1f;
+    color: #f3f4f6;
+    border-color: #2e2e2e;
+  }
+  .composer {
+    background: #0f0f0f;
+    border-top-color: #2e2e2e;
+  }
+  .composer textarea {
+    background: #1f1f1f;
+    color: #f3f4f6;
+    border-color: #3a3a3a;
+  }
+  .composer textarea:disabled {
+    background: #161616;
+  }
+  .meta {
+    color: #6b7280;
+  }
+  @media (min-width: 768px) {
+    .agent-chat {
+      border-color: #2e2e2e;
+    }
+  }
+}
+</style>
