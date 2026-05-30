@@ -18,6 +18,13 @@ export interface ChatPeer {
   chatIds: Set<string>
   // Identity of the peer — used for diagnostics + future auth tightening.
   email: string
+  // 'agent' peers (act='agent' bridges) get auto-subscribed to any
+  // chat where chat.agentEmail === email at creation time. Without
+  // this, an agent that connected BEFORE its chat row existed
+  // (common: agent is up first, owner sends the first message later)
+  // never sees the message because the chat.id isn't in chatIds.
+  // 'human' peers must explicitly subscribe.
+  kind: 'human' | 'agent'
 }
 
 const peers = new Set<ChatPeer>()
@@ -48,6 +55,35 @@ export function broadcastToChat(chatId: string, frame: ChatFrame): void {
     if (!peer.chatIds.has(chatId)) continue
     try { peer.send(json) }
     catch { /* peer gone; the close handler cleans up */ }
+  }
+}
+
+/**
+ * Called by getOrCreateChat() when a new chat row is inserted. Walk
+ * every connected agent peer; if any has email === agentEmail, add
+ * the new chatId to its subscription so the agent receives the
+ * first message (the one that triggered the lazy chat creation).
+ *
+ * Without this, agents that booted before their chat existed
+ * silently drop the first message: the bridge's WS is open but
+ * chatIds is empty (preSubscribeAgent found no chat rows at
+ * connect time), so broadcastToChat skips them on the very
+ * broadcast that should reach them.
+ */
+export function notifyAgentChatCreated(chat: { id: string, agentEmail: string }): void {
+  for (const peer of peers) {
+    if (peer.kind !== 'agent') continue
+    if (peer.email !== chat.agentEmail) continue
+    if (peer.chatIds.has(chat.id)) continue
+    peer.chatIds.add(chat.id)
+    try {
+      peer.send(JSON.stringify({
+        type: 'subscribed',
+        chat_id: chat.id,
+        payload: { reason: 'auto-on-create' },
+      }))
+    }
+    catch { /* peer gone; close handler cleans up */ }
   }
 }
 
