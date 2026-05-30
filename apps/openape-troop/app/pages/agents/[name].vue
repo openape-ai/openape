@@ -527,6 +527,18 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
       </UCard>
 
       <template v-else-if="detail">
+        <!-- Main Session — the ChatGPT-style chat surface. Patrick's
+             request: "Im Agent tab wird die Main Session als tab
+             (standard) angezeigt." It's the first thing the operator
+             sees on this page; everything else (details, system prompt,
+             tasks, skills) drops below as collapsed sections.
+             Proxies through to chat.openape.ai for now (interim); the
+             troop-native backend lands in M5/M6 of plan
+             01KSWSHPA4C320VV0BKK98EZ0V. -->
+        <UCard :ui="{ body: 'p-0 sm:p-0' }">
+          <AgentChat :agent-name="detail.agent.agentName" />
+        </UCard>
+
         <!-- Agent metadata. Collapsed by default on mobile because the
              SSH key + email are long strings that crowd out the tasks
              section, which is what the user actually came here to edit. -->
