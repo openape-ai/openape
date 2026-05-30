@@ -11,6 +11,7 @@ import { and, desc, eq, lt } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { agents, chatMessages, chats } from '../database/schema'
 import type { Chat, ChatMessage, NewChatMessage } from '../database/schema'
+import { notifyAgentChatCreated } from './chat-realtime'
 
 export interface PostMessageInput {
   chatId: string
@@ -43,6 +44,12 @@ export async function getOrCreateChat(input: {
     lastMessageAt: null,
   }
   await db.insert(chats).values(row)
+  // Tell the realtime hub: any already-connected agent peer for this
+  // agentEmail should auto-subscribe to the new chat id. Without this
+  // the very first message the owner sends (which is what created the
+  // chat row) silently drops on the floor because the agent's WS
+  // peer.chatIds is empty (it was empty at connect time too).
+  notifyAgentChatCreated(row)
   return row
 }
 

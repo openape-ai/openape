@@ -149,6 +149,7 @@ export default defineWebSocketHandler({
         email: ctx.email,
         chatIds: new Set(),
         send: msg => peer.send(msg),
+        kind: ctx.act,
       }
       ctxByPeerId.set(peer.id, { ...ctx, chatPeer })
       registerPeer(chatPeer)
