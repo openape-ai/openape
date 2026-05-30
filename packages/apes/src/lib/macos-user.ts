@@ -5,8 +5,10 @@ export interface MacOSUserSummary {
   name: string
   uid: number | null
   shell: string | null
-  /** Resolved NFSHomeDirectory — varies between /Users/<name> for
-   *  legacy agents and /var/openape/homes/<name> for Phase G+ agents. */
+  /**
+   * Resolved NFSHomeDirectory — varies between /Users/<name> for
+   *  legacy agents and /var/openape/homes/<name> for Phase G+ agents.
+   */
   homeDir: string | null
 }
 
