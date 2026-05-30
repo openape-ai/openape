@@ -140,3 +140,56 @@ export const agentSecrets = sqliteTable('agent_secrets', {
 }, table => [
   primaryKey({ columns: [table.agentEmail, table.env] }),
 ])
+
+// chats — one persistent "main session" per (owner, agent) pair. Mirrors
+// what chat.openape.ai modelled as a DM room + main thread, but flat and
+// agent-scoped (the owner is implicit from the agent row's ownerEmail).
+// Created lazily on first message either side sends.
+export const chats = sqliteTable('chats', {
+  // (ownerEmail, agentEmail) is the natural PK — one chat per pair —
+  // but composite PKs are clunky in foreign-key joins, so use a UUID
+  // and unique-index the pair below.
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  agentEmail: text('agent_email').notNull(),
+  createdAt: integer('created_at').notNull(),
+  // Bumped on every message — drives "recent chats" ordering in any
+  // future agent-list view without a per-agent message-count query.
+  lastMessageAt: integer('last_message_at'),
+}, table => [
+  index('idx_chats_owner_agent').on(table.ownerEmail, table.agentEmail),
+])
+
+// chat_messages — the persistent log for one chat. role mirrors what
+// chat.openape.ai called sender_act (`human` vs `agent`), simplified to
+// just two values since troop's chat is always a 1:1.
+//
+// `streaming` follows the openape-chat semantics: agent posts an empty
+// row, streams content via PATCH, sets streaming=false on completion.
+// While streaming=true edits don't bump editedAt — so the UI can show
+// a typing-indicator state without the message looking "(edited)" once
+// it lands.
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey(),
+  chatId: text('chat_id').notNull(),
+  role: text('role', { enum: ['human', 'agent'] }).notNull(),
+  body: text('body').notNull(),
+  createdAt: integer('created_at').notNull(),
+  editedAt: integer('edited_at'),
+  streaming: integer('streaming', { mode: 'boolean' }).notNull().default(false),
+  // Ephemeral "what is the agent doing right now" — set by the bridge
+  // when a tool call starts, cleared when it completes. Cleared
+  // automatically when streaming=false.
+  streamingStatus: text('streaming_status'),
+  // Optional reply-to-message-id; for future threading inside the chat.
+  // v1 doesn't render threads but the field is here so the schema
+  // doesn't have to migrate when threading lands.
+  replyTo: text('reply_to'),
+}, table => [
+  index('idx_chat_messages_chat_created').on(table.chatId, table.createdAt),
+])
+
+export type Chat = typeof chats.$inferSelect
+export type NewChat = typeof chats.$inferInsert
+export type ChatMessage = typeof chatMessages.$inferSelect
+export type NewChatMessage = typeof chatMessages.$inferInsert
