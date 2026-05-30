@@ -557,7 +557,6 @@ function close() {
         <UAlert v-if="result?.ok && !result.error" color="success" :title="`Spawned: ${result.agent_email ?? spawnedName}`" />
         <UAlert v-if="result?.ok && result.error" color="warning" title="Spawned with a note" :description="result.error" />
         <UAlert v-if="result && !result.ok" color="error" title="Failed" :description="result.error" />
-
       </div>
 
       <!-- Pinned footer: never scrolls out of reach and clears the
