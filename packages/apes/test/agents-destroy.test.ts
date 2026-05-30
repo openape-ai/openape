@@ -25,6 +25,29 @@ const macosUserMock = {
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
+// Production code now imports isDarwin + getHostPlatform from the new
+// host-platform module instead of macos-user. Without this mock, CI on
+// Linux uses linuxHostPlatform whose methods either throw or branch
+// differently, breaking the destroy-flow assertions below.
+const hostPlatformMock = {
+  isDarwin: vi.fn(() => true),
+  isLinux: vi.fn(() => false),
+  getHostPlatform: vi.fn(() => ({
+    getHostId: () => 'host-id',
+    getHostname: () => 'host',
+    agentUsername: (n: string) => macosUserMock.macOSUsernameForAgent(n),
+    lookupAgentUser: (n: string) => macosUserMock.lookupMacOSUserForAgent(n),
+    readAgentUser: () => macosUserMock.readMacOSUser(),
+    listAgentUserNames: () => macosUserMock.listMacOSUserNames(),
+    listOrphanAgentUsers: () => [],
+    installNestSupervisor: vi.fn(async () => {}),
+    uninstallNestSupervisor: vi.fn(async () => {}),
+    runPrivilegedBash: vi.fn(async () => {}),
+    runAsAgentUser: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
+  })),
+}
+vi.mock('../src/lib/host-platform/index.js', () => hostPlatformMock)
+
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }))
@@ -56,6 +79,7 @@ describe('apes agents destroy', () => {
     // both the legacy and the prefix-aware lookup paths uniformly.
     macosUserMock.lookupMacOSUserForAgent.mockImplementation(() => macosUserMock.readMacOSUser())
     macosUserMock.isDarwin.mockReturnValue(true)
+    hostPlatformMock.isDarwin.mockReturnValue(true)
     // The OS-teardown path collects the local admin password; CI never
     // has a TTY so we set the env-var resolution path explicitly. Tests
     // that exercise the "no password" failure case delete this first.
