@@ -96,6 +96,10 @@ function ecosystemContents(apesBin: string, agentName: string): string {
     'APE_CHAT_BRIDGE_TOOLS',
     'APE_CHAT_BRIDGE_MAX_STEPS',
     'APE_CHAT_BRIDGE_SYSTEM_PROMPT',
+    // Chat backend selection (chat.openape.ai vs troop.openape.ai) —
+    // honoured by the bridge at startup. See ape-agent/src/bridge.ts.
+    'OPENAPE_BRIDGE_TARGET',
+    'APE_CHAT_ENDPOINT',
   ]
   const envLines = envForwards
     .filter(k => process.env[k] !== undefined)
