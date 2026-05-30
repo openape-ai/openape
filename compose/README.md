@@ -16,7 +16,7 @@ docker compose -f compose/docker-compose.yml up --build
 
 # Verify (in another shell):
 docker ps                                            # both Up
-curl http://127.0.0.1:4000/health/liveliness         # → "I'm alive!"
+curl http://127.0.0.1:4001/health/liveliness         # → "I'm alive!"
 docker logs openape-nest | grep "reconciled with registry"   # → present within 5s
 ```
 
@@ -25,11 +25,14 @@ docker logs openape-nest | grep "reconciled with registry"   # → present withi
 | Service       | Port (host)  | Port (pod) | Purpose                                  |
 |---------------|--------------|------------|------------------------------------------|
 | `openape-nest`| —            | —          | Outbound-only WS client to troop; no HTTP API. Health = container Up + "reconciled with registry" in logs. |
-| `openape-llm` | 4000         | 4000       | LiteLLM proxy — all model traffic        |
+| `openape-llm` | 4001         | 4000       | LiteLLM proxy — all model traffic        |
 
 In-pod, services reach each other by their compose service-name
-(`http://openape-llm:4000/v1`). On the host they're published to
-`127.0.0.1` only — a misconfigured firewall can't expose them to the LAN.
+(`http://openape-llm:4000/v1`). On the host the proxy is published to
+`127.0.0.1:4001` only — `4001` (not `4000`) so a host-side litellm
+install bound to `*:4000` keeps its loopback traffic. On macOS/OrbStack
+the specific `127.0.0.1` docker binding wins over the host process's
+wildcard `*:4000`, silently stealing requests otherwise.
 
 ## Volumes
 

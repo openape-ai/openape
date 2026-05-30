@@ -10,8 +10,9 @@
 #   2. cp compose/.env.example compose/.env
 #      → set ANTHROPIC_API_KEY etc.
 #   3. docker compose -f compose/docker-compose.yml up --build
-#   4. curl http://127.0.0.1:9091/health   # nest
-#      curl http://127.0.0.1:4000/health/liveliness  # litellm
+#   4. docker ps                                            # both Up
+#      curl http://127.0.0.1:4001/health/liveliness         # litellm
+#      docker logs openape-nest | grep "reconciled with registry"
 #
 # Volumes:
 #   openape-nest-data   → /var/lib/openape/nest (registry + auth.json)
@@ -19,9 +20,13 @@
 #
 # Network:
 #   openape-pod (bridge) → in-pod hostnames `openape-nest`, `openape-llm`
-#   work for service-to-service traffic. The host-published ports
-#   (9091, 4000) are bound to 127.0.0.1 only so a misconfigured firewall
-#   can't expose them to the LAN.
+#   work for service-to-service traffic. The host-published port
+#   (4001 → container :4000) is bound to 127.0.0.1 only so a
+#   misconfigured firewall can't expose it to the LAN. 4001 (not 4000)
+#   so a host-side litellm install on *:4000 — the default for OpenApe
+#   operators who started before the containerisation — keeps its
+#   loopback traffic; on macOS/OrbStack the specific 127.0.0.1 binding
+#   wins over wildcard, silently stealing requests otherwise.
 
 services:
   openape-llm:
@@ -34,7 +39,7 @@ services:
     networks:
       - openape-pod
     ports:
-      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:4001:4000"
     volumes:
       - ./litellm.yaml:/etc/litellm/config.yaml:ro
       # ChatGPT OAuth state — when the operator uses the `chatgpt/`
