@@ -57,13 +57,19 @@ services:
       - openape-llm
     networks:
       - openape-pod
-    ports:
-      - "127.0.0.1:9091:9091"
+    # No host ports — the nest is a pure long-running WebSocket CLIENT
+    # (Phase F+: connects out to troop, never listens). Verification is
+    # via `docker ps` + `docker logs openape-nest` showing the
+    # reconcile/sync loops running. See compose/README.md.
     volumes:
       - openape-nest-data:/var/lib/openape/nest
       - openape-homes:/var/lib/openape/homes
     environment:
-      OPENAPE_NEST_PORT: "9091"
+      # The nest reads auth.json / agents.json out of $HOME, so HOME
+      # has to point at the persistent volume — without this the nest
+      # silently uses /root (the container default) and loses state on
+      # restart.
+      HOME: /var/lib/openape/nest
       # Inside the pod the nest reaches the proxy at the service hostname.
       # Agents under this nest inherit this URL via the bridge env file.
       LITELLM_BASE_URL: http://openape-llm:4000/v1
