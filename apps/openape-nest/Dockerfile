@@ -24,15 +24,35 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /work
 
 # Copy just enough to install deps cached.
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.json ./
-COPY apps ./apps
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
+# Only the apps we actually build live in this image. Skipping
+# openape-agent-proxy / openape-troop / openape-free-idp / idp / etc.
+# avoids dragging Nuxt apps and packages they reference that aren't part
+# of the workspace (e.g. @openape/nuxt-auth-sp lives in a sibling repo).
+COPY apps/openape-nest ./apps/openape-nest
+COPY apps/openape-ape-agent ./apps/openape-ape-agent
 COPY packages ./packages
-COPY examples ./examples
 
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts: the Nuxt apps in the monorepo (troop, idp, agent-proxy)
+# run `nuxt prepare` postinstall, which spins up the full Nuxt module
+# resolution and fails inside a slim node image. We don't build those
+# apps in this image — just apes + nest — so skipping their postinstalls
+# is safe and cuts install time roughly in half.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build apes (the CLI nest invokes for privileged steps) + nest itself.
+# The --filter ... build invocation only builds the explicitly named
+# packages (and their workspace deps), so we don't drag the Nuxt apps
+# into the build at all.
 RUN pnpm --filter '@openape/apes' build && pnpm --filter '@openape/nest' build
+
+# `pnpm deploy` materializes a self-contained subtree (workspace deps
+# flattened, no symlinks into the monorepo's .pnpm store) so the runtime
+# image gets a normal node_modules/ that resolves bare imports like
+# `import { ofetch } from 'ofetch'`. Without this step the tsup'd dist
+# can't find its external deps (tsup bundles only the entry's own code).
+RUN pnpm --filter '@openape/apes' deploy --legacy --prod /tmp/deploy/apes \
+ && pnpm --filter '@openape/nest' deploy --legacy --prod /tmp/deploy/nest
 
 # ---- Stage 2: runtime -----------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
@@ -44,9 +64,17 @@ FROM node:22-bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        curl \
+        git \
+        gnupg \
         procps \
         sudo \
         tini \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Nest data dir — bind-mounted by compose so registry + auth survive
@@ -57,12 +85,11 @@ ENV OPENAPE_NEST_PORT=9091
 RUN mkdir -p "$NEST_DATA_DIR" \
     && mkdir -p /var/lib/openape/homes
 
-# Copy the built dists and the runtime deps from stage 1.
+# Copy the deployed subtrees from stage 1 — they include node_modules
+# with all production deps flattened (no workspace symlinks).
 WORKDIR /opt/openape
-COPY --from=build /work/packages/apes/dist        ./apes/dist
-COPY --from=build /work/packages/apes/package.json ./apes/package.json
-COPY --from=build /work/apps/openape-nest/dist      ./nest/dist
-COPY --from=build /work/apps/openape-nest/package.json ./nest/package.json
+COPY --from=build /tmp/deploy/apes ./apes
+COPY --from=build /tmp/deploy/nest ./nest
 
 # Symlink the binaries onto PATH so the nest's subprocess calls
 # (`apes run --as ...`, `openape-nest`) resolve without further plumbing.

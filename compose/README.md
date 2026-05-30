@@ -15,15 +15,16 @@ cp compose/.env.example compose/.env
 docker compose -f compose/docker-compose.yml up --build
 
 # Verify (in another shell):
-curl http://127.0.0.1:9091/health             # → 200 OK
-curl http://127.0.0.1:4000/health/liveliness  # → 200 OK
+docker ps                                            # both Up
+curl http://127.0.0.1:4000/health/liveliness         # → "I'm alive!"
+docker logs openape-nest | grep "reconciled with registry"   # → present within 5s
 ```
 
 ## Layout
 
 | Service       | Port (host)  | Port (pod) | Purpose                                  |
 |---------------|--------------|------------|------------------------------------------|
-| `openape-nest`| 9091         | 9091       | Supervises agents, talks to troop SP     |
+| `openape-nest`| —            | —          | Outbound-only WS client to troop; no HTTP API. Health = container Up + "reconciled with registry" in logs. |
 | `openape-llm` | 4000         | 4000       | LiteLLM proxy — all model traffic        |
 
 In-pod, services reach each other by their compose service-name
