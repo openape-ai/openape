@@ -5,22 +5,32 @@ const props = defineProps<{
   agentName: string
 }>()
 
+// Troop-native chat row. Mirrors the server's chat_messages schema —
+// `role` is 'human' (the operator) or 'agent' (the bridge). No
+// roomId/threadId because troop's chat is a 1:1 main-session per
+// (owner, agent) pair; the chat row's id IS the conversation key.
 interface ChatMessage {
   id: string
-  roomId: string
-  threadId: string | null
-  senderEmail: string
-  senderAct: 'human' | 'agent'
+  chatId: string
+  role: 'human' | 'agent'
   body: string
   createdAt: number
   editedAt: number | null
   streaming: boolean
   streamingStatus: string | null
+  replyTo: string | null
+}
+
+interface Chat {
+  id: string
+  ownerEmail: string
+  agentEmail: string
+  createdAt: number
+  lastMessageAt: number | null
 }
 
 const messages = ref<ChatMessage[]>([])
-const roomId = ref<string | null>(null)
-const threadId = ref<string | null>(null)
+const chat = ref<Chat | null>(null)
 const loading = ref(true)
 const sending = ref(false)
 const error = ref<string | null>(null)
@@ -32,22 +42,15 @@ const empty = computed(() => !loading.value && messages.value.length === 0)
 
 async function load(): Promise<void> {
   try {
-    const data = await ($fetch as any)(`/api/agents/${props.agentName}/chat-proxy`)
-    roomId.value = data.roomId
-    threadId.value = data.threadId
+    const data = await ($fetch as any)(`/api/agents/${props.agentName}/chat`)
+    chat.value = data.chat
     messages.value = data.messages
     error.value = null
     await nextTick()
     scrollToBottom()
   }
   catch (err: any) {
-    const status = err?.statusCode ?? err?.status
-    if (status === 412) {
-      error.value = 'Chat session not initialised. Open chat.openape.ai once in this browser to sign in, then come back.'
-    }
-    else {
-      error.value = err?.data?.statusMessage || err?.message || 'failed to load chat'
-    }
+    error.value = err?.data?.statusMessage || err?.message || 'failed to load chat'
   }
   finally {
     loading.value = false
@@ -74,41 +77,35 @@ function stopPolling(): void {
 
 async function send(): Promise<void> {
   const body = composer.value.trim()
-  if (!body || sending.value || !roomId.value || !threadId.value) return
+  if (!body || sending.value || !chat.value) return
   sending.value = true
   // Optimistic: drop the message into the local view immediately so the
-  // user sees their text right after pressing send; the next poll will
-  // reconcile with the server's canonical row (matching `id`).
+  // user sees their text right after pressing send; the next poll/WS
+  // reconcile lands the canonical row (matching `id`).
   const localId = `local-${Date.now()}`
   messages.value.push({
     id: localId,
-    roomId: roomId.value,
-    threadId: threadId.value,
-    senderEmail: '__local__',
-    senderAct: 'human',
+    chatId: chat.value.id,
+    role: 'human',
     body,
     createdAt: Math.floor(Date.now() / 1000),
     editedAt: null,
     streaming: false,
     streamingStatus: null,
+    replyTo: null,
   })
   composer.value = ''
   await nextTick()
   scrollToBottom()
   try {
-    await ($fetch as any)(`/api/agents/${props.agentName}/chat-proxy/messages`, {
+    await ($fetch as any)(`/api/agents/${props.agentName}/chat/messages`, {
       method: 'POST',
-      body: { room_id: roomId.value, thread_id: threadId.value, body },
+      body: { body },
     })
-    // Wait one tick + poll-cycle for the server-side row to land,
-    // then reload — that replaces the optimistic local row with the
-    // canonical one (avoiding the placeholder lingering after the
-    // round-trip completed).
     await load()
   }
   catch (err: any) {
     error.value = err?.data?.statusMessage || err?.message || 'failed to send'
-    // Roll back the optimistic insert.
     messages.value = messages.value.filter(m => m.id !== localId)
   }
   finally {
@@ -198,7 +195,7 @@ onBeforeUnmount(() => stopPolling())
         <li
           v-for="m in messages"
           :key="m.id"
-          class="msg" :class="[`msg-${m.senderAct}`]"
+          class="msg" :class="[`msg-${m.role}`]"
         >
           <div class="bubble">
             <div
@@ -228,12 +225,12 @@ onBeforeUnmount(() => stopPolling())
         v-model="composer"
         rows="1"
         placeholder="Schreib dem Agent…"
-        :disabled="sending || loading || !roomId"
+        :disabled="sending || loading || !chat"
         @keydown="onComposerKey"
       />
       <button
         class="send"
-        :disabled="!composer.trim() || sending || !roomId"
+        :disabled="!composer.trim() || sending || !chat"
         @click="send"
       >
         <span v-if="sending">…</span>
