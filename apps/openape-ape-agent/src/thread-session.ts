@@ -12,7 +12,7 @@
 
 import type { ChatMessage, RuntimeConfig } from '@openape/apes'
 import { runLoop, taskTools } from '@openape/apes'
-import type { ChatApi } from './chat-api'
+import type { ChatBackend } from './chat-api'
 import type { Throttle } from './throttle'
 import { createThrottle } from './throttle'
 
@@ -28,7 +28,7 @@ interface ActiveTurn {
 export interface ThreadSessionDeps {
   roomId: string
   threadId: string
-  chat: ChatApi
+  chat: ChatBackend
   /** LiteLLM proxy + model — the bridge resolves these from its env. */
   runtimeConfig: RuntimeConfig
   /**

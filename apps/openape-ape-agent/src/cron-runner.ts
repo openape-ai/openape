@@ -21,7 +21,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeConfig } from '@openape/apes'
 import { runApeShell, runLoop, taskTools } from '@openape/apes'
-import type { ChatApi } from './chat-api'
+import type { ChatBackend } from './chat-api'
 
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
@@ -148,7 +148,7 @@ export interface CronRunnerDeps {
    * cron runner shares it with chat threads.
    */
   runtimeConfig: RuntimeConfig
-  chat: ChatApi
+  chat: ChatBackend
   /** Owner email — where DMs go. Resolved from the contacts list at fire time. */
   ownerEmail: string
   log: (line: string) => void

@@ -51,8 +51,10 @@ RUN pnpm --filter '@openape/apes' build && pnpm --filter '@openape/nest' build
 # image gets a normal node_modules/ that resolves bare imports like
 # `import { ofetch } from 'ofetch'`. Without this step the tsup'd dist
 # can't find its external deps (tsup bundles only the entry's own code).
+RUN pnpm --filter '@openape/apes' build && pnpm --filter '@openape/ape-agent' build && pnpm --filter '@openape/nest' build
 RUN pnpm --filter '@openape/apes' deploy --legacy --prod /tmp/deploy/apes \
- && pnpm --filter '@openape/nest' deploy --legacy --prod /tmp/deploy/nest
+ && pnpm --filter '@openape/nest' deploy --legacy --prod /tmp/deploy/nest \
+ && pnpm --filter '@openape/ape-agent' deploy --legacy --prod /tmp/deploy/ape-agent
 
 # ---- Stage 2: runtime -----------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
@@ -68,6 +70,7 @@ RUN apt-get update \
         git \
         gnupg \
         procps \
+        python3 \
         sudo \
         tini \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -76,6 +79,13 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
+
+# Sudoers config — let the nest (running as root, PID 1) sudo to any of
+# its supervised agents without a password. The container is the OpenApe
+# sandbox; the human operator never logs in here, so unrestricted
+# in-container privilege drop is the point.
+RUN echo 'root ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/openape-nest \
+    && chmod 0440 /etc/sudoers.d/openape-nest
 
 # Nest data dir — bind-mounted by compose so registry + auth survive
 # container restarts. The launchd plist's HOME=NEST_DATA_DIR semantics
@@ -90,17 +100,33 @@ RUN mkdir -p "$NEST_DATA_DIR" \
 WORKDIR /opt/openape
 COPY --from=build /tmp/deploy/apes ./apes
 COPY --from=build /tmp/deploy/nest ./nest
+COPY --from=build /tmp/deploy/ape-agent ./ape-agent
+
+# pm2 is the per-agent process supervisor the nest uses — install
+# globally so `pm2 start ...` (invoked by lib/pm2-supervisor.ts) resolves
+# the same way the host setup does.
+RUN npm install -g pm2
 
 # Symlink the binaries onto PATH so the nest's subprocess calls
-# (`apes run --as ...`, `openape-nest`) resolve without further plumbing.
+# (`apes run --as ...`, `openape-nest`, `ape-agent`) resolve without
+# further plumbing.
 RUN ln -sf /opt/openape/apes/dist/cli.js /usr/local/bin/apes \
     && chmod +x /opt/openape/apes/dist/cli.js \
     && ln -sf /opt/openape/nest/dist/index.mjs /usr/local/bin/openape-nest \
-    && chmod +x /opt/openape/nest/dist/index.mjs
+    && chmod +x /opt/openape/nest/dist/index.mjs \
+    && ln -sf /opt/openape/ape-agent/dist/bridge.mjs /usr/local/bin/ape-agent \
+    && chmod +x /opt/openape/ape-agent/dist/bridge.mjs
 
-# The nest binary is set as the entrypoint via tini so SIGTERM
-# propagates cleanly to the node process AND any agent subprocesses
-# it has spawned.
+# Entrypoint runs `docker-entrypoint.sh` before exec'ing the nest. The
+# script ensures /var/log/openape exists + recreates the per-agent
+# users from the volume-persisted registry (so `docker compose down/up`
+# doesn't strand bridges by leaving their /etc/passwd entries gone).
+COPY apps/openape-nest/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# tini reaps zombies + propagates SIGTERM cleanly to the nest AND any
+# agent subprocesses it has spawned via pm2.
 EXPOSE 9091
 WORKDIR $NEST_DATA_DIR
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/openape-nest"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/openape-nest"]
