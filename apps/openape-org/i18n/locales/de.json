@@ -130,7 +130,7 @@
         "label": "Agent-Email",
         "description": "Die vollständige DDISA-Email des Agents.",
         "descriptionOptional": "Optional — leer lassen wenn der Agent noch nicht gespawnt ist. Der Slot bleibt reserviert, Email später nachtragen.",
-        "placeholderOptional": "agent+alice+example.com@id.openape.ai (optional)",
+        "placeholderOptional": "agent+alice+example.com{'@'}id.openape.ai (optional)",
         "pendingTitle": "Planungs-Modus",
         "pendingDescription": "Leerlassen legt einen Pending-Slot an. In der Chart erscheint eine gestrichelte Karte mit 'Agent verbinden'-Link — fülle das nach dem Spawn in troop aus."
       },
