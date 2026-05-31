@@ -101,7 +101,18 @@
       "hint": "Add your CEO first. Once they're on board, they can hire the rest of the team within your budget."
     },
     "unassigned": "Unassigned specialists",
-    "other": "Other roles"
+    "other": "Other roles",
+    "noAgentYet": "(no agent yet)",
+    "linkAgentCta": "Link agent…"
+  },
+  "linkAgent": {
+    "title": "Link an agent to this slot",
+    "subtitle": "Paste the DDISA email of the agent you spawned in troop. The status flips to 'active' once linked.",
+    "field": {
+      "label": "Agent email",
+      "description": "Full DDISA email — usually shown in troop after `apes agents spawn …`."
+    },
+    "submit": "Link agent"
   },
   "member": {
     "add": {
@@ -117,7 +128,11 @@
       },
       "agentEmail": {
         "label": "Agent email",
-        "description": "The full DDISA email of the agent."
+        "description": "The full DDISA email of the agent.",
+        "descriptionOptional": "Optional — leave blank if you haven't spawned the agent yet. The slot is reserved and you can link the agent later.",
+        "placeholderOptional": "agent+alice+example.com@id.openape.ai (optional)",
+        "pendingTitle": "Planning mode",
+        "pendingDescription": "Leaving this empty creates a pending slot. The chart will show a dashed card with a 'Link agent' action — fill it in after you've spawned the agent in troop."
       },
       "reportsTo": {
         "label": "Reports to",

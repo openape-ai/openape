@@ -18,12 +18,23 @@ const props = defineProps<{
   ownerEmail: string
 }>()
 
-// `retire` event reserved for a future inline-retire button (currently
-// the member-management UI lives in AddMemberDialog only). Underscore
-// prefix silences the unused-vars lint until the button lands.
-defineEmits<{ retire: [email: string] }>()
+defineEmits<{
+  retire: [email: string]
+  // Owner clicks a "link agent" badge on a placeholder member; the
+  // parent page opens an edit-email dialog (handled in [id].vue).
+  linkAgent: [email: string]
+}>()
 
 const { t } = useI18n()
+
+// Placeholder rows are the ones the API minted because the Owner
+// didn't supply a real DDISA email at create time. They're functional
+// (carry a role + name + reports-to) but signal "no real agent
+// behind this seat yet" — the chart renders them with a dashed
+// border + "needs agent" badge so the Owner can fill in later.
+function isPlaceholderEmail(email: string): boolean {
+  return /^pending\+[a-f0-9]{8}@org\.openape\.ai$/i.test(email)
+}
 
 // Active = currently part of the org. Retired rows live in the data
 // for audit but aren't drawn on the chart.
@@ -91,7 +102,7 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
       <!-- CEO row — single, centered. Sanierer sits beside it on the
            same level (parallel reporting to Owner). -->
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <div v-if="ceo" class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('ceo')]">
+        <div v-if="ceo" class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('ceo'), { 'border-dashed': isPlaceholderEmail(ceo.agentEmail) }]">
           <div class="text-xs uppercase tracking-wide font-semibold">
             {{ $t('chart.role.ceo') }}
           </div>
@@ -101,9 +112,12 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
           <UBadge :color="statusBadge(ceo.status).color" variant="subtle" size="xs" class="mt-2">
             {{ statusBadge(ceo.status).label }}
           </UBadge>
+          <button v-if="isPlaceholderEmail(ceo.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', ceo.agentEmail)">
+            {{ $t('chart.linkAgentCta') }}
+          </button>
         </div>
 
-        <div v-if="sanierer" class="rounded-lg border px-4 py-3 min-w-[180px] text-center relative" :class="[roleColor('sanierer')]">
+        <div v-if="sanierer" class="rounded-lg border px-4 py-3 min-w-[180px] text-center relative" :class="[roleColor('sanierer'), { 'border-dashed': isPlaceholderEmail(sanierer.agentEmail) }]">
           <div class="text-xs uppercase tracking-wide font-semibold">
             {{ $t('chart.role.sanierer') }}
           </div>
@@ -116,6 +130,9 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
           <div class="text-[10px] text-muted mt-1">
             {{ $t('chart.role.sanierer.note') }}
           </div>
+          <button v-if="isPlaceholderEmail(sanierer.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sanierer.agentEmail)">
+            {{ $t('chart.linkAgentCta') }}
+          </button>
         </div>
       </div>
 
@@ -124,7 +141,7 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
       <div v-if="teamleads.length > 0" class="space-y-4">
         <div v-for="tl in teamleads" :key="tl.agentEmail" class="space-y-3">
           <div class="flex justify-center">
-            <div class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('teamlead')]">
+            <div class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('teamlead'), { 'border-dashed': isPlaceholderEmail(tl.agentEmail) }]">
               <div class="text-xs uppercase tracking-wide font-semibold">
                 {{ $t('chart.role.teamlead') }}
               </div>
@@ -134,6 +151,9 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
               <UBadge :color="statusBadge(tl.status).color" variant="subtle" size="xs" class="mt-2">
                 {{ statusBadge(tl.status).label }}
               </UBadge>
+              <button v-if="isPlaceholderEmail(tl.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', tl.agentEmail)">
+                {{ $t('chart.linkAgentCta') }}
+              </button>
             </div>
           </div>
 
@@ -141,7 +161,7 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
             <div
               v-for="sp in specialistsOf(tl.agentEmail)"
               :key="sp.agentEmail"
-              class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist')]"
+              class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist'), { 'border-dashed': isPlaceholderEmail(sp.agentEmail) }]"
             >
               <div class="text-[10px] uppercase tracking-wide font-semibold opacity-70">
                 {{ $t('chart.role.specialist') }}
@@ -152,6 +172,9 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
               <UBadge :color="statusBadge(sp.status).color" variant="subtle" size="xs" class="mt-1.5">
                 {{ statusBadge(sp.status).label }}
               </UBadge>
+              <button v-if="isPlaceholderEmail(sp.agentEmail)" type="button" class="block w-full mt-1.5 text-[9px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sp.agentEmail)">
+                {{ $t('chart.linkAgentCta') }}
+              </button>
             </div>
           </div>
         </div>
@@ -168,7 +191,7 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
           <div
             v-for="sp in unassignedSpecialists"
             :key="sp.agentEmail"
-            class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist')]"
+            class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist'), { 'border-dashed': isPlaceholderEmail(sp.agentEmail) }]"
           >
             <div class="text-[10px] uppercase tracking-wide font-semibold opacity-70">
               {{ $t('chart.role.specialist') }}
@@ -179,6 +202,9 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
             <UBadge :color="statusBadge(sp.status).color" variant="subtle" size="xs" class="mt-1.5">
               {{ statusBadge(sp.status).label }}
             </UBadge>
+            <button v-if="isPlaceholderEmail(sp.agentEmail)" type="button" class="block w-full mt-1.5 text-[9px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sp.agentEmail)">
+              {{ $t('chart.linkAgentCta') }}
+            </button>
           </div>
         </div>
       </div>

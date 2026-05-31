@@ -106,6 +106,15 @@ async function saveSettings() {
 // Add-member dialog state
 const showAddMember = ref(false)
 
+// Link-agent dialog state (triggered from OrgChart when Owner clicks
+// "link agent" on a placeholder row).
+const showLinkAgent = ref(false)
+const placeholderToLink = ref<string | null>(null)
+function onLinkAgent(email: string) {
+  placeholderToLink.value = email
+  showLinkAgent.value = true
+}
+
 // Destroy-org modal
 const showDestroy = ref(false)
 const destroyConfirm = ref('')
@@ -163,11 +172,17 @@ async function destroyOrg() {
               {{ $t('chart.addMember') }}
             </UButton>
           </div>
-          <OrgChart :members="members" :owner-email="org.ownerEmail" />
+          <OrgChart :members="members" :owner-email="org.ownerEmail" @link-agent="onLinkAgent" />
           <AddMemberDialog
             v-model:open="showAddMember"
             :org-id="org.id"
             :existing-members="members"
+            @saved="loadAll"
+          />
+          <LinkAgentDialog
+            v-model:open="showLinkAgent"
+            :org-id="org.id"
+            :placeholder-email="placeholderToLink"
             @saved="loadAll"
           />
         </div>
