@@ -11,33 +11,19 @@ interface Member {
   spawnedAt: number | null
   retiredAt: number | null
   createdAt: number
+  spawnIntentId?: string | null
+  spawnStatus?: string | null
+  spawnError?: string | null
 }
 
-const props = defineProps<{
-  members: Member[]
-  ownerEmail: string
-}>()
+const props = defineProps<{ members: Member[], ownerEmail: string }>()
 
 defineEmits<{
   retire: [email: string]
-  // Owner clicks a "link agent" badge on a placeholder member; the
-  // parent page opens an edit-email dialog (handled in [id].vue).
   linkAgent: [email: string]
+  spawnAgent: [email: string]
 }>()
 
-const { t } = useI18n()
-
-// Placeholder rows are the ones the API minted because the Owner
-// didn't supply a real DDISA email at create time. They're functional
-// (carry a role + name + reports-to) but signal "no real agent
-// behind this seat yet" — the chart renders them with a dashed
-// border + "needs agent" badge so the Owner can fill in later.
-function isPlaceholderEmail(email: string): boolean {
-  return /^pending\+[a-f0-9]{8}@org\.openape\.ai$/i.test(email)
-}
-
-// Active = currently part of the org. Retired rows live in the data
-// for audit but aren't drawn on the chart.
 const active = computed(() => props.members.filter(m => m.status !== 'retired'))
 
 const ceo = computed(() => active.value.find(m => m.role === 'ceo') ?? null)
@@ -47,7 +33,7 @@ function specialistsOf(teamleadEmail: string) {
   return active.value.filter(m => m.role === 'specialist' && m.reportsToEmail === teamleadEmail)
 }
 const unassignedSpecialists = computed(() =>
-  active.value.filter(m => m.role === 'specialist' && (!m.reportsToEmail || !teamleads.value.some(t => t.agentEmail === m.reportsToEmail))),
+  active.value.filter(m => m.role === 'specialist' && (!m.reportsToEmail || !teamleads.value.some(tl => tl.agentEmail === m.reportsToEmail))),
 )
 const others = computed(() => active.value.filter(m => !['ceo', 'sanierer', 'teamlead', 'specialist'].includes(m.role)))
 
@@ -60,18 +46,11 @@ function roleColor(role: string): string {
     default: return 'bg-zinc-500/20 text-zinc-300 border-zinc-500/40'
   }
 }
-
-function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', label: string } {
-  if (s === 'active') return { color: 'success', label: t('chart.status.active') }
-  if (s === 'invited') return { color: 'warning', label: t('chart.status.invited') }
-  return { color: 'neutral', label: s }
-}
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Owner card — always shown at top, not a member row but the
-         root of the chart. -->
+    <!-- Owner card — root of the chart, not a member row. -->
     <div class="flex flex-col items-center gap-3">
       <div class="rounded-lg border border-amber-600/40 bg-amber-500/5 px-4 py-3 text-center min-w-[180px]">
         <div class="text-xs uppercase tracking-wide text-amber-400 font-semibold">
@@ -83,9 +62,6 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
       </div>
     </div>
 
-    <!-- Empty state — no members yet. The dotted lines hint at the
-         intended structure so the Owner sees what they're about to
-         build. -->
     <div v-if="active.length === 0" class="rounded-lg border border-dashed border-(--ui-border) p-8 text-center space-y-3">
       <div class="text-4xl">
         👔
@@ -99,135 +75,93 @@ function statusBadge(s: string): { color: 'success' | 'warning' | 'neutral', lab
     </div>
 
     <template v-else>
-      <!-- CEO row — single, centered. Sanierer sits beside it on the
-           same level (parallel reporting to Owner). -->
+      <!-- CEO + Sanierer at the same level (parallel reporting to Owner). -->
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <div v-if="ceo" class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('ceo'), { 'border-dashed': isPlaceholderEmail(ceo.agentEmail) }]">
-          <div class="text-xs uppercase tracking-wide font-semibold">
-            {{ $t('chart.role.ceo') }}
-          </div>
-          <div class="font-mono text-sm mt-1 break-all">
-            {{ ceo.agentName }}
-          </div>
-          <UBadge :color="statusBadge(ceo.status).color" variant="subtle" size="xs" class="mt-2">
-            {{ statusBadge(ceo.status).label }}
-          </UBadge>
-          <button v-if="isPlaceholderEmail(ceo.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', ceo.agentEmail)">
-            {{ $t('chart.linkAgentCta') }}
-          </button>
-        </div>
-
-        <div v-if="sanierer" class="rounded-lg border px-4 py-3 min-w-[180px] text-center relative" :class="[roleColor('sanierer'), { 'border-dashed': isPlaceholderEmail(sanierer.agentEmail) }]">
-          <div class="text-xs uppercase tracking-wide font-semibold">
-            {{ $t('chart.role.sanierer') }}
-          </div>
-          <div class="font-mono text-sm mt-1 break-all">
-            {{ sanierer.agentName }}
-          </div>
-          <UBadge :color="statusBadge(sanierer.status).color" variant="subtle" size="xs" class="mt-2">
-            {{ statusBadge(sanierer.status).label }}
-          </UBadge>
-          <div class="text-[10px] text-muted mt-1">
-            {{ $t('chart.role.sanierer.note') }}
-          </div>
-          <button v-if="isPlaceholderEmail(sanierer.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sanierer.agentEmail)">
-            {{ $t('chart.linkAgentCta') }}
-          </button>
-        </div>
+        <MemberCard
+          v-if="ceo"
+          :member="ceo"
+          :role-label="$t('chart.role.ceo')"
+          :color-class="roleColor('ceo')"
+          size="lg"
+          @link-agent="$emit('linkAgent', $event)"
+          @spawn-agent="$emit('spawnAgent', $event)"
+        />
+        <MemberCard
+          v-if="sanierer"
+          :member="sanierer"
+          :role-label="$t('chart.role.sanierer')"
+          :color-class="roleColor('sanierer')"
+          size="lg"
+          :note="$t('chart.role.sanierer.note')"
+          @link-agent="$emit('linkAgent', $event)"
+          @spawn-agent="$emit('spawnAgent', $event)"
+        />
       </div>
 
-      <!-- Teamleads under CEO. Each Teamlead-card collapses its
-           specialists below it. -->
+      <!-- Teamleads under CEO, each with their specialists collapsed below. -->
       <div v-if="teamleads.length > 0" class="space-y-4">
         <div v-for="tl in teamleads" :key="tl.agentEmail" class="space-y-3">
           <div class="flex justify-center">
-            <div class="rounded-lg border px-4 py-3 min-w-[180px] text-center" :class="[roleColor('teamlead'), { 'border-dashed': isPlaceholderEmail(tl.agentEmail) }]">
-              <div class="text-xs uppercase tracking-wide font-semibold">
-                {{ $t('chart.role.teamlead') }}
-              </div>
-              <div class="font-mono text-sm mt-1 break-all">
-                {{ tl.agentName }}
-              </div>
-              <UBadge :color="statusBadge(tl.status).color" variant="subtle" size="xs" class="mt-2">
-                {{ statusBadge(tl.status).label }}
-              </UBadge>
-              <button v-if="isPlaceholderEmail(tl.agentEmail)" type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', tl.agentEmail)">
-                {{ $t('chart.linkAgentCta') }}
-              </button>
-            </div>
+            <MemberCard
+              :member="tl"
+              :role-label="$t('chart.role.teamlead')"
+              :color-class="roleColor('teamlead')"
+              size="lg"
+              @link-agent="$emit('linkAgent', $event)"
+              @spawn-agent="$emit('spawnAgent', $event)"
+            />
           </div>
-
           <div v-if="specialistsOf(tl.agentEmail).length > 0" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <div
+            <MemberCard
               v-for="sp in specialistsOf(tl.agentEmail)"
               :key="sp.agentEmail"
-              class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist'), { 'border-dashed': isPlaceholderEmail(sp.agentEmail) }]"
-            >
-              <div class="text-[10px] uppercase tracking-wide font-semibold opacity-70">
-                {{ $t('chart.role.specialist') }}
-              </div>
-              <div class="font-mono text-xs mt-0.5 break-all">
-                {{ sp.agentName }}
-              </div>
-              <UBadge :color="statusBadge(sp.status).color" variant="subtle" size="xs" class="mt-1.5">
-                {{ statusBadge(sp.status).label }}
-              </UBadge>
-              <button v-if="isPlaceholderEmail(sp.agentEmail)" type="button" class="block w-full mt-1.5 text-[9px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sp.agentEmail)">
-                {{ $t('chart.linkAgentCta') }}
-              </button>
-            </div>
+              :member="sp"
+              :role-label="$t('chart.role.specialist')"
+              :color-class="roleColor('specialist')"
+              size="sm"
+              @link-agent="$emit('linkAgent', $event)"
+              @spawn-agent="$emit('spawnAgent', $event)"
+            />
           </div>
         </div>
       </div>
 
-      <!-- Specialists without a Teamlead parent — surface them so they
-           don't disappear; usually a hint that the Owner needs to set
-           a reports_to_email. -->
+      <!-- Specialists with no Teamlead parent — surfaced so they don't disappear. -->
       <div v-if="unassignedSpecialists.length > 0" class="space-y-2">
         <div class="text-xs text-muted text-center">
           {{ $t('chart.unassigned') }}
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div
+          <MemberCard
             v-for="sp in unassignedSpecialists"
             :key="sp.agentEmail"
-            class="rounded-lg border px-3 py-2 text-center" :class="[roleColor('specialist'), { 'border-dashed': isPlaceholderEmail(sp.agentEmail) }]"
-          >
-            <div class="text-[10px] uppercase tracking-wide font-semibold opacity-70">
-              {{ $t('chart.role.specialist') }}
-            </div>
-            <div class="font-mono text-xs mt-0.5 break-all">
-              {{ sp.agentName }}
-            </div>
-            <UBadge :color="statusBadge(sp.status).color" variant="subtle" size="xs" class="mt-1.5">
-              {{ statusBadge(sp.status).label }}
-            </UBadge>
-            <button v-if="isPlaceholderEmail(sp.agentEmail)" type="button" class="block w-full mt-1.5 text-[9px] underline text-amber-300/80 cursor-pointer" @click="$emit('linkAgent', sp.agentEmail)">
-              {{ $t('chart.linkAgentCta') }}
-            </button>
-          </div>
+            :member="sp"
+            :role-label="$t('chart.role.specialist')"
+            :color-class="roleColor('specialist')"
+            size="sm"
+            @link-agent="$emit('linkAgent', $event)"
+            @spawn-agent="$emit('spawnAgent', $event)"
+          />
         </div>
       </div>
 
       <!-- "Other" roles bucket — anything not in the standard 4-tier
-           taxonomy. v1 reserves space, future tiers slot in here. -->
+           taxonomy. v1 reserves space; future tiers slot in here. -->
       <div v-if="others.length > 0" class="space-y-2">
         <div class="text-xs text-muted text-center">
           {{ $t('chart.other') }}
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div
+          <MemberCard
             v-for="m in others"
             :key="m.agentEmail"
-            class="rounded-lg border px-3 py-2 text-center" :class="[roleColor(m.role)]"
-          >
-            <div class="text-[10px] uppercase tracking-wide font-semibold opacity-70">
-              {{ m.role }}
-            </div>
-            <div class="font-mono text-xs mt-0.5 break-all">
-              {{ m.agentName }}
-            </div>
-          </div>
+            :member="m"
+            :role-label="m.role"
+            :color-class="roleColor(m.role)"
+            size="sm"
+            @link-agent="$emit('linkAgent', $event)"
+            @spawn-agent="$emit('spawnAgent', $event)"
+          />
         </div>
       </div>
     </template>
