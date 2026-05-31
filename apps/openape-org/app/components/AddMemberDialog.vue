@@ -22,13 +22,11 @@ watch(open, (now) => {
   error.value = ''
 })
 
-// Only Teamleads make sense as a parent. CEO + Sanierer report to Owner;
-// the Owner isn't a row in members.
 const teamleadOptions = computed(() => {
   const tls = props.existingMembers.filter(m => m.role === 'teamlead')
   return [
     { label: t('member.reportsToNone'), value: '' },
-    ...tls.map(t => ({ label: `${t.agentName} (${t.agentEmail})`, value: t.agentEmail })),
+    ...tls.map(tl => ({ label: `${tl.agentName} (${tl.agentEmail})`, value: tl.agentEmail })),
   ]
 })
 
@@ -41,14 +39,17 @@ const roleOptions = computed(() => [
 ])
 
 async function submit() {
-  if (!form.value.agent_email || !form.value.agent_name) return
+  if (!form.value.agent_name) return
   submitting.value = true
   error.value = ''
   try {
     await ($fetch as any)(`/api/orgs/${props.orgId}/members`, {
       method: 'POST',
       body: {
-        agent_email: form.value.agent_email,
+        // Omit agent_email when blank so the server generates a
+        // pending placeholder — Owner can plan the org-chart before
+        // spawning the actual agents in troop.
+        ...(form.value.agent_email.trim() ? { agent_email: form.value.agent_email.trim() } : {}),
         agent_name: form.value.agent_name,
         role: form.value.role,
         reports_to_email: form.value.reports_to_email || null,
@@ -91,9 +92,18 @@ async function submit() {
           <UInput v-model="form.agent_name" placeholder="alice" size="lg" class="w-full" :ui="{ base: 'w-full' }" />
         </UFormField>
 
-        <UFormField :label="$t('member.field.agentEmail.label')" :description="$t('member.field.agentEmail.description')" required>
-          <UInput v-model="form.agent_email" placeholder="agent+alice+example.com@id.openape.ai" size="lg" class="w-full" :ui="{ base: 'w-full' }" />
+        <UFormField :label="$t('member.field.agentEmail.label')" :description="$t('member.field.agentEmail.descriptionOptional')">
+          <UInput v-model="form.agent_email" :placeholder="$t('member.field.agentEmail.placeholderOptional')" size="lg" class="w-full" :ui="{ base: 'w-full' }" />
         </UFormField>
+
+        <UAlert
+          v-if="!form.agent_email.trim()"
+          color="info"
+          variant="subtle"
+          icon="i-lucide-info"
+          :title="$t('member.field.agentEmail.pendingTitle')"
+          :description="$t('member.field.agentEmail.pendingDescription')"
+        />
 
         <UFormField v-if="form.role === 'specialist'" :label="$t('member.field.reportsTo.label')" :description="$t('member.field.reportsTo.description')">
           <USelect v-model="form.reports_to_email" :items="teamleadOptions" />
@@ -106,7 +116,7 @@ async function submit() {
         <UButton variant="ghost" :disabled="submitting" @click="open = false">
           {{ $t('common.cancel') }}
         </UButton>
-        <UButton color="primary" :loading="submitting" :disabled="!form.agent_email || !form.agent_name" @click="submit">
+        <UButton color="primary" :loading="submitting" :disabled="!form.agent_name" @click="submit">
           {{ $t('member.add.submit') }}
         </UButton>
       </div>
