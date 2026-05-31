@@ -1,0 +1,222 @@
+{
+  "app": {
+    "title": "OpenApe Org"
+  },
+  "common": {
+    "loading": "Lädt…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "retry": "Erneut versuchen",
+    "logout": "Abmelden"
+  },
+  "time": {
+    "never": "nie",
+    "justNow": "gerade eben"
+  },
+  "login": {
+    "tabTitle": "Anmelden",
+    "oauth": {
+      "accessDenied": "Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin OpenApe Org noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse."
+    },
+    "card": {
+      "title": "Bei OpenApe Org anmelden",
+      "subtitle": "Führe deine virtuelle Firma von überall aus",
+      "button": "Weiter"
+    }
+  },
+  "orgsIndex": {
+    "tabTitle": "Meine Organisationen",
+    "heading": "Meine Organisationen",
+    "subheading": "Jede Org ist eine virtuelle Firma mit eigenem CEO, Team, Budget und Reports.",
+    "newOrg": "Neue Org",
+    "empty": {
+      "title": "Noch keine Organisation.",
+      "hint": "Starte deine erste virtuelle Firma. Du setzt Vision und Budget — die Agents machen den Rest.",
+      "cta": "Erste Org anlegen"
+    },
+    "card": {
+      "members": "Mitglieder",
+      "budget": "Budget"
+    },
+    "error": {
+      "loadFailed": "Organisationen konnten nicht geladen werden",
+      "createFailed": "Anlegen fehlgeschlagen"
+    }
+  },
+  "createOrg": {
+    "title": "Neue Organisation anlegen",
+    "subtitle": "Mit den Basics starten — Vision verfeinern und Team aufbauen geht später.",
+    "field": {
+      "name": {
+        "label": "Organisations-Name",
+        "description": "Kurzes Label, sehen nur du und deine Agents — z.B. \"OpenApe Inc.\" oder \"Marketing\".",
+        "placeholder": "OpenApe Inc."
+      },
+      "vision": {
+        "label": "Vision",
+        "description": "Was soll diese Organisation erreichen? Fließtext, der CEO liest das.",
+        "placeholder": "Wir bauen die offene Agent-Infrastruktur für selbst-gehostete Teams. Bis Q3 sollen CI, PR-Review und Reviewer-Agent ausgeliefert sein."
+      },
+      "budget": {
+        "label": "Monatliches Budget",
+        "description": "Das harte Limit, das der Sanierer überwacht. Darüber stoppt er den CEO beim Hiring."
+      }
+    },
+    "submit": "Anlegen"
+  },
+  "orgDetail": {
+    "backToList": "Orgs",
+    "tab": {
+      "chart": "Chart",
+      "objectives": "Ziele",
+      "cost": "Kosten",
+      "reports": "Reports",
+      "settings": "Einstellungen"
+    },
+    "error": {
+      "loadFailed": "Diese Organisation konnte nicht geladen werden",
+      "saveFailed": "Speichern fehlgeschlagen"
+    },
+    "destroy": {
+      "failed": "Löschen fehlgeschlagen"
+    }
+  },
+  "chart": {
+    "addMember": "Mitglied hinzufügen",
+    "role": {
+      "owner": "Owner",
+      "ceo": "CEO",
+      "teamlead": "Teamlead",
+      "specialist": "Spezialist",
+      "sanierer": "Sanierer"
+    },
+    "role.sanierer.note": "Berichtet direkt an Owner",
+    "status": {
+      "active": "aktiv",
+      "invited": "eingeladen"
+    },
+    "empty": {
+      "title": "Noch kein Team",
+      "hint": "Füge zuerst deinen CEO hinzu. Sobald er da ist, kann er den Rest des Teams im Budget-Rahmen einstellen."
+    },
+    "unassigned": "Nicht zugewiesene Spezialisten",
+    "other": "Andere Rollen"
+  },
+  "member": {
+    "add": {
+      "title": "Team-Mitglied hinzufügen",
+      "subtitle": "v1: du fügst Agents manuell hinzu. Ab M4 macht das der CEO.",
+      "submit": "Hinzufügen"
+    },
+    "field": {
+      "role": "Rolle",
+      "agentName": {
+        "label": "Agent-Name",
+        "description": "Der Kurzname, der in troop angezeigt wird (z.B. alice)."
+      },
+      "agentEmail": {
+        "label": "Agent-Email",
+        "description": "Die vollständige DDISA-Email des Agents."
+      },
+      "reportsTo": {
+        "label": "Berichtet an",
+        "description": "Wähle den Teamlead, unter dem dieser Spezialist arbeitet."
+      }
+    },
+    "role": {
+      "ceo": "CEO",
+      "teamlead": "Teamlead",
+      "specialist": "Spezialist",
+      "sanierer": "Sanierer",
+      "other": "Andere"
+    },
+    "reportsToNone": "— (keiner / berichtet an Owner)",
+    "error": {
+      "saveFailed": "Hinzufügen fehlgeschlagen"
+    }
+  },
+  "objective": {
+    "new": "Neues Ziel",
+    "edit": {
+      "title": "Ziel bearbeiten"
+    },
+    "field": {
+      "title": "Titel",
+      "description": "Beschreibung",
+      "status": "Status"
+    },
+    "column": {
+      "planned": "Geplant",
+      "inProgress": "In Arbeit",
+      "done": "Erledigt"
+    },
+    "move": {
+      "planned": "Auf 'Geplant' setzen",
+      "inProgress": "Auf 'In Arbeit' setzen",
+      "done": "Als erledigt markieren",
+      "abandoned": "Verworfen"
+    },
+    "delete": "Löschen",
+    "empty": "Keine Ziele in dieser Spalte.",
+    "abandoned": "Verworfen",
+    "confirmDelete": "Ziel \"{title}\" löschen?",
+    "error": {
+      "saveFailed": "Ziel konnte nicht gespeichert werden",
+      "deleteFailed": "Ziel konnte nicht gelöscht werden"
+    }
+  },
+  "cost": {
+    "budget": {
+      "heading": "Ausgaben (30 Tage)",
+      "window": "Rollierendes 30-Tage-Fenster",
+      "burn": "vom Budget",
+      "warning": "Budget-Grenze nähert sich — der Sanierer wird das Hiring drosseln.",
+      "overrun": "Budget überschritten — der Sanierer stoppt neue Spawns bis zum nächsten Zyklus."
+    },
+    "kpi": {
+      "tokens": "Tokens",
+      "artifacts": "Artefakte",
+      "efficiency": "Artefakte/€",
+      "days": "Tage mit Daten"
+    },
+    "trend": {
+      "title": "Tägliche Ausgaben (letzte 30 Tage)",
+      "empty": "Noch keine Kostendaten. Sobald der Sanierer läuft, schreibt er tägliche Snapshots."
+    }
+  },
+  "reports": {
+    "filter": {
+      "all": "Alle Reports"
+    },
+    "kind": {
+      "alert": "Alert",
+      "weekly": "Wöchentlich",
+      "daily": "Täglich",
+      "quarterly": "Quartal",
+      "adhoc": "Ad-hoc"
+    },
+    "count": "{count} Reports",
+    "empty": "Noch keine Reports. Der CEO schreibt freitags eine Wochenzusammenfassung; der Sanierer alarmiert bei Schwellenwerten."
+  },
+  "settings": {
+    "vision": {
+      "title": "Vision",
+      "hint": "Der CEO liest das bei jeder Interaktion, um seine Vorschläge zu fundieren. Aktualisiere bei Richtungswechsel.",
+      "placeholder": "Was soll diese Organisation erreichen, bis wann, und warum?"
+    },
+    "budget": {
+      "title": "Monatliches Budget",
+      "hint": "Hartes Limit, das der Sanierer überwacht. Über-Budget-Spawns erfordern Owner-Genehmigung."
+    },
+    "danger": {
+      "title": "Danger Zone",
+      "hint": "Löscht diese Organisation und alle ihre Daten (Mitglieder, Ziele, Reports, Kostendaten). Bereits in troop gespawnte Agents werden NICHT automatisch entfernt — dort separat retiren.",
+      "button": "Organisation löschen",
+      "modalTitle": "Diese Organisation löschen?",
+      "modalBody": "Das löscht {name} samt aller Mitglieder, Ziele, Reports und Kostendaten dauerhaft. Nicht rückgängig machbar.",
+      "typeToConfirm": "Tippe {name} zur Bestätigung",
+      "confirmButton": "Für immer löschen"
+    }
+  }
+}
