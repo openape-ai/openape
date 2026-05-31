@@ -71,25 +71,11 @@ export default defineNuxtConfig({
     tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-org.db',
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
     // troop's API base — server-side calls from org's spawn-proxy
-    // endpoint use this; UI uses the public mirror below.
+    // endpoint will use this once the protocol-aligned M4 lands.
     troopApiBase: process.env.NUXT_TROOP_API_BASE || 'https://troop.openape.ai',
-    // org's own IdP-issued agent access token, minted once via
-    // scripts/enroll-org-as-agent.sh. Required for cross-SP
-    // token-exchange when spawning agents on the Owner's behalf.
-    // Empty in dev → spawn endpoints return a 503 with a clear
-    // bootstrap message.
-    orgIdpAccessToken: process.env.NUXT_ORG_IDP_ACCESS_TOKEN || '',
-    // The agent email org enrolled as — used for /api/delegations'
-    // `delegate` field shown to the Owner in the bootstrap UI.
-    orgIdpAgentEmail: process.env.NUXT_ORG_IDP_AGENT_EMAIL || 'agent+openape-org@id.openape.ai',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',
       troopUiBase: process.env.NUXT_PUBLIC_TROOP_UI_BASE || 'https://troop.openape.ai',
-      // Expose the agent email + the audience publicly so the UI can
-      // build the exact CLI command for the Owner to run when
-      // bootstrapping their delegation grant.
-      orgIdpAgentEmail: process.env.NUXT_ORG_IDP_AGENT_EMAIL || 'agent+openape-org@id.openape.ai',
-      troopAudience: process.env.NUXT_TROOP_AUDIENCE || 'apes-cli',
     },
   },
 })

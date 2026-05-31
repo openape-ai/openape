@@ -100,14 +100,12 @@ const statusBadge = computed(() => {
       </button>
     </div>
 
-    <!-- Placeholder, no spawn in flight, no failure: offer both
-         "Spawn agent" (primary, kicks off the auto-flow) and "Link
-         agent…" (manual paste fallback, for already-spawned agents). -->
+    <!-- Placeholder, no spawn in flight, no failure: today only the
+         "Link existing" manual-paste path is wired. The "Spawn agent"
+         auto-flow ships with M4-correct (cross-SP DDISA delegation
+         per openape-ai/protocol sp-data-access.md). -->
     <template v-else-if="isPlaceholder">
-      <button type="button" class="block w-full mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-300 hover:text-amber-200 cursor-pointer" @click="emit('spawnAgent', member.agentEmail)">
-        {{ $t('chart.spawnCta') }}
-      </button>
-      <button type="button" class="block w-full mt-0.5 text-[10px] underline text-amber-300/70 cursor-pointer" @click="emit('linkAgent', member.agentEmail)">
+      <button type="button" class="block w-full mt-2 text-[10px] underline text-amber-300/80 cursor-pointer" @click="emit('linkAgent', member.agentEmail)">
         {{ $t('chart.linkAgentCta') }}
       </button>
     </template>
