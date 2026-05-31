@@ -5,7 +5,10 @@ import { useOpenApeAuth } from '#imports'
 const route = useRoute()
 const agentName = computed(() => String(route.params.name))
 
-useSeoMeta({ title: () => `Agent ${agentName.value}` })
+const { t } = useI18n()
+const { fmtDate } = useDateFormat()
+const { fmtRelative } = useRelativeTime()
+useSeoMeta({ title: () => t('agentDetail.tabTitle', { name: agentName.value }) })
 
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
@@ -67,7 +70,7 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'failed to load agent'
+    error.value = err?.data?.statusMessage || err?.message || t('agentDetail.error.loadFailed')
   }
   finally {
     loading.value = false
@@ -96,9 +99,9 @@ onBeforeUnmount(() => { if (nestHostsTimer) clearInterval(nestHostsTimer) })
 
 const nestOnline = computed(() => nestHosts.value.length > 0)
 const nestLabel = computed(() => {
-  if (!nestOnline.value) return 'nest offline — falling back to 5min poll'
+  if (!nestOnline.value) return t('agentDetail.nest.offlineLabel')
   const names = nestHosts.value.map(h => h.hostname).join(', ')
-  return `live · ${names}`
+  return t('agentDetail.nest.onlineLabel', { names })
 })
 
 // Agent-level system prompt editor — saved on blur via PATCH
@@ -128,7 +131,7 @@ async function saveSystemPrompt() {
     if (detail.value) detail.value.agent.systemPrompt = systemPromptDraft.value
   }
   catch (err: any) {
-    systemPromptError.value = err?.data?.statusMessage || err?.message || 'save failed'
+    systemPromptError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
   }
   finally {
     systemPromptSaving.value = false
@@ -160,7 +163,7 @@ async function applyRecipe() {
     if (detail.value) detail.value.agent.systemPrompt = (await ($fetch as any)(`/api/agents/${agentName.value}`)).agent.systemPrompt
   }
   catch (err: any) {
-    recipeError.value = err?.data?.statusMessage || err?.message || 'apply failed'
+    recipeError.value = err?.data?.statusMessage || err?.message || t('agentDetail.recipe.error.applyFailed')
   }
   finally {
     recipeSaving.value = false
@@ -196,7 +199,7 @@ async function saveTools() {
     if (detail.value) detail.value.agent.tools = [...toolsDraft.value]
   }
   catch (err: any) {
-    toolsError.value = err?.data?.statusMessage || err?.message || 'save failed'
+    toolsError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
   }
   finally {
     toolsSaving.value = false
@@ -230,8 +233,8 @@ const skillSaving = ref(false)
 async function loadSkills() {
   if (!agentName.value) return
   skillsError.value = ''
-  try { skills.value = await ($fetch as any)(`/api/agents/${agentName.value}/skills`) }
-  catch (err: any) { skillsError.value = err?.data?.statusMessage || err?.message || 'failed to load skills' }
+  try { skills.value = await ($fetch as any)(`/api/agents/${agentName.value}/skills`); skillsError.value = '' }
+  catch (err: any) { skillsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.skills.error.loadFailed') }
 }
 watch(detail, (d) => { if (d) loadSkills() })
 
@@ -259,7 +262,7 @@ async function saveSkill() {
     await loadSkills()
   }
   catch (err: any) {
-    skillsError.value = err?.data?.statusMessage || err?.message || 'save failed'
+    skillsError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
   }
   finally {
     skillSaving.value = false
@@ -267,13 +270,13 @@ async function saveSkill() {
 }
 async function deleteSkill(name: string) {
   if (!agentName.value) return
-  if (!confirm(`Delete skill '${name}'? This is permanent — to keep it but hide it from the agent use 'disabled'.`)) return
+  if (!confirm(t('agentDetail.skills.confirmDelete', { name }))) return
   try {
     await ($fetch as any)(`/api/agents/${agentName.value}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
     await loadSkills()
   }
   catch (err: any) {
-    skillsError.value = err?.data?.statusMessage || err?.message || 'delete failed'
+    skillsError.value = err?.data?.statusMessage || err?.message || t('common.error.deleteFailed')
   }
 }
 
@@ -293,7 +296,7 @@ async function loadSecrets() {
     const res: { secrets: SecretRow[] } = await ($fetch as any)(`/api/agents/${agentName.value}/secrets`)
     secrets.value = res.secrets
   }
-  catch (err: any) { secretsError.value = err?.data?.statusMessage || err?.message || 'failed to load secrets' }
+  catch (err: any) { secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.loadFailed') }
 }
 watch(detail, (d) => { if (d) loadSecrets() })
 
@@ -310,7 +313,7 @@ async function saveSecret() {
     await loadSecrets()
   }
   catch (err: any) {
-    secretsError.value = err?.data?.statusMessage || err?.message || 'save failed (the agent must have synced once after spawn)'
+    secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.saveFailed')
   }
   finally {
     secretSaving.value = false
@@ -319,13 +322,13 @@ async function saveSecret() {
 
 async function revokeSecret(env: string) {
   if (!agentName.value) return
-  if (!confirm(`Revoke '${env}'? The agent's copy is cleared on its next connect.`)) return
+  if (!confirm(t('agentDetail.secrets.confirmRevoke', { env }))) return
   try {
     await ($fetch as any)(`/api/agents/${agentName.value}/secrets/${encodeURIComponent(env)}`, { method: 'DELETE' })
     await loadSecrets()
   }
   catch (err: any) {
-    secretsError.value = err?.data?.statusMessage || err?.message || 'revoke failed'
+    secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.revokeFailed')
   }
 }
 
@@ -401,38 +404,22 @@ async function save() {
     await load()
   }
   catch (err: any) {
-    saveError.value = err?.data?.statusMessage || err?.message || 'save failed'
+    saveError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
   }
   finally {
     saving.value = false
   }
 }
 
-async function remove(t: Task) {
-  if (!confirm(`Delete task "${t.name}"? Active launchd jobs on the agent host will be removed on the next sync.`)) return
+async function remove(task: Task) {
+  if (!confirm(t('agentDetail.tasks.confirmDelete', { name: task.name }))) return
   try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/tasks/${t.taskId}`, { method: 'DELETE' })
+    await ($fetch as any)(`/api/agents/${agentName.value}/tasks/${task.taskId}`, { method: 'DELETE' })
     await load()
   }
   catch (err: any) {
-    error.value = err?.data?.statusMessage || err?.message || 'delete failed'
+    error.value = err?.data?.statusMessage || err?.message || t('common.error.deleteFailed')
   }
-}
-
-function fmtDate(ts: number | null): string {
-  if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleString('de-AT', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
-}
-
-function fmtRelative(ts: number | null): string {
-  if (!ts) return 'never'
-  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts)
-  if (sec < 60) return 'just now'
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
-  return `${Math.floor(sec / 86400)}d ago`
 }
 
 const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'success', error: 'error' }
@@ -471,11 +458,11 @@ async function pollDestroy(): Promise<void> {
       await navigateTo('/agents')
       return
     }
-    destroyError.value = res.error || 'destroy failed on the nest'
+    destroyError.value = res.error || t('agentDetail.destroy.error.nestFailed')
   }
   catch (err: any) {
     destroying.value = false
-    destroyError.value = err?.data?.statusMessage || err?.message || 'poll failed'
+    destroyError.value = err?.data?.statusMessage || err?.message || t('agentDetail.destroy.error.pollFailed')
   }
 }
 
@@ -492,7 +479,7 @@ async function submitDestroy() {
   }
   catch (err: any) {
     destroying.value = false
-    destroyError.value = err?.data?.statusMessage || err?.message || 'failed to start destroy'
+    destroyError.value = err?.data?.statusMessage || err?.message || t('agentDetail.destroy.error.startFailed')
   }
 }
 
@@ -503,7 +490,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
     <header class="border-b border-(--ui-border) px-3 sm:px-6 py-3 flex items-center gap-2 sticky top-0 z-10 bg-zinc-950/95 backdrop-blur">
       <UButton to="/agents" variant="ghost" size="sm" icon="i-lucide-arrow-left" :ui="{ base: 'shrink-0' }">
-        <span class="hidden sm:inline">Agents</span>
+        <span class="hidden sm:inline">{{ $t('agentDetail.backToAgents') }}</span>
       </UButton>
       <span v-if="detail" class="font-mono font-semibold truncate flex-1">
         🦍 {{ detail.agent.agentName }}
@@ -513,7 +500,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
         :class="nestOnline ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-800/50'"
         :title="nestLabel"
       >
-        {{ nestOnline ? '● live' : '○ poll' }}
+        {{ nestOnline ? $t('agentDetail.nest.badgeLive') : $t('agentDetail.nest.badgePoll') }}
       </span>
       <LocaleSwitcher />
     </header>
@@ -523,7 +510,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
 
       <UCard v-if="loading">
         <p class="text-muted text-sm">
-          Loading…
+          {{ $t('common.loading') }}
         </p>
       </UCard>
 
@@ -548,16 +535,16 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-info" class="text-muted size-4" />
-                <span class="font-medium">Agent details</span>
+                <span class="font-medium">{{ $t('agentDetail.details.title') }}</span>
                 <span class="text-xs text-muted">·</span>
-                <span class="text-xs text-muted">last sync {{ fmtRelative(detail.agent.lastSeenAt) }}</span>
+                <span class="text-xs text-muted">{{ $t('agentDetail.details.lastSyncShort', { value: fmtRelative(detail.agent.lastSeenAt) }) }}</span>
               </div>
               <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
             </summary>
             <dl class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-(--ui-border)">
               <div>
                 <dt class="text-xs text-muted mb-0.5">
-                  Email
+                  {{ $t('agentDetail.details.email') }}
                 </dt>
                 <dd class="font-mono text-xs break-all">
                   {{ detail.agent.email }}
@@ -565,7 +552,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               </div>
               <div>
                 <dt class="text-xs text-muted mb-0.5">
-                  Hostname
+                  {{ $t('agentDetail.details.hostname') }}
                 </dt>
                 <dd class="font-mono">
                   {{ detail.agent.hostname || '—' }}
@@ -573,7 +560,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               </div>
               <div>
                 <dt class="text-xs text-muted mb-0.5">
-                  Host ID
+                  {{ $t('agentDetail.details.hostId') }}
                 </dt>
                 <dd class="font-mono text-xs break-all">
                   {{ detail.agent.hostId || '—' }}
@@ -581,7 +568,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               </div>
               <div>
                 <dt class="text-xs text-muted mb-0.5">
-                  Public SSH key
+                  {{ $t('agentDetail.details.pubkey') }}
                 </dt>
                 <dd class="font-mono text-xs break-all">
                   {{ detail.agent.pubkeySsh || '—' }}
@@ -590,7 +577,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <dt class="text-xs text-muted mb-0.5">
-                    First sync
+                    {{ $t('agentDetail.details.firstSync') }}
                   </dt>
                   <dd class="text-sm">
                     {{ fmtDate(detail.agent.firstSeenAt) }}
@@ -598,7 +585,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                 </div>
                 <div>
                   <dt class="text-xs text-muted mb-0.5">
-                    Last sync
+                    {{ $t('agentDetail.details.lastSync') }}
                   </dt>
                   <dd class="text-sm">
                     {{ fmtDate(detail.agent.lastSeenAt) }}
@@ -621,15 +608,15 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-message-square" class="text-muted size-4" />
-                <span class="font-medium">System prompt</span>
+                <span class="font-medium">{{ $t('agentDetail.systemPrompt.title') }}</span>
                 <UBadge v-if="systemPromptDirty" color="warning" variant="subtle" size="xs">
-                  unsaved
+                  {{ $t('common.badge.unsaved') }}
                 </UBadge>
                 <UBadge v-else-if="systemPromptDraft" color="success" variant="subtle" size="xs">
-                  set
+                  {{ $t('common.badge.set') }}
                 </UBadge>
                 <UBadge v-else color="neutral" variant="subtle" size="xs">
-                  empty
+                  {{ $t('common.badge.empty') }}
                 </UBadge>
               </div>
               <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
@@ -642,16 +629,16 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                 size="lg"
                 class="w-full"
                 :ui="{ base: 'w-full' }"
-                placeholder="Du bist … (Persönlichkeit, Stil, Grundregeln in 1–3 Sätzen)"
+                :placeholder="$t('agentDetail.systemPrompt.placeholder')"
                 @blur="saveSystemPrompt"
               />
               <p class="text-xs text-muted mt-2">
-                Persönlichkeit, Stil, Grundregeln — gilt für jede Nachricht im Chat und für jeden Task-Run. Wird via Sync (~5min) auf den Agent-Host übertragen.
+                {{ $t('agentDetail.systemPrompt.hint') }}
               </p>
               <UAlert v-if="systemPromptError" color="error" :title="systemPromptError" class="mt-3" />
               <div v-if="systemPromptDirty" class="flex justify-end mt-3">
                 <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
-                  Save
+                  {{ $t('common.save') }}
                 </UButton>
               </div>
             </div>
@@ -666,27 +653,27 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-package" class="text-muted size-4" />
-                <span class="font-medium">Recipe</span>
+                <span class="font-medium">{{ $t('agentDetail.recipe.title') }}</span>
               </div>
               <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
             </summary>
             <div class="px-4 pb-4 pt-3 border-t border-(--ui-border) space-y-3">
-              <UFormField label="Recipe ref" description="owner/repo@ref (pinned), e.g. openape-ai/coding-agent@main">
+              <UFormField :label="$t('agentDetail.recipe.ref.label')" :description="$t('agentDetail.recipe.ref.description')">
                 <UInput v-model="recipeRef" placeholder="openape-ai/coding-agent@main" class="w-full" :ui="{ base: 'w-full' }" />
               </UFormField>
-              <UFormField label="Params (JSON)" description="e.g. {&quot;repo&quot;:&quot;https://github.com/openape-ai/openape.git&quot;,&quot;forge&quot;:&quot;github&quot;}">
+              <UFormField :label="$t('agentDetail.recipe.params.label')" :description="$t('agentDetail.recipe.params.description')">
                 <UTextarea v-model="recipeParams" :rows="2" class="w-full" :ui="{ base: 'w-full' }" />
               </UFormField>
               <UAlert v-if="recipeError" color="error" :title="recipeError" />
               <UAlert
                 v-if="recipeResult"
                 color="success"
-                :title="`Applied ${recipeResult.ref}`"
-                :description="recipeResult.required_capabilities.length ? `Bind secrets: ${recipeResult.required_capabilities.join(', ')}` : 'No new secrets required.'"
+                :title="$t('agentDetail.recipe.applied', { ref: recipeResult.ref })"
+                :description="recipeResult.required_capabilities.length ? $t('agentDetail.recipe.bindSecrets', { names: recipeResult.required_capabilities.join(', ') }) : $t('agentDetail.recipe.noNewSecrets')"
               />
               <div class="flex justify-end">
                 <UButton size="sm" color="primary" :loading="recipeSaving" :disabled="!recipeRef.trim()" @click="applyRecipe">
-                  Set / update recipe
+                  {{ $t('agentDetail.recipe.applyButton') }}
                 </UButton>
               </div>
             </div>
@@ -701,21 +688,19 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-wrench" class="text-muted size-4" />
-                <span class="font-medium">Tools</span>
+                <span class="font-medium">{{ $t('agentDetail.tools.title') }}</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
-                  {{ toolsDraft.length }} selected
+                  {{ $t('agentDetail.tools.selectedCount', { n: toolsDraft.length }) }}
                 </UBadge>
                 <UBadge v-if="toolsDirty" color="warning" variant="subtle" size="xs">
-                  unsaved
+                  {{ $t('common.badge.unsaved') }}
                 </UBadge>
               </div>
               <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
             </summary>
             <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
               <p class="text-xs text-muted mb-3">
-                Welche Tools darf der Agent im Chat verwenden? Default: alle. Nach
-                Speichern via Sync (~5min) auf den Agent-Host übertragen — kein
-                Bridge-Restart nötig (jeder neue Chat-Thread liest die Liste frisch).
+                {{ $t('agentDetail.tools.hint') }}
               </p>
               <ToolPicker v-model="toolsDraft" :disabled="toolsSaving" />
               <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
@@ -734,7 +719,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-book-open" class="text-muted size-4" />
-                <span class="font-medium">Skills</span>
+                <span class="font-medium">{{ $t('agentDetail.skills.title') }}</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ skills.length }}
                 </UBadge>
@@ -744,19 +729,18 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <div class="border-t border-(--ui-border)">
               <div class="flex items-start justify-between gap-3 px-4 py-3">
                 <p class="text-xs text-muted">
-                  Lazy-loaded SKILL.md instructions. The agent sees name + description in every
-                  system prompt; the body is read on demand via the file.read tool when the task
-                  matches.
+                  {{ $t('agentDetail.skills.hint') }}
                 </p>
                 <UButton color="primary" size="sm" icon="i-lucide-plus" :ui="{ base: 'shrink-0' }" @click="openCreateSkill">
-                  New skill
+                  {{ $t('agentDetail.skills.newButton') }}
                 </UButton>
               </div>
               <UAlert v-if="skillsError" color="error" :title="skillsError" class="m-4" />
-              <div v-if="skills.length === 0" class="px-4 pb-6 pt-2 text-center text-muted text-sm">
-                No custom skills yet — the agent runs with the default skills bundled in
-                <code class="text-zinc-300">@openape/ape-agent</code> (one per built-in tool).
-              </div>
+              <i18n-t v-if="skills.length === 0" keypath="agentDetail.skills.empty" tag="div" class="px-4 pb-6 pt-2 text-center text-muted text-sm">
+                <template #pkg>
+                  <code class="text-zinc-300">@openape/ape-agent</code>
+                </template>
+              </i18n-t>
               <ul v-else class="divide-y divide-(--ui-border)">
                 <li v-for="s in skills" :key="s.name">
                   <button
@@ -768,7 +752,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                       <div class="flex items-center gap-2 flex-wrap mb-1">
                         <span class="font-medium text-base">{{ s.name }}</span>
                         <UBadge v-if="!s.enabled" color="neutral" variant="subtle" size="xs">
-                          disabled
+                          {{ $t('common.badge.disabled') }}
                         </UBadge>
                       </div>
                       <div class="text-xs text-muted line-clamp-2">
@@ -780,7 +764,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                       color="error"
                       variant="ghost"
                       icon="i-lucide-trash-2"
-                      aria-label="Delete skill"
+                      :aria-label="$t('agentDetail.skills.deleteAria')"
                       @click.stop="deleteSkill(s.name)"
                     />
                   </button>
@@ -795,26 +779,26 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
           <template #content>
             <div class="p-5 space-y-4">
               <h3 class="text-lg font-semibold">
-                {{ skillEditor.isNew ? 'New skill' : `Edit ${skillEditor.name}` }}
+                {{ skillEditor.isNew ? $t('agentDetail.skills.editor.titleNew') : $t('agentDetail.skills.editor.titleEdit', { name: skillEditor.name }) }}
               </h3>
-              <UFormField label="Name" :description="skillEditor.isNew ? 'lowercase, [a-z0-9-], max 32 — becomes the directory name on disk' : 'name is immutable after creation'">
+              <UFormField :label="$t('agentDetail.skills.editor.name.label')" :description="skillEditor.isNew ? $t('agentDetail.skills.editor.name.descriptionNew') : $t('agentDetail.skills.editor.name.descriptionImmutable')">
                 <UInput v-model="skillEditor.name" :disabled="!skillEditor.isNew || skillSaving" placeholder="iurio" />
               </UFormField>
-              <UFormField label="Description" description="One-liner the LLM sees in every system prompt; tells it when to load this skill">
-                <UInput v-model="skillEditor.description" :disabled="skillSaving" placeholder="When the user asks about IURIO projects, cases, or documents, load this." />
+              <UFormField :label="$t('agentDetail.skills.editor.description.label')" :description="$t('agentDetail.skills.editor.description.description')">
+                <UInput v-model="skillEditor.description" :disabled="skillSaving" :placeholder="$t('agentDetail.skills.editor.description.placeholder')" />
               </UFormField>
-              <UFormField label="Body (markdown)" description="Full SKILL.md content — workflows, commands, conventions">
-                <UTextarea v-model="skillEditor.body" :rows="14" :disabled="skillSaving" placeholder="# IURIO CLI usage…" />
+              <UFormField :label="$t('agentDetail.skills.editor.body.label')" :description="$t('agentDetail.skills.editor.body.description')">
+                <UTextarea v-model="skillEditor.body" :rows="14" :disabled="skillSaving" :placeholder="$t('agentDetail.skills.editor.body.placeholder')" />
               </UFormField>
-              <UFormField label="Enabled" description="Disabled skills stay on disk but the agent doesn't see them.">
+              <UFormField :label="$t('agentDetail.skills.editor.enabled.label')" :description="$t('agentDetail.skills.editor.enabled.description')">
                 <USwitch v-model="skillEditor.enabled" :disabled="skillSaving" />
               </UFormField>
               <div class="flex justify-end gap-2">
                 <UButton variant="ghost" :disabled="skillSaving" @click="skillEditor.open = false">
-                  Cancel
+                  {{ $t('common.cancel') }}
                 </UButton>
                 <UButton color="primary" :loading="skillSaving" @click="saveSkill">
-                  Save
+                  {{ $t('common.save') }}
                 </UButton>
               </div>
             </div>
@@ -827,7 +811,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-key-round" class="text-muted size-4" />
-                <span class="font-medium">Secrets</span>
+                <span class="font-medium">{{ $t('agentDetail.secrets.title') }}</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ secrets.filter(s => s.status === 'active').length }}
                 </UBadge>
@@ -836,7 +820,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             </summary>
             <div class="border-t border-(--ui-border)">
               <p class="text-xs text-muted px-4 py-3">
-                Capability values for this agent. The value is sealed to the agent's key before it's stored — troop never keeps the plaintext and can't show it back. Set a value again to rotate it.
+                {{ $t('agentDetail.secrets.hint') }}
               </p>
               <UAlert v-if="secretsError" color="error" :title="secretsError" class="m-4" />
               <ul v-if="secrets.length > 0" class="divide-y divide-(--ui-border)">
@@ -845,7 +829,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                     <div class="flex items-center gap-2">
                       <code class="font-medium">{{ s.env }}</code>
                       <UBadge :color="s.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
-                        {{ s.status }}
+                        {{ $t(`agentDetail.secrets.status.${s.status}`) }}
                       </UBadge>
                     </div>
                   </div>
@@ -855,7 +839,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                     color="error"
                     variant="ghost"
                     icon="i-lucide-trash-2"
-                    aria-label="Revoke secret"
+                    :aria-label="$t('agentDetail.secrets.revokeAria')"
                     @click="revokeSecret(s.env)"
                   />
                 </li>
@@ -864,7 +848,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                 <div class="flex items-stretch gap-2">
                   <UInput
                     v-model="newSecret.env"
-                    placeholder="ENV_NAME"
+                    :placeholder="$t('agentDetail.secrets.envPlaceholder')"
                     class="flex-1"
                     :ui="{ base: 'w-full' }"
                     :disabled="secretSaving"
@@ -872,7 +856,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                   <UInput
                     v-model="newSecret.value"
                     type="password"
-                    placeholder="value"
+                    :placeholder="$t('agentDetail.secrets.valuePlaceholder')"
                     class="flex-1"
                     :ui="{ base: 'w-full' }"
                     :disabled="secretSaving"
@@ -883,11 +867,11 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                     :disabled="!newSecret.env || !newSecret.value"
                     @click="saveSecret"
                   >
-                    Set
+                    {{ $t('agentDetail.secrets.setButton') }}
                   </UButton>
                 </div>
                 <p class="text-[11px] text-muted">
-                  UPPER_SNAKE_CASE. Binding works once the agent has synced after spawn.
+                  {{ $t('agentDetail.secrets.casingHint') }}
                 </p>
               </div>
             </div>
@@ -900,7 +884,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-clock" class="text-muted size-4" />
-                <span class="font-medium">Tasks</span>
+                <span class="font-medium">{{ $t('agentDetail.tasks.title') }}</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ detail.tasks.length }}
                 </UBadge>
@@ -910,41 +894,41 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <div class="border-t border-(--ui-border)">
               <div class="flex items-center justify-end px-4 py-3">
                 <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openCreate">
-                  New task
+                  {{ $t('agentDetail.tasks.newButton') }}
                 </UButton>
               </div>
               <div v-if="detail.tasks.length === 0" class="px-4 pb-6 text-center text-muted text-sm">
-                No tasks yet — tap "New task" to schedule the agent.
+                {{ $t('agentDetail.tasks.empty') }}
               </div>
               <ul v-else class="divide-y divide-(--ui-border)">
-                <li v-for="t in detail.tasks" :key="t.taskId">
+                <li v-for="task in detail.tasks" :key="task.taskId">
                   <button
                     type="button"
                     class="w-full text-left px-4 py-4 active:bg-zinc-900 transition-colors flex items-start gap-3"
-                    @click="openEdit(t)"
+                    @click="openEdit(task)"
                   >
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap mb-1">
-                        <span class="font-medium text-base">{{ t.name }}</span>
-                        <UBadge v-if="!t.enabled" color="neutral" variant="subtle" size="xs">
-                          disabled
+                        <span class="font-medium text-base">{{ task.name }}</span>
+                        <UBadge v-if="!task.enabled" color="neutral" variant="subtle" size="xs">
+                          {{ $t('common.badge.disabled') }}
                         </UBadge>
                       </div>
                       <div class="flex items-center gap-2 text-xs text-muted">
                         <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
-                        <code class="font-mono">{{ t.cron }}</code>
+                        <code class="font-mono">{{ task.cron }}</code>
                       </div>
-                      <p v-if="t.userPrompt" class="text-xs text-muted mt-1 line-clamp-2">
-                        {{ t.userPrompt }}
+                      <p v-if="task.userPrompt" class="text-xs text-muted mt-1 line-clamp-2">
+                        {{ task.userPrompt }}
                       </p>
                       <div class="flex items-center gap-2 text-xs text-muted mt-1.5 flex-wrap">
-                        <span v-if="t.tools.length > 0" class="flex items-center gap-1">
+                        <span v-if="task.tools.length > 0" class="flex items-center gap-1">
                           <UIcon name="i-lucide-wrench" class="size-3.5 shrink-0" />
-                          {{ t.tools.length }} {{ t.tools.length === 1 ? 'tool' : 'tools' }}
+                          {{ $t('agentDetail.tasks.toolsCount', task.tools.length) }}
                         </span>
                         <span class="flex items-center gap-1">
                           <UIcon name="i-lucide-list-checks" class="size-3.5 shrink-0" />
-                          max {{ t.maxSteps }} steps
+                          {{ $t('agentDetail.tasks.maxSteps', { n: task.maxSteps }) }}
                         </span>
                       </div>
                     </div>
@@ -954,7 +938,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                       size="sm"
                       icon="i-lucide-trash-2"
                       :ui="{ base: 'shrink-0' }"
-                      @click.stop="remove(t)"
+                      @click.stop="remove(task)"
                     />
                   </button>
                 </li>
@@ -969,7 +953,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 text-sm">
                 <UIcon name="i-lucide-history" class="text-muted size-4" />
-                <span class="font-medium">Recent runs</span>
+                <span class="font-medium">{{ $t('agentDetail.runs.title') }}</span>
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ detail.recentRuns.length }}
                 </UBadge>
@@ -978,7 +962,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             </summary>
             <div class="border-t border-(--ui-border)">
               <div v-if="detail.recentRuns.length === 0" class="px-4 py-6 text-center text-muted text-sm">
-                No runs yet.
+                {{ $t('agentDetail.runs.empty') }}
               </div>
               <ul v-else class="divide-y divide-(--ui-border)">
                 <li v-for="r in detail.recentRuns" :key="r.id" class="px-4 py-3">
@@ -986,12 +970,12 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
                         <UBadge :color="(statusColor[r.status] as any)" variant="subtle" size="xs">
-                          {{ r.status }}
+                          {{ $t(`agentDetail.runs.status.${r.status}`) }}
                         </UBadge>
                         <code class="font-mono text-xs">{{ r.taskId }}</code>
                         <span class="text-xs text-muted">
                           {{ fmtDate(r.startedAt) }}
-                          <span v-if="r.finishedAt"> · {{ (r.finishedAt - r.startedAt).toFixed(0) }}s</span>
+                          <span v-if="r.finishedAt"> · {{ $t('agentDetail.runs.elapsedSec', { n: (r.finishedAt - r.startedAt).toFixed(0) }) }}</span>
                         </span>
                       </div>
                       <p v-if="r.finalMessage" class="text-sm mt-1 break-words">
@@ -999,7 +983,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
                       </p>
                       <details v-if="r.trace" class="mt-1">
                         <summary class="cursor-pointer text-xs text-muted">
-                          trace
+                          {{ $t('agentDetail.runs.trace') }}
                         </summary>
                         <pre class="text-xs mt-1 p-2 bg-(--ui-bg-elevated) rounded overflow-auto max-h-72">{{ JSON.stringify(r.trace, null, 2) }}</pre>
                       </details>
@@ -1020,28 +1004,26 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
            script + agent-home wipe). -->
       <section class="mt-12 pt-6 border-t border-red-500/20">
         <h2 class="text-sm font-medium text-red-400 mb-1">
-          Danger zone
+          {{ $t('agentDetail.danger.title') }}
         </h2>
         <p class="text-xs text-muted mb-3">
-          Destroys the agent on the nest where it lives. The IdP record is
-          removed, the bridge is stopped, the agent's home directory is
-          wiped, and this troop entry disappears.
+          {{ $t('agentDetail.danger.hint') }}
         </p>
         <UButton color="error" variant="soft" icon="i-lucide-trash-2" @click="openDestroy">
-          Delete agent
+          {{ $t('agentDetail.danger.deleteButton') }}
         </UButton>
       </section>
     </main>
 
-    <UModal v-model:open="showDestroy" title="Delete agent?" :ui="{ content: 'sm:max-w-md' }">
+    <UModal v-model:open="showDestroy" :title="$t('agentDetail.destroy.title')" :ui="{ content: 'sm:max-w-md' }">
       <template #body>
         <div class="space-y-4">
-          <p class="text-sm">
-            This destroys <span class="font-mono font-semibold">{{ agentName }}</span> on its nest
-            (IdP record gone, bridge stopped, home wiped). The chat history on
-            chat.openape.ai stays intact, but the agent won't reply anymore.
-          </p>
-          <UFormField :label="`Type ${agentName} to confirm`">
+          <i18n-t keypath="agentDetail.destroy.body" tag="p" class="text-sm">
+            <template #name>
+              <span class="font-mono font-semibold">{{ agentName }}</span>
+            </template>
+          </i18n-t>
+          <UFormField :label="$t('agentDetail.destroy.typeToConfirm', { name: agentName })">
             <UInput v-model="destroyConfirmInput" :placeholder="agentName" :disabled="destroying" autocomplete="off" />
           </UFormField>
           <UAlert v-if="destroyError" color="error" :title="destroyError" />
@@ -1049,11 +1031,10 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             <UIcon name="i-lucide-loader-circle" class="animate-spin shrink-0 size-4 mt-0.5" />
             <div>
               <div class="font-medium">
-                Destroying on the nest…
+                {{ $t('agentDetail.destroy.pending.title') }}
               </div>
               <div class="text-muted mt-1">
-                Approve the as=root grant on your iPhone if asked. This dialog
-                closes when the nest reports back.
+                {{ $t('agentDetail.destroy.pending.hint') }}
               </div>
             </div>
           </div>
@@ -1067,10 +1048,10 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
             :disabled="destroying || destroyConfirmInput !== agentName"
             @click="submitDestroy"
           >
-            Delete forever
+            {{ $t('agentDetail.destroy.confirmButton') }}
           </UButton>
           <UButton variant="ghost" :disabled="destroying" @click="showDestroy = false">
-            Cancel
+            {{ $t('common.cancel') }}
           </UButton>
         </div>
       </template>
@@ -1080,13 +1061,13 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
          doesn't push the save button under the textarea. -->
     <UModal
       v-model:open="showEditor"
-      :title="editing.isNew ? 'New task' : `Edit ${editing.taskId}`"
+      :title="editing.isNew ? $t('agentDetail.taskEditor.titleNew') : $t('agentDetail.taskEditor.titleEdit', { id: editing.taskId })"
       fullscreen
       :ui="{ content: 'sm:max-w-2xl sm:max-h-[90vh]' }"
     >
       <template #body>
         <form class="space-y-5" @submit.prevent="save">
-          <UFormField label="task_id" hint="lowercase letters, digits, dashes — immutable" :required="editing.isNew">
+          <UFormField label="task_id" :hint="$t('agentDetail.taskEditor.taskId.hint')" :required="editing.isNew">
             <UInput
               v-model="form.task_id"
               :disabled="!editing.isNew"
@@ -1100,30 +1081,30 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               @input="form.task_id = String($event.target.value).toLowerCase().replace(/[^a-z0-9-]/g, '')"
             />
           </UFormField>
-          <UFormField label="Display name" required>
+          <UFormField :label="$t('agentDetail.taskEditor.displayName')" required>
             <UInput v-model="form.name" placeholder="Daily Summary" size="lg" class="w-full" />
           </UFormField>
-          <UFormField label="When to run" hint="Cron syntax — see preview below">
+          <UFormField :label="$t('agentDetail.taskEditor.cron.label')" :hint="$t('agentDetail.taskEditor.cron.hint')">
             <CronInput v-model="form.cron" />
           </UFormField>
-          <UFormField label="What should run?" hint="The job for this run — agent's persona/style is set on the agent itself." required>
+          <UFormField :label="$t('agentDetail.taskEditor.userPrompt.label')" :hint="$t('agentDetail.taskEditor.userPrompt.hint')" required>
             <UTextarea
               v-model="form.user_prompt"
               :rows="8"
               autoresize
               size="lg"
               class="w-full"
-              placeholder="Lese mein Postfach durch und mach mir eine Zusammenfassung der wichtigsten neuen Mails."
+              :placeholder="$t('agentDetail.taskEditor.userPrompt.placeholder')"
             />
           </UFormField>
-          <UFormField label="Tools available">
+          <UFormField :label="$t('agentDetail.taskEditor.toolsLabel')">
             <ToolPicker v-model="form.tools" />
           </UFormField>
-          <UFormField label="Max tool-call rounds per run">
+          <UFormField :label="$t('agentDetail.taskEditor.maxStepsLabel')">
             <UInput v-model.number="form.max_steps" type="number" :min="1" :max="50" size="lg" class="w-full" />
           </UFormField>
           <UFormField>
-            <UCheckbox v-model="form.enabled" label="Enabled" />
+            <UCheckbox v-model="form.enabled" :label="$t('agentDetail.taskEditor.enabledLabel')" />
           </UFormField>
 
           <UAlert v-if="saveError" color="error" :title="saveError" />
@@ -1132,10 +1113,10 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
       <template #footer>
         <div class="flex flex-row-reverse w-full gap-2">
           <UButton type="submit" color="primary" :loading="saving" size="lg" class="flex-1 sm:flex-none justify-center" @click="save">
-            {{ editing.isNew ? 'Create task' : 'Save changes' }}
+            {{ editing.isNew ? $t('agentDetail.taskEditor.createButton') : $t('agentDetail.taskEditor.saveButton') }}
           </UButton>
           <UButton variant="ghost" :disabled="saving" size="lg" @click="showEditor = false">
-            Cancel
+            {{ $t('common.cancel') }}
           </UButton>
         </div>
       </template>

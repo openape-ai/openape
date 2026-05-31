@@ -10,6 +10,8 @@ interface NestHost {
 
 const open = defineModel<boolean>('open', { default: false })
 
+const { t } = useI18n()
+
 const hosts = ref<NestHost[]>([])
 const hostsError = ref('')
 const loadingHosts = ref(false)
@@ -19,7 +21,7 @@ async function loadHosts() {
   hostsError.value = ''
   try { hosts.value = await ($fetch as any)('/api/nest/hosts') }
   catch (err: any) {
-    hostsError.value = err?.data?.statusMessage || err?.data?.message || err?.message || 'failed to load nest hosts'
+    hostsError.value = err?.data?.statusMessage || err?.data?.message || err?.message || t('spawn.error.hostsLoadFailed')
   }
   finally {
     loadingHosts.value = false
@@ -37,7 +39,7 @@ watch(open, (now) => { if (now) loadHosts() })
 // paste any github.com/<owner>/<name>@<ref>. `caps` lets the recipe
 // pre-declare which secrets to add; if a recipe doesn't, the Help
 // button points at its repo where the README documents them.
-interface RecipeIndexEntry { id: string, label: string, repo_ref: string, repo_url: string, hint: string, caps: string[] }
+interface RecipeIndexEntry { id: string, label: string, repo_ref: string, repo_url: string, hintKey: string, caps: string[] }
 const RECIPE_NONE = '__none__'
 const RECIPE_CUSTOM = '__custom__'
 const RECIPE_INDEX: RecipeIndexEntry[] = [
@@ -46,7 +48,7 @@ const RECIPE_INDEX: RecipeIndexEntry[] = [
     label: 'Bluesky feed summary',
     repo_ref: 'github.com/openape-ai/bluesky-summary@v0.1.0',
     repo_url: 'https://github.com/openape-ai/bluesky-summary',
-    hint: 'Twice-daily digest of your Bluesky home timeline. Param: topic.',
+    hintKey: 'spawn.recipe.entries.blueskySummary.hint',
     caps: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
   },
 ]
@@ -56,14 +58,20 @@ const recipeForm = ref({ repo_ref: '', params: '' })
 // Free-text persona presets — fill the system-prompt textarea. With a
 // recipe this rides along as the additive user_addendum; without one
 // it is the agent's system prompt.
+//
+// Note: only the UI label/description are i18n'd. The `prompt` body is
+// what gets sent TO the agent (the agent's runtime instructions) and
+// is kept in German — that is the language the agent operates in.
+// Operators who want an English-speaking agent rewrite the prompt
+// manually after picking the closest preset.
 interface SystemPromptPreset { id: string, label: string, description: string, prompt: string }
 const MEMORY_NOTE = `Persistente Notizen, Account-Namen, Standard-Filter und alles was du dir konversationsübergreifend merken willst, schreibst du nach ~/.openape/agent/MEMORY.md (Markdown, lege es bei Bedarf neu an). Du liest das File am Beginn jeder Konversation und aktualisierst es wenn der Owner dir neue dauerhafte Vorgaben gibt.`
-const PRESETS: SystemPromptPreset[] = [
-  { id: 'custom', label: 'Custom (leer)', description: 'Eigenen System-Prompt schreiben oder später im Agent-Detail setzen.', prompt: '' },
+const PRESETS = computed<SystemPromptPreset[]>(() => [
+  { id: 'custom', label: t('spawn.preset.custom.label'), description: t('spawn.preset.custom.description'), prompt: '' },
   {
     id: 'calendar',
-    label: '📅 Kalender-Assistent',
-    description: 'Tagesüberblick am Morgen, Hinweise zu Verschiebungen / Konflikten.',
+    label: t('spawn.preset.calendar.label'),
+    description: t('spawn.preset.calendar.description'),
     prompt: `Du bist ein Kalender-Assistent. Du gibst werktags am Morgen einen Tagesüberblick per DM und meldest dich bei kurzfristigen Terminverschiebungen oder Konflikten. Halte dich kurz und antworte auf Deutsch.
 
 Tools: das bash-Tool ist dein Hauptwerkzeug — ruf damit das passende CLI auf, das der Owner für seinen Kalender nutzt (z.B. o365-cli für Microsoft 365 oder gcalcli für Google). Falls noch keines konfiguriert ist, frag den Owner nach dem CLI-Namen und dem zu verwendenden Account.
@@ -72,8 +80,8 @@ ${MEMORY_NOTE}`,
   },
   {
     id: 'mail-triage',
-    label: '📬 Mail-Triage',
-    description: 'Sichtet ungelesene Mails, priorisiert Action / Important / FYI / Spam.',
+    label: t('spawn.preset.mailTriage.label'),
+    description: t('spawn.preset.mailTriage.description'),
     prompt: `Du bist ein Mail-Triage-Assistent. Du sichtest die Inbox, fasst neue ungelesene Mails zusammen und priorisierst nach Action / Important / FYI / Spam. Top-5-Übersicht per DM, max. eine Zeile pro Mail (Absender · Betreff · Empfehlung). Knapp, deutsche Sprache.
 
 Tools: bash. Nutz dafür o365-cli (für Microsoft 365) oder ein anderes Mail-CLI das auf dem Host installiert ist.
@@ -82,8 +90,8 @@ ${MEMORY_NOTE}`,
   },
   {
     id: 'time-tracker',
-    label: '⏱ Zeiterfassung',
-    description: 'Wertet activity-logs aus, fasst Stunden pro Projekt / Firma zusammen.',
+    label: t('spawn.preset.timeTracker.label'),
+    description: t('spawn.preset.timeTracker.description'),
     prompt: `Du bist ein Zeiterfassungs-Assistent. Du liest die activity-logs des Owners (JSONL pro Tag), gruppierst nach Firma + Projekt und meldest pro Tag eine Markdown-Tabelle: Firma / Projekt / Stunden / Stichworte.
 
 Tools: bash und file.read. Der Owner sagt dir beim ersten Mal wo die logs liegen — merke dir den Pfad in MEMORY.md.
@@ -92,15 +100,15 @@ ${MEMORY_NOTE}`,
   },
   {
     id: 'daily-summary',
-    label: '🗞 Daily Summary',
-    description: 'Synthetisiert activity-logs + tasks + Termine zu einem End-of-day Bericht.',
+    label: t('spawn.preset.dailySummary.label'),
+    description: t('spawn.preset.dailySummary.description'),
     prompt: `Du bist ein Daily-Summary-Bot. Jeden Werktag am Abend fasst du zusammen: 1. Was wurde heute gemacht? 2. Was wurde abgeschlossen? 3. Was steht morgen an? Drei kurze Abschnitte, je 3-5 Bulletpoints, deutsche Sprache.
 
 Tools: bash, file.read, http.get. Welche Pfade / APIs / Accounts der Owner verwendet, fragst du beim ersten Mal ab und speicherst es in MEMORY.md.
 
 ${MEMORY_NOTE}`,
   },
-]
+])
 const selectedPreset = ref<string>('custom')
 
 const AGENT_NAME_POOL: readonly string[] = [
@@ -162,9 +170,9 @@ function rollName(): void {
 }
 
 watch(selectedPreset, (id) => {
-  const preset = PRESETS.find(p => p.id === id)
+  const preset = PRESETS.value.find(p => p.id === id)
   if (!preset) return
-  if (!form.value.system_prompt || PRESETS.some(p => p.prompt === form.value.system_prompt)) {
+  if (!form.value.system_prompt || PRESETS.value.some(p => p.prompt === form.value.system_prompt)) {
     form.value.system_prompt = preset.prompt
   }
 })
@@ -217,7 +225,7 @@ function parseParams(text: string): Record<string, string> {
     const line = raw.trim()
     if (!line) continue
     const eq = line.indexOf('=')
-    if (eq <= 0) throw new Error(`bad param line: "${line}" (expected KEY=value)`)
+    if (eq <= 0) throw new Error(t('spawn.error.badParamLine', { line }))
     out[line.slice(0, eq).trim()] = line.slice(eq + 1)
   }
   return out
@@ -257,7 +265,7 @@ async function submit() {
     pollResult()
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || 'spawn failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || t('spawn.error.spawnFailed') }
   }
   finally {
     submitting.value = false
@@ -279,7 +287,7 @@ async function pollResult() {
     await bindSecrets(res.agent_email)
   }
   catch (err: any) {
-    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || 'poll failed' }
+    result.value = { ok: false, error: err?.data?.statusMessage || err?.data?.message || err?.message || t('spawn.error.pollFailed') }
   }
 }
 
@@ -302,7 +310,8 @@ async function bindSecrets(agentEmail?: string) {
         }
         catch (err: any) {
           if (i === 39) {
-            result.value = { ok: false, error: `binding ${env} failed: ${err?.data?.statusMessage || err?.data?.message || err?.message}` }
+            const detail = err?.data?.statusMessage || err?.data?.message || err?.message
+            result.value = { ok: false, error: t('spawn.error.bindingFailed', { env, detail }) }
             binding.value = false
             return
           }
@@ -316,7 +325,7 @@ async function bindSecrets(agentEmail?: string) {
     ok: true,
     agent_email: agentEmail,
     error: missingRequired.length > 0
-      ? `Spawned. Still missing secrets ${missingRequired.join(', ')} — add them on the agent page.`
+      ? t('spawn.result.missingSecrets', { names: missingRequired.join(', ') })
       : undefined,
   }
 }
@@ -338,10 +347,10 @@ function close() {
         <div class="flex items-start justify-between gap-3">
           <div>
             <h3 class="text-lg font-semibold">
-              Spawn agent
+              {{ $t('spawn.title') }}
             </h3>
             <p class="text-xs text-muted">
-              Name + prompt are the base. A recipe and secrets are optional, additive layers — expand them if you need them. You'll get a DDISA grant request on your iPhone — approve to complete.
+              {{ $t('spawn.subtitle') }}
             </p>
           </div>
           <UButton variant="ghost" size="sm" icon="i-lucide-x" :disabled="submitting" @click="close" />
@@ -351,11 +360,11 @@ function close() {
         <UAlert
           v-else-if="!loadingHosts && hosts.length === 0"
           color="warning"
-          title="No connected nest"
-          description="Start the nest daemon on a Mac (apes nest install + run) and refresh."
+          :title="$t('spawn.alert.noNestTitle')"
+          :description="$t('spawn.alert.noNestDescription')"
         />
 
-        <UFormField v-if="hosts.length > 1" label="Host" description="You have multiple Macs connected — pick the one to spawn on.">
+        <UFormField v-if="hosts.length > 1" :label="$t('spawn.field.host.label')" :description="$t('spawn.field.host.description')">
           <USelect
             v-model="form.host_id"
             :items="hosts.map(h => ({ label: `${h.hostname} (${h.version})`, value: h.host_id }))"
@@ -363,7 +372,7 @@ function close() {
           />
         </UFormField>
 
-        <UFormField label="Name" description="lowercase, [a-z0-9-], max 24 chars — or pick from the list">
+        <UFormField :label="$t('spawn.field.name.label')" :description="$t('spawn.field.name.description')">
           <div class="flex items-stretch gap-2">
             <UInput
               v-model="form.name"
@@ -377,7 +386,7 @@ function close() {
               variant="soft"
               color="neutral"
               icon="i-lucide-dices"
-              aria-label="Roll a random name"
+              :aria-label="$t('spawn.field.name.rollAria')"
               :disabled="!!intentId"
               @click="rollName"
             />
@@ -391,14 +400,14 @@ function close() {
                 variant="soft"
                 color="neutral"
                 icon="i-lucide-list"
-                aria-label="Pick from name list"
+                :aria-label="$t('spawn.field.name.pickAria')"
                 :disabled="!!intentId"
               />
             </UDropdownMenu>
           </div>
         </UFormField>
 
-        <UFormField label="Preset" description="Quick-start prompt. Tweak the textarea or pick 'Custom' for a blank slate.">
+        <UFormField :label="$t('spawn.field.preset.label')" :description="$t('spawn.field.preset.description')">
           <USelect
             v-model="selectedPreset"
             :items="PRESETS.map(p => ({ label: p.label, value: p.id, description: p.description }))"
@@ -406,13 +415,13 @@ function close() {
           />
         </UFormField>
 
-        <UFormField label="System prompt" description="With a recipe this is added on top of the recipe's intent (user_addendum) — editable later without re-deploy.">
+        <UFormField :label="$t('spawn.field.systemPrompt.label')" :description="$t('spawn.field.systemPrompt.description')">
           <UTextarea
             v-model="form.system_prompt"
             :rows="5"
             autoresize
             :disabled="!!intentId"
-            placeholder="Du bist …"
+            :placeholder="$t('spawn.field.systemPrompt.placeholder')"
             class="w-full"
             :ui="{ base: 'w-full' }"
           />
@@ -422,22 +431,22 @@ function close() {
         <details class="rounded border border-(--ui-border) px-3 py-2">
           <summary class="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
             <UIcon name="i-lucide-package" class="size-4 text-muted" />
-            Recipe <span class="text-xs text-muted font-normal">(optional, additive)</span>
+            {{ $t('spawn.recipe.summary') }} <span class="text-xs text-muted font-normal">{{ $t('spawn.recipe.summaryHint') }}</span>
           </summary>
           <div class="space-y-3 mt-3">
-            <UFormField label="Recipe" description="Pick a curated recipe, Custom for any pinned repo, or None.">
+            <UFormField :label="$t('spawn.recipe.field.label')" :description="$t('spawn.recipe.field.description')">
               <USelect
                 v-model="selectedRecipe"
                 :items="[
-                  { label: 'None', value: RECIPE_NONE },
-                  ...RECIPE_INDEX.map(r => ({ label: r.label, value: r.id, description: r.hint })),
-                  { label: 'Custom…', value: RECIPE_CUSTOM, description: 'Paste any github.com/<owner>/<name>@<ref>' },
+                  { label: $t('spawn.recipe.option.none'), value: RECIPE_NONE },
+                  ...RECIPE_INDEX.map(r => ({ label: r.label, value: r.id, description: $t(r.hintKey) })),
+                  { label: $t('spawn.recipe.option.custom'), value: RECIPE_CUSTOM, description: $t('spawn.recipe.option.customDescription') },
                 ]"
                 :disabled="!!intentId"
               />
             </UFormField>
             <template v-if="selectedRecipe !== RECIPE_NONE">
-              <UFormField label="Repository" description="github.com/<owner>/<name>@<tag|commit> — the pinned ref is mandatory.">
+              <UFormField :label="$t('spawn.recipe.repo.label')" :description="$t('spawn.recipe.repo.description')">
                 <div class="flex items-stretch gap-2">
                   <UInput
                     v-model="recipeForm.repo_ref"
@@ -454,17 +463,17 @@ function close() {
                     icon="i-lucide-help-circle"
                     :to="recipeRepoUrl"
                     target="_blank"
-                    aria-label="Open recipe repo (docs + required secrets)"
+                    :aria-label="$t('spawn.recipe.repo.openAria')"
                   />
                 </div>
               </UFormField>
-              <UFormField label="Params" description="One KEY=value per line (recipe params, e.g. topic=AI agents).">
+              <UFormField :label="$t('spawn.recipe.params.label')" :description="$t('spawn.recipe.params.description')">
                 <UTextarea
                   v-model="recipeForm.params"
                   :rows="2"
                   autoresize
                   :disabled="!!intentId"
-                  placeholder="topic=AI agents"
+                  :placeholder="$t('spawn.recipe.params.placeholder')"
                   class="w-full"
                   :ui="{ base: 'w-full' }"
                 />
@@ -477,16 +486,16 @@ function close() {
         <details class="rounded border border-(--ui-border) px-3 py-2" :open="secrets.length > 0">
           <summary class="cursor-pointer select-none text-sm font-medium flex items-center gap-2">
             <UIcon name="i-lucide-key-round" class="size-4 text-muted" />
-            Secrets <span class="text-xs text-muted font-normal">({{ secrets.length }})</span>
+            {{ $t('spawn.secrets.summary') }} <span class="text-xs text-muted font-normal">({{ secrets.length }})</span>
           </summary>
           <div class="space-y-2 mt-3">
             <p class="text-xs text-muted">
-              Sealed to the agent before they're stored — troop never keeps the plaintext. A chosen recipe pre-fills the names it needs; you can add more. Also editable later on the agent's page.
+              {{ $t('spawn.secrets.hint') }}
             </p>
             <div v-for="(s, i) in secrets" :key="i" class="flex items-stretch gap-2">
               <UInput
                 v-model="s.env"
-                placeholder="ENV_NAME"
+                :placeholder="$t('spawn.secrets.envPlaceholder')"
                 :disabled="!!intentId"
                 class="flex-1"
                 :ui="{ base: 'w-full' }"
@@ -494,7 +503,7 @@ function close() {
               <UInput
                 v-model="s.value"
                 type="password"
-                placeholder="value"
+                :placeholder="$t('spawn.secrets.valuePlaceholder')"
                 :disabled="binding || !!result?.ok"
                 class="flex-1"
                 :ui="{ base: 'w-full' }"
@@ -504,7 +513,7 @@ function close() {
                 variant="ghost"
                 color="error"
                 icon="i-lucide-trash-2"
-                aria-label="Remove secret"
+                :aria-label="$t('spawn.secrets.removeAria')"
                 :disabled="!!intentId"
                 @click="removeSecretRow(i)"
               />
@@ -518,23 +527,23 @@ function close() {
               :disabled="!!intentId"
               @click="addSecretRow"
             >
-              Add secret
+              {{ $t('spawn.secrets.addButton') }}
             </UButton>
           </div>
         </details>
 
         <details class="text-xs text-muted">
           <summary class="cursor-pointer select-none">
-            Bridge overrides (optional)
+            {{ $t('spawn.bridge.summary') }}
           </summary>
           <div class="space-y-3 mt-3">
-            <UFormField label="LITELLM_API_KEY" description="Defaults to ~/litellm/.env on the host.">
-              <UInput v-model="form.bridge_key" type="password" placeholder="sk-… or token" :disabled="!!intentId" />
+            <UFormField label="LITELLM_API_KEY" :description="$t('spawn.bridge.apiKeyDescription')">
+              <UInput v-model="form.bridge_key" type="password" :placeholder="$t('spawn.bridge.apiKeyPlaceholder')" :disabled="!!intentId" />
             </UFormField>
-            <UFormField label="LITELLM_BASE_URL" description="Defaults to http://127.0.0.1:4000/v1">
+            <UFormField label="LITELLM_BASE_URL" :description="$t('spawn.bridge.baseUrlDescription')">
               <UInput v-model="form.bridge_base_url" placeholder="https://your-proxy.example/openai" :disabled="!!intentId" />
             </UFormField>
-            <UFormField label="APE_CHAT_BRIDGE_MODEL" description="Required by the bridge at runtime.">
+            <UFormField label="APE_CHAT_BRIDGE_MODEL" :description="$t('spawn.bridge.modelDescription')">
               <UInput v-model="form.bridge_model" placeholder="gpt-5.4" :disabled="!!intentId" />
             </UFormField>
           </div>
@@ -544,26 +553,24 @@ function close() {
           <UIcon name="i-lucide-loader-circle" class="animate-spin shrink-0 size-4 mt-0.5" />
           <div>
             <div class="font-medium">
-              {{ binding ? 'Binding secrets…' : 'Waiting for DDISA approval…' }}
+              {{ binding ? $t('spawn.pending.bindingTitle') : $t('spawn.pending.approvalTitle') }}
             </div>
             <div class="text-xs text-muted mt-1">
-              {{ binding
-                ? 'Sealing each value to the agent and pushing it.'
-                : 'Approve the as=root grant in the OpenApe app on your phone. This dialog updates automatically.' }}
+              {{ binding ? $t('spawn.pending.bindingHint') : $t('spawn.pending.approvalHint') }}
             </div>
           </div>
         </div>
 
-        <UAlert v-if="result?.ok && !result.error" color="success" :title="`Spawned: ${result.agent_email ?? spawnedName}`" />
-        <UAlert v-if="result?.ok && result.error" color="warning" title="Spawned with a note" :description="result.error" />
-        <UAlert v-if="result && !result.ok" color="error" title="Failed" :description="result.error" />
+        <UAlert v-if="result?.ok && !result.error" color="success" :title="$t('spawn.result.successTitle', { name: result.agent_email ?? spawnedName })" />
+        <UAlert v-if="result?.ok && result.error" color="warning" :title="$t('spawn.result.successWithNoteTitle')" :description="result.error" />
+        <UAlert v-if="result && !result.ok" color="error" :title="$t('spawn.result.failedTitle')" :description="result.error" />
       </div>
 
       <!-- Pinned footer: never scrolls out of reach and clears the
            iOS home-indicator / browser chrome via the safe-area inset. -->
       <div class="shrink-0 flex justify-end gap-2 border-t border-default bg-default px-5 sm:px-6 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
         <UButton variant="ghost" :disabled="submitting" @click="close">
-          {{ result?.ok ? 'Close' : 'Cancel' }}
+          {{ result?.ok ? $t('common.close') : $t('common.cancel') }}
         </UButton>
         <UButton
           v-if="!result?.ok"
@@ -572,7 +579,7 @@ function close() {
           :disabled="!canSubmit"
           @click="submit"
         >
-          Spawn
+          {{ $t('spawn.submitButton') }}
         </UButton>
       </div>
     </template>

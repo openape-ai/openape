@@ -2,8 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
-useSeoMeta({ title: 'My Agents' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('agentsIndex.tabTitle') })
 
+const { fmtRelative } = useRelativeTime()
+const { fmtDate } = useDateFormat()
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
@@ -51,7 +54,7 @@ async function load() {
       await navigateTo('/login')
       return
     }
-    error.value = err?.data?.statusMessage || err?.message || 'failed to load agents'
+    error.value = err?.data?.statusMessage || err?.message || t('agentsIndex.error.loadFailed')
   }
   finally {
     loading.value = false
@@ -60,22 +63,6 @@ async function load() {
 
 watch(user, (u) => { if (u) load() }, { immediate: true })
 onMounted(() => { if (!user.value) navigateTo('/login') })
-
-function fmtDate(ts: number | null): string {
-  if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-// Relative time for the at-a-glance "is this agent alive?" signal —
-// absolute timestamps don't work on a phone-sized card.
-function fmtRelative(ts: number | null): string {
-  if (!ts) return 'never'
-  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts)
-  if (sec < 60) return 'just now'
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
-  return `${Math.floor(sec / 86400)}d ago`
-}
 
 const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
   running: 'info',
@@ -94,7 +81,7 @@ const nestGroups = computed<NestGroup[]>(() => {
   const buckets = new Map<string, NestGroup>()
   for (const a of agents.value) {
     const key = a.hostId ?? PENDING_SYNC_KEY
-    const label = a.hostId ? (a.hostname || a.hostId) : 'Pending first sync'
+    const label = a.hostId ? (a.hostname || a.hostId) : t('agentsIndex.group.pendingSync')
     const existing = buckets.get(key)
     if (existing) {
       existing.agents.push(a)
@@ -138,7 +125,7 @@ const nestGroups = computed<NestGroup[]>(() => {
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-2xl shrink-0">🦍</span>
         <h1 class="text-xl font-semibold">
-          Troop
+          {{ $t('app.title') }}
         </h1>
       </div>
       <div class="flex items-center gap-2 shrink-0">
@@ -149,7 +136,7 @@ const nestGroups = computed<NestGroup[]>(() => {
           icon="i-lucide-plus"
           @click="showSpawn = true"
         >
-          <span class="hidden sm:inline">Spawn agent</span>
+          <span class="hidden sm:inline">{{ $t('agentsIndex.spawnButton') }}</span>
         </UButton>
         <UButton
           variant="ghost"
@@ -158,7 +145,7 @@ const nestGroups = computed<NestGroup[]>(() => {
           :ui="{ base: 'shrink-0' }"
           @click="logout"
         >
-          <span class="hidden sm:inline">Logout</span>
+          <span class="hidden sm:inline">{{ $t('common.logout') }}</span>
         </UButton>
       </div>
     </header>
@@ -166,29 +153,32 @@ const nestGroups = computed<NestGroup[]>(() => {
 
     <main class="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
       <h2 class="text-2xl font-bold mb-1">
-        My Agents
+        {{ $t('agentsIndex.heading') }}
       </h2>
-      <p class="text-muted mb-6">
-        Cron-scheduled jobs you've spawned with <code>apes agents spawn</code>.
-      </p>
+      <i18n-t keypath="agentsIndex.subheading" tag="p" class="text-muted mb-6">
+        <template #cmd>
+          <code>apes agents spawn</code>
+        </template>
+      </i18n-t>
 
       <UAlert v-if="error" color="error" :title="error" class="mb-4" />
 
       <UCard v-if="loading">
         <p class="text-muted text-sm">
-          Loading…
+          {{ $t('common.loading') }}
         </p>
       </UCard>
 
       <UCard v-else-if="agents.length === 0">
         <div class="text-center py-8 space-y-3">
           <p class="text-muted">
-            No agents registered yet.
+            {{ $t('agentsIndex.empty.title') }}
           </p>
-          <p class="text-sm text-muted">
-            Run <code class="bg-(--ui-bg-elevated) px-2 py-0.5 rounded">apes agents spawn &lt;name&gt;</code>
-            on a Mac to provision one. It'll show up here once it's done its first sync.
-          </p>
+          <i18n-t keypath="agentsIndex.empty.hint" tag="p" class="text-sm text-muted">
+            <template #cmd>
+              <code class="bg-(--ui-bg-elevated) px-2 py-0.5 rounded">apes agents spawn &lt;name&gt;</code>
+            </template>
+          </i18n-t>
         </div>
       </UCard>
 
@@ -239,7 +229,7 @@ const nestGroups = computed<NestGroup[]>(() => {
                 <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                   <div>
                     <dt class="text-muted">
-                      Tasks
+                      {{ $t('agentsIndex.card.tasks') }}
                     </dt>
                     <dd class="font-medium">
                       {{ a.taskCount }}
@@ -247,7 +237,7 @@ const nestGroups = computed<NestGroup[]>(() => {
                   </div>
                   <div>
                     <dt class="text-muted">
-                      Last sync
+                      {{ $t('agentsIndex.card.lastSync') }}
                     </dt>
                     <dd class="truncate">
                       {{ fmtRelative(a.lastSeenAt) }}
@@ -255,7 +245,7 @@ const nestGroups = computed<NestGroup[]>(() => {
                   </div>
                   <div v-if="a.lastRunAt" class="col-span-2">
                     <dt class="text-muted">
-                      Last run
+                      {{ $t('agentsIndex.card.lastRun') }}
                     </dt>
                     <dd>{{ fmtDate(a.lastRunAt) }}</dd>
                   </div>

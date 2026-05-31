@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
+const { t } = useI18n()
 const { user, loading, fetchUser, login } = useOpenApeAuth()
 await fetchUser()
 
@@ -16,7 +17,7 @@ const submitting = ref(false)
 async function handleLogin() {
   error.value = ''
   if (!email.value || !email.value.includes('@')) {
-    error.value = 'Bitte eine gültige Email-Adresse eingeben.'
+    error.value = t('index.error.invalidEmail')
     return
   }
   submitting.value = true
@@ -24,7 +25,7 @@ async function handleLogin() {
     await login(email.value.trim())
   }
   catch (e: any) {
-    error.value = e?.data?.statusMessage || e?.message || 'Login fehlgeschlagen.'
+    error.value = e?.data?.statusMessage || e?.message || t('index.error.loginFailed')
     submitting.value = false
   }
 }
@@ -37,7 +38,7 @@ async function handleLogin() {
         <OpenApeOAuthErrorAlert
           class="text-left mb-6 w-full"
           :messages="{
-            access_denied: 'Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Troop noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse.',
+            access_denied: $t('login.oauth.accessDenied'),
           }"
         />
 
@@ -46,20 +47,20 @@ async function handleLogin() {
         </div>
 
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-          We feed<br>
-          baby apes<br>
-          <span class="text-primary-500">with inference.</span>
+          {{ $t('index.hero.line1') }}<br>
+          {{ $t('index.hero.line2') }}<br>
+          <span class="text-primary-500">{{ $t('index.hero.line3') }}</span>
         </h1>
 
         <p class="mt-4 text-zinc-400 text-lg">
-          Cron-scheduled, single-purpose, OpenApe-identity. Manage from anywhere.
+          {{ $t('index.hero.subtitle') }}
         </p>
 
         <form class="mt-10 w-full space-y-3" @submit.prevent="handleLogin">
           <UInput
             v-model="email"
             type="email"
-            placeholder="you@example.com"
+            :placeholder="$t('index.email.placeholder')"
             size="xl"
             autocomplete="email"
             icon="i-lucide-mail"
@@ -78,18 +79,18 @@ async function handleLogin() {
             icon="i-lucide-fingerprint"
             :loading="submitting || loading"
           >
-            Sign in with OpenApe
+            {{ $t('index.submit') }}
           </UButton>
         </form>
 
         <p class="mt-10 italic text-sm text-zinc-500">
-          "Hatched by you. Loyal to you. Lives on your computer."
+          {{ $t('index.tagline') }}
         </p>
       </div>
     </main>
 
     <footer class="py-6 text-center text-xs text-zinc-600">
-      Powered by
+      {{ $t('index.footer.poweredBy') }}
       <a
         href="https://openape.ai"
         target="_blank"
