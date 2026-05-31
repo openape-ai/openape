@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../../database/drizzle'
 import { agents } from '../../database/schema'
-import { requireOwner } from '../../utils/auth'
+import { requireOwnerWithScope } from '../../utils/auth'
 import { createDestroyIntent } from '../../utils/destroy-intents'
 import { listNestPeersForOwner } from '../../utils/nest-registry'
 
@@ -32,7 +32,7 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const owner = await requireOwner(event)
+  const { owner } = await requireOwnerWithScope(event, 'troop:destroy-agent')
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message ?? 'invalid body' })

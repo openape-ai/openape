@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { materializeRecipe } from '../../utils/agent-recipe'
-import { requireOwner } from '../../utils/auth'
+import { requireOwnerWithScope } from '../../utils/auth'
 import { listNestPeersForOwner } from '../../utils/nest-registry'
 import { buildDeployPlan, fetchRecipeManifest } from '../../utils/recipe-deploy'
 import { stashRecipeDeploy } from '../../utils/recipe-deploys'
@@ -42,7 +42,10 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const owner = await requireOwner(event)
+  // Scope-gate: first-party (session / aud=apes-cli Bearer) auto-passes.
+  // Delegated callers (Receiver SPs) need `troop:spawn-agent` in their
+  // CLI token, minted at /api/cli/exchange per sp-data-access.md.
+  const { owner } = await requireOwnerWithScope(event, 'troop:spawn-agent')
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message ?? 'invalid body' })

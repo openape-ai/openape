@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
+import { verifyCliToken } from './cli-token'
 
 // Two distinct auth tracks because owner-side and agent-side endpoints
 // have different identity sources:
@@ -57,25 +58,85 @@ function problem(status: number, title: string): never {
  * Throws 401 if neither yields an owner.
  */
 export async function requireOwner(event: H3Event): Promise<string> {
+  return (await resolveOwnerContext(event)).owner
+}
+
+/**
+ * Resolve the owner email AND the set of scopes the caller is allowed
+ * to exercise. Three transports:
+ *
+ *   1. **Browser session cookie** (UI path) — scopes are unbounded
+ *      (the Owner-authenticated session can do anything Owner can).
+ *   2. **IdP-issued human Bearer with aud='apes-cli'** (first-party
+ *      CLI path) — scopes are unbounded for the same reason. This is
+ *      a token Patrick himself minted via `apes login`.
+ *   3. **troop-issued CLI token via /api/cli/exchange** (Receiver SP
+ *      path per sp-data-access.md) — scopes are bounded to whatever
+ *      the delegation grant carried. Route handlers MUST check via
+ *      `requireOwnerWithScope`.
+ *
+ * The function preserves backwards compatibility: anything that called
+ * `requireOwner` and got an unrestricted owner still works because
+ * paths 1+2 return `{ scopes: null }` (= "no restriction").
+ */
+export async function resolveOwnerContext(event: H3Event): Promise<{
+  owner: string
+  /**
+   * Effective scopes the caller may exercise. `null` = unrestricted
+   *  (first-party). Non-null array = restrictive (delegation).
+   */
+  scopes: string[] | null
+  /** Provenance: which SP-delegate the call rides on, if any. */
+  delegate: string | null
+}> {
   const session = await getSpSession(event)
   const sessionEmail = (session.data as { claims?: DDISAClaims })?.claims?.sub
-  if (sessionEmail) return sessionEmail
+  if (sessionEmail) return { owner: sessionEmail, scopes: null, delegate: null }
 
   const auth = getHeader(event, 'Authorization')
   if (auth?.toLowerCase().startsWith('bearer ')) {
     const token = auth.slice(7).trim()
+
+    // Try troop's own CLI-exchange token first (cheap HS256 verify
+    // against the shared session secret). This is the path delegate
+    // SPs use after token-exchange.
+    const cli = await verifyCliToken(token)
+    if (cli) {
+      return { owner: cli.sub, scopes: cli.scope ?? [], delegate: cli.delegate ?? null }
+    }
+
+    // Fall back to IdP-issued human Bearer with aud='apes-cli'.
     const idpUrl = useRuntimeConfig().public.idpUrl as string
     try {
       const result = await verifyJWT(token, getJwks(), { issuer: idpUrl })
       const claims = result.payload as DDISAClaims
       const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
       if (claims.act === 'human' && auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
-        return claims.sub
+        return { owner: claims.sub, scopes: null, delegate: null }
       }
     }
     catch { /* fall through to 401 */ }
   }
   problem(401, 'Authentication required')
+}
+
+/**
+ * Owner-auth + scope enforcement. For routes that a Receiver SP may
+ * call on the Owner's behalf via delegation. First-party paths
+ * (session, apes-cli Bearer) auto-pass any scope check because their
+ * effective scope is unbounded. Delegated paths must carry the
+ * requested scope in their CLI token (minted at /api/cli/exchange).
+ */
+export async function requireOwnerWithScope(event: H3Event, requiredScope: string): Promise<{
+  owner: string
+  delegate: string | null
+}> {
+  const ctx = await resolveOwnerContext(event)
+  if (ctx.scopes === null) return { owner: ctx.owner, delegate: ctx.delegate }
+  if (!ctx.scopes.includes(requiredScope)) {
+    problem(403, `scope '${requiredScope}' required (token carries: ${ctx.scopes.join(', ') || 'none'})`)
+  }
+  return { owner: ctx.owner, delegate: ctx.delegate }
 }
 
 /**
