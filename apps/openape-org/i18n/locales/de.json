@@ -101,7 +101,18 @@
       "hint": "Füge zuerst deinen CEO hinzu. Sobald er da ist, kann er den Rest des Teams im Budget-Rahmen einstellen."
     },
     "unassigned": "Nicht zugewiesene Spezialisten",
-    "other": "Andere Rollen"
+    "other": "Andere Rollen",
+    "noAgentYet": "(noch kein Agent)",
+    "linkAgentCta": "Agent verbinden…"
+  },
+  "linkAgent": {
+    "title": "Agent mit diesem Slot verbinden",
+    "subtitle": "Füge die DDISA-Email des in troop gespawnten Agents ein. Status wird beim Verbinden auf 'aktiv' gesetzt.",
+    "field": {
+      "label": "Agent-Email",
+      "description": "Vollständige DDISA-Email — wird in troop nach `apes agents spawn …` angezeigt."
+    },
+    "submit": "Agent verbinden"
   },
   "member": {
     "add": {
@@ -117,7 +128,11 @@
       },
       "agentEmail": {
         "label": "Agent-Email",
-        "description": "Die vollständige DDISA-Email des Agents."
+        "description": "Die vollständige DDISA-Email des Agents.",
+        "descriptionOptional": "Optional — leer lassen wenn der Agent noch nicht gespawnt ist. Der Slot bleibt reserviert, Email später nachtragen.",
+        "placeholderOptional": "agent+alice+example.com@id.openape.ai (optional)",
+        "pendingTitle": "Planungs-Modus",
+        "pendingDescription": "Leerlassen legt einen Pending-Slot an. In der Chart erscheint eine gestrichelte Karte mit 'Agent verbinden'-Link — fülle das nach dem Spawn in troop aus."
       },
       "reportsTo": {
         "label": "Berichtet an",
