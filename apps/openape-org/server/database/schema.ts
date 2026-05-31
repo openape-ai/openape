@@ -58,27 +58,19 @@ export const orgMembers = sqliteTable('org_members', {
   index('idx_org_members_role').on(table.orgId, table.role),
 ])
 
-// delegation_grants — RFC 8693 token-exchange grant IDs.
-//
-// When the Owner first wants to spawn an agent via org, they create
-// a delegation grant at the IdP (`apes grants delegate --to
-// org.openape.ai --at troop.openape.ai --approval always`) and paste
-// the resulting grant_id into org's settings page. From then on
-// org's server uses its own IdP access token + this grant_id to mint
-// a Bearer with sub=ownerEmail act=org via /api/oauth/token-exchange,
-// and calls troop's API as the Owner.
-//
-// One row per (ownerEmail, audience). Owner can revoke; org never
-// renews automatically.
-export const delegationGrants = sqliteTable('delegation_grants', {
-  ownerEmail: text('owner_email').notNull(),
-  audience: text('audience').notNull(),
-  grantId: text('grant_id').notNull(),
-  createdAt: integer('created_at').notNull(),
-  revokedAt: integer('revoked_at'),
-}, table => [
-  primaryKey({ columns: [table.ownerEmail, table.audience] }),
-])
+// NOTE — A previous PR added a `delegation_grants` table here that
+// modeled org as a DDISA *agent identity* (org enrolled at the IdP
+// + Owner created an agent-delegation, token-exchange via
+// actor_token=org-agent-token). That misuses the agent primitive —
+// agents are human-created delegates, not services. The right model
+// per `openape-ai/protocol` sp-data-access.md is: **delegate is a
+// DDISA domain string**, no client registration needed, the
+// Provider (troop) publishes a scope catalog at
+// /.well-known/openape.json and exposes /api/cli/exchange like
+// openape-chat already does. Implementation lives in the M4-correct
+// plan; this schema reserves only the columns common to both
+// approaches (spawn_intent_id / spawn_status / spawn_error on
+// org_members, see above).
 
 // objectives — what the org is currently working on. A Kanban-style
 // flat list (with optional `parentId` for nesting epics → stories later).
@@ -146,5 +138,3 @@ export type Report = typeof reports.$inferSelect
 export type NewReport = typeof reports.$inferInsert
 export type CostSnapshot = typeof costSnapshots.$inferSelect
 export type NewCostSnapshot = typeof costSnapshots.$inferInsert
-export type DelegationGrant = typeof delegationGrants.$inferSelect
-export type NewDelegationGrant = typeof delegationGrants.$inferInsert

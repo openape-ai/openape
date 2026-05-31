@@ -75,15 +75,6 @@ export default defineNitroPlugin(async () => {
       PRIMARY KEY (org_id, day)
     )`)
 
-    await db.run(sql`CREATE TABLE IF NOT EXISTS delegation_grants (
-      owner_email TEXT NOT NULL,
-      audience TEXT NOT NULL,
-      grant_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      revoked_at INTEGER,
-      PRIMARY KEY (owner_email, audience)
-    )`)
-
     // M4 schema migrations — additive columns on org_members for the
     // in-flight spawn tracking. SQLite has no IF NOT EXISTS for
     // columns, so each ALTER is wrapped in try/catch.

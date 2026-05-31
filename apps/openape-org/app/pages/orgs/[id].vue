@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 const route = useRoute()
@@ -115,63 +115,11 @@ function onLinkAgent(email: string) {
   showLinkAgent.value = true
 }
 
-// Spawn-agent flow: POST org's spawn-proxy, kick off polling.
-// Polling lives on a single 2s interval that walks all members and
-// re-fetches status for any in 'pending' state. When a member flips
-// to 'active' we reload the full org snapshot to pick up the new
-// PK (the PK swap from placeholder to real email is server-side).
-const spawnPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
+// Spawn-agent flow not yet wired — M4-correct (sp-data-access spec)
+// will land it. For now, the placeholder cards only show "Link
+// existing" (manual paste).
 const spawnError = ref('')
-
-async function onSpawnAgent(email: string) {
-  if (!org.value) return
-  spawnError.value = ''
-  try {
-    await ($fetch as any)(`/api/orgs/${org.value.id}/members/${encodeURIComponent(email)}/spawn`, { method: 'POST' })
-    await loadAll()
-    ensureSpawnPolling()
-  }
-  catch (err: any) {
-    const msg = err?.data?.statusMessage || err?.message || ''
-    // 412 = no delegation grant; gently redirect Owner to Settings.
-    if (err?.statusCode === 412 || /delegation grant/i.test(msg)) {
-      spawnError.value = t('orgDetail.spawn.needsGrant')
-      activeTab.value = 'settings'
-      return
-    }
-    spawnError.value = msg || t('orgDetail.spawn.failed')
-  }
-}
-
-function ensureSpawnPolling() {
-  if (spawnPollTimer.value) return
-  spawnPollTimer.value = setInterval(async () => {
-    const pending = members.value.filter(m => m.spawnStatus === 'pending')
-    if (pending.length === 0) {
-      if (spawnPollTimer.value) { clearInterval(spawnPollTimer.value); spawnPollTimer.value = null }
-      return
-    }
-    let anyFlipped = false
-    for (const m of pending) {
-      try {
-        const res = await ($fetch as any)(`/api/orgs/${org.value!.id}/members/${encodeURIComponent(m.agentEmail)}/spawn-status`) as { status: string, agent_email: string | null }
-        if (res.status === 'active' || res.status === 'failed') anyFlipped = true
-      }
-      catch { /* keep polling */ }
-    }
-    if (anyFlipped) await loadAll()
-  }, 2000)
-}
-
-// Resume polling when the page mounts with already-pending spawns
-// (e.g. Owner refreshed mid-flight).
-watch(members, (ms) => {
-  if (ms.some(m => m.spawnStatus === 'pending')) ensureSpawnPolling()
-})
-
-onBeforeUnmount(() => {
-  if (spawnPollTimer.value) clearInterval(spawnPollTimer.value)
-})
+function onSpawnAgent(_email: string) { /* no-op until M4-correct */ }
 
 // Destroy-org modal
 const showDestroy = ref(false)
@@ -230,7 +178,7 @@ async function destroyOrg() {
               {{ $t('chart.addMember') }}
             </UButton>
           </div>
-          <UAlert v-if="spawnError" color="error" :title="spawnError" :close-button="{}" @close="spawnError = ''" />
+          <UAlert v-if="spawnError" color="error" :title="spawnError" />
           <OrgChart :members="members" :owner-email="org.ownerEmail" @link-agent="onLinkAgent" @spawn-agent="onSpawnAgent" />
           <AddMemberDialog
             v-model:open="showAddMember"
@@ -286,8 +234,6 @@ async function destroyOrg() {
               </template>
             </UInput>
           </UCard>
-
-          <DelegationGrantManager :org-id="org.id" />
 
           <UAlert v-if="settingsError" color="error" :title="settingsError" />
 
