@@ -10,6 +10,7 @@ interface ToolEntry {
 
 defineProps<{ disabled?: boolean }>()
 const model = defineModel<string[]>({ default: () => [] })
+const { t } = useI18n()
 const catalog = ref<ToolEntry[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -20,7 +21,7 @@ onMounted(async () => {
     catalog.value = res.tools
   }
   catch (err: any) {
-    error.value = err?.message ?? 'failed to load tool catalog'
+    error.value = err?.message ?? t('toolPicker.error.loadFailed')
   }
   finally {
     loading.value = false
@@ -45,7 +46,7 @@ const riskColor: Record<ToolEntry['risk'], 'success' | 'warning' | 'error'> = {
 <template>
   <div class="space-y-2">
     <p v-if="loading" class="text-sm text-muted">
-      Loading tools…
+      {{ $t('toolPicker.loading') }}
     </p>
     <p v-else-if="error" class="text-sm text-error">
       {{ error }}
@@ -68,7 +69,7 @@ const riskColor: Record<ToolEntry['risk'], 'success' | 'warning' | 'error'> = {
           <div class="flex items-center gap-2">
             <code class="font-mono text-sm">{{ tool.name }}</code>
             <UBadge :color="riskColor[tool.risk]" variant="subtle" size="xs">
-              {{ tool.risk }}
+              {{ $t(`toolPicker.risk.${tool.risk}`) }}
             </UBadge>
           </div>
           <p class="text-xs text-muted mt-0.5">

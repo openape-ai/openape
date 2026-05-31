@@ -37,6 +37,11 @@ export default defineNuxtConfig({
       alwaysRedirect: false,
     },
     bundle: { optimizeTranslationDirective: false },
+    // Messages contain literal `@` (e.g. "you@example.com", "repo@ref")
+    // which vue-i18n's default compiler reads as linked-message markers
+    // and rejects with "Invalid linked format". Strict=false + no
+    // escape on `@` keeps the messages as plain strings.
+    compilation: { strictMessage: false, escapeHtml: false },
   },
 
   app: {
