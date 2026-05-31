@@ -16,6 +16,18 @@
 
 set -euo pipefail
 
+# apes CLI must be on PATH. Install per-user if missing — keeps the
+# enroll script truly one-shot.
+if ! command -v apes >/dev/null 2>&1; then
+  echo "→ Installing @openape/apes (per-user, ~/.npm-global)"
+  export NPM_CONFIG_PREFIX="$HOME/.npm-global"
+  export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
+  npm install --silent -g @openape/apes
+  if [ -f "$HOME/.bashrc" ] && ! grep -q 'npm-global/bin' "$HOME/.bashrc"; then
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> "$HOME/.bashrc"
+  fi
+fi
+
 ORG_BASE=/home/openape/projects/openape-org
 SHARED=$ORG_BASE/shared
 AGENT_NAME=openape-org
