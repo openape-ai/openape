@@ -130,7 +130,7 @@
         "label": "Agent email",
         "description": "The full DDISA email of the agent.",
         "descriptionOptional": "Optional — leave blank if you haven't spawned the agent yet. The slot is reserved and you can link the agent later.",
-        "placeholderOptional": "agent+alice+example.com@id.openape.ai (optional)",
+        "placeholderOptional": "agent+alice+example.com{'@'}id.openape.ai (optional)",
         "pendingTitle": "Planning mode",
         "pendingDescription": "Leaving this empty creates a pending slot. The chart will show a dashed card with a 'Link agent' action — fill it in after you've spawned the agent in troop."
       },
