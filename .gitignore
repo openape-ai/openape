@@ -22,3 +22,7 @@ modules/*/src/runtime/**/*.vue.d.ts
 # unplugin auto-generated type declarations
 auto-imports.d.ts
 components.d.ts
+
+# Local dev SQLite databases (each SP creates one when NUXT_TURSO_URL is unset)
+apps/openape-troop/openape-troop.db
+apps/openape-org/openape-org.db
