@@ -1,0 +1,222 @@
+{
+  "app": {
+    "title": "OpenApe Org"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "logout": "Logout"
+  },
+  "time": {
+    "never": "never",
+    "justNow": "just now"
+  },
+  "login": {
+    "tabTitle": "Sign in",
+    "oauth": {
+      "accessDenied": "Login was denied by the identity provider — most likely your domain admin hasn't approved OpenApe Org yet. Ask your admin or use a different email address."
+    },
+    "card": {
+      "title": "Sign in to OpenApe Org",
+      "subtitle": "Run your virtual company from anywhere",
+      "button": "Continue"
+    }
+  },
+  "orgsIndex": {
+    "tabTitle": "My organizations",
+    "heading": "My organizations",
+    "subheading": "Each org is a virtual company with its own CEO, team, budget and reports.",
+    "newOrg": "New org",
+    "empty": {
+      "title": "No organization yet.",
+      "hint": "Spin up your first virtual company. You set the vision and budget — the agents do the rest.",
+      "cta": "Create your first org"
+    },
+    "card": {
+      "members": "Members",
+      "budget": "Budget"
+    },
+    "error": {
+      "loadFailed": "Failed to load organizations",
+      "createFailed": "Failed to create organization"
+    }
+  },
+  "createOrg": {
+    "title": "Create a new organization",
+    "subtitle": "Start with the basics — you can refine the vision and grow the team later.",
+    "field": {
+      "name": {
+        "label": "Organization name",
+        "description": "A short label only you see — e.g. \"OpenApe Inc.\" or \"Marketing\".",
+        "placeholder": "OpenApe Inc."
+      },
+      "vision": {
+        "label": "Vision",
+        "description": "What should this organization achieve? Plain prose, the CEO reads it.",
+        "placeholder": "We build the open agent infrastructure for self-hosted teams. By Q3 we want shipping CI, PR review, and review-agent products."
+      },
+      "budget": {
+        "label": "Monthly budget",
+        "description": "The hard cap the Sanierer watches. Above this it stops the CEO from hiring more."
+      }
+    },
+    "submit": "Create"
+  },
+  "orgDetail": {
+    "backToList": "Orgs",
+    "tab": {
+      "chart": "Chart",
+      "objectives": "Objectives",
+      "cost": "Cost",
+      "reports": "Reports",
+      "settings": "Settings"
+    },
+    "error": {
+      "loadFailed": "Failed to load this organization",
+      "saveFailed": "Save failed"
+    },
+    "destroy": {
+      "failed": "Destroy failed"
+    }
+  },
+  "chart": {
+    "addMember": "Add member",
+    "role": {
+      "owner": "Owner",
+      "ceo": "CEO",
+      "teamlead": "Teamlead",
+      "specialist": "Specialist",
+      "sanierer": "Auditor"
+    },
+    "role.sanierer.note": "Reports directly to Owner",
+    "status": {
+      "active": "active",
+      "invited": "invited"
+    },
+    "empty": {
+      "title": "No team yet",
+      "hint": "Add your CEO first. Once they're on board, they can hire the rest of the team within your budget."
+    },
+    "unassigned": "Unassigned specialists",
+    "other": "Other roles"
+  },
+  "member": {
+    "add": {
+      "title": "Add a team member",
+      "subtitle": "v1: you add agents manually. From M4 the CEO does this for you.",
+      "submit": "Add"
+    },
+    "field": {
+      "role": "Role",
+      "agentName": {
+        "label": "Agent name",
+        "description": "The short name shown in troop (e.g. alice)."
+      },
+      "agentEmail": {
+        "label": "Agent email",
+        "description": "The full DDISA email of the agent."
+      },
+      "reportsTo": {
+        "label": "Reports to",
+        "description": "Pick the Teamlead this specialist works under."
+      }
+    },
+    "role": {
+      "ceo": "CEO",
+      "teamlead": "Teamlead",
+      "specialist": "Specialist",
+      "sanierer": "Auditor (Sanierer)",
+      "other": "Other"
+    },
+    "reportsToNone": "— (none / reports to Owner)",
+    "error": {
+      "saveFailed": "Failed to add member"
+    }
+  },
+  "objective": {
+    "new": "New objective",
+    "edit": {
+      "title": "Edit objective"
+    },
+    "field": {
+      "title": "Title",
+      "description": "Description",
+      "status": "Status"
+    },
+    "column": {
+      "planned": "Planned",
+      "inProgress": "In progress",
+      "done": "Done"
+    },
+    "move": {
+      "planned": "Move to planned",
+      "inProgress": "Move to in progress",
+      "done": "Mark as done",
+      "abandoned": "Abandon"
+    },
+    "delete": "Delete",
+    "empty": "No objectives in this column.",
+    "abandoned": "Abandoned",
+    "confirmDelete": "Delete objective \"{title}\"?",
+    "error": {
+      "saveFailed": "Failed to save objective",
+      "deleteFailed": "Failed to delete objective"
+    }
+  },
+  "cost": {
+    "budget": {
+      "heading": "Spend (30 days)",
+      "window": "Rolling 30-day window",
+      "burn": "of budget",
+      "warning": "Approaching the monthly budget — the Sanierer may slow hiring.",
+      "overrun": "Over budget — the Sanierer will stop new spawns until next cycle."
+    },
+    "kpi": {
+      "tokens": "Tokens",
+      "artifacts": "Artifacts",
+      "efficiency": "Artifacts/€",
+      "days": "Days w/ data"
+    },
+    "trend": {
+      "title": "Daily spend (last 30 days)",
+      "empty": "No cost data yet. Once the Sanierer is running, it will fill in daily snapshots."
+    }
+  },
+  "reports": {
+    "filter": {
+      "all": "All reports"
+    },
+    "kind": {
+      "alert": "Alert",
+      "weekly": "Weekly",
+      "daily": "Daily",
+      "quarterly": "Quarterly",
+      "adhoc": "Ad-hoc"
+    },
+    "count": "{count} reports",
+    "empty": "No reports yet. The CEO writes weekly summaries on Friday; the Sanierer alerts on thresholds."
+  },
+  "settings": {
+    "vision": {
+      "title": "Vision",
+      "hint": "The CEO reads this on every interaction to ground their proposals. Update it when your direction shifts.",
+      "placeholder": "What is this organization trying to achieve, by when, and why?"
+    },
+    "budget": {
+      "title": "Monthly budget",
+      "hint": "Hard cap watched by the Sanierer. Over-budget spawns require Owner approval."
+    },
+    "danger": {
+      "title": "Danger zone",
+      "hint": "Destroys this organization and all its data (members, objectives, reports, cost snapshots). Spawned agents on troop are NOT removed automatically — retire them from troop separately.",
+      "button": "Delete organization",
+      "modalTitle": "Delete this organization?",
+      "modalBody": "This permanently deletes {name} along with all its members, objectives, reports and cost data. This cannot be undone.",
+      "typeToConfirm": "Type {name} to confirm",
+      "confirmButton": "Delete forever"
+    }
+  }
+}
