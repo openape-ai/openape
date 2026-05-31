@@ -29,6 +29,8 @@ interface Chat {
   lastMessageAt: number | null
 }
 
+const { t, locale } = useI18n()
+
 const messages = ref<ChatMessage[]>([])
 const chat = ref<Chat | null>(null)
 const loading = ref(true)
@@ -50,7 +52,7 @@ async function load(): Promise<void> {
     scrollToBottom()
   }
   catch (err: any) {
-    error.value = err?.data?.statusMessage || err?.message || 'failed to load chat'
+    error.value = err?.data?.statusMessage || err?.message || t('chat.error.loadFailed')
   }
   finally {
     loading.value = false
@@ -105,7 +107,7 @@ async function send(): Promise<void> {
     await load()
   }
   catch (err: any) {
-    error.value = err?.data?.statusMessage || err?.message || 'failed to send'
+    error.value = err?.data?.statusMessage || err?.message || t('chat.error.sendFailed')
     messages.value = messages.value.filter(m => m.id !== localId)
   }
   finally {
@@ -135,7 +137,7 @@ function formatTs(unixSec: number): string {
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
   if (sameDay) return `${hh}:${mm}`
-  return `${d.toLocaleDateString()} ${hh}:${mm}`
+  return `${d.toLocaleDateString(locale.value)} ${hh}:${mm}`
 }
 
 watch(() => props.agentName, () => {
@@ -162,7 +164,7 @@ onBeforeUnmount(() => stopPolling())
         class="banner-action"
         @click="error = null; loading = true; void load()"
       >
-        Retry
+        {{ $t('common.retry') }}
       </button>
     </div>
 
@@ -174,17 +176,17 @@ onBeforeUnmount(() => stopPolling())
         v-if="loading"
         class="state state-loading"
       >
-        Loading chat…
+        {{ $t('chat.loading') }}
       </div>
       <div
         v-else-if="empty"
         class="state state-empty"
       >
         <p class="empty-title">
-          Noch keine Nachrichten
+          {{ $t('chat.empty.title') }}
         </p>
         <p class="empty-sub">
-          Schreib dem Agent unten — die Antwort landet hier oben.
+          {{ $t('chat.empty.sub') }}
         </p>
       </div>
 
@@ -213,7 +215,7 @@ onBeforeUnmount(() => stopPolling())
             </div>
           </div>
           <div class="meta">
-            {{ formatTs(m.createdAt) }}<span v-if="m.editedAt"> · edited</span>
+            {{ formatTs(m.createdAt) }}<span v-if="m.editedAt"> · {{ $t('chat.edited') }}</span>
           </div>
         </li>
       </ul>
@@ -224,7 +226,7 @@ onBeforeUnmount(() => stopPolling())
         ref="composerEl"
         v-model="composer"
         rows="1"
-        placeholder="Schreib dem Agent…"
+        :placeholder="$t('chat.composer.placeholder')"
         :disabled="sending || loading || !chat"
         @keydown="onComposerKey"
       />

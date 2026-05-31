@@ -1,13 +1,398 @@
 {
   "app": {
-    "title": "troop"
+    "title": "Troop"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "logout": "Logout",
+    "error": {
+      "saveFailed": "Save failed",
+      "deleteFailed": "Delete failed"
+    },
+    "badge": {
+      "set": "set",
+      "empty": "empty",
+      "unsaved": "unsaved",
+      "disabled": "disabled"
+    }
   },
   "locale": {
     "english": "English",
     "german": "German"
   },
+  "time": {
+    "never": "never",
+    "justNow": "just now"
+  },
   "login": {
-    "email": "Email",
-    "submit": "Sign in"
+    "tabTitle": "Sign in",
+    "oauth": {
+      "accessDenied": "Login was denied by the identity provider — most likely your domain admin hasn't approved Troop yet. Ask your admin or use a different email address."
+    },
+    "card": {
+      "title": "Sign in to Troop",
+      "subtitle": "Enter your email to manage your agents",
+      "button": "Continue"
+    }
+  },
+  "index": {
+    "hero": {
+      "line1": "We feed",
+      "line2": "baby apes",
+      "line3": "with inference.",
+      "subtitle": "Cron-scheduled, single-purpose, OpenApe-identity. Manage from anywhere."
+    },
+    "email": {
+      "placeholder": "you{'@'}example.com"
+    },
+    "submit": "Sign in with OpenApe",
+    "tagline": "\"Hatched by you. Loyal to you. Lives on your computer.\"",
+    "footer": {
+      "poweredBy": "Powered by"
+    },
+    "error": {
+      "invalidEmail": "Please enter a valid email address.",
+      "loginFailed": "Login failed."
+    }
+  },
+  "agentsIndex": {
+    "tabTitle": "My Agents",
+    "heading": "My Agents",
+    "subheading": "Cron-scheduled jobs you've spawned with {cmd}.",
+    "spawnButton": "Spawn agent",
+    "empty": {
+      "title": "No agents registered yet.",
+      "hint": "Run {cmd} on a Mac to provision one. It'll show up here once it's done its first sync."
+    },
+    "card": {
+      "tasks": "Tasks",
+      "lastSync": "Last sync",
+      "lastRun": "Last run"
+    },
+    "group": {
+      "pendingSync": "Pending first sync"
+    },
+    "error": {
+      "loadFailed": "Failed to load agents"
+    }
+  },
+  "agentDetail": {
+    "tabTitle": "Agent {name}",
+    "backToAgents": "Agents",
+    "error": {
+      "loadFailed": "Failed to load agent"
+    },
+    "nest": {
+      "offlineLabel": "Nest offline — falling back to 5 min poll",
+      "onlineLabel": "live · {names}",
+      "badgeLive": "● live",
+      "badgePoll": "○ poll"
+    },
+    "details": {
+      "title": "Agent details",
+      "lastSyncShort": "last sync {value}",
+      "email": "Email",
+      "hostname": "Hostname",
+      "hostId": "Host ID",
+      "pubkey": "Public SSH key",
+      "firstSync": "First sync",
+      "lastSync": "Last sync"
+    },
+    "systemPrompt": {
+      "title": "System prompt",
+      "placeholder": "You are … (personality, style, ground rules in 1–3 sentences)",
+      "hint": "Personality, style, ground rules — applies to every chat message and every task run. Synced to the agent host every ~5 min."
+    },
+    "recipe": {
+      "title": "Recipe",
+      "ref": {
+        "label": "Recipe ref",
+        "description": "owner/repo{'@'}ref (pinned), e.g. openape-ai/coding-agent{'@'}main"
+      },
+      "params": {
+        "label": "Params (JSON)",
+        "description": "JSON object with the recipe params (see the recipe README for keys)."
+      },
+      "applied": "Applied {ref}",
+      "bindSecrets": "Bind secrets: {names}",
+      "noNewSecrets": "No new secrets required.",
+      "applyButton": "Set / update recipe",
+      "error": {
+        "applyFailed": "Recipe apply failed"
+      }
+    },
+    "tools": {
+      "title": "Tools",
+      "selectedCount": "{n} selected",
+      "hint": "Which tools may the agent use in chat? Default: all. Synced to the agent host every ~5 min after save — no bridge restart needed (every new chat thread reads the list fresh)."
+    },
+    "skills": {
+      "title": "Skills",
+      "hint": "Lazy-loaded SKILL.md instructions. The agent sees name + description in every system prompt; the body is read on demand via the file.read tool when the task matches.",
+      "newButton": "New skill",
+      "empty": "No custom skills yet — the agent runs with the default skills bundled in {pkg} (one per built-in tool).",
+      "deleteAria": "Delete skill",
+      "confirmDelete": "Delete skill '{name}'? This is permanent — to keep it but hide it from the agent use 'disabled'.",
+      "error": {
+        "loadFailed": "Failed to load skills"
+      },
+      "editor": {
+        "titleNew": "New skill",
+        "titleEdit": "Edit {name}",
+        "name": {
+          "label": "Name",
+          "descriptionNew": "lowercase, [a-z0-9-], max 32 — becomes the directory name on disk",
+          "descriptionImmutable": "Name is immutable after creation"
+        },
+        "description": {
+          "label": "Description",
+          "description": "One-liner the LLM sees in every system prompt; tells it when to load this skill",
+          "placeholder": "When the user asks about IURIO projects, cases, or documents, load this."
+        },
+        "body": {
+          "label": "Body (markdown)",
+          "description": "Full SKILL.md content — workflows, commands, conventions",
+          "placeholder": "# IURIO CLI usage…"
+        },
+        "enabled": {
+          "label": "Enabled",
+          "description": "Disabled skills stay on disk but the agent doesn't see them."
+        }
+      }
+    },
+    "secrets": {
+      "title": "Secrets",
+      "hint": "Capability values for this agent. The value is sealed to the agent's key before it's stored — Troop never keeps the plaintext and can't show it back. Set a value again to rotate it.",
+      "status": {
+        "active": "active",
+        "revoked": "revoked"
+      },
+      "envPlaceholder": "ENV_NAME",
+      "valuePlaceholder": "value",
+      "setButton": "Set",
+      "revokeAria": "Revoke secret",
+      "casingHint": "UPPER_SNAKE_CASE. Binding works once the agent has synced after spawn.",
+      "confirmRevoke": "Revoke '{env}'? The agent's copy is cleared on its next connect.",
+      "error": {
+        "loadFailed": "Failed to load secrets",
+        "saveFailed": "Save failed (the agent must have synced once after spawn)",
+        "revokeFailed": "Revoke failed"
+      }
+    },
+    "tasks": {
+      "title": "Tasks",
+      "newButton": "New task",
+      "empty": "No tasks yet — tap \"New task\" to schedule the agent.",
+      "toolsCount": "no tools | 1 tool | {count} tools",
+      "maxSteps": "max {n} steps",
+      "confirmDelete": "Delete task \"{name}\"? Active launchd jobs on the agent host will be removed on the next sync."
+    },
+    "taskEditor": {
+      "titleNew": "New task",
+      "titleEdit": "Edit {id}",
+      "taskId": {
+        "hint": "lowercase letters, digits, dashes — immutable"
+      },
+      "displayName": "Display name",
+      "cron": {
+        "label": "When to run",
+        "hint": "Cron syntax — see preview below"
+      },
+      "userPrompt": {
+        "label": "What should run?",
+        "hint": "The job for this run — agent's persona/style is set on the agent itself.",
+        "placeholder": "Read my inbox and summarize the most important new mails."
+      },
+      "toolsLabel": "Tools available",
+      "maxStepsLabel": "Max tool-call rounds per run",
+      "enabledLabel": "Enabled",
+      "createButton": "Create task",
+      "saveButton": "Save changes"
+    },
+    "runs": {
+      "title": "Recent runs",
+      "empty": "No runs yet.",
+      "status": {
+        "running": "running",
+        "ok": "ok",
+        "error": "error"
+      },
+      "elapsedSec": "{n}s",
+      "trace": "trace"
+    },
+    "danger": {
+      "title": "Danger zone",
+      "hint": "Destroys the agent on the nest where it lives. The IdP record is removed, the bridge is stopped, the agent's home directory is wiped, and this Troop entry disappears.",
+      "deleteButton": "Delete agent"
+    },
+    "destroy": {
+      "title": "Delete agent?",
+      "body": "This destroys {name} on its nest (IdP record gone, bridge stopped, home wiped). The chat history stays intact, but the agent won't reply anymore.",
+      "typeToConfirm": "Type {name} to confirm",
+      "confirmButton": "Delete forever",
+      "pending": {
+        "title": "Destroying on the nest…",
+        "hint": "Approve the as=root grant on your iPhone if asked. This dialog closes when the nest reports back."
+      },
+      "error": {
+        "nestFailed": "Destroy failed on the nest",
+        "pollFailed": "Poll failed",
+        "startFailed": "Failed to start destroy"
+      }
+    }
+  },
+  "chat": {
+    "loading": "Loading chat…",
+    "edited": "edited",
+    "empty": {
+      "title": "No messages yet",
+      "sub": "Write to the agent below — the reply lands up here."
+    },
+    "composer": {
+      "placeholder": "Write to the agent…"
+    },
+    "error": {
+      "loadFailed": "Failed to load chat",
+      "sendFailed": "Failed to send"
+    }
+  },
+  "spawn": {
+    "title": "Spawn agent",
+    "subtitle": "Name + prompt are the base. A recipe and secrets are optional, additive layers — expand them if you need them. You'll get a DDISA grant request on your iPhone — approve to complete.",
+    "submitButton": "Spawn",
+    "alert": {
+      "noNestTitle": "No connected nest",
+      "noNestDescription": "Start the nest daemon on a Mac (apes nest install + run) and refresh."
+    },
+    "field": {
+      "host": {
+        "label": "Host",
+        "description": "You have multiple Macs connected — pick the one to spawn on."
+      },
+      "name": {
+        "label": "Name",
+        "description": "lowercase, [a-z0-9-], max 24 chars — or pick from the list",
+        "rollAria": "Roll a random name",
+        "pickAria": "Pick from name list"
+      },
+      "preset": {
+        "label": "Preset",
+        "description": "Quick-start prompt. Tweak the textarea or pick 'Custom' for a blank slate."
+      },
+      "systemPrompt": {
+        "label": "System prompt",
+        "description": "With a recipe this is added on top of the recipe's intent (user_addendum) — editable later without re-deploy.",
+        "placeholder": "You are …"
+      }
+    },
+    "preset": {
+      "custom": {
+        "label": "Custom (empty)",
+        "description": "Write your own system prompt or set it later on the agent's page."
+      },
+      "calendar": {
+        "label": "📅 Calendar assistant",
+        "description": "Morning daily overview, alerts on schedule changes / conflicts."
+      },
+      "mailTriage": {
+        "label": "📬 Mail triage",
+        "description": "Triages unread mail, prioritizes Action / Important / FYI / Spam."
+      },
+      "timeTracker": {
+        "label": "⏱ Time tracker",
+        "description": "Parses activity logs, summarizes hours per project / company."
+      },
+      "dailySummary": {
+        "label": "🗞 Daily summary",
+        "description": "Synthesizes activity logs + tasks + calendar into an end-of-day report."
+      }
+    },
+    "recipe": {
+      "summary": "Recipe",
+      "summaryHint": "(optional, additive)",
+      "field": {
+        "label": "Recipe",
+        "description": "Pick a curated recipe, Custom for any pinned repo, or None."
+      },
+      "option": {
+        "none": "None",
+        "custom": "Custom…",
+        "customDescription": "Paste any github.com/<owner>/<name>{'@'}<ref>"
+      },
+      "repo": {
+        "label": "Repository",
+        "description": "github.com/<owner>/<name>{'@'}<tag|commit> — the pinned ref is mandatory.",
+        "openAria": "Open recipe repo (docs + required secrets)"
+      },
+      "params": {
+        "label": "Params",
+        "description": "One KEY=value per line (recipe params, e.g. topic=AI agents).",
+        "placeholder": "topic=AI agents"
+      },
+      "entries": {
+        "blueskySummary": {
+          "hint": "Twice-daily digest of your Bluesky home timeline. Param: topic."
+        }
+      }
+    },
+    "secrets": {
+      "summary": "Secrets",
+      "hint": "Sealed to the agent before they're stored — Troop never keeps the plaintext. A chosen recipe pre-fills the names it needs; you can add more. Also editable later on the agent's page.",
+      "envPlaceholder": "ENV_NAME",
+      "valuePlaceholder": "value",
+      "removeAria": "Remove secret",
+      "addButton": "Add secret"
+    },
+    "bridge": {
+      "summary": "Bridge overrides (optional)",
+      "apiKeyDescription": "Defaults to ~/litellm/.env on the host.",
+      "apiKeyPlaceholder": "sk-… or token",
+      "baseUrlDescription": "Defaults to http://127.0.0.1:4000/v1",
+      "modelDescription": "Required by the bridge at runtime."
+    },
+    "pending": {
+      "bindingTitle": "Binding secrets…",
+      "bindingHint": "Sealing each value to the agent and pushing it.",
+      "approvalTitle": "Waiting for DDISA approval…",
+      "approvalHint": "Approve the as=root grant in the OpenApe app on your phone. This dialog updates automatically."
+    },
+    "result": {
+      "successTitle": "Spawned: {name}",
+      "successWithNoteTitle": "Spawned with a note",
+      "failedTitle": "Failed",
+      "missingSecrets": "Spawned. Still missing secrets {names} — add them on the agent page."
+    },
+    "error": {
+      "hostsLoadFailed": "Failed to load nest hosts",
+      "spawnFailed": "Spawn failed",
+      "pollFailed": "Poll failed",
+      "badParamLine": "Bad param line: \"{line}\" (expected KEY=value)",
+      "bindingFailed": "Binding {env} failed: {detail}"
+    }
+  },
+  "toolPicker": {
+    "loading": "Loading tools…",
+    "risk": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "error": {
+      "loadFailed": "Failed to load tool catalog"
+    }
+  },
+  "cron": {
+    "help": "Subset: {any}, {fixed} (fixed), {step} (only on minute + hour). 5 fields: minute hour day-of-month month day-of-week.",
+    "preview": {
+      "noFireTimes": "No fire times in the next 7 days"
+    },
+    "error": {
+      "expectFiveFields": "Expected 5 space-separated fields",
+      "invalidField": "Invalid field — see help"
+    }
   }
 }

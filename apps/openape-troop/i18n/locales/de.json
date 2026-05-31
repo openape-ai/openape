@@ -1,13 +1,398 @@
 {
   "app": {
-    "title": "troop"
+    "title": "Troop"
+  },
+  "common": {
+    "loading": "Lädt…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "retry": "Erneut versuchen",
+    "logout": "Abmelden",
+    "error": {
+      "saveFailed": "Speichern fehlgeschlagen",
+      "deleteFailed": "Löschen fehlgeschlagen"
+    },
+    "badge": {
+      "set": "gesetzt",
+      "empty": "leer",
+      "unsaved": "ungespeichert",
+      "disabled": "deaktiviert"
+    }
   },
   "locale": {
     "english": "Englisch",
     "german": "Deutsch"
   },
+  "time": {
+    "never": "nie",
+    "justNow": "gerade eben"
+  },
   "login": {
-    "email": "E-Mail",
-    "submit": "Anmelden"
+    "tabTitle": "Anmelden",
+    "oauth": {
+      "accessDenied": "Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Troop noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse."
+    },
+    "card": {
+      "title": "Bei Troop anmelden",
+      "subtitle": "Email eingeben um deine Agents zu verwalten",
+      "button": "Weiter"
+    }
+  },
+  "index": {
+    "hero": {
+      "line1": "Wir füttern",
+      "line2": "kleine Affen",
+      "line3": "mit Inference.",
+      "subtitle": "Cron-getriggert, Single-Purpose, OpenApe-Identity. Verwalte sie von überall."
+    },
+    "email": {
+      "placeholder": "du{'@'}beispiel.at"
+    },
+    "submit": "Mit OpenApe anmelden",
+    "tagline": "\"Von dir geschlüpft. Dir treu. Lebt auf deinem Computer.\"",
+    "footer": {
+      "poweredBy": "Powered by"
+    },
+    "error": {
+      "invalidEmail": "Bitte eine gültige Email-Adresse eingeben.",
+      "loginFailed": "Login fehlgeschlagen."
+    }
+  },
+  "agentsIndex": {
+    "tabTitle": "Meine Agents",
+    "heading": "Meine Agents",
+    "subheading": "Cron-Jobs, die du mit {cmd} angelegt hast.",
+    "spawnButton": "Agent anlegen",
+    "empty": {
+      "title": "Noch keine Agents registriert.",
+      "hint": "Führe {cmd} auf einem Mac aus, um einen anzulegen. Sobald der erste Sync durchgelaufen ist, taucht er hier auf."
+    },
+    "card": {
+      "tasks": "Tasks",
+      "lastSync": "Letzter Sync",
+      "lastRun": "Letzter Lauf"
+    },
+    "group": {
+      "pendingSync": "Wartet auf ersten Sync"
+    },
+    "error": {
+      "loadFailed": "Agents konnten nicht geladen werden"
+    }
+  },
+  "agentDetail": {
+    "tabTitle": "Agent {name}",
+    "backToAgents": "Agents",
+    "error": {
+      "loadFailed": "Agent konnte nicht geladen werden"
+    },
+    "nest": {
+      "offlineLabel": "Nest offline — fällt auf 5-min-Poll zurück",
+      "onlineLabel": "live · {names}",
+      "badgeLive": "● live",
+      "badgePoll": "○ poll"
+    },
+    "details": {
+      "title": "Agent-Details",
+      "lastSyncShort": "letzter Sync {value}",
+      "email": "Email",
+      "hostname": "Hostname",
+      "hostId": "Host-ID",
+      "pubkey": "Public SSH Key",
+      "firstSync": "Erster Sync",
+      "lastSync": "Letzter Sync"
+    },
+    "systemPrompt": {
+      "title": "System-Prompt",
+      "placeholder": "Du bist … (Persönlichkeit, Stil, Grundregeln in 1–3 Sätzen)",
+      "hint": "Persönlichkeit, Stil, Grundregeln — gilt für jede Nachricht im Chat und für jeden Task-Run. Wird via Sync (~5 min) auf den Agent-Host übertragen."
+    },
+    "recipe": {
+      "title": "Recipe",
+      "ref": {
+        "label": "Recipe-Ref",
+        "description": "owner/repo{'@'}ref (pinned), z.B. openape-ai/coding-agent{'@'}main"
+      },
+      "params": {
+        "label": "Params (JSON)",
+        "description": "JSON-Objekt mit den Recipe-Params (Keys siehe README des Recipes)."
+      },
+      "applied": "{ref} angewandt",
+      "bindSecrets": "Secrets binden: {names}",
+      "noNewSecrets": "Keine neuen Secrets erforderlich.",
+      "applyButton": "Recipe setzen / aktualisieren",
+      "error": {
+        "applyFailed": "Recipe-Anwendung fehlgeschlagen"
+      }
+    },
+    "tools": {
+      "title": "Tools",
+      "selectedCount": "{n} ausgewählt",
+      "hint": "Welche Tools darf der Agent im Chat verwenden? Default: alle. Nach Speichern via Sync (~5 min) auf den Agent-Host übertragen — kein Bridge-Restart nötig (jeder neue Chat-Thread liest die Liste frisch)."
+    },
+    "skills": {
+      "title": "Skills",
+      "hint": "Lazy geladene SKILL.md-Instructions. Der Agent sieht Name + Beschreibung in jedem System-Prompt; den Body lädt er bei Bedarf über file.read.",
+      "newButton": "Neue Skill",
+      "empty": "Noch keine eigenen Skills — der Agent läuft mit den Default-Skills aus {pkg} (eine pro eingebautem Tool).",
+      "deleteAria": "Skill löschen",
+      "confirmDelete": "Skill '{name}' löschen? Das ist permanent — wenn du sie nur vor dem Agent verstecken willst, setze sie auf 'disabled'.",
+      "error": {
+        "loadFailed": "Skills konnten nicht geladen werden"
+      },
+      "editor": {
+        "titleNew": "Neue Skill",
+        "titleEdit": "{name} bearbeiten",
+        "name": {
+          "label": "Name",
+          "descriptionNew": "lowercase, [a-z0-9-], max. 32 — wird der Directory-Name auf der Disk",
+          "descriptionImmutable": "Name ist nach dem Anlegen unveränderlich"
+        },
+        "description": {
+          "label": "Beschreibung",
+          "description": "Ein-Zeiler, den das LLM in jedem System-Prompt sieht; sagt dem Agent, wann er diese Skill laden soll",
+          "placeholder": "Wenn der User über IURIO-Projekte, Cases oder Dokumente spricht, lade das."
+        },
+        "body": {
+          "label": "Body (Markdown)",
+          "description": "Voller SKILL.md-Inhalt — Workflows, Befehle, Konventionen",
+          "placeholder": "# IURIO CLI Verwendung…"
+        },
+        "enabled": {
+          "label": "Aktiv",
+          "description": "Deaktivierte Skills bleiben auf der Disk, der Agent sieht sie aber nicht."
+        }
+      }
+    },
+    "secrets": {
+      "title": "Secrets",
+      "hint": "Capability-Values für diesen Agent. Der Wert wird vor dem Speichern auf den Schlüssel des Agents sealed — Troop kennt den Klartext nie und kann ihn nicht mehr anzeigen. Wert nochmal setzen = rotieren.",
+      "status": {
+        "active": "aktiv",
+        "revoked": "widerrufen"
+      },
+      "envPlaceholder": "ENV_NAME",
+      "valuePlaceholder": "Wert",
+      "setButton": "Setzen",
+      "revokeAria": "Secret widerrufen",
+      "casingHint": "UPPER_SNAKE_CASE. Binding funktioniert sobald der Agent nach dem Spawn einmal gesynct hat.",
+      "confirmRevoke": "'{env}' widerrufen? Die Kopie beim Agent wird beim nächsten Connect gelöscht.",
+      "error": {
+        "loadFailed": "Secrets konnten nicht geladen werden",
+        "saveFailed": "Speichern fehlgeschlagen (der Agent muss nach dem Spawn einmal gesynct haben)",
+        "revokeFailed": "Widerrufen fehlgeschlagen"
+      }
+    },
+    "tasks": {
+      "title": "Tasks",
+      "newButton": "Neuer Task",
+      "empty": "Noch keine Tasks — tippe \"Neuer Task\" um den Agent zu schedulen.",
+      "toolsCount": "keine Tools | 1 Tool | {count} Tools",
+      "maxSteps": "max. {n} Schritte",
+      "confirmDelete": "Task \"{name}\" löschen? Aktive launchd-Jobs auf dem Agent-Host werden beim nächsten Sync entfernt."
+    },
+    "taskEditor": {
+      "titleNew": "Neuer Task",
+      "titleEdit": "{id} bearbeiten",
+      "taskId": {
+        "hint": "Kleinbuchstaben, Ziffern, Bindestriche — unveränderlich"
+      },
+      "displayName": "Anzeigename",
+      "cron": {
+        "label": "Wann ausführen",
+        "hint": "Cron-Syntax — siehe Preview unten"
+      },
+      "userPrompt": {
+        "label": "Was soll laufen?",
+        "hint": "Der Job für diesen Run — die Persönlichkeit/Stil ist am Agent selbst gesetzt.",
+        "placeholder": "Lese mein Postfach durch und mach mir eine Zusammenfassung der wichtigsten neuen Mails."
+      },
+      "toolsLabel": "Verfügbare Tools",
+      "maxStepsLabel": "Max. Tool-Call-Runden pro Run",
+      "enabledLabel": "Aktiv",
+      "createButton": "Task anlegen",
+      "saveButton": "Änderungen speichern"
+    },
+    "runs": {
+      "title": "Letzte Läufe",
+      "empty": "Noch keine Läufe.",
+      "status": {
+        "running": "läuft",
+        "ok": "ok",
+        "error": "Fehler"
+      },
+      "elapsedSec": "{n} s",
+      "trace": "Trace"
+    },
+    "danger": {
+      "title": "Danger Zone",
+      "hint": "Zerstört den Agent auf seinem Nest. Der IdP-Eintrag wird entfernt, die Bridge gestoppt, das Home-Directory gelöscht — und dieser Troop-Eintrag verschwindet.",
+      "deleteButton": "Agent löschen"
+    },
+    "destroy": {
+      "title": "Agent löschen?",
+      "body": "Das zerstört {name} auf seinem Nest (IdP weg, Bridge gestoppt, Home gelöscht). Der Chat-Verlauf bleibt erhalten, der Agent antwortet aber nicht mehr.",
+      "typeToConfirm": "Tippe {name} zur Bestätigung",
+      "confirmButton": "Für immer löschen",
+      "pending": {
+        "title": "Zerstörung läuft auf dem Nest…",
+        "hint": "Bestätige den as=root-Grant auf deinem iPhone wenn gefragt. Dieser Dialog schließt sich, sobald das Nest zurückmeldet."
+      },
+      "error": {
+        "nestFailed": "Zerstörung auf dem Nest fehlgeschlagen",
+        "pollFailed": "Polling fehlgeschlagen",
+        "startFailed": "Zerstörung konnte nicht gestartet werden"
+      }
+    }
+  },
+  "chat": {
+    "loading": "Chat lädt…",
+    "edited": "bearbeitet",
+    "empty": {
+      "title": "Noch keine Nachrichten",
+      "sub": "Schreib dem Agent unten — die Antwort landet hier oben."
+    },
+    "composer": {
+      "placeholder": "Schreib dem Agent…"
+    },
+    "error": {
+      "loadFailed": "Chat konnte nicht geladen werden",
+      "sendFailed": "Senden fehlgeschlagen"
+    }
+  },
+  "spawn": {
+    "title": "Agent anlegen",
+    "subtitle": "Name + Prompt sind die Basis. Recipe und Secrets sind optionale, additive Layer — aufklappen wenn du sie brauchst. Du bekommst einen DDISA-Grant-Request auf dein iPhone — bestätigen zum Abschließen.",
+    "submitButton": "Anlegen",
+    "alert": {
+      "noNestTitle": "Kein verbundenes Nest",
+      "noNestDescription": "Starte den Nest-Daemon auf einem Mac (apes nest install + run) und lade neu."
+    },
+    "field": {
+      "host": {
+        "label": "Host",
+        "description": "Mehrere Macs verbunden — wähle den, auf dem der Agent angelegt werden soll."
+      },
+      "name": {
+        "label": "Name",
+        "description": "lowercase, [a-z0-9-], max. 24 Zeichen — oder aus der Liste wählen",
+        "rollAria": "Zufälligen Namen würfeln",
+        "pickAria": "Aus Namensliste wählen"
+      },
+      "preset": {
+        "label": "Preset",
+        "description": "Quick-Start-Prompt. Im Textfeld anpassen oder 'Custom' für eine leere Vorlage."
+      },
+      "systemPrompt": {
+        "label": "System-Prompt",
+        "description": "Mit einem Recipe wird das on top des Recipe-Intents gehängt (user_addendum) — später ohne Re-Deploy editierbar.",
+        "placeholder": "Du bist …"
+      }
+    },
+    "preset": {
+      "custom": {
+        "label": "Custom (leer)",
+        "description": "Eigenen System-Prompt schreiben oder später im Agent-Detail setzen."
+      },
+      "calendar": {
+        "label": "📅 Kalender-Assistent",
+        "description": "Tagesüberblick am Morgen, Hinweise zu Verschiebungen / Konflikten."
+      },
+      "mailTriage": {
+        "label": "📬 Mail-Triage",
+        "description": "Sichtet ungelesene Mails, priorisiert Action / Important / FYI / Spam."
+      },
+      "timeTracker": {
+        "label": "⏱ Zeiterfassung",
+        "description": "Wertet activity-logs aus, fasst Stunden pro Projekt / Firma zusammen."
+      },
+      "dailySummary": {
+        "label": "🗞 Daily Summary",
+        "description": "Synthetisiert activity-logs + tasks + Termine zu einem End-of-day Bericht."
+      }
+    },
+    "recipe": {
+      "summary": "Recipe",
+      "summaryHint": "(optional, additiv)",
+      "field": {
+        "label": "Recipe",
+        "description": "Kuratiertes Recipe wählen, Custom für jedes Pinned-Repo oder Keines."
+      },
+      "option": {
+        "none": "Keines",
+        "custom": "Custom…",
+        "customDescription": "github.com/<owner>/<name>{'@'}<ref> einfügen"
+      },
+      "repo": {
+        "label": "Repository",
+        "description": "github.com/<owner>/<name>{'@'}<tag|commit> — die Pinned-Ref ist verpflichtend.",
+        "openAria": "Recipe-Repo öffnen (Docs + benötigte Secrets)"
+      },
+      "params": {
+        "label": "Params",
+        "description": "Ein KEY=value pro Zeile (Recipe-Params, z.B. topic=AI agents).",
+        "placeholder": "topic=AI agents"
+      },
+      "entries": {
+        "blueskySummary": {
+          "hint": "Zweimal täglich ein Digest deiner Bluesky-Home-Timeline. Param: topic."
+        }
+      }
+    },
+    "secrets": {
+      "summary": "Secrets",
+      "hint": "Vor dem Speichern auf den Agent sealed — Troop hat den Klartext nie. Ein gewähltes Recipe trägt die benötigten Namen ein; du kannst weitere hinzufügen. Später auch im Agent-Detail editierbar.",
+      "envPlaceholder": "ENV_NAME",
+      "valuePlaceholder": "Wert",
+      "removeAria": "Secret entfernen",
+      "addButton": "Secret hinzufügen"
+    },
+    "bridge": {
+      "summary": "Bridge-Overrides (optional)",
+      "apiKeyDescription": "Standard: ~/litellm/.env am Host.",
+      "apiKeyPlaceholder": "sk-… oder Token",
+      "baseUrlDescription": "Standard: http://127.0.0.1:4000/v1",
+      "modelDescription": "Wird zur Laufzeit von der Bridge benötigt."
+    },
+    "pending": {
+      "bindingTitle": "Secrets werden gebunden…",
+      "bindingHint": "Jeder Wert wird auf den Agent sealed und gepusht.",
+      "approvalTitle": "Warte auf DDISA-Freigabe…",
+      "approvalHint": "Bestätige den as=root-Grant in der OpenApe-App auf deinem Phone. Dieser Dialog aktualisiert sich automatisch."
+    },
+    "result": {
+      "successTitle": "Angelegt: {name}",
+      "successWithNoteTitle": "Angelegt mit Hinweis",
+      "failedTitle": "Fehlgeschlagen",
+      "missingSecrets": "Angelegt. Fehlen noch Secrets {names} — füge sie auf der Agent-Seite hinzu."
+    },
+    "error": {
+      "hostsLoadFailed": "Nest-Hosts konnten nicht geladen werden",
+      "spawnFailed": "Anlegen fehlgeschlagen",
+      "pollFailed": "Polling fehlgeschlagen",
+      "badParamLine": "Schlechte Param-Zeile: \"{line}\" (erwartet KEY=value)",
+      "bindingFailed": "Binden von {env} fehlgeschlagen: {detail}"
+    }
+  },
+  "toolPicker": {
+    "loading": "Tools werden geladen…",
+    "risk": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "error": {
+      "loadFailed": "Tool-Catalog konnte nicht geladen werden"
+    }
+  },
+  "cron": {
+    "help": "Subset: {any}, {fixed} (fix), {step} (nur bei Minute + Stunde). 5 Felder: Minute Stunde Tag-des-Monats Monat Wochentag.",
+    "preview": {
+      "noFireTimes": "Keine Ausführungen in den nächsten 7 Tagen"
+    },
+    "error": {
+      "expectFiveFields": "5 leerzeichengetrennte Felder erwartet",
+      "invalidField": "Ungültiges Feld — siehe Hilfe"
+    }
   }
 }

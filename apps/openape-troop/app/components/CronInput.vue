@@ -7,6 +7,8 @@ defineProps<{
 
 const model = defineModel<string>({ default: '*/5 * * * *' })
 
+const { t, locale } = useI18n()
+
 // Tiny cron preview — only handles the subset we accept server-side
 // (`*` / `N` / `*/N` per field). Returns the next ~5 fire times in
 // human-readable form so the user can sanity-check their expression
@@ -35,7 +37,7 @@ function fieldMatches(f: Field, value: number): boolean {
 
 const preview = computed(() => {
   const parts = model.value.trim().split(/\s+/)
-  if (parts.length !== 5) return { ok: false as const, msg: 'expected 5 space-separated fields' }
+  if (parts.length !== 5) return { ok: false as const, msg: t('cron.error.expectFiveFields') }
   const [m, h, dom, mo, dow] = parts as [string, string, string, string, string]
   const minute = parseField(m, 59)
   const hour = parseField(h, 23)
@@ -43,7 +45,7 @@ const preview = computed(() => {
   const month = parseField(mo, 12)
   const weekDay = parseField(dow, 7)
   if (!minute || !hour || !monthDay || !month || !weekDay) {
-    return { ok: false as const, msg: 'invalid field — see help' }
+    return { ok: false as const, msg: t('cron.error.invalidField') }
   }
 
   const now = new Date()
@@ -66,7 +68,7 @@ const preview = computed(() => {
       && fieldMatches(month, mn)
       && (fieldMatches(weekDay, wd) || (weekDay.kind === 'fixed' && weekDay.value === 7 && wd === 0))
     ) {
-      matches.push(cursor.toLocaleString('de-AT', {
+      matches.push(cursor.toLocaleString(locale.value, {
         weekday: 'short',
         day: '2-digit',
         month: '2-digit',
@@ -77,7 +79,7 @@ const preview = computed(() => {
   }
 
   if (matches.length === 0) {
-    return { ok: true as const, msg: 'no fire times in the next 7 days' }
+    return { ok: true as const, msg: t('cron.preview.noFireTimes') }
   }
   return { ok: true as const, msg: matches.join(' · ') }
 })
@@ -99,9 +101,16 @@ const preview = computed(() => {
       <UIcon v-else name="i-lucide-alert-triangle" class="inline" />
       {{ preview.msg }}
     </p>
-    <p class="text-xs text-muted">
-      Subset: <code>*</code>, <code>N</code> (fixed), <code>*/N</code> (only on minute + hour). 5 fields:
-      minute hour day-of-month month day-of-week.
-    </p>
+    <i18n-t keypath="cron.help" tag="p" class="text-xs text-muted">
+      <template #any>
+        <code>*</code>
+      </template>
+      <template #fixed>
+        <code>N</code>
+      </template>
+      <template #step>
+        <code>*/N</code>
+      </template>
+    </i18n-t>
   </div>
 </template>
