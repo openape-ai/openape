@@ -8,7 +8,8 @@
     "cancel": "Abbrechen",
     "close": "Schließen",
     "retry": "Erneut versuchen",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "copy": "Kopieren"
   },
   "time": {
     "never": "nie",
@@ -80,6 +81,33 @@
     },
     "destroy": {
       "failed": "Löschen fehlgeschlagen"
+    },
+    "spawn": {
+      "needsGrant": "Du hast dieser Org noch nicht erlaubt in deinem Namen Agents zu spawnen. Setze einen Delegation-Grant in den Einstellungen auf (einmalig).",
+      "failed": "Spawn fehlgeschlagen"
+    }
+  },
+  "delegation": {
+    "title": "Delegation-Grants",
+    "subtitle": "Erlaube dieser Org in deinem Namen Agents auf troop zu spawnen. Einmalige Einrichtung pro Org.",
+    "statusActive": "aktiv",
+    "empty": "Noch keine Grants — folge den zwei Schritten unten.",
+    "revoke": "Widerrufen",
+    "confirmRevoke": "Delegation-Grant für audience '{audience}' widerrufen? In-flight-Spawns schlagen fehl.",
+    "step1": {
+      "title": "Schritt 1 — Grant auf deinem Rechner anlegen",
+      "description": "Führe diesen Befehl in deinem Terminal aus. Du bekommst einen iPhone-DDISA-Prompt; nach Bestätigung gibt das CLI eine grant_id zurück."
+    },
+    "step2": {
+      "title": "Schritt 2 — grant_id hier einfügen",
+      "description": "Die vollständige grant_id aus dem vorherigen Schritt. Wird lokal gespeichert; jederzeit widerrufbar.",
+      "placeholder": "01H8…",
+      "save": "Grant speichern"
+    },
+    "error": {
+      "loadFailed": "Delegation-Grants konnten nicht geladen werden",
+      "saveFailed": "Grant speichern fehlgeschlagen",
+      "revokeFailed": "Widerrufen fehlgeschlagen"
     }
   },
   "chart": {
@@ -103,7 +131,11 @@
     "unassigned": "Nicht zugewiesene Spezialisten",
     "other": "Andere Rollen",
     "noAgentYet": "(noch kein Agent)",
-    "linkAgentCta": "Agent verbinden…"
+    "linkAgentCta": "Bestehenden verbinden…",
+    "spawnCta": "Agent spawnen",
+    "spawnRetry": "Erneut versuchen",
+    "spawning": "Spawne… am iPhone bestätigen",
+    "spawnFailedGeneric": "Spawn fehlgeschlagen"
   },
   "linkAgent": {
     "title": "Agent mit diesem Slot verbinden",
