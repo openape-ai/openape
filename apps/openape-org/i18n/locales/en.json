@@ -8,7 +8,8 @@
     "cancel": "Cancel",
     "close": "Close",
     "retry": "Retry",
-    "logout": "Logout"
+    "logout": "Logout",
+    "copy": "Copy"
   },
   "time": {
     "never": "never",
@@ -80,6 +81,33 @@
     },
     "destroy": {
       "failed": "Destroy failed"
+    },
+    "spawn": {
+      "needsGrant": "You haven't authorized this org to spawn agents on your behalf. Set up a delegation grant in Settings (one-time).",
+      "failed": "Spawn failed"
+    }
+  },
+  "delegation": {
+    "title": "Delegation grants",
+    "subtitle": "Authorize this org to spawn agents on troop on your behalf. One-time setup per org.",
+    "statusActive": "active",
+    "empty": "No grants yet — follow the two steps below to bootstrap.",
+    "revoke": "Revoke",
+    "confirmRevoke": "Revoke the delegation grant for audience '{audience}'? Active spawns mid-flight will fail.",
+    "step1": {
+      "title": "Step 1 — create the grant on your machine",
+      "description": "Run this command in your terminal. You'll get an iPhone DDISA approval; once approved, the CLI prints a grant_id."
+    },
+    "step2": {
+      "title": "Step 2 — paste the grant_id here",
+      "description": "The full grant_id from the previous step. Stored locally; revokeable any time.",
+      "placeholder": "01H8…",
+      "save": "Save grant"
+    },
+    "error": {
+      "loadFailed": "Failed to load delegation grants",
+      "saveFailed": "Failed to save grant",
+      "revokeFailed": "Failed to revoke"
     }
   },
   "chart": {
@@ -103,7 +131,11 @@
     "unassigned": "Unassigned specialists",
     "other": "Other roles",
     "noAgentYet": "(no agent yet)",
-    "linkAgentCta": "Link agent…"
+    "linkAgentCta": "Link existing…",
+    "spawnCta": "Spawn agent",
+    "spawnRetry": "Retry spawn",
+    "spawning": "Spawning… approve on iPhone",
+    "spawnFailedGeneric": "Spawn failed"
   },
   "linkAgent": {
     "title": "Link an agent to this slot",

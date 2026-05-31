@@ -73,3 +73,28 @@ Add `org.openape.ai` as an OIDC client at id.openape.ai with redirect URI `https
 ## After bootstrap
 
 `scripts/deploy-org.sh` (and the GH workflow that calls it) handles every subsequent release: build → rsync → libsql native-binding pin → symlink swap → systemctl restart → health check → rollback on failure.
+
+## M4 — Cross-SP spawn bootstrap (one-time per host)
+
+For org to spawn agents on troop on the Owner's behalf, it needs:
+
+1. **Its own DDISA agent identity** at id.openape.ai (mints `NUXT_ORG_IDP_ACCESS_TOKEN`)
+2. **A delegation grant per Owner** (Owner runs `apes grants delegate` from their own machine, pastes grant_id into org's Settings)
+
+Step 1 — one-time on the deploy host:
+
+```bash
+ssh openape@chatty.delta-mind.at "bash -s" < scripts/enroll-org-as-agent.sh
+```
+
+The script prints an enrollment URL — open it, approve in DDISA on your iPhone. The script then writes `NUXT_ORG_IDP_ACCESS_TOKEN` + `NUXT_ORG_IDP_AGENT_EMAIL` into `shared/.env` and you restart the service (instructions printed).
+
+Step 2 — Owner-side, once per Owner-org:
+
+```bash
+# On your own machine, logged in via `apes login`
+apes grants delegate --to <NUXT_ORG_IDP_AGENT_EMAIL> --at apes-cli --approval always
+# Paste the resulting grant_id in org.openape.ai → /orgs/<id>/settings → Delegation grants
+```
+
+From then on, "Spawn agent" on the chart works invisibly: org server token-exchanges the Owner's grant for an `apes-cli`-scoped Bearer and calls troop's `/api/agents/spawn-intent` on Owner's behalf. The Owner still gets the standard DDISA iPhone prompt for the spawn itself — only the cross-SP plumbing is invisible.

@@ -40,10 +40,44 @@ export const orgMembers = sqliteTable('org_members', {
   spawnedAt: integer('spawned_at'),
   retiredAt: integer('retired_at'),
   createdAt: integer('created_at').notNull(),
+  // Tracks an in-flight troop spawn: when the Owner clicks "Spawn
+  // agent" on a placeholder row we POST to troop's /api/agents/spawn-
+  // intent (with a delegation-grant-derived Bearer), get back an
+  // intent_id, and store it here. The polling endpoint reads troop's
+  // /api/agents/spawn-intent/<id> until done, then PATCHes the PK to
+  // the real agent_email and clears these columns.
+  spawnIntentId: text('spawn_intent_id'),
+  // Lifecycle: null (no spawn in flight) → 'pending' (intent created,
+  // waiting for DDISA approval + nest result) → cleared on success +
+  // PK-swap, or → 'failed' with spawnError on failure.
+  spawnStatus: text('spawn_status'),
+  spawnError: text('spawn_error'),
 }, table => [
   primaryKey({ columns: [table.orgId, table.agentEmail] }),
   index('idx_org_members_org').on(table.orgId),
   index('idx_org_members_role').on(table.orgId, table.role),
+])
+
+// delegation_grants — RFC 8693 token-exchange grant IDs.
+//
+// When the Owner first wants to spawn an agent via org, they create
+// a delegation grant at the IdP (`apes grants delegate --to
+// org.openape.ai --at troop.openape.ai --approval always`) and paste
+// the resulting grant_id into org's settings page. From then on
+// org's server uses its own IdP access token + this grant_id to mint
+// a Bearer with sub=ownerEmail act=org via /api/oauth/token-exchange,
+// and calls troop's API as the Owner.
+//
+// One row per (ownerEmail, audience). Owner can revoke; org never
+// renews automatically.
+export const delegationGrants = sqliteTable('delegation_grants', {
+  ownerEmail: text('owner_email').notNull(),
+  audience: text('audience').notNull(),
+  grantId: text('grant_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+  revokedAt: integer('revoked_at'),
+}, table => [
+  primaryKey({ columns: [table.ownerEmail, table.audience] }),
 ])
 
 // objectives — what the org is currently working on. A Kanban-style
@@ -112,3 +146,5 @@ export type Report = typeof reports.$inferSelect
 export type NewReport = typeof reports.$inferInsert
 export type CostSnapshot = typeof costSnapshots.$inferSelect
 export type NewCostSnapshot = typeof costSnapshots.$inferInsert
+export type DelegationGrant = typeof delegationGrants.$inferSelect
+export type NewDelegationGrant = typeof delegationGrants.$inferInsert
