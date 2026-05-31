@@ -1,5 +1,6 @@
 <script setup lang="ts">
-useSeoMeta({ title: 'Sign in' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('login.tabTitle') })
 </script>
 
 <template>
@@ -9,15 +10,15 @@ useSeoMeta({ title: 'Sign in' })
         <OpenApeOAuthErrorAlert
           class="text-left mb-6 w-full"
           :messages="{
-            access_denied: 'Login wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Troop noch nicht freigegeben — frag deinen Admin oder verwende eine andere Email-Adresse.',
+            access_denied: $t('login.oauth.accessDenied'),
           }"
         />
 
         <UCard>
           <OpenApeAuth
-            title="Sign in to Troop"
-            subtitle="Enter your email to manage your agents"
-            button-text="Continue"
+            :title="$t('login.card.title')"
+            :subtitle="$t('login.card.subtitle')"
+            :button-text="$t('login.card.button')"
             post-login-redirect="/"
           />
         </UCard>
