@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
 import { nests } from '../../database/schema'
 import { requireOwnerWithScope } from '../../utils/auth'
+import { generateDeviceSecret, hashDeviceSecret } from '../../utils/nest-credential'
 import { pickUniqueHostId, slugifyHostId } from '../../utils/nest-slug'
 
 // POST /api/nests/bind  { display_name, pod_uuid? }
@@ -60,6 +61,11 @@ export default defineEventHandler(async (event) => {
   )
   const hostId = pickUniqueHostId(slugifyHostId(displayName), taken)
 
+  // Mint the device secret. Plaintext is returned to the pod exactly once
+  // (below); troop only persists its SHA-256. The pod presents the plaintext
+  // to POST /api/nests/token on each reconnect to mint a nest:* troop token.
+  const deviceSecret = generateDeviceSecret()
+
   await db.insert(nests).values({
     ownerEmail,
     hostId,
@@ -67,8 +73,9 @@ export default defineEventHandler(async (event) => {
     podUuid,
     status: 'active',
     createdAt: Date.now(),
+    deviceSecretHash: hashDeviceSecret(deviceSecret),
   })
 
   setResponseStatus(event, 201)
-  return { host_id: hostId, display_name: displayName, reused: false }
+  return { host_id: hostId, display_name: displayName, device_secret: deviceSecret, reused: false }
 })
