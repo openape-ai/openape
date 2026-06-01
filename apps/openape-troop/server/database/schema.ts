@@ -189,6 +189,38 @@ export const chatMessages = sqliteTable('chat_messages', {
   index('idx_chat_messages_chat_created').on(table.chatId, table.createdAt),
 ])
 
+// nests — one row per device (pod) bound to an Owner (M4δ).
+//
+// The architectural shift from agents: a nest is no longer a DDISA
+// *agent* with its own keypair + IdP enrollment. It's a *device* the
+// Owner authorizes via a standing delegation grant (M4γ consent). troop
+// is the canonical issuer of `hostId`, and that id is only unique
+// *within an owner* — the natural key is (ownerEmail, hostId), so two
+// different Owners can each have a `mbp-home` without colliding.
+//
+// `podUuid` is the container/pod's self-reported UUID at bind time —
+// purely informational (helps the Owner tell two pods apart in the UI
+// and debug a recreate). `status` is 'active' until the Owner revokes
+// (DELETE /api/nests/:host_id), which flips it to 'revoked' rather than
+// hard-deleting so the binding history stays auditable and an in-flight
+// token referencing the host_id resolves to a revoked row, not a
+// missing one.
+export const nests = sqliteTable('nests', {
+  ownerEmail: text('owner_email').notNull(),
+  hostId: text('host_id').notNull(),
+  displayName: text('display_name').notNull(),
+  podUuid: text('pod_uuid'),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
+  createdAt: integer('created_at').notNull(),
+  lastSeenAt: integer('last_seen_at'),
+}, table => [
+  primaryKey({ columns: [table.ownerEmail, table.hostId] }),
+  index('idx_nests_owner').on(table.ownerEmail),
+])
+
+export type Nest = typeof nests.$inferSelect
+export type NewNest = typeof nests.$inferInsert
+
 export type Chat = typeof chats.$inferSelect
 export type NewChat = typeof chats.$inferInsert
 export type ChatMessage = typeof chatMessages.$inferSelect
