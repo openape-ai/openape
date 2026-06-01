@@ -82,6 +82,11 @@ export default defineNitroPlugin(async () => {
       sql`ALTER TABLE org_members ADD COLUMN spawn_intent_id TEXT`,
       sql`ALTER TABLE org_members ADD COLUMN spawn_status TEXT`,
       sql`ALTER TABLE org_members ADD COLUMN spawn_error TEXT`,
+      // M4β — cache the exchanged troop bearer per intent so the
+      // 2s-poll loop doesn't have to round-trip to the IdP per tick.
+      sql`ALTER TABLE org_members ADD COLUMN spawn_troop_bearer TEXT`,
+      sql`ALTER TABLE org_members ADD COLUMN spawn_troop_bearer_expires_at INTEGER`,
+      sql`ALTER TABLE org_members ADD COLUMN spawn_grant_id TEXT`,
     ]) {
       try { await db.run(stmt) }
       catch { /* already exists */ }
