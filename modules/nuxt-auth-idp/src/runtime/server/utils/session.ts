@@ -11,6 +11,14 @@ export async function getAppSession(event: H3Event) {
   // cookies must use sameSite: 'none' or the browser will reject them in
   // the cross-origin context. 'none' requires secure: true (already set).
   const embeddable = !!(process.env.NUXT_OPENAPE_IDP_ALLOWED_FRAME_ANCESTORS || idpConfig.allowedFrameAncestors)
+  // When a CORS allowlist is configured (M4β cross-SP flow per
+  // sp-data-access.md), Receiver SPs need to fetch IdP endpoints
+  // from the Owner's browser with credentials:'include'. The browser
+  // only sends the IdP cookie on those cross-origin XHRs if
+  // sameSite='none'. The CORS plugin pairs with this — both
+  // strict-equality on the same env so they can't drift.
+  const corsAllowlist = !!(process.env.NUXT_OPENAPE_IDP_CORS_ALLOWED_ORIGINS)
+  const crossOrigin = embeddable || corsAllowlist
   return await useSession(event, {
     name: sessionName,
     password: idpConfig.sessionSecret as string,
@@ -18,7 +26,7 @@ export async function getAppSession(event: H3Event) {
     cookie: {
       secure: true,
       httpOnly: true,
-      sameSite: embeddable ? 'none' : 'lax',
+      sameSite: crossOrigin ? 'none' : 'lax',
     },
   })
 }
