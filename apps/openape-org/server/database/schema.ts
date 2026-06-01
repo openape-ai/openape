@@ -52,6 +52,18 @@ export const orgMembers = sqliteTable('org_members', {
   // PK-swap, or → 'failed' with spawnError on failure.
   spawnStatus: text('spawn_status'),
   spawnError: text('spawn_error'),
+  // Cache the troop CLI bearer minted at /api/cli/exchange so the
+  // polling endpoint doesn't have to refetch an AuthZ-JWT from the
+  // IdP on every 2s tick. Bearer lives 15 min per sp-data-access §6;
+  // polling expires gracefully when the bearer does (UI surfaces
+  // "spawn link expired, retry" via spawn_error).
+  spawnTroopBearer: text('spawn_troop_bearer'),
+  spawnTroopBearerExpiresAt: integer('spawn_troop_bearer_expires_at'),
+  // The standing-grant id used for this spawn (audit + future
+  // refresh: the polling endpoint could refetch a fresh JWT if the
+  // troop bearer expires before the spawn finishes). Today purely
+  // informational — UI shows it under member details if interested.
+  spawnGrantId: text('spawn_grant_id'),
 }, table => [
   primaryKey({ columns: [table.orgId, table.agentEmail] }),
   index('idx_org_members_org').on(table.orgId),

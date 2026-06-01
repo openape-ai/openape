@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 const route = useRoute()
@@ -115,11 +115,148 @@ function onLinkAgent(email: string) {
   showLinkAgent.value = true
 }
 
-// Spawn-agent flow not yet wired — M4-correct (sp-data-access spec)
-// will land it. For now, the placeholder cards only show "Link
-// existing" (manual paste).
+// Spawn-agent flow per openape-ai/protocol sp-data-access.md (M4β).
+//
+// On click:
+//   1. fetch existing standing delegation grants from id.openape.ai
+//      with credentials:'include' — relies on the Owner's IdP session
+//      cookie + the CORS+sameSite=none allowlist we set up in M4α-IdP
+//   2. find a standing grant matching (delegate=org.openape.ai,
+//      audience=troop.openape.ai, scopes ⊇ [troop:spawn-agent])
+//   3. if none: open BootstrapGrantDialog with the apes CLI command
+//      the Owner runs once; "Retry" replays this whole flow
+//   4. if found: fetch AuthZ-JWT via /api/grants/{id}/token (still
+//      browser, credentials)
+//   5. POST { subject_token, grant_id } to org's /spawn endpoint;
+//      org server exchanges at troop, calls spawn-intent
+//   6. start the 2s polling loop until troop reports active/failed
 const spawnError = ref('')
-function onSpawnAgent(_email: string) { /* no-op until M4-correct */ }
+const spawnPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const showBootstrapGrant = ref(false)
+const pendingSpawnEmail = ref<string | null>(null)
+
+const idpBase = computed(() => (useRuntimeConfig().public as { idpUrl?: string }).idpUrl ?? 'https://id.openape.ai')
+
+interface StandingGrant {
+  id: string
+  type?: string
+  status?: string
+  request?: {
+    delegate?: string
+    audience?: string
+    scopes?: string[]
+    grant_type?: string
+  }
+}
+
+async function findStandingGrant(): Promise<StandingGrant | null> {
+  // Browser → IdP, credentials:'include' relies on CORS allowlist
+  // (set up in PR #522) + sameSite=none on the IdP session cookie.
+  const res = await fetch(`${idpBase.value}/api/grants?role=delegator`, { credentials: 'include' })
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('idp-unauthenticated')
+    throw new Error(`idp /api/grants failed: HTTP ${res.status}`)
+  }
+  const body = await res.json() as { grants?: StandingGrant[] } | StandingGrant[]
+  const grants = Array.isArray(body) ? body : (body.grants ?? [])
+  return grants.find(g =>
+    g.type === 'delegation'
+    && g.status === 'approved'
+    && g.request?.delegate === 'org.openape.ai'
+    && g.request?.audience === 'troop.openape.ai'
+    && (g.request?.scopes ?? []).includes('troop:spawn-agent')
+    && g.request?.grant_type === 'always',
+  ) ?? null
+}
+
+async function fetchAuthzJwt(grantId: string): Promise<string> {
+  const res = await fetch(`${idpBase.value}/api/grants/${encodeURIComponent(grantId)}/token`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  if (!res.ok) throw new Error(`idp /api/grants/${grantId}/token failed: HTTP ${res.status}`)
+  const body = await res.json() as { authz_jwt: string }
+  return body.authz_jwt
+}
+
+async function onSpawnAgent(email: string) {
+  if (!org.value) return
+  spawnError.value = ''
+  pendingSpawnEmail.value = email
+
+  let grant: StandingGrant | null
+  try {
+    grant = await findStandingGrant()
+  }
+  catch (err: any) {
+    if (err?.message === 'idp-unauthenticated') {
+      spawnError.value = t('orgDetail.spawn.idpUnauthenticated')
+      return
+    }
+    spawnError.value = err?.message || t('orgDetail.spawn.failed')
+    return
+  }
+
+  if (!grant) {
+    showBootstrapGrant.value = true
+    return
+  }
+
+  let subjectToken: string
+  try { subjectToken = await fetchAuthzJwt(grant.id) }
+  catch (err: any) { spawnError.value = err?.message || t('orgDetail.spawn.failed'); return }
+
+  try {
+    await ($fetch as any)(`/api/orgs/${org.value.id}/members/${encodeURIComponent(email)}/spawn`, {
+      method: 'POST',
+      body: { subject_token: subjectToken, grant_id: grant.id },
+    })
+    await loadAll()
+    ensureSpawnPolling()
+  }
+  catch (err: any) {
+    spawnError.value = err?.data?.statusMessage || err?.message || t('orgDetail.spawn.failed')
+  }
+}
+
+function ensureSpawnPolling() {
+  if (spawnPollTimer.value) return
+  spawnPollTimer.value = setInterval(async () => {
+    const pending = members.value.filter(m => m.spawnStatus === 'pending')
+    if (pending.length === 0) {
+      if (spawnPollTimer.value) { clearInterval(spawnPollTimer.value); spawnPollTimer.value = null }
+      return
+    }
+    let anyFlipped = false
+    for (const m of pending) {
+      try {
+        const res = await ($fetch as any)(`/api/orgs/${org.value!.id}/members/${encodeURIComponent(m.agentEmail)}/spawn-status`) as { status: string }
+        if (res.status === 'active' || res.status === 'failed') anyFlipped = true
+      }
+      catch { /* keep polling */ }
+    }
+    if (anyFlipped) await loadAll()
+  }, 2000)
+}
+
+// Resume polling when the page mounts with already-pending spawns.
+watch(members, (ms) => {
+  if (ms.some(m => m.spawnStatus === 'pending')) ensureSpawnPolling()
+})
+
+onBeforeUnmount(() => {
+  if (spawnPollTimer.value) clearInterval(spawnPollTimer.value)
+})
+
+function onBootstrapRetry() {
+  if (pendingSpawnEmail.value) {
+    const email = pendingSpawnEmail.value
+    pendingSpawnEmail.value = null
+    void onSpawnAgent(email)
+  }
+}
 
 // Destroy-org modal
 const showDestroy = ref(false)
@@ -191,6 +328,10 @@ async function destroyOrg() {
             :org-id="org.id"
             :placeholder-email="placeholderToLink"
             @saved="loadAll"
+          />
+          <BootstrapGrantDialog
+            v-model:open="showBootstrapGrant"
+            @retry="onBootstrapRetry"
           />
         </div>
 
