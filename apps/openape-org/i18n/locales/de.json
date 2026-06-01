@@ -85,26 +85,9 @@
     "spawn": {
       "needsGrant": "Du hast dieser Org noch nicht erlaubt in deinem Namen Agents zu spawnen. Einmalige Einrichtung notwendig.",
       "idpUnauthenticated": "Deine IdP-Session ist abgelaufen — auf id.openape.ai neu einloggen, dann erneut versuchen.",
+      "denied": "Zustimmung verweigert. Ohne deine Freigabe kann die Org keine Agents spawnen.",
       "failed": "Spawn fehlgeschlagen"
     }
-  },
-  "bootstrapGrant": {
-    "title": "Einmalige Einrichtung nötig",
-    "subtitle": "Erlaube dieser Org in deinem Namen Agents auf troop zu spawnen.",
-    "oneTime": "Nur einmal pro Browser/Gerät nötig. Jederzeit widerrufbar via id.openape.ai.",
-    "step1": {
-      "title": "Schritt 1 — diesen Befehl im Terminal ausführen",
-      "description": "Du musst via 'apes login' eingeloggt sein. Der Grant wird auto-approved, weil du selbst der Delegator bist."
-    },
-    "step2": {
-      "title": "Schritt 2 — auf den iPhone DDISA-Prompt warten",
-      "description": "Falls dein IdP pro Grant eine Bestätigung verlangt, am Telefon approven."
-    },
-    "step3": {
-      "title": "Schritt 3 — Retry klicken",
-      "description": "Geht zurück in die Chart und triggert den Spawn neu — läuft ab da invisible. troop unter {troopUi} öffnen falls noch was Aufmerksamkeit braucht."
-    },
-    "retry": "Spawn wiederholen"
   },
   "delegation": {
     "title": "Delegation-Grants",
