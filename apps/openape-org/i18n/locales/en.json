@@ -85,26 +85,9 @@
     "spawn": {
       "needsGrant": "You haven't authorized this org to spawn agents on your behalf. Set up a delegation grant (one-time).",
       "idpUnauthenticated": "Your IdP session expired — sign in again at id.openape.ai, then retry.",
+      "denied": "Consent denied. The org can't spawn agents without your approval.",
       "failed": "Spawn failed"
     }
-  },
-  "bootstrapGrant": {
-    "title": "One-time setup needed",
-    "subtitle": "Authorize this org to spawn agents on troop on your behalf.",
-    "oneTime": "You only need to do this once per browser/device. The grant is revocable any time from id.openape.ai.",
-    "step1": {
-      "title": "Step 1 — run this in your terminal",
-      "description": "You must be logged in via 'apes login'. The grant auto-approves because you're the delegator."
-    },
-    "step2": {
-      "title": "Step 2 — wait for the iPhone DDISA prompt",
-      "description": "If your IdP requires per-grant confirmation, approve on your phone."
-    },
-    "step3": {
-      "title": "Step 3 — click Retry",
-      "description": "Returns to the chart and re-triggers the spawn — runs invisibly from there. Open troop at {troopUi} if anything else needs attention."
-    },
-    "retry": "Retry spawn"
   },
   "delegation": {
     "title": "Delegation grants",
