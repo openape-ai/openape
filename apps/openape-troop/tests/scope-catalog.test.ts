@@ -9,10 +9,17 @@ describe('troop scope catalog', () => {
     expect(ids).toContain('troop:read-agents')
   })
 
+  it('publishes the nest:* device-binding trio (M4δ)', () => {
+    const ids = TROOP_SCOPES.map(s => s.id)
+    expect(ids).toContain('nest:bind')
+    expect(ids).toContain('nest:spawn-agent')
+    expect(ids).toContain('nest:report-status')
+  })
+
   it('every entry has the spec-required shape (sp-data-access §3.2)', () => {
     for (const s of TROOP_SCOPES) {
       expect(typeof s.id).toBe('string')
-      expect(s.id).toMatch(/^troop:[a-z-]+$/)
+      expect(s.id).toMatch(/^(?:troop|nest):[a-z-]+$/)
       expect(typeof s.description).toBe('string')
       expect(s.description.length).toBeGreaterThan(10)
       expect(Array.isArray(s.grants)).toBe(true)
