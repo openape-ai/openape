@@ -3,9 +3,11 @@ import { and, eq } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import toolCatalog from '../../tool-catalog.json'
 import { useDb } from '../../database/drizzle'
-import { agents, tasks } from '../../database/schema'
+import { agents, nests, tasks } from '../../database/schema'
 import { parseAgentEmail } from '../../utils/agent-email'
+import { verifyCliToken } from '../../utils/cli-token'
 import { resolveDestroyIntent } from '../../utils/destroy-intents'
+import { parseNestDeviceToken } from '../../utils/nest-credential'
 import { registerNestPeer, touchNestPeer, unregisterNestPeerById } from '../../utils/nest-registry'
 import { takeRecipeDeploy } from '../../utils/recipe-deploys'
 import { resolveSpawnIntent } from '../../utils/spawn-intents'
@@ -28,18 +30,22 @@ const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }
 //   - destroy-intent { intent_id, name }     — `apes agents destroy --force`
 //   - reload-bridge { name }                 — pm2 reload, no fresh sync
 //
-// Auth model: same DDISA-JWT pattern as chat's WS — bearer signed
-// by id.openape.ai's JWKS. We accept two flavours of caller:
+// Auth model: three flavours of caller.
 //
-//   - `act: human` — owner-direct connection (UI/dev tooling).
+//   - **troop device token** (M4δ — the nest-as-device path). A
+//     troop-issued HS256 CLI token with act='agent' and
+//     delegate='nest:<host_id>'. The keypair-less pod mints it from its
+//     bind-time device secret at POST /api/nests/token. We verify it with
+//     troop's own secret (verifyCliToken), pull (ownerEmail, host_id) off
+//     the token, and require an *active* nests row — so revoking the nest
+//     (status='revoked') drops the connection at the next (re)connect. The
+//     host_id is token-authoritative; we ignore the self-reported one.
+//   - `act: human` — owner-direct connection (UI/dev tooling), IdP-signed.
 //     ownerEmail = JWT `sub`.
-//   - `act: agent` — the nest itself, signed with its own DDISA
-//     keypair (see `apes nest enroll`). The agent email encodes
-//     its owner (`<name>-<hash>+<owner-local>+<owner-domain>@id…`),
-//     so we resolve ownerEmail from parseAgentEmail. This is the
-//     normal daemon path — the nest reads its act:agent JWT from
-//     `~/.openape/nest/.config/apes/auth.json` and uses it as
-//     bearer here.
+//   - `act: agent` (IdP-signed) — the legacy keypair nest. The agent email
+//     encodes its owner (`<name>-<hash>+<owner-local>+<owner-domain>@id…`),
+//     so we resolve ownerEmail from parseAgentEmail. Kept until the live
+//     nests are cut over to device identity.
 //
 // Either way the WS connection is owner-scoped — broadcasts and
 // spawn-intents fan out per ownerEmail.
@@ -58,10 +64,33 @@ function jwks() {
   return _jwks
 }
 
-interface AuthCtx { ownerEmail: string }
+interface AuthCtx {
+  ownerEmail: string
+  /** Set only for device-token nests — the token-authoritative host_id. */
+  hostId?: string
+}
 const authByPeerId = new Map<string, AuthCtx>()
 
 async function authenticateUpgrade(token: string): Promise<AuthCtx> {
+  // Device-token path first: a troop-issued HS256 token verifies cheaply
+  // and fails fast (verifyCliToken → null) for any IdP-signed token, so
+  // legacy nests fall straight through to the JWKS path below.
+  const device = parseNestDeviceToken(await verifyCliToken(token))
+  if (device) {
+    const db = useDb()
+    const rows = await db
+      .select({ hostId: nests.hostId })
+      .from(nests)
+      .where(and(
+        eq(nests.ownerEmail, device.ownerEmail),
+        eq(nests.hostId, device.hostId),
+        eq(nests.status, 'active'),
+      ))
+      .limit(1)
+    if (!rows[0]) throw new Error('nest is revoked or unknown')
+    return { ownerEmail: device.ownerEmail, hostId: device.hostId }
+  }
+
   const { payload } = await verifyJWT<DDISAClaims>(token, jwks())
   if (!payload.sub) throw new Error('token missing sub')
   if (payload.act === 'human') {
@@ -152,10 +181,13 @@ export default defineWebSocketHandler({
     if (!frame) return
     if (frame.type === 'hello') {
       const f = frame as HelloFrame
-      if (!f.host_id || !f.hostname) return
+      // Device-token nests: the host_id is bound into the token, so trust
+      // that over the self-reported one (no more host fingerprinting).
+      const hostId = ctx.hostId ?? f.host_id
+      if (!hostId || !f.hostname) return
       registerNestPeer({
         ownerEmail: ctx.ownerEmail,
-        hostId: f.host_id,
+        hostId,
         hostname: f.hostname,
         version: f.version ?? 'unknown',
         lastSeenAt: Math.floor(Date.now() / 1000),

@@ -1,3 +1,4 @@
+import type { CliTokenPayload } from './cli-token'
 import { createHash, randomBytes } from 'node:crypto'
 
 // Device-credential primitives for the nest-as-device model (M4δ-3).
@@ -30,4 +31,30 @@ export function generateDeviceSecret(): string {
 
 export function hashDeviceSecret(secret: string): string {
   return createHash('sha256').update(secret, 'utf8').digest('hex')
+}
+
+export interface NestDeviceIdentity {
+  ownerEmail: string
+  hostId: string
+}
+
+// `delegate` provenance prefix for a minted device token: `nest:<host_id>`.
+const DELEGATE_PREFIX = 'nest:'
+
+// Narrow a *verified* troop CLI token to a nest device identity. Returns
+// null when the token isn't a device token (a first-party human token, or
+// an IdP-signed token that verifyCliToken couldn't verify) so the caller
+// can fall back to the IdP auth path. The host_id rides in `delegate`
+// (`nest:<host_id>`) and is token-authoritative — troop never has to trust
+// a nest's self-reported host_id in the hello frame. Note this does NOT
+// check the nest is still active; the caller must verify the (owner,
+// host_id) row against the nests table so a revoke takes effect.
+export function parseNestDeviceToken(claims: CliTokenPayload | null): NestDeviceIdentity | null {
+  if (!claims) return null
+  if (claims.act !== 'agent') return null
+  if (!claims.delegate?.startsWith(DELEGATE_PREFIX)) return null
+  const hostId = claims.delegate.slice(DELEGATE_PREFIX.length)
+  if (!hostId) return null
+  if (!claims.scope?.includes('nest:report-status')) return null
+  return { ownerEmail: claims.sub.toLowerCase(), hostId }
 }
