@@ -65,14 +65,22 @@ export class TroopSync {
 
   private async syncOne(name: string): Promise<void> {
     try {
-      // `apes run --as <agent>` triggers escapes-helper which does
-      // the setuid switch and exec's `apes agents sync` as the
-      // agent. The Nest's YOLO policy auto-approves the grant.
-      await execFileAsync(
-        this.deps.apesBin,
-        ['run', '--as', name, '--wait', '--', 'apes', 'agents', 'sync'],
-        { maxBuffer: 1024 * 1024, env: process.env, timeout: 60_000 },
-      )
+      // Two transports per environment:
+      //   - macOS Nest (`OPENAPE_BYPASS_APE_SHELL` unset): `apes run
+      //     --as <agent>` triggers escapes-helper which does the
+      //     setuid switch and exec's `apes agents sync` as the agent.
+      //     The Nest's YOLO policy auto-approves the grant.
+      //   - Container Nest (`OPENAPE_BYPASS_APE_SHELL=1`): no
+      //     DDISA/escapes layer inside the container — the container
+      //     IS the sandbox boundary. Switch to plain
+      //     `sudo -n -H -u <agent> apes agents sync` — matches what
+      //     pm2-supervisor already does for the bridge processes.
+      const bypassApeShell = process.env.OPENAPE_BYPASS_APE_SHELL === '1'
+      const cmd = bypassApeShell ? '/usr/bin/sudo' : this.deps.apesBin
+      const argv = bypassApeShell
+        ? ['-n', '-H', '-u', name, this.deps.apesBin, 'agents', 'sync']
+        : ['run', '--as', name, '--wait', '--', 'apes', 'agents', 'sync']
+      await execFileAsync(cmd, argv, { maxBuffer: 1024 * 1024, env: process.env, timeout: 60_000 })
     }
     catch (err) {
       this.deps.log(`troop-sync: ${name} failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
