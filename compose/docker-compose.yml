@@ -57,6 +57,14 @@ services:
       dockerfile: apps/openape-nest/Dockerfile
     image: openape-nest:dev
     container_name: openape-nest
+    # Stable hostname across `docker compose up` recreates — otherwise
+    # the container's random short-id (`df560db1f58f`) becomes the
+    # `host_id` reported to troop, and the FIRST sync after every
+    # container recreate fails with 401 host_id mismatch (the agent's
+    # keypair "moved" to a new host as far as troop knows). Pinning
+    # the hostname makes the nest reuse the same host_id forever and
+    # troop's pin stays stable.
+    hostname: openape-nest
     restart: unless-stopped
     depends_on:
       - openape-llm
