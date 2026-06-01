@@ -1,3 +1,4 @@
+import type { CliTokenPayload } from '../server/utils/cli-token'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { signCliToken, verifyCliToken } from '../server/utils/cli-token'
 import {
@@ -5,7 +6,24 @@ import {
   hashDeviceSecret,
   NEST_DEVICE_SCOPES,
   NEST_TOKEN_TTL_SECONDS,
+  parseNestDeviceToken,
 } from '../server/utils/nest-credential'
+
+function deviceClaims(over: Partial<CliTokenPayload> = {}): CliTokenPayload {
+  return {
+    iss: 'troop.openape.ai',
+    aud: 'troop.openape.ai',
+    typ: 'cli',
+    sub: 'patrick@example.com',
+    email: 'patrick@example.com',
+    act: 'agent',
+    scope: [...NEST_DEVICE_SCOPES],
+    delegate: 'nest:mbp-home',
+    iat: 0,
+    exp: 0,
+    ...over,
+  }
+}
 
 // cli-token.ts reads two Nuxt auto-imported globals at call time. Stub them
 // so the mint round-trip can run under the plain-node vitest env.
@@ -67,5 +85,32 @@ describe('session-less device token mint (M4δ-3 core)', () => {
     expect(claims!.delegate).toBe(`nest:${hostId}`)
     // Short-lived by design: the cap is enforced, not the 30-day first-party TTL.
     expect(expiresAt - claims!.iat).toBeLessThanOrEqual(NEST_TOKEN_TTL_SECONDS)
+  })
+})
+
+describe('parseNestDeviceToken (troop WS accept path)', () => {
+  it('narrows a valid device token to (owner, host_id), lowercasing owner', () => {
+    const id = parseNestDeviceToken(deviceClaims({ sub: 'Patrick@Example.Com' }))
+    expect(id).toEqual({ ownerEmail: 'patrick@example.com', hostId: 'mbp-home' })
+  })
+
+  it('returns null for a null token (verify failed → fall back to IdP)', () => {
+    expect(parseNestDeviceToken(null)).toBeNull()
+  })
+
+  it('returns null for a first-party human token (no nest delegate)', () => {
+    expect(parseNestDeviceToken(deviceClaims({ act: 'human', delegate: null }))).toBeNull()
+  })
+
+  it('returns null when delegate is not a nest provenance', () => {
+    expect(parseNestDeviceToken(deviceClaims({ delegate: 'org.openape.ai' }))).toBeNull()
+  })
+
+  it('returns null for an empty host_id', () => {
+    expect(parseNestDeviceToken(deviceClaims({ delegate: 'nest:' }))).toBeNull()
+  })
+
+  it('returns null when the report-status scope is absent', () => {
+    expect(parseNestDeviceToken(deviceClaims({ scope: ['nest:spawn-agent'] }))).toBeNull()
   })
 })
