@@ -16,15 +16,18 @@ export const DEFAULT_CLI_AUDIENCE = 'apes-cli'
 
 export interface AuthTokenPayload {
   sub: string
-  /** Either a simple actor-type string ('human' | 'agent') for direct
+  /**
+   * Either a simple actor-type string ('human' | 'agent') for direct
    * tokens, or a structured DDISA DelegationActClaim object for
    * delegated tokens minted via /api/oauth/token-exchange. The
    * structured form's `sub` field is the email of the actor (delegate).
    */
   act: ActorType | DelegationActClaim
   aud?: string
-  /** Set on delegated tokens — the id of the delegation grant that
-   * authorised this token-exchange. */
+  /**
+   * Set on delegated tokens — the id of the delegation grant that
+   * authorised this token-exchange.
+   */
   delegation_grant?: string
 }
 
