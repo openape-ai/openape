@@ -221,6 +221,14 @@ export default defineNuxtModule<ModuleOptions>({
             // Phase 2: Agents view + standing-grant management
             { name: 'openape-agents', path: '/agents', file: resolve('./runtime/pages/agents.vue') },
             { name: 'openape-agents-detail', path: '/agents/:email', file: resolve('./runtime/pages/agents/[email].vue') },
+            // M4γ: Cross-SP delegation consent (sp-data-access.md §4).
+            // Receiver SP redirects the Owner here with delegate / audience
+            // / scopes / return_to query params. Page fetches the Provider's
+            // scope catalog server-side, renders a consent card with the
+            // verbatim scope descriptions, and on Approve creates a
+            // standing delegation grant + redirects back to return_to with
+            // ?grant_id=…
+            { name: 'openape-grant-cross-sp', path: '/grant-cross-sp', file: resolve('./runtime/pages/grant-cross-sp.vue') },
           )
         }
 
