@@ -18,6 +18,7 @@
     "release": "node scripts/publish-chain.mjs",
     "release:dry": "node scripts/publish-chain.mjs --dry-run",
     "release:local": "node scripts/release-local.mjs",
+    "deploy": "node scripts/deploy.mjs",
     "sync:openclaw": "bash scripts/sync-openclaw-skills.sh",
     "seed:shapes": "tsx scripts/seed-shapes.ts",
     "prepare": "git config core.hooksPath .githooks || true"
