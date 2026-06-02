@@ -62,7 +62,7 @@ gh pr create
 ```
 
 - Link the issue: `Closes #<nr>` in the PR body
-- CI must pass before merge
+- The **pre-push hook** runs the full local gate (build + audit + lint + typecheck + test) before the push leaves your machine — this is the CI. There is no server-side CI (no GitHub Actions / Blacksmith). Emergency bypass: `SKIP_HOOKS=1 git push`.
 - Add a changeset if publishable packages changed: `pnpm changeset`
 
 ### 6. After Merge — Release
@@ -75,13 +75,24 @@ git pull
 pnpm release:local
 ```
 
-This script (`scripts/release-local.mjs`) consumes pending changesets, bumps versions, builds, publishes to npm in dependency order, and pushes the version commit. It replaces what used to be three sequential CI cycles (version-PR + post-merge CI + publish) with a single local pass — usually faster, and you skip the surface area for CI flakes.
+This script (`scripts/release-local.mjs`) consumes pending changesets, bumps versions, builds, publishes to npm in dependency order, and pushes the version commit. Versioning and publishing happen entirely on your machine — there is no publish workflow on a CI server.
 
-The CI `release.yml` is the safety net: pushing a changeset to main without running `release:local` first will fail loudly instead of silently opening a version-PR.
+### 7. Deploy
+
+Deploys also run locally. Each app has a `scripts/deploy-<app>.sh` (build → rsync to chatty → swap `current` → restart service → health-check); `scripts/deploy.mjs` wraps them with target selection and rollback-on-failure:
+
+```bash
+pnpm deploy troop            # deploy a specific app
+pnpm deploy --changed        # deploy whatever changed vs origin/main
+pnpm deploy --all            # deploy everything
+pnpm deploy --dry-run troop  # show the plan, touch nothing
+```
+
+Requires local SSH access to chatty (`openape@chatty.delta-mind.at`) with passwordless sudo for `systemctl restart openape-*.service`.
 
 ## Branch Policy
 
-- **`main` is protected** — no direct pushes, PRs + CI required
+- **`main` is protected** — work on feature branches, open PRs; the local pre-push gate stands in for server-side CI
 - **Source changes on `main` are blocked** by pre-commit hook
 - **Infrastructure exceptions** (direct-to-main OK): `.claude/`, `.github/`, `.githooks/`, `scripts/`, config files, docs
 - **Emergency bypass:** `SKIP_HOOKS=1 git commit ...`

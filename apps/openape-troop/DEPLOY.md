@@ -1,6 +1,6 @@
 # Deploying troop.openape.ai
 
-> One-time bootstrap, then `scripts/deploy-troop.sh` (called by GitHub Actions on every push to main).
+> One-time bootstrap, then deploy locally with `pnpm deploy troop` (wraps `scripts/deploy-troop.sh`).
 
 Mirrors the layout of the other `apps/openape-*` services on the deploy host.
 
@@ -98,4 +98,4 @@ exo dns add A openape.ai -n troop -a 85.217.175.26 -t 300
 
 ## Recurring deploys
 
-GitHub Actions handles them on every push to `main` that touches `apps/openape-troop/**` or related dependencies — see `.github/workflows/deploy-troop.yml`. Manual fallback: `./scripts/deploy-troop.sh` from the monorepo root with `chatty` SSH alias configured.
+Run `pnpm deploy troop` from the monorepo root (or `pnpm deploy --changed` to let it pick targets from the diff vs `origin/main`). It builds, rsyncs to chatty, swaps `current`, restarts the service, health-checks, and rolls back on failure. Requires SSH access to `openape@chatty.delta-mind.at` with passwordless sudo for `systemctl restart openape-troop.service`.
