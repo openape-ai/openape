@@ -1,6 +1,6 @@
 # Deploying org.openape.ai
 
-> Mirrors the layout of the other `apps/openape-*` services on `chatty.delta-mind.at`. One-time bootstrap, then `scripts/deploy-org.sh` (called by `.github/workflows/deploy-org.yml` on every push to main).
+> Mirrors the layout of the other `apps/openape-*` services on `chatty.delta-mind.at`. One-time bootstrap, then deploy locally with `pnpm deploy org` (wraps `scripts/deploy-org.sh`).
 
 ## One-time bootstrap (run by Patrick, not the agent)
 
@@ -72,7 +72,7 @@ Add `org.openape.ai` as an OIDC client at id.openape.ai with redirect URI `https
 
 ## After bootstrap
 
-`scripts/deploy-org.sh` (and the GH workflow that calls it) handles every subsequent release: build → rsync → libsql native-binding pin → symlink swap → systemctl restart → health check → rollback on failure.
+`pnpm deploy org` (wrapping `scripts/deploy-org.sh`) handles every subsequent release locally: build → rsync → libsql native-binding pin → symlink swap → systemctl restart → health check → rollback on failure.
 
 ## M4 — Cross-SP spawn (not yet wired)
 
