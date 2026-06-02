@@ -46,6 +46,7 @@ const PACKAGES = [
   { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
   { name: '@openape/ape-agent', dir: 'apps/openape-ape-agent' },
   { name: '@openape/nest', dir: 'apps/openape-nest' },
+  { name: '@openape/ape-troop', dir: 'packages/ape-troop' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')
