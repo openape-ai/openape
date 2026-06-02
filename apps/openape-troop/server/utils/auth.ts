@@ -102,6 +102,14 @@ export async function resolveOwnerContext(event: H3Event): Promise<{
     // SPs use after token-exchange.
     const cli = await verifyCliToken(token)
     if (cli) {
+      // A first-party human token (the Owner's own apes-cli session,
+      // exchanged to a troop token) is unbounded — same status as the
+      // session and IdP-human paths. Only delegated/agent tokens are
+      // scope-bounded to what their token carries; a human's exchanged
+      // token has scope=[] and must NOT collapse to "no scopes".
+      if (cli.act === 'human' && !cli.delegate) {
+        return { owner: cli.sub, scopes: null, delegate: null }
+      }
       return { owner: cli.sub, scopes: cli.scope ?? [], delegate: cli.delegate ?? null }
     }
 
