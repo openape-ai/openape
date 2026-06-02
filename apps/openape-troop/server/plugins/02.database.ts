@@ -157,6 +157,21 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_created
       ON chat_messages (chat_id, created_at)`)
+
+    // nests — devices (pods) bound to an Owner (M4δ). host_id is
+    // owner-scoped, so the PK is (owner_email, host_id). status flips
+    // to 'revoked' on DELETE rather than hard-deleting.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS nests (
+      owner_email TEXT NOT NULL,
+      host_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      pod_uuid TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at INTEGER NOT NULL,
+      last_seen_at INTEGER,
+      PRIMARY KEY (owner_email, host_id)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_nests_owner ON nests(owner_email)`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)
