@@ -42,6 +42,21 @@ export const TROOP_SCOPES: TroopScope[] = [
     description: 'Read the user\'s agent list, agent details, and live nest-status on this troop.',
     grants: ['GET /api/agents', 'GET /api/agents/:name', 'GET /api/nest/hosts'],
   },
+  {
+    id: 'nest:bind',
+    description: 'Bind a new device (pod) to your account on this troop. This lets the device run agents on your behalf without its own identity — you can revoke the binding any time, instantly cutting the device off.',
+    grants: ['POST /api/nests/bind'],
+  },
+  {
+    id: 'nest:spawn-agent',
+    description: 'Let a bound device spawn agents under your account. The device can only create agents — it cannot destroy them or read your other devices.',
+    grants: ['POST /api/agents/spawn-intent'],
+  },
+  {
+    id: 'nest:report-status',
+    description: 'Let a bound device report its status (online/offline, version) and read the list of your devices.',
+    grants: ['GET /api/nests', 'GET /api/nest/hosts'],
+  },
 ]
 
 const KNOWN_IDS = new Set(TROOP_SCOPES.map(s => s.id))
