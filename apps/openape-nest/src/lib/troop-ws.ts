@@ -28,12 +28,12 @@
 // a cold-path fallback for whenever the WS connection is down (Mac
 // sleeping, troop deploying, flaky network).
 
-import { execFile, execFileSync, spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { execFile, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { hostname, networkInterfaces } from 'node:os'
-import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
+import { hostname } from 'node:os'
 import WebSocket from 'ws'
+import { mintNestToken,  readDeviceCreds } from './nest-device'
+import type { NestDeviceCreds } from './nest-device'
 import { agentNameFromEmail, planSecretRevoke, planSecretWrite } from './secret-relay'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
@@ -102,12 +102,17 @@ export class TroopWs {
   private reconnectAttempts = 0
   private stopped = false
   private readonly troopUrl: string
-  private readonly hostId: string
+  // Set from the device creds on each connect (troop is authoritative for
+  // host_id now; the daemon no longer self-fingerprints).
+  private hostId = ''
   private readonly hostname: string
+  // Short-lived device token, held in memory only and re-minted before
+  // expiry. Never persisted — only the long-lived device_secret is on disk.
+  private cachedToken: string | null = null
+  private cachedTokenExp = 0
 
   constructor(private opts: TroopWsOptions) {
     this.troopUrl = (opts.troopUrl ?? process.env.OPENAPE_TROOP_WS_URL ?? 'wss://troop.openape.ai').replace(/\/$/, '')
-    this.hostId = readHostId()
     this.hostname = hostname()
   }
 
@@ -129,20 +134,34 @@ export class TroopWs {
     }
   }
 
+  // Mint (or reuse) a short-lived device token. Cached in memory and
+  // re-minted ~1 min before expiry; never written to disk.
+  private async mintToken(creds: NestDeviceCreds): Promise<string> {
+    const nowSec = Math.floor(Date.now() / 1000)
+    if (this.cachedToken && this.cachedTokenExp - nowSec > 60) return this.cachedToken
+    const { token, expiresAt } = await mintNestToken(this.troopUrl, creds)
+    this.cachedToken = token
+    this.cachedTokenExp = expiresAt
+    return token
+  }
+
   private async connect(): Promise<void> {
     if (this.stopped) return
+    // Re-read on every attempt so creds injected after boot are picked up
+    // without a restart.
+    const creds = readDeviceCreds()
+    if (!creds) {
+      this.opts.log('troop-ws: no device creds (set OPENAPE_NEST_HOST_ID + OPENAPE_NEST_DEVICE_SECRET, or ~/nest-device.json) — not connecting, will retry')
+      this.scheduleReconnect()
+      return
+    }
+    this.hostId = creds.hostId
     let token: string
     try {
-      const auth = await ensureFreshIdpAuth()
-      token = auth.access_token
+      token = await this.mintToken(creds)
     }
     catch (err) {
-      if (err instanceof NotLoggedInError) {
-        this.opts.log('troop-ws: not logged in (apes login) — skip connect, will retry')
-      }
-      else {
-        this.opts.log(`troop-ws: auth refresh failed: ${err instanceof Error ? err.message : String(err)}`)
-      }
+      this.opts.log(`troop-ws: token mint failed (nest revoked or bad secret?): ${err instanceof Error ? err.message : String(err)}`)
       this.scheduleReconnect()
       return
     }
@@ -409,38 +428,6 @@ function runWithInput(bin: string, args: string[], input: string): Promise<void>
     child.stdin?.on('error', () => { /* child may exit before we finish writing; close handler reports it */ })
     child.stdin?.end(input)
   })
-}
-
-/**
- * Stable per-host identifier. On macOS we read `IOPlatformUUID` via
- * ioreg if available (same source `apes agents sync` pins on). As a
- * portable fallback we hash MAC addresses + hostname — gives a stable
- * value across boots on Linux/CI without requiring elevated privs.
- */
-function readHostId(): string {
-  try {
-    if (process.platform === 'darwin') {
-      const out = execFileSync('/usr/sbin/ioreg', ['-d2', '-c', 'IOPlatformExpertDevice'], { encoding: 'utf8' })
-      const match = out.match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/)
-      if (match) return match[1]!
-    }
-  }
-  catch { /* fall through to hash-based id */ }
-  return hashBasedHostId()
-}
-
-function hashBasedHostId(): string {
-  const nics = networkInterfaces()
-  const macs: string[] = []
-  for (const list of Object.values(nics)) {
-    if (!list) continue
-    for (const nic of list) {
-      if (!nic.mac || nic.mac === '00:00:00:00:00:00' || nic.internal) continue
-      macs.push(nic.mac)
-    }
-  }
-  const seed = `${hostname()}|${macs.toSorted().join(',')}`
-  return createHash('sha256').update(seed).digest('hex').slice(0, 32)
 }
 
 // Read this package's version once at boot. Falls back to 'unknown'
