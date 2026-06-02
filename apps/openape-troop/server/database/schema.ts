@@ -213,6 +213,12 @@ export const nests = sqliteTable('nests', {
   status: text('status', { enum: ['active', 'revoked'] }).notNull().default('active'),
   createdAt: integer('created_at').notNull(),
   lastSeenAt: integer('last_seen_at'),
+  // SHA-256 (hex) of the device secret minted at bind time. The plaintext
+  // is shown to the pod exactly once in the bind response; troop only ever
+  // stores this hash. The pod presents the plaintext to POST /api/nests/token
+  // on every reconnect to mint a short-lived nest:* troop token. Revoking the
+  // nest (status='revoked') makes that exchange fail — one-click cut-off.
+  deviceSecretHash: text('device_secret_hash'),
 }, table => [
   primaryKey({ columns: [table.ownerEmail, table.hostId] }),
   index('idx_nests_owner').on(table.ownerEmail),

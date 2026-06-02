@@ -169,9 +169,16 @@ export default defineNitroPlugin(async () => {
       status TEXT NOT NULL DEFAULT 'active',
       created_at INTEGER NOT NULL,
       last_seen_at INTEGER,
+      device_secret_hash TEXT,
       PRIMARY KEY (owner_email, host_id)
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_nests_owner ON nests(owner_email)`)
+    // device_secret_hash was added after the initial nests CREATE; ALTER is
+    // idempotent-by-try (SQLite has no ADD COLUMN IF NOT EXISTS).
+    try {
+      await db.run(sql`ALTER TABLE nests ADD COLUMN device_secret_hash TEXT`)
+    }
+    catch { /* column already exists */ }
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)
