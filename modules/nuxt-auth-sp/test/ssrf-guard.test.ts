@@ -31,13 +31,13 @@ describe('assertSafeIdpUrl', () => {
   })
 
   it('rejects literal private/loopback hosts', async () => {
-    await expect(assertSafeIdpUrl('https://127.0.0.1')).rejects.toThrow(/blocked/)
-    await expect(assertSafeIdpUrl('https://169.254.169.254/latest/meta-data')).rejects.toThrow(/blocked/)
-    await expect(assertSafeIdpUrl('https://[::1]')).rejects.toThrow(/blocked/)
+    await expect(assertSafeIdpUrl('https://127.0.0.1')).rejects.toThrow(/private\/loopback/)
+    await expect(assertSafeIdpUrl('https://169.254.169.254/latest/meta-data')).rejects.toThrow(/private\/loopback/)
+    await expect(assertSafeIdpUrl('https://[::1]')).rejects.toThrow(/private\/loopback/)
   })
 
   it('rejects hostnames that resolve to loopback (localhost)', async () => {
-    await expect(assertSafeIdpUrl('https://localhost')).rejects.toThrow(/blocked/)
+    await expect(assertSafeIdpUrl('https://localhost')).rejects.toThrow(/private\/loopback/)
   })
 
   it('rejects malformed URLs', async () => {
