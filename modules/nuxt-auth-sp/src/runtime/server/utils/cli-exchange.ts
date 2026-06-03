@@ -4,6 +4,7 @@ import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3
 import { signCliToken } from './cli-token'
 import { resolveIssuerForToken } from './ddisa-issuer'
 import { getSpConfig } from './sp-config'
+import { assertSafeIdpUrl } from './ssrf-guard'
 
 interface ExchangeBody {
   subject_token?: string
@@ -23,7 +24,10 @@ let _idpJwksUrl = ''
 function getIdpJwks(idpUrl: string): ReturnType<typeof createRemoteJWKSet> {
   const url = new URL('/.well-known/jwks.json', idpUrl).toString()
   if (!_idpJwks || _idpJwksUrl !== url) {
-    _idpJwks = createRemoteJWKSet(new URL(url))
+    // Short timeout bounds the JWKS fetch (paired with the assertSafeIdpUrl
+    // SSRF guard at the call site). Note: jose 5.x cannot refuse redirects on
+    // this fetch — a redirect-to-internal bypass remains a documented residual.
+    _idpJwks = createRemoteJWKSet(new URL(url), { timeoutDuration: 5000 })
     _idpJwksUrl = url
   }
   return _idpJwks
@@ -74,6 +78,21 @@ export function createCliExchangeHandler() {
       })
     }
     const idpUrl = resolved.issuer
+
+    // SSRF guard: the issuer was resolved from the subject's DDISA record
+    // (attacker-influenceable). Refuse non-https or private/loopback targets
+    // before fetching their JWKS.
+    try {
+      await assertSafeIdpUrl(idpUrl)
+    }
+    catch (err) {
+      const detail = err instanceof Error ? err.message : 'issuer rejected'
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'IdP issuer not permitted',
+        data: { detail },
+      })
+    }
 
     let claims: JWTPayload
     try {

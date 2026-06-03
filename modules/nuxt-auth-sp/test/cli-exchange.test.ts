@@ -3,11 +3,12 @@ import type { H3Event } from 'h3'
 
 // ── Hoisted stubs (vi.hoisted runs before any vi.mock factory) ────────────────
 
-const { mockSetResponseStatus, mockJwtVerify, mockResolveIssuer, mockReadBody } = vi.hoisted(() => ({
+const { mockSetResponseStatus, mockJwtVerify, mockResolveIssuer, mockReadBody, mockAssertSafe } = vi.hoisted(() => ({
   mockSetResponseStatus: vi.fn(),
   mockJwtVerify: vi.fn(),
   mockResolveIssuer: vi.fn(),
   mockReadBody: vi.fn(),
+  mockAssertSafe: vi.fn(),
 }))
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -24,6 +25,10 @@ vi.mock('../src/runtime/server/utils/sp-config', () => ({
 
 vi.mock('../src/runtime/server/utils/ddisa-issuer', () => ({
   resolveIssuerForToken: (token: string) => mockResolveIssuer(token),
+}))
+
+vi.mock('../src/runtime/server/utils/ssrf-guard', () => ({
+  assertSafeIdpUrl: (url: string) => mockAssertSafe(url),
 }))
 
 vi.mock('jose', async (importOriginal) => {
@@ -68,6 +73,17 @@ describe('createCliExchangeHandler', () => {
     })
     mockJwtVerify.mockResolvedValue({
       payload: { sub: 'alice@openape.ai', act: 'human', iss: 'https://id.openape.ai', aud: 'apes-cli' },
+    })
+    mockAssertSafe.mockResolvedValue(undefined)
+  })
+
+  it('returns 502 when the resolved issuer is rejected by the SSRF guard', async () => {
+    mockReadBody.mockResolvedValue({ subject_token: 'valid.looking.token' })
+    mockAssertSafe.mockRejectedValue(new Error('IdP issuer host resolves to a blocked address (169.254.169.254)'))
+    const handler = createCliExchangeHandler()
+    await expect(handler(fakeEvent)).rejects.toMatchObject({
+      statusCode: 502,
+      message: 'IdP issuer not permitted',
     })
   })
 
