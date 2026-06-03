@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { createRemoteJWKS, verifyJWT } from '@openape/core'
 import { decodeProtectedHeader } from 'jose'
-import { verifyCliToken } from './cli-token'
+// verifyCliToken is auto-imported from @openape/nuxt-auth-sp server utils
 
 // `getSpSession`, `createError`, `getHeader`, `getQuery`, and `useRuntimeConfig`
 // are all auto-imported by Nuxt 4 (the SP module + nitro), so we don't import
