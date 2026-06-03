@@ -35,6 +35,7 @@
     "@openape/cli-auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
+    "@openape/shapes": "workspace:*",
     "@openape/proxy": "workspace:*",
     "citty": "^0.2.2",
     "consola": "^3.4.2",

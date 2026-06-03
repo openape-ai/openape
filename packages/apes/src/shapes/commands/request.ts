@@ -1,9 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { loadAdapter } from '../adapters.js'
-import { getIdpUrl } from '../config.js'
+import { loadAdapter, resolveCommand, getIdpUrl } from '@openape/shapes'
 import { createShapesGrant, fetchGrantToken, findExistingGrant, verifyAndExecute, waitForGrantStatus } from '../grants.js'
-import { resolveCommand } from '../parser.js'
 import { extractOption, extractWrappedCommand } from './explain.js'
 
 export const requestCommand = defineCommand({

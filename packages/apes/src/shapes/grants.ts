@@ -4,14 +4,18 @@ import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import consola from 'consola'
-import { getRequesterIdentity } from './config.js'
 import { getGenericAuditLogPath } from '../config.js'
-import { resolveCommand } from './parser.js'
-import { loadOrInstallAdapter } from './shell-parser.js'
-import type { ResolvedCommand } from './types.js'
-import { apiFetch, discoverEndpoints, getGrantsEndpoint } from './http.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
-import { isGenericResolved } from './generic.js'
+import {
+  apiFetch,
+  discoverEndpoints,
+  getGrantsEndpoint,
+  getRequesterIdentity,
+  isGenericResolved,
+  loadOrInstallAdapter,
+  resolveCommand,
+} from '@openape/shapes'
+import type { ResolvedCommand } from '@openape/shapes'
 
 function decodePayload(token: string): Record<string, unknown> {
   const [, payload] = token.split('.')

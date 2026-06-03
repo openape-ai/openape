@@ -4,7 +4,7 @@ import {
   buildGenericAdapter,
   buildGenericResolved,
   isGenericResolved,
-} from '../src/shapes/generic.js'
+} from '../src/generic.js'
 
 describe('buildGenericAdapter', () => {
   it('creates a synthetic adapter with the expected shape', () => {
