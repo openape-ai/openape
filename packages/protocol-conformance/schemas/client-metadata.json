@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddisa.org/schemas/client-metadata.json",
+  "title": "SP Client Metadata",
+  "description": "Service Provider client metadata following RFC 7591, published at /.well-known/oauth-client-metadata.",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client identifier. Typically the SP's domain name."
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Human-readable display name of the SP."
+    },
+    "redirect_uris": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "minItems": 1,
+      "description": "Array of allowed redirect URIs for OAuth callbacks."
+    },
+    "jwks_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the SP's JWKS."
+    },
+    "client_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the SP's homepage or description page."
+    },
+    "logo_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the SP's logo image."
+    },
+    "contacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "email"
+      },
+      "description": "Array of contact email addresses."
+    },
+    "policy_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the SP's privacy policy."
+    },
+    "tos_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the SP's terms of service."
+    },
+    "ddisa_domain": {
+      "type": "string",
+      "description": "The SP's primary domain (for DDISA DNS verification)."
+    }
+  },
+  "required": ["client_id", "client_name", "redirect_uris"],
+  "additionalProperties": true
+}

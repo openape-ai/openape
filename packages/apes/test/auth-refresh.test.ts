@@ -214,9 +214,12 @@ describe('apiFetch auto-refresh', () => {
     const { calls } = installFetchMock(async (url) => {
       if (url.includes('/.well-known/'))
         return jsonResponse({ token_endpoint: `${IDP}/token` })
-      if (url.endsWith('/api/agent/challenge'))
+      // Fixed (M3): server emits ddisa_auth_challenge_endpoint / ddisa_auth_authenticate_endpoint.
+      // Discovery mock doesn't include those keys, so the client falls to the hardcoded default
+      // which is now /api/auth/challenge and /api/auth/authenticate.
+      if (url.endsWith('/api/auth/challenge'))
         return jsonResponse({ challenge: 'Y2hhbGxlbmdlMTIz' }) // base64
-      if (url.endsWith('/api/agent/authenticate')) {
+      if (url.endsWith('/api/auth/authenticate')) {
         return jsonResponse({
           token: 'agent-refreshed-token',
           expires_in: 3600,
@@ -230,9 +233,9 @@ describe('apiFetch auto-refresh', () => {
     const { apiFetch } = await import('../src/http')
     await apiFetch('/api/grants')
 
-    // Agent challenge + authenticate hit, /token must NOT have been called
-    expect(calls.some(c => c.url.endsWith('/api/agent/challenge'))).toBe(true)
-    expect(calls.some(c => c.url.endsWith('/api/agent/authenticate'))).toBe(true)
+    // Agent challenge + authenticate hit via canonical /api/auth/* endpoints, /token must NOT have been called
+    expect(calls.some(c => c.url.endsWith('/api/auth/challenge'))).toBe(true)
+    expect(calls.some(c => c.url.endsWith('/api/auth/authenticate'))).toBe(true)
     expect(calls.some(c => c.url === `${IDP}/token`)).toBe(false)
 
     expect(readAuth().access_token).toBe('agent-refreshed-token')

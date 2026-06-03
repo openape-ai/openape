@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openape.org/schemas/delegation.json",
+  "title": "OpenApe Delegation Grant",
+  "description": "A delegation grant extending the base grant with delegation-specific fields.",
+  "allOf": [
+    { "$ref": "grant.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "delegation"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "delegator": {
+              "type": "string",
+              "description": "The user granting the delegation."
+            },
+            "delegate": {
+              "type": "string",
+              "description": "The user or agent receiving the delegation."
+            },
+            "audience": {
+              "type": "string",
+              "description": "The SP where the delegation is valid. '*' for any SP."
+            },
+            "scopes": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Actions the delegate may perform."
+            }
+          },
+          "required": ["delegator", "delegate", "audience"]
+        }
+      },
+      "required": ["type"]
+    }
+  ]
+}
