@@ -51,25 +51,32 @@ describe('discovery document — openid-configuration-extensions.json', () => {
     expect(Array.isArray(doc.ddisa_auth_methods_supported)).toBe(true)
   })
 
-  // DRIFT: handler emits ddisa_auth_methods_supported: ['ed25519','ssh-key'] but
-  // schema enum only allows 'webauthn'|'ed25519' — 'ssh-key' is rejected.
-  // Also: handler emits ddisa_auth_challenge_endpoint / ddisa_auth_authenticate_endpoint
-  // while schema defines ddisa_agent_challenge_endpoint / ddisa_agent_authenticate_endpoint.
-  // The methods array drift is what actually triggers the schema failure here.
-  // see docs/superpowers/DRIFT-REPORT-m3.md
-  it.fails('full discovery doc validates against schema', () => {
-    // DRIFT: ddisa_auth_methods_supported includes 'ssh-key' not in enum ['webauthn','ed25519']; see docs/superpowers/DRIFT-REPORT-m3.md
+  it('full discovery doc validates against schema', () => {
+    // schema enum now includes 'ssh-key' and canonical ddisa_auth_* field names — resolved drift.
     const { valid, errors } = validate(doc)
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
   })
 
-  it('validates when ssh-key is removed from ddisa_auth_methods_supported', () => {
-    // Confirm harness itself works — a conforming subset passes.
-    const conforming = {
+  it('validates with only ed25519 in ddisa_auth_methods_supported', () => {
+    // Confirm a subset of methods also passes — schema accepts any non-empty array of valid methods.
+    const subset = {
       ...doc,
       ddisa_auth_methods_supported: ['ed25519'],
     }
-    const { valid, errors } = validate(conforming)
+    const { valid, errors } = validate(subset)
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
+  })
+
+  it('canonical ddisa_auth_* endpoint names are present and ddisa_agent_* are absent', () => {
+    // Decision: ddisa_auth_challenge_endpoint / ddisa_auth_authenticate_endpoint are the
+    // canonical field names emitted by packages/server/src/idp/handlers/discovery.ts.
+    // The CLI (packages/apes/src/http.ts) must look these up — not the legacy ddisa_agent_* keys.
+    const { valid, errors } = validate(doc)
+    expect(valid, `Schema errors:\n${errors}`).toBe(true)
+    expect(doc.ddisa_auth_challenge_endpoint).toBe(`${issuer}/api/auth/challenge`)
+    expect(doc.ddisa_auth_authenticate_endpoint).toBe(`${issuer}/api/auth/authenticate`)
+    // ddisa_agent_* must NOT appear in what the server emits
+    expect(doc.ddisa_agent_challenge_endpoint).toBeUndefined()
+    expect(doc.ddisa_agent_authenticate_endpoint).toBeUndefined()
   })
 })
