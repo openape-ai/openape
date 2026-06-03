@@ -35,7 +35,6 @@ modules/          # Publishable Nuxt modules
 
 apps/             # Deployable applications (private, not published)
   openape-free-idp/   # Free DDISA IdP → self-hosted (chatty)
-  openape-agent-proxy/ # Agent HTTP proxy → self-hosted (chatty)
   openape-troop/      # Troop control plane → self-hosted (chatty)
   openape-chat/       # Chat app → self-hosted (chatty)
   openape-org/        # Org management → self-hosted (chatty)
@@ -114,7 +113,6 @@ Targets (each maps to a `scripts/deploy-<t>.sh` + systemd service on chatty):
 | `chat`     | apps/openape-chat        | openape-chat.service         |
 | `docs`     | apps/docs                | static symlink swap (no svc) |
 | `free-idp` | apps/openape-free-idp    | openape-free-idp.service     |
-| `proxy`    | apps/openape-agent-proxy | openape-agent-proxy.service  |
 
 SSH user defaults to `openape`; override with `CHATTY_USER` / `CHATTY_HOST` env vars. Each deploy script builds locally, rsyncs to chatty, swaps the `current` symlink, restarts the service, and health-checks. `scripts/deploy.mjs` adds path-based change detection and automatic rollback on failure.
 
