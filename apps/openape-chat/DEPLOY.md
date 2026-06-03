@@ -1,6 +1,6 @@
 # Deploying chat.openape.ai
 
-> One-time bootstrap + recurring deploy via `scripts/deploy-chat.sh`. Mirrors the layout of the other hosted services (see `scripts/deploy-free-idp.sh` for `id.openape.ai`, `scripts/deploy-proxy.sh` for `proxy.openape.ai`).
+> One-time bootstrap + recurring deploy via `scripts/deploy-chat.sh`. Mirrors the layout of the other hosted services (see `scripts/deploy-free-idp.sh` for `id.openape.ai`).
 
 ---
 

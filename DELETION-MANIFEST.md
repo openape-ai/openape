@@ -4,8 +4,12 @@ Stand: 2026-06-03. Jeder Eintrag ist beweisbar tot. Evidenz pro Zeile.
 Plan: `docs/superpowers/plans/2026-06-03-konsolidierung-phase1-m0-m1.md`.
 
 ## openape-monorepo
+- `apps/openape-agent-proxy/` (+ `scripts/deploy-proxy.sh`, `proxy`-Target in `deploy.mjs`) — leere
+  „Coming soon"-SP-App, deployt als `openape-agent-proxy.service`. Entscheidung 2026-06-03: abschalten.
+  Der einzige relevante Proxy ist `packages/proxy` (MITM-Egress + Secrets-Injection) — bleibt unberührt.
+  Server-seitiger systemd-Teardown auf chatty: siehe Checkpoint.
 - `apps/idp/` (+ `apps/idp/local.db`) — alter Standalone-IdP.
-  Evidenz: nicht in `scripts/deploy.mjs` (Targets: free-idp/agent-proxy/org/troop/chat/docs/proxy);
+  Evidenz: nicht in `scripts/deploy.mjs` (Targets: free-idp/org/troop/chat/docs);
   `grep -r '"openape-idp"' --include=package.json` ist leer (nichts depended darauf);
   Ersatz ist `examples/idp`. (Enthält auch den toten Re-Export `server/utils/idp-context.ts`.)
 - `packages/shapes/` — Zombie-Verzeichnis ohne `package.json` (nur dist/coverage/.turbo/node_modules).
@@ -27,5 +31,4 @@ Plan: `docs/superpowers/plans/2026-06-03-konsolidierung-phase1-m0-m1.md`.
 - `test-deltamind-at` — lokaler Checkout des Remotes openape-ai/sp-starter (redundant).
 
 ## Bewusst NICHT in M1 (Open Decisions)
-- `apps/openape-agent-proxy` — deployt (systemd `openape-agent-proxy.service`), Produkt-Entscheidung nötig.
 - `soul` DROP COLUMN auf bestehende Prod-DBs — braucht Backup/eigene Migration.

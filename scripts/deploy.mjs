@@ -2,7 +2,7 @@
 
 /**
  * Local deploy orchestrator — replaces the per-app GitHub deploy workflows
- * (deploy-{org,troop,chat,docs,free-idp,proxy}.yml). Deploys run from the
+ * (deploy-{org,troop,chat,docs,free-idp}.yml). Deploys run from the
  * maintainer's machine now: each target's scripts/deploy-<t>.sh already
  * builds locally, rsyncs to chatty, swaps the `current` symlink, restarts
  * the systemd service and health-checks. This wrapper adds the two things
@@ -66,12 +66,6 @@ const TARGETS = {
     base: '/home/openape/projects/openape-free-idp',
     service: 'openape-free-idp.service',
     paths: ['apps/openape-free-idp/**', 'modules/nuxt-auth-idp/**', 'packages/auth/**', 'packages/core/**', 'packages/grants/**', 'scripts/deploy-free-idp.sh', 'pnpm-lock.yaml'],
-  },
-  proxy: {
-    script: 'deploy-proxy.sh',
-    base: '/home/openape/projects/openape-agent-proxy',
-    service: 'openape-agent-proxy.service',
-    paths: ['apps/openape-agent-proxy/**', 'modules/nuxt-auth-sp/**', 'packages/auth/**', 'packages/core/**', 'packages/grants/**', 'scripts/deploy-proxy.sh', 'pnpm-lock.yaml'],
   },
 }
 
