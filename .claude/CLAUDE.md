@@ -21,22 +21,35 @@ packages/         # Publishable libraries
   proxy/          # @openape/proxy — agent HTTP gateway
   s3-driver/      # @openape/unstorage-s3-driver — S3 storage driver
   browser/        # @openape/browser — Playwright wrapper
+  apes/           # @openape/apes — CLI toolkit
+  cli-auth/       # @openape/cli-auth — shared CLI auth lib
+  server/         # @openape/server — shared server utilities
+  prompt-injection-detector/  # @openape/prompt-injection-detector
+  idp-test-suite/ # @openape/idp-test-suite — integration test helpers
+  vue-components/ # @openape/vue-components — shared Vue components
+  ape-troop/      # @openape/ape-troop — owner CLI for troop.openape.ai (nests + agents)
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
   nuxt-auth-sp/   # @openape/nuxt-auth-sp — SP Nuxt module
 
 apps/             # Deployable applications (private, not published)
-  service/        # @openape/cloud — Multi-tenant SaaS → Vercel
-  openape-free-idp/  # Free IdP → Vercel
-  openape-agent-mail/  # Mail agent → Vercel
-  openape-agent-proxy/ # Proxy agent → Vercel
-  docs/           # Documentation site
+  openape-free-idp/   # Free DDISA IdP → self-hosted (chatty)
+  openape-agent-proxy/ # Agent HTTP proxy → self-hosted (chatty)
+  openape-troop/      # Troop control plane → self-hosted (chatty)
+  openape-chat/       # Chat app → self-hosted (chatty)
+  openape-org/        # Org management → self-hosted (chatty)
+  openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
+  openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
+  openape-nest/       # @openape/nest — local control-plane daemon
+  openape-llm/        # LLM proxy container (Dockerfile only)
+  docs/               # Documentation site → self-hosted (chatty)
 
 examples/         # Example apps + E2E tests
   idp/            # IdP example app
   sp/             # SP example app
   e2e/            # E2E integration tests
+  agent-recipes/  # Agent recipe examples
 ```
 
 ## Dependency Graph (Publish Order)
@@ -82,9 +95,28 @@ pnpm release
 
 ## Deploy Flow
 
-GitHub Actions (`.github/workflows/deploy.yml`) auto-deploys on push to main with change detection per app. Manual deploy via workflow_dispatch.
+All apps are self-hosted on `chatty.delta-mind.at` via SSH + systemd. Deployment is orchestrated by `scripts/deploy.mjs` (replaces the retired per-app GitHub Actions deploy workflows).
 
-Required secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_SERVICE_PROJECT_ID`, `VERCEL_FREEIDP_PROJECT_ID`, `VERCEL_AGENTMAIL_PROJECT_ID`, `VERCEL_AGENTPROXY_PROJECT_ID`.
+```bash
+pnpm deploy <target...>      # deploy named target(s)
+pnpm deploy --all            # deploy every target
+pnpm deploy --changed[=ref]  # deploy targets whose paths changed vs ref
+pnpm deploy --dry-run ...    # print plan, touch nothing
+pnpm deploy --list           # list known targets
+```
+
+Targets (each maps to a `scripts/deploy-<t>.sh` + systemd service on chatty):
+
+| Target     | App dir                  | Service                      |
+|------------|--------------------------|------------------------------|
+| `org`      | apps/openape-org         | openape-org.service          |
+| `troop`    | apps/openape-troop       | openape-troop.service        |
+| `chat`     | apps/openape-chat        | openape-chat.service         |
+| `docs`     | apps/docs                | static symlink swap (no svc) |
+| `free-idp` | apps/openape-free-idp    | openape-free-idp.service     |
+| `proxy`    | apps/openape-agent-proxy | openape-agent-proxy.service  |
+
+SSH user defaults to `openape`; override with `CHATTY_USER` / `CHATTY_HOST` env vars. Each deploy script builds locally, rsyncs to chatty, swaps the `current` symlink, restarts the service, and health-checks. `scripts/deploy.mjs` adds path-based change detection and automatic rollback on failure.
 
 ## Workflow: Definition of Done
 
@@ -117,7 +149,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 
 ## Important Notes
 
-- **`desktop/` and `sudo/`** are separate repos (`openape-ai/desktop`, `openape-ai/escapes`) — not part of this monorepo
+- **`escapes/`** (formerly "sudo") is a separate repo (`openape-ai/escapes`) — not part of this monorepo. `desktop/` (`openape-ai/desktop`) is a separate repo currently being decommissioned/archived.
 - **ESLint override:** `eslint` is pinned to `^9.35.0` via pnpm overrides to avoid eslint 10 incompatibility with vue-eslint-parser
 - **Nuxt module stubs:** modules run `nuxt-module-build build --stub` during `prepare` so apps can load them during install
 
