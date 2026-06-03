@@ -1,7 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { buildExoscaleUserData, exoscaleAdapter } from '../server/utils/cloud/exoscale'
-import { getCloud, listClouds, registerCloud  } from '../server/utils/cloud/index'
+import { getCloud, listClouds, registerCloud } from '../server/utils/cloud/index'
 import type { CloudAdapter } from '../server/utils/cloud/index'
+
+// exoscale.ts uses the Nitro auto-imported createError global. Stub it so
+// callExoscale's 501 throw is testable in the plain-node vitest environment.
+beforeAll(() => {
+  ;(globalThis as Record<string, unknown>).createError = (opts: { statusCode: number, statusMessage: string }) => {
+    const err = new Error(opts.statusMessage) as Error & { statusCode: number }
+    err.statusCode = opts.statusCode
+    return err
+  }
+})
 
 afterEach(() => {
   vi.resetAllMocks()
@@ -121,6 +131,33 @@ describe('exoscale adapter', () => {
     finally {
       if (prev.key) process.env.EXOSCALE_API_KEY = prev.key
       if (prev.secret) process.env.EXOSCALE_API_SECRET = prev.secret
+    }
+  })
+
+  it('createInstance returns a 501 (not implemented) when credentials are present but API client is not wired', async () => {
+    // callExoscale is explicitly disabled until the signed-URL HTTP client
+    // lands. With credentials set, readEnv() passes and callExoscale throws
+    // a 501 createError — confirming the intentional disable is in place.
+    const prev = { key: process.env.EXOSCALE_API_KEY, secret: process.env.EXOSCALE_API_SECRET }
+    process.env.EXOSCALE_API_KEY = 'test-key'
+    process.env.EXOSCALE_API_SECRET = 'test-secret'
+    try {
+      const err = await exoscaleAdapter.createInstance({
+        name: 'test',
+        region: 'ch-gva-2',
+        instanceType: 'standard.small',
+        image: 'ubuntu-24.04',
+        sshPublicKey: 'ssh-ed25519 X',
+      }).catch(e => e)
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error & { statusCode?: number }).statusCode).toBe(501)
+      expect((err as Error).message).toContain('not implemented')
+    }
+    finally {
+      if (prev.key !== undefined) process.env.EXOSCALE_API_KEY = prev.key
+      else delete process.env.EXOSCALE_API_KEY
+      if (prev.secret !== undefined) process.env.EXOSCALE_API_SECRET = prev.secret
+      else delete process.env.EXOSCALE_API_SECRET
     }
   })
 })
