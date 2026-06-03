@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.2
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+  - @openape/auth@0.11.2
+  - @openape/grants@0.12.1
+
 ## 0.29.1
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @openape/shapes
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+  - @openape/grants@0.12.1
+
 ## 0.7.0
 
 ### Minor Changes

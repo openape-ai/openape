@@ -1,5 +1,11 @@
 # @openape/ape-agent
 
+## 2.9.1
+
+### Patch Changes
+
+- @openape/apes@1.29.1
+
 ## 2.9.0
 
 ### Minor Changes
