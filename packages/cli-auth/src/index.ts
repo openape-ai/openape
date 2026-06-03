@@ -18,6 +18,15 @@
  */
 
 export { getAuthorizedBearer, type AuthorizedBearerOptions } from './bearer.js'
+export { fmtTime, printJson, printLine, printNdjson } from './output.js'
+export {
+  ApiError,
+  createSpClient,
+  type RequestOptions as SpRequestOptions,
+  type SpClient,
+  type SpClientOptions,
+  type SpClientState,
+} from './sp-client.js'
 export { exchangeWithDelegation, type DelegationExchangeRequest, type DelegationExchangeResponse } from './delegation-exchange.js'
 export { exchangeForSpToken, type ExchangeRequest } from './exchange.js'
 export { ensureFreshIdpAuth } from './refresh.js'
