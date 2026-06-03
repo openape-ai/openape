@@ -54,6 +54,15 @@
       "items": { "type": "string" },
       "description": "Granted permissions array."
     },
+    "scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Granted scopes (delegation grants). Mirrors the request scopes."
+    },
+    "delegate": {
+      "type": "string",
+      "description": "The delegate identity (delegation grants only)."
+    },
     "authorization_details": {
       "type": "array",
       "items": {

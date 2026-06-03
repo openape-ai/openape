@@ -1,3 +1,8 @@
+// NOTE: OpenApeManifest.scopes (Record<string, OpenApeScope>) in @openape/core is a SEPARATE,
+// richer capability-manifest type — NOT the SP data-access scope catalog validated here.
+// It is flagged for Phase 2 (sharpen package boundaries / possible legacy type). The live
+// /.well-known/openape.json served by apps/openape-troop uses this array format.
+
 import type { OpenApeManifest } from '@openape/core'
 import { validateOpenApeManifest } from '@openape/core'
 import { describe, expect, it } from 'vitest'
@@ -36,16 +41,21 @@ describe('openape.json manifest — sp-scope-catalog.json', () => {
   const { validate } = getValidator('sp-scope-catalog.json')
 
   it('validateOpenApeManifest accepts the sample manifest (internal validator)', () => {
-    // Confirm the code-side validator accepts this object before testing schema.
+    // Confirm the code-side validator accepts the Record-format manifest object.
     const result = validateOpenApeManifest(sampleManifest)
     expect(result.valid, `Validation errors: ${result.errors.join(', ')}`).toBe(true)
   })
 
-  it.fails('manifest scopes (Record format) validates against sp-scope-catalog.json schema (Array format)', () => {
-    // DRIFT: code uses Record<string, OpenApeScope> (object keyed by scope id)
-    // but sp-scope-catalog.json expects an Array of {id, description, grants?}; see docs/superpowers/DRIFT-REPORT-m3.md
-    // The manifest's `scopes` property is an object, but the schema root type is `array`.
-    const { valid, errors } = validate(sampleManifest.scopes)
+  it('array scope catalog validates against sp-scope-catalog.json schema', () => {
+    // The live /.well-known/openape.json (apps/openape-troop) and its consumer
+    // (modules/nuxt-auth-sp cross-sp-scope-catalog.get.ts) use an ARRAY of
+    // {id, description, grants?} objects.  sp-scope-catalog.json (Array) is the
+    // correct schema for that wire format.
+    const scopeCatalog = [
+      { id: 'timetrack:read', description: 'Read your time entries', grants: ['GET /api/me/entries'] },
+      { id: 'timetrack:write', description: 'Create and update time entries' },
+    ]
+    const { valid, errors } = validate(scopeCatalog)
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
   })
 })
