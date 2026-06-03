@@ -60,7 +60,8 @@ Fünf wiederkehrende Symptome:
    `packages/proxy` vs. `apps/openape-agent-proxy` (fast gleicher Name,
    nichts gemein). "Nest" bedeutet drei Dinge.
 5. **Drei parallele Auth-Implementierungslinien** — Web (nuxt-auth-sp),
-   CLI (cli-auth), Desktop-Rust-PKCE (kennt niemand).
+   CLI (cli-auth), Desktop-Rust-PKCE (kennt niemand). → Die Desktop-Linie wird in
+   M1 entfernt (Repo-Decommission), womit nur noch Web + CLI bleiben.
 
 ---
 
@@ -110,6 +111,9 @@ Reihenfolge ist bewusst: **M3 (das Netz) kommt vor jeder Phase-2-Chirurgie.**
     `escapes --update` (deprecated flag).
   - `apps/openape-agent-proxy` ("Coming soon", deployed) → löschen oder befüllen.
   - `ape-tg-bridge` archivieren; `test-deltamind-at` → Deploy-Branch von `openape-sp-starter`.
+  - `desktop` (Tauri-App, abgebrochener Step-4-Effort) komplett entfernen/archivieren.
+    Eliminiert zugleich die dritte Auth-Implementierungslinie (Desktop-Rust-PKCE) —
+    übrig bleiben nur Web (`nuxt-auth-sp`) + CLI (`cli-auth`).
   - `soul`-Tombstone-Spalte + Boot-Migration in troop entfernen.
 - **Beweis:** `pnpm turbo run build test` weiter grün; `grep -r` nach Zombie-Namen
   (`idp-context`, leeres shapes, `ape-tg-bridge`-Referenzen) leer; weniger Deploy-Targets.
@@ -189,8 +193,10 @@ Noch nicht im Detail geplant; nach Phase 1, abgesichert durch Contract-Tests:
   "nest"-Dreifachbedeutung.
 - Grenzen schärfen: `auth` vs. `server`; Insel-Pakete (`browser`, `s3-driver`,
   `prompt-injection-detector`) inlinen oder als echte Standalone positionieren.
-- Dritte Auth-Linie (Desktop-Rust-PKCE) dokumentieren oder anbinden.
 - `approveGrantWithExtension` vs. `approveGrantWithWidening` zusammenführen.
+
+> Hinweis: Die ursprünglich hier vorgesehene Konsolidierung der dritten Auth-Linie
+> (Desktop-Rust-PKCE) entfällt — die `desktop`-App wird bereits in M1 entfernt.
 
 ---
 
