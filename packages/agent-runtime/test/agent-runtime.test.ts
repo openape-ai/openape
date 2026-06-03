@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runLoop, RpcSessionMap  } from '../src/lib/agent-runtime'
-import type { RuntimeConfig } from '../src/lib/agent-runtime'
-import type { ToolDefinition } from '../src/lib/agent-tools'
+import { runLoop, RpcSessionMap  } from '../src/agent-runtime'
+import type { RuntimeConfig } from '../src/agent-runtime'
+import type { ToolDefinition } from '../src/agent-tools'
 
 const config: RuntimeConfig = {
   apiBase: 'http://test.local/v1',

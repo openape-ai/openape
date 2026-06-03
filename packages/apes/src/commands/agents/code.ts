@@ -4,16 +4,9 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { defineCommand } from 'citty'
 import { consola } from 'consola'
-import type { RuntimeConfig } from '../../lib/agent-runtime'
-import { taskTools } from '../../lib/agent-tools'
-import { runApeShell } from '../../lib/agent-tools/ape-shell-exec'
+import type { RuntimeConfig, Forge, IssueRef } from '@openape/agent-runtime'
+import { taskTools, runApeShell, runCodingTask, buildIssueGet, detectForge, createLlmReviewer, createLlmRiskAssessor, resolveMergePolicy } from '@openape/agent-runtime'
 import { materializeSecrets } from '../../lib/agent-secrets-runtime'
-import { runCodingTask } from '../../lib/coding/coding-loop'
-import { buildIssueGet, detectForge } from '../../lib/coding/forge'
-import type { Forge } from '../../lib/coding/forge'
-import type { IssueRef } from '../../lib/coding/issue-task'
-import { createLlmReviewer, createLlmRiskAssessor } from '../../lib/coding/llm-review'
-import { resolveMergePolicy } from '../../lib/coding/derive-policy'
 
 class CliError extends Error {}
 
