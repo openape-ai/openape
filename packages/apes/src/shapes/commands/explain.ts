@@ -1,6 +1,5 @@
 import { defineCommand } from 'citty'
-import { loadAdapter } from '../adapters.js'
-import { resolveCommand } from '../parser.js'
+import { loadAdapter, resolveCommand } from '@openape/shapes'
 
 export const explainCommand = defineCommand({
   meta: {

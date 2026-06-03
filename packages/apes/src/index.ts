@@ -1,17 +1,12 @@
-// Re-export all shapes subsystem library functions
+// Pure shapes library — re-exported from @openape/shapes
 export {
   appendAuditLog,
   buildExactCommandGrantRequest,
   buildStructuredCliGrantRequest,
-  createShapesGrant,
-  extractOption,
   extractShellCommandString,
-  extractWrappedCommand,
-  fetchGrantToken,
   fetchRegistry,
   findAdapter,
   findConflictingAdapters,
-  findExistingGrant,
   getInstalledDigest,
   installAdapter,
   isInstalled,
@@ -24,9 +19,7 @@ export {
   resolveCommand,
   searchAdapters,
   tryLoadAdapter,
-  verifyAndExecute,
-  waitForGrantStatus,
-} from './shapes/index.js'
+} from '@openape/shapes'
 
 export type {
   AdapterMeta,
@@ -39,7 +32,11 @@ export type {
   ResolvedCommand,
   ShapesAdapter,
   ShapesOperation,
-} from './shapes/index.js'
+} from '@openape/shapes'
+
+// Grant-orchestration + CLI glue — stayed in apes
+export { createShapesGrant, fetchGrantToken, findExistingGrant, verifyAndExecute, waitForGrantStatus } from './shapes/grants.js'
+export { extractOption, extractWrappedCommand } from './shapes/commands/explain.js'
 
 // Apes-specific exports
 export { loadAuth, saveAuth, clearAuth, loadConfig, saveConfig, getIdpUrl, getAuthToken, getRequesterIdentity } from './config'

@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty'
-import { loadAdapter } from '../adapters.js'
+import { loadAdapter, resolveCommand } from '@openape/shapes'
 import { verifyAndExecute } from '../grants.js'
-import { resolveCommand } from '../parser.js'
 import { extractOption, extractWrappedCommand } from './explain.js'
 
 export const executeCommand = defineCommand({
