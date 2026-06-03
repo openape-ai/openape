@@ -1,5 +1,12 @@
 # @openape/idp-test-suite
 
+## 0.4.7
+
+### Patch Changes
+
+- Updated dependencies [04bdf06]
+  - @openape/core@0.17.1
+
 ## 0.4.6
 
 ### Patch Changes
@@ -47,7 +54,6 @@
 ### Minor Changes
 
 - [#131](https://github.com/openape-ai/openape/pull/131) [`d1c8f5a`](https://github.com/openape-ai/openape/commit/d1c8f5a711b088ac160c92d67a532f6f4d77d437) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase 5: glob-pattern support in coverage + mobile-first scoped-command authoring.
-
   - `cliAuthorizationDetailCovers` now treats `*` inside granted selector values as glob wildcards (prefix/suffix/middle, POSIX-shell semantics — `*` matches any chars including `/`). Selectors without `*` stay literal equality. Backward-compatible: all existing standing grants match identically.
   - New `selectorValueMatches(granted, required)` helper exported from `@openape/grants`.
   - Free-idp UI: full-screen 3-step wizard on `/agents/:id` lets users author scoped standing grants by typing an example command, editing typed slots with Literal/Any/Pattern modes (live glob preview), and picking risk cap / duration / reason.
@@ -59,7 +65,6 @@
 ### Minor Changes
 
 - [#127](https://github.com/openape-ai/openape/pull/127) [`d8e1516`](https://github.com/openape-ai/openape/commit/d8e15161d7edda67139633ec18c959a2cc8a57bd) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase 4: Safe-Commands seeding + UX.
-
   - Agent enrollment now auto-seeds 14 default safe-command standing grants for the new agent (ls, cat, head, tail, wc, file, stat, which, echo, date, whoami, pwd, find, grep). Low-risk read-only invocations of those CLIs auto-approve without a prompt.
   - New UI section on `/agents/:email` to toggle defaults and add custom safe commands.
   - New `/agents` page modal to bulk-apply safe commands across all of a user's agents (idempotent — already-present entries are skipped).
@@ -80,7 +85,6 @@
   **Shape Registry (server-side):** the IdP now hosts shapes in a DB table
   (seeded from the shapes-registry repo via `pnpm seed:shapes`) and exposes
   them via three public endpoints:
-
   - `GET /api/shapes` — list all registered shapes
   - `GET /api/shapes/:cliId` — fetch single shape
   - `POST /api/shapes/resolve` — resolve `{cli_id, argv}` → structured
@@ -90,7 +94,6 @@
   **Standing Grants:** users can pre-authorize a (delegate, resource-chain)
   pattern so matching future agent grant requests auto-approve without
   human intervention:
-
   - `POST /api/standing-grants` — create (auto-approved by creator)
   - `GET /api/standing-grants` — list own
   - `DELETE /api/standing-grants/:id` — revoke
@@ -108,7 +111,6 @@ true` so clients can distinguish auto-approved from manually-approved
   ## Public surface
 
   **`@openape/grants`** — new exports:
-
   - `ServerShape`, `ServerShapeOperation`, `ShapeStore`,
     `createInMemoryShapeStore`
   - `resolveServerShape`, `ServerResolvedCommand`, `GENERIC_OPERATION_ID`
@@ -117,7 +119,6 @@ true` so clients can distinguish auto-approved from manually-approved
     `buildCoverageDetailFromStandingGrant`
 
   **`@openape/core`** — extensions:
-
   - `GrantCategory` now includes `'standing'`
   - `OpenApeGrant.decided_by_standing_grant` audit column
 
