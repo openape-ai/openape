@@ -1,15 +1,3 @@
-export function printJson(data: unknown): void {
-  process.stdout.write(`${JSON.stringify(data, null, 2)}\n`)
-}
-
-export function printLine(line: string): void {
-  process.stdout.write(`${line}\n`)
-}
-
-export function printNdjson(obj: unknown): void {
-  process.stdout.write(`${JSON.stringify(obj)}\n`)
-}
-
-export function fmtTime(unixSeconds: number): string {
-  return new Date(unixSeconds * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z')
-}
+// Output helpers now live in @openape/cli-auth. Re-export so existing
+// command imports (`from '../output'`) remain valid without change.
+export { fmtTime, printJson, printLine, printNdjson } from '@openape/cli-auth'
