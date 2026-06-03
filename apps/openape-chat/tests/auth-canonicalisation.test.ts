@@ -31,9 +31,9 @@ vi.mock('jose', () => ({
   decodeProtectedHeader: vi.fn(() => ({ alg: 'EdDSA' })),
 }))
 
-vi.mock('../server/utils/cli-token', () => ({
-  verifyCliToken: vi.fn(async () => ({ email: 'Foo@X.com', act: 'human' })),
-}))
+// verifyCliToken is now provided by @openape/nuxt-auth-sp as an auto-import;
+// stub it as a global so auth.ts can reference it without Nuxt's auto-import runtime.
+;(globalThis as any).verifyCliToken = vi.fn(async () => ({ email: 'Foo@X.com', act: 'human' }))
 
 describe('resolveCaller email canonicalisation (#282)', () => {
   it('lower-cases the cookie-session sub claim', async () => {

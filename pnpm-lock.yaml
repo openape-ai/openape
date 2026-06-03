@@ -645,6 +645,9 @@ importers:
       defu:
         specifier: '>=6.1.5'
         version: 6.1.7
+      jose:
+        specifier: ^5.9.0
+        version: 5.10.0
     devDependencies:
       '@nuxt/module-builder':
         specifier: ^1.0.2
