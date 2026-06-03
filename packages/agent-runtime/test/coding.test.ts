@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge, listForges, registerForge, shq } from '../src/lib/coding/forge'
-import type { ForgeAdapter } from '../src/lib/coding/forge'
-import { classifyChange, decideMerge, globToRegExp, matchesAny, SECURE_DEFAULT_POLICY } from '../src/lib/coding/merge-policy'
-import type { MergePolicy } from '../src/lib/coding/merge-policy'
-import { buildBranchName, buildTaskPrompt, slugify } from '../src/lib/coding/issue-task'
-import { BudgetExceededError, BudgetTracker } from '../src/lib/coding/budget'
-import { gateMerge } from '../src/lib/coding/review-gate'
-import { extractWorkflowPaths, parseCodeowners } from '../src/lib/coding/derive-policy'
+import { buildIssueGet, buildPrCreate, buildPrMerge, buildPrStatus, detectForge, listForges, registerForge, shq } from '../src/coding/forge'
+import type { ForgeAdapter } from '../src/coding/forge'
+import { classifyChange, decideMerge, globToRegExp, matchesAny, SECURE_DEFAULT_POLICY } from '../src/coding/merge-policy'
+import type { MergePolicy } from '../src/coding/merge-policy'
+import { buildBranchName, buildTaskPrompt, slugify } from '../src/coding/issue-task'
+import { BudgetExceededError, BudgetTracker } from '../src/coding/budget'
+import { gateMerge } from '../src/coding/review-gate'
+import { extractWorkflowPaths, parseCodeowners } from '../src/coding/derive-policy'
 
 describe('forge: detect + escape', () => {
   it('detects built-in github / azure', () => {
