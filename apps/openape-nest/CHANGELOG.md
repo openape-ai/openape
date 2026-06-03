@@ -1,5 +1,12 @@
 # @openape/nest
 
+## 2.3.4
+
+### Patch Changes
+
+- Updated dependencies [04bdf06]
+  - @openape/core@0.17.1
+
 ## 2.3.3
 
 ### Patch Changes

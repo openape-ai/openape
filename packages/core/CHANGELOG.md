@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1
+
+### Patch Changes
+
+- 04bdf06: Fix OpenApeManifest.scopes type + validateOpenApeManifest to the array form ({ id, description, grants?, ... }[]) per protocol sp-scope-catalog.json and the cross-SP consumer. The previous Record shape caused validateOpenApeManifest (used by the IdP's fetchSpManifest) to reject the array-format manifests that SPs actually serve.
+
 ## 0.17.0
 
 ### Minor Changes
@@ -15,7 +21,6 @@
 ### Minor Changes
 
 - [#319](https://github.com/openape-ai/openape/pull/319) [`362390c`](https://github.com/openape-ai/openape/commit/362390c6da33bb6334ac22830336b5e4903e157c) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Two small admin/DX additions:
-
   - **`@openape/core`**: new `clearDNSCacheFor(domain)` helper alongside the existing `clearDNSCache()`. Lets a domain owner drop the IdP's in-memory cache for their domain right after they update their `_ddisa.{domain}` TXT record, without waiting for the 300s positive TTL.
   - **`@openape/nuxt-auth-idp`**: the `decision === 'deny'` redirect for the bearer flow + the "back to SP" button on the `/denied` page now include an OAuth-spec `error_description` parameter alongside the bare `error=access_denied`. SPs can use this to render product-specific guidance instead of just the bare error code (`mode=deny` → "Domain owner forbids this IdP", `allowlist-admin` deny → "SP not on the admin-curated allowlist").
 
@@ -40,7 +45,6 @@
   `parseDDISARecord` previously accepted any string after `idp=`: `http://`, `javascript:`, IDN homograph hostnames, paths with embedded credentials. The IdP URL is the trust anchor for the entire DDISA flow — every SP that resolves it fetches JWKS from there and accepts the resulting assertions, so a poisoned DNS record (cache poisoning, on-path attacker, hostile registrar/registrant for a sub-tenant, dev environments without DNSSEC) redirected every login through an attacker IdP that the SP would happily trust.
 
   The parser now rejects records whose `idp=` value isn't:
-
   - a parseable URL,
   - with `https:` protocol (or `http:` when `OPENAPE_DDISA_ALLOW_HTTP=1` is set — strictly a dev escape hatch),
   - without embedded credentials (`user:pass@`),
@@ -55,18 +59,15 @@
 - [#156](https://github.com/openape-ai/openape/pull/156) [`d7f78fa`](https://github.com/openape-ai/openape/commit/d7f78fa68478f295202351e15bfada8ce849c4db) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Extract YOLO-mode from `@openape/nuxt-auth-idp` to `openape-free-idp`; module exposes a generic `definePreApprovalHook` seam instead.
 
   **Module changes (nuxt-auth-idp):**
-
   - **NEW** `definePreApprovalHook(hook)` + `runPreApprovalHooks(event, request)` — a generic seam apps can use to auto-approve grant requests. Hooks run AFTER standing-grant evaluation; the first non-null match wins. Return `{ kind, decidedBy }` to approve, `null` to defer to the manual flow.
   - **REMOVED** YOLO-specific files: `yolo-policy-store.ts`, `yolo-policy-auth.ts`, `grant-auto-approval.ts`, `api/users/[email]/yolo-policy.{get,put,delete}.ts`. The module is now YOLO-agnostic.
   - **REMOVED** `defineYoloPolicyStore` / `yoloPolicyStore` from the public store surface.
   - The module's runtime `/grants` page now renders `auto_approval_kind` as a generic badge (was: hardcoded YOLO/Standing match).
 
   **Core change:**
-
   - `OpenApeGrant.auto_approval_kind` widened from `'standing' | 'yolo'` to `string` so consuming apps can register custom kinds via the hook. Both previously-defined values remain valid; pure type-widen, no runtime impact.
 
   **Consumer migration** (applied in this PR for openape-free-idp):
-
   - Apps that relied on `defineYoloPolicyStore` should now register the YOLO feature in their own `server/` tree and call `definePreApprovalHook` from a Nitro plugin.
 
 ## 0.13.1
@@ -74,7 +75,6 @@
 ### Patch Changes
 
 - [#151](https://github.com/openape-ai/openape/pull/151) [`ed1ad3f`](https://github.com/openape-ai/openape/commit/ed1ad3f6cd7d8ed2c9309cabda503d3ecf6453ff) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - YOLO-Modus: per-Agent Opt-in Auto-Approval für Grant-Requests.
-
   - Neuer Abschnitt auf `/agents/:email` zum (De)Aktivieren plus Deny-Patterns (Glob: `*`/`?`) und optionale Risiko-Schwelle.
   - Admin-API: `GET|PUT|DELETE /api/users/:email/yolo-policy` (Session-Auth + Owner/Approver/Admin-Check).
   - Server-seitige Auto-Approval läuft nach dem Standing-Grant-Match; zuerst erfolgreicher Matcher gewinnt. Deny-Patterns und Risk-Threshold (Shape-Resolver, generic fallback → `risk='high'`) rollen den Request auf den normalen manuellen Flow zurück.
@@ -94,7 +94,6 @@
   **Shape Registry (server-side):** the IdP now hosts shapes in a DB table
   (seeded from the shapes-registry repo via `pnpm seed:shapes`) and exposes
   them via three public endpoints:
-
   - `GET /api/shapes` — list all registered shapes
   - `GET /api/shapes/:cliId` — fetch single shape
   - `POST /api/shapes/resolve` — resolve `{cli_id, argv}` → structured
@@ -104,7 +103,6 @@
   **Standing Grants:** users can pre-authorize a (delegate, resource-chain)
   pattern so matching future agent grant requests auto-approve without
   human intervention:
-
   - `POST /api/standing-grants` — create (auto-approved by creator)
   - `GET /api/standing-grants` — list own
   - `DELETE /api/standing-grants/:id` — revoke
@@ -122,7 +120,6 @@ true` so clients can distinguish auto-approved from manually-approved
   ## Public surface
 
   **`@openape/grants`** — new exports:
-
   - `ServerShape`, `ServerShapeOperation`, `ShapeStore`,
     `createInMemoryShapeStore`
   - `resolveServerShape`, `ServerResolvedCommand`, `GENERIC_OPERATION_ID`
@@ -131,7 +128,6 @@ true` so clients can distinguish auto-approved from manually-approved
     `buildCoverageDetailFromStandingGrant`
 
   **`@openape/core`** — extensions:
-
   - `GrantCategory` now includes `'standing'`
   - `OpenApeGrant.decided_by_standing_grant` audit column
 
@@ -191,18 +187,15 @@ true` so clients can distinguish auto-approved from manually-approved
 - [#1](https://github.com/openape-ai/openape/pull/1) [`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Align implementation with DDISA spec v1.0-draft
 
   **@openape/core:**
-
   - **BREAKING:** `OpenApeGrantRequest.target` → `target_host` (host/domain), `audience` now REQUIRED
   - `OpenApeAuthZClaims` gets `target_host` as REQUIRED claim
   - Fix error status codes: `invalid_audience`/`invalid_nonce` → 401, `grant_not_approved` → 400, `grant_already_used` → 410
   - Add missing error types: `policyDenied`, `invalidPkce`, `invalidState`
 
   **@openape/grants:**
-
   - **BREAKING:** `issueAuthzJWT` sets `aud` from `audience` (not `target`), adds `target_host` + `run_as` claims
 
   **@openape/nuxt-auth-idp:**
-
   - Grant creation validates `target_host` + `audience` (REQUIRED)
   - Fix `ddisa_version` from `'ddisa1'` to `'1.0'`
   - Fix `ddisa_auth_methods_supported` from `'passkey'` to `'webauthn'`
@@ -213,11 +206,9 @@ true` so clients can distinguish auto-approved from manually-approved
   - Delegation list supports `?role=delegator|delegate` query parameter
 
   **@openape/grapes:**
-
   - **BREAKING:** Replace `exec` command with audience-first `run` command
   - `request` command uses `--audience` + `--host` instead of `--for`
   - Remove `defaults.for` from config
 
   **@openape/proxy:**
-
   - Update `GrantsClient` to use `targetHost` + `audience` parameters
