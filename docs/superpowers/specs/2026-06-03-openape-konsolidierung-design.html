@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenApe-Konsolidierung — Design</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161922; --ink: #e6e8ee; --muted: #9aa3b2;
+    --accent: #6ea8fe; --accent2: #7ee787; --warn: #f0a35e; --line: #262b36;
+    --code-bg: #11141b; --chip: #1d2230;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 120px; }
+  header.doc {
+    border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 32px;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 12px; letter-spacing: -.02em; }
+  h2 {
+    font-size: 1.5rem; margin: 48px 0 14px; padding-top: 8px;
+    border-top: 1px solid var(--line); letter-spacing: -.01em;
+  }
+  h3 { font-size: 1.15rem; margin: 28px 0 8px; color: var(--accent); }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  .meta { color: var(--muted); font-size: .92rem; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+  .chip {
+    background: var(--chip); border: 1px solid var(--line); color: var(--muted);
+    border-radius: 999px; padding: 4px 12px; font-size: .82rem;
+  }
+  .chip.ok { color: var(--accent2); border-color: #234d2e; }
+  blockquote {
+    margin: 18px 0; padding: 16px 20px; background: var(--panel);
+    border-left: 3px solid var(--accent); border-radius: 8px; color: var(--ink);
+    font-size: 1.08rem;
+  }
+  ul, ol { margin: 10px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 6px; font: .88em "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    color: #d7dcff;
+  }
+  .ms {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin: 16px 0;
+  }
+  .ms h3 { margin-top: 0; }
+  .ms .label { font-weight: 600; color: var(--ink); }
+  .ms .proof { color: var(--accent2); }
+  .num {
+    display: inline-block; min-width: 1.9em;
+  }
+  .callout {
+    background: linear-gradient(180deg, #16243a, #161922); border: 1px solid #243a5e;
+    border-radius: 12px; padding: 18px 20px; margin: 20px 0;
+  }
+  .callout strong { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .95rem; }
+  td, th { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+  .toc {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; margin: 24px 0 8px; font-size: .95rem;
+  }
+  .toc a { color: var(--muted); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+  .toc ol { columns: 2; column-gap: 32px; }
+  footer.doc { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  .pill { font-size:.72rem; padding:2px 8px; border-radius:6px; background:var(--chip); border:1px solid var(--line); color:var(--muted); margin-left:8px; vertical-align: middle;}
+  @media (max-width: 640px){ .toc ol{ columns: 1; } h1{ font-size:1.7rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>OpenApe-Konsolidierung — Design</h1>
+  <p class="meta"><b>Datum:</b> 2026-06-03 &nbsp;·&nbsp; <b>Status:</b> Freigegeben (Design), Phase&nbsp;1 zur Planung</p>
+  <p class="meta"><b>Autor:</b> Brainstorming-Session „fresh-openape" (Patrick Hofmann + Claude)</p>
+  <div class="chips">
+    <span class="chip ok">✓ Konsolidierung, kein Rewrite</span>
+    <span class="chip ok">✓ Spec-Driven, Contract-Enforced</span>
+    <span class="chip ok">✓ Fundament zuerst, Chirurgie Phase 2</span>
+  </div>
+  <div class="toc">
+    <ol>
+      <li><a href="#kontext">Kontext</a></li>
+      <li><a href="#befund">Survey-Befund</a></li>
+      <li><a href="#entscheidungen">Strategische Entscheidungen</a></li>
+      <li><a href="#northstar">North Star</a></li>
+      <li><a href="#phase1">Phase 1 — Fundament</a></li>
+      <li><a href="#antised">Anti-Sediment-Prozess</a></li>
+      <li><a href="#phase2">Phase 2 — Skizze</a></li>
+      <li><a href="#scope">Nicht im Scope</a></li>
+      <li><a href="#risiken">Risiken &amp; Rollback</a></li>
+    </ol>
+  </div>
+</header>
+
+<h2 id="kontext">Kontext</h2>
+<p>Das OpenApe-Universum (~20 Repos + ein Monorepo mit 11 Apps &amp; 14 Packages) ist organisch gewachsen. Es deckt ab:</p>
+<ul>
+  <li><b>DDISA</b> — dezentrale, OIDC-ähnliche Anmeldung für Service-Provider (SPs)</li>
+  <li><b>Utility-SPs</b> in diesem Zusammenhang (tasks, plans, timetrack, chat, …)</li>
+  <li><b>Grants inkl. Escapes</b> — Human/Approver-in-the-Loop für Agents sowie menschliche/maschinelle Approver, zugleich sudo-Replacement</li>
+  <li><b>Protocol</b> — die normativen Spezifikationen dazu</li>
+  <li><b>Troop</b> — ein Ape-Agent-Spawn-Nest für den lokalen Rechner, aus dem Netz bedienbar</li>
+  <li><b>Org</b> — Meta-Tool über Troop, um sich eine Organisation aus Agenten zu bauen</li>
+</ul>
+<p>Jede Iteration hat Altlast hinterlassen. Ziel dieser Kampagne: das Projekt nachhaltig auf stabile Beine stellen, Weiterentwicklung und Einarbeitung (auch durch Agents) vereinfachen, Qualität durch einfache, konkrete Tests heben.</p>
+
+<h2 id="befund">Befund des Survey <span class="pill">6 parallele Teams, 2026-06-02</span></h2>
+<div class="callout">
+  <p><strong>Die Architektur-Knochen sind gesund. Die Krankheit ist Sediment + Spec-Drift, nicht ein Architektur-Fehler.</strong> Einstimmig über alle Teams:</p>
+  <ul>
+    <li>Schichtung <code>core → auth/grants → server → module → apps</code> ist sauber.</li>
+    <li>Grants/Escapes-Trennung (TS-Server-Lib vs. Rust-setuid-Executor) ist <b>richtig</b> und soll <b>nicht</b> zusammengeführt werden.</li>
+    <li><code>@openape/nuxt-auth-sp</code> + <code>@openape/cli-auth</code> sind echte geteilte Libs.</li>
+    <li>Kern-Test-Coverage ist solide (grants ~92 %, auth/core/proxy gut).</li>
+  </ul>
+</div>
+<p>Fünf wiederkehrende Symptome:</p>
+<ol>
+  <li><b>Jede Iteration hinterlässt Altlast.</b> <code>apps/idp</code> (kompletter alter IdP + eingecheckte <code>local.db</code>, in keiner CI), halbmigrierte Mac→Docker-Reste (launchd/plist, <code>~/Library/Application Support</code>-Pfade, launchd-Cron-Validator), <code>OPENAPE_BRIDGE_TARGET</code> fehlt in Docker-Bundles (neue Nests starten im falschen Chat-Backend), leeres <code>packages/shapes/</code>-Zombie-Verzeichnis, <code>soul</code>-Tombstone-Spalte, <code>openape-agent-proxy</code> („Coming soon", deployed), <code>ape-tg-bridge</code> (tot), <code>test-deltamind-at</code> (redundant), Exoscale-Adapter wirft <code>"not yet wired"</code> bei live Endpoint.</li>
+  <li><b>Spec-Drift — Specs sind NICHT die Source of Truth.</b> Implementierung führt, Doku hinkt. <code>ddisa_agent_*</code> (Spec) vs. <code>ddisa_auth_*</code> (Code) — bekannter Bug mit Test-Kommentar. <code>standing</code>-Grants (Prod-Feature) undokumentiert. <code>openape.json</code>-Manifest: Spec (Array) vs. Code (Record) strukturell inkompatibel. JSON-Schemas werden nirgends zur Validierung genutzt.</li>
+  <li><b>SP-Boilerplate kopiert statt geteilt.</b> <code>ddisa-issuer.ts</code>, <code>problem.ts</code>, <code>cli-token.ts</code>, <code>require-auth.ts</code> <b>wortgleich</b> in tasks/plans/timetrack/chat. CLI-<code>api.ts</code>/<code>config.ts</code>/<code>output.ts</code> identisch über drei Repos. Nur das Frontend ist in der geteilten Lib, die Server-Seite nicht.</li>
+  <li><b>Unscharfe Grenzen &amp; Namenskollisionen.</b> <code>apes</code> ist 18k-LOC-Monolith (154 Dateien). <code>server-resolver.ts</code> dupliziert <code>apes/shapes/parser.ts</code>. <code>packages/proxy</code> vs. <code>apps/openape-agent-proxy</code> (fast gleicher Name, nichts gemein). „Nest" bedeutet drei Dinge.</li>
+  <li><b>Drei parallele Auth-Implementierungslinien</b> — Web (nuxt-auth-sp), CLI (cli-auth), Desktop-Rust-PKCE (kennt niemand). → Die Desktop-Linie wird in M1 entfernt (Repo-Decommission), womit nur noch Web + CLI bleiben.</li>
+</ol>
+
+<h2 id="entscheidungen">Strategische Entscheidungen</h2>
+<ol>
+  <li><b>Konsolidierungs-Kampagne + Anti-Sediment-Prozess — kein Rewrite.</b> Ein Rewrite würde funktionierende Tests und saubere Schichtung wegwerfen und dieselbe Drift neu einfangen. Der Survey fand keinen Architektur-Fehler, der das rechtfertigt.</li>
+  <li><b>Leitprinzip: Spec-Driven, Contract-Enforced.</b> Die <code>protocol/</code>-Specs + JSON-Schemas werden per CI gegen die echte Implementierung validiert. Drift = roter Test. Die Specs werden so geschrieben, dass ein Agent/Mensch das System allein daraus versteht. Heilt Drift + Onboarding + externe Interop in einem Zug.</li>
+  <li><b>Fundament zuerst (Phase 1), Chirurgie als Phase 2.</b> Die riskante apes-Zerlegung/Renames bekommen eine eigene Phase <b>mit</b> den dann existierenden Contract-Tests als Sicherheitsnetz.</li>
+</ol>
+
+<h2 id="northstar">North Star</h2>
+<blockquote>Ein neuer Agent oder Mensch versteht das OpenApe-System in unter einer Stunde, allein aus den Specs — und kann sich darauf verlassen, weil CI beweist, dass Code und Spec übereinstimmen.</blockquote>
+
+<h2 id="phase1">Phase 1 — Fundament <span class="pill">fünf session-große Milestones</span></h2>
+<p>Reihenfolge ist bewusst: <b>M3 (das Netz) kommt vor jeder Phase-2-Chirurgie.</b></p>
+
+<div class="ms">
+  <h3>M0 — Baseline &amp; Kill-Liste</h3>
+  <p><span class="label">Ziel:</span> Sicherer Ausgangspunkt + vollständiger Katalog des toten Codes.</p>
+  <p><span class="label">Arbeit:</span> <code>pnpm turbo run build test</code> über das ganze Monorepo grün dokumentieren. Jeden toten Artefakt mit exaktem Pfad in <code>DELETION-MANIFEST.md</code> (Monorepo-Wurzel) katalogisieren.</p>
+  <p><span class="proof">Beweis:</span> Build+Test grün (Output festgehalten); <code>DELETION-MANIFEST.md</code> existiert und listet jeden Eintrag aus M1/M2 mit Pfad + Begründung + „nicht in CI/Deploy".</p>
+</div>
+
+<div class="ms">
+  <h3>M1 — De-Sedimentation (lösche, was beweisbar tot ist)</h3>
+  <p><span class="label">Ziel:</span> Beweisbar toten Code entfernen, ohne Verhalten zu ändern.</p>
+  <p><span class="label">Arbeit:</span></p>
+  <ul>
+    <li><code>apps/idp</code> (alter IdP) + <code>local.db</code> → löschen oder nach <code>examples/legacy-idp</code>. (Nachweislich in keiner CI/Deploy-Pipeline.)</li>
+    <li><code>packages/shapes/</code> (leeres Zombie-Verzeichnis), <code>apps/idp/server/utils/idp-context.ts</code> (toter Re-Export), <code>log_error</code> in <code>escapes/src/audit.rs</code> (<code>#[allow(dead_code)]</code>), <code>escapes --update</code> (deprecated flag).</li>
+    <li><code>apps/openape-agent-proxy</code> („Coming soon", deployed) → löschen oder befüllen.</li>
+    <li><code>ape-tg-bridge</code> archivieren; <code>test-deltamind-at</code> → Deploy-Branch von <code>openape-sp-starter</code>.</li>
+    <li><code>desktop</code> (Tauri-App, abgebrochener Step-4-Effort) komplett entfernen/archivieren. Eliminiert zugleich die dritte Auth-Implementierungslinie (Desktop-Rust-PKCE) — übrig bleiben nur Web (<code>nuxt-auth-sp</code>) + CLI (<code>cli-auth</code>).</li>
+    <li><code>soul</code>-Tombstone-Spalte + Boot-Migration in troop entfernen.</li>
+  </ul>
+  <p><span class="proof">Beweis:</span> <code>pnpm turbo run build test</code> weiter grün; <code>grep -r</code> nach Zombie-Namen leer; weniger Deploy-Targets.</p>
+</div>
+
+<div class="ms">
+  <h3>M2 — Mac→Docker-Migration abschließen</h3>
+  <p><span class="label">Ziel:</span> Das bereits begonnene Re-Framing zu Ende führen; Mac-first-Reste tilgen.</p>
+  <p><span class="label">Arbeit:</span></p>
+  <ul>
+    <li><code>OPENAPE_BRIDGE_TARGET=troop</code> in die Docker-Compose-Bundles (<code>nest/hatch.post.ts</code>, <code>pod/hatch.post.ts</code>).</li>
+    <li>Dualen Chat-Backend in <code>ape-agent</code> (<code>chat-api.ts</code> + <code>TroopChatApi</code>) auf troop-only reduzieren.</li>
+    <li><code>~/Library/Application Support</code>-Pfade + launchd/plist-Referenzen entfernen (<code>bridge.ts</code>, <code>identity.ts</code>, <code>cron-runner.ts</code>); Cron-Validator auf Container-Kontext.</li>
+    <li>Legacy-Keypair-Auth-Pfad in <code>nest-ws.ts</code> entfernen.</li>
+    <li>Exoscale-<code>"not yet wired"</code>-Endpoint deaktivieren oder fertigstellen (live Endpoint der wirft ist gefährlicher als keiner).</li>
+  </ul>
+  <p><span class="proof">Beweis:</span> frischer Docker-Nest spawnt, verbindet zu <b>troop</b> (nicht chat), läuft einen Cron-Task; <code>grep</code> nach <code>launchd</code>/<code>Library</code> nur noch absichtliche Treffer; abgeschlossene <code>MIGRATION-mac-to-docker.md</code>.</p>
+</div>
+
+<div class="ms">
+  <h3>M3 — Spec-Contract-Tests (Schlussstein des Leitprinzips)</h3>
+  <p><span class="label">Ziel:</span> Drift wird strukturell unmöglich, weil CI Spec vs. Code beweist.</p>
+  <p><span class="label">Arbeit:</span></p>
+  <ul>
+    <li>Ajv-Test-Suite: emittierte Discovery-Docs, Grant-Objekte, AuthZ-JWTs gegen <code>protocol/schemas/*.json</code> validieren.</li>
+    <li>Sofort rote Tests auflösen (Code <b>oder</b> Spec angleichen, Entscheidung im Decision-Log):
+      <ul>
+        <li><code>ddisa_agent_*</code> vs. <code>ddisa_auth_*</code> (Discovery-Feldnamen)</li>
+        <li><code>standing</code> als <code>GrantCategory</code> in <code>grants.md</code> + <code>schemas/grant.json</code> aufnehmen</li>
+        <li><code>scope</code> (singular) vs. <code>scopes</code> im AuthZ-JWT</li>
+        <li><code>openape.json</code>-Manifest: Array- vs. Record-Format vereinheitlichen (eine Wahrheit)</li>
+        <li><code>approver</code>-Claim + <code>ssh-key</code>-Auth-Methode dokumentieren</li>
+      </ul>
+    </li>
+  </ul>
+  <p><span class="proof">Beweis:</span> <code>pnpm test</code> enthält Contract-Tests, alle grün; ein absichtlich umbenanntes Discovery-Feld macht einen Contract-Test rot.</p>
+</div>
+
+<div class="ms">
+  <h3>M4 — SP-SDK (Tod der Boilerplate)</h3>
+  <p><span class="label">Ziel:</span> Server- + CLI-Boilerplate aus den Satelliten in geteilte Libs.</p>
+  <p><span class="label">Arbeit:</span></p>
+  <ul>
+    <li>Server-Seite (<code>cli-token</code>, <code>ddisa-issuer</code>, <code>problem</code>, <code>require-auth</code>, <code>exchange.post</code>) in <code>@openape/nuxt-auth-sp</code>, parametriert über <code>openapeSp</code>-Config.</li>
+    <li>CLI-Factory <code>createSpClient({ defaultEndpoint, envVar, configFile, defaultAud })</code> in <code>@openape/cli-auth</code> (+ geteiltes <code>output.ts</code>).</li>
+    <li>tasks/plans/timetrack/chat migrieren; wortgleiche Kopien löschen.</li>
+  </ul>
+  <p><span class="proof">Beweis:</span> die 4 wortgleichen Dateien sind aus allen Satelliten weg; SP-Tests grün; ein neuer SP-CLI ist deutlich kleiner.</p>
+</div>
+
+<h2 id="antised">Anti-Sediment-Prozess <span class="pill">Heilung gegen Wiederkehr</span></h2>
+<p>Macht Sediment <b>sichtbar und ablaufdatiert</b> statt vergraben:</p>
+<ol>
+  <li><b>Contract-Tests als Merge-Gate</b> (aus M3). Spec und Code auseinanderlaufen lassen = roter CI.</li>
+  <li><b><code>// REMOVE-AFTER: &lt;version|datum&gt;</code>-Regel mit Zahn.</b> Jeder Legacy-/Compat-Shim trägt das Tag; ein CI-Check failt bei überschrittenem Datum. (Survey fand mehrere deadline-lose „#stage-3 cleanup"-Kommentare + Legacy-Auth-Pfad „kept until cut over" ohne Datum.)</li>
+  <li><b><code>DEPRECATIONS.md</code>-Ledger</b> an der Monorepo-Wurzel — ein Ort für jeden Shim, jede Tombstone-Spalte, jeden Legacy-Pfad mit Entfernungs-Trigger.</li>
+  <li><b><code>MIGRATION-&lt;name&gt;.md</code>-Abschluss-Gate.</b> Re-Framings (wie Mac→Docker) erzeugen ein Checklisten-Artefakt, das erst schließt, wenn <code>grep</code> den alten Ansatz tot beweist. M2 produziert die erste solche abgeschlossene Migration.</li>
+  <li><b><code>protocol/ARCHITECTURE.md</code></b> — eine Seite: Dependency-Graph + „was ist was" + „wo fange ich an". Von den Contract-Tests referenziert, damit Onboarding-Doku und Wahrheit dasselbe Artefakt sind.</li>
+</ol>
+
+<h2 id="phase2">Phase 2 — Skizze <span class="pill">strukturelle Chirurgie, mit M3-Netz</span></h2>
+<p>Noch nicht im Detail geplant; nach Phase 1, abgesichert durch Contract-Tests:</p>
+<ul>
+  <li><code>apes</code>-Monolith (18k LOC/154 Dateien) in Module mit klaren Grenzen zerlegen.</li>
+  <li><code>@openape/shapes</code> als echtes Paket extrahieren — löst <code>server-resolver.ts</code> ↔ <code>apes/shapes/parser.ts</code>-Duplikat <b>und</b> das Zombie-Verzeichnis in einem.</li>
+  <li>Namenskollisionen auflösen: <code>packages/proxy</code> vs. <code>apps/openape-agent-proxy</code>; „nest"-Dreifachbedeutung.</li>
+  <li>Grenzen schärfen: <code>auth</code> vs. <code>server</code>; Insel-Pakete (<code>browser</code>, <code>s3-driver</code>, <code>prompt-injection-detector</code>) inlinen oder als echte Standalone positionieren.</li>
+  <li><code>approveGrantWithExtension</code> vs. <code>approveGrantWithWidening</code> zusammenführen.</li>
+</ul>
+<p class="meta">Hinweis: Die ursprünglich hier vorgesehene Konsolidierung der dritten Auth-Linie (Desktop-Rust-PKCE) entfällt — die <code>desktop</code>-App wird bereits in M1 entfernt.</p>
+
+<h2 id="scope">Nicht im Scope</h2>
+<ul>
+  <li>Vollständiger Rewrite (verworfen, siehe Strategische Entscheidung 1).</li>
+  <li>Zusammenführung von Grants und Escapes (Trennung ist korrekt).</li>
+  <li>Neue Features. Diese Kampagne ist reine Konsolidierung + Stabilisierung.</li>
+</ul>
+
+<h2 id="risiken">Risiken &amp; Rollback</h2>
+<ul>
+  <li>Jeder Milestone ist eigenständig per Git-Commit-Checkpoint abgesichert.</li>
+  <li>M1-Löschungen sind idempotent und über Git wiederherstellbar; nichts Deployedtes wird ohne <code>grep</code>-Beweis „nicht in CI" entfernt.</li>
+  <li>M3 deckt vor der Phase-2-Chirurgie ab — die riskanten Umbauten haben dann ein Netz.</li>
+  <li>Baseline-Test (M0) vor jeder Änderung verifiziert bestehende Funktionalität.</li>
+</ul>
+
+<footer class="doc">
+  Quelle: <code>docs/superpowers/specs/2026-06-03-openape-konsolidierung-design.md</code> · Branch <code>chore/konsolidierung-design</code> · generiert 2026-06-03
+</footer>
+
+</div>
+</body>
+</html>
