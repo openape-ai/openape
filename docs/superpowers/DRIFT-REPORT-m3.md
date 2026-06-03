@@ -50,8 +50,22 @@ Hier muss eine Seite gewinnen; beides zu lassen bricht externe Konsumenten. **Br
    - **Option B: Array wird kanonisch.** Code-Parser + alle SP-`openape.json` auf Array
      umstellen — größerer Eingriff, betrifft jeden deployten SP.
 
-## Nächste Schritte
-- **A1–A4**: auf dein „ok" setze ich Schema- (vendored + upstream `protocol`-PR) und
-  Spec-Ergänzungen um und flippe die jeweiligen `it.fails` → echte Assertions.
-- **B5, B6**: ich brauche deine Wahl (Option A/B je). Danach Umsetzung in Code+Spec+Schema
-  + Conformance-Erweiterung.
+## Auflösung (2026-06-03)
+- **A1–A4 (standing, scope, delegate, ssh-key): GELÖST.** Upstream `protocol`-Spec + Schemas
+  ergänzt (Branch `spec/reconcile-implementation`), in die vendored Schemas gesynct, die
+  `it.fails` zu echten grünen Assertions geflippt.
+- **B5 (Discovery-Endpoint-Namen): GELÖST — `ddisa_auth_*` kanonisch.** Spec/Schema umbenannt;
+  CLI-Known-Bug in `packages/apes/src/http.ts` gefixt (liest jetzt `ddisa_auth_*`, postet
+  `{ id }` an `/api/auth/*` — verifiziert gegen den Live-Handler, der genau das erwartet;
+  Server behält `/api/agent/*`-Aliase, alte Clients brechen nicht). Conformance deckt es ab.
+- **B6 (Manifest Record vs Array): FEHLALARM, kein echter Drift.** Das live servierte
+  `/.well-known/openape.json` (`apps/openape-troop/.../openape.json.get.ts`) nutzt bereits das
+  **Array**-Format `{id, description, grants?}`, das zu `sp-scope-catalog.json` passt; der
+  Consumer `cross-sp-scope-catalog.get.ts` erwartet ebendieses Array. Der Conformance-Test
+  hatte fälschlich den parallelen Typ `OpenApeManifest.scopes` (Record, reicher) validiert.
+  → Spec/Schema **unverändert** (korrekt). Test auf Array-Validierung umgestellt (echte
+  grüne Assertion). **Phase-2-Item:** `OpenApeManifest` (Record) als möglicher Legacy-/Doppel-
+  Typ untersuchen und Grenzen schärfen.
+
+Ergebnis: alle 5 echten Drifts gelöst (Spec folgt Code), 1 Fehlalarm korrigiert. Conformance-
+Suite ohne verbleibende `it.fails`.
