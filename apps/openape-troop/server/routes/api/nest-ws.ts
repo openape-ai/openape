@@ -15,8 +15,8 @@ import { resolveSpawnIntent } from '../../utils/spawn-intents'
 const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }> }).tools.map(t => t.name)
 
 // Control-plane WS for local nest daemons. Each connected peer
-// represents a Mac (or any host) running `openape-nest`, owned by
-// the DDISA-authenticated `sub` of the bearer token used at upgrade.
+// represents a host running `openape-nest`, owned by the
+// DDISA-authenticated `sub` of the bearer token used at upgrade.
 //
 // Frames in (nest → troop):
 //   - hello { host_id, hostname, version }   — must be the first message
@@ -30,7 +30,7 @@ const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }
 //   - destroy-intent { intent_id, name }     — `apes agents destroy --force`
 //   - reload-bridge { name }                 — pm2 reload, no fresh sync
 //
-// Auth model: three flavours of caller.
+// Auth model: two flavours of caller.
 //
 //   - **troop device token** (M4δ — the nest-as-device path). A
 //     troop-issued HS256 CLI token with act='agent' and
@@ -42,17 +42,13 @@ const ALL_TOOL_NAMES: string[] = (toolCatalog as { tools: Array<{ name: string }
 //     host_id is token-authoritative; we ignore the self-reported one.
 //   - `act: human` — owner-direct connection (UI/dev tooling), IdP-signed.
 //     ownerEmail = JWT `sub`.
-//   - `act: agent` (IdP-signed) — the legacy keypair nest. The agent email
-//     encodes its owner (`<name>-<hash>+<owner-local>+<owner-domain>@id…`),
-//     so we resolve ownerEmail from parseAgentEmail. Kept until the live
-//     nests are cut over to device identity.
 //
 // Either way the WS connection is owner-scoped — broadcasts and
 // spawn-intents fan out per ownerEmail.
 
 interface DDISAClaims {
   sub?: string
-  act?: 'human' | 'agent' | string
+  act?: string
 }
 
 let _jwks: ReturnType<typeof createRemoteJWKS> | null = null
@@ -96,19 +92,7 @@ async function authenticateUpgrade(token: string): Promise<AuthCtx> {
   if (payload.act === 'human') {
     return { ownerEmail: payload.sub.toLowerCase() }
   }
-  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-  // Legacy keypair nest path: agent JWT with act=agent encodes ownerEmail in
-  // the sub. Kept until we confirm no live nest still uses keypair auth
-  // (troop prod DB: nests with null device_secret_hash = legacy). After
-  // cutover: remove this branch and parseAgentEmail import.
-  if (payload.act === 'agent') {
-    const parsed = parseAgentEmail(payload.sub)
-    if (!parsed) {
-      throw new Error('agent token sub does not match the agent+owner email pattern')
-    }
-    return { ownerEmail: parsed.ownerEmail }
-  }
-  throw new Error('token must be act:human or act:agent')
+  throw new Error('token must be a device token or act:human')
 }
 
 interface HelloFrame { type: 'hello', host_id: string, hostname: string, version: string }
