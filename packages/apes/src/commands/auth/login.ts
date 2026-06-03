@@ -252,7 +252,8 @@ async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
   const challengeResp = await fetch(challengeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: agentEmail }),
+    // Use canonical `id` field (the server's /api/auth/challenge handler expects `id`).
+    body: JSON.stringify({ id: agentEmail }),
   })
 
   if (!challengeResp.ok) {
@@ -271,8 +272,9 @@ async function loginWithKey(idp: string, keyPath: string, agentEmail: string) {
   const authResp = await fetch(authenticateUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // Use canonical `id` field (the server's /api/auth/authenticate handler expects `id`).
     body: JSON.stringify({
-      agent_id: agentEmail,
+      id: agentEmail,
       challenge,
       signature,
     }),
