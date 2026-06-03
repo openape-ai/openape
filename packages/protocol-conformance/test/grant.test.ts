@@ -38,9 +38,8 @@ describe('grant object — grant.json', () => {
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
   })
 
-  it.fails('grant with type "standing" validates against schema', () => {
-    // DRIFT: OpenApeGrant.type is GrantCategory = 'command'|'delegation'|'standing'
-    // but grant.json enum is only ["command","delegation"]; see docs/superpowers/DRIFT-REPORT-m3.md
+  it('grant with type "standing" validates against schema', () => {
+    // grant.json enum now includes "standing" — resolved drift.
     const now = Math.floor(Date.now() / 1000)
     const standingGrant: OpenApeGrant = {
       id: crypto.randomUUID(),

@@ -12,7 +12,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["command", "delegation"],
+      "enum": ["command", "delegation", "standing"],
       "default": "command",
       "description": "Grant category."
     },

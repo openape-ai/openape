@@ -14,7 +14,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["webauthn", "ed25519"]
+        "enum": ["webauthn", "ed25519", "ssh-key"]
       },
       "minItems": 1,
       "description": "Supported authentication methods."
@@ -24,12 +24,12 @@
       "format": "uri",
       "description": "URL pointing to the IdP's own client metadata document."
     },
-    "ddisa_agent_challenge_endpoint": {
+    "ddisa_auth_challenge_endpoint": {
       "type": "string",
       "format": "uri",
       "description": "Endpoint for Ed25519 challenge requests."
     },
-    "ddisa_agent_authenticate_endpoint": {
+    "ddisa_auth_authenticate_endpoint": {
       "type": "string",
       "format": "uri",
       "description": "Endpoint for Ed25519 authentication."
