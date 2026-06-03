@@ -1,7 +1,7 @@
 {
   "name": "@openape/server",
   "type": "module",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "Programmatic DDISA IdP and SP server (h3)",
   "author": "Delta Mind GmbH",
   "license": "MIT",

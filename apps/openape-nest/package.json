@@ -1,6 +1,6 @@
 {
   "name": "@openape/nest",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "OpenApe Nest — local control-plane daemon that supervises agent processes on this computer. Talks to troop SP for ownership state, spawns/destroys agents via DDISA always-grants, supervises chat-bridge children (replacing per-agent launchd plists).",
   "type": "module",
   "license": "MIT",

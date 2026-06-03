@@ -1,5 +1,13 @@
 # @openape/agent-runtime
 
+## 0.2.1
+
+### Patch Changes
+
+- 3e3dfea: Consolidate the SSRF guard (isBlockedAddress + assertPublicUrl) into @openape/core as the single source of truth; nuxt-auth-sp and agent-runtime now consume it. No behaviour change.
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+
 ## 0.2.0
 
 ### Minor Changes
