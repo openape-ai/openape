@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddisa.org/schemas/openid-configuration-extensions.json",
+  "title": "DDISA & OpenApe OIDC Discovery Extensions",
+  "description": "Custom fields extending the standard OIDC Discovery document for DDISA and OpenApe protocols.",
+  "type": "object",
+  "properties": {
+    "ddisa_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "DDISA protocol version."
+    },
+    "ddisa_auth_methods_supported": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["webauthn", "ed25519", "ssh-key"]
+      },
+      "minItems": 1,
+      "description": "Supported authentication methods."
+    },
+    "ddisa_client_metadata_uri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL pointing to the IdP's own client metadata document."
+    },
+    "ddisa_auth_challenge_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Endpoint for Ed25519 challenge requests."
+    },
+    "ddisa_auth_authenticate_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Endpoint for Ed25519 authentication."
+    },
+    "openape_grants_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL for the Grants REST API."
+    },
+    "openape_delegations_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL for the Delegations REST API."
+    },
+    "openape_grant_types_supported": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["once", "timed", "always"]
+      },
+      "description": "Supported grant types."
+    },
+    "openape_grant_categories_supported": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["command", "delegation"]
+      },
+      "description": "Supported grant categories."
+    },
+    "openape_delegation_scopes_supported": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of supported delegation scopes."
+    }
+  },
+  "required": ["ddisa_version", "ddisa_auth_methods_supported"],
+  "additionalProperties": true
+}

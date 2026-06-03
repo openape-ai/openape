@@ -1,0 +1,27 @@
+{
+  "name": "@openape/protocol-conformance",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "sync-schemas": "node ../../scripts/sync-protocol-schemas.mjs"
+  },
+  "dependencies": {
+    "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
+    "@openape/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
