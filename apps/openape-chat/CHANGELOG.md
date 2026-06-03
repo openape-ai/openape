@@ -1,5 +1,12 @@
 # @openape/chat
 
+## 0.2.18
+
+### Patch Changes
+
+- Updated dependencies [a112d23]
+  - @openape/nuxt-auth-sp@0.11.1
+
 ## 0.2.17
 
 ### Patch Changes
