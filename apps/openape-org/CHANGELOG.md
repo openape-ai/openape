@@ -1,5 +1,12 @@
 # @openape/org
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [a112d23]
+  - @openape/nuxt-auth-sp@0.11.1
+
 ## 0.1.1
 
 ### Patch Changes
