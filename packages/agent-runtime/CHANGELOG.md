@@ -1,0 +1,11 @@
+# @openape/agent-runtime
+
+## 0.2.0
+
+### Minor Changes
+
+- bb4a318: Extract the agent-execution cluster (in-process run loop, agent tools, coding agent) from `@openape/apes` into a new dependency-light `@openape/agent-runtime` package. apes re-exports the surface, so `@openape/ape-agent` is unaffected. No behaviour change.
+
+### Patch Changes
+
+- 2d5f64b: Add an SSRF guard to the agent `http.get`/`http.post` tools: validate the URL scheme, DNS-resolve the host and reject private/loopback/link-local/CGNAT/ULA/cloud-metadata targets, and re-validate every redirect hop (manual redirect following). Prevents a prompt-injected agent from reaching internal infrastructure via the HTTP tool.
