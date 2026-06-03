@@ -2,11 +2,11 @@ import catalog from '../tool-catalog.json'
 
 const KNOWN_TOOLS = new Set<string>(catalog.tools.map((t: { name: string }) => t.name))
 
-// Tiny cron-syntax subset that the apes-runtime's launchd reconciler
-// can translate to `StartCalendarInterval`. We accept the 95% — every
-// other syntax (lists, ranges, step on day fields, @-shortcuts) gets
-// rejected at create time so the agent host doesn't end up with a
-// task it can't actually schedule.
+// Tiny cron-syntax subset that the apes-runtime's cron runner inside the
+// bridge daemon can evaluate. We accept the 95% — every other syntax
+// (lists, ranges, step on day fields, @-shortcuts) gets rejected at
+// create time so the agent host doesn't end up with a task it can't
+// actually schedule.
 //
 // Supported patterns (5 fields: minute hour day-of-month month day-of-week):
 //   *                 every value
