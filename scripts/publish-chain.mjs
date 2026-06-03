@@ -38,6 +38,8 @@ const PACKAGES = [
   { name: '@openape/server', dir: 'packages/server' },
   { name: '@openape/browser', dir: 'packages/browser' },
   { name: '@openape/vue-components', dir: 'packages/vue-components' },
+  { name: '@openape/shapes', dir: 'packages/shapes' },
+  { name: '@openape/agent-runtime', dir: 'packages/agent-runtime' },
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/prompt-injection-detector', dir: 'packages/prompt-injection-detector' },
