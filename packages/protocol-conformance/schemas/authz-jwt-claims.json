@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openape.org/schemas/authz-jwt-claims.json",
+  "title": "OpenApe Authorization JWT Claims",
+  "description": "Claims in an Authorization JWT (AuthZ-JWT) issued for an approved grant.",
+  "type": "object",
+  "properties": {
+    "iss": {
+      "type": "string",
+      "description": "Issuer (IdP URL)."
+    },
+    "sub": {
+      "type": "string",
+      "description": "Subject (the grant requester)."
+    },
+    "aud": {
+      "type": "string",
+      "description": "Audience — service or relying party identifier (e.g. 'apes', 'proxy')."
+    },
+    "target_host": {
+      "type": "string",
+      "description": "Host or domain where this grant is valid."
+    },
+    "iat": {
+      "type": "number",
+      "description": "Issued-at timestamp (Unix seconds)."
+    },
+    "exp": {
+      "type": "number",
+      "description": "Expiration timestamp (Unix seconds)."
+    },
+    "jti": {
+      "type": "string",
+      "format": "uuid",
+      "description": "JWT ID (UUID v4)."
+    },
+    "grant_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the grant."
+    },
+    "grant_type": {
+      "type": "string",
+      "enum": ["once", "timed", "always"],
+      "description": "The grant type."
+    },
+    "approval": {
+      "type": "string",
+      "enum": ["once", "timed", "always"],
+      "description": "The approval type (mirrors grant_type)."
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Granted permissions array."
+    },
+    "scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Granted scopes (delegation grants). Mirrors the request scopes."
+    },
+    "delegate": {
+      "type": "string",
+      "description": "The delegate identity (delegation grants only)."
+    },
+    "authorization_details": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["openape_grant", "openape_cli"] },
+          "action": { "type": "string" },
+          "locations": { "type": "array", "items": { "type": "string" } },
+          "approval": { "type": "string", "enum": ["once", "timed", "always"] },
+          "reason": { "type": "string" },
+          "grant_id": { "type": "string" },
+          "cli_id": { "type": "string" },
+          "operation_id": { "type": "string" },
+          "resource_chain": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "resource": { "type": "string" },
+                "selector": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                }
+              },
+              "required": ["resource"],
+              "additionalProperties": false
+            }
+          },
+          "permission": { "type": "string" },
+          "display": { "type": "string" },
+          "risk": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "constraints": {
+            "type": "object",
+            "properties": {
+              "exact_command": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "action"],
+        "additionalProperties": false
+      },
+      "description": "Structured authorization details."
+    },
+    "cmd_hash": {
+      "type": "string",
+      "description": "Command hash for verification."
+    },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Plaintext command array."
+    },
+    "execution_context": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "argv_hash": {
+          "type": "string",
+          "pattern": "^SHA-256:[a-f0-9]{64}$"
+        },
+        "adapter_id": { "type": "string" },
+        "adapter_version": { "type": "string" },
+        "adapter_digest": {
+          "type": "string",
+          "pattern": "^SHA-256:[a-f0-9]{64}$"
+        },
+        "resolved_executable": { "type": "string" },
+        "context_bindings": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["adapter_id", "adapter_version", "adapter_digest", "resolved_executable"],
+      "additionalProperties": false,
+      "description": "Execution context bound to the grant."
+    },
+    "decided_by": {
+      "type": "string",
+      "description": "Who approved the grant."
+    },
+    "nonce": {
+      "type": "string",
+      "description": "Request-specific nonce."
+    },
+    "run_as": {
+      "type": "string",
+      "description": "Execute command as this user identity."
+    }
+  },
+  "required": ["iss", "sub", "aud", "target_host", "iat", "exp", "jti", "grant_id", "grant_type"],
+  "additionalProperties": false
+}

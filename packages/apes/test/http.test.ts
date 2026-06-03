@@ -128,22 +128,24 @@ describe('http module', () => {
   })
 
   describe('getAgentChallengeEndpoint', () => {
-    it('returns challenge endpoint (fallback when discovery key differs)', async () => {
+    it('reads canonical ddisa_auth_challenge_endpoint from discovery', async () => {
       const { getAgentChallengeEndpoint } = await import('../src/http')
 
       const endpoint = await getAgentChallengeEndpoint(idpBase)
-      // The code looks for ddisa_agent_challenge_endpoint but the server
-      // returns ddisa_auth_challenge_endpoint, so it falls back to default
-      expect(endpoint).toBe(`${idpBase}/api/agent/challenge`)
+      // Fixed (M3): client now reads ddisa_auth_challenge_endpoint — the canonical key
+      // emitted by the server — instead of the legacy ddisa_agent_challenge_endpoint.
+      expect(endpoint).toBe(`${idpBase}/api/auth/challenge`)
     })
   })
 
   describe('getAgentAuthenticateEndpoint', () => {
-    it('returns authenticate endpoint (fallback when discovery key differs)', async () => {
+    it('reads canonical ddisa_auth_authenticate_endpoint from discovery', async () => {
       const { getAgentAuthenticateEndpoint } = await import('../src/http')
 
       const endpoint = await getAgentAuthenticateEndpoint(idpBase)
-      expect(endpoint).toBe(`${idpBase}/api/agent/authenticate`)
+      // Fixed (M3): client now reads ddisa_auth_authenticate_endpoint — the canonical key
+      // emitted by the server — instead of the legacy ddisa_agent_authenticate_endpoint.
+      expect(endpoint).toBe(`${idpBase}/api/auth/authenticate`)
     })
   })
 
