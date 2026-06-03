@@ -57,69 +57,45 @@ is the same; only the explanatory comment changed.
 
 ---
 
-## DEFERRED (cutover-dependent — do NOT remove yet)
+## DONE — Cutover-gated removals (2026-06-03, cutover confirmed)
 
-All deferred points are tagged `// REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)`.
+Owner confirmed: the single live nest is device-bound (device_secret_hash
+IS NOT NULL). No legacy keypair nests remain. All three deferred removal
+groups below are now executed.
 
-### A. Bridge `OPENAPE_BRIDGE_TARGET` default + `ChatApi` dual backend
+### A. Bridge dual backend removed — troop is the sole target
 
-**Tagged in:** `apps/openape-ape-agent/src/bridge.ts`
-- `readConfig()`: `process.env.OPENAPE_BRIDGE_TARGET ?? 'chat'` default
-- `Bridge` constructor: `ChatApi` vs `TroopChatApi` selection
+**Removed from:** `apps/openape-ape-agent/src/bridge.ts`
+- `loadBridgeEnvFile()` (Mac-only `~/Library/Application Support/openape/bridge/.env` loader)
+- `OPENAPE_BRIDGE_TARGET` env var and `'chat' | 'troop'` union in `BridgeConfig`
+- `ChatApi` import + constructor branch in `Bridge`
+- `APE_CHAT_ENDPOINT` env var (replaced by `OPENAPE_TROOP_URL`)
 
-**Why deferred:** Changing the default from `'chat'` to `'troop'` would break
-any live Mac-based nest that does NOT set `OPENAPE_BRIDGE_TARGET`. The bridge
-reads this at startup; a wrong default silently routes messages to the wrong
-backend with no error until the first chat message fails.
+**Removed:** `apps/openape-ape-agent/src/chat-api.ts` (ChatApi + shared types)
+**Removed:** `apps/openape-ape-agent/test/chat-api.test.ts` (tested removed behavior)
 
-**Gate to remove:** Confirm via troop prod DB that NO active agent is connecting
-via the chat backend. Query: check nests whose bridge process does NOT pass
-`OPENAPE_BRIDGE_TARGET=troop` — identifiable by agents last seen via
-`chat.openape.ai` websocket sessions. Then:
+Shared types (`PostedMessage`, `HistoryMessage`, `ContactView`, `ChatBackend`)
+moved into `troop-chat-api.ts`. `TroopChatApi` is now the only backend.
+`DEFAULT_ENDPOINT` updated to `https://troop.openape.ai`.
 
-1. Flip default to `'troop'`
-2. Remove `ChatApi` import and `chat-api.ts`
-3. Remove the `TroopChatApi | ChatApi` union type; use `TroopChatApi` directly
+### B. Legacy keypair auth path removed from nest-ws.ts
 
-### B. Legacy keypair auth path in nest-ws.ts
+**Removed from:** `apps/openape-troop/server/routes/api/nest-ws.ts`
+- `act: 'agent'` branch in `authenticateUpgrade()` (IdP-signed keypair JWT path)
+- The three-flavour comment updated to two-flavour (device-token + human)
 
-**Tagged in:** `apps/openape-troop/server/routes/api/nest-ws.ts`
-- `act: 'agent'` branch in `authenticateUpgrade`
+Device-token nests (troop HS256, `delegate='nest:<host_id>'`) and `act:human`
+direct connections remain the only accepted auth paths.
 
-**Why deferred:** The legacy keypair path (`act=agent` IdP-signed JWT, owner
-resolved from `parseAgentEmail`) is still needed for nests that haven't
-migrated to device-token auth (M4δ). Removing it disconnects those nests.
+### C. Mac-path references cleaned from ape-agent
 
-**Gate to remove:** Confirm via troop prod DB that NO nest connects with
-`device_secret_hash IS NULL` (null = legacy keypair auth, never bound via
-`POST /api/nests/bind`). Query example:
-```sql
-SELECT host_id, owner_email, last_seen_at
-FROM nests
-WHERE device_secret_hash IS NULL AND status = 'active';
-```
-If empty: remove the `act: 'agent'` branch and `parseAgentEmail` import.
-
-### C. Mac-path references in ape-agent (~/Library, launchd)
-
-**Tagged in:**
-- `apps/openape-ape-agent/src/bridge.ts` — `loadBridgeEnvFile` reads
-  `~/Library/Application Support/openape/bridge/.env`
-- `apps/openape-ape-agent/src/identity.ts` — error message mentioning launchd plist
-- `apps/openape-ape-agent/src/cron-runner.ts` — `TASK_CACHE_DIR` at `~/.openape/agent/tasks/`
-
-**Why deferred:** Docker nests don't use `~/Library/Application Support` (Linux
-container). The `loadBridgeEnvFile` path silently no-ops on Linux (file not
-found → early return), so it doesn't break Docker. But it's dead code there.
-`TASK_CACHE_DIR` works in Docker (it's under `~` which is `/root` in the
-container), but the canonical post-cutover location should be
-`/var/lib/openape/agent/tasks/`.
-
-**Gate to remove:** After confirming no live Mac nests remain:
-1. Remove `loadBridgeEnvFile` (Docker nests get env from compose `environment:`)
-2. Update `TASK_CACHE_DIR` to `/var/lib/openape/agent/tasks/` (or make it
-   configurable via `OPENAPE_AGENT_DATA_DIR`)
-3. Remove launchd references from `identity.ts` error message
+**Updated:**
+- `apps/openape-ape-agent/src/identity.ts` — removed launchd plist comment;
+  error message + JSDoc updated to reflect container-env reality
+- `apps/openape-ape-agent/src/cron-runner.ts` — REMOVE-AFTER comment replaced
+  with current-state comment noting `~/.openape/agent/tasks/` resolves to
+  `/root/.openape/…` in the container; OPENAPE_AGENT_DATA_DIR noted as future
+  configurability path
 
 ---
 
@@ -140,4 +116,3 @@ WHERE last_seen_at < <deploy_timestamp>;
 ```
 
 Access: requires SSH to chatty + `sqlite3 ~/projects/openape-troop/shared/data/openape-troop.db`
-(prod DB access was not available during M2 — hence the deferral).

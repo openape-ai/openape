@@ -1,11 +1,11 @@
 // ape-agent (formerly openape-chat-bridge)
 //
-// Long-running daemon. Connects to chat.openape.ai via WebSocket using
+// Long-running daemon. Connects to troop.openape.ai via WebSocket using
 // the agent's IdP token. For each inbound message that wasn't sent by
-// the agent itself, forwards into a long-lived `apes agents serve --rpc`
-// subprocess. Streams text_delta events back as progressive PATCH
-// updates on a placeholder chat message — so the human sees the agent
-// "type" in real time, with memory across messages in the same thread.
+// the agent itself, forwards into the in-process runLoop. Streams
+// text_delta events back as progressive PATCH updates on a placeholder
+// chat message — so the human sees the agent "type" in real time, with
+// memory across messages in the same thread.
 //
 // M8: replaced the per-thread `pi --mode rpc` subprocess with a single
 // shared `apes agents serve --rpc` runtime that multiplexes sessions
@@ -19,7 +19,7 @@
 // boot-time fallback when the file isn't there yet.
 //
 // Env knobs (all optional):
-//   APE_CHAT_ENDPOINT             override https://chat.openape.ai
+//   OPENAPE_TROOP_URL             override https://troop.openape.ai (bridge target)
 //   APE_CHAT_BRIDGE_APES_BIN      apes binary path (default: 'apes' on PATH)
 //   APE_CHAT_BRIDGE_MODEL         per-message model — REQUIRED. Boot
 //                                 fails fast if unset. Used to default
@@ -44,7 +44,6 @@ import { createHeuristicDetector, decide } from '@openape/prompt-injection-detec
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
-import { ChatApi } from './chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
@@ -93,7 +92,7 @@ function resolveTools(envFallback: string[]): string[] {
   return envFallback
 }
 
-const DEFAULT_ENDPOINT = 'https://chat.openape.ai'
+const DEFAULT_ENDPOINT = 'https://troop.openape.ai'
 const DEFAULT_APES_BIN = 'apes'
 const DEFAULT_MAX_STEPS = 10
 const DEFAULT_SYSTEM_PROMPT
@@ -125,58 +124,9 @@ interface BridgeConfig {
   tools: string[]
   maxSteps: number
   roomFilter?: string
-  /**
-   * Which backend hosts the chat surface this bridge connects to.
-   * `chat` (default) targets chat.openape.ai's shape: WS at /api/ws,
-   * room+thread model, contact handshake. `troop` targets troop's
-   * native 1:1-per-(owner,agent) chat: WS at /_ws/chat, one synthetic
-   * thread, no contact dance. Set via `OPENAPE_BRIDGE_TARGET`.
-   *
-   * The two backends are not wire-compatible — the bridge picks the
-   * ChatApi impl + WS path + frame translation at startup, so a flip
-   * needs a bridge restart (pm2 restart openape-bridge-<name>).
-   */
-  target: 'chat' | 'troop'
-}
-
-/**
- * Load env vars from the bridge .env file written at spawn time.
- * Merges into process.env (no overwrite — process.env wins). Used to
- * have a start.sh wrapper that sourced this file; with the Nest
- * supervisor invoking the bridge directly we load it here. Silent
- * no-op if the file is missing (covers ad-hoc invocations + tests).
- */
-function loadBridgeEnvFile(): void {
-  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-  // Mac-only path. Docker nests pass env via compose environment: block, not
-  // this file. Remove once all live nests are Docker-based.
-  const path = join(homedir(), 'Library', 'Application Support', 'openape', 'bridge', '.env')
-  if (!existsSync(path)) return
-  try {
-    const raw = readFileSync(path, 'utf8')
-    for (const line of raw.split(/\r?\n/)) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const eq = trimmed.indexOf('=')
-      if (eq < 0) continue
-      const key = trimmed.slice(0, eq).trim()
-      const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
-      if (!key) continue
-      // Don't clobber explicit env (lets operators override per-launch).
-      if (process.env[key] === undefined) {
-        process.env[key] = value
-      }
-    }
-  }
-  catch {
-    // Tolerate read errors — fail-fast checks below will surface
-    // the real problem with a clearer message.
-  }
 }
 
 function readConfig(): BridgeConfig {
-  loadBridgeEnvFile()
-
   const toolsRaw = process.env.APE_CHAT_BRIDGE_TOOLS ?? ''
   const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
   const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
@@ -190,30 +140,20 @@ function readConfig(): BridgeConfig {
   const model = process.env.APE_CHAT_BRIDGE_MODEL
   if (!model) {
     throw new Error(
-      'APE_CHAT_BRIDGE_MODEL is not set. Set it in the bridge .env '
-      + '(usually `~/Library/Application Support/openape/bridge/.env` '
-      + 'on macOS) or globally in `~/litellm/.env` so resolveBridgeConfig '
-      + 'picks it up at spawn time. Common values: `gpt-5.4` (ChatGPT-only '
-      + 'LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only).',
+      'APE_CHAT_BRIDGE_MODEL is not set. Set it in the container env '
+      + '(compose environment: block) or globally in `~/litellm/.env`. '
+      + 'Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only).',
     )
   }
 
-  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-  // Once all live nests pass OPENAPE_BRIDGE_TARGET=troop in their compose env
-  // (confirmed via troop prod DB: no nests with null device_secret_hash still
-  // connecting without the var), flip this default to 'troop' and remove the
-  // 'chat' fallback branch below together with ChatApi + chat-api.ts.
-  const targetRaw = (process.env.OPENAPE_BRIDGE_TARGET ?? 'chat').toLowerCase()
-  const target: BridgeConfig['target'] = targetRaw === 'troop' ? 'troop' : 'chat'
   return {
-    endpoint: (process.env.APE_CHAT_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
+    endpoint: (process.env.OPENAPE_TROOP_URL ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
     apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
     model,
     systemPrompt: process.env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
     roomFilter: process.env.APE_CHAT_BRIDGE_ROOM,
-    target,
   }
 }
 
@@ -252,12 +192,7 @@ class Bridge {
   // its own message history and calls @openape/apes' runLoop directly
   // (no stdio JSON-RPC subprocess — see thread-session.ts).
   private threads = new Map<string, ThreadSession>()
-  // ChatApi and TroopChatApi expose the same surface (postMessage /
-  // listMessages / patchMessage / listContacts / requestContact /
-  // acceptContact / createThread) so the rest of the bridge calls
-  // through a structurally-typed reference without caring which
-  // backend is in play. Picked at construction time from cfg.target.
-  private chat: ChatApi | TroopChatApi
+  private chat: TroopChatApi
   private bearer: () => Promise<string>
   private cron: CronRunner | undefined
   // Prompt-injection gate (#277). Pure heuristic by default — pluggable
@@ -274,23 +209,16 @@ class Bridge {
       const idp = await ensureFreshIdpAuth()
       return `Bearer ${idp.access_token}`
     }
-    // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-    // The ChatApi branch (chat.openape.ai backend) stays until we confirm no
-    // live agent still uses it. Remove ChatApi import + chat-api.ts after
-    // cutover.
-    this.chat = this.cfg.target === 'troop'
-      ? new TroopChatApi(this.cfg.endpoint, this.bearer)
-      : new ChatApi(this.cfg.endpoint, this.bearer)
+    this.chat = new TroopChatApi(this.cfg.endpoint, this.bearer)
     // The cron runner ticks every 60s, fires matching tasks via the
     // same in-process runLoop the chat threads use, posts results as
-    // DMs through the existing chat WebSocket connection. Replaces the
-    // per-task launchd plist + separate `apes agents run` process model.
+    // DMs through the existing chat WebSocket connection.
     this.cron = new CronRunner({
       runtimeConfig: this.runtimeConfig(),
       chat: this.chat,
       ownerEmail: this.ownerEmail,
       log,
-      troopUrl: (process.env.OPENAPE_TROOP_URL ?? 'https://troop.openape.ai').replace(/\/$/, ''),
+      troopUrl: this.cfg.endpoint,
       bearer: this.bearer,
     })
     this.cron.start()
@@ -452,8 +380,7 @@ class Bridge {
 
   async pumpOnce(): Promise<void> {
     const bearer = await this.bearer()
-    const wsPath = this.cfg.target === 'troop' ? '/_ws/chat' : '/api/ws'
-    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}${wsPath}?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
+    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}/_ws/chat?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
     const ws = new WebSocket(wsUrl)
     return new Promise<void>((resolve, reject) => {
       let pingTimer: NodeJS.Timeout | undefined
@@ -484,14 +411,9 @@ class Bridge {
         try { frame = JSON.parse(text) as typeof frame }
         catch { return }
         if (frame.type !== 'message' || !frame.payload) return
-        // Frame translation: troop ships `{chat_id, payload:
-        // {id,chatId,role,body,...}}` while chat.openape.ai ships
-        // `{room_id, payload:{id,roomId,threadId,senderEmail,senderAct,
-        //  body,...}}`. Normalize to the bridge's chat.openape.ai-style
-        // Message shape so handleInbound stays target-agnostic.
-        const msg: Message = this.cfg.target === 'troop'
-          ? this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
-          : (frame.payload as unknown as Message)
+        // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
+        // Translate to the bridge's internal Message shape.
+        const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
         void this.handleInbound(msg)
       })
 
