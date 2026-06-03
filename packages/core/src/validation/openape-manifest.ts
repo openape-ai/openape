@@ -60,26 +60,32 @@ export function validateOpenApeManifest(data: unknown): OpenApeManifestValidatio
     }
   }
 
-  // scopes (optional)
+  // scopes (optional) — must be an array of { id, description, grants?, risk?, ... }
   if (obj.scopes !== undefined) {
-    if (typeof obj.scopes !== 'object' || obj.scopes === null) {
-      errors.push('scopes must be an object if provided')
+    if (!Array.isArray(obj.scopes)) {
+      errors.push('scopes must be an array if provided')
     }
     else {
-      for (const [key, scope] of Object.entries(obj.scopes as Record<string, unknown>)) {
+      for (let i = 0; i < obj.scopes.length; i++) {
+        const scope = obj.scopes[i]
         if (!scope || typeof scope !== 'object') {
-          errors.push(`scopes.${key}: must be an object`)
+          errors.push(`scopes[${i}]: must be an object`)
           continue
         }
         const s = scope as Record<string, unknown>
-        if (typeof s.name !== 'string' || !s.name) {
-          errors.push(`scopes.${key}.name is required`)
+        if (typeof s.id !== 'string' || !s.id) {
+          errors.push(`scopes[${i}].id is required`)
         }
         if (typeof s.description !== 'string' || !s.description) {
-          errors.push(`scopes.${key}.description is required`)
+          errors.push(`scopes[${i}].description is required`)
         }
-        if (!VALID_RISK_LEVELS.includes(s.risk as string)) {
-          errors.push(`scopes.${key}.risk must be one of: ${VALID_RISK_LEVELS.join(', ')}`)
+        if (s.grants !== undefined) {
+          if (!Array.isArray(s.grants) || s.grants.some(g => typeof g !== 'string')) {
+            errors.push(`scopes[${i}].grants must be a string[] if provided`)
+          }
+        }
+        if (s.risk !== undefined && !VALID_RISK_LEVELS.includes(s.risk as string)) {
+          errors.push(`scopes[${i}].risk must be one of: ${VALID_RISK_LEVELS.join(', ')}`)
         }
       }
     }
