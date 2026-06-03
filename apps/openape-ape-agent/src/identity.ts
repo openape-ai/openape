@@ -1,9 +1,10 @@
 // Read the agent's identity + trust state from local files.
 //
 // The agent's own email + IdP, and the email of the human who owns it,
-// were written into ~/.config/apes/auth.json by `apes agents spawn`.
-// The contact-allowlist (peers whose contact requests the bridge will
-// auto-accept) is stored alongside, in ~/.config/openape/bridge-allowlist.json.
+// are written into ~/.config/apes/auth.json at spawn time by
+// `apes agents spawn`. The contact-allowlist (peers whose contact
+// requests the bridge will auto-accept) is stored alongside, in
+// ~/.config/openape/bridge-allowlist.json.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -38,12 +39,11 @@ function allowlistPath(): string {
  * Read the agent's identity from auth.json. Throws if the file is
  * missing or has no `email` — both indicate a botched spawn.
  *
- * `owner_email` is normally written by `apes agents spawn`. If it's
- * missing we fall back to `OPENAPE_OWNER_EMAIL` from the environment
- * (set by the launchd plist) so an old auth.json that pre-dates the
- * Phase A migration doesn't strand the bridge in a crash loop. If both
- * are missing we throw — the bridge requires it for the contact
- * handshake.
+ * `owner_email` is written by `apes agents spawn`. If it's missing we
+ * fall back to `OPENAPE_OWNER_EMAIL` from the container environment
+ * (compose `environment:` block) so an old auth.json that pre-dates
+ * Phase A doesn't strand the bridge in a crash loop. If both are
+ * missing we throw — the bridge requires it for the contact handshake.
  */
 export function readAgentIdentity(): AgentIdentity {
   const path = authPath()
@@ -56,10 +56,6 @@ export function readAgentIdentity(): AgentIdentity {
   if (!parsed.idp) throw new Error(`auth.json at ${path} missing 'idp'`)
   const ownerEmail = parsed.owner_email ?? process.env.OPENAPE_OWNER_EMAIL
   if (!ownerEmail) {
-    // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-    // The launchd plist fallback path is Mac-specific. Docker nests always
-    // have owner_email in auth.json (written at spawn time). Remove the env
-    // fallback once all live nests are confirmed Docker-based.
     throw new Error(
       `auth.json at ${path} missing 'owner_email' and no OPENAPE_OWNER_EMAIL env var set — `
       + 're-spawn the agent with @openape/apes >= 0.28 or set OPENAPE_OWNER_EMAIL in the container env',

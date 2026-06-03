@@ -12,7 +12,7 @@
 
 import type { ChatMessage, RuntimeConfig } from '@openape/apes'
 import { runLoop, taskTools } from '@openape/apes'
-import type { ChatBackend } from './chat-api'
+import type { ChatBackend } from './troop-chat-api'
 import type { Throttle } from './throttle'
 import { createThrottle } from './throttle'
 
