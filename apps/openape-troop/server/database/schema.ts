@@ -40,11 +40,6 @@ export const agents = sqliteTable('agents', {
   // For recipe agents systemPrompt is the (immutable) intent and this
   // is the mutable augmentation. (Agent Recipe M5.)
   userAddendum: text('user_addendum').notNull().default(''),
-  // (legacy) `soul` text column still exists in the DB for back-compat
-  // with rows written before the SOUL.md + system_prompt merge. New code
-  // doesn't read or write it — the system_prompt above absorbed its role.
-  // Future migration can DROP COLUMN once we're confident no read path
-  // is left. Drizzle doesn't reference it, so it's a benign tombstone.
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
