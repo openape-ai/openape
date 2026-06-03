@@ -1,5 +1,15 @@
 # @openape/apes
 
+## 1.28.13
+
+### Patch Changes
+
+- Updated dependencies [04bdf06]
+- Updated dependencies [b2d8dfe]
+  - @openape/core@0.17.1
+  - @openape/grants@0.12.0
+  - @openape/proxy@0.4.5
+
 ## 1.28.12
 
 ### Patch Changes
