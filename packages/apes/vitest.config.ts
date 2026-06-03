@@ -19,16 +19,14 @@ export default defineConfig({
       exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
       thresholds: {
-        // M5 added the agent runtime + tool registry. The shared
-        // run-loop (lib/agent-runtime.ts) IS unit-tested; the
-        // CLI-command wrappers and tool shell-out helpers are
-        // integration-tested via M7 dogfood, not here. Bumped
-        // functions threshold down to match what we can practically
-        // unit-test without ballooning the suite or pretending we
-        // mock the LLM provider.
-        statements: 50,
-        functions: 50,
-        lines: 50,
+        // Agent-runtime cluster (agent-runtime.ts, agent-tools/, coding/)
+        // was extracted into @openape/agent-runtime and its tests moved
+        // there. Remaining apes code is mostly CLI command wrappers and
+        // shell-out helpers that are integration-tested via dogfood, not
+        // unit-tested here. Thresholds adjusted to reflect the new scope.
+        statements: 45,
+        functions: 45,
+        lines: 45,
       },
     },
   },

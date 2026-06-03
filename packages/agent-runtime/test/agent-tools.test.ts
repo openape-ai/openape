@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { asOpenAiTools, taskTools, TOOLS } from '../src/lib/agent-tools'
-import { _internal as fileInternal } from '../src/lib/agent-tools/file'
-import { _internal as wtInternal } from '../src/lib/agent-tools/git-worktree'
+import { asOpenAiTools, taskTools, TOOLS } from '../src/agent-tools'
+import { _internal as fileInternal } from '../src/agent-tools/file'
+import { _internal as wtInternal } from '../src/agent-tools/git-worktree'
 
 describe('tool registry', () => {
   it('TOOLS has the expected keys', () => {
