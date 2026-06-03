@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto'
 import { requireOwner } from '../../utils/auth'
-import { getCloud } from '../../utils/cloud/index'
 import { buildExoscaleUserData } from '../../utils/cloud/exoscale'
+import { getCloud } from '../../utils/cloud/index'
+import { buildPodComposeYaml, buildPodEnvFile } from '../../utils/hatch-bundle'
 import { rememberHatchToken } from '../../utils/hatch-tokens'
 
 // POST /api/pod/hatch — provision a fresh OpenApe pod on a cloud
@@ -65,8 +66,8 @@ export default defineEventHandler<Promise<HatchPodResponse>>(async (event) => {
   rememberHatchToken({ token, ownerEmail, expiresAt })
 
   const troopUrl = (useRuntimeConfig().troopUrl as string | undefined) ?? 'https://troop.openape.ai'
-  const composeYaml = buildComposeYaml({ troopUrl, ownerEmail, hatchToken: token })
-  const envFile = buildEnvFile(body.llm_secrets)
+  const composeYaml = buildPodComposeYaml({ troopUrl, ownerEmail, hatchToken: token })
+  const envFile = buildPodEnvFile(body.llm_secrets)
 
   // Cloud-init user-data — the provider boots the VM, installs Docker,
   // materializes the bundle, runs `docker compose up -d`. ~90s to ready
@@ -93,54 +94,3 @@ export default defineEventHandler<Promise<HatchPodResponse>>(async (event) => {
     enrollment_token: token,
   }
 })
-
-function buildComposeYaml(opts: { troopUrl: string, ownerEmail: string, hatchToken: string }): string {
-  return `services:
-  openape-llm:
-    image: ghcr.io/openape-ai/openape-llm:latest
-    container_name: openape-llm
-    restart: unless-stopped
-    networks: [openape-pod]
-    ports: ["127.0.0.1:4000:4000"]
-    volumes: ["./litellm.yaml:/etc/litellm/config.yaml:ro"]
-    environment:
-      LITELLM_MASTER_KEY: \${LITELLM_MASTER_KEY}
-      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
-      CHATGPT_OAUTH_TOKEN: \${CHATGPT_OAUTH_TOKEN}
-
-  openape-nest:
-    image: ghcr.io/openape-ai/openape-nest:latest
-    container_name: openape-nest
-    restart: unless-stopped
-    depends_on: [openape-llm]
-    networks: [openape-pod]
-    ports: ["127.0.0.1:9091:9091"]
-    volumes:
-      - openape-nest-data:/var/lib/openape/nest
-      - openape-homes:/var/lib/openape/homes
-    environment:
-      OPENAPE_NEST_PORT: "9091"
-      OPENAPE_TROOP_URL: ${opts.troopUrl}
-      OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
-      OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
-      LITELLM_BASE_URL: http://openape-llm:4000/v1
-      LITELLM_API_KEY: \${LITELLM_MASTER_KEY}
-
-volumes:
-  openape-nest-data:
-  openape-homes:
-networks:
-  openape-pod:
-    driver: bridge
-`
-}
-
-function buildEnvFile(secrets: Record<string, string>): string {
-  const lines = [
-    `LITELLM_MASTER_KEY=sk-litellm-${randomBytes(8).toString('hex')}`,
-    `ANTHROPIC_API_KEY=${secrets.ANTHROPIC_API_KEY ?? ''}`,
-    `CHATGPT_OAUTH_TOKEN=${secrets.CHATGPT_OAUTH_TOKEN ?? ''}`,
-    `APE_CHAT_BRIDGE_MODEL=${secrets.APE_CHAT_BRIDGE_MODEL ?? 'claude-haiku-4-5'}`,
-  ]
-  return `${lines.join('\n')}\n`
-}
