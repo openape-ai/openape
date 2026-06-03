@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+
 ## 0.11.1
 
 ### Patch Changes

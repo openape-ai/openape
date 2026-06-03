@@ -1,5 +1,12 @@
 # @openape/browser
 
+## 0.1.16
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+
 ## 0.1.15
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @openape/apes
 
+## 1.29.1
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+  - @openape/agent-runtime@0.2.1
+  - @openape/grants@0.12.1
+  - @openape/proxy@0.4.6
+  - @openape/shapes@0.7.1
+
 ## 1.29.0
 
 ### Minor Changes
