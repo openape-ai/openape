@@ -1,12 +1,6 @@
 import { hostname } from 'node:os'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import {
-  createShapesGrant,
-  fetchGrantToken,
-  loadAdapter,
-  resolveCommand,
-  verifyAndExecute,
-} from '../../shapes/index.js'
+import { createShapesGrant, fetchGrantToken, loadAdapter, resolveCommand, verifyAndExecute } from '../../shapes/index.js'
 import { z } from 'zod'
 import { getAuthToken, getIdpUrl, getRequesterIdentity } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'

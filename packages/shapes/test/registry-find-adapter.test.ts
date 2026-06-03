@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { findAdapter } from '../src/shapes/registry.js'
-import type { RegistryIndex } from '../src/shapes/types.js'
+import { findAdapter } from '../src/registry.js'
+import type { RegistryIndex } from '../src/types.js'
 
 // Minimal fake index — only the fields `findAdapter` looks at.
 const fakeIndex: RegistryIndex = {

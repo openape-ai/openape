@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { LoadedAdapter, ShapesOperation } from '../src/shapes/types.js'
-import { resolveCapabilityRequest } from '../src/shapes/capabilities.js'
+import type { LoadedAdapter, ShapesOperation } from '../src/types.js'
+import { resolveCapabilityRequest } from '../src/capabilities.js'
 
 function makeOperation(overrides: Partial<ShapesOperation> & Pick<ShapesOperation, 'id' | 'command' | 'resource_chain' | 'action'>): ShapesOperation {
   return {

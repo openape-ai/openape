@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractShellCommandString, parseShellCommand } from '../src/shapes/shell-parser'
+import { extractShellCommandString, parseShellCommand } from '../src/shell-parser'
 
 describe('parseShellCommand', () => {
   it('parses a simple command', () => {

@@ -36,7 +36,7 @@ vi.mock('../src/shapes/index.js', async () => {
   // Import the real generic helpers so resolveGenericOrReject produces
   // real ResolvedCommand shapes in fallback tests. Everything else is
   // mocked as a jest-style fn for per-test control.
-  const generic = await import('../src/shapes/generic.js')
+  const generic = await import('@openape/shapes')
   return {
     createShapesGrant: vi.fn(),
     fetchGrantToken: vi.fn(),

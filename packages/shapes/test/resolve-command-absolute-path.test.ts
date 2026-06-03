@@ -1,8 +1,8 @@
 import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parseShellCommand } from '../src/shapes/shell-parser.js'
-import { resolveCommand } from '../src/shapes/parser.js'
-import type { LoadedAdapter } from '../src/shapes/types.js'
+import { parseShellCommand } from '../src/shell-parser.js'
+import { resolveCommand } from '../src/parser.js'
+import type { LoadedAdapter } from '../src/types.js'
 
 // Minimal hand-rolled adapter that matches `foo list [--flag value]*`.
 // Only the fields `resolveCommand` actually reads are populated.

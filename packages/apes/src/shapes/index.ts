@@ -1,12 +1,43 @@
-export { loadAdapter, resolveAdapterPath, resolveGenericOrReject, tryLoadAdapter } from './adapters.js'
-export { GENERIC_OPERATION_ID, buildGenericAdapter, buildGenericResolved, isGenericResolved } from './generic.js'
-export { appendAuditLog, type AuditEntry } from './audit.js'
-export { extractShellCommandString, loadOrInstallAdapter, parseShellCommand, type ParsedShellCommand } from './shell-parser.js'
-export { resolveCapabilityRequest } from './capabilities.js'
+export {
+  appendAuditLog,
+  buildExactCommandGrantRequest,
+  buildStructuredCliGrantRequest,
+  buildGenericAdapter,
+  buildGenericResolved,
+  discoverEndpoints,
+  extractShellCommandString,
+  fetchRegistry,
+  findAdapter,
+  findConflictingAdapters,
+  GENERIC_OPERATION_ID,
+  getInstalledDigest,
+  installAdapter,
+  isGenericResolved,
+  isInstalled,
+  loadAdapter,
+  loadOrInstallAdapter,
+  parseShellCommand,
+  removeAdapter,
+  resolveAdapterPath,
+  resolveCapabilityRequest,
+  resolveCommand,
+  resolveGenericOrReject,
+  searchAdapters,
+  tryLoadAdapter,
+} from '@openape/shapes'
+export type {
+  AdapterMeta,
+  AuditEntry,
+  BuiltGrantRequest,
+  GrantRequestOptions,
+  LoadedAdapter,
+  ParsedShellCommand,
+  RegistryEntry,
+  RegistryIndex,
+  ResolvedCapability,
+  ResolvedCommand,
+  ShapesAdapter,
+  ShapesOperation,
+} from '@openape/shapes'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
 export { createShapesGrant, executeResolvedViaExec, fetchGrantToken, findExistingGrant, resolveFromGrant, verifyAndConsume, verifyAndExecute, waitForGrantStatus } from './grants.js'
-export { resolveCommand } from './parser.js'
-export { buildExactCommandGrantRequest, buildStructuredCliGrantRequest } from './request-builders.js'
-export { fetchRegistry, findAdapter, searchAdapters } from './registry.js'
-export { findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter } from './installer.js'
-export type { AdapterMeta, BuiltGrantRequest, GrantRequestOptions, LoadedAdapter, RegistryEntry, RegistryIndex, ResolvedCapability, ResolvedCommand, ShapesAdapter, ShapesOperation } from './types.js'

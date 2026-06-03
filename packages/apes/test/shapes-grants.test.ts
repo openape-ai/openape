@@ -7,15 +7,16 @@ const getRequesterIdentityMock = vi.fn()
 const verifyAuthzJWTMock = vi.fn()
 const execFileSyncMock = vi.fn()
 
-vi.mock('../src/shapes/http.js', () => ({
-  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
-  discoverEndpoints: (...args: unknown[]) => discoverEndpointsMock(...args),
-  getGrantsEndpoint: (...args: unknown[]) => getGrantsEndpointMock(...args),
-}))
-
-vi.mock('../src/shapes/config.js', () => ({
-  getRequesterIdentity: (...args: unknown[]) => getRequesterIdentityMock(...args),
-}))
+vi.mock('@openape/shapes', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@openape/shapes')>()
+  return {
+    ...real,
+    apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+    discoverEndpoints: (...args: unknown[]) => discoverEndpointsMock(...args),
+    getGrantsEndpoint: (...args: unknown[]) => getGrantsEndpointMock(...args),
+    getRequesterIdentity: (...args: unknown[]) => getRequesterIdentityMock(...args),
+  }
+})
 
 vi.mock('@openape/grants', async importOriginal => ({
   ...await importOriginal<typeof import('@openape/grants')>(),

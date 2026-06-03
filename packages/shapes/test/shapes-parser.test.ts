@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadAdapter } from '../src/shapes/adapters.js'
-import { resolveCommand } from '../src/shapes/parser.js'
+import { loadAdapter } from '../src/adapters.js'
+import { resolveCommand } from '../src/parser.js'
 
 const fixturesDir = join(import.meta.dirname, 'fixtures')
 

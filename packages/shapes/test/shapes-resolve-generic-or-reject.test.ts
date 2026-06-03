@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { resolveGenericOrReject } from '../src/shapes/adapters.js'
-import { GENERIC_OPERATION_ID } from '../src/shapes/generic.js'
+import { resolveGenericOrReject } from '../src/adapters.js'
+import { GENERIC_OPERATION_ID } from '../src/generic.js'
 
 describe('resolveGenericOrReject', () => {
   it('returns a synthetic ResolvedCommand when genericEnabled=true', async () => {
