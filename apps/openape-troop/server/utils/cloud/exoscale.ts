@@ -92,10 +92,12 @@ ssh_authorized_keys:
 `
 }
 
-// Placeholder API-call helper. Replaced with a signed-URL implementation
-// (Exoscale v2 HMAC scheme) when the Exoscale SDK lands.
+// Placeholder API-call helper. Intentionally disabled until the
+// signed-URL HTTP client (Exoscale v2 HMAC) is wired. Throws a
+// 501 Not Implemented so callers get an explicit, intentional error
+// rather than a generic scaffold message leaking through the API.
 async function callExoscale<T>(_env: ExoscaleEnv, _verb: 'GET' | 'POST' | 'DELETE', _path: string, _body?: unknown): Promise<T> {
-  throw new Error('exoscale.callExoscale is a scaffold — wire the signed-URL HTTP client (PR follow-up).')
+  throw createError({ statusCode: 501, statusMessage: 'Exoscale provisioning not implemented' })
 }
 
 export const exoscaleAdapter: CloudAdapter = {

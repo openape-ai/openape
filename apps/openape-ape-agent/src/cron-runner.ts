@@ -1,14 +1,18 @@
 // Cron task runner inside the chat-bridge daemon.
 //
-// Why in-process (not separate launchd plists per task): the bridge
-// already owns the agent's WebSocket to chat.openape.ai, the
-// `apes agents serve --rpc` subprocess, and the only LLM-config
-// resolution. Spawning a fresh `apes agents run` per task fire would
-// duplicate every one of those plus require a separate copy of the
-// LiteLLM env that's already in the bridge's working directory. So
-// we tick the cron in here instead — every 60s, read the cached
-// task specs, fire any whose cron expression matches the current
-// minute, post the streamed result back to the owner as a DM.
+// Why in-process (not separate processes per task): the bridge already
+// owns the agent's WebSocket connection, the LLM-config resolution,
+// and the LiteLLM env. Spawning a fresh process per task fire would
+// duplicate every one of those. So we tick the cron in here instead —
+// every 60s, read the cached task specs, fire any whose cron expression
+// matches the current minute, post the streamed result back to the owner
+// as a DM.
+//
+// REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+// The ~/.openape/agent/tasks/ cache dir is a Mac-era path. Docker nests
+// write it into the container's home dir which works, but the canonical
+// location post-cutover should be /var/lib/openape/agent/tasks/. Defer
+// until the Mac path is confirmed unused.
 //
 // Cron subset: same as the troop SP enforces — `*`, `N`, `*/N`. No
 // lists, no ranges. Match is evaluated minute-by-minute against the
