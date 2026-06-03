@@ -1,4 +1,5 @@
 import type { ToolDefinition } from './index'
+import { safeFetch } from './ssrf-guard'
 
 const MAX_BYTES = 1024 * 1024
 // Headers we never let the model set: hop-by-hop ones, host (we
@@ -62,10 +63,12 @@ export const httpTools: ToolDefinition[] = [
     },
     execute: async (args: unknown) => {
       const a = args as { url: string, headers?: unknown }
-      if (typeof a.url !== 'string' || !a.url.startsWith('http')) {
-        throw new Error('url must be an http(s) URL')
+      if (typeof a.url !== 'string') {
+        throw new TypeError('url must be an http(s) URL')
       }
-      const res = await fetch(a.url, { method: 'GET', headers: sanitizeHeaders(a.headers) })
+      // safeFetch validates scheme + blocks private/loopback/metadata targets
+      // (SSRF guard) and re-validates each redirect hop.
+      const res = await safeFetch(a.url, { method: 'GET', headers: sanitizeHeaders(a.headers) })
       const body = await readCappedBody(res)
       return { status: res.status, headers: Object.fromEntries(res.headers), body }
     },
@@ -84,10 +87,10 @@ export const httpTools: ToolDefinition[] = [
     },
     execute: async (args: unknown) => {
       const a = args as { url: string, body: unknown, headers?: unknown }
-      if (typeof a.url !== 'string' || !a.url.startsWith('http')) {
-        throw new Error('url must be an http(s) URL')
+      if (typeof a.url !== 'string') {
+        throw new TypeError('url must be an http(s) URL')
       }
-      const res = await fetch(a.url, {
+      const res = await safeFetch(a.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...sanitizeHeaders(a.headers) },
         body: JSON.stringify(a.body),
