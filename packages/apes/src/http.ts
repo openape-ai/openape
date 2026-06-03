@@ -40,12 +40,20 @@ export async function getGrantsEndpoint(idpUrl: string): Promise<string> {
 
 export async function getAgentChallengeEndpoint(idpUrl: string): Promise<string> {
   const disco = await discoverEndpoints(idpUrl)
-  return (disco.ddisa_agent_challenge_endpoint as string) || `${idpUrl}/api/agent/challenge`
+  // Read canonical ddisa_auth_challenge_endpoint (emitted by server since M3).
+  // Fall back to legacy ddisa_agent_challenge_endpoint for backward-compat with older IdPs.
+  return (disco.ddisa_auth_challenge_endpoint as string)
+    || (disco.ddisa_agent_challenge_endpoint as string)
+    || `${idpUrl}/api/auth/challenge`
 }
 
 export async function getAgentAuthenticateEndpoint(idpUrl: string): Promise<string> {
   const disco = await discoverEndpoints(idpUrl)
-  return (disco.ddisa_agent_authenticate_endpoint as string) || `${idpUrl}/api/agent/authenticate`
+  // Read canonical ddisa_auth_authenticate_endpoint (emitted by server since M3).
+  // Fall back to legacy ddisa_agent_authenticate_endpoint for backward-compat with older IdPs.
+  return (disco.ddisa_auth_authenticate_endpoint as string)
+    || (disco.ddisa_agent_authenticate_endpoint as string)
+    || `${idpUrl}/api/auth/authenticate`
 }
 
 export async function getDelegationsEndpoint(idpUrl: string): Promise<string> {
@@ -81,7 +89,8 @@ async function refreshAgentToken(): Promise<string | null> {
     const challengeResp = await fetch(challengeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: auth.email }),
+      // Use canonical `id` field (the server's /api/auth/challenge handler expects `id`).
+      body: JSON.stringify({ id: auth.email }),
     })
 
     if (!challengeResp.ok)
@@ -95,7 +104,8 @@ async function refreshAgentToken(): Promise<string | null> {
     const authResp = await fetch(authenticateUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: auth.email, challenge, signature }),
+      // Use canonical `id` field (the server's /api/auth/authenticate handler expects `id`).
+      body: JSON.stringify({ id: auth.email, challenge, signature }),
     })
 
     if (!authResp.ok)
