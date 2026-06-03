@@ -5,8 +5,7 @@ import { getIdpUrl } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { getPollMaxMinutes, pollGrantUntilResolved } from '../../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../../http'
-import { fetchGrantToken, resolveFromGrant, verifyAndExecute } from '../../shapes/index.js'
-import { buildGenericResolved, GENERIC_OPERATION_ID } from '../../shapes/generic.js'
+import { buildGenericResolved, fetchGrantToken, GENERIC_OPERATION_ID, resolveFromGrant, verifyAndExecute } from '../../shapes/index.js'
 
 interface GrantDetail {
   id: string

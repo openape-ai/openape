@@ -1,0 +1,25 @@
+schema = "openape-shapes/v1"
+
+[cli]
+id = "grep"
+executable = "grep"
+audience = "shapes"
+version = "1"
+
+[[operation]]
+id = "grep.search"
+command = []
+positionals = ["pattern", "path"]
+display = "Search for {pattern} in {path}"
+action = "read"
+risk = "low"
+resource_chain = ["filesystem:path={path}"]
+
+[[operation]]
+id = "grep.search-recursive"
+command = ["-r"]
+positionals = ["pattern", "path"]
+display = "Recursively search for {pattern} in {path}"
+action = "read"
+risk = "low"
+resource_chain = ["filesystem:path={path}"]

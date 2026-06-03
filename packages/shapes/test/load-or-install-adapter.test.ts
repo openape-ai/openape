@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock the modules that would touch the filesystem and the network
-vi.mock('../src/shapes/adapters.js', () => ({
+vi.mock('../src/adapters.js', () => ({
   tryLoadAdapter: vi.fn(),
   loadAdapter: vi.fn(),
 }))
-vi.mock('../src/shapes/registry.js', () => ({
+vi.mock('../src/registry.js', () => ({
   fetchRegistry: vi.fn(),
   findAdapter: vi.fn(),
 }))
-vi.mock('../src/shapes/installer.js', () => ({
+vi.mock('../src/installer.js', () => ({
   installAdapter: vi.fn(),
 }))
-vi.mock('../src/shapes/audit.js', () => ({
+vi.mock('../src/audit.js', () => ({
   appendAuditLog: vi.fn(),
 }))
 
@@ -26,8 +26,8 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('returns the local adapter when it is already installed', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     const fakeAdapter = {
       adapter: { cli: { id: 'rm', executable: 'rm', audience: 'shapes' }, operations: [], schema: 'openape-shapes/v1' },
@@ -42,11 +42,11 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('fetches registry, installs, and loads when adapter is missing locally', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { fetchRegistry, findAdapter } = await import('../src/shapes/registry.js')
-    const { installAdapter } = await import('../src/shapes/installer.js')
-    const { appendAuditLog } = await import('../src/shapes/audit.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { fetchRegistry, findAdapter } = await import('../src/registry.js')
+    const { installAdapter } = await import('../src/installer.js')
+    const { appendAuditLog } = await import('../src/audit.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     const installedAdapter = {
       adapter: { cli: { id: 'rm', executable: 'rm' }, operations: [], schema: 'openape-shapes/v1' },
@@ -90,10 +90,10 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('returns null when the executable is not in the registry', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { fetchRegistry, findAdapter } = await import('../src/shapes/registry.js')
-    const { installAdapter } = await import('../src/shapes/installer.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { fetchRegistry, findAdapter } = await import('../src/registry.js')
+    const { installAdapter } = await import('../src/installer.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     vi.mocked(tryLoadAdapter).mockReturnValueOnce(null)
     vi.mocked(fetchRegistry).mockResolvedValueOnce({ adapters: [] } as any)
@@ -105,9 +105,9 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('returns null when fetchRegistry throws (offline)', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { fetchRegistry } = await import('../src/shapes/registry.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { fetchRegistry } = await import('../src/registry.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     vi.mocked(tryLoadAdapter).mockReturnValueOnce(null)
     vi.mocked(fetchRegistry).mockRejectedValueOnce(new Error('network down'))
@@ -117,10 +117,10 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('returns null when installAdapter throws', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { fetchRegistry, findAdapter } = await import('../src/shapes/registry.js')
-    const { installAdapter } = await import('../src/shapes/installer.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { fetchRegistry, findAdapter } = await import('../src/registry.js')
+    const { installAdapter } = await import('../src/installer.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     const fakeEntry = {
       id: 'rm',
@@ -137,13 +137,13 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('normalizes absolute binary paths to basename before lookup', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { findAdapter } = await import('../src/shapes/registry.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { findAdapter } = await import('../src/registry.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     vi.mocked(tryLoadAdapter).mockReturnValueOnce(null)
     // No registry entry — we only care that the lookup key was normalized
-    const { fetchRegistry } = await import('../src/shapes/registry.js')
+    const { fetchRegistry } = await import('../src/registry.js')
     vi.mocked(fetchRegistry).mockResolvedValueOnce({ adapters: [] } as any)
     vi.mocked(findAdapter).mockReturnValueOnce(undefined)
 
@@ -154,10 +154,10 @@ describe('loadOrInstallAdapter', () => {
   })
 
   it('reloads the installed adapter by registry id, not by the requested executable', async () => {
-    const { tryLoadAdapter } = await import('../src/shapes/adapters.js')
-    const { fetchRegistry, findAdapter } = await import('../src/shapes/registry.js')
-    const { installAdapter } = await import('../src/shapes/installer.js')
-    const { loadOrInstallAdapter } = await import('../src/shapes/shell-parser.js')
+    const { tryLoadAdapter } = await import('../src/adapters.js')
+    const { fetchRegistry, findAdapter } = await import('../src/registry.js')
+    const { installAdapter } = await import('../src/installer.js')
+    const { loadOrInstallAdapter } = await import('../src/shell-parser.js')
 
     const installedAdapter = {
       adapter: { cli: { id: 'o365', executable: 'o365-cli' }, operations: [], schema: 'openape-shapes/v1' },

@@ -3,9 +3,8 @@ import { defineCommand, runMain } from 'citty'
 import { adapterCommand } from './commands/adapter.js'
 import { explainCommand, extractOption, extractWrappedCommand } from './commands/explain.js'
 import { requestCommand } from './commands/request.js'
-import { loadAdapter } from './adapters.js'
+import { loadAdapter, resolveCommand } from '@openape/shapes'
 import { verifyAndExecute } from './grants.js'
-import { resolveCommand } from './parser.js'
 
 declare const __VERSION__: string
 

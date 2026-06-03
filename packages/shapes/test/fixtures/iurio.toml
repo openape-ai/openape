@@ -1,0 +1,59 @@
+schema = "openape-shapes/v1"
+
+[cli]
+id = "iurio"
+executable = "iurio"
+audience = "shapes"
+version = "1"
+
+[[operation]]
+id = "mytasks.list"
+command = ["mytasks"]
+display = "List my tasks"
+action = "list"
+risk = "low"
+resource_chain = ["user:self", "task:*"]
+
+[[operation]]
+id = "projects.list"
+command = ["projects", "list"]
+display = "List projects"
+action = "list"
+risk = "low"
+resource_chain = ["project:*"]
+
+[[operation]]
+id = "workspaces.list"
+command = ["project"]
+positionals = ["project_id", "=workspaces", "=list"]
+display = "List workspaces in project {project_id}"
+action = "list"
+risk = "low"
+resource_chain = ["project:id={project_id}", "workspace:*"]
+
+[[operation]]
+id = "task.show"
+command = ["project"]
+positionals = ["project_id", "=workspace", "workspace_id", "=task", "task_id", "=show"]
+display = "Show task {task_id}"
+action = "read"
+risk = "low"
+resource_chain = ["project:id={project_id}", "workspace:id={workspace_id}", "task:id={task_id}"]
+
+[[operation]]
+id = "task.archive"
+command = ["project"]
+positionals = ["project_id", "=workspace", "workspace_id", "=task", "task_id", "=archive"]
+display = "Archive task {task_id}"
+action = "edit"
+risk = "medium"
+resource_chain = ["project:id={project_id}", "workspace:id={workspace_id}", "task:id={task_id}"]
+
+[[operation]]
+id = "task.remove"
+command = ["project"]
+positionals = ["project_id", "=workspace", "workspace_id", "=task", "task_id", "=remove"]
+display = "Remove task {task_id}"
+action = "delete"
+risk = "high"
+resource_chain = ["project:id={project_id}", "workspace:id={workspace_id}", "task:id={task_id}"]

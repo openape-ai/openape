@@ -1,0 +1,61 @@
+{
+  "name": "@openape/shapes",
+  "type": "module",
+  "version": "0.1.0",
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
+  },
+  "description": "OpenApe Shapes library: adapter parsing, registry, installer, capabilities, shell-parser",
+  "author": "Delta Mind GmbH",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
+    "consola": "^3.4.2",
+    "shell-quote": "^1.8.3"
+  },
+  "devDependencies": {
+    "@openape/server": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/shell-quote": "^1.7.5",
+    "@vitest/coverage-istanbul": "^4.1.7",
+    "h3": "^1.15.0",
+    "jose": "^5.9.0",
+    "tsup": "catalog:",
+    "typescript": "^5.8.2",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/shapes"
+  }
+}

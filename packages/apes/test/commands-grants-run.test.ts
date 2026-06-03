@@ -14,11 +14,15 @@ vi.mock('../src/http.js', () => ({
   getGrantsEndpoint: vi.fn(async () => 'http://idp.test/api/grants'),
   ApiError: class extends Error {},
 }))
-vi.mock('../src/shapes/index.js', () => ({
-  resolveFromGrant: vi.fn(),
-  fetchGrantToken: vi.fn(),
-  verifyAndExecute: vi.fn(),
-}))
+vi.mock('../src/shapes/index.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/shapes/index.js')>()
+  return {
+    ...real,
+    resolveFromGrant: vi.fn(),
+    fetchGrantToken: vi.fn(),
+    verifyAndExecute: vi.fn(),
+  }
+})
 vi.mock('../src/grant-poll.js', () => ({
   // Mock the entire grant-poll module so the --wait tests can control
   // the polling outcome deterministically instead of actually polling
