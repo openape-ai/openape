@@ -1,3 +1,4 @@
+export { buildCliAuthDetail, matchArgvToOperation, type ShapeMatchOperation } from './shape-matcher.js'
 export {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
