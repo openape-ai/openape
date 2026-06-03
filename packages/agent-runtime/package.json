@@ -30,7 +30,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
-  "dependencies": {},
+  "dependencies": {
+    "@openape/core": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "^4.1.7",
