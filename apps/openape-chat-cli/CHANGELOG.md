@@ -1,5 +1,12 @@
 # @openape/ape-chat
 
+## 0.4.3
+
+### Patch Changes
+
+- Updated dependencies [2ea39ac]
+  - @openape/cli-auth@0.5.0
+
 ## 0.4.2
 
 ### Patch Changes
