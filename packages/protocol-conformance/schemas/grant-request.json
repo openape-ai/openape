@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openape.org/schemas/grant-request.json",
+  "title": "OpenApe Grant Request",
+  "description": "The request details within a grant, describing what is being requested.",
+  "type": "object",
+  "properties": {
+    "requester": {
+      "type": "string",
+      "description": "Identifier of the requesting entity (email or agent ID)."
+    },
+    "target_host": {
+      "type": "string",
+      "description": "Host or domain where this grant is valid."
+    },
+    "grant_type": {
+      "type": "string",
+      "enum": ["once", "timed", "always"],
+      "description": "Grant type controlling lifecycle behavior."
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Array of requested permission identifiers."
+    },
+    "authorization_details": {
+      "type": "array",
+      "description": "Structured authorization details for the request.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["openape_grant", "openape_cli"] },
+          "action": { "type": "string" },
+          "locations": { "type": "array", "items": { "type": "string" } },
+          "approval": { "type": "string", "enum": ["once", "timed", "always"] },
+          "reason": { "type": "string" },
+          "grant_id": { "type": "string" },
+          "cli_id": { "type": "string" },
+          "operation_id": { "type": "string" },
+          "resource_chain": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "resource": { "type": "string" },
+                "selector": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                }
+              },
+              "required": ["resource"],
+              "additionalProperties": false
+            }
+          },
+          "permission": { "type": "string" },
+          "display": { "type": "string" },
+          "risk": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "constraints": {
+            "type": "object",
+            "properties": {
+              "exact_command": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "action"],
+        "additionalProperties": false
+      }
+    },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Plaintext command array (for display in approval UI)."
+    },
+    "cmd_hash": {
+      "type": "string",
+      "pattern": "^SHA-256:[a-f0-9]{64}$",
+      "description": "SHA-256 hash of the command. Format: SHA-256:<hex>."
+    },
+    "execution_context": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "argv_hash": {
+          "type": "string",
+          "pattern": "^SHA-256:[a-f0-9]{64}$"
+        },
+        "adapter_id": { "type": "string" },
+        "adapter_version": { "type": "string" },
+        "adapter_digest": {
+          "type": "string",
+          "pattern": "^SHA-256:[a-f0-9]{64}$"
+        },
+        "resolved_executable": { "type": "string" },
+        "context_bindings": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["adapter_id", "adapter_version", "adapter_digest", "resolved_executable"],
+      "additionalProperties": false
+    },
+    "duration": {
+      "type": "number",
+      "minimum": 1,
+      "description": "Duration in seconds. Required for timed grants."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for the request."
+    },
+    "delegator": {
+      "type": "string",
+      "description": "Who is being acted on behalf of (delegation grants only)."
+    },
+    "delegate": {
+      "type": "string",
+      "description": "Who is allowed to act (delegation grants only)."
+    },
+    "audience": {
+      "type": "string",
+      "description": "Service or relying party identifier (e.g. 'apes', 'proxy'). For delegation grants, '*' means any SP."
+    },
+    "run_as": {
+      "type": "string",
+      "description": "Execute as this user identity."
+    },
+    "scopes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Allowed actions under the delegation."
+    }
+  },
+  "required": ["requester", "target_host", "audience", "grant_type"],
+  "if": {
+    "properties": { "grant_type": { "const": "timed" } }
+  },
+  "then": {
+    "required": ["requester", "target_host", "audience", "grant_type", "duration"]
+  },
+  "additionalProperties": false
+}

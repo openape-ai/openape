@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddisa.org/schemas/ddisa-record.json",
+  "title": "DDISA DNS TXT Record",
+  "description": "Parsed representation of a DDISA DNS TXT record (v=ddisa1).",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "ddisa1",
+      "description": "Version tag. Must be 'ddisa1'."
+    },
+    "idp": {
+      "type": "string",
+      "format": "uri",
+      "description": "The IdP base URL. Must be HTTPS.",
+      "pattern": "^https://"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["open", "allowlist-admin", "allowlist-user", "deny"],
+      "description": "Policy mode controlling SP admission."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 10,
+      "description": "Priority value (lower = higher priority)."
+    },
+    "policy_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL for the IdP's policy management endpoint."
+    }
+  },
+  "required": ["version", "idp"],
+  "additionalProperties": false
+}
