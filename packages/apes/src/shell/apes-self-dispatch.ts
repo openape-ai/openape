@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import type { ParsedShellCommand } from '../shapes/shell-parser.js'
+import type { ParsedShellCommand } from '../shapes/index.js'
 
 /**
  * Subset of `apes` subcommands that remain grant-gated even when invoked

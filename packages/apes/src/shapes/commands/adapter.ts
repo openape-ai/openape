@@ -1,8 +1,6 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { fetchRegistry, findAdapter, searchAdapters } from '../registry.js'
-import { findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter } from '../installer.js'
-import { loadAdapter } from '../adapters.js'
+import { fetchRegistry, findAdapter, searchAdapters, findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter, loadAdapter } from '@openape/shapes'
 
 export const adapterCommand = defineCommand({
   meta: {
