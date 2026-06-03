@@ -1,5 +1,12 @@
 # @openape/apes
 
+## 1.28.12
+
+### Patch Changes
+
+- Updated dependencies [2ea39ac]
+  - @openape/cli-auth@0.5.0
+
 ## 1.28.11
 
 ### Patch Changes
