@@ -1,8 +1,0 @@
-node_modules
-.output
-.nuxt
-.vercel
-.env
-.env.*
-*.local
-pnpm-workspace.yaml

@@ -57,15 +57,6 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN tools TEXT NOT NULL DEFAULT '[]'`)
     }
     catch { /* column exists */ }
-    // Skills feature (#404-ish): per-agent persona via SOUL.md + a
-    // catalog of `<name>/SKILL.md` lazy-load instructions. Both are
-    // distributed via `apes agents sync`. Default '' / no rows for
-    // existing agents — they keep working with just default skills
-    // shipped in the ape-agent package.
-    try {
-      await db.run(sql`ALTER TABLE agents ADD COLUMN soul TEXT NOT NULL DEFAULT ''`)
-    }
-    catch { /* column exists */ }
     // Agent Recipe M5: owner-editable behaviour layer appended to the
     // system prompt at sync (no re-deploy).
     try {
