@@ -18,10 +18,17 @@ export interface ManifestConfig {
     supported_methods?: ('ddisa' | 'oidc')[]
     login_url?: string
   }
-  scopes?: Record<string, {
-    name: string
+  // SP data-access scope catalog as published in /.well-known/openape.json.
+  // Array form per protocol `sp-scope-catalog.json` — this is what the served
+  // manifest exposes and what the cross-SP scope-catalog consumer expects
+  // (an object/Record here would break cross-SP delegation consent). `id` +
+  // `description` are the contract; the rest are optional capability metadata.
+  scopes?: Array<{
+    id: string
     description: string
-    risk: 'low' | 'medium' | 'high' | 'critical'
+    grants?: string[]
+    name?: string
+    risk?: 'low' | 'medium' | 'high' | 'critical'
     category?: string
     parameters?: Record<string, { type: string, description: string }>
   }>
