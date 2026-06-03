@@ -7,7 +7,7 @@ import { composeSystemPrompt } from '../../../utils/system-prompt'
 // Agent reads its own task list + agent-level config. No owner gate —
 // the JWT's sub is the agent email and we filter rows on it.
 // Returns the full spec the agent needs to:
-//   - materialise launchd plists for cron tasks
+//   - register cron tasks with the bridge's in-process cron runner
 //   - hydrate `~/.openape/agent/agent.json` (systemPrompt + tools)
 //   - hydrate `~/.openape/agent/SOUL.md` (always-on persona / rules)
 //   - hydrate `~/.openape/agent/skills/<name>/SKILL.md` (lazy-load

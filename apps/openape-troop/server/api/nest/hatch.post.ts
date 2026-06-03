@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { requireOwner } from '../../utils/auth'
+import { buildNestComposeYaml, buildNestEnvFile } from '../../utils/hatch-bundle'
 import { rememberHatchToken } from '../../utils/hatch-tokens'
 
 // POST /api/nest/hatch — return everything a new operator host (or a
@@ -41,63 +42,10 @@ export default defineEventHandler<Promise<HatchResponse>>(async (event) => {
 
   const troopUrl = (useRuntimeConfig().troopUrl as string | undefined) ?? 'https://troop.openape.ai'
 
-  const composeYaml = `# Generated for ${ownerEmail} on ${new Date().toISOString()}.
-# Run on the target host:
-#   docker compose up -d
-# Then verify on this troop instance — the host appears in
-# /api/nest/hosts within ~5s of bootup.
-
-services:
-  openape-llm:
-    image: ghcr.io/openape-ai/openape-llm:latest
-    container_name: openape-llm
-    restart: unless-stopped
-    networks: [openape-pod]
-    ports: ["127.0.0.1:4000:4000"]
-    volumes: ["./litellm.yaml:/etc/litellm/config.yaml:ro"]
-    environment:
-      LITELLM_MASTER_KEY: \${LITELLM_MASTER_KEY}
-      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
-      CHATGPT_OAUTH_TOKEN: \${CHATGPT_OAUTH_TOKEN}
-
-  openape-nest:
-    image: ghcr.io/openape-ai/openape-nest:latest
-    container_name: openape-nest
-    restart: unless-stopped
-    depends_on: [openape-llm]
-    networks: [openape-pod]
-    ports: ["127.0.0.1:9091:9091"]
-    volumes:
-      - openape-nest-data:/var/lib/openape/nest
-      - openape-homes:/var/lib/openape/homes
-    environment:
-      OPENAPE_NEST_PORT: "9091"
-      OPENAPE_TROOP_URL: ${troopUrl}
-      OPENAPE_HATCH_TOKEN: ${token}
-      OPENAPE_HATCH_OWNER: ${ownerEmail}
-      LITELLM_BASE_URL: http://openape-llm:4000/v1
-      LITELLM_API_KEY: \${LITELLM_MASTER_KEY}
-      APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-claude-haiku-4-5}
-
-volumes:
-  openape-nest-data:
-  openape-homes:
-networks:
-  openape-pod:
-    driver: bridge
-`
-
-  const envFile = `# Copy to .env next to docker-compose.yml. Fill in provider keys.
-LITELLM_MASTER_KEY=sk-litellm-${randomBytes(8).toString('hex')}
-ANTHROPIC_API_KEY=
-CHATGPT_OAUTH_TOKEN=
-APE_CHAT_BRIDGE_MODEL=claude-haiku-4-5
-`
-
   return {
     enrollment_token: token,
     expires_at: expiresAt,
-    compose_yaml: composeYaml,
-    env_file: envFile,
+    compose_yaml: buildNestComposeYaml({ troopUrl, ownerEmail, hatchToken: token }),
+    env_file: buildNestEnvFile(),
   }
 })
