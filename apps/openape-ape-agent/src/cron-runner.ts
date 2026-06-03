@@ -8,11 +8,8 @@
 // matches the current minute, post the streamed result back to the owner
 // as a DM.
 //
-// REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
-// The ~/.openape/agent/tasks/ cache dir is a Mac-era path. Docker nests
-// write it into the container's home dir which works, but the canonical
-// location post-cutover should be /var/lib/openape/agent/tasks/. Defer
-// until the Mac path is confirmed unused.
+// Task cache: ~/.openape/agent/tasks/ (resolves to /root/.openape/…
+// inside the container). Future: make configurable via OPENAPE_AGENT_DATA_DIR.
 //
 // Cron subset: same as the troop SP enforces — `*`, `N`, `*/N`. No
 // lists, no ranges. Match is evaluated minute-by-minute against the
@@ -25,7 +22,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeConfig } from '@openape/apes'
 import { runApeShell, runLoop, taskTools } from '@openape/apes'
-import type { ChatBackend } from './chat-api'
+import type { ChatBackend } from './troop-chat-api'
 
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
