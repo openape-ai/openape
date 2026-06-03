@@ -1,5 +1,12 @@
 # @openape/nest
 
+## 2.3.3
+
+### Patch Changes
+
+- Updated dependencies [2ea39ac]
+  - @openape/cli-auth@0.5.0
+
 ## 2.3.1
 
 ### Patch Changes

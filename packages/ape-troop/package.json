@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-troop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "turbo": {
     "tags": [
       "publishable"
