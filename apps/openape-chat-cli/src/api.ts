@@ -1,49 +1,16 @@
-import { ofetch } from 'ofetch'
-import { getChatBearer } from './auth'
-import { getEndpoint } from './config'
+/**
+ * Chat-app API wrappers.
+ *
+ * The generic HTTP machinery (ApiError, request<T>) now lives in
+ * @openape/cli-auth via createSpClient. This file exposes the typed
+ * per-resource helpers that commands import, keeping all call-sites
+ * unchanged.
+ */
+import { ApiError } from '@openape/cli-auth'
+import { _request as request } from './client'
 import type { Member, Message, Room, Thread } from './types'
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    public title: string,
-    public detail?: string,
-  ) {
-    super(detail ? `${title}: ${detail}` : title)
-    this.name = 'ApiError'
-  }
-}
-
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
-  body?: unknown
-  query?: Record<string, string | number | undefined>
-  endpoint?: string
-}
-
-async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const endpoint = getEndpoint(opts.endpoint)
-  const url = `${endpoint}${path}`
-  const headers: Record<string, string> = {
-    Authorization: await getChatBearer(),
-  }
-  try {
-    return await ofetch<T>(url, {
-      method: opts.method ?? 'GET',
-      headers,
-      body: opts.body as Record<string, unknown> | undefined,
-      query: opts.query as Record<string, string | number> | undefined,
-    })
-  }
-  catch (err: unknown) {
-    const status = (err as { status?: number, statusCode?: number }).status
-      ?? (err as { statusCode?: number }).statusCode
-      ?? 0
-    const data = (err as { data?: { title?: string, statusMessage?: string, detail?: string, message?: string } }).data
-    const title = data?.title ?? data?.statusMessage ?? data?.message ?? `Request failed (HTTP ${status})`
-    throw new ApiError(status, title, data?.detail)
-  }
-}
+export { ApiError }
 
 export function listRooms(opts?: { endpoint?: string }): Promise<Room[]> {
   return request<Room[]>('/api/rooms', { endpoint: opts?.endpoint })
