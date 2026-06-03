@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runCodingTask } from '../src/lib/coding/coding-loop'
-import type { CodingTaskDeps, ShellResult } from '../src/lib/coding/coding-loop'
-import type { MergePolicy } from '../src/lib/coding/merge-policy'
-import { createLlmReviewer, createLlmRiskAssessor } from '../src/lib/coding/llm-review'
+import { runCodingTask } from '../src/coding/coding-loop'
+import type { CodingTaskDeps, ShellResult } from '../src/coding/coding-loop'
+import type { MergePolicy } from '../src/coding/merge-policy'
+import { createLlmReviewer, createLlmRiskAssessor } from '../src/coding/llm-review'
 
 const runtimeConfig = { apiBase: 'http://x/v1', apiKey: 'k', model: 'm' }
 const POLICY: MergePolicy = { autoMergeEnabled: true, autoPaths: ['**/*.md'], riskPaths: ['infra/**'] }
