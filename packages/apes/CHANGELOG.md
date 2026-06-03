@@ -1,5 +1,20 @@
 # @openape/apes
 
+## 1.29.0
+
+### Minor Changes
+
+- bb4a318: Extract the agent-execution cluster (in-process run loop, agent tools, coding agent) from `@openape/apes` into a new dependency-light `@openape/agent-runtime` package. apes re-exports the surface, so `@openape/ape-agent` is unaffected. No behaviour change.
+- a0d8506: Extract the pure Shapes library core (parser, adapters, registry, installer, toml, capabilities, request-builders, shell-parser, types, audit, http, config) from `@openape/apes` into a new `@openape/shapes` package. Grant-orchestration and CLI glue stay in apes and consume the package. No behaviour change.
+
+### Patch Changes
+
+- Updated dependencies [2d5f64b]
+- Updated dependencies [bb4a318]
+- Updated dependencies [a0d8506]
+  - @openape/agent-runtime@0.2.0
+  - @openape/shapes@0.2.0
+
 ## 1.28.13
 
 ### Patch Changes
