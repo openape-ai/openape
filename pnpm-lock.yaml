@@ -677,6 +677,24 @@ importers:
         specifier: ^3.3.1
         version: 3.3.1(typescript@5.9.3)
 
+  packages/agent-runtime:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      '@vitest/coverage-istanbul':
+        specifier: ^4.1.7
+        version: 4.1.7(vitest@4.1.7)
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.2)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-istanbul@4.1.7)(happy-dom@18.0.1)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
+
   packages/ape-troop:
     dependencies:
       '@openape/cli-auth':
@@ -710,6 +728,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
         version: 1.29.0(zod@4.4.3)
+      '@openape/agent-runtime':
+        specifier: workspace:*
+        version: link:../agent-runtime
       '@openape/cli-auth':
         specifier: workspace:*
         version: link:../cli-auth

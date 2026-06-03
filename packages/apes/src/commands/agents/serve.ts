@@ -4,9 +4,8 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { defineCommand } from 'citty'
 import { CliError } from '../../errors'
-import { taskTools } from '../../lib/agent-tools'
-import { runLoop, RpcSessionMap  } from '../../lib/agent-runtime'
-import type { RuntimeConfig } from '../../lib/agent-runtime'
+import { taskTools, runLoop, RpcSessionMap } from '@openape/agent-runtime'
+import type { RuntimeConfig } from '@openape/agent-runtime'
 import { startSecretsWatcher } from '../../lib/agent-secrets-runtime'
 
 // `apes agents serve --rpc` — long-running stdio JSON server.
