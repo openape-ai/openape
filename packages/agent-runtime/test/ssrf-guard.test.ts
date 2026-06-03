@@ -22,23 +22,25 @@ describe('isBlockedAddress', () => {
 })
 
 describe('assertPublicUrl', () => {
+  // agent-runtime allows http + https; { allowHttp: true } must be passed to
+  // match the real agent behaviour (safeFetch always passes it).
   it('rejects non-http(s) schemes', async () => {
-    await expect(assertPublicUrl('file:///etc/passwd')).rejects.toThrow(/http/)
-    await expect(assertPublicUrl('not a url')).rejects.toThrow(/Invalid URL/)
+    await expect(assertPublicUrl('file:///etc/passwd', { allowHttp: true })).rejects.toThrow(/http/)
+    await expect(assertPublicUrl('not a url', { allowHttp: true })).rejects.toThrow(/Invalid URL/)
   })
 
   it('rejects literal private/loopback/metadata hosts', async () => {
-    await expect(assertPublicUrl('http://169.254.169.254/latest/meta-data')).rejects.toThrow(/private\/loopback/)
-    await expect(assertPublicUrl('https://127.0.0.1')).rejects.toThrow(/private\/loopback/)
-    await expect(assertPublicUrl('http://10.0.0.5:6379')).rejects.toThrow(/private\/loopback/)
-    await expect(assertPublicUrl('https://[::1]')).rejects.toThrow(/private\/loopback/)
+    await expect(assertPublicUrl('http://169.254.169.254/latest/meta-data', { allowHttp: true })).rejects.toThrow(/private\/loopback/)
+    await expect(assertPublicUrl('https://127.0.0.1', { allowHttp: true })).rejects.toThrow(/private\/loopback/)
+    await expect(assertPublicUrl('http://10.0.0.5:6379', { allowHttp: true })).rejects.toThrow(/private\/loopback/)
+    await expect(assertPublicUrl('https://[::1]', { allowHttp: true })).rejects.toThrow(/private\/loopback/)
   })
 
   it('rejects hostnames resolving to loopback (localhost)', async () => {
-    await expect(assertPublicUrl('http://localhost:3000')).rejects.toThrow(/private\/loopback/)
+    await expect(assertPublicUrl('http://localhost:3000', { allowHttp: true })).rejects.toThrow(/private\/loopback/)
   })
 
   it('allows a public literal IP', async () => {
-    await expect(assertPublicUrl('https://8.8.8.8')).resolves.toBeInstanceOf(URL)
+    await expect(assertPublicUrl('https://8.8.8.8', { allowHttp: true })).resolves.toBeInstanceOf(URL)
   })
 })
