@@ -1,17 +1,55 @@
-// Troop-native chat client — used by the bridge when
-// `OPENAPE_BRIDGE_TARGET=troop`. Implements the same surface as
-// `chat-api.ts` (ChatApi) so the bridge's call sites stay
-// identical: only the `endpoint` URL + the resulting backend
-// instance change.
-//
-// Troop's chat is simpler than chat.openape.ai's: one persistent
-// chat per (owner, agent) pair, no contacts dance, no threads.
-// We synthesize the chat.openape.ai-shaped responses the bridge
-// expects so the rest of the bridge code (cron-runner, thread-
-// session, contact-allowlist flow) doesn't have to branch.
+// Troop-native chat client. Troop's chat is simpler than
+// chat.openape.ai's: one persistent chat per (owner, agent) pair,
+// no contacts dance, no threads. We synthesize chat-shaped responses
+// the rest of the bridge code (cron-runner, thread-session,
+// contact-allowlist flow) expects.
 
 import { ofetch } from 'ofetch'
-import type { ContactView, HistoryMessage, PostedMessage } from './chat-api'
+
+export interface PostedMessage {
+  id: string
+  roomId: string
+  threadId: string
+  body: string
+  createdAt: number
+}
+
+/**
+ * One row from chat history. Used by the bridge to backfill
+ * ThreadSession message history after a process restart.
+ */
+export interface HistoryMessage {
+  id: string
+  roomId: string
+  threadId: string
+  senderEmail: string
+  senderAct: 'human' | 'agent'
+  body: string
+  replyTo: string | null
+  createdAt: number
+}
+
+export interface ContactView {
+  peerEmail: string
+  myStatus: 'accepted' | 'pending' | 'blocked'
+  theirStatus: 'accepted' | 'pending' | 'blocked'
+  connected: boolean
+  roomId: string | null
+}
+
+/**
+ * Structural interface both the cron-runner and thread-session use
+ * so their call sites stay backend-agnostic.
+ */
+export interface ChatBackend {
+  postMessage: (roomId: string, body: string, opts?: { replyTo?: string, threadId?: string, streaming?: boolean }) => Promise<PostedMessage>
+  listMessages: (roomId: string, threadId: string, limit?: number) => Promise<HistoryMessage[]>
+  patchMessage: (messageId: string, opts?: { body?: string, streaming?: boolean, streamingStatus?: string | null }) => Promise<void>
+  listContacts: () => Promise<ContactView[]>
+  requestContact: (peerEmail: string) => Promise<ContactView>
+  acceptContact: (peerEmail: string) => Promise<ContactView>
+  createThread: (roomId: string, name: string) => Promise<{ id: string, name: string }>
+}
 
 interface TroopChat {
   id: string
