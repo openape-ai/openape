@@ -341,7 +341,15 @@ export interface OpenApeManifest {
     login_url?: string
   }
   /** Scopes the SP offers */
-  scopes?: Record<string, OpenApeScope>
+  scopes?: Array<{
+    id: string
+    description: string
+    grants?: string[]
+    name?: string
+    risk?: ScopeRiskLevel
+    category?: string
+    parameters?: Record<string, { type: string, description: string }>
+  }>
   /** Scope categories for UI grouping */
   categories?: Record<string, OpenApeScopeCategory>
   /** SP policies */
