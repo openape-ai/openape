@@ -1,5 +1,12 @@
 # @openape/idp-test-suite
 
+## 0.4.8
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+
 ## 0.4.7
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @openape/vue-components
 
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [3e3dfea]
+  - @openape/core@0.18.0
+
 ## 0.2.8
 
 ### Patch Changes
