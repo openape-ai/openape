@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openape.ai/protocol/schemas/sp-scope-catalog.json",
+  "title": "SP Scope Catalog",
+  "description": "The `scopes` array published in an SP's /.well-known/openape.json. See sp-data-access.md Section 3.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "description"],
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Scope identifier. Convention: <sp-shortname>:<action>.",
+        "pattern": "^[a-z0-9-]+:[a-z0-9-]+$",
+        "examples": ["timetrack:read", "timetrack:write", "timetrack:report"]
+      },
+      "description": {
+        "type": "string",
+        "description": "Human-readable; rendered verbatim on the consent screen.",
+        "minLength": 1,
+        "maxLength": 280
+      },
+      "grants": {
+        "type": "array",
+        "description": "Informative: API operations this scope authorizes.",
+        "items": { "type": "string" },
+        "examples": [["GET /api/me/entries", "GET /api/report"]]
+      }
+    }
+  }
+}

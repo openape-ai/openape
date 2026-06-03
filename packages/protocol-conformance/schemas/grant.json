@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openape.org/schemas/grant.json",
+  "title": "OpenApe Grant",
+  "description": "A grant representing a permission request and its lifecycle state.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique grant identifier (UUID v4)."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["command", "delegation"],
+      "default": "command",
+      "description": "Grant category."
+    },
+    "request": {
+      "$ref": "grant-request.json",
+      "description": "The grant request details."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "denied", "revoked", "expired", "used"],
+      "description": "Current grant status."
+    },
+    "decided_by": {
+      "type": "string",
+      "description": "Identifier of the user who approved or denied the grant."
+    },
+    "created_at": {
+      "type": "number",
+      "description": "Unix timestamp (seconds) when the grant was created."
+    },
+    "decided_at": {
+      "type": "number",
+      "description": "Unix timestamp (seconds) when the decision was made."
+    },
+    "expires_at": {
+      "type": "number",
+      "description": "Unix timestamp (seconds) when the grant expires."
+    },
+    "used_at": {
+      "type": "number",
+      "description": "Unix timestamp (seconds) when the grant was consumed."
+    }
+  },
+  "required": ["id", "request", "status", "created_at"],
+  "additionalProperties": false
+}
