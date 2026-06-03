@@ -147,6 +147,9 @@ interface BridgeConfig {
  * no-op if the file is missing (covers ad-hoc invocations + tests).
  */
 function loadBridgeEnvFile(): void {
+  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+  // Mac-only path. Docker nests pass env via compose environment: block, not
+  // this file. Remove once all live nests are Docker-based.
   const path = join(homedir(), 'Library', 'Application Support', 'openape', 'bridge', '.env')
   if (!existsSync(path)) return
   try {
@@ -195,6 +198,11 @@ function readConfig(): BridgeConfig {
     )
   }
 
+  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+  // Once all live nests pass OPENAPE_BRIDGE_TARGET=troop in their compose env
+  // (confirmed via troop prod DB: no nests with null device_secret_hash still
+  // connecting without the var), flip this default to 'troop' and remove the
+  // 'chat' fallback branch below together with ChatApi + chat-api.ts.
   const targetRaw = (process.env.OPENAPE_BRIDGE_TARGET ?? 'chat').toLowerCase()
   const target: BridgeConfig['target'] = targetRaw === 'troop' ? 'troop' : 'chat'
   return {
@@ -266,6 +274,10 @@ class Bridge {
       const idp = await ensureFreshIdpAuth()
       return `Bearer ${idp.access_token}`
     }
+    // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+    // The ChatApi branch (chat.openape.ai backend) stays until we confirm no
+    // live agent still uses it. Remove ChatApi import + chat-api.ts after
+    // cutover.
     this.chat = this.cfg.target === 'troop'
       ? new TroopChatApi(this.cfg.endpoint, this.bearer)
       : new ChatApi(this.cfg.endpoint, this.bearer)

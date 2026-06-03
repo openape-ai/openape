@@ -56,9 +56,13 @@ export function readAgentIdentity(): AgentIdentity {
   if (!parsed.idp) throw new Error(`auth.json at ${path} missing 'idp'`)
   const ownerEmail = parsed.owner_email ?? process.env.OPENAPE_OWNER_EMAIL
   if (!ownerEmail) {
+    // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+    // The launchd plist fallback path is Mac-specific. Docker nests always
+    // have owner_email in auth.json (written at spawn time). Remove the env
+    // fallback once all live nests are confirmed Docker-based.
     throw new Error(
       `auth.json at ${path} missing 'owner_email' and no OPENAPE_OWNER_EMAIL env var set — `
-      + 're-spawn the agent with @openape/apes >= 0.28 or add OPENAPE_OWNER_EMAIL to the launchd plist',
+      + 're-spawn the agent with @openape/apes >= 0.28 or set OPENAPE_OWNER_EMAIL in the container env',
     )
   }
   return { email: parsed.email, ownerEmail, idp: parsed.idp }

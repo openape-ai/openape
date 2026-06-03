@@ -96,6 +96,11 @@ async function authenticateUpgrade(token: string): Promise<AuthCtx> {
   if (payload.act === 'human') {
     return { ownerEmail: payload.sub.toLowerCase() }
   }
+  // REMOVE-AFTER: cutover-verified (see MIGRATION-mac-to-docker.md)
+  // Legacy keypair nest path: agent JWT with act=agent encodes ownerEmail in
+  // the sub. Kept until we confirm no live nest still uses keypair auth
+  // (troop prod DB: nests with null device_secret_hash = legacy). After
+  // cutover: remove this branch and parseAgentEmail import.
   if (payload.act === 'agent') {
     const parsed = parseAgentEmail(payload.sub)
     if (!parsed) {
