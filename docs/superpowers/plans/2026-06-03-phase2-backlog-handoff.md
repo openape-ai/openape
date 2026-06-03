@@ -3,6 +3,28 @@
 **Datum:** 2026-06-03. Übergabe nach Abschluss von Phase 1 (M0–M4) + erstem Phase-2-Item.
 Design: `docs/superpowers/specs/2026-06-03-openape-konsolidierung-design.md`.
 
+---
+
+## ✅ ABSCHLUSS-STAND 2026-06-04 (lies das zuerst)
+
+Die Kampagne ist im Kern **abgeschlossen**. Stand:
+
+- **Phase 1 vollständig:** M0/M1/M3/M4 ✅; **M2 end-to-end** ✅ — Cutover-Removal gemerged (#554) + `node scripts/deploy.mjs troop` **live deployed** (verifiziert: mbp-home reconnected post-restart via device-token, troop healthy). Mac→Docker durch.
+- **Phase 2:** ✅ `OpenApeManifest`-Array-Fix · shape-matcher · **`@openape/shapes@0.7.x`** + **`@openape/agent-runtime@0.2.x`** extrahiert+publiziert · Agent-`http`-SSRF-Guard · SSRF-Guard nach `@openape/core` dedupliziert (Single Source).
+- **apes-Decompose: ABGESCHLOSSEN erklärt** (2026-06-04). Die zwei sauber separierbaren Libs sind raus (apes ~18k→~14k LOC). Der Rest — `commands/` + `shell/` (CLI-Oberfläche) und die `host-platform/`-Abstraktion + `agent-bootstrap` (live, darwin für Mac-Nests + linux für Docker, eng mit den agents-Commands verwoben) — ist der **irreduzible CLI-Kern**, bewusst NICHT weiter extrahiert (sinkender Nutzen, steigende Verflechtung).
+- **Releases:** alle git↔npm synchron, **0 offene Changesets**. ~20 Pakete publiziert.
+
+### Genuin verbleibend (optional/future)
+- **`approveGrantWithExtension` vs `approveGrantWithWidening`** (grants) zusammenführen — braucht eine Semantik-Entscheidung (welche Variante gewinnt); grants ist prod-kritisch.
+- **„nest"-Dreifachbedeutung** dokumentieren/auflösen.
+- **`host-platform/` als `@openape/host-platform`** wäre der einzige semi-saubere Rest-Schnitt, falls je gewünscht (interface-basierte darwin/linux-Abstraktion, ~600 LOC; agent-bootstrap hängt dran).
+- **SSRF-Residual:** Redirect-/DNS-Rebinding-Härtung via pinned-IP-Fetch / jose-v6 `customFetch`.
+
+### Bekannte Harness-Grenze
+Der Auto-Mode-Classifier blockt agent-seitige **Prod-DB-SSH-Reads** (auch mit Chat-Freigabe + `apes run`-Wrapper) — braucht eine Bash-Permission-Rule in `.claude/settings.local.json` (vom User anzulegen; Agent darf sich nicht selbst freischalten). **Deploy-Scripts** (`node scripts/deploy.mjs <t>`) laufen dagegen durch.
+
+---
+
 ## Phase-1-Status: ✅ komplett (bis auf cutover-gated Rest in M2)
 - **M0/M1** De-Sedimentation, **M3** Spec-Contract-Netz + protocol-Reconciliation, **M4** SP-SDK fleet-weit (Libs publiziert, chat + tasks/plans/timetrack migriert, SSRF gehärtet), **M2** safe slice (Hatch-Bundle-Bugfix, Exoscale-501, launchd-Kommentare, REMOVE-AFTER-Tags + `MIGRATION-mac-to-docker.md`).
 - Erstes Phase-2-Item erledigt: `OpenApeManifest.scopes` (core) Record→Array (IdP-seitiges B6 behoben, PR #546).
