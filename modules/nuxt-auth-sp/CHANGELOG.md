@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [04bdf06]
+  - @openape/core@0.17.1
+  - @openape/auth@0.11.1
+
 ## 0.11.1
 
 ### Patch Changes
