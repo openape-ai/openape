@@ -1,7 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { execFileSync } from 'node:child_process'
 import { createPrivateKey, sign } from 'node:crypto'
-import { rmSync } from 'node:fs'
 import { exchangeWithDelegation } from '@openape/cli-auth'
 import { loadAuth } from '../config'
 import { apiFetch, getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../http'
@@ -173,7 +171,10 @@ export async function issueAgentToken(input: {
   const challengeResp = await fetch(challengeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: input.agentEmail }),
+    // Canonical /api/auth/challenge expects `id` (M3). The legacy
+    // /api/agent/challenge field was `agent_id`; discovery now resolves
+    // the canonical endpoint, so the payload must use `id` to match.
+    body: JSON.stringify({ id: input.agentEmail }),
   })
   if (!challengeResp.ok) {
     const text = await challengeResp.text().catch(() => '')
@@ -187,7 +188,8 @@ export async function issueAgentToken(input: {
   const authResp = await fetch(authenticateUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: input.agentEmail, challenge, signature }),
+    // Canonical /api/auth/authenticate expects `id` (same M3 rename).
+    body: JSON.stringify({ id: input.agentEmail, challenge, signature }),
   })
   if (!authResp.ok) {
     const text = await authResp.text().catch(() => '')
@@ -199,66 +201,20 @@ export async function issueAgentToken(input: {
 
 export interface SpawnSetupScriptInput {
   name: string
-  /**
-   * macOS username for the dscl record + chown ops. Prefixed with
-   * `openape-agent-` (see MACOS_USER_PREFIX) so operators can audit
-   * `dscl . -list /Users` and `apes agents cleanup-orphans` can
-   * recognise OpenApe-managed accounts without UID-range heuristics.
-   * Kept separate from `name` so the bare agent name stays visible
-   * on user-facing surfaces (email, troop UI, bridge data dir).
-   */
-  macOSUsername: string
+  /** Absolute home dir, under /var/lib/openape/homes/<name>. */
   homeDir: string
+  /** Login shell, e.g. /bin/bash. */
   shellPath: string
   privateKeyPem: string
   publicKeySshLine: string
-  /**
-   * Agent X25519 keypair (base64url DER) for sealed capability secrets.
-   * The private key is written to `~/.config/openape/agent-x25519.key`
-   * (0600) so the agent runtime can open secrets troop sealed to its
-   * public key. The public key is written alongside (`.pub`, 0644) so
-   * the agent can report it to troop on sync.
-   */
+  /** Agent X25519 keypair (base64url) for sealed capability secrets. */
   x25519PrivateKey: string
   x25519PublicKey: string
   authJson: string
   claudeSettingsJson: string | null
   hookScriptSource: string | null
-  /**
-   * Long-lived Claude Code OAuth token (`sk-ant-oat01-…`) obtained via
-   * `claude setup-token`. When provided, gets written to a chmod 600 env
-   * file under the agent's HOME and sourced from .zshenv + .profile so
-   * `claude -p "…"` works immediately without interactive auth.
-   * `null` means the agent has no Claude credential — `claude` will
-   * prompt for auth on first run inside that user.
-   */
+  /** Long-lived Claude Code OAuth token; null = agent auths interactively. */
   claudeOauthToken: string | null
-  /**
-   * If set, also installs the ape-agent runtime for this agent:
-   * drops a launchd plist + start script + .env with the LLM proxy master
-   * key. The runtime expects `@openape/ape-agent` to already be installed
-   * globally on the host. `null` skips the bridge entirely (current default).
-   */
-  bridge: SpawnBridgeFiles | null
-  /**
-   * Troop sync launchd plist. Always set for spawn-via-troop; passed
-   * as null only by tests that exercise the legacy path. Drops the
-   * plist into ~/Library/LaunchAgents/ and bootstraps it.
-   */
-  troop: SpawnTroopFiles | null
-}
-
-export interface SpawnBridgeFiles {
-  /** Plist label, e.g. `eco.hofmann.apes.bridge.<agent>` (must be unique). */
-  plistLabel: string
-  /** Absolute path of the plist file (under /Library/LaunchDaemons/). */
-  plistPath: string
-  /** XML plist content (full file). */
-  plistContent: string
-  /** start.sh content (idempotent installer + exec). */
-  startScript: string
-  /** .env content (`LITELLM_BASE_URL` + `LITELLM_API_KEY`). */
-  envFile: string
 }
 
 const SH_HEREDOC_DELIMITER = 'APES_HEREDOC_END'
@@ -271,9 +227,9 @@ function shHeredoc(content: string): string {
 }
 
 export function buildSpawnSetupScript(input: SpawnSetupScriptInput): string {
-  const { name, macOSUsername, homeDir, shellPath } = input
+  const { name, homeDir, shellPath } = input
 
-  // Trailing newline on PEM keeps OpenSSL happy. JSON files we write as-is.
+  // Trailing newline on PEM keeps OpenSSL happy.
   const privatePemForHeredoc = input.privateKeyPem.endsWith('\n')
     ? input.privateKeyPem
     : `${input.privateKeyPem}\n`
@@ -287,11 +243,6 @@ chmod 755 "$HOME_DIR/.claude/hooks/bash-via-ape-shell.sh"
 `
     : ''
 
-  // Claude Code OAuth token: write to a chmod 600 env file under
-  // ~/.config/openape/, source it from both .zshenv (zsh always loads,
-  // including non-interactive) and .profile (bash login shells, what
-  // `escapes` ends up exec'ing through). Keeping the actual token in
-  // one place means rotation = edit one file, no shell-rc grep needed.
   const claudeTokenBlock = input.claudeOauthToken
     ? `
 mkdir -p "$HOME_DIR/.config/openape"
@@ -313,94 +264,50 @@ done
   return `#!/bin/bash
 set -euo pipefail
 
-# escapes-spawned scripts inherit a minimal PATH that doesn't include
-# /usr/sbin — which is where chown / dscl / pwpolicy live. Force a
-# wide PATH so the privileged setup commands resolve without absolute
-# paths everywhere.
-export PATH="/usr/sbin:/usr/bin:/bin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+# Wide PATH so useradd / getent / install / chown resolve regardless of
+# how the privileged wrapper trimmed the environment.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 NAME=${shQuote(name)}
-MACOS_USER=${shQuote(macOSUsername)}
 HOME_DIR=${shQuote(homeDir)}
 SHELL_PATH=${shQuote(shellPath)}
 
-# Tombstone-reuse: \`apes agents destroy\` leaves the dscl user
-# record behind (opendirectoryd refuses \`dscl . -delete\` from
-# escapes' setuid-root context without admin auth, so we accept the
-# stranded record as a harmless tombstone — see
-# runPhaseGTeardownInProcess). When the operator re-spawns with the
-# same name, we recycle the tombstone instead of refusing: if the
-# previously-recorded home dir is gone from disk (matching the
-# Phase-G teardown's \`rm -rf\`), we reuse the existing UID +
-# overwrite the home. If the home is still on disk it's a real,
-# live agent — refuse.
-TOMBSTONE_REUSE=0
-if dscl . -read "/Users/$MACOS_USER" >/dev/null 2>&1; then
-  EXISTING_HOME=$(dscl . -read "/Users/$MACOS_USER" NFSHomeDirectory 2>/dev/null | awk '/NFSHomeDirectory:/ {print $2}')
-  if [ -n "$EXISTING_HOME" ] && [ -d "$EXISTING_HOME" ]; then
-    echo "User $MACOS_USER already exists with a live home at $EXISTING_HOME; refusing to overwrite." >&2
-    exit 1
-  fi
-  NEXT_UID=$(dscl . -read "/Users/$MACOS_USER" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
-  if [ -z "$NEXT_UID" ]; then
-    echo "User $MACOS_USER exists but has no UniqueID; record is malformed, refusing to recycle." >&2
-    exit 1
-  fi
-  echo "Recycling tombstone dscl record for $MACOS_USER (uid=$NEXT_UID, prior home $EXISTING_HOME — gone)"
-  TOMBSTONE_REUSE=1
+# Agent homes live under /var/lib/openape/homes/ (the persisted
+# openape-homes volume) — out of /home/ where real operator accounts
+# live. useradd --create-home makes the leaf dir but not missing
+# parents; the volume mount provides the parent, but pre-create it
+# anyway so a bare-metal/non-volume run still works.
+mkdir -p /var/lib/openape/homes
+chmod 755 /var/lib/openape/homes
+
+# Create the agent's OS user if absent. spawn.ts already refused earlier
+# when the user existed, but guard here too so a re-run of the privileged
+# script is idempotent rather than erroring on a half-created account.
+if ! getent passwd "$NAME" >/dev/null 2>&1; then
+  useradd --create-home --home-dir "$HOME_DIR" --shell "$SHELL_PATH" --comment "OpenApe Agent $NAME" "$NAME"
 fi
 
-# Phase G: agent home dirs live under /var/openape/homes/, not
-# /Users/. Pre-create the parent and chmod it world-traversable
-# so per-agent dirs can be reached by their respective uids.
-mkdir -p /var/openape/homes
-chmod 755 /var/openape/homes
+# Resolve the uid for the final report line (getent is the canonical read).
+NEW_UID=$(getent passwd "$NAME" | cut -d: -f3)
 
-if [ "$TOMBSTONE_REUSE" = "0" ]; then
-  # Pick the LOWEST free UID in the [200, 500) hidden service-account
-  # range. We must skip every occupied UID — agent users AND the many
-  # macOS system _* accounts — and reuse gaps. The old code took
-  # max(existing)+1, so a single agent landing on 499 wedged every
-  # future spawn ("No free UID") even with 100+ UIDs free. Now we scan
-  # for the first actually-unused UID.
-  OCCUPIED_UIDS=$(dscl . -list /Users UniqueID | awk '$2 >= 200 && $2 < 500 {print $2}' | sort -n -u)
-  NEXT_UID=""
-  candidate=200
-  while [ "$candidate" -lt 500 ]; do
-    if ! printf '%s\n' "$OCCUPIED_UIDS" | grep -qx "$candidate"; then
-      NEXT_UID=$candidate
-      break
-    fi
-    candidate=$((candidate + 1))
-  done
-  if [ -z "$NEXT_UID" ]; then
-    echo "No free UID in [200, 500) — refusing to clobber a real user." >&2
-    exit 1
-  fi
-
-  dscl . -create "/Users/$MACOS_USER"
-fi
-
-# Idempotent attribute writes — \`dscl . -create\` on an existing
-# property overwrites in place, so the tombstone-reuse path lands
-# the same end-state as a fresh create.
-dscl . -create "/Users/$MACOS_USER" UserShell "$SHELL_PATH"
-dscl . -create "/Users/$MACOS_USER" RealName "OpenApe Agent $NAME"
-dscl . -create "/Users/$MACOS_USER" UniqueID "$NEXT_UID"
-dscl . -create "/Users/$MACOS_USER" PrimaryGroupID 20
-dscl . -create "/Users/$MACOS_USER" NFSHomeDirectory "$HOME_DIR"
-dscl . -create "/Users/$MACOS_USER" IsHidden 1
-
-mkdir -p "$HOME_DIR/.ssh" "$HOME_DIR/.config/apes"
+# Identity dirs — created owned by the agent so the file writes below land
+# with the right owner even before the final recursive chown.
+install -d -m 700 -o "$NAME" "$HOME_DIR/.ssh"
+install -d -m 700 -o "$NAME" "$HOME_DIR/.config"
+install -d -m 700 -o "$NAME" "$HOME_DIR/.config/apes"
+install -d -m 700 -o "$NAME" "$HOME_DIR/.config/openape"
 
 cat > "$HOME_DIR/.ssh/id_ed25519" ${shHeredoc(privatePemForHeredoc.trimEnd())}
-cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(`${input.publicKeySshLine}`)}
+cat > "$HOME_DIR/.ssh/id_ed25519.pub" ${shHeredoc(input.publicKeySshLine)}
 cat > "$HOME_DIR/.config/apes/auth.json" ${shHeredoc(input.authJson)}
-mkdir -p "$HOME_DIR/.config/openape"
 cat > "$HOME_DIR/.config/openape/agent-x25519.key" ${shHeredoc(input.x25519PrivateKey)}
 cat > "$HOME_DIR/.config/openape/agent-x25519.key.pub" ${shHeredoc(input.x25519PublicKey)}
-${claudeBlock}${claudeTokenBlock}${buildBridgeBlock(input.bridge)}${buildTroopBlock(input.troop)}
-chown -R "$MACOS_USER:staff" "$HOME_DIR"
+${claudeBlock}${claudeTokenBlock}
+# Per-agent task dir that \`apes agents sync\` writes to (XDG-style on
+# Linux; was ~/Library/... on macOS).
+mkdir -p "$HOME_DIR/.openape/agent/tasks"
+
+chown -R "$NAME:" "$HOME_DIR"
 chmod 700 "$HOME_DIR/.ssh"
 chmod 700 "$HOME_DIR/.config"
 chmod 700 "$HOME_DIR/.config/openape"
@@ -410,270 +317,10 @@ chmod 600 "$HOME_DIR/.config/apes/auth.json"
 chmod 600 "$HOME_DIR/.config/openape/agent-x25519.key"
 chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key.pub"
 if [ -f "$HOME_DIR/.config/openape/claude-token.env" ]; then
-  chmod 700 "$HOME_DIR/.config/openape"
   chmod 600 "$HOME_DIR/.config/openape/claude-token.env"
 fi
 
-echo "OK $NAME (macOS user $MACOS_USER) uid=$NEXT_UID home=$HOME_DIR"
-${buildBridgeBootstrapBlock(input.bridge, name)}${buildTroopBootstrapBlock(input.troop, name)}`
-}
-
-function buildBridgeBlock(bridge: SpawnBridgeFiles | null): string {
-  if (!bridge) return ''
-  // Phase B (#sim-arch): no per-agent system-domain bridge plist
-  // anymore. The Nest's in-process supervisor owns bridge lifecycle
-  // (`apps/openape-nest/src/lib/supervisor.ts`). We still drop the
-  // bridge .env into the agent home so the bridge's
-  // resolveBridgeConfig finds it at runtime — same path the
-  // supervisor's child process uses. start.sh is no longer needed
-  // (the supervisor invokes ape-agent directly via
-  // \`apes run --as <agent>\`), and the system-domain plist is no
-  // longer written.
-  return `
-mkdir -p "$HOME_DIR/Library/Application Support/openape/bridge" "$HOME_DIR/Library/Logs"
-cat > "$HOME_DIR/Library/Application Support/openape/bridge/.env" ${shHeredoc(bridge.envFile)}
-chmod 600 "$HOME_DIR/Library/Application Support/openape/bridge/.env"
-`
-}
-
-function buildBridgeBootstrapBlock(_bridge: SpawnBridgeFiles | null, _name: string): string {
-  // Phase B: no launchd plist to bootstrap — Nest supervisor takes
-  // over at the next /agents POST handler reconcile. Caller (the
-  // Nest's POST /agents handler) calls supervisor.reconcile(...)
-  // after the spawn succeeds.
-  return ''
-}
-
-export interface SpawnTroopFiles {
-  /** Plist label, e.g. `openape.troop.sync.<agent>`. */
-  plistLabel: string
-  /** Absolute path under $HOME/Library/LaunchAgents/. */
-  plistPath: string
-  /** Full plist XML content. */
-  plistContent: string
-}
-
-/**
- * Troop sync launchd plist — installed for every spawned agent.
- * Drops `~/Library/LaunchAgents/openape.troop.sync.<agent>.plist`,
- * bootstraps it into the agent's user-domain (gui/<uid>), then runs
- * `apes agents sync` once eagerly so the agent appears at the troop
- * SP within seconds rather than waiting a full sync interval.
- */
-function buildTroopBlock(_troop: SpawnTroopFiles | null): string {
-  // Phase C (#sim-arch): no per-agent troop-sync plist anymore. The
-  // Nest's centralised TroopSync loop walks the registry every 5 min
-  // and runs `apes agents sync` for each agent (see
-  // apps/openape-nest/src/lib/troop-sync.ts). We still create the
-  // agent-side dirs that `apes agents sync` writes to.
-  return `
-mkdir -p "$HOME_DIR/Library/Logs" "$HOME_DIR/.openape/agent/tasks"
-`
-}
-
-function buildTroopBootstrapBlock(_troop: SpawnTroopFiles | null, _name: string): string {
-  // Phase C: no system-domain plist to bootstrap. The Nest's
-  // centralised troop-sync loop will pick the new agent up at the
-  // next tick (≤5 min after spawn).
-  return ''
-}
-
-export interface DestroyTeardownScriptInput {
-  name: string
-  homeDir: string
-  adminUser: string
-}
-
-/**
- * Phase G teardown — for agents whose home is under /var/openape/homes/.
- * Skips sysadminctl + admin-password because:
- *   1. The home dir is on /var/, not FDA-protected → root can rm.
- *   2. We accept leaving the dscl user record as a tombstone
- *      (hidden, IsHidden=1, no home, no processes) — opendirectoryd
- *      refuses dscl . -delete from escapes' setuid-root context
- *      without admin auth, but the tombstone is harmless.
- * Result: fully scriptable destroy without an interactive admin
- * password prompt.
- */
-/**
- * Phase-G teardown — Node implementation. The shell variant
- * (`buildPhaseGTeardownScript` below) is kept for back-compat but
- * unused in the new flow: instead of `apes run --as root -- bash
- * <tempScript>`, the destroy command does `apes run --as root --
- * apes agents destroy <name> --force --root-stage`, then this
- * function runs the same ops directly in-process when re-invoked
- * as root. Net effect: the DDISA grant request reads
- * "apes agents destroy <name> --force --root-stage" (matches the
- * existing `apes agents destroy *` YOLO pattern) instead of an
- * opaque `bash /var/folders/.../teardown.sh`.
- *
- * Caller invariant: process.geteuid() === 0. The shell script
- * tolerated being called as non-root by no-op'ing on the privileged
- * lines; this version trusts the caller to have already escalated
- * via `apes run --as root`.
- */
-export function runPhaseGTeardownInProcess(input: { name: string, homeDir: string, macOSUsername?: string }): void {
-  const { name, homeDir } = input
-  // macOSUsername is the dscl record name; for new agents it's
-  // `openape-agent-<name>`, for legacy pre-prefix agents it's just
-  // <name>. Callers pass it explicitly; if absent we fall back to
-  // the agent name so the legacy code path still resolves.
-  const macOSUser = input.macOSUsername ?? name
-
-  // Read agent's UID via dscl. Same approach as the shell version —
-  // dscl . -read /Users/<user> UniqueID emits "UniqueID: <n>".
-  let uid: string | null = null
-  try {
-    const out = execFileSync('/usr/bin/dscl', ['.', '-read', `/Users/${macOSUser}`, 'UniqueID'], { encoding: 'utf8' })
-    const m = out.match(/UniqueID:\s*(\d+)/)
-    if (m) uid = m[1]!
-  }
-  catch { /* dscl returns non-zero when the user doesn't exist — that's fine */ }
-
-  if (uid) {
-    // bootout the user-domain launchd + kill any live processes
-    // owned by the agent uid. Both allowed to fail (no live session
-    // is the common case after a clean spawn). We swallow failures
-    // identically to the shell script's `|| true`.
-    try { execFileSync('/bin/launchctl', ['bootout', `user/${uid}`], { stdio: 'ignore' }) }
-    catch { /* no live session — fine */ }
-    try { execFileSync('/usr/bin/pkill', ['-9', '-u', uid], { stdio: 'ignore' }) }
-    catch { /* no live procs — fine */ }
-  }
-
-  // Per-agent ecosystem files written by the Nest's pm2-supervisor.
-  const agentDir = `/var/openape/agents/${name}`
-  try { rmSync(agentDir, { recursive: true, force: true }) }
-  catch { /* nothing to remove */ }
-
-  // Home dir lives under /var/openape/homes/ — no FDA wall, root can
-  // rm directly. Same safety check as the shell script: refuse on
-  // empty / root-fs paths so a misconfigured agent.json can't nuke
-  // the filesystem.
-  if (homeDir && homeDir !== '/' && homeDir.startsWith('/var/openape/homes/')) {
-    try { rmSync(homeDir, { recursive: true, force: true }) }
-    catch { /* already gone */ }
-  }
-
-  // dscl record stays as a tombstone — opendirectoryd rejects the
-  // delete from escapes' setuid-root context without admin auth, so
-  // the user record sticks around hidden (IsHidden=1) with a stale
-  // NFSHomeDirectory. Run `sudo apes agents cleanup-orphans` from a
-  // shell later to sysadminctl-deleteUser the accumulated tombstones.
-
-  console.log(`OK Phase-G teardown done for ${name} (dscl record /Users/${macOSUser} kept as tombstone)`)
-}
-
-// Legacy: bash-script version of the same teardown. Kept as a
-// reference until we've verified the in-process variant covers all
-// the edge cases in production; no caller in this repo uses it.
-export function buildPhaseGTeardownScript(input: { name: string, homeDir: string }): string {
-  const { name, homeDir } = input
-  return `#!/bin/bash
-set -u
-
-NAME=${shQuote(name)}
-HOME_DIR=${shQuote(homeDir)}
-
-UID_OF=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
-
-if [ -n "$UID_OF" ]; then
-  launchctl bootout "user/$UID_OF" 2>/dev/null || true
-  pkill -9 -u "$UID_OF" 2>/dev/null || true
-fi
-
-# Per-agent ecosystem files written by the Nest's pm2-supervisor.
-rm -rf "/var/openape/agents/$NAME"
-
-# Home dir lives under /var/openape/homes/ — no FDA wall, root can
-# remove directly.
-if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
-  rm -rf "$HOME_DIR"
-fi
-
-# dscl record stays as a tombstone. Operators run
-# \`sudo sysadminctl -deleteUser $NAME\` to fully clean up if desired.
-echo "OK Phase-G teardown done for $NAME (dscl record kept as tombstone)"
-`
-}
-
-export function buildDestroyTeardownScript(input: DestroyTeardownScriptInput): string {
-  const { name, homeDir, adminUser } = input
-  return `#!/bin/bash
-# Best-effort teardown. set -u catches typos; we deliberately do NOT use -e
-# because pkill / launchctl are allowed to fail when the user has no live
-# sessions.
-set -u
-
-NAME=${shQuote(name)}
-HOME_DIR=${shQuote(homeDir)}
-ADMIN_USER=${shQuote(adminUser)}
-
-# Read the admin password from stdin (line 1). The caller pipes it in.
-# We never accept it as an argv element so it can't show up in process
-# listings or escapes' audit log.
-read -r ADMIN_PASSWORD
-if [ -z "$ADMIN_PASSWORD" ]; then
-  echo "ERROR: no admin password on stdin (expected one line)." >&2
-  exit 2
-fi
-
-UID_OF=$(dscl . -read "/Users/$NAME" UniqueID 2>/dev/null | awk '/UniqueID:/ {print $2}')
-
-if [ -n "$UID_OF" ]; then
-  launchctl bootout "user/$UID_OF" 2>/dev/null || true
-  pkill -9 -u "$UID_OF" 2>/dev/null || true
-fi
-
-# Per-agent system LaunchDaemon written by spawn (unless --no-bridge). Bootout +
-# delete must come BEFORE we delete the user, otherwise launchd keeps a
-# zombie reference. No-op if the plist isn't there.
-BRIDGE_LABEL="eco.hofmann.apes.bridge.$NAME"
-BRIDGE_PLIST="/Library/LaunchDaemons/$BRIDGE_LABEL.plist"
-if [ -f "$BRIDGE_PLIST" ]; then
-  launchctl bootout "system/$BRIDGE_LABEL" 2>/dev/null || true
-  rm -f "$BRIDGE_PLIST"
-fi
-
-if [ -d "$HOME_DIR" ] && [ "$HOME_DIR" != "/" ] && [ "$HOME_DIR" != "" ]; then
-  rm -rf "$HOME_DIR"
-fi
-
-# \`escapes\` is a plain setuid binary — opendirectoryd sees no audit/PAM
-# session attached (AUDIT_SESSION_ID=unset) and rejects DirectoryService
-# writes from this context: a bare \`sysadminctl -deleteUser\` or
-# \`dscl . -delete\` hangs ~5 minutes and exits with eUndefinedError -14987
-# at DSRecord.m:563. Passing explicit -adminUser/-adminPassword bypasses
-# opendirectoryd's implicit "is current session admin?" check and
-# authenticates against DirectoryService directly — the delete then
-# completes in ~1 second.
-if ! command -v sysadminctl >/dev/null 2>&1; then
-  echo "ERROR: sysadminctl not available; cannot delete user record." >&2
-  exit 1
-fi
-
-sysadminctl \\
-  -deleteUser "$NAME" \\
-  -adminUser "$ADMIN_USER" \\
-  -adminPassword "$ADMIN_PASSWORD"
-SYSAD_EC=$?
-unset ADMIN_PASSWORD
-
-if [ $SYSAD_EC -ne 0 ]; then
-  echo "ERROR: sysadminctl -deleteUser failed (exit=$SYSAD_EC)." >&2
-  echo "       Common causes: wrong admin password, admin user '$ADMIN_USER'" >&2
-  echo "       not in admin group, or target user '$NAME' is the last secure" >&2
-  echo "       token holder (run \\\`sysadminctl -secureTokenStatus $NAME\\\`)." >&2
-  exit 1
-fi
-
-# Verify the record is actually gone.
-if dscl . -read "/Users/$NAME" >/dev/null 2>&1; then
-  echo "ERROR: user record /Users/$NAME still exists after teardown" >&2
-  exit 1
-fi
-
-echo "OK destroyed $NAME"
+echo "OK $NAME (linux user) uid=$NEW_UID home=$HOME_DIR"
 `
 }
 

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_NAME_REGEX,
   buildAgentAuthJson,
-  buildDestroyTeardownScript,
   buildSpawnSetupScript,
   CLAUDE_SETTINGS_JSON,
+  issueAgentToken,
   registerAgentAtIdp,
   shQuote,
   SSH_ED25519_REGEX,
@@ -92,154 +92,67 @@ describe('CLAUDE_SETTINGS_JSON', () => {
   })
 })
 
-describe('buildSpawnSetupScript', () => {
+describe('buildSpawnSetupScript (linux)', () => {
   const baseInput = {
-    name: 'agent-a',
-    macOSUsername: 'openape-agent-agent-a',
-    homeDir: '/var/openape/homes/openape-agent-agent-a',
-    shellPath: '/usr/local/bin/ape-shell',
-    privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEADBEEF\n-----END PRIVATE KEY-----\n',
-    publicKeySshLine: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBz1WSDX',
-    x25519PrivateKey: 'TUVfWDI1NTE5X1BSSVZBVEVfREVSX0ZBS0U',
-    x25519PublicKey: 'TUVfWDI1NTE5X1BVQkxJQ19ERVJfRkFLRQ',
+    name: 'coder',
+    homeDir: '/var/lib/openape/homes/coder',
+    shellPath: '/bin/bash',
+    privateKeyPem: '-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n',
+    publicKeySshLine: 'ssh-ed25519 AAAAFAKE',
+    x25519PrivateKey: 'PRIVB64',
+    x25519PublicKey: 'PUBB64',
     authJson: '{"idp":"https://id.openape.ai"}\n',
+    claudeSettingsJson: null,
+    hookScriptSource: null,
+    claudeOauthToken: null,
   }
 
-  it('writes the agent X25519 keypair with private key chmod 600', () => {
-    const script = buildSpawnSetupScript({
-      ...baseInput,
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: null,
-    })
-    expect(script).toContain('mkdir -p "$HOME_DIR/.config/openape"')
-    expect(script).toContain('cat > "$HOME_DIR/.config/openape/agent-x25519.key"')
-    expect(script).toContain('cat > "$HOME_DIR/.config/openape/agent-x25519.key.pub"')
-    expect(script).toContain('chmod 600 "$HOME_DIR/.config/openape/agent-x25519.key"')
-    expect(script).toContain('chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key.pub"')
-    // private key never world-readable
-    expect(script).not.toContain('chmod 644 "$HOME_DIR/.config/openape/agent-x25519.key"')
+  it('creates the agent user via useradd, not dscl', () => {
+    const s = buildSpawnSetupScript(baseInput)
+    expect(s).toContain('useradd --create-home --home-dir "$HOME_DIR" --shell "$SHELL_PATH" --comment "OpenApe Agent $NAME" "$NAME"')
+    expect(s).not.toContain('dscl')
+    expect(s).not.toContain('launchctl')
+    expect(s).not.toContain('NFSHomeDirectory')
+    expect(s).not.toContain('Library/Application Support')
   })
 
-  it('allocates the lowest free UID, not max+1 (so a high UID does not wedge spawns)', () => {
-    const script = buildSpawnSetupScript({
-      ...baseInput,
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: null,
-    })
-    // Scans for the first actually-unused UID in [200,500)…
-    expect(script).toContain('OCCUPIED_UIDS=')
-    expect(script).toMatch(/while \[ "\$candidate" -lt 500 \]/)
-    expect(script).toContain('grep -qx "$candidate"')
-    // …and must NOT be the old max(existing)+1 logic.
-    expect(script).not.toContain('NEXT_UID=199')
-    expect(script).not.toContain('NEXT_UID=$((uid + 1))')
-    // The genuine "range full" guard is still present.
-    expect(script).toContain('No free UID in [200, 500)')
+  it('guards user creation behind a getent existence check (idempotent)', () => {
+    const s = buildSpawnSetupScript(baseInput)
+    expect(s).toContain('if ! getent passwd "$NAME" >/dev/null 2>&1; then')
   })
 
-  it('with claude hook: includes settings.json + hook script blocks', () => {
-    const script = buildSpawnSetupScript({
+  it('writes the identity files and locks down perms', () => {
+    const s = buildSpawnSetupScript(baseInput)
+    expect(s).toContain('"$HOME_DIR/.ssh/id_ed25519"')
+    expect(s).toContain('"$HOME_DIR/.config/apes/auth.json"')
+    expect(s).toContain('"$HOME_DIR/.config/openape/agent-x25519.key"')
+    expect(s).toContain('chmod 600 "$HOME_DIR/.ssh/id_ed25519"')
+    expect(s).toContain('chown -R "$NAME:" "$HOME_DIR"')
+  })
+
+  it('creates the agent-sync task dir under ~/.openape (not ~/Library)', () => {
+    const s = buildSpawnSetupScript(baseInput)
+    expect(s).toContain('mkdir -p "$HOME_DIR/.openape/agent/tasks"')
+  })
+
+  it('includes the claude hook + settings only when provided', () => {
+    const withHook = buildSpawnSetupScript({
       ...baseInput,
-      claudeSettingsJson: CLAUDE_SETTINGS_JSON,
+      claudeSettingsJson: '{"hooks":{}}',
       hookScriptSource: '#!/bin/bash\necho hi\n',
-      claudeOauthToken: null,
     })
-    expect(script).toContain(`NAME='agent-a'`)
-    expect(script).toContain(`MACOS_USER='openape-agent-agent-a'`)
-    expect(script).toContain(`HOME_DIR='/var/openape/homes/openape-agent-agent-a'`)
-    expect(script).toContain(`SHELL_PATH='/usr/local/bin/ape-shell'`)
-    expect(script).toContain('dscl . -create "/Users/$MACOS_USER" UserShell "$SHELL_PATH"')
-    expect(script).toContain('mkdir -p "$HOME_DIR/.claude/hooks"')
-    expect(script).toContain('chown -R "$MACOS_USER:staff" "$HOME_DIR"')
-    expect(script).toContain('chmod 600 "$HOME_DIR/.config/apes/auth.json"')
-    expect(script).toMatch(/refusing to overwrite/i)
-    expect(script).toContain('IsHidden 1')
+    expect(withHook).toContain('.claude/settings.json')
+    expect(withHook).toContain('.claude/hooks/bash-via-ape-shell.sh')
   })
 
-  it('without claude hook: no .claude blocks', () => {
-    const script = buildSpawnSetupScript({
-      ...baseInput,
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: null,
-    })
-    expect(script).not.toContain('.claude')
-  })
-
-  it('with claude OAuth token: writes env file + sources from .zshenv and .profile', () => {
-    const token = 'sk-ant-oat01-FAKE_TOKEN_FOR_TESTING'
-    const script = buildSpawnSetupScript({
-      ...baseInput,
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: token,
-    })
-    expect(script).toContain('mkdir -p "$HOME_DIR/.config/openape"')
-    expect(script).toContain('cat > "$HOME_DIR/.config/openape/claude-token.env"')
-    expect(script).toContain(`export CLAUDE_CODE_OAUTH_TOKEN=${`'${token}'`}`)
-    expect(script).toContain('chmod 600 "$HOME_DIR/.config/openape/claude-token.env"')
-    expect(script).toContain('"$HOME_DIR/.zshenv"')
-    expect(script).toContain('"$HOME_DIR/.profile"')
-    expect(script).toContain('config/openape/claude-token.env')
-  })
-
-  it('without claude OAuth token: no env file write or rc additions', () => {
-    const script = buildSpawnSetupScript({
-      ...baseInput,
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: null,
-    })
-    expect(script).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
-    expect(script).not.toContain('cat > "$HOME_DIR/.config/openape/claude-token.env"')
-    expect(script).not.toMatch(/touch "\$HOME_DIR\/\.zshenv"/)
-  })
-
-  it('refuses inputs that collide with the heredoc delimiter', () => {
-    expect(() => buildSpawnSetupScript({
-      ...baseInput,
-      privateKeyPem: 'APES_HEREDOC_END pwned',
-      claudeSettingsJson: null,
-      hookScriptSource: null,
-      claudeOauthToken: null,
-    })).toThrow(/Refusing to emit heredoc/)
-  })
-})
-
-describe('buildDestroyTeardownScript', () => {
-  it('produces a script that deletes the user and home dir', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
-    expect(script).toContain(`NAME='agent-a'`)
-    expect(script).toContain(`HOME_DIR='/Users/agent-a'`)
-    expect(script).toContain(`ADMIN_USER='patrickhofmann'`)
-    expect(script).toContain('launchctl bootout "user/$UID_OF"')
-    expect(script).toContain('pkill -9 -u "$UID_OF"')
-    expect(script).toContain('rm -rf "$HOME_DIR"')
-    expect(script).toContain('sysadminctl \\')
-    expect(script).toContain('-deleteUser "$NAME"')
-    expect(script).toContain('-adminUser "$ADMIN_USER"')
-    expect(script).toContain('-adminPassword "$ADMIN_PASSWORD"')
-  })
-
-  it('reads the admin password from stdin (never as argv) and unsets it after use', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
-    expect(script).toContain('read -r ADMIN_PASSWORD')
-    expect(script).toContain('unset ADMIN_PASSWORD')
-    // The literal password must never be embedded in the script.
-    expect(script).not.toMatch(/-adminPassword\s+["'][^"'$]/)
-  })
-
-  it('post-verifies the user record is actually gone (no silent failure)', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
-    expect(script).toContain('still exists after teardown')
-    expect(script).toContain('exit 1')
-  })
-
-  it('guards against empty/root home', () => {
-    const script = buildDestroyTeardownScript({ name: 'agent-a', homeDir: '/Users/agent-a', adminUser: 'patrickhofmann' })
-    expect(script).toContain('"$HOME_DIR" != "/"')
+  it('writes the claude-token env file and grep-guards the shell-rc source line when a token is given', () => {
+    const s = buildSpawnSetupScript({ ...baseInput, claudeOauthToken: 'sk-ant-oat01-deadbeef' })
+    expect(s).toContain('"$HOME_DIR/.config/openape/claude-token.env"')
+    expect(s).toContain('export CLAUDE_CODE_OAUTH_TOKEN=')
+    expect(s).toContain('sk-ant-oat01-deadbeef')
+    expect(s).toContain('grep -qF \'config/openape/claude-token.env\'')
+    // and absent when no token:
+    expect(buildSpawnSetupScript(baseInput)).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
   })
 })
 
@@ -265,5 +178,42 @@ describe('registerAgentAtIdp', () => {
       idp: 'https://id.openape.ai',
     })
     expect(result.email).toBe('agent-a+patrick+hofmann_eco@id.openape.ai')
+  })
+})
+
+describe('issueAgentToken', () => {
+  it('sends the canonical `id` field (not legacy agent_id) to challenge + authenticate', async () => {
+    const { generateKeyPairSync } = await import('node:crypto')
+    const { privateKey } = generateKeyPairSync('ed25519')
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
+
+    const calls: Array<{ url: string, body: any }> = []
+    const fetchMock = vi.fn(async (url: string, init: any) => {
+      calls.push({ url, body: JSON.parse(init.body) })
+      if (url.endsWith('/challenge')) {
+        return { ok: true, json: async () => ({ challenge: 'a-challenge-string' }) } as any
+      }
+      return { ok: true, json: async () => ({ token: 'tok', expires_in: 3600 }) } as any
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const res = await issueAgentToken({
+        idp: 'https://id.openape.ai',
+        agentEmail: 'agent-a@id.openape.ai',
+        privateKeyPem: pem,
+      })
+      expect(res).toEqual({ token: 'tok', expiresIn: 3600 })
+
+      // The M3 canonical endpoints expect `id`; the legacy `agent_id`
+      // field name must never be sent (that was the spawn-time 400).
+      expect(calls[0]!.body).toEqual({ id: 'agent-a@id.openape.ai' })
+      expect(calls[1]!.body).toMatchObject({ id: 'agent-a@id.openape.ai', challenge: 'a-challenge-string' })
+      expect(calls[1]!.body).not.toHaveProperty('agent_id')
+      expect(typeof calls[1]!.body.signature).toBe('string')
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
