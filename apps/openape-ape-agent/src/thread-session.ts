@@ -18,6 +18,15 @@ import { createThrottle } from './throttle'
 
 const PATCH_INTERVAL_MS = 300
 
+// If the model backend produces no first token or tool-call within this
+// window, the turn fails *visibly* instead of leaving the chat stuck on
+// the typing indicator forever. Targets a hung/unreachable LLM proxy
+// (e.g. expired upstream auth) — the exact failure that otherwise shows
+// as an opaque, permanent "…". Disarmed on first activity, so a long but
+// legitimately slow answer is never cut off.
+const NO_ACTIVITY_TIMEOUT_MS = 60_000
+const NO_RESPONSE_MESSAGE = '(no response from the model backend — it may be unavailable or its API auth expired; nothing was changed, please retry)'
+
 interface ActiveTurn {
   placeholderId: string
   accumulated: string
@@ -139,6 +148,24 @@ export class ThreadSession {
     // placeholder (so the user immediately sees the typing indicator)
     // and before runLoop (so it gets the full context).
     await this.backfillHistoryOnce(replyToMessageId, body)
+
+    // Watchdog: a hung backend makes `runLoop` await a response that
+    // never arrives; without this the turn sits on the typing indicator
+    // forever. `settleOnce` ensures exactly one of {watchdog, runLoop
+    // result, runLoop throw} handles the turn — the others no-op.
+    let sawActivity = false
+    let turnSettled = false
+    const settleOnce = (): boolean => {
+      if (turnSettled) return true
+      turnSettled = true
+      return false
+    }
+    const watchdog = setTimeout(() => {
+      if (sawActivity || this.active !== turn || settleOnce()) return
+      this.deps.log(`turn watchdog: no model activity in ${NO_ACTIVITY_TIMEOUT_MS}ms — failing turn (room=${this.deps.roomId} thread=${this.deps.threadId})`)
+      void this.failTurn(NO_RESPONSE_MESSAGE)
+    }, NO_ACTIVITY_TIMEOUT_MS)
+
     try {
       const result = await runLoop({
         config: this.deps.runtimeConfig,
@@ -149,11 +176,13 @@ export class ThreadSession {
         history: this.history,
         handlers: {
           onTextDelta: (delta) => {
+            sawActivity = true
             if (!this.active) return
             this.active.accumulated += delta
             this.active.throttle.schedule()
           },
           onToolCall: ({ name }: { name: string }) => {
+            sawActivity = true
             this.deps.log(`[${this.deps.roomId}/${this.deps.threadId.slice(0, 8)}] tool_call: ${name}`)
             void setStatus(`🔧 ${name}`)
           },
@@ -167,6 +196,8 @@ export class ThreadSession {
           },
         },
       })
+      clearTimeout(watchdog)
+      if (settleOnce()) return // watchdog already failed this turn
 
       // Persist this turn into the thread's message history so the
       // next turn has full context — same shape as the old runtime's
@@ -178,10 +209,18 @@ export class ThreadSession {
 
       if (result.status === 'error') {
         this.deps.log(`runtime done with status=error (room=${this.deps.roomId} thread=${this.deps.threadId})`)
+        // Don't leave the user with a blank "(empty response)" when the
+        // run errored without producing any text — surface it instead.
+        if (!turn.accumulated) {
+          await this.failTurn('(the model run ended with an error and produced no output — please retry)')
+          return
+        }
       }
       await this.endTurn()
     }
     catch (err) {
+      clearTimeout(watchdog)
+      if (settleOnce()) return // watchdog already failed this turn
       const message = err instanceof Error ? err.message : String(err)
       this.deps.log(`runtime error (room=${this.deps.roomId} thread=${this.deps.threadId}): ${message}`)
       await this.failTurn(`(runtime error: ${message})`)
