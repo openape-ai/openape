@@ -1,5 +1,11 @@
 # @openape/apes
 
+## 1.30.0
+
+### Minor Changes
+
+- Linux-only agent spawn. `apes agents spawn` now provisions agents on Linux (the Docker nest) via `useradd`, replacing the macOS-native `dscl` path — the macOS user/launchd/host modules (`macos-user`, `macos-host`, `launchd-reconcile`, `troop-bootstrap`, `host-platform/darwin*`) are removed and `getHostPlatform()` is Linux-only. Agent homes land on the persisted `/var/lib/openape/homes`; the registry path is reconciled across writer (CLI) and reader (nest) via `OPENAPE_NEST_REGISTRY_PATH`; the stale `escapes`/`apes` PATH guards are dropped (Linux escalates via `runPrivilegedBash`); and `issueAgentToken` uses the canonical `/api/auth/*` `id` field instead of the legacy `agent_id`. Note: macOS-native spawn/destroy is no longer supported — nests are Linux containers.
+
 ## 1.29.1
 
 ### Patch Changes
