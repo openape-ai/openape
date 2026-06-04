@@ -13,7 +13,6 @@ vi.mock('../src/http.js', () => ({
 // On Linux the username is identity and homes live under /home. Only
 // `agent-a` has an OS record in the fixtures.
 vi.mock('../src/lib/host-platform/index.js', () => ({
-  isDarwin: vi.fn(() => false),
   isLinux: vi.fn(() => true),
   getHostPlatform: vi.fn(() => ({
     getHostId: () => 'host-id',

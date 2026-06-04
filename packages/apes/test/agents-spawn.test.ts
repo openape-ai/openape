@@ -21,12 +21,11 @@ const readUserMock = vi.fn(() => null as any)
 
 // The host-platform indirection replaces direct imports of OS helpers
 // in production code. Mock its surface here so the tests can control the
-// agent-user lookups deterministically. Linux: isLinux=true, isDarwin=false,
+// agent-user lookups deterministically. Linux: isLinux=true,
 // agentUsername is identity (no prefix).
 const runPrivilegedBashMock = vi.fn(async () => {})
 
 const hostPlatformMock = {
-  isDarwin: vi.fn(() => false),
   isLinux: vi.fn(() => true),
   getHostPlatform: vi.fn(() => ({
     getHostId: () => 'host-id',
@@ -94,7 +93,6 @@ describe('apes agents spawn', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     whichBinaryMock.mockImplementation((name: string) => `/usr/local/bin/${name}`)
     readUserMock.mockReturnValue(null)
-    hostPlatformMock.isDarwin.mockReturnValue(false)
     hostPlatformMock.isLinux.mockReturnValue(true)
   })
 

@@ -16,7 +16,6 @@ const lookupAgentUser = vi.fn()
 const runPrivilegedBash = vi.fn(async () => {})
 
 const hostPlatformMock = {
-  isDarwin: vi.fn(() => false),
   isLinux: vi.fn(() => true),
   getHostPlatform: vi.fn(() => ({
     getHostId: () => 'host-id',
