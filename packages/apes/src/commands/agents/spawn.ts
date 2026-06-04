@@ -12,7 +12,6 @@ import {
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
-import { whichBinary } from '../../lib/which'
 import { getHostPlatform } from '../../lib/host-platform'
 import { upsertNestAgent } from '../../lib/nest-registry'
 
@@ -94,17 +93,6 @@ export const spawnAgentCommand = defineCommand({
     // etc.). The Claude bash-rewrite hook still routes Claude-issued
     // commands through ape-shell — that's where grant-mediation matters.
     const loginShell = (args.shell ?? '/bin/bash').toString()
-    const apes = whichBinary('apes')
-    if (!apes) {
-      throw new CliError('`apes` not found on PATH. Install @openape/apes globally first.')
-    }
-    const escapes = whichBinary('escapes')
-    if (!escapes) {
-      throw new CliError(
-        '`escapes` not found on PATH. spawn delegates the privileged setup phase to escapes; '
-        + 'install it before running spawn.',
-      )
-    }
 
     // On Linux the agent name IS the OS username (no prefix) — the
     // container's OpenApe namespace is the namespace, and Linux caps

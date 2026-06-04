@@ -11,11 +11,6 @@ vi.mock('../src/config.js', () => ({
   getIdpUrl: vi.fn(() => 'https://id.openape.ai'),
 }))
 
-// whichBinary lives in lib/which; stub it standalone so per-test
-// mockImplementation overrides (e.g. missing escapes) still apply.
-const whichBinaryMock = vi.fn((name: string) => `/usr/local/bin/${name}`)
-vi.mock('../src/lib/which.js', () => ({ whichBinary: whichBinaryMock }))
-
 // readAgentUser lookup — null means "no such OS user" (free to create).
 const readUserMock = vi.fn(() => null as any)
 
@@ -91,7 +86,6 @@ describe('apes agents spawn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    whichBinaryMock.mockImplementation((name: string) => `/usr/local/bin/${name}`)
     readUserMock.mockReturnValue(null)
     hostPlatformMock.isLinux.mockReturnValue(true)
   })
@@ -114,14 +108,6 @@ describe('apes agents spawn', () => {
     await expect((spawnAgentCommand as any).run({
       args: { name: 'agent-a' },
     })).rejects.toThrow(/already exists/)
-  })
-
-  it('rejects when escapes binary is missing', async () => {
-    whichBinaryMock.mockImplementation((n: string) => n === 'escapes' ? null as any : `/usr/local/bin/${n}`)
-    const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
-    await expect((spawnAgentCommand as any).run({
-      args: { name: 'agent-a' },
-    })).rejects.toThrow(/escapes/)
   })
 
   it('happy path: registers, issues token, runs the linux setup script', async () => {
