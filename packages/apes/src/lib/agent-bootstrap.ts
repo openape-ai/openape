@@ -278,7 +278,7 @@ chmod 755 /var/openape/homes
 # when the user existed, but guard here too so a re-run of the privileged
 # script is idempotent rather than erroring on a half-created account.
 if ! getent passwd "$NAME" >/dev/null 2>&1; then
-  useradd --create-home --home-dir ${shQuote(homeDir)} --shell ${shQuote(shellPath)} --comment ${shQuote(`OpenApe Agent ${name}`)} "$NAME"
+  useradd --create-home --home-dir "$HOME_DIR" --shell "$SHELL_PATH" --comment "OpenApe Agent $NAME" "$NAME"
 fi
 
 # Resolve the uid for the final report line (getent is the canonical read).

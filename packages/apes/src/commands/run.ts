@@ -44,7 +44,7 @@ import { getHostPlatform } from '../lib/host-platform'
 function resolveRunAsTarget(runAs: string | undefined): string | undefined {
   if (!runAs) return runAs
   if (!AGENT_NAME_REGEX.test(runAs)) return runAs
-  // Already prefixed (operator typed the full macOS username) — pass through.
+  // Already prefixed (operator typed the full prefixed username) — pass through.
   if (runAs.startsWith('openape-agent-')) return runAs
   const platform = getHostPlatform()
   const prefixed = platform.agentUsername(runAs)

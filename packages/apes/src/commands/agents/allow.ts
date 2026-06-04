@@ -16,7 +16,7 @@ export const allowAgentCommand = defineCommand({
     agent: {
       type: 'positional',
       required: true,
-      description: 'Agent name (the macOS short username spawn created)',
+      description: 'Agent name (the Linux username spawn created)',
     },
     email: {
       type: 'positional',
@@ -40,8 +40,8 @@ export const allowAgentCommand = defineCommand({
     if (!apes) throw new CliError('`apes` not found on PATH.')
 
     // Update the allowlist file inside the agent's home. python3 is
-    // always present on macOS — avoids a jq dep. Idempotent: re-running
-    // for the same email is a no-op.
+    // present in the agent container — avoids a jq dep. Idempotent:
+    // re-running for the same email is a no-op.
     const script = `set -eu
 mkdir -p "$HOME/.config/openape"
 F="$HOME/.config/openape/bridge-allowlist.json"

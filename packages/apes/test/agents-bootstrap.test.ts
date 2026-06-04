@@ -108,9 +108,7 @@ describe('buildSpawnSetupScript (linux)', () => {
 
   it('creates the agent user via useradd, not dscl', () => {
     const s = buildSpawnSetupScript(baseInput)
-    expect(s).toContain('useradd --create-home --home-dir \'/var/openape/homes/coder\'')
-    expect(s).toContain('--shell \'/bin/bash\'')
-    expect(s).toContain('--comment \'OpenApe Agent coder\'')
+    expect(s).toContain('useradd --create-home --home-dir "$HOME_DIR" --shell "$SHELL_PATH" --comment "OpenApe Agent $NAME" "$NAME"')
     expect(s).not.toContain('dscl')
     expect(s).not.toContain('launchctl')
     expect(s).not.toContain('NFSHomeDirectory')
@@ -144,6 +142,16 @@ describe('buildSpawnSetupScript (linux)', () => {
     })
     expect(withHook).toContain('.claude/settings.json')
     expect(withHook).toContain('.claude/hooks/bash-via-ape-shell.sh')
+  })
+
+  it('writes the claude-token env file and grep-guards the shell-rc source line when a token is given', () => {
+    const s = buildSpawnSetupScript({ ...baseInput, claudeOauthToken: 'sk-ant-oat01-deadbeef' })
+    expect(s).toContain('"$HOME_DIR/.config/openape/claude-token.env"')
+    expect(s).toContain('export CLAUDE_CODE_OAUTH_TOKEN=')
+    expect(s).toContain('sk-ant-oat01-deadbeef')
+    expect(s).toContain('grep -qF \'config/openape/claude-token.env\'')
+    // and absent when no token:
+    expect(buildSpawnSetupScript(baseInput)).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
   })
 })
 

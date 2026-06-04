@@ -120,117 +120,112 @@ export const spawnAgentCommand = defineCommand({
     // keeping them out of /home for real human accounts.
     const homeDir = `/var/openape/homes/${osUsername}`
 
+    consola.start(`Generating keypair for ${name}…`)
+    const { privatePem, publicSshLine, x25519PrivateKey, x25519PublicKey } = generateKeyPairInMemory()
+
+    consola.start(`Registering agent at ${idp}…`)
+    const registration = await registerAgentAtIdp({ name, publicKey: publicSshLine, idp })
+    consola.success(`Registered as ${registration.email}`)
+
+    consola.start('Issuing agent access token…')
+    const { token, expiresIn } = await issueAgentToken({
+      idp,
+      agentEmail: registration.email,
+      privateKeyPem: privatePem,
+    })
+
+    const authJson = buildAgentAuthJson({
+      idp,
+      accessToken: token,
+      email: registration.email,
+      expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
+      keyPath: `${homeDir}/.ssh/id_ed25519`,
+      // The IdP resolves the owner transitively (when the caller
+      // is itself an agent — e.g. a Nest spawning a child — the
+      // human at the top of the chain becomes owner). Use the
+      // server-resolved owner, not the local caller's auth.email,
+      // otherwise the agent's auth.json will carry the Nest's
+      // email and troop will reject sync calls because the
+      // encoded owner-domain in the agent email doesn't match
+      // the auth.json's owner_email domain.
+      ownerEmail: registration.owner,
+    })
+
+    const includeClaudeHook = !args['no-claude-hook']
+    const claudeOauthToken = await resolveClaudeToken({
+      flag: typeof args['claude-token'] === 'string' ? args['claude-token'] : undefined,
+      fromStdin: !!args['claude-token-stdin'],
+    })
+
+    // Bridge install is the default — every agent needs the runtime
+    // to answer chat or fire cron tasks. `--no-bridge` is the explicit
+    // escape for headless / CI / account-only provisioning. The runtime
+    // install itself is supervised by the Nest (reconciled off the
+    // registry entry below), not baked into the setup script.
+    const withBridge = !args['no-bridge']
+
+    const script = buildSpawnSetupScript({
+      name,
+      homeDir,
+      shellPath: loginShell,
+      privateKeyPem: privatePem,
+      publicKeySshLine: publicSshLine,
+      x25519PrivateKey,
+      x25519PublicKey,
+      authJson,
+      claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
+      hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
+      claudeOauthToken,
+    })
+    // runPrivilegedBash short-circuits to a direct bash exec when we're
+    // already root (nest → `apes run --as root -- apes agents spawn`
+    // already obtained the grant); otherwise it routes through
+    // `apes run --as root --wait` for the DDISA grant cycle.
+    consola.start('Running privileged setup…')
+    if (process.getuid?.() !== 0) {
+      consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
+    }
+    await platform.runPrivilegedBash(script)
+
+    // Phase F: register in the Nest's registry directly (replaces
+    // the old intent-channel handler in the Nest). The Nest
+    // watches agents.json and reconciles its pm2-supervisor when
+    // it sees a new entry — bridge starts within a second.
     try {
-      consola.start(`Generating keypair for ${name}…`)
-      const { privatePem, publicSshLine, x25519PrivateKey, x25519PublicKey } = generateKeyPairInMemory()
-
-      consola.start(`Registering agent at ${idp}…`)
-      const registration = await registerAgentAtIdp({ name, publicKey: publicSshLine, idp })
-      consola.success(`Registered as ${registration.email}`)
-
-      consola.start('Issuing agent access token…')
-      const { token, expiresIn } = await issueAgentToken({
-        idp,
-        agentEmail: registration.email,
-        privateKeyPem: privatePem,
-      })
-
-      const authJson = buildAgentAuthJson({
-        idp,
-        accessToken: token,
-        email: registration.email,
-        expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
-        keyPath: `${homeDir}/.ssh/id_ed25519`,
-        // The IdP resolves the owner transitively (when the caller
-        // is itself an agent — e.g. a Nest spawning a child — the
-        // human at the top of the chain becomes owner). Use the
-        // server-resolved owner, not the local caller's auth.email,
-        // otherwise the agent's auth.json will carry the Nest's
-        // email and troop will reject sync calls because the
-        // encoded owner-domain in the agent email doesn't match
-        // the auth.json's owner_email domain.
-        ownerEmail: registration.owner,
-      })
-
-      const includeClaudeHook = !args['no-claude-hook']
-      const claudeOauthToken = await resolveClaudeToken({
-        flag: typeof args['claude-token'] === 'string' ? args['claude-token'] : undefined,
-        fromStdin: !!args['claude-token-stdin'],
-      })
-
-      // Bridge install is the default — every agent needs the runtime
-      // to answer chat or fire cron tasks. `--no-bridge` is the explicit
-      // escape for headless / CI / account-only provisioning. The runtime
-      // install itself is supervised by the Nest (reconciled off the
-      // registry entry below), not baked into the setup script.
-      const withBridge = !args['no-bridge']
-
-      const script = buildSpawnSetupScript({
+      const uid = readUidOrNull(osUsername) ?? -1
+      upsertNestAgent({
         name,
-        homeDir,
-        shellPath: loginShell,
-        privateKeyPem: privatePem,
-        publicKeySshLine: publicSshLine,
-        x25519PrivateKey,
-        x25519PublicKey,
-        authJson,
-        claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
-        hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
-        claudeOauthToken,
+        uid,
+        home: homeDir,
+        email: registration.email,
+        registeredAt: Math.floor(Date.now() / 1000),
+        bridge: withBridge
+          ? {
+              baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
+              apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
+              model: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
+            }
+          : undefined,
       })
-      // runPrivilegedBash short-circuits to a direct bash exec when we're
-      // already root (nest → `apes run --as root -- apes agents spawn`
-      // already obtained the grant); otherwise it routes through
-      // `apes run --as root --wait` for the DDISA grant cycle.
-      consola.start('Running privileged setup…')
-      if (process.getuid?.() !== 0) {
-        consola.info('You will be asked to approve the as=root grant in your DDISA inbox; this command blocks until you do.')
-      }
-      await platform.runPrivilegedBash(script)
-
-      // Phase F: register in the Nest's registry directly (replaces
-      // the old intent-channel handler in the Nest). The Nest
-      // watches agents.json and reconciles its pm2-supervisor when
-      // it sees a new entry — bridge starts within a second.
-      try {
-        const uid = readUidOrNull(osUsername) ?? -1
-        upsertNestAgent({
-          name,
-          uid,
-          home: homeDir,
-          email: registration.email,
-          registeredAt: Math.floor(Date.now() / 1000),
-          bridge: withBridge
-            ? {
-                baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
-                apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
-                model: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
-              }
-            : undefined,
-        })
-      }
-      catch (err) {
-        // Don't fail the spawn just because the registry write
-        // glitched — the agent's OS user exists, the human can
-        // manually register later. Log loudly.
-        consola.warn(`Could not write to nest registry: ${err instanceof Error ? err.message : String(err)}`)
-      }
-
-      consola.success(`Agent ${name} spawned.`)
-      consola.info(`🔗 Troop: https://troop.openape.ai/agents/${name}`)
-
-      if (withBridge) {
-        consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
-        consola.info('Open chat.openape.ai and accept it to start chatting with the agent.')
-      }
-
-      console.log('')
-      console.log('Run as the agent with:')
-      console.log(`  apes run --as ${name} -- claude --session-name ${name} --dangerously-skip-permissions`)
     }
-    finally {
-      // runPrivilegedBash owns the tmp-script lifecycle; nothing to clean here.
+    catch (err) {
+      // Don't fail the spawn just because the registry write
+      // glitched — the agent's OS user exists, the human can
+      // manually register later. Log loudly.
+      consola.warn(`Could not write to nest registry: ${err instanceof Error ? err.message : String(err)}`)
     }
+
+    consola.success(`Agent ${name} spawned.`)
+    consola.info(`🔗 Troop: https://troop.openape.ai/agents/${name}`)
+
+    if (withBridge) {
+      consola.info(`On first boot, the bridge will send you a contact request from ${registration.email}.`)
+      consola.info('Open chat.openape.ai and accept it to start chatting with the agent.')
+    }
+
+    console.log('')
+    console.log('Run as the agent with:')
+    console.log(`  apes run --as ${name} -- claude --session-name ${name} --dangerously-skip-permissions`)
   },
 })
 
