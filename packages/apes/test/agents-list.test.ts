@@ -9,33 +9,18 @@ vi.mock('../src/http.js', () => ({
   apiFetch: vi.fn(),
 }))
 
-vi.mock('../src/lib/macos-user.js', () => ({
-  isDarwin: vi.fn(() => true),
-  listMacOSUserNames: vi.fn(() => new Set(['agent-a', 'patrick'])),
-  readMacOSUser: vi.fn(),
-  // list.ts uses the prefix-aware lookup; for the test fixtures only
-  // `agent-a` has a macOS record, and it's the bare (legacy) form.
-  lookupMacOSUserForAgent: vi.fn((name: string) =>
-    name === 'agent-a' ? { name: 'agent-a', uid: 250, shell: '/bin/zsh', homeDir: '/Users/agent-a' } : null,
-  ),
-  macOSUsernameForAgent: vi.fn((n: string) => `openape-agent-${n}`),
-  MACOS_USER_PREFIX: 'openape-agent-',
-  whichBinary: vi.fn(),
-  isShellRegistered: vi.fn(),
-}))
-
-// Production code now imports isDarwin + getHostPlatform from the new
-// host-platform module instead of macos-user. Without this mock, CI on
-// Linux invokes linuxHostPlatform methods that throw "not implemented".
+// Production code routes all OS-user lookups through getHostPlatform().
+// On Linux the username is identity and homes live under /home. Only
+// `agent-a` has an OS record in the fixtures.
 vi.mock('../src/lib/host-platform/index.js', () => ({
-  isDarwin: vi.fn(() => true),
-  isLinux: vi.fn(() => false),
+  isDarwin: vi.fn(() => false),
+  isLinux: vi.fn(() => true),
   getHostPlatform: vi.fn(() => ({
     getHostId: () => 'host-id',
     getHostname: () => 'host',
-    agentUsername: (n: string) => `openape-agent-${n}`,
+    agentUsername: (n: string) => n,
     lookupAgentUser: (name: string) =>
-      name === 'agent-a' ? { name: 'agent-a', uid: 250, shell: '/bin/zsh', homeDir: '/Users/agent-a' } : null,
+      name === 'agent-a' ? { name: 'agent-a', uid: 250, shell: '/bin/zsh', homeDir: '/home/agent-a' } : null,
     readAgentUser: () => null,
     listAgentUserNames: () => new Set(['agent-a', 'patrick']),
     listOrphanAgentUsers: () => [],
@@ -83,7 +68,7 @@ describe('apes agents list', () => {
     expect(out).toMatch(/agent-a/)
     expect(out).toMatch(/agent-b/)
     expect(out).not.toMatch(/\bold\b/)
-    expect(out).toContain('/Users/agent-a')
+    expect(out).toContain('/home/agent-a')
     expect(out).toContain('(missing)')
   })
 
@@ -109,7 +94,7 @@ describe('apes agents list', () => {
     const out = (writeSpy.mock.calls[0]![0] as string).trim()
     const parsed = JSON.parse(out)
     expect(parsed).toHaveLength(2)
-    expect(parsed[0]).toMatchObject({ name: 'agent-a', osUser: true, home: '/Users/agent-a', isActive: true })
+    expect(parsed[0]).toMatchObject({ name: 'agent-a', osUser: true, home: '/home/agent-a', isActive: true })
     expect(parsed[1]).toMatchObject({ name: 'agent-b', osUser: false, home: null })
   })
 

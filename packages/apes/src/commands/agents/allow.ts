@@ -4,7 +4,7 @@ import consola from 'consola'
 import { CliError } from '../../errors'
 import { AGENT_NAME_REGEX } from '../../lib/agent-bootstrap'
 import { whichBinary } from '../../lib/which'
-import { getHostPlatform, isDarwin } from '../../lib/host-platform'
+import { getHostPlatform } from '../../lib/host-platform'
 
 export const allowAgentCommand = defineCommand({
   meta: {
@@ -33,11 +33,8 @@ export const allowAgentCommand = defineCommand({
     if (!email.includes('@')) {
       throw new CliError(`Invalid email "${email}".`)
     }
-    if (!isDarwin()) {
-      throw new CliError('`apes agents allow` is currently macOS-only.')
-    }
     if (!getHostPlatform().lookupAgentUser(agent)) {
-      throw new CliError(`No macOS user for agent "${agent}" — has it been spawned?`)
+      throw new CliError(`No OS user for agent "${agent}" — has it been spawned?`)
     }
     const apes = whichBinary('apes')
     if (!apes) throw new CliError('`apes` not found on PATH.')

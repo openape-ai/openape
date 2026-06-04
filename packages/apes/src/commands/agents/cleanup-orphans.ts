@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { CliError } from '../../errors'
-import { getHostPlatform, isDarwin } from '../../lib/host-platform'
+import { getHostPlatform } from '../../lib/host-platform'
 
 /**
  * Sweep accumulated agent-user tombstones left behind by
@@ -38,13 +38,9 @@ export const cleanupOrphansCommand = defineCommand({
     },
   },
   async run({ args }) {
-    if (!isDarwin()) {
-      throw new CliError(`\`apes agents cleanup-orphans\` is macOS-only. Detected platform: ${process.platform}.`)
-    }
-
     const orphans = getHostPlatform().listOrphanAgentUsers()
     if (orphans.length === 0) {
-      consola.success('No agent tombstones found — dscl is clean.')
+      consola.success('No agent tombstones — userdel is clean on Linux.')
       return
     }
 

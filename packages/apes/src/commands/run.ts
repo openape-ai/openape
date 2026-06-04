@@ -26,24 +26,23 @@ import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
-import { getHostPlatform, isDarwin } from '../lib/host-platform'
+import { getHostPlatform } from '../lib/host-platform'
 
 /**
- * Map an agent name (`igor`) to its macOS username (`openape-agent-igor`)
- * when the prefixed dscl record exists. Returns the input unchanged for:
- *   - non-Darwin platforms (escapes-helper isn't macOS-specific in theory)
+ * Resolve an agent name (`igor`) to its OS-level username. On Linux the
+ * platform's `agentUsername` is the identity function, so this is a
+ * no-op-ish resolve: it only rewrites when a prefixed record actually
+ * exists on the host. Returns the input unchanged for:
  *   - non-agent values like `root`, `_postgres`, etc.
- *   - legacy agents that pre-date the prefix (the prefixed record is
- *     absent, so we fall through and let escapes setuid to the plain
- *     name — backward-compatible)
+ *   - agents whose OS record matches the bare name (the resolved
+ *     username has no record, so we fall through to the plain name).
  *
  * The mapping is transparent to all callers: nest/troop-ws.ts,
  * pm2-supervisor.ts, allow.ts and operators typing `apes run --as
- * igor` keep working without knowing about the prefix.
+ * igor` keep working without knowing about any prefix.
  */
 function resolveRunAsTarget(runAs: string | undefined): string | undefined {
   if (!runAs) return runAs
-  if (!isDarwin()) return runAs
   if (!AGENT_NAME_REGEX.test(runAs)) return runAs
   // Already prefixed (operator typed the full macOS username) — pass through.
   if (runAs.startsWith('openape-agent-')) return runAs
