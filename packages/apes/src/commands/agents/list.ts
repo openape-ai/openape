@@ -3,7 +3,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError } from '../../errors'
 import { apiFetch } from '../../http'
-import { getHostPlatform, isDarwin } from '../../lib/host-platform'
+import { getHostPlatform } from '../../lib/host-platform'
 
 interface IdpUser {
   email: string
@@ -46,7 +46,7 @@ export const listAgentsCommand = defineCommand({
       : all.filter(u => u.isActive !== false)
 
     const platform = getHostPlatform()
-    const osUsers = isDarwin() ? platform.listAgentUserNames() : new Set<string>()
+    const osUsers = platform.listAgentUserNames()
     // Resolve OS state per agent, checking both the prefixed
     // (`openape-agent-<name>`) and bare (`<name>`) records so legacy
     // pre-prefix agents keep showing up in the table.
@@ -90,7 +90,7 @@ export const listAgentsCommand = defineCommand({
     for (const r of rows) {
       const active = r.isActive ? '✓' : '✗'
       const os = r.osUser ? '✓' : '✗'
-      const homeCol = r.home ?? (isDarwin() ? '(missing)' : '(non-darwin)')
+      const homeCol = r.home ?? '(missing)'
       console.log(`${r.name.padEnd(nameW)}  ${r.email.padEnd(emailW)}  ${active.padEnd(6)}  ${os.padEnd(7)}  ${homeCol}`)
     }
   },

@@ -41,7 +41,11 @@ services:
       # litellm provider, this is where the access/refresh tokens
       # live (litellm reads them from $HOME/.config/litellm/chatgpt/).
       # Optional: omit for Anthropic/OpenAI-only setups.
-      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt:ro
+      # MUST be writable: litellm refreshes the access token in place and
+      # rewrites this file. A `:ro` mount makes refresh fail with
+      # "Read-only file system" → the token dies on expiry and every chat
+      # hangs. Read-write so refresh + device-login re-auth persist.
+      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt
     environment:
       LITELLM_HOST: 0.0.0.0
       LITELLM_PORT: "4000"
@@ -83,6 +87,12 @@ services:
       # silently uses /root (the container default) and loses state on
       # restart.
       HOME: /var/lib/openape/nest
+      # Single source of truth for the agent registry, honoured by BOTH
+      # the nest daemon (reader) and apes-cli `agents spawn|destroy`
+      # (writer). Without pinning it the two resolvers' fallbacks diverge
+      # ($HOME/agents.json vs $HOME/.openape/nest/agents.json) and a
+      # spawned agent lands where the nest never looks → no bridge.
+      OPENAPE_NEST_REGISTRY_PATH: /var/lib/openape/nest/agents.json
       # Inside the pod the nest reaches the proxy at the service hostname.
       # Agents under this nest inherit this URL via the bridge env file.
       LITELLM_BASE_URL: http://openape-llm:4000/v1
