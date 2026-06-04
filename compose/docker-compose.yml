@@ -41,7 +41,11 @@ services:
       # litellm provider, this is where the access/refresh tokens
       # live (litellm reads them from $HOME/.config/litellm/chatgpt/).
       # Optional: omit for Anthropic/OpenAI-only setups.
-      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt:ro
+      # MUST be writable: litellm refreshes the access token in place and
+      # rewrites this file. A `:ro` mount makes refresh fail with
+      # "Read-only file system" → the token dies on expiry and every chat
+      # hangs. Read-write so refresh + device-login re-auth persist.
+      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt
     environment:
       LITELLM_HOST: 0.0.0.0
       LITELLM_PORT: "4000"
