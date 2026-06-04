@@ -38,10 +38,15 @@ interface RegistryFile {
 }
 
 /**
- * Resolve the registry path. Prefers the post-migration system
- *  location; falls back to the per-user location otherwise.
+ * Resolve the registry path — the file `apes agents spawn|destroy`
+ * writes and the nest daemon watches. MUST stay byte-identical to the
+ * nest's own resolver (apps/openape-nest/src/lib/registry.ts), or the
+ * writer and reader target different files and spawned agents never get
+ * supervised. The `OPENAPE_NEST_REGISTRY_PATH` override is the single
+ * source of truth the container sets (compose env) so both sides agree.
  */
 export function resolveRegistryPath(): string {
+  if (process.env.OPENAPE_NEST_REGISTRY_PATH) return process.env.OPENAPE_NEST_REGISTRY_PATH
   if (existsSync('/var/openape/nest/agents.json')) return '/var/openape/nest/agents.json'
   if (existsSync('/var/openape/nest')) return '/var/openape/nest/agents.json'
   return join(homedir(), '.openape', 'nest', 'agents.json')

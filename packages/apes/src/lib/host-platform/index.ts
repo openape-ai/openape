@@ -1,18 +1,14 @@
 // Platform abstraction for host-level ops (identity, agent users,
-// supervisor lifecycle, run-as). Currently macOS-only; the Linux impl
-// lands in Milestone B alongside `escapes-linux`. Every call site that
-// historically reached for `lib/macos-user`, `lib/macos-host`,
-// `lib/agent-bootstrap`, `lib/launchd-reconcile`, or `lib/troop-bootstrap`
-// should route through `getHostPlatform()` instead.
+// supervisor lifecycle, run-as). OpenApe nests are Linux-only: agent
+// spawning, user creation, and the supervisor lifecycle all assume a
+// Linux host. The macOS-native path was removed — every call site routes
+// through `getHostPlatform()`, which only resolves the Linux impl (or a
+// test override).
 //
-// Selection happens at first call via `process.platform`. Both impls are
-// eagerly imported so this module is platform-neutral at compile-time —
-// the impls themselves must NOT execute side effects at top level (no
-// dscl probes, no plist writes, no `which` calls) so importing the wrong
-// one on the wrong host is a no-op.
+// The impl must NOT execute side effects at top level (no probes, no
+// `which` calls) so the module stays platform-neutral at import time.
 
 import process from 'node:process'
-import { darwinHostPlatform } from './darwin'
 import { linuxHostPlatform } from './linux'
 
 // ---- Types ----------------------------------------------------------------
@@ -89,10 +85,6 @@ export interface HostPlatform {
 
 // ---- Factory --------------------------------------------------------------
 
-export function isDarwin(): boolean {
-  return process.platform === 'darwin'
-}
-
 export function isLinux(): boolean {
   return process.platform === 'linux'
 }
@@ -101,9 +93,8 @@ let testOverride: HostPlatform | null = null
 
 export function getHostPlatform(): HostPlatform {
   if (testOverride) return testOverride
-  if (isDarwin()) return darwinHostPlatform
   if (isLinux()) return linuxHostPlatform
-  throw new Error(`unsupported host platform: ${process.platform}`)
+  throw new Error(`unsupported host platform: ${process.platform} — OpenApe nests are Linux-only`)
 }
 
 export function __setHostPlatformForTesting(impl: HostPlatform | null): void {

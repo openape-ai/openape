@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 const { t } = useI18n()
@@ -43,8 +43,11 @@ const loading = ref(true)
 const error = ref('')
 const showSpawn = ref(false)
 
-async function load() {
-  loading.value = true
+// `silent` skips the loading spinner so background polls don't flash the
+// list to a loading state — only the first load (and explicit reloads)
+// toggle `loading`.
+async function load(opts: { silent?: boolean } = {}) {
+  if (!opts.silent) loading.value = true
   error.value = ''
   try {
     agents.value = await ($fetch as any)('/api/agents')
@@ -57,12 +60,40 @@ async function load() {
     error.value = err?.data?.statusMessage || err?.message || t('agentsIndex.error.loadFailed')
   }
   finally {
-    loading.value = false
+    if (!opts.silent) loading.value = false
   }
 }
 
 watch(user, (u) => { if (u) load() }, { immediate: true })
-onMounted(() => { if (!user.value) navigateTo('/login') })
+
+// A freshly-spawned agent moves from the "pending sync" bucket to its
+// nest group seconds after its bridge connects, and lastSeenAt advances
+// on every troop-sync — but the single load() above never re-fetched, so
+// the list looked stale until the user navigated away and back. Poll
+// quietly while the tab is visible, and refresh immediately when it
+// regains focus, so the list converges on its own.
+const POLL_INTERVAL_MS = 10_000
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function onVisibilityChange() {
+  if (!document.hidden && user.value) load({ silent: true })
+}
+
+onMounted(() => {
+  if (!user.value) {
+    navigateTo('/login')
+    return
+  }
+  pollTimer = setInterval(() => {
+    if (user.value && !document.hidden) load({ silent: true })
+  }, POLL_INTERVAL_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 
 const statusColor: Record<NonNullable<AgentRow['lastRunStatus']>, string> = {
   running: 'info',
