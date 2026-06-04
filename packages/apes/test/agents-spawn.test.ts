@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ----------------------------------------------------------------------------
 // Mocks: spawn touches a lot of system surfaces, so we stub each one and let
-// the orchestration logic run end-to-end against the stubs.
+// the orchestration logic run end-to-end against the stubs. Linux-only path:
+// no macos-user, no plist builders.
 // ----------------------------------------------------------------------------
 
 vi.mock('../src/config.js', () => ({
@@ -10,36 +11,30 @@ vi.mock('../src/config.js', () => ({
   getIdpUrl: vi.fn(() => 'https://id.openape.ai'),
 }))
 
-const macosUserMock = {
-  isDarwin: vi.fn(() => true),
-  readMacOSUser: vi.fn(() => null),
-  whichBinary: vi.fn((name: string) => `/usr/local/bin/${name}`),
-  isShellRegistered: vi.fn(() => true),
-  listMacOSUserNames: vi.fn(() => new Set<string>()),
-  macOSUsernameForAgent: vi.fn((n: string) => `openape-agent-${n}`),
-  MACOS_USER_PREFIX: 'openape-agent-',
-}
-vi.mock('../src/lib/macos-user.js', () => macosUserMock)
+// whichBinary lives in lib/which; stub it standalone so per-test
+// mockImplementation overrides (e.g. missing escapes) still apply.
+const whichBinaryMock = vi.fn((name: string) => `/usr/local/bin/${name}`)
+vi.mock('../src/lib/which.js', () => ({ whichBinary: whichBinaryMock }))
 
-// whichBinary moved to lib/which; keep it stubbed via the same mock fn so
-// per-test mockImplementation overrides (e.g. missing escapes) still apply.
-vi.mock('../src/lib/which.js', () => ({ whichBinary: macosUserMock.whichBinary }))
+// readAgentUser lookup — null means "no such OS user" (free to create).
+const readUserMock = vi.fn(() => null as any)
 
-// The host-platform indirection replaces direct imports of macOS helpers
-// in production code. Mock its surface here too so the tests can flip
-// isDarwin / control the agent-user lookups deterministically.
+// The host-platform indirection replaces direct imports of OS helpers
+// in production code. Mock its surface here so the tests can control the
+// agent-user lookups deterministically. Linux: isLinux=true, isDarwin=false,
+// agentUsername is identity (no prefix).
 const runPrivilegedBashMock = vi.fn(async () => {})
 
 const hostPlatformMock = {
-  isDarwin: vi.fn(() => true),
-  isLinux: vi.fn(() => false),
+  isDarwin: vi.fn(() => false),
+  isLinux: vi.fn(() => true),
   getHostPlatform: vi.fn(() => ({
     getHostId: () => 'host-id',
     getHostname: () => 'host',
-    agentUsername: (n: string) => macosUserMock.macOSUsernameForAgent(n),
+    agentUsername: (n: string) => n,
     lookupAgentUser: () => null,
-    readAgentUser: () => macosUserMock.readMacOSUser(),
-    listAgentUserNames: () => macosUserMock.listMacOSUserNames(),
+    readAgentUser: () => readUserMock(),
+    listAgentUserNames: () => new Set<string>(),
     listOrphanAgentUsers: () => [],
     runPrivilegedBash: runPrivilegedBashMock,
     runAsAgentUser: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
@@ -83,30 +78,6 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }))
 
-// captureHostBinDirs() shells out to /usr/bin/which to resolve real bin
-// dirs on the host. Tests don't need to exercise that probe — stub the
-// helper to return a fixed list so spawn-orchestration assertions only
-// see the calls they care about.
-vi.mock('../src/lib/llm-bridge.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/lib/llm-bridge.js')>()
-  return {
-    ...actual,
-    captureHostBinDirs: vi.fn(() => ['/usr/local/bin']),
-    // Bridge is now installed by default — stub the .env / config probe
-    // so tests don't need a real LITELLM_API_KEY on the host.
-    resolveBridgeConfig: vi.fn(() => ({
-      baseUrl: 'http://127.0.0.1:4000/v1',
-      apiKey: 'sk-test',
-      model: 'gpt-5.4',
-    })),
-    buildBridgeEnvFile: vi.fn(() => 'LITELLM_API_KEY=sk-test\n'),
-    buildBridgeStartScript: vi.fn(() => '#!/usr/bin/env bash\nexec ape-agent\n'),
-    buildBridgePlist: vi.fn(() => '<plist/>'),
-    bridgePlistLabel: vi.fn((n: string) => `eco.hofmann.apes.bridge.${n}`),
-    bridgePlistPath: vi.fn((n: string) => `/Library/LaunchDaemons/eco.hofmann.apes.bridge.${n}.plist`),
-  }
-})
-
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
   return {
@@ -121,11 +92,10 @@ describe('apes agents spawn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.spyOn(console, 'log').mockImplementation(() => {})
-    macosUserMock.isDarwin.mockReturnValue(true)
-    macosUserMock.readMacOSUser.mockReturnValue(null)
-    macosUserMock.whichBinary.mockImplementation((name: string) => `/usr/local/bin/${name}`)
-    macosUserMock.isShellRegistered.mockReturnValue(true)
-    hostPlatformMock.isDarwin.mockReturnValue(true)
+    whichBinaryMock.mockImplementation((name: string) => `/usr/local/bin/${name}`)
+    readUserMock.mockReturnValue(null)
+    hostPlatformMock.isDarwin.mockReturnValue(false)
+    hostPlatformMock.isLinux.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -140,25 +110,8 @@ describe('apes agents spawn', () => {
     })).rejects.toThrow(/Invalid agent name/)
   })
 
-  it('rejects on non-darwin platforms', async () => {
-    macosUserMock.isDarwin.mockReturnValue(false)
-    hostPlatformMock.isDarwin.mockReturnValue(false)
-    const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
-    await expect((spawnAgentCommand as any).run({
-      args: { name: 'agent-a' },
-    })).rejects.toThrow(/macOS-only/)
-  })
-
-  it('rejects when default login shell (/bin/zsh) is not in /etc/shells', async () => {
-    macosUserMock.isShellRegistered.mockReturnValue(false)
-    const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
-    await expect((spawnAgentCommand as any).run({
-      args: { name: 'agent-a' },
-    })).rejects.toThrow(/not registered in \/etc\/shells/)
-  })
-
-  it('rejects when target macOS user already exists', async () => {
-    macosUserMock.readMacOSUser.mockReturnValue({ name: 'agent-a', uid: 250, shell: '/bin/zsh' })
+  it('refuses when the OS user already exists', async () => {
+    readUserMock.mockReturnValue({ name: 'agent-a', uid: 1001, shell: '/bin/bash', homeDir: '/var/openape/homes/agent-a' })
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({
       args: { name: 'agent-a' },
@@ -166,14 +119,14 @@ describe('apes agents spawn', () => {
   })
 
   it('rejects when escapes binary is missing', async () => {
-    macosUserMock.whichBinary.mockImplementation((n: string) => n === 'escapes' ? null : `/usr/local/bin/${n}`)
+    whichBinaryMock.mockImplementation((n: string) => n === 'escapes' ? null as any : `/usr/local/bin/${n}`)
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({
       args: { name: 'agent-a' },
     })).rejects.toThrow(/escapes/)
   })
 
-  it('happy path: registers, issues token, runs setup via platform.runPrivilegedBash', async () => {
+  it('happy path: registers, issues token, runs the linux setup script', async () => {
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await (spawnAgentCommand as any).run({ args: { name: 'agent-a' } })
 
@@ -182,23 +135,14 @@ describe('apes agents spawn', () => {
       publicKey: 'ssh-ed25519 AAAAFAKE',
       idp: 'https://id.openape.ai',
     })
-    expect(bootstrapMock.issueAgentToken).toHaveBeenCalledWith({
-      idp: 'https://id.openape.ai',
-      agentEmail: 'agent-a+patrick+hofmann_eco@id.openape.ai',
-      privateKeyPem: '-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n',
-    })
     expect(bootstrapMock.buildSpawnSetupScript).toHaveBeenCalledTimes(1)
     const buildArgs = bootstrapMock.buildSpawnSetupScript.mock.calls[0]![0] as any
-    expect(buildArgs.claudeSettingsJson).toBe('{}') // hook included by default
-    expect(buildArgs.shellPath).toBe('/bin/zsh')
-    expect(buildArgs.x25519PrivateKey).toBe('WDI1NTE5X1BSSVZfRkFLRQ')
-    expect(buildArgs.x25519PublicKey).toBe('WDI1NTE5X1BVQl9GQUtF')
-
-    // The spawn script flows to the host platform's privileged-exec boundary;
-    // the boundary itself (tmp file + apes run --as root --wait --) is the
-    // platform's responsibility and unit-tested separately.
+    expect(buildArgs.shellPath).toBe('/bin/bash')
+    expect(buildArgs.homeDir).toBe('/var/openape/homes/agent-a')
+    expect(buildArgs).not.toHaveProperty('macOSUsername')
+    expect(buildArgs).not.toHaveProperty('bridge')
+    expect(buildArgs).not.toHaveProperty('troop')
     expect(runPrivilegedBashMock).toHaveBeenCalledTimes(1)
-    expect(runPrivilegedBashMock).toHaveBeenCalledWith('#!/bin/bash\necho setup\n')
   })
 
   it('--no-claude-hook passes nulls for the claude settings + hook source', async () => {

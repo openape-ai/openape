@@ -11,23 +11,12 @@ import {
   issueAgentToken,
   registerAgentAtIdp,
 } from '../../lib/agent-bootstrap'
-import { buildSyncPlist } from '../../lib/troop-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
-import {
-  bridgePlistLabel,
-  bridgePlistPath,
-  buildBridgeEnvFile,
-  buildBridgePlist,
-  buildBridgeStartScript,
-  captureHostBinDirs,
-  resolveBridgeConfig,
-} from '../../lib/llm-bridge'
-import { isShellRegistered } from '../../lib/macos-user'
 import { whichBinary } from '../../lib/which'
-import { getHostPlatform, isDarwin } from '../../lib/host-platform'
+import { getHostPlatform } from '../../lib/host-platform'
 import { upsertNestAgent } from '../../lib/nest-registry'
 
-function readMacOSUidOrNull(name: string): number | null {
+function readUidOrNull(name: string): number | null {
   try {
     const u = getHostPlatform().readAgentUser(name)
     return u?.uid ?? null
@@ -38,17 +27,17 @@ function readMacOSUidOrNull(name: string): number | null {
 export const spawnAgentCommand = defineCommand({
   meta: {
     name: 'spawn',
-    description: 'Provision a local macOS agent end-to-end (OS user, keypair, IdP agent, Claude hook)',
+    description: 'Provision a local Linux agent end-to-end (OS user, keypair, IdP agent, Claude hook)',
   },
   args: {
     name: {
       type: 'positional',
-      description: 'Agent name — also the macOS short username (lowercase, [a-z0-9-], must start with a letter)',
+      description: 'Agent name — also the Linux username (lowercase, [a-z0-9-], must start with a letter)',
       required: true,
     },
     shell: {
       type: 'string',
-      description: 'Login shell for the macOS user. Default: /bin/zsh. Pass $(which ape-shell) to opt into the grant-mediated REPL as login shell.',
+      description: 'Login shell for the Linux user. Default: /bin/bash. Pass $(which ape-shell) to opt into the grant-mediated REPL as login shell.',
     },
     'no-claude-hook': {
       type: 'boolean',
@@ -89,13 +78,6 @@ export const spawnAgentCommand = defineCommand({
       )
     }
 
-    if (!isDarwin()) {
-      throw new CliError(
-        `\`apes agents spawn\` is currently macOS-only. Detected platform: ${process.platform}. `
-        + `Linux support is a follow-up; for now, use \`apes agents register\` plus a manually provisioned user.`,
-      )
-    }
-
     const auth = loadAuth()
     if (!auth) {
       throw new CliError('Not authenticated. Run `apes login` first.')
@@ -105,14 +87,13 @@ export const spawnAgentCommand = defineCommand({
       throw new CliError('No IdP URL configured. Run `apes login` first.')
     }
 
-    // Default to plain /bin/zsh (macOS modern default) — ape-shell as login
-    // shell is opt-in via --shell. Rationale: ape-shell intercepts every
-    // command through the grant flow which is the right model for unattended
-    // agents but trips on interactive niceties (terminal control sequences
-    // sent by tools like Warp, exit semantics, etc.). The Claude
-    // bash-rewrite hook still routes Claude-issued commands through
-    // ape-shell — that's where grant-mediation actually matters.
-    const loginShell = (args.shell ?? '/bin/zsh').toString()
+    // Default to plain /bin/bash — ape-shell as login shell is opt-in via
+    // --shell. Rationale: ape-shell intercepts every command through the
+    // grant flow which is the right model for unattended agents but trips
+    // on interactive niceties (terminal control sequences, exit semantics,
+    // etc.). The Claude bash-rewrite hook still routes Claude-issued
+    // commands through ape-shell — that's where grant-mediation matters.
+    const loginShell = (args.shell ?? '/bin/bash').toString()
     const apes = whichBinary('apes')
     if (!apes) {
       throw new CliError('`apes` not found on PATH. Install @openape/apes globally first.')
@@ -124,40 +105,20 @@ export const spawnAgentCommand = defineCommand({
         + 'install it before running spawn.',
       )
     }
-    if (!isShellRegistered(loginShell)) {
-      throw new CliError(
-        `${loginShell} is not registered in /etc/shells. macOS refuses to set it as a login shell. Run:\n`
-        + `  echo ${loginShell} | sudo tee -a /etc/shells\n`
-        + 'and try again.',
-      )
-    }
 
-    // macOSUsername is the dscl record name + chown target. Prefixed
-    // (`openape-agent-<name>`) so `cleanup-orphans` and any operator
-    // running `dscl . -list /Users` can spot OpenApe-managed accounts
-    // immediately. Agent-facing surfaces (email, troop UI, bridge data
-    // dir, `apes agents list`) stay on the bare `name`. Legacy agents
-    // (pre-prefix) keep working via `lookupMacOSUserForAgent` which
-    // falls through to the unprefixed lookup.
+    // On Linux the agent name IS the OS username (no prefix) — the
+    // container's OpenApe namespace is the namespace, and Linux caps
+    // usernames at 32 chars so a prefix would reject longer names.
     const platform = getHostPlatform()
-    const macOSUsername = platform.agentUsername(name)
-    const existing = platform.readAgentUser(macOSUsername) ?? platform.readAgentUser(name)
+    const osUsername = platform.agentUsername(name)
+    const existing = platform.readAgentUser(osUsername)
     if (existing) {
-      throw new CliError(`macOS user "${existing.name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
+      throw new CliError(`OS user "${existing.name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
     }
 
-    // Phase G (#sim-arch): hidden service-account agents live under
-    // /var/openape/homes/<macOSUsername>, matching macOS convention
-    // for hidden services (_www → /var/empty, _postgres → /var/empty,
-    // our own _openape_nest → /var/openape/nest). Keeps /Users/ for
-    // real human accounts only — Finder, TimeMachine, Migration
-    // Assistant stop seeing agents.
-    //
-    // The dscl record stays at /Users/<macOSUsername> (that's the
-    // dscl namespace, not a filesystem path) — only the
-    // NFSHomeDirectory attribute changes. setup.sh below interpolates
-    // both into the dscl create call.
-    const homeDir = `/var/openape/homes/${macOSUsername}`
+    // Hidden service-account agents live under /var/openape/homes/<name>,
+    // keeping them out of /home for real human accounts.
+    const homeDir = `/var/openape/homes/${osUsername}`
 
     try {
       consola.start(`Generating keypair for ${name}…`)
@@ -199,50 +160,13 @@ export const spawnAgentCommand = defineCommand({
 
       // Bridge install is the default — every agent needs the runtime
       // to answer chat or fire cron tasks. `--no-bridge` is the explicit
-      // escape for headless / CI / account-only provisioning.
+      // escape for headless / CI / account-only provisioning. The runtime
+      // install itself is supervised by the Nest (reconciled off the
+      // registry entry below), not baked into the setup script.
       const withBridge = !args['no-bridge']
-      const bridge = withBridge
-        ? (() => {
-            const cfg = resolveBridgeConfig({
-              cliKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
-              cliBaseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
-              cliModel: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
-            })
-            // Capture the host's bin dirs ONCE per spawn — same dirs
-            // are baked into both the plist's PATH and start.sh.
-            // Throws if node / ape-agent / apes aren't on
-            // the host PATH.
-            const hostBinDirs = captureHostBinDirs()
-            return {
-              plistLabel: bridgePlistLabel(name),
-              plistPath: bridgePlistPath(name),
-              plistContent: buildBridgePlist(name, homeDir, auth.email, hostBinDirs),
-              startScript: buildBridgeStartScript(hostBinDirs),
-              envFile: buildBridgeEnvFile(cfg),
-            }
-          })()
-        : null
-
-      // Troop sync launchd — installed for every agent (no opt-out
-      // for v1). The plist runs `apes agents sync` every 5min and
-      // RunAtLoad fires it once eagerly so the agent registers at
-      // troop.openape.ai within seconds of spawn finishing.
-      const troopPlistLabel = `openape.troop.sync.${name}`
-      const troopPlistPath = `/Library/LaunchDaemons/${troopPlistLabel}.plist`
-      // Reuse the bridge's host-bin-dir capture if a bridge was set
-      // up; otherwise capture once for the troop sync alone. The
-      // sync daemon needs `node` (apes-cli's shebang) and `apes`
-      // (the actual binary it runs) on PATH.
-      const troopBinDirs = bridge ? captureHostBinDirs() : captureHostBinDirs()
-      const troop = {
-        plistLabel: troopPlistLabel,
-        plistPath: troopPlistPath,
-        plistContent: buildSyncPlist({ agentName: name, apesBin: apes, homeDir, userName: name, hostBinDirs: troopBinDirs }),
-      }
 
       const script = buildSpawnSetupScript({
         name,
-        macOSUsername,
         homeDir,
         shellPath: loginShell,
         privateKeyPem: privatePem,
@@ -253,8 +177,6 @@ export const spawnAgentCommand = defineCommand({
         claudeSettingsJson: includeClaudeHook ? CLAUDE_SETTINGS_JSON : null,
         hookScriptSource: includeClaudeHook ? BASH_VIA_APE_SHELL_HOOK_SOURCE : null,
         claudeOauthToken,
-        bridge,
-        troop,
       })
       // runPrivilegedBash short-circuits to a direct bash exec when we're
       // already root (nest → `apes run --as root -- apes agents spawn`
@@ -271,10 +193,10 @@ export const spawnAgentCommand = defineCommand({
       // watches agents.json and reconciles its pm2-supervisor when
       // it sees a new entry — bridge starts within a second.
       try {
-        const uid = readMacOSUidOrNull(macOSUsername) ?? readMacOSUidOrNull(name)
+        const uid = readUidOrNull(osUsername) ?? -1
         upsertNestAgent({
           name,
-          uid: uid ?? -1,
+          uid,
           home: homeDir,
           email: registration.email,
           registeredAt: Math.floor(Date.now() / 1000),
@@ -289,7 +211,7 @@ export const spawnAgentCommand = defineCommand({
       }
       catch (err) {
         // Don't fail the spawn just because the registry write
-        // glitched — the agent exists in macOS, the human can
+        // glitched — the agent's OS user exists, the human can
         // manually register later. Log loudly.
         consola.warn(`Could not write to nest registry: ${err instanceof Error ? err.message : String(err)}`)
       }
