@@ -1,5 +1,13 @@
 # @openape/ape-agent
 
+## 2.9.2
+
+### Patch Changes
+
+- Bridge: add a no-activity watchdog. If the model backend produces no first token or tool-call within 60s, the turn now fails visibly (clearing the typing indicator with a clear error) instead of hanging forever — e.g. when the upstream LLM proxy's auth has expired. Disarms on first activity so long, legitimately slow answers are never cut off.
+- Updated dependencies
+  - @openape/apes@1.30.0
+
 ## 2.9.1
 
 ### Patch Changes
