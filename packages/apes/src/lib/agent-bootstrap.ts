@@ -171,7 +171,10 @@ export async function issueAgentToken(input: {
   const challengeResp = await fetch(challengeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: input.agentEmail }),
+    // Canonical /api/auth/challenge expects `id` (M3). The legacy
+    // /api/agent/challenge field was `agent_id`; discovery now resolves
+    // the canonical endpoint, so the payload must use `id` to match.
+    body: JSON.stringify({ id: input.agentEmail }),
   })
   if (!challengeResp.ok) {
     const text = await challengeResp.text().catch(() => '')
@@ -185,7 +188,8 @@ export async function issueAgentToken(input: {
   const authResp = await fetch(authenticateUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: input.agentEmail, challenge, signature }),
+    // Canonical /api/auth/authenticate expects `id` (same M3 rename).
+    body: JSON.stringify({ id: input.agentEmail, challenge, signature }),
   })
   if (!authResp.ok) {
     const text = await authResp.text().catch(() => '')

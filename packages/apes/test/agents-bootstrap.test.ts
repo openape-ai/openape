@@ -4,6 +4,7 @@ import {
   buildAgentAuthJson,
   buildSpawnSetupScript,
   CLAUDE_SETTINGS_JSON,
+  issueAgentToken,
   registerAgentAtIdp,
   shQuote,
   SSH_ED25519_REGEX,
@@ -177,5 +178,42 @@ describe('registerAgentAtIdp', () => {
       idp: 'https://id.openape.ai',
     })
     expect(result.email).toBe('agent-a+patrick+hofmann_eco@id.openape.ai')
+  })
+})
+
+describe('issueAgentToken', () => {
+  it('sends the canonical `id` field (not legacy agent_id) to challenge + authenticate', async () => {
+    const { generateKeyPairSync } = await import('node:crypto')
+    const { privateKey } = generateKeyPairSync('ed25519')
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
+
+    const calls: Array<{ url: string, body: any }> = []
+    const fetchMock = vi.fn(async (url: string, init: any) => {
+      calls.push({ url, body: JSON.parse(init.body) })
+      if (url.endsWith('/challenge')) {
+        return { ok: true, json: async () => ({ challenge: 'a-challenge-string' }) } as any
+      }
+      return { ok: true, json: async () => ({ token: 'tok', expires_in: 3600 }) } as any
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const res = await issueAgentToken({
+        idp: 'https://id.openape.ai',
+        agentEmail: 'agent-a@id.openape.ai',
+        privateKeyPem: pem,
+      })
+      expect(res).toEqual({ token: 'tok', expiresIn: 3600 })
+
+      // The M3 canonical endpoints expect `id`; the legacy `agent_id`
+      // field name must never be sent (that was the spawn-time 400).
+      expect(calls[0]!.body).toEqual({ id: 'agent-a@id.openape.ai' })
+      expect(calls[1]!.body).toMatchObject({ id: 'agent-a@id.openape.ai', challenge: 'a-challenge-string' })
+      expect(calls[1]!.body).not.toHaveProperty('agent_id')
+      expect(typeof calls[1]!.body.signature).toBe('string')
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
