@@ -21,6 +21,10 @@ const macosUserMock = {
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
+// whichBinary moved to lib/which; keep it stubbed via the same mock fn so
+// per-test mockImplementation overrides (e.g. missing escapes) still apply.
+vi.mock('../src/lib/which.js', () => ({ whichBinary: macosUserMock.whichBinary }))
+
 // The host-platform indirection replaces direct imports of macOS helpers
 // in production code. Mock its surface here too so the tests can flip
 // isDarwin / control the agent-user lookups deterministically.

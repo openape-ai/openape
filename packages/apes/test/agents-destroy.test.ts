@@ -25,6 +25,9 @@ const macosUserMock = {
 }
 vi.mock('../src/lib/macos-user.js', () => macosUserMock)
 
+// whichBinary moved to lib/which; keep it stubbed via the same mock fn.
+vi.mock('../src/lib/which.js', () => ({ whichBinary: macosUserMock.whichBinary }))
+
 // Production code now imports isDarwin + getHostPlatform from the new
 // host-platform module instead of macos-user. Without this mock, CI on
 // Linux uses linuxHostPlatform whose methods either throw or branch

@@ -22,7 +22,8 @@ import {
   captureHostBinDirs,
   resolveBridgeConfig,
 } from '../../lib/llm-bridge'
-import { isShellRegistered, whichBinary } from '../../lib/macos-user'
+import { isShellRegistered } from '../../lib/macos-user'
+import { whichBinary } from '../../lib/which'
 import { getHostPlatform, isDarwin } from '../../lib/host-platform'
 import { upsertNestAgent } from '../../lib/nest-registry'
 

@@ -3,7 +3,7 @@ import { defineCommand } from 'citty'
 import consola from 'consola'
 import { CliError } from '../../errors'
 import { AGENT_NAME_REGEX } from '../../lib/agent-bootstrap'
-import { whichBinary } from '../../lib/macos-user'
+import { whichBinary } from '../../lib/which'
 import { getHostPlatform, isDarwin } from '../../lib/host-platform'
 
 export const allowAgentCommand = defineCommand({
