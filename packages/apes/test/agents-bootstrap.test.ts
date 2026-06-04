@@ -94,7 +94,7 @@ describe('CLAUDE_SETTINGS_JSON', () => {
 describe('buildSpawnSetupScript (linux)', () => {
   const baseInput = {
     name: 'coder',
-    homeDir: '/var/openape/homes/coder',
+    homeDir: '/var/lib/openape/homes/coder',
     shellPath: '/bin/bash',
     privateKeyPem: '-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n',
     publicKeySshLine: 'ssh-ed25519 AAAAFAKE',

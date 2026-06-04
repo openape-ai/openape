@@ -116,9 +116,11 @@ export const spawnAgentCommand = defineCommand({
       throw new CliError(`OS user "${existing.name}" already exists (uid=${existing.uid ?? '?'}). Refusing to overwrite.`)
     }
 
-    // Hidden service-account agents live under /var/openape/homes/<name>,
-    // keeping them out of /home for real human accounts.
-    const homeDir = `/var/openape/homes/${osUsername}`
+    // Agent homes live under /var/lib/openape/homes/<name> — the
+    // persisted `openape-homes` volume the nest container mounts (and the
+    // dir docker-entrypoint.sh reconciles on restart), kept out of /home
+    // where real human accounts live.
+    const homeDir = `/var/lib/openape/homes/${osUsername}`
 
     consola.start(`Generating keypair for ${name}…`)
     const { privatePem, publicSshLine, x25519PrivateKey, x25519PublicKey } = generateKeyPairInMemory()

@@ -6,7 +6,7 @@ import { buildSpawnSetupScript } from '../src/lib/agent-bootstrap.js'
 describe('linux spawn script (integration)', () => {
   const script = buildSpawnSetupScript({
     name: 'agent-x',
-    homeDir: '/var/openape/homes/agent-x',
+    homeDir: '/var/lib/openape/homes/agent-x',
     shellPath: '/bin/bash',
     privateKeyPem: '-----BEGIN OPENSSH PRIVATE KEY-----\nKEY\n-----END OPENSSH PRIVATE KEY-----\n',
     publicKeySshLine: 'ssh-ed25519 AAAAC3Nz agent-x',
@@ -23,10 +23,10 @@ describe('linux spawn script (integration)', () => {
   })
 
   it('creates the parent homes dir then the user', () => {
-    expect(script).toContain('mkdir -p /var/openape/homes')
+    expect(script).toContain('mkdir -p /var/lib/openape/homes')
     // Anchor on the full command (with --home-dir); the explanatory
     // comment above it also contains "useradd --create-home".
-    expect(script.indexOf('mkdir -p /var/openape/homes'))
+    expect(script.indexOf('mkdir -p /var/lib/openape/homes'))
       .toBeLessThan(script.indexOf('useradd --create-home --home-dir'))
   })
 

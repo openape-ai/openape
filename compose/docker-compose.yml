@@ -83,6 +83,12 @@ services:
       # silently uses /root (the container default) and loses state on
       # restart.
       HOME: /var/lib/openape/nest
+      # Single source of truth for the agent registry, honoured by BOTH
+      # the nest daemon (reader) and apes-cli `agents spawn|destroy`
+      # (writer). Without pinning it the two resolvers' fallbacks diverge
+      # ($HOME/agents.json vs $HOME/.openape/nest/agents.json) and a
+      # spawned agent lands where the nest never looks → no bridge.
+      OPENAPE_NEST_REGISTRY_PATH: /var/lib/openape/nest/agents.json
       # Inside the pod the nest reaches the proxy at the service hostname.
       # Agents under this nest inherit this URL via the bridge env file.
       LITELLM_BASE_URL: http://openape-llm:4000/v1

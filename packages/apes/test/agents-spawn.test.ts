@@ -109,7 +109,7 @@ describe('apes agents spawn', () => {
   })
 
   it('refuses when the OS user already exists', async () => {
-    readUserMock.mockReturnValue({ name: 'agent-a', uid: 1001, shell: '/bin/bash', homeDir: '/var/openape/homes/agent-a' })
+    readUserMock.mockReturnValue({ name: 'agent-a', uid: 1001, shell: '/bin/bash', homeDir: '/var/lib/openape/homes/agent-a' })
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
     await expect((spawnAgentCommand as any).run({
       args: { name: 'agent-a' },
@@ -136,7 +136,7 @@ describe('apes agents spawn', () => {
     expect(bootstrapMock.buildSpawnSetupScript).toHaveBeenCalledTimes(1)
     const buildArgs = bootstrapMock.buildSpawnSetupScript.mock.calls[0]![0] as any
     expect(buildArgs.shellPath).toBe('/bin/bash')
-    expect(buildArgs.homeDir).toBe('/var/openape/homes/agent-a')
+    expect(buildArgs.homeDir).toBe('/var/lib/openape/homes/agent-a')
     expect(buildArgs).not.toHaveProperty('macOSUsername')
     expect(buildArgs).not.toHaveProperty('bridge')
     expect(buildArgs).not.toHaveProperty('troop')

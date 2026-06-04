@@ -197,7 +197,7 @@ export async function issueAgentToken(input: {
 
 export interface SpawnSetupScriptInput {
   name: string
-  /** Absolute home dir, under /var/openape/homes/<name>. */
+  /** Absolute home dir, under /var/lib/openape/homes/<name>. */
   homeDir: string
   /** Login shell, e.g. /bin/bash. */
   shellPath: string
@@ -268,11 +268,13 @@ NAME=${shQuote(name)}
 HOME_DIR=${shQuote(homeDir)}
 SHELL_PATH=${shQuote(shellPath)}
 
-# Agent homes live under /var/openape/homes/ — out of /home/ where real
-# operator accounts live. useradd --create-home makes the leaf dir but not
-# missing parents, so pre-create the parent (world-traversable).
-mkdir -p /var/openape/homes
-chmod 755 /var/openape/homes
+# Agent homes live under /var/lib/openape/homes/ (the persisted
+# openape-homes volume) — out of /home/ where real operator accounts
+# live. useradd --create-home makes the leaf dir but not missing
+# parents; the volume mount provides the parent, but pre-create it
+# anyway so a bare-metal/non-volume run still works.
+mkdir -p /var/lib/openape/homes
+chmod 755 /var/lib/openape/homes
 
 # Create the agent's OS user if absent. spawn.ts already refused earlier
 # when the user existed, but guard here too so a re-run of the privileged
