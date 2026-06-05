@@ -1,0 +1,40 @@
+# chatty web-app pod — tested-image deploys.
+#
+# One service per chatty-hosted web app, each published on its loopback
+# port so the existing nginx vhosts (TLS + *.openape.ai routing) stay
+# UNCHANGED. Pilot: openape-troop only; org/chat/free-idp slot in later
+# as further services (follow-up spec).
+#
+# Image pinning vars (REGISTRY, TROOP_TAG) live in the compose project-dir's
+# .env (written by scripts/deploy-image.mjs). Running `pull` without that .env
+# means TROOP_TAG falls back to `latest`, which may not exist on GHCR yet.
+# Always set TROOP_TAG before pulling on chatty.
+#
+# Local dev (build + run on the Mac):
+#   cp compose/.env.troop.example compose/.env.troop   # fill values
+#   docker compose -f compose/chatty.yml up --build openape-troop
+#
+# chatty (pull a pushed image, no build):
+#   docker compose -f compose/chatty.yml pull openape-troop
+#   docker compose -f compose/chatty.yml up -d --no-build openape-troop
+
+services:
+  openape-troop:
+    image: ${REGISTRY:-ghcr.io/openape-ai}/openape-troop:${TROOP_TAG:-latest}
+    # build: lets `up --build` work locally; chatty uses `--no-build` so
+    # it never needs the monorepo context, just the pulled image.
+    build:
+      context: ..
+      dockerfile: apps/openape-troop/Dockerfile
+    container_name: openape-troop
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:3010"
+    env_file:
+      - .env.troop
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
