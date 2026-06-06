@@ -120,6 +120,24 @@ export default defineNitroPlugin(async () => {
       PRIMARY KEY (agent_email, env)
     )`)
 
+    // ChatGPT (and future) OAuth device-flow state + connection status. The
+    // sealed credential itself lives in agent_secrets (CHATGPT_AUTH_JSON);
+    // this table is only the flow/UI state. (ape-plan 01KTCBFW M1/S2.)
+    await db.run(sql`CREATE TABLE IF NOT EXISTS oauth_credentials (
+      agent_email TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      device_code TEXT,
+      user_code TEXT,
+      verification_uri TEXT,
+      device_expires_at INTEGER,
+      account_id TEXT,
+      expires_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (agent_email, provider)
+    )`)
+
     // chats — one persistent "main session" per (owner, agent) pair.
     // Lazily inserted on first message either side sends.
     await db.run(sql`CREATE TABLE IF NOT EXISTS chats (

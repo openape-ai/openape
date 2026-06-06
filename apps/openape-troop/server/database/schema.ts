@@ -136,6 +136,28 @@ export const agentSecrets = sqliteTable('agent_secrets', {
   primaryKey({ columns: [table.agentEmail, table.env] }),
 ])
 
+// oauth_credentials — per-agent external-provider OAuth state (currently
+// ChatGPT "Sign in with ChatGPT"). Holds only the transient device-flow code
+// + connection status + non-secret metadata (account_id, expiry) for the UI.
+// The sealed auth.json itself rides the normal agent_secrets path (env
+// CHATGPT_AUTH_JSON, file-target) so it re-syncs + seeds via the M2 broker.
+// Composite PK (agent_email, provider).
+export const oauthCredentials = sqliteTable('oauth_credentials', {
+  agentEmail: text('agent_email').notNull(),
+  provider: text('provider').notNull(),
+  status: text('status').notNull(), // 'pending' | 'connected' | 'denied'
+  deviceCode: text('device_code'),
+  userCode: text('user_code'),
+  verificationUri: text('verification_uri'),
+  deviceExpiresAt: integer('device_expires_at'),
+  accountId: text('account_id'),
+  expiresAt: integer('expires_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.agentEmail, table.provider] }),
+])
+
 // chats — one persistent "main session" per (owner, agent) pair. Mirrors
 // what chat.openape.ai modelled as a DM room + main thread, but flat and
 // agent-scoped (the owner is implicit from the agent row's ownerEmail).

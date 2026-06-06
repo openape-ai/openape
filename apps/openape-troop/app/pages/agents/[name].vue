@@ -822,6 +822,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               <p class="text-xs text-muted px-4 py-3">
                 {{ $t('agentDetail.secrets.hint') }}
               </p>
+              <ChatgptConnect :agent-name="agentName" @connected="loadSecrets" />
               <UAlert v-if="secretsError" color="error" :title="secretsError" class="m-4" />
               <ul v-if="secrets.length > 0" class="divide-y divide-(--ui-border)">
                 <li v-for="s in secrets" :key="s.env" class="px-4 py-3 flex items-center gap-3">
