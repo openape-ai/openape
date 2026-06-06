@@ -42,7 +42,7 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "defu": "^6.1.7",
-    "jose": "^5.9.0"
+    "jose": "^6.2.3"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"

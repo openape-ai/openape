@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "jose": "^5.9.0"
+    "jose": "^6.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

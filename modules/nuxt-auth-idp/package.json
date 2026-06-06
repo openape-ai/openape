@@ -40,7 +40,7 @@
     "@openape/grants": "workspace:*",
     "@simplewebauthn/browser": "^13",
     "defu": "^6.1.7",
-    "jose": "^5.9.0"
+    "jose": "^6.2.3"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"
