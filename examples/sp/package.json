@@ -12,12 +12,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "4.8.2",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "nuxt": "^4.4.6",
+    "nuxt": "^4.4.7",
     "tailwindcss": "^4.2.1"
   },
   "devDependencies": {

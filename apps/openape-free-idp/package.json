@@ -18,18 +18,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.90",
+    "@iconify-json/lucide": "^1.2.111",
     "@libsql/client": "^0.17.3",
-    "@nuxt/ui": "^4.7.1",
+    "@nuxt/ui": "^4.8.2",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/vue-components": "workspace:*",
-    "@sentry/nuxt": "^10.47.0",
+    "@sentry/nuxt": "^10.56.0",
     "@vite-pwa/nuxt": "^1.0.4",
     "drizzle-orm": "^0.44.7",
-    "nuxt": "^4.4.6",
-    "resend": "^6.12.3",
+    "nuxt": "^4.4.7",
+    "resend": "^6.12.4",
     "tailwindcss": "^4.0.0",
     "web-push": "^3.6.7"
   },
@@ -37,8 +37,8 @@
     "@types/node": "^22.0.0",
     "@types/web-push": "^3.6.4",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.7",
-    "vue-tsc": "^3.3.1"
+    "vitest": "^4.1.8",
+    "vue-tsc": "^3.3.3"
   },
   "engines": {
     "node": ">=22"
