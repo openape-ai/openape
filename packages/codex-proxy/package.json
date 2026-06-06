@@ -35,7 +35,7 @@
     "test": "vitest run --no-coverage"
   },
   "devDependencies": {
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.9.2",
     "tsup": "^8.3.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.7"
