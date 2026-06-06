@@ -16,6 +16,9 @@ const CODEX_PROXY_BASE_URL = 'http://127.0.0.1:4000/v1'
 const CODEX_PROXY_API_KEY = 'sk-codex-loopback'
 // Default subscription model served over the Codex Responses backend.
 const DEFAULT_BRIDGE_MODEL = 'gpt-5'
+// Nest image, pulled from our self-hosted registry on chatty. Anonymous pull,
+// so hatched pods need no registry credentials (replaced ghcr.io).
+const NEST_IMAGE = 'registry.openape.ai/openape-nest:latest'
 
 /**
  * Build the docker-compose YAML for a BYO nest bundle.
@@ -40,7 +43,7 @@ export function buildNestComposeYaml(opts: {
 
 services:
   openape-nest:
-    image: ghcr.io/openape-ai/openape-nest:latest
+    image: ${NEST_IMAGE}
     container_name: openape-nest
     restart: unless-stopped
     networks: [openape-pod]
@@ -74,7 +77,7 @@ networks:
 export function buildPodComposeYaml(opts: { troopUrl: string, ownerEmail: string, hatchToken: string }): string {
   return `services:
   openape-nest:
-    image: ghcr.io/openape-ai/openape-nest:latest
+    image: ${NEST_IMAGE}
     container_name: openape-nest
     restart: unless-stopped
     networks: [openape-pod]
