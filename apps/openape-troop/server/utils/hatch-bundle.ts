@@ -1,8 +1,21 @@
-import { randomBytes } from 'node:crypto'
-
 // Pure builder functions for the hatch compose + env bundles.
 // Extracted from the handler files so they can be unit-tested without
 // Nitro auto-imports (defineEventHandler, useRuntimeConfig).
+//
+// Subscription-only (M3.4): the nest image runs an in-process Codex proxy on
+// its own loopback:4000, so a hatched pod is a SINGLE container — no separate
+// litellm/LLM service, no provider API keys. The ChatGPT credential is seeded
+// via troop's "Connect ChatGPT" flow once the nest is online.
+
+// OpenAI-compatible base URL the per-agent bridges talk to: the in-nest
+// codex-proxy on loopback. (Env name stays LITELLM_* for bridge back-compat;
+// the target is the codex-proxy, not litellm.) The API key is a loopback dummy
+// — the proxy ignores Authorization and authenticates to OpenAI with the
+// seeded ChatGPT credential.
+const CODEX_PROXY_BASE_URL = 'http://127.0.0.1:4000/v1'
+const CODEX_PROXY_API_KEY = 'sk-codex-loopback'
+// Default subscription model served over the Codex Responses backend.
+const DEFAULT_BRIDGE_MODEL = 'gpt-5'
 
 /**
  * Build the docker-compose YAML for a BYO nest bundle.
@@ -20,25 +33,16 @@ export function buildNestComposeYaml(opts: {
 #   docker compose up -d
 # Then verify on this troop instance — the host appears in
 # /api/nest/hosts within ~5s of bootup.
+#
+# Subscription-only: the nest runs an in-process Codex proxy on its own
+# loopback:4000 — no separate LLM container. The ChatGPT credential is
+# seeded via troop's "Connect ChatGPT" flow after the nest is online.
 
 services:
-  openape-llm:
-    image: ghcr.io/openape-ai/openape-llm:latest
-    container_name: openape-llm
-    restart: unless-stopped
-    networks: [openape-pod]
-    ports: ["127.0.0.1:4000:4000"]
-    volumes: ["./litellm.yaml:/etc/litellm/config.yaml:ro"]
-    environment:
-      LITELLM_MASTER_KEY: \${LITELLM_MASTER_KEY}
-      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
-      CHATGPT_OAUTH_TOKEN: \${CHATGPT_OAUTH_TOKEN}
-
   openape-nest:
     image: ghcr.io/openape-ai/openape-nest:latest
     container_name: openape-nest
     restart: unless-stopped
-    depends_on: [openape-llm]
     networks: [openape-pod]
     ports: ["127.0.0.1:9091:9091"]
     volumes:
@@ -50,9 +54,9 @@ services:
       OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
       OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
       OPENAPE_BRIDGE_TARGET: troop
-      LITELLM_BASE_URL: http://openape-llm:4000/v1
-      LITELLM_API_KEY: \${LITELLM_MASTER_KEY}
-      APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-claude-haiku-4-5}
+      LITELLM_BASE_URL: ${CODEX_PROXY_BASE_URL}
+      LITELLM_API_KEY: ${CODEX_PROXY_API_KEY}
+      APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-${DEFAULT_BRIDGE_MODEL}}
 
 volumes:
   openape-nest-data:
@@ -69,23 +73,10 @@ networks:
  */
 export function buildPodComposeYaml(opts: { troopUrl: string, ownerEmail: string, hatchToken: string }): string {
   return `services:
-  openape-llm:
-    image: ghcr.io/openape-ai/openape-llm:latest
-    container_name: openape-llm
-    restart: unless-stopped
-    networks: [openape-pod]
-    ports: ["127.0.0.1:4000:4000"]
-    volumes: ["./litellm.yaml:/etc/litellm/config.yaml:ro"]
-    environment:
-      LITELLM_MASTER_KEY: \${LITELLM_MASTER_KEY}
-      ANTHROPIC_API_KEY: \${ANTHROPIC_API_KEY}
-      CHATGPT_OAUTH_TOKEN: \${CHATGPT_OAUTH_TOKEN}
-
   openape-nest:
     image: ghcr.io/openape-ai/openape-nest:latest
     container_name: openape-nest
     restart: unless-stopped
-    depends_on: [openape-llm]
     networks: [openape-pod]
     ports: ["127.0.0.1:9091:9091"]
     volumes:
@@ -97,8 +88,9 @@ export function buildPodComposeYaml(opts: { troopUrl: string, ownerEmail: string
       OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
       OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
       OPENAPE_BRIDGE_TARGET: troop
-      LITELLM_BASE_URL: http://openape-llm:4000/v1
-      LITELLM_API_KEY: \${LITELLM_MASTER_KEY}
+      LITELLM_BASE_URL: ${CODEX_PROXY_BASE_URL}
+      LITELLM_API_KEY: ${CODEX_PROXY_API_KEY}
+      APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-${DEFAULT_BRIDGE_MODEL}}
 
 volumes:
   openape-nest-data:
@@ -110,29 +102,21 @@ networks:
 }
 
 /**
- * Build the .env file for a pod bundle. Provider API keys are
- * injected here; OPENAPE_* vars belong in the compose environment:
+ * Build the .env file for a pod bundle. Subscription-only: the model is the
+ * only knob — no provider API keys (agents run on the ChatGPT subscription via
+ * the in-nest codex-proxy). OPENAPE_* vars belong in the compose environment:
  * block (not .env) so they can't be accidentally overridden.
  */
 export function buildPodEnvFile(secrets: Record<string, string>): string {
-  const lines = [
-    `LITELLM_MASTER_KEY=sk-litellm-${randomBytes(8).toString('hex')}`,
-    `ANTHROPIC_API_KEY=${secrets.ANTHROPIC_API_KEY ?? ''}`,
-    `CHATGPT_OAUTH_TOKEN=${secrets.CHATGPT_OAUTH_TOKEN ?? ''}`,
-    `APE_CHAT_BRIDGE_MODEL=${secrets.APE_CHAT_BRIDGE_MODEL ?? 'claude-haiku-4-5'}`,
-  ]
-  return `${lines.join('\n')}\n`
+  return `APE_CHAT_BRIDGE_MODEL=${secrets.APE_CHAT_BRIDGE_MODEL ?? DEFAULT_BRIDGE_MODEL}\n`
 }
 
 /**
- * Build the .env file for the BYO nest bundle. Intentionally minimal —
- * provider keys that vary per operator are placeholders to fill in.
+ * Build the .env file for the BYO nest bundle. Subscription-only — the only
+ * knob is the model; override it before `docker compose up` if you like.
  */
 export function buildNestEnvFile(): string {
-  return `# Copy to .env next to docker-compose.yml. Fill in provider keys.
-LITELLM_MASTER_KEY=sk-litellm-${randomBytes(8).toString('hex')}
-ANTHROPIC_API_KEY=
-CHATGPT_OAUTH_TOKEN=
-APE_CHAT_BRIDGE_MODEL=claude-haiku-4-5
+  return `# Copy to .env next to docker-compose.yml. Override the model if you like.
+APE_CHAT_BRIDGE_MODEL=${DEFAULT_BRIDGE_MODEL}
 `
 }
