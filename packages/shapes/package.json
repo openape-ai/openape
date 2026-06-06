@@ -44,7 +44,7 @@
     "h3": "^1.15.0",
     "jose": "^5.9.0",
     "tsup": "catalog:",
-    "typescript": "^5.8.2",
+    "typescript": "^6.0.3",
     "vitest": "catalog:"
   },
   "engines": {
