@@ -4,13 +4,13 @@ import { agents, agentSecrets, oauthCredentials } from '../../../../../database/
 import { buildSecretUpdateFrame, sealSecret, serializeSealed } from '../../../../../utils/agent-secrets'
 import { requireOwner } from '../../../../../utils/auth'
 import { broadcastToOwner } from '../../../../../utils/nest-registry'
-import { CHATGPT_AUTH_FILE_PATH, CHATGPT_SECRET_ENV, pollChatgptToken, toLitellmAuthJson } from '../../../../../utils/oauth-chatgpt'
+import { CHATGPT_AUTH_FILE_PATH, CHATGPT_SECRET_ENV, pollChatgptToken, toCodexAuthJson } from '../../../../../utils/oauth-chatgpt'
 
 // Poll the device flow once. On `pending`/`slow_down` the UI keeps polling.
 // On success: serialize the token → seal the auth.json to the agent's X25519
 // pubkey → persist as a file-target agent_secret (CHATGPT_AUTH_JSON) and push
-// it over the nest WS. The agent's broker (M1/S1) writes it to the litellm
-// auth.json with seed-once; litellm refreshes it in place thereafter.
+// it over the nest WS. The agent's broker (M1/S1) writes it to the codex-proxy
+// auth.json with seed-once; the in-nest codex-proxy refreshes it in place.
 export default defineEventHandler(async (event) => {
   const owner = await requireOwner(event)
   const name = getRouterParam(event, 'name')
@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     return { status: result.status } // pending | slow_down
   }
 
-  const auth = toLitellmAuthJson(result.token)
+  const auth = toCodexAuthJson(result.token)
   let box
   try {
     box = sealSecret(agent.pubkeyX25519, JSON.stringify(auth))

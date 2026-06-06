@@ -40,21 +40,29 @@ COPY packages ./packages
 # is safe and cuts install time roughly in half.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Build apes (the CLI nest invokes for privileged steps) + nest itself.
-# The --filter ... build invocation only builds the explicitly named
-# packages (and their workspace deps), so we don't drag the Nuxt apps
-# into the build at all.
-RUN pnpm --filter '@openape/apes' build && pnpm --filter '@openape/nest' build
+# Build the nest, the binaries it shells out to (apes, ape-agent), and the
+# in-nest codex-proxy. Drive it through turbo, NOT a hand-rolled
+# `pnpm --filter X build` chain: turbo's build task is `dependsOn: ["^build"]`,
+# so every @openape/* workspace dep (shapes, agent-runtime, core, grants,
+# proxy, server, cli-auth, …) is built FIRST, in topological order. The old
+# per-package chain didn't build deps first and broke the tsup dts step with
+# TS2307 the moment a target gained a new workspace dep (apes → shapes /
+# agent-runtime). Only the filtered targets + their deps build — no Nuxt apps.
+RUN pnpm turbo run build \
+      --filter='@openape/apes' \
+      --filter='@openape/nest' \
+      --filter='@openape/ape-agent' \
+      --filter='@openape/codex-proxy'
 
 # `pnpm deploy` materializes a self-contained subtree (workspace deps
 # flattened, no symlinks into the monorepo's .pnpm store) so the runtime
 # image gets a normal node_modules/ that resolves bare imports like
 # `import { ofetch } from 'ofetch'`. Without this step the tsup'd dist
 # can't find its external deps (tsup bundles only the entry's own code).
-RUN pnpm --filter '@openape/apes' build && pnpm --filter '@openape/ape-agent' build && pnpm --filter '@openape/nest' build
 RUN pnpm --filter '@openape/apes' deploy --legacy --prod /tmp/deploy/apes \
  && pnpm --filter '@openape/nest' deploy --legacy --prod /tmp/deploy/nest \
- && pnpm --filter '@openape/ape-agent' deploy --legacy --prod /tmp/deploy/ape-agent
+ && pnpm --filter '@openape/ape-agent' deploy --legacy --prod /tmp/deploy/ape-agent \
+ && pnpm --filter '@openape/codex-proxy' deploy --legacy --prod /tmp/deploy/codex-proxy
 
 # ---- Stage 2: runtime -----------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
@@ -101,6 +109,7 @@ WORKDIR /opt/openape
 COPY --from=build /tmp/deploy/apes ./apes
 COPY --from=build /tmp/deploy/nest ./nest
 COPY --from=build /tmp/deploy/ape-agent ./ape-agent
+COPY --from=build /tmp/deploy/codex-proxy ./codex-proxy
 
 # pm2 is the per-agent process supervisor the nest uses — install
 # globally so `pm2 start ...` (invoked by lib/pm2-supervisor.ts) resolves

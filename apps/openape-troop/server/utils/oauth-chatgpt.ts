@@ -1,6 +1,8 @@
-// Token-endpoint response (Codex "Sign in with ChatGPT") → litellm's chatgpt
-// auth.json shape. litellm reads ~/.config/litellm/chatgpt/auth.json and
-// refreshes it in place; Troop only seeds the initial file (ape-plan M1/S2).
+// Token-endpoint response (Codex "Sign in with ChatGPT") → the on-disk auth.json
+// shape @openape/codex-proxy's CodexCredentialStore loads. The agent's broker
+// seeds the file once (ape-plan M1/S1); the in-nest codex-proxy refreshes it in
+// place thereafter. Fields match codex-proxy's CodexCredential exactly, so the
+// sealed JSON loads without a converter.
 
 export interface ChatgptTokenResponse {
   access_token: string
@@ -8,7 +10,7 @@ export interface ChatgptTokenResponse {
   id_token: string
 }
 
-export interface LitellmChatgptAuth {
+export interface CodexAuthJson {
   access_token: string
   refresh_token: string
   id_token: string
@@ -24,12 +26,12 @@ function decodeJwtClaims(token: string): Record<string, unknown> {
 }
 
 /**
- * Map an OpenAI token response to the on-disk shape litellm's chatgpt provider
- * expects. `expires_at` and `account_id` are read from the access-token claims
- * (`exp` and the `https://api.openai.com/auth.chatgpt_account_id` claim). Throws
- * loudly rather than emit an auth.json litellm would choke on.
+ * Map an OpenAI token response to the on-disk auth.json shape the codex-proxy
+ * loads (its CodexCredential). `expires_at` and `account_id` are read from the
+ * access-token claims (`exp` and the `https://api.openai.com/auth.chatgpt_account_id`
+ * claim). Throws loudly rather than emit an auth.json the proxy would choke on.
  */
-export function toLitellmAuthJson(token: ChatgptTokenResponse): LitellmChatgptAuth {
+export function toCodexAuthJson(token: ChatgptTokenResponse): CodexAuthJson {
   const claims = decodeJwtClaims(token.access_token)
   const auth = claims['https://api.openai.com/auth'] as { chatgpt_account_id?: unknown } | undefined
   const accountId = auth?.chatgpt_account_id
@@ -57,12 +59,12 @@ const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 /** Agent-secret env name carrying the sealed ChatGPT auth.json (a file target, not an env var). */
 export const CHATGPT_SECRET_ENV = 'CHATGPT_AUTH_JSON'
 /**
- * Container path litellm reads. The host's `~/.config/litellm/chatgpt` is
- * mounted into openape-llm at /root/.config/litellm/chatgpt. The nest↔llm
- * shared volume so the agent's write lands here is wired in M1/S4 (or removed
- * by M3 when openape-llm collapses into the nest).
+ * Container path the codex-proxy reads (its CODEX_CREDENTIAL_PATH). The agent's
+ * broker materializes the sealed blob here once (seed-once); the codex-proxy —
+ * started by the nest entrypoint on 127.0.0.1:4000 — refreshes it in place. M3
+ * collapsed the openape-llm/litellm container into this single in-nest proxy.
  */
-export const CHATGPT_AUTH_FILE_PATH = '/root/.config/litellm/chatgpt/auth.json'
+export const CHATGPT_AUTH_FILE_PATH = '/var/lib/openape/codex/auth.json'
 
 export interface DeviceFlowStart {
   device_code: string
