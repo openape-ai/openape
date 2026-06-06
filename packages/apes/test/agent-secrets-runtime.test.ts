@@ -1,5 +1,5 @@
 import { generateX25519KeyPair, seal } from '@openape/core'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -67,5 +67,42 @@ describe('materializeSecrets', () => {
     expect(r.applied).toEqual(['KEEP'])
     expect(env.KEEP).toBe('k')
     expect(env.GONE).toBeUndefined()
+  })
+})
+
+describe('materializeSecrets — file targets', () => {
+  function writeFileBlob(name: string, value: string, materializeTo: string): void {
+    writeFileSync(join(dir, `${name}.blob`), JSON.stringify({ ...seal(value, kp.publicKey), materializeTo }))
+  }
+
+  it('writes the unsealed content to the target file (mode 0600), not the env', () => {
+    const target = join(dir, 'out', 'auth.json')
+    writeFileBlob('CHATGPT_AUTH_JSON', '{"token":"abc"}', target)
+    const env: NodeJS.ProcessEnv = {}
+    const r = materializeSecrets({ dir, keyPath, env })
+    expect(r.applied).toEqual(['CHATGPT_AUTH_JSON'])
+    expect(readFileSync(target, 'utf8')).toBe('{"token":"abc"}')
+    expect(statSync(target).mode & 0o777).toBe(0o600)
+    expect(env.CHATGPT_AUTH_JSON).toBeUndefined()
+  })
+
+  it('seed-once: leaves a target file that is newer than the blob untouched', () => {
+    const target = join(dir, 'auth.json')
+    writeFileSync(target, 'LIVE-refreshed-by-litellm')
+    writeFileBlob('CHATGPT_AUTH_JSON', 'STALE-from-troop', target)
+    utimesSync(join(dir, 'CHATGPT_AUTH_JSON.blob'), new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'))
+    utimesSync(target, new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'))
+    materializeSecrets({ dir, keyPath, env: {} })
+    expect(readFileSync(target, 'utf8')).toBe('LIVE-refreshed-by-litellm')
+  })
+
+  it('re-verify: a blob newer than the target overwrites it', () => {
+    const target = join(dir, 'auth.json')
+    writeFileSync(target, 'OLD')
+    writeFileBlob('CHATGPT_AUTH_JSON', 'FRESH-reverify', target)
+    utimesSync(target, new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'))
+    utimesSync(join(dir, 'CHATGPT_AUTH_JSON.blob'), new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'))
+    materializeSecrets({ dir, keyPath, env: {} })
+    expect(readFileSync(target, 'utf8')).toBe('FRESH-reverify')
   })
 })
