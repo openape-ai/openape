@@ -52,6 +52,11 @@ describe('nest/hatch bundle (BYO Docker path)', () => {
     expect(yaml).toContain('gpt-5')
     expect(yaml).not.toContain('claude-haiku')
   })
+
+  it('pulls the nest image from the self-hosted registry (not ghcr)', () => {
+    expect(yaml).toContain('image: registry.openape.ai/openape-nest:latest')
+    expect(yaml).not.toContain('ghcr.io')
+  })
 })
 
 describe('pod/hatch bundle (cloud-provisioned Docker path)', () => {
@@ -84,6 +89,11 @@ describe('pod/hatch bundle (cloud-provisioned Docker path)', () => {
 
   it('points the bridge at the in-nest codex-proxy on loopback', () => {
     expect(yaml).toContain('LITELLM_BASE_URL: http://127.0.0.1:4000/v1')
+  })
+
+  it('pulls the nest image from the self-hosted registry (not ghcr)', () => {
+    expect(yaml).toContain('image: registry.openape.ai/openape-nest:latest')
+    expect(yaml).not.toContain('ghcr.io')
   })
 })
 
