@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initiateChatgptDeviceFlow, pollChatgptToken, toLitellmAuthJson } from '../server/utils/oauth-chatgpt'
+import { initiateChatgptDeviceFlow, pollChatgptToken, toCodexAuthJson } from '../server/utils/oauth-chatgpt'
 
 // A fetch double that always answers with the given status + JSON body.
 function fetchReturning(status: number, body: unknown) {
@@ -13,13 +13,13 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `${b64({ alg: 'none', typ: 'JWT' })}.${b64(payload)}.sig`
 }
 
-describe('toLitellmAuthJson', () => {
-  it('maps a token response to litellm auth.json (exp + chatgpt_account_id from the access token)', () => {
+describe('toCodexAuthJson', () => {
+  it('maps a token response to the codex-proxy auth.json (exp + chatgpt_account_id from the access token)', () => {
     const accessToken = makeJwt({
       exp: 1781465881,
       'https://api.openai.com/auth': { chatgpt_account_id: 'acc-123' },
     })
-    const out = toLitellmAuthJson({ access_token: accessToken, refresh_token: 'rt_x', id_token: 'idt' })
+    const out = toCodexAuthJson({ access_token: accessToken, refresh_token: 'rt_x', id_token: 'idt' })
     expect(out).toEqual({
       access_token: accessToken,
       refresh_token: 'rt_x',
@@ -31,7 +31,7 @@ describe('toLitellmAuthJson', () => {
 
   it('throws when the access token lacks chatgpt_account_id (never write a broken auth.json)', () => {
     const accessToken = makeJwt({ exp: 1781465881 })
-    expect(() => toLitellmAuthJson({ access_token: accessToken, refresh_token: 'rt_x', id_token: 'idt' }))
+    expect(() => toCodexAuthJson({ access_token: accessToken, refresh_token: 'rt_x', id_token: 'idt' }))
       .toThrow(/account_id/i)
   })
 })
