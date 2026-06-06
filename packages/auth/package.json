@@ -42,7 +42,8 @@
     "@openape/core": "workspace:*",
     "@simplewebauthn/server": "^13",
     "@simplewebauthn/types": "^12",
-    "jose": "^5.9.0"
+    "jose": "^5.9.0",
+    "ofetch": "^1.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

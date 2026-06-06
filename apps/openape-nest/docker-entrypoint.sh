@@ -57,4 +57,30 @@ for a in reg.get('agents', []):
 PY
 fi
 
+# --- Codex proxy ----------------------------------------------------------
+# The OpenAI-compatible shim the per-agent bridges talk to on loopback:4000,
+# replacing the openape-llm/litellm container that M3 collapsed into the nest.
+# Non-blocking by design: it serves /health immediately and only fails a chat
+# request (clear 502) until troop seeds the ChatGPT credential at
+# CODEX_CREDENTIAL_PATH. The seeding agent's broker writes that file once
+# (seed-once); the proxy refreshes it in place thereafter.
+#
+# The dir is world-writable + sticky (like /var/log/openape): the seeding agent
+# runs as a non-root, dynamically-uid'd user and must be able to create
+# auth.json here — the file itself stays 0600. Run under a restart loop so a
+# transient proxy crash doesn't strand model access; the nest stays PID 1 via
+# the exec below, and the loop is reaped with the container.
+mkdir -p /var/lib/openape/codex && chmod 1777 /var/lib/openape/codex
+
+(
+  while true; do
+    CODEX_CREDENTIAL_PATH=/var/lib/openape/codex/auth.json \
+    CODEX_PROXY_PORT=4000 \
+    CODEX_PROXY_HOST=127.0.0.1 \
+    node /opt/openape/codex-proxy/dist/bin.js
+    echo "[entrypoint] codex-proxy exited ($?) — restarting in 2s" >&2
+    sleep 2
+  done
+) >> /var/log/openape/codex-proxy.log 2>&1 &
+
 exec "$@"
