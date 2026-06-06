@@ -1,7 +1,7 @@
 import type { SealedBox } from '@openape/core'
-import { existsSync, readdirSync, readFileSync, watch } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { openString } from '@openape/core'
 
 // Agent-side of the capability broker. troop seals a secret to this
@@ -72,8 +72,21 @@ export function materializeSecrets(opts: MaterializeOptions = {}): MaterializeRe
     const name = envNameFromFile(file)
     if (!name) continue
     try {
-      const box = JSON.parse(readFileSync(join(dir, file), 'utf8')) as SealedBox
-      env[name] = openString(box, key!)
+      const box = JSON.parse(readFileSync(join(dir, file), 'utf8')) as SealedBox & { materializeTo?: unknown }
+      const plaintext = openString(box, key!)
+      const target = typeof box.materializeTo === 'string' ? box.materializeTo : null
+      if (target) {
+        // Seed-once: write only on first seed or a newer blob (re-verify).
+        // Never clobber a file litellm refreshed in place (file > blob mtime).
+        const blobMtime = statSync(join(dir, file)).mtimeMs
+        if (!existsSync(target) || statSync(target).mtimeMs < blobMtime) {
+          mkdirSync(dirname(target), { recursive: true })
+          writeFileSync(target, plaintext, { mode: 0o600 })
+        }
+      }
+      else {
+        env[name] = plaintext
+      }
       applied.push(name)
     }
     catch (e) {
