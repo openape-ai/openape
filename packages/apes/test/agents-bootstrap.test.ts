@@ -104,7 +104,6 @@ describe('buildSpawnSetupScript (linux)', () => {
     authJson: '{"idp":"https://id.openape.ai"}\n',
     claudeSettingsJson: null,
     hookScriptSource: null,
-    claudeOauthToken: null,
   }
 
   it('creates the agent user via useradd, not dscl', () => {
@@ -145,14 +144,10 @@ describe('buildSpawnSetupScript (linux)', () => {
     expect(withHook).toContain('.claude/hooks/bash-via-ape-shell.sh')
   })
 
-  it('writes the claude-token env file and grep-guards the shell-rc source line when a token is given', () => {
-    const s = buildSpawnSetupScript({ ...baseInput, claudeOauthToken: 'sk-ant-oat01-deadbeef' })
-    expect(s).toContain('"$HOME_DIR/.config/openape/claude-token.env"')
-    expect(s).toContain('export CLAUDE_CODE_OAUTH_TOKEN=')
-    expect(s).toContain('sk-ant-oat01-deadbeef')
-    expect(s).toContain('grep -qF \'config/openape/claude-token.env\'')
-    // and absent when no token:
-    expect(buildSpawnSetupScript(baseInput)).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
+  it('never provisions a Claude OAuth token (subscription-first; removed in M4)', () => {
+    const s = buildSpawnSetupScript({ ...baseInput, claudeSettingsJson: '{"hooks":{}}', hookScriptSource: '#!/bin/bash\n' })
+    expect(s).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
+    expect(s).not.toContain('claude-token.env')
   })
 })
 

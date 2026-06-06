@@ -15,7 +15,6 @@ describe('linux spawn script (integration)', () => {
     authJson: '{"idp":"https://id.openape.ai","email":"agent-x@id.openape.ai"}\n',
     claudeSettingsJson: '{"hooks":{"PreToolUse":[]}}',
     hookScriptSource: '#!/bin/bash\nexec true\n',
-    claudeOauthToken: 'sk-ant-oat01-deadbeef',
   })
 
   it('is a bash script with strict mode', () => {
@@ -43,10 +42,10 @@ describe('linux spawn script (integration)', () => {
     expect(script).toContain('"$HOME_DIR/.config/openape/agent-x25519.key"')
   })
 
-  it('installs the claude token env + hook when supplied', () => {
-    expect(script).toContain('claude-token.env')
-    expect(script).toContain('CLAUDE_CODE_OAUTH_TOKEN=')
+  it('installs the claude ape-shell hook but no OAuth token (M4)', () => {
     expect(script).toContain('.claude/hooks/bash-via-ape-shell.sh')
+    expect(script).not.toContain('claude-token.env')
+    expect(script).not.toContain('CLAUDE_CODE_OAUTH_TOKEN')
   })
 
   it('locks the private key and auth.json to 600 and chowns to the agent', () => {
