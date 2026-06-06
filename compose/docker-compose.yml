@@ -1,112 +1,64 @@
 # OpenApe pod — local-dev compose.
 #
-# Brings up the two long-running services that historically lived on the
-# Mac host (nest + LiteLLM proxy) as containers. Designed to run on
-# OrbStack (Mac) or any Docker Engine (Linux), identically.
+# Brings the nest up as a SINGLE container. As of M3 the LiteLLM proxy runs
+# IN the nest (collapsed from the former sibling openape-llm service), so the
+# ChatGPT auth.json the agent writes is on the same filesystem litellm reads.
+# Runs on OrbStack (Mac) or any Docker Engine (Linux), identically.
 #
 # Quickstart:
-#   1. cp apps/openape-llm/config.example.yaml compose/litellm.yaml
-#      → fill in the API key envs.
-#   2. cp compose/.env.example compose/.env
-#      → set ANTHROPIC_API_KEY etc.
-#   3. docker compose -f compose/docker-compose.yml up --build
-#   4. curl http://127.0.0.1:9091/health   # nest
-#      curl http://127.0.0.1:4000/health/liveliness  # litellm
+#   1. cp compose/.env.example compose/.env   → set ANTHROPIC_API_KEY etc.
+#   2. docker compose -f compose/docker-compose.yml up --build
+#   3. docker exec openape-nest curl -s http://127.0.0.1:4000/health/liveliness  # litellm
+#      docker logs openape-nest                                                   # nest loops
 #
 # Volumes:
 #   openape-nest-data   → /var/lib/openape/nest (registry + auth.json)
 #   openape-homes       → /var/lib/openape/homes (per-agent homes)
-#
-# Network:
-#   openape-pod (bridge) → in-pod hostnames `openape-nest`, `openape-llm`
-#   work for service-to-service traffic. The host-published ports
-#   (9091, 4000) are bound to 127.0.0.1 only so a misconfigured firewall
-#   can't expose them to the LAN.
 
 services:
-  openape-llm:
-    build:
-      context: ..
-      dockerfile: apps/openape-llm/Dockerfile
-    image: openape-llm:dev
-    container_name: openape-llm
-    restart: unless-stopped
-    networks:
-      - openape-pod
-    ports:
-      - "127.0.0.1:4000:4000"
-    volumes:
-      - ./litellm.yaml:/etc/litellm/config.yaml:ro
-      # ChatGPT OAuth state — when the operator uses the `chatgpt/`
-      # litellm provider, this is where the access/refresh tokens
-      # live (litellm reads them from $HOME/.config/litellm/chatgpt/).
-      # Optional: omit for Anthropic/OpenAI-only setups.
-      # MUST be writable: litellm refreshes the access token in place and
-      # rewrites this file. A `:ro` mount makes refresh fail with
-      # "Read-only file system" → the token dies on expiry and every chat
-      # hangs. Read-write so refresh + device-login re-auth persist.
-      - ${HOME}/.config/litellm/chatgpt:/root/.config/litellm/chatgpt
-    environment:
-      LITELLM_HOST: 0.0.0.0
-      LITELLM_PORT: "4000"
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-loopback}
-      # API keys — set in compose/.env or inherit from the operator's
-      # shell. config.yaml expands these at LiteLLM load time.
-      CHATGPT_OAUTH_TOKEN: ${CHATGPT_OAUTH_TOKEN:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-
+  # openape-nest — the control-plane daemon. As of M3 it also runs litellm
+  # in-container on 127.0.0.1:4000 (collapsed from the former openape-llm
+  # service). The ChatGPT credential the Troop "Connect ChatGPT" flow seeds
+  # lands on this same filesystem (see CHATGPT_AUTH_FILE_PATH in troop).
   openape-nest:
     build:
       context: ..
       dockerfile: apps/openape-nest/Dockerfile
     image: openape-nest:dev
     container_name: openape-nest
-    # Stable hostname across `docker compose up` recreates — otherwise
-    # the container's random short-id (`df560db1f58f`) becomes the
-    # `host_id` reported to troop, and the FIRST sync after every
-    # container recreate fails with 401 host_id mismatch (the agent's
-    # keypair "moved" to a new host as far as troop knows). Pinning
-    # the hostname makes the nest reuse the same host_id forever and
-    # troop's pin stays stable.
+    # Stable hostname across `docker compose up` recreates — otherwise the
+    # container's random short-id becomes the host_id reported to troop, and
+    # the first sync after every recreate fails with a 401 host_id mismatch.
     hostname: openape-nest
     restart: unless-stopped
-    depends_on:
-      - openape-llm
     networks:
       - openape-pod
     # No host ports — the nest is a pure long-running WebSocket CLIENT
-    # (Phase F+: connects out to troop, never listens). Verification is
-    # via `docker ps` + `docker logs openape-nest` showing the
-    # reconcile/sync loops running. See compose/README.md.
+    # (connects out to troop, never listens). litellm is loopback-internal;
+    # reach it via `docker exec`. Verify via `docker logs openape-nest`.
     volumes:
       - openape-nest-data:/var/lib/openape/nest
       - openape-homes:/var/lib/openape/homes
     environment:
-      # The nest reads auth.json / agents.json out of $HOME, so HOME
-      # has to point at the persistent volume — without this the nest
-      # silently uses /root (the container default) and loses state on
-      # restart.
+      # The nest reads auth.json / agents.json out of $HOME, so HOME points
+      # at the persistent volume (else it loses state on restart).
       HOME: /var/lib/openape/nest
-      # Single source of truth for the agent registry, honoured by BOTH
-      # the nest daemon (reader) and apes-cli `agents spawn|destroy`
-      # (writer). Without pinning it the two resolvers' fallbacks diverge
-      # ($HOME/agents.json vs $HOME/.openape/nest/agents.json) and a
-      # spawned agent lands where the nest never looks → no bridge.
       OPENAPE_NEST_REGISTRY_PATH: /var/lib/openape/nest/agents.json
-      # Inside the pod the nest reaches the proxy at the service hostname.
-      # Agents under this nest inherit this URL via the bridge env file.
-      LITELLM_BASE_URL: http://openape-llm:4000/v1
+      # litellm runs in-container (M3 collapse) on loopback; agents inherit
+      # this URL via the bridge env file.
+      LITELLM_BASE_URL: http://127.0.0.1:4000/v1
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-loopback}
+      # litellm's own config expands these at load — master key + the keyed
+      # Anthropic fallback. The ChatGPT path uses the auth.json the Troop
+      # "Connect ChatGPT" flow seeds, so no token env is needed for it.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-loopback}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       APE_CHAT_BRIDGE_MODEL: ${APE_CHAT_BRIDGE_MODEL:-claude-haiku-4-5}
-      # Container is the sandbox — no DDISA/escapes layer. Tells the
-      # nest's pm2-supervisor to shell to `sudo -u <agent>` instead of
-      # `apes run --as <agent>`, and the agent-tool runApeShell helper
-      # to exec via /bin/bash instead of the gated ape-shell.
+      # Container is the sandbox — no DDISA/escapes layer. pm2-supervisor
+      # shells via `sudo -u <agent>`; agent-tool runApeShell uses /bin/bash.
       OPENAPE_BYPASS_APE_SHELL: "1"
-      # Chat backend the per-agent bridges connect to. Default 'chat'
-      # (chat.openape.ai) for back-compat with operators who haven't
-      # migrated; flip via compose/.env to 'troop' to point bridges at
-      # troop.openape.ai's native chat. See compose/CUTOVER-CHAT-TO-TROOP.md.
+      # Chat backend the per-agent bridges connect to. Flip to 'troop' via
+      # compose/.env to point bridges at troop.openape.ai's native chat.
       OPENAPE_BRIDGE_TARGET: ${OPENAPE_BRIDGE_TARGET:-chat}
       APE_CHAT_ENDPOINT: ${APE_CHAT_ENDPOINT:-https://chat.openape.ai}
 

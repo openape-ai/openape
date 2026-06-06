@@ -57,12 +57,12 @@ const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 /** Agent-secret env name carrying the sealed ChatGPT auth.json (a file target, not an env var). */
 export const CHATGPT_SECRET_ENV = 'CHATGPT_AUTH_JSON'
 /**
- * Container path litellm reads. The host's `~/.config/litellm/chatgpt` is
- * mounted into openape-llm at /root/.config/litellm/chatgpt. The nest↔llm
- * shared volume so the agent's write lands here is wired in M1/S4 (or removed
- * by M3 when openape-llm collapses into the nest).
+ * Container path litellm reads. As of M3, litellm runs inside the nest with
+ * HOME=/var/lib/openape/llm, and the agent (a non-root user) writes the sealed
+ * auth.json here via the M2/S1 broker — one container, one filesystem. The
+ * nest entrypoint makes this dir world-writable so any agent user can seed it.
  */
-export const CHATGPT_AUTH_FILE_PATH = '/root/.config/litellm/chatgpt/auth.json'
+export const CHATGPT_AUTH_FILE_PATH = '/var/lib/openape/llm/.config/litellm/chatgpt/auth.json'
 
 export interface DeviceFlowStart {
   device_code: string
