@@ -57,4 +57,17 @@ for a in reg.get('agents', []):
 PY
 fi
 
+# litellm — collapsed into the nest (M3). The ChatGPT auth.json is delivered
+# to an agent (sealed; the agent, a non-root user, writes it via the M2/S1
+# broker) and read by litellm here — one container, one filesystem. litellm's
+# chatgpt provider reads $HOME/.config/litellm/chatgpt, so point its HOME at a
+# world-writable shared dir any agent user can drop the auth.json into.
+LITELLM_HOME=/var/lib/openape/llm
+mkdir -p "$LITELLM_HOME/.config/litellm/chatgpt"
+chmod -R 0777 "$LITELLM_HOME/.config"
+HOME="$LITELLM_HOME" litellm \
+  --config "${LITELLM_CONFIG:-/etc/litellm/config.yaml}" \
+  --host 127.0.0.1 --port "${LITELLM_PORT:-4000}" \
+  >> /var/log/openape/litellm.log 2>&1 &
+
 exec "$@"
