@@ -164,6 +164,13 @@
         }
       }
     },
+    "chatgpt": {
+      "connectButton": "Connect ChatGPT",
+      "hint": "Sign in once — the agent then uses your ChatGPT subscription.",
+      "enterCode": "Open and enter the code:",
+      "waiting": "Waiting for browser confirmation …",
+      "connected": "ChatGPT connected (account {account})"
+    },
     "secrets": {
       "title": "Secrets",
       "hint": "Capability values for this agent. The value is sealed to the agent's key before it's stored — Troop never keeps the plaintext and can't show it back. Set a value again to rotate it.",
