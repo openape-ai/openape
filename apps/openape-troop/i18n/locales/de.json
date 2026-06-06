@@ -164,6 +164,13 @@
         }
       }
     },
+    "chatgpt": {
+      "connectButton": "ChatGPT verbinden",
+      "hint": "Einmal anmelden — der Agent nutzt dann dein ChatGPT-Abo.",
+      "enterCode": "Öffne und gib den Code ein:",
+      "waiting": "Warte auf Bestätigung im Browser …",
+      "connected": "ChatGPT verbunden (Account {account})"
+    },
     "secrets": {
       "title": "Secrets",
       "hint": "Capability-Values für diesen Agent. Der Wert wird vor dem Speichern auf den Schlüssel des Agents sealed — Troop kennt den Klartext nie und kann ihn nicht mehr anzeigen. Wert nochmal setzen = rotieren.",
