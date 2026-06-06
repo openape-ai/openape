@@ -71,6 +71,8 @@ RUN apt-get update \
         gnupg \
         procps \
         python3 \
+        python3-pip \
+        python3-venv \
         sudo \
         tini \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -79,6 +81,16 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
+
+# litellm — collapsed into the nest (M3). The LLM proxy runs in-container so
+# the ChatGPT auth.json the agent writes is on the same filesystem litellm
+# reads. Installed in a venv because Debian's system python is PEP-668
+# externally-managed. Same fork as the former openape-llm image.
+RUN python3 -m venv /opt/litellm \
+    && /opt/litellm/bin/pip install --no-cache-dir \
+        'litellm[proxy] @ git+https://github.com/patrick-hofmann/litellm.git@fix/chatgpt-non-stream-output-aggregate' \
+    && ln -sf /opt/litellm/bin/litellm /usr/local/bin/litellm
+COPY apps/openape-llm/config.example.yaml /etc/litellm/config.yaml
 
 # Sudoers config — let the nest (running as root, PID 1) sudo to any of
 # its supervised agents without a password. The container is the OpenApe
