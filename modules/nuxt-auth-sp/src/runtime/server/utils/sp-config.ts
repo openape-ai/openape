@@ -1,7 +1,8 @@
 import type { H3Event } from 'h3'
-import { useSession } from 'h3'
+import { getRequestURL, useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import type { AuthFlowState } from '@openape/core'
+import { resolveClientId } from './client-id'
 
 const FLOW_COOKIE = 'openape-flow'
 
@@ -15,7 +16,9 @@ export function getSpConfig() {
   // populates these.
   const sp = config.openapeSp as unknown as Record<string, string | undefined>
   return {
-    clientId: (sp.clientId || 'sp.example.com').trim(),
+    // Empty when not pinned → the SP identifies as its request host
+    // (see getClientId / resolveClientId). Real SPs pin this via env.
+    clientId: (sp.clientId || '').trim(),
     openapeUrl: (sp.openapeUrl || '').trim(),
     spName: (sp.spName || 'OpenApe Service Provider').trim(),
     fallbackIdpUrl: (sp.fallbackIdpUrl || 'https://id.openape.at').trim(),
@@ -24,6 +27,14 @@ export function getSpConfig() {
     // its nuxt.config — see `openapeSp.postLoginRedirect`.
     postLoginRedirect: (sp.postLoginRedirect || '/dashboard').trim(),
   }
+}
+
+/**
+ * The SP's OAuth `client_id` for this request: the pinned value, or — when
+ * unset — the live request host (DDISA: an SP's identity is its domain).
+ */
+export function getClientId(event: H3Event): string {
+  return resolveClientId(getSpConfig().clientId, getRequestURL(event).host)
 }
 
 export async function saveFlowState(event: H3Event, state: string, flow: AuthFlowState) {

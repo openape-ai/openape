@@ -1,12 +1,12 @@
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { handleCallback } from '@openape/auth'
-import { getSpConfig, getFlowState, clearFlowState } from '../utils/sp-config'
+import { getClientId, getSpConfig, getFlowState, clearFlowState } from '../utils/sp-config'
 import { getSpSession } from '../utils/sp-session'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const { code, state, error, error_description } = query as Record<string, string>
-  const { clientId } = getSpConfig()
+  const clientId = getClientId(event)
   const origin = getRequestURL(event).origin
   const redirectUri = `${origin}/api/callback`
 
