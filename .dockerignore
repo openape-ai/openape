@@ -1,0 +1,7 @@
+**/node_modules
+**/.output
+**/.nuxt
+**/.turbo
+**/.git
+**/.data
+**/*.log
