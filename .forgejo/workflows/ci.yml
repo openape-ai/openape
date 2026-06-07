@@ -26,11 +26,11 @@ jobs:
         # a concurrent nuxi prepare from typecheck/test → TSConfckParseError.
         # Running build alone removes the concurrent writer.
         #
-        # Retry once: the build occasionally dies on a transient runner signal
-        # (exit 129/SIGHUP during a Nuxt app build) — not a code error, it passes
-        # on rerun (the host has ample RAM, so it is not OOM). turbo's cache makes
-        # the retry rebuild only the task that failed, so this stays fast.
-        run: |
-          pnpm turbo run build --filter='!openape-e2e' --filter='!docs' && exit 0
-          echo "::warning::build wave failed (transient runner signal?) — retrying once"
-          pnpm turbo run build --filter='!openape-e2e' --filter='!docs'
+        # --concurrency=1: the runner is a 4-core box. turbo's default fan-out
+        # builds several Nuxt apps at once, each spawning its own vite workers, so
+        # load spikes past 15 (≈4× oversubscription) and a build worker gets
+        # SIGHUP'd mid-build (exit 129) — the flaky failure that hit several PRs.
+        # Serial app builds keep each one within the 4 cores: slower, but it stops
+        # thrashing the runner. (A same-shell retry can't help — the SIGHUP hits
+        # the step's shell too.)
+        run: pnpm turbo run build --filter='!openape-e2e' --filter='!docs' --concurrency=1
