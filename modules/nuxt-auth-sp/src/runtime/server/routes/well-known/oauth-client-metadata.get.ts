@@ -1,9 +1,10 @@
 import { defineEventHandler, getRequestURL } from 'h3'
 import { createClientMetadata } from '@openape/auth'
-import { getSpConfig } from '../../utils/sp-config'
+import { getClientId, getSpConfig } from '../../utils/sp-config'
 
 export default defineEventHandler((event) => {
-  const { clientId, spName } = getSpConfig()
+  const { spName } = getSpConfig()
+  const clientId = getClientId(event)
   const origin = getRequestURL(event).origin
   return createClientMetadata({
     client_id: clientId,

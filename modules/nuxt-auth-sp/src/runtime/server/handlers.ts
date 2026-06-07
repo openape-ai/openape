@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { createError, defineEventHandler, getQuery, getRequestURL, readBody, sendRedirect } from 'h3'
 import { createAuthorizationURL, createClientMetadata, discoverIdP, handleCallback } from '@openape/auth'
 import type { DDISAAssertionClaims } from '@openape/core'
-import { getSpConfig, saveFlowState, getFlowState, clearFlowState } from './utils/sp-config'
+import { getClientId, getSpConfig, saveFlowState, getFlowState, clearFlowState } from './utils/sp-config'
 
 export interface LoginHandlerOptions {
   callbackPath: string
@@ -24,7 +24,8 @@ export interface ClientMetadataHandlerOptions {
 export function defineOpenApeLoginHandler(options: LoginHandlerOptions) {
   return defineEventHandler(async (event) => {
     const body = await readBody<{ email: string }>(event)
-    const { clientId, openapeUrl, fallbackIdpUrl } = getSpConfig()
+    const { openapeUrl, fallbackIdpUrl } = getSpConfig()
+    const clientId = getClientId(event)
     const origin = getRequestURL(event).origin
     const redirectUri = `${origin}${options.callbackPath}`
 
@@ -66,7 +67,7 @@ export function defineOpenApeCallbackHandler(options: CallbackHandlerOptions) {
   return defineEventHandler(async (event) => {
     const query = getQuery(event)
     const { code, state, error, error_description } = query as Record<string, string>
-    const { clientId } = getSpConfig()
+    const clientId = getClientId(event)
     const origin = getRequestURL(event).origin
 
     if (error) {
@@ -128,7 +129,8 @@ export function defineOpenApeCallbackHandler(options: CallbackHandlerOptions) {
 
 export function defineOpenApeClientMetadataHandler(options: ClientMetadataHandlerOptions) {
   return defineEventHandler((event) => {
-    const { clientId, spName } = getSpConfig()
+    const { spName } = getSpConfig()
+    const clientId = getClientId(event)
     const origin = getRequestURL(event).origin
     return createClientMetadata({
       client_id: clientId,
