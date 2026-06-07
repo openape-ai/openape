@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from 'node:http'
 import type { ChatCompletionsRequest } from './types'
 import { createServer } from 'node:http'
 import { postCodexResponses } from './codex-client'
+import { fetchCodexModels } from './codex-models'
 import { CodexCredentialStore } from './credential-store'
 import { streamChatCompletion } from './proxy'
 
@@ -40,6 +41,21 @@ export function createCodexProxyServer(opts: CodexProxyOptions): Server {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end('{"ok":true}')
+      return
+    }
+    if (req.method === 'GET' && req.url === '/v1/models') {
+      try {
+        const cred = await store.get()
+        const created = Math.floor(Date.now() / 1000)
+        const data = (await fetchCodexModels(cred)).map(id => ({ id, object: 'model', created, owned_by: 'openai' }))
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ object: 'list', data }))
+      }
+      catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+        res.writeHead(502, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: { message } }))
+      }
       return
     }
     if (req.method !== 'POST' || !req.url?.startsWith('/v1/chat/completions')) {
