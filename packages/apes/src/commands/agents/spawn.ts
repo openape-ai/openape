@@ -59,6 +59,18 @@ export const spawnAgentCommand = defineCommand({
       type: 'string',
       description: 'Model the bridge sends in chat-completion requests (default: claude-haiku-4-5). Override when fronting a proxy that doesn\'t route the default — e.g. ChatGPT-only proxy needs `gpt-5.4`.',
     },
+    'kind': {
+      type: 'string',
+      description: 'Agent kind: "user" (default, connects to troop-chat) or "service" (polls an SP backend\'s task queue and runs each task through the LLM). With "service", --serves is required.',
+    },
+    'serves': {
+      type: 'string',
+      description: 'For --kind service: base URL of the SP backend this agent serves (e.g. https://zaz.delta-mind.at or http://127.0.0.1:3013). The agent pulls GetNextTask / posts ResolveTask there.',
+    },
+    'poll-interval': {
+      type: 'string',
+      description: 'For --kind service: idle poll interval in ms (default 2000).',
+    },
   },
   async run({ args }) {
     const name = args.name as string
@@ -68,6 +80,14 @@ export const spawnAgentCommand = defineCommand({
         + `lowercase letters, digits and hyphens, 1–24 chars, must start with a letter.`,
       )
     }
+
+    if (args.kind != null && args.kind !== 'user' && args.kind !== 'service')
+      throw new CliError(`Invalid --kind "${String(args.kind)}". Must be "user" or "service".`)
+    const isService = args.kind === 'service'
+    const servesUrl = typeof args.serves === 'string' ? args.serves.replace(/\/$/, '') : undefined
+    if (isService && !servesUrl)
+      throw new CliError('--kind service requires --serves <SP base URL> (e.g. https://zaz.delta-mind.at).')
+    const pollMs = typeof args['poll-interval'] === 'string' ? Number.parseInt(args['poll-interval'], 10) : undefined
 
     const auth = loadAuth()
     if (!auth) {
@@ -176,7 +196,13 @@ export const spawnAgentCommand = defineCommand({
         home: homeDir,
         email: registration.email,
         registeredAt: Math.floor(Date.now() / 1000),
-        bridge: withBridge
+        kind: isService ? 'service' : undefined,
+        service: isService && servesUrl
+          ? { spBaseUrl: servesUrl, pollIntervalMs: pollMs != null && Number.isFinite(pollMs) && pollMs > 0 ? pollMs : undefined }
+          : undefined,
+        // Service agents also carry bridge config — it's the LLM endpoint the
+        // worker forwards to (baseUrl/key/model from --bridge-*).
+        bridge: withBridge || isService
           ? {
               baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
               apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
