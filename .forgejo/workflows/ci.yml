@@ -11,26 +11,33 @@ concurrency:
 jobs:
   ci:
     runs-on: docker
+    # `--affected`: turbo runs each task only for packages changed vs main (+
+    # their dependents). A leaf-package PR (e.g. sp-tasks) then skips every Nuxt
+    # app build entirely → seconds, not 20 min on the 4-core runner. TURBO_SCM_BASE
+    # + fetch-depth:0 give turbo the base ref to diff against.
+    env:
+      TURBO_SCM_BASE: origin/main
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure base ref for --affected
+        # Guarantee origin/main is present so turbo can diff against it. Without
+        # a resolvable base, --affected falls back to building everything.
+        run: git fetch --no-tags origin main
       - name: Enable pnpm
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Lint · Typecheck · Test
+      - name: Lint · Typecheck · Test (affected)
         # e2e needs a running stack (dedicated job); docs prerenders OG images
         # (fragile, own deploy) — both excluded from per-PR CI.
-        run: pnpm turbo run lint typecheck test --filter='!openape-e2e' --filter='!docs'
-      - name: Build
-        # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which races
-        # a concurrent nuxi prepare from typecheck/test → TSConfckParseError.
-        # Running build alone removes the concurrent writer.
-        #
-        # --concurrency=1: the runner is a 4-core box. turbo's default fan-out
-        # builds several Nuxt apps at once, each spawning its own vite workers, so
-        # load spikes past 15 (≈4× oversubscription) and a build worker gets
-        # SIGHUP'd mid-build (exit 129) — the flaky failure that hit several PRs.
-        # Serial app builds keep each one within the 4 cores: slower, but it stops
-        # thrashing the runner. (A same-shell retry can't help — the SIGHUP hits
-        # the step's shell too.)
-        run: pnpm turbo run build --filter='!openape-e2e' --filter='!docs' --concurrency=1
+        run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
+      - name: Build (affected)
+        # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which would
+        # race a concurrent nuxi prepare from the typecheck/test wave.
+        # --concurrency=1 stays as a safety net for the rare PR that actually
+        # touches several Nuxt apps at once (the 4-core runner thrashes and
+        # SIGHUPs a build worker — exit 129 — when many build in parallel); with
+        # --affected that case is now rare, so the cap costs almost nothing.
+        run: pnpm turbo run build --affected --filter='!openape-e2e' --filter='!docs' --concurrency=1
