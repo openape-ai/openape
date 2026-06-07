@@ -30,6 +30,13 @@ export interface AgentEntry {
     apiKey?: string
     model?: string
   }
+  /** 'user' (default) → troop-chat bridge; 'service' → SP task-queue worker. */
+  kind?: 'user' | 'service'
+  /** Required for kind='service': the SP backend this agent serves. */
+  service?: {
+    spBaseUrl: string
+    pollIntervalMs?: number
+  }
 }
 
 interface RegistryFile {
