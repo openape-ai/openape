@@ -32,6 +32,20 @@ export interface AgentEntry {
     apiKey?: string
     model?: string
   }
+  /**
+   * Agent kind. 'user' (default, also when absent → backward-compatible)
+   * connects to troop-chat; 'service' polls an SP backend's task queue and
+   * runs each task through the LLM. The supervisor starts a different binary
+   * per kind (`ape-agent` vs `ape-agent-service`).
+   */
+  kind?: 'user' | 'service'
+  /** Required for kind='service': the SP backend this agent serves. */
+  service?: {
+    /** Base URL of the SP (where GetNextTask/ResolveTask live). */
+    spBaseUrl: string
+    /** Idle poll interval in ms (default 2000). */
+    pollIntervalMs?: number
+  }
 }
 
 interface RegistryFile {
