@@ -1,4 +1,5 @@
 import type { ChatCompletionsRequest, ChatMessage, ResponsesBody, ResponsesInputItem, ResponsesTool } from './types'
+import { sanitizeToolParameters } from './schema-sanitizer'
 
 // Chat-Completions request → Codex Responses request body. Shapes per OpenClaw's
 // `convertResponsesMessages` / `convertResponsesTools` / `buildRequestBody`:
@@ -52,7 +53,7 @@ export function chatCompletionsToResponsesBody(req: ChatCompletionsRequest): Res
     // Lift name/description/parameters out of the `function` wrapper; sort by
     // name so the prompt-cache key bytes are stable across turns.
     body.tools = req.tools
-      .map((t): ResponsesTool => ({ type: 'function', name: t.function.name, description: t.function.description, parameters: t.function.parameters ?? {} }))
+      .map((t): ResponsesTool => ({ type: 'function', name: t.function.name, description: t.function.description, parameters: sanitizeToolParameters(t.function.parameters ?? {}) }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
