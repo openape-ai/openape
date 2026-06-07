@@ -1135,6 +1135,31 @@ importers:
         specifier: 'catalog:'
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-istanbul@4.1.7)(happy-dom@18.0.1)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
 
+  packages/sp-tasks:
+    dependencies:
+      drizzle-orm:
+        specifier: '>=0.45.2'
+        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14)
+    devDependencies:
+      '@libsql/client':
+        specifier: ^0.17.3
+        version: 0.17.3
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      h3:
+        specifier: 'catalog:'
+        version: 1.15.11
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.2)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-istanbul@4.1.7)(happy-dom@18.0.1)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
+
   packages/vue-components:
     dependencies:
       '@openape/core':
