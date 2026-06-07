@@ -39,6 +39,10 @@ export default defineNuxtConfig({
       ],
       crawlLinks: true,
       autoSubfolderIndex: false,
+      // OG-image island prerendering 400s ("Invalid island request hash") on clean/CI
+      // builds; those images are non-essential, so prerender best-effort instead of
+      // failing the whole build. They still render on-demand at runtime.
+      failOnError: false,
     },
   },
 
