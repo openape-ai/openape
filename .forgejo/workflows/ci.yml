@@ -17,7 +17,12 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Lint · Typecheck · Test · Build
-        # e2e needs a running stack (dedicated job, M4); docs build prerenders
-        # OG images (fragile, has its own deploy) — both excluded from per-PR CI.
-        run: pnpm turbo run lint typecheck test build --filter='!openape-e2e' --filter='!docs'
+      - name: Lint · Typecheck · Test
+        # e2e needs a running stack (dedicated job); docs prerenders OG images
+        # (fragile, own deploy) — both excluded from per-PR CI.
+        run: pnpm turbo run lint typecheck test --filter='!openape-e2e' --filter='!docs'
+      - name: Build
+        # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which races
+        # a concurrent nuxi prepare from typecheck/test → TSConfckParseError.
+        # Running build alone removes the concurrent writer.
+        run: pnpm turbo run build --filter='!openape-e2e' --filter='!docs'
