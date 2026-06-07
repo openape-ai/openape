@@ -1,0 +1,21 @@
+name: e2e
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: E2E (self-contained idp+sp, fresh, no prod)
+        run: pnpm turbo run test --filter=openape-e2e
