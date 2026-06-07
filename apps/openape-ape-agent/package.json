@@ -7,7 +7,8 @@
   "private": false,
   "bin": {
     "ape-agent": "./dist/bridge.mjs",
-    "openape-chat-bridge": "./dist/bridge.mjs"
+    "openape-chat-bridge": "./dist/bridge.mjs",
+    "ape-agent-service": "./dist/service-bridge-main.mjs"
   },
   "files": [
     "dist",
@@ -30,6 +31,7 @@
     "@openape/apes": "workspace:*",
     "@openape/cli-auth": "workspace:*",
     "@openape/prompt-injection-detector": "workspace:*",
+    "@openape/sp-tasks": "workspace:*",
     "jose": "catalog:",
     "ofetch": "^1.4.1",
     "ws": "^8.18.0",

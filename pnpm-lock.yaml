@@ -166,6 +166,9 @@ importers:
       '@openape/prompt-injection-detector':
         specifier: workspace:*
         version: link:../../packages/prompt-injection-detector
+      '@openape/sp-tasks':
+        specifier: workspace:*
+        version: link:../../packages/sp-tasks
       jose:
         specifier: 'catalog:'
         version: 5.10.0
