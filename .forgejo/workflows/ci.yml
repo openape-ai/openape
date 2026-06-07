@@ -25,4 +25,12 @@ jobs:
         # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which races
         # a concurrent nuxi prepare from typecheck/test → TSConfckParseError.
         # Running build alone removes the concurrent writer.
-        run: pnpm turbo run build --filter='!openape-e2e' --filter='!docs'
+        #
+        # Retry once: the build occasionally dies on a transient runner signal
+        # (exit 129/SIGHUP during a Nuxt app build) — not a code error, it passes
+        # on rerun (the host has ample RAM, so it is not OOM). turbo's cache makes
+        # the retry rebuild only the task that failed, so this stays fast.
+        run: |
+          pnpm turbo run build --filter='!openape-e2e' --filter='!docs' && exit 0
+          echo "::warning::build wave failed (transient runner signal?) — retrying once"
+          pnpm turbo run build --filter='!openape-e2e' --filter='!docs'
