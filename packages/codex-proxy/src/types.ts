@@ -54,6 +54,22 @@ export interface ResponsesBody {
   include: ['reasoning.encrypted_content']
 }
 
+// --- chat.completion (non-streaming response, for `stream:false`) ---
+
+export interface ChatCompletionMessage {
+  role: 'assistant'
+  content: string | null
+  tool_calls?: ChatToolCall[]
+}
+
+export interface ChatCompletion {
+  id: string
+  object: 'chat.completion'
+  created: number
+  model: string
+  choices: Array<{ index: 0, message: ChatCompletionMessage, finish_reason: string | null }>
+}
+
 // --- chat.completion.chunk (what the proxy streams back) ---
 
 export interface ChunkToolCallDelta {

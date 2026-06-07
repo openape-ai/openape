@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { postCodexResponses } from './codex-client'
 import { fetchCodexModels } from './codex-models'
 import { CodexCredentialStore } from './credential-store'
-import { streamChatCompletion } from './proxy'
+import { collectChatCompletion, streamChatCompletion } from './proxy'
 
 export interface CodexProxyOptions {
   /** Where the Codex credential (auth.json) lives; the Troop "Connect ChatGPT" flow seeds it. */
@@ -67,16 +67,26 @@ export function createCodexProxyServer(opts: CodexProxyOptions): Server {
       const body = await readJson(req) as ChatCompletionsRequest
       const cred = await store.get()
       const created = Math.floor(Date.now() / 1000)
-      const id = `chatcmpl-${created}`
-      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', 'connection': 'keep-alive' })
-      for await (const chunk of streamChatCompletion(body, {
-        meta: { id, model: body.model, created },
+      const meta = { id: `chatcmpl-${created}`, model: body.model, created }
+      const chunks = streamChatCompletion(body, {
+        meta,
         fetchResponses: b => postCodexResponses(b, cred, opts.originator),
-      })) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+      })
+
+      // `stream:true` → SSE; anything else (incl. omitted) → a single
+      // `chat.completion` JSON, the OpenAI default that zaz/agent-runtime expect.
+      if (body.stream === true) {
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', 'connection': 'keep-alive' })
+        for await (const chunk of chunks)
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+        res.write('data: [DONE]\n\n')
+        res.end()
       }
-      res.write('data: [DONE]\n\n')
-      res.end()
+      else {
+        const completion = await collectChatCompletion(chunks, meta)
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+        res.end(JSON.stringify(completion))
+      }
     }
     catch (e) {
       const message = e instanceof Error ? e.message : String(e)
