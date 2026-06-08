@@ -1,60 +1,64 @@
-# openape-llm — the LiteLLM proxy container.
+# openape-llm — the OpenApe pod's LLM proxy container.
 #
-# Purpose: replace the bare-host LiteLLM install (homebrew + brew services
-# on macOS, manual systemd on Linux) with a containerised, hatchable
-# instance. Inside the OpenApe pod (compose / k8s / cloud VM) it binds
-# 127.0.0.1:4000 on the pod network so all in-pod agents resolve to a
-# loopback URL — same auth-free semantics as the macOS local path.
+# Now backed by @openape/codex-proxy (packages/codex-proxy) instead of LiteLLM.
+# codex-proxy is a thin OpenAI-compatible proxy over the ChatGPT (Codex)
+# Responses backend: it serves `GET /v1/models` + `POST /v1/chat/completions`
+# (non-stream JSON by default, SSE on stream:true) against a ChatGPT
+# subscription credential. The switch is what lets this container serve
+# `gpt-5.5` — the old LiteLLM fork's chatgpt provider could only do gpt-5.4.
 #
-# Configure via /etc/litellm/config.yaml (mounted from the host or built
-# into a custom image inheriting from this one). LITELLM_MASTER_KEY is
-# read from env; when unset, the proxy still serves on loopback but with
-# `master_key` from the yaml.
+# In the pod it binds 0.0.0.0:4000 under the network alias `openape-llm`, so
+# in-pod agents keep resolving `http://openape-llm:4000/v1` unchanged — same
+# auth-free loopback semantics as before (the proxy ignores the Authorization
+# header and authenticates to OpenAI with the mounted ChatGPT credential).
 #
-# Build from monorepo root:
-#   docker build -f apps/openape-llm/Dockerfile -t openape-llm:dev .
+# Credential: NOT baked in. Mount a *flat* codex auth.json
+# ({access_token, refresh_token, id_token, expires_at, account_id}) at
+# CODEX_CREDENTIAL_PATH. The proxy refreshes the token and writes it back, so
+# mount the directory read-write. (The Codex CLI's ~/.codex/auth.json is the
+# *nested* format — transform it first; do not mount it directly or the
+# write-back will clobber it.)
+#
+# codex-proxy has zero runtime npm dependencies and tsup bundles it to a
+# self-contained ESM file, so the build context is just the package itself
+# (no monorepo/turbo needed) and the runtime stage is node + the bundle.
+#
+# Build (context = the codex-proxy package):
+#   docker build -f apps/openape-llm/Dockerfile -t openape-llm:codex packages/codex-proxy
 #
 # Run standalone:
-#   docker run --rm -p 4000:4000 \
-#     -v $PWD/apps/openape-llm/config.example.yaml:/etc/litellm/config.yaml:ro \
-#     -e LITELLM_MASTER_KEY=sk-litellm-loopback \
-#     openape-llm:dev
+#   docker run --rm --init -p 127.0.0.1:4000:4000 \
+#     -v "$HOME/.config/openape/codex:/var/lib/openape/codex" \
+#     openape-llm:codex
 
-FROM python:3.12-slim AS runtime
+# ---- Stage 1: build the proxy bundle --------------------------------------
+FROM node:22-bookworm-slim AS build
+WORKDIR /build
 
-# tini for clean signal forwarding to the litellm worker.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        git \
-        tini \
-    && rm -rf /var/lib/apt/lists/*
+# Install the build toolchain (tsup + typescript) from devDependencies only —
+# the package declares no runtime dependencies.
+COPY package.json tsconfig.json tsup.config.ts ./
+RUN npm install --no-audit --no-fund
 
-# Install from our LiteLLM fork (patrick-hofmann/litellm) on the
-# fix/chatgpt-non-stream-output-aggregate branch. The fork carries the
-# fix for the upstream chatgpt-provider bug where /v1/chat/completions
-# fails with `'ResponsesAPIResponse' object has no attribute 'output'` —
-# upstream's response.completed event ships an empty output array; the
-# fix aggregates the intermediate response.output_item.done events into
-# the final response.
-#
-# git+ssh would need keys baked in, so use the public https git url with
-# pip's [proxy] extra still resolved from PyPI (pip auto-installs the
-# fork's pyproject.toml deps).
-RUN pip install --no-cache-dir \
-    'litellm[proxy] @ git+https://github.com/patrick-hofmann/litellm.git@fix/chatgpt-non-stream-output-aggregate'
+COPY src ./src
+RUN npm run build
 
-ENV LITELLM_HOST=0.0.0.0
-ENV LITELLM_PORT=4000
-ENV LITELLM_CONFIG=/etc/litellm/config.yaml
+# ---- Stage 2: runtime -----------------------------------------------------
+FROM node:22-bookworm-slim AS runtime
+WORKDIR /app
+
+# Just the bundle — no node_modules, the proxy uses only Node builtins + fetch.
+COPY --from=build /build/dist ./dist
+
+ENV CODEX_PROXY_HOST=0.0.0.0
+ENV CODEX_PROXY_PORT=4000
+ENV CODEX_CREDENTIAL_PATH=/var/lib/openape/codex/auth.json
+ENV CODEX_ORIGINATOR=codex_cli_rs
 
 EXPOSE 4000
 
-# Healthcheck — LiteLLM exposes /health/liveliness (their spelling).
-# python is the only HTTP client guaranteed in this image; wget/curl
-# aren't installed in python:3.12-slim.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness').read()" || exit 1
+# /health answers immediately (before any credential use) — see src/bin.ts.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["sh", "-c", "litellm --config \"$LITELLM_CONFIG\" --host \"$LITELLM_HOST\" --port \"$LITELLM_PORT\""]
+CMD ["node", "dist/bin.js"]
