@@ -6,6 +6,7 @@ import consola from 'consola'
 import { readAgentEncryptionPublicKey } from '../../lib/agent-secrets-runtime'
 import { CliError } from '../../errors'
 import { getHostPlatform } from '../../lib/host-platform'
+import { ensureRecipeCheckout } from '../../lib/recipe-checkout'
 import { resolveTroopUrl, TroopClient } from '../../lib/troop-client'
 
 interface AuthJson {
@@ -106,7 +107,7 @@ export const syncAgentCommand = defineCommand({
     consola.info(sync.first_sync ? '✓ first sync — agent registered' : '✓ presence updated')
     if (!pubkeyX25519) consola.warn('No X25519 public key found on disk — sealed capability secrets cannot be bound until the agent is re-spawned.')
 
-    const { system_prompt: systemPrompt, tools, skills, tasks } = await client.listTasks()
+    const { system_prompt: systemPrompt, tools, skills, tasks, recipe_ref: recipeRef } = await client.listTasks()
     consola.info(`Pulled ${tasks.length} task${tasks.length === 1 ? '' : 's'}`)
     consola.info(`Tools enabled: ${tools.length === 0 ? '(none)' : tools.join(', ')}`)
     consola.info(`Skills: ${skills.length === 0 ? '(none)' : skills.map(s => s.name).join(', ')}`)
@@ -148,10 +149,17 @@ export const syncAgentCommand = defineCommand({
     const agentJsonPath = join(agentDir, 'agent.json')
     writeFileSync(
       agentJsonPath,
-      `${JSON.stringify({ systemPrompt, tools }, null, 2)}\n`,
+      `${JSON.stringify({ systemPrompt, tools, ...(recipeRef ? { recipeRef } : {}) }, null, 2)}\n`,
       { mode: 0o600 },
     )
     chownToAgent(agentJsonPath)
+
+    // Check out the agent's recipe repo so scheduled `command` tasks run
+    // against its tooling (e.g. `node tools/serve.mjs` resolves with
+    // cwd=~/recipe in the cron runner). Operator-pinned ref, shallow
+    // clone, idempotent via a marker — never throws, so a broken recipe
+    // doesn't abort the rest of the sync.
+    if (recipeRef) ensureRecipeCheckout(recipeRef, join(homedir(), 'recipe'))
     mkdirSync(TASK_CACHE_DIR, { recursive: true })
     chownToAgent(TASK_CACHE_DIR)
     for (const task of tasks) {
