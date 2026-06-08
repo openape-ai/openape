@@ -123,6 +123,21 @@ schedules:
     expect(buildDeployPlan(rec, mat.value).userAddendum).toBeUndefined()
   })
 
+  it('carries recipeRef through when provided', () => {
+    const rec = recipe()
+    const mat = materializeRecipe(rec, { topic: 'AI agents' })
+    if (!mat.ok) throw new Error(mat.reason)
+    const plan = buildDeployPlan(rec, mat.value, { recipeRef: 'owner/name@v1.0.0' })
+    expect(plan.recipeRef).toBe('owner/name@v1.0.0')
+  })
+
+  it('omits recipeRef when not given', () => {
+    const rec = recipe()
+    const mat = materializeRecipe(rec, { topic: 'x' })
+    if (!mat.ok) throw new Error(mat.reason)
+    expect(buildDeployPlan(rec, mat.value).recipeRef).toBeUndefined()
+  })
+
   it('caps the agent name at the spawn-intent slug limit', () => {
     const rec = { ...recipe(), name: 'a-very-long-recipe-name-way-over-limit' }
     const mat = materializeRecipe(rec, { topic: 'x' })

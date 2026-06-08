@@ -33,6 +33,12 @@ export interface DeployPlan {
    * additive — no special-casing, recipe + spawn coexist.
    */
   userAddendum?: string
+  /**
+   * The `<repo>@<ref>` this agent was deployed from. The agent runtime
+   * will check out the repo's tools/ from it (piece c). Absent for
+   * manually-spawned agents.
+   */
+  recipeRef?: string
   schedules: DeploySchedule[]
   requiredCapabilities: string[]
 }
@@ -60,6 +66,11 @@ export interface DeployPlanOptions {
    *  user_addendum on top of the recipe intent.
    */
   userAddendum?: string
+  /**
+   * The `<repo>@<ref>` spec string as supplied to the deploy request.
+   * Stored verbatim; piece c parses it to clone tools/.
+   */
+  recipeRef?: string
 }
 
 export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, opts: DeployPlanOptions = {}): DeployPlan {
@@ -75,6 +86,7 @@ export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, op
     agentName: opts.agentName ? agentNameFromRecipe(opts.agentName) : agentNameFromRecipe(recipe.name),
     systemPrompt: mat.intent,
     ...(opts.userAddendum ? { userAddendum: opts.userAddendum } : {}),
+    ...(opts.recipeRef ? { recipeRef: opts.recipeRef } : {}),
     schedules,
     requiredCapabilities: recipe.capabilities.filter(c => !c.optional).map(c => c.env),
   }
