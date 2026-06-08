@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import { agentTasks } from './schema'
 import { TERMINAL_STATES } from './types'
+import { withBusyRetry } from './harden'
 
 /** A Drizzle/libsql handle that includes the {@link agentTasks} table. */
 export type SpTaskDb = LibSQLDatabase<{ agentTasks: typeof agentTasks }>
@@ -59,7 +60,7 @@ export async function enqueueTask(
   const id = opts.id ?? randomUUID()
   const contextId = opts.contextId ?? randomUUID()
   const message: Message = { ...opts.message, taskId: id, contextId }
-  await db.insert(agentTasks).values({
+  await withBusyRetry(() => db.insert(agentTasks).values({
     id,
     contextId,
     type: opts.type,
@@ -69,7 +70,7 @@ export async function enqueueTask(
     deliveryCount: 0,
     createdAt: opts.now,
     updatedAt: opts.now,
-  })
+  }))
   return {
     kind: 'task',
     id,
@@ -92,7 +93,7 @@ export async function leaseNextTask(
   db: SpTaskDb,
   opts: { assignee: string, leaseMs: number, now: number },
 ): Promise<Task | null> {
-  const rows = await db
+  const rows = await withBusyRetry(() => db
     .update(agentTasks)
     .set({
       state: 'working',
@@ -107,7 +108,7 @@ export async function leaseNextTask(
       ORDER BY created_at ASC
       LIMIT 1
     )`)
-    .returning()
+    .returning())
   const row = rows[0]
   return row ? rowToTask(row) : null
 }
@@ -131,7 +132,7 @@ export async function resolveTask(
     now: number
   },
 ): Promise<Task> {
-  const existing = await getRow(db, opts.id)
+  const existing = await withBusyRetry(() => getRow(db, opts.id))
   if (!existing)
     throw new SpTaskError(`task ${opts.id} not found`)
   if (existing.assignee !== opts.assignee || existing.leaseUntil == null || opts.now > existing.leaseUntil)
@@ -148,7 +149,7 @@ export async function resolveTask(
   const leaseUntil = terminal ? null : opts.now + (opts.leaseMs ?? DEFAULT_LEASE_MS)
   const assignee = terminal ? null : opts.assignee
 
-  await db
+  await withBusyRetry(() => db
     .update(agentTasks)
     .set({
       state: opts.state,
@@ -158,7 +159,7 @@ export async function resolveTask(
       leaseUntil,
       updatedAt: opts.now,
     })
-    .where(eq(agentTasks.id, opts.id))
+    .where(eq(agentTasks.id, opts.id)))
 
   return rowToTask({
     ...existing,
