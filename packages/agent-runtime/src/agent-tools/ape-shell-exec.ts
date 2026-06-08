@@ -30,7 +30,9 @@ function capStdio(s: string): string {
   return `${buf.subarray(0, MAX_STDIO_BYTES).toString('utf8')}\n[truncated to ${MAX_STDIO_BYTES} bytes]`
 }
 
-export function runApeShell(cmd: string, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<ApeShellResult> {
+// Optional `cwd` runs the command in that directory — used to resolve a
+// recipe's bundled `tools/` scripts from the checked-out recipe directory.
+export function runApeShell(cmd: string, timeoutMs: number = DEFAULT_TIMEOUT_MS, cwd?: string): Promise<ApeShellResult> {
   // Container escape hatch: inside the OpenApe pod the container itself
   // IS the sandbox (kernel namespaces + read-only FS overlays) — there's
   // no DDISA layer to gate against, no upstream owner to approve grants,
@@ -45,6 +47,7 @@ export function runApeShell(cmd: string, timeoutMs: number = DEFAULT_TIMEOUT_MS)
     const child = spawn(execBin, execArgs, {
       env: { ...process.env, APE_WAIT: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
+      ...(cwd ? { cwd } : {}),
     })
     let stdout = ''
     let stderr = ''
