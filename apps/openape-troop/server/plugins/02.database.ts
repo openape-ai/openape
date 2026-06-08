@@ -63,6 +63,12 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN user_addendum TEXT NOT NULL DEFAULT ''`)
     }
     catch { /* column exists */ }
+    // Agent Recipe tools/ (piece b): the <repo>@<ref> the agent was
+    // deployed from; the agent checks out its tools/ from it.
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN recipe_ref TEXT`)
+    }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
       agent_email TEXT NOT NULL,
       name TEXT NOT NULL,
