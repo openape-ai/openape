@@ -1,0 +1,48 @@
+# openape-llm as a @openape/codex-proxy container (serves gpt-5.5 + gpt-5.4),
+# joined to the already-running pod network so the nest's chat-agents and the
+# zaz service-agent keep resolving http://openape-llm:4000/v1 unchanged.
+#
+# Why a side file: the canonical compose/docker-compose.yml collapsed the LLM
+# into the nest (in-nest codex-proxy on loopback:4000, #575). The running Mac
+# pod is still the two-container topology (separate openape-llm container). This
+# file swaps just that LLM container litellm -> codex-proxy without reverting
+# the collapse in the canonical file. It attaches to the existing external
+# network created by the original two-container compose run.
+#
+# Credential: mount the host's flat codex auth.json directory read-write — the
+# proxy refreshes the token and writes it back. Seed it from ~/.codex/auth.json
+# (nested Codex-CLI format) transformed to the flat
+# {access_token,refresh_token,id_token,expires_at,account_id} schema.
+#
+# Usage:
+#   docker build -f apps/openape-llm/Dockerfile -t openape-llm:codex packages/codex-proxy
+#   docker stop openape-llm && docker rm openape-llm      # drop the old litellm container
+#   docker compose -f compose/openape-llm.codex.yml up -d
+
+services:
+  openape-llm:
+    image: openape-llm:codex
+    container_name: openape-llm
+    hostname: openape-llm
+    init: true
+    restart: unless-stopped
+    networks:
+      openape-pod:
+        aliases:
+          - openape-llm
+    ports:
+      # Host-published on loopback only (parity with the old container) so the
+      # Mac host can curl /v1/models directly; in-pod agents use the alias.
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ${HOME}/.config/openape/codex:/var/lib/openape/codex
+    environment:
+      CODEX_PROXY_HOST: 0.0.0.0
+      CODEX_PROXY_PORT: "4000"
+      CODEX_CREDENTIAL_PATH: /var/lib/openape/codex/auth.json
+      CODEX_ORIGINATOR: codex_cli_rs
+
+networks:
+  openape-pod:
+    external: true
+    name: compose_openape-pod
