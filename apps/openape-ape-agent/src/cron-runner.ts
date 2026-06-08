@@ -26,6 +26,11 @@ import type { ChatBackend } from './troop-chat-api'
 
 const TASK_CACHE_DIR = join(homedir(), '.openape', 'agent', 'tasks')
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+// The agent's recipe checkout (written by `apes agents sync`). Scheduled
+// `command` tasks run with this as cwd so the recipe's own tooling
+// (e.g. `node tools/serve.mjs`) resolves. Absent until the first sync
+// with a pinned recipe_ref — guard with existsSync before using.
+const RECIPE_DIR = join(homedir(), 'recipe')
 // One chat thread per task — persisted so we don't fan out a new
 // thread per run after every bridge restart. Layout:
 // { "<taskId>": "<chatThreadId>", ... }.
@@ -326,7 +331,7 @@ export class CronRunner {
     // (apes agents code …) drives the LLM coding loop internally.
     if (spec.command) {
       try {
-        const res = await runApeShell(spec.command, 30 * 60 * 1000)
+        const res = await runApeShell(spec.command, 30 * 60 * 1000, existsSync(RECIPE_DIR) ? RECIPE_DIR : undefined)
         const turn = this.pending.get(sessionId)
         if (!turn) return
         turn.status = res.exit_code === 0 ? 'ok' : 'error'

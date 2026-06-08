@@ -66,6 +66,13 @@ export interface AgentTasksResponse {
    */
   skills: SkillSpec[]
   tasks: TaskSpec[]
+  /**
+   * `<owner>/<name>@<ref>` of the agent's recipe repo, when set. Sync
+   * writes it to agent.json and shallow-clones the repo to ~/recipe so
+   * scheduled `command` tasks run against its tooling. Null/absent when
+   * the agent has no recipe pinned.
+   */
+  recipe_ref?: string | null
 }
 
 export interface SyncResponse {
