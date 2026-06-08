@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const mat = materializeRecipe(manifest.recipe, parsed.data.params)
   if (!mat.ok) throw createError({ statusCode: 400, statusMessage: mat.reason })
 
-  const plan = buildDeployPlan(manifest.recipe, mat.value)
+  const plan = buildDeployPlan(manifest.recipe, mat.value, { recipeRef: parsed.data.repo_ref })
 
   const peers = listNestPeersForOwner(owner)
   if (peers.length === 0) {

@@ -40,6 +40,9 @@ export const agents = sqliteTable('agents', {
   // For recipe agents systemPrompt is the (immutable) intent and this
   // is the mutable augmentation. (Agent Recipe M5.)
   userAddendum: text('user_addendum').notNull().default(''),
+  // The `<repo>@<ref>` this agent was deployed from; the agent checks
+  // out its tools/ from it. Null for manually-spawned agents.
+  recipeRef: text('recipe_ref'),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),

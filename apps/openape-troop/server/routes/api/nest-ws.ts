@@ -246,6 +246,7 @@ export default defineWebSocketHandler({
                   .set({
                     systemPrompt: plan.systemPrompt,
                     ...(plan.userAddendum !== undefined ? { userAddendum: plan.userAddendum } : {}),
+                    ...(plan.recipeRef !== undefined ? { recipeRef: plan.recipeRef } : {}),
                   })
                   .where(eq(agents.email, agentEmail))
                 for (const s of plan.schedules) {
