@@ -91,6 +91,11 @@ const CHAT_ENV_FORWARDS = [
   // honoured by the bridge at startup. See ape-agent/src/bridge.ts.
   'OPENAPE_BRIDGE_TARGET',
   'APE_CHAT_ENDPOINT',
+  // The bridge's actual troop endpoint (bridge.ts readConfig → endpoint).
+  // Unset in prod → defaults to https://troop.openape.ai; the local stack
+  // sets it to https://troop.openape.test so the bridge talks to the local
+  // control plane, not production.
+  'OPENAPE_TROOP_URL',
 ]
 
 // pm2's `env:` block is the surviving env source in the container (no launchd,
@@ -129,6 +134,13 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
   // publish→deploy→sync round-trip.
   if (process.env.OPENAPE_RECIPE_DEV_DIR)
     pairs.push(['OPENAPE_RECIPE_DEV_DIR', process.env.OPENAPE_RECIPE_DEV_DIR])
+  // Local-CA trust: the bridge makes https calls to the IdP (token refresh) and
+  // troop (chat WS + reply post). Behind a `tls internal` proxy those use a CA
+  // Node won't trust unless pointed at it — and sudo strips the nest's env, so
+  // it must ride in this pm2 block like the flags above. Unset in prod (public
+  // certs), so this is a no-op there.
+  if (process.env.NODE_EXTRA_CA_CERTS)
+    pairs.push(['NODE_EXTRA_CA_CERTS', process.env.NODE_EXTRA_CA_CERTS])
   return pairs.map(([k, v]) => `      ${k}: ${JSON.stringify(v)},`).join('\n')
 }
 
