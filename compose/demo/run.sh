@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Capture the local-stack demo flows as screenshots.
+#
+# Brings up the stack (if needed), mints a self-service registration token for
+# the demo user — read straight from the IdP DB, standing in for the email link
+# a real user would click — and runs the Playwright flow capture. Screenshots
+# land in docs/local-stack/screenshots/.
+#
+#   ./compose/demo/run.sh
+set -euo pipefail
+cd "$(dirname "$0")/../.."   # monorepo root
+COMPOSE=(docker compose -f compose/local-stack.yml)
+EMAIL=demo@openape.test
+
+echo "→ Clearing old screenshots…"
+find docs/local-stack/screenshots -name '*.png' -delete 2>/dev/null || true
+
+echo "→ Ensuring the stack is up…"
+"${COMPOSE[@]}" up -d >/dev/null
+
+# Reset the IdP to a clean slate so the demo user is freshly registered (the
+# file DB is ephemeral; recreating the container wipes it) — reproducible
+# screenshots: a real first-time passkey sign-up + first-time consent each run.
+echo "→ Resetting the IdP to a clean slate…"
+"${COMPOSE[@]}" up -d --force-recreate idp >/dev/null
+printf "  waiting for idp…"
+for _ in $(seq 1 30); do
+  [ "$("${COMPOSE[@]}" ps idp --format '{{.Health}}' 2>/dev/null)" = "healthy" ] && break
+  sleep 2
+done
+echo " ok"
+
+echo "→ Minting a registration token for ${EMAIL}…"
+# Self-service signup. The email send errors locally (no Resend key), but the
+# token is persisted to registration_urls *before* the send, so it's usable.
+"${COMPOSE[@]}" exec -T troop curl -k -s -o /dev/null -X POST https://id.openape.test/api/register \
+  -H 'content-type: application/json' -d "{\"email\":\"${EMAIL}\"}" || true
+
+TOKEN=$("${COMPOSE[@]}" exec -T idp node -e '
+const Database = require("/app/.output/server/node_modules/libsql");
+const db = new Database("/app/idp.db");
+const row = db.prepare("SELECT token FROM registration_urls WHERE email = ? AND consumed = 0 ORDER BY created_at DESC LIMIT 1").get(process.argv[1]);
+process.stdout.write(row ? row.token : "");
+' "${EMAIL}" | tr -d '\r\n')
+
+if [ -z "${TOKEN}" ]; then echo "✗ no registration token found"; exit 1; fi
+echo "→ Registration token: ${TOKEN}"
+
+echo "→ Running the flows…"
+"${COMPOSE[@]}" run --rm -e REG_TOKEN="${TOKEN}" playwright
+
+echo "✓ Screenshots in docs/local-stack/screenshots/"
