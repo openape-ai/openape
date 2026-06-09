@@ -41,9 +41,6 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
-      # E2E-generated docs (README rendered to index.html + the screenshots),
-      # served at /docs on every app host. See compose/docs-index.mjs.
-      - ../docs/local-stack:/docs-site:ro
     networks:
       openape-test:
         aliases:

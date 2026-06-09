@@ -18,6 +18,12 @@ const src = join(root, 'docs', 'local-stack', 'screenshots')
 // Which captured screenshots each app documents — see apps/<app>/docs/flows.md.
 // idp + chat are added as their /docs pages land.
 const ownedBy = {
+  'openape-free-idp': [
+    '01-idp-landing',
+    '02-idp-request-link',
+    '03-idp-register-passkey',
+    '04-idp-registered',
+  ],
   'openape-troop': [
     '05-troop-landing',
     '06-idp-authorize-troop',
@@ -25,6 +31,10 @@ const ownedBy = {
     'agent-01-spawned',
     'agent-02-ran',
     'agent-03-destroyed',
+  ],
+  'openape-chat': [
+    '08-chat-landing',
+    '09-chat-dashboard',
   ],
 }
 
