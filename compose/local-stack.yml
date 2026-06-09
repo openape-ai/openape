@@ -73,13 +73,19 @@ services:
     volumes:
       - caddy-data:/caddy-data:ro
     environment:
-      NUXT_OPENAPE_ISSUER: https://id.openape.test
-      NUXT_OPENAPE_RP_ID: id.openape.test
-      NUXT_OPENAPE_RP_ORIGIN: https://id.openape.test
-      NUXT_OPENAPE_RP_HOST_ALLOWLIST: id.openape.test
-      NUXT_OPENAPE_SESSION_SECRET: *session-secret
-      NUXT_OPENAPE_MANAGEMENT_TOKEN: dev-management-token
-      NUXT_OPENAPE_E2E: "1"
+      # These are nuxt-auth-idp module runtimeConfig keys (configKey openapeIdp),
+      # so the runtime-override env names are NUXT_OPENAPE_IDP_* — the plain
+      # NUXT_OPENAPE_* names are only read at BUILD time and would bake defaults.
+      NUXT_OPENAPE_IDP_ISSUER: https://id.openape.test
+      NUXT_OPENAPE_IDP_RP_ID: id.openape.test
+      NUXT_OPENAPE_IDP_RP_ORIGIN: https://id.openape.test
+      NUXT_OPENAPE_IDP_RP_HOST_ALLOW_LIST: id.openape.test
+      NUXT_OPENAPE_IDP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_IDP_MANAGEMENT_TOKEN: dev-management-token
+      # Permissive: accept a host-derived SP client_id by fetching its
+      # /.well-known/oauth-client-metadata (mirrors id.openape.ai) instead of
+      # requiring pre-registration.
+      NUXT_OPENAPE_IDP_SP_METADATA_MODE: permissive
       NUXT_TURSO_URL: file:/app/idp.db
       NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
       NITRO_PORT: "3003"
@@ -109,9 +115,11 @@ services:
     volumes:
       - caddy-data:/caddy-data:ro
     environment:
-      # No NUXT_OPENAPE_URL → the SP performs real DDISA discovery via DNS TXT.
-      NUXT_OPENAPE_CLIENT_ID: troop.openape.test
-      NUXT_OPENAPE_SP_NAME: OpenApe Troop
+      # nuxt-auth-sp module runtimeConfig (configKey openapeSp) → NUXT_OPENAPE_SP_*.
+      # client_id = this SP's own https host, so the IdP fetches its local
+      # /.well-known/oauth-client-metadata. No openapeUrl → real DDISA discovery.
+      NUXT_OPENAPE_SP_CLIENT_ID: troop.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Troop
       NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
       NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
       NUXT_PUBLIC_IDP_URL: https://id.openape.test
@@ -143,8 +151,8 @@ services:
     volumes:
       - caddy-data:/caddy-data:ro
     environment:
-      NUXT_OPENAPE_CLIENT_ID: chat.openape.test
-      NUXT_OPENAPE_SP_NAME: OpenApe Chat
+      NUXT_OPENAPE_SP_CLIENT_ID: chat.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Chat
       NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
       NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
       NUXT_PUBLIC_IDP_URL: https://id.openape.test
@@ -158,3 +166,29 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+
+  # Screenshot runner. Not started by `up` (demo profile); run on demand:
+  #   docker compose -f compose/local-stack.yml run --rm playwright
+  # Joins the network with dnsmasq as resolver, so the browser reaches the same
+  # https://*.openape.test the apps do. Writes PNGs to docs/local-stack/screenshots.
+  playwright:
+    build:
+      context: ..
+      dockerfile: compose/demo/Dockerfile
+    image: openape-demo-playwright:local
+    profiles: ["demo"]
+    depends_on:
+      idp:
+        condition: service_healthy
+      troop:
+        condition: service_healthy
+      chat:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - ../docs/local-stack/screenshots:/demo/out
+      # Live-mount the script so the flows can be iterated without an image rebuild.
+      - ./demo/screenshot.mjs:/demo/screenshot.mjs:ro
+    networks:
+      - openape-test
