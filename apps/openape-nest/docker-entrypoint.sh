@@ -31,6 +31,23 @@ if [ -r "$LOCAL_CA_SRC" ]; then
   echo "[entrypoint] trusted local CA → $LOCAL_CA_DST"
 fi
 
+# Promote the enrolled nest-agent auth.json onto $HOME/.config/apes/ where
+# @openape/cli-auth and troop-ws look it up. `apes nest enroll` writes to
+# $HOME/.openape/nest/.config/apes/auth.json (mirroring the macOS plist
+# convention HOME=NEST_DATA_DIR). In the container HOME points at the
+# volume root instead, so the default cli-auth lookup misses the file
+# and troop-ws falls back to "○ poll" instead of "● live".
+NEST_AUTH_SRC="$HOME/.openape/nest/.config/apes/auth.json"
+NEST_AUTH_DST="$HOME/.config/apes/auth.json"
+if [ -f "$NEST_AUTH_SRC" ]; then
+  mkdir -p "$(dirname "$NEST_AUTH_DST")"
+  if [ ! -f "$NEST_AUTH_DST" ] || ! cmp -s "$NEST_AUTH_SRC" "$NEST_AUTH_DST"; then
+    cp "$NEST_AUTH_SRC" "$NEST_AUTH_DST"
+    chmod 600 "$NEST_AUTH_DST"
+    echo "[entrypoint] promoted nest auth.json → $NEST_AUTH_DST"
+  fi
+fi
+
 REGISTRY=/var/lib/openape/nest/agents.json
 HOMES=/var/lib/openape/homes
 
