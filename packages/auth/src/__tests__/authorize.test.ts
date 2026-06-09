@@ -115,9 +115,19 @@ describe('evaluatePolicy', () => {
     )).toBe('deny')
   })
 
-  it('defaults to consent for undefined mode', async () => {
+  it('defaults to consent for undefined mode (no record / no `mode`) — first time', async () => {
     const store = new InMemoryConsentStore()
     expect(await evaluatePolicy(undefined, 'sp', 'user', store)).toBe('consent')
+  })
+
+  // Regression: the consent flow stashes the request, the user approves, the
+  // approval is persisted, and /authorize re-evaluates. For undefined mode the
+  // re-evaluation MUST honour the stored consent (→ 'allow'); otherwise it
+  // re-prompts forever and the user can never finish logging in.
+  it('remembers consent for undefined mode — re-evaluation after approval allows', async () => {
+    const store = new InMemoryConsentStore()
+    await store.save({ userId: 'user', clientId: 'sp', grantedAt: Math.floor(Date.now() / 1000) })
+    expect(await evaluatePolicy(undefined, 'sp', 'user', store)).toBe('allow')
   })
 })
 

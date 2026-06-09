@@ -83,7 +83,15 @@ export async function evaluatePolicy(
       const allowed = await store.isAllowed(userDomain, clientId)
       return allowed ? 'allow' : 'deny'
     }
-    default:
-      return 'consent'
+    // No explicit `mode` (no DDISA record, or the record omits `mode`): the
+    // spec recommends prompting for consent rather than silently issuing
+    // assertions. But once the user approves, the consent is persisted and
+    // /authorize re-evaluates — so we MUST honour the stored consent here, the
+    // same as `allowlist-user`. Returning a bare `'consent'` would re-prompt
+    // forever after approval (the user could never finish logging in).
+    default: {
+      const hasConsent = await consentStore.hasConsent(userId, clientId)
+      return hasConsent ? 'allow' : 'consent'
+    }
   }
 }
