@@ -235,6 +235,10 @@ export async function ensureFreshToken(): Promise<string | null> {
   return oauthToken ?? null
 }
 
+// Bounded 429 retry/backoff for the IdP's per-IP auth-endpoint rate limit.
+const MAX_RATE_LIMIT_RETRIES = 3
+const RATE_LIMIT_WAIT_CAP_MS = 12_000
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: {
@@ -272,11 +276,21 @@ export async function apiFetch<T = unknown>(
     consola.debug(`Token: ${token.substring(0, 20)}...${token.substring(token.length - 10)}`)
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  })
+  // Retry on 429 (the IdP's per-IP rate limit on auth endpoints). Rapid
+  // sequences bunch on one IP and the last call trips the cap — e.g. a nest's
+  // `agents spawn` (enroll + challenge + authenticate) immediately followed by
+  // `agents destroy` (de-register). Honour Retry-After, bounded, so the call
+  // rides it out instead of failing. This is well-behaved backoff, not bypass.
+  const fetchInit = { method, headers, body: options.body ? JSON.stringify(options.body) : undefined }
+  let response = await fetch(url, fetchInit)
+  for (let rlAttempt = 0; response.status === 429 && rlAttempt < MAX_RATE_LIMIT_RETRIES; rlAttempt++) {
+    const retryAfter = Number(response.headers.get('retry-after'))
+    const waitMs = Math.min((Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 2 ** rlAttempt) * 1000, RATE_LIMIT_WAIT_CAP_MS)
+    await response.text().catch(() => {}) // drain so the socket frees before the retry
+    consola.info(`Rate limited by IdP — retrying in ${Math.round(waitMs / 1000)}s (${rlAttempt + 1}/${MAX_RATE_LIMIT_RETRIES})`)
+    await new Promise(resolve => setTimeout(resolve, waitMs))
+    response = await fetch(url, fetchInit)
+  }
 
   if (debug) {
     consola.debug(`Response: ${response.status} ${response.statusText}`)
