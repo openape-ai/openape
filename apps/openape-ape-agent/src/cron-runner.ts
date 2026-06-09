@@ -139,6 +139,15 @@ function composeTaskOutput(command: string, exitCode: number, stdout: string, st
   return parts.join('\n\n')
 }
 
+// A scheduled `command` task only warrants a DM to the owner when it has
+// something to say: a non-zero exit (failure) or any output. A silent,
+// successful run — the common once-a-minute service poll that drained
+// nothing — is still recorded in troop's run history (see finaliseRun) but
+// must NOT ping the owner, or a service agent spams a DM every minute.
+export function shouldReportCommandRun(exitCode: number, stdout: string, stderr: string): boolean {
+  return exitCode !== 0 || `${stdout}${stderr}`.trim() !== ''
+}
+
 function readSystemPrompt(): string {
   if (!existsSync(AGENT_CONFIG_PATH)) return ''
   try {
@@ -341,7 +350,8 @@ export class CronRunner {
         // tail so the operative error (usually last) survives the cap.
         turn.accumulated = composeTaskOutput(spec.command, res.exit_code, res.stdout, res.stderr)
         await this.finaliseRun(turn, 1)
-        await this.postResult(sessionId, turn)
+        if (shouldReportCommandRun(res.exit_code, res.stdout, res.stderr))
+          await this.postResult(sessionId, turn)
         this.pending.delete(sessionId)
       }
       catch (err) {
