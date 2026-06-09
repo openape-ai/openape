@@ -184,5 +184,49 @@ describe('http module', () => {
         }),
       ).rejects.toThrow()
     })
+
+    it('retries on 429 then succeeds (rate-limit backoff)', async () => {
+      vi.useFakeTimers()
+      const { apiFetch } = await import('../src/http')
+      let calls = 0
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        calls += 1
+        return calls === 1
+          ? new Response('{"detail":"rate limited"}', { status: 429, headers: { 'content-type': 'application/problem+json' } })
+          : new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } })
+      }))
+      try {
+        const promise = apiFetch<{ ok: boolean }>('http://idp.test/api/x', { token: 'tkn' })
+        await vi.runAllTimersAsync() // fast-forward the backoff sleep
+        await expect(promise).resolves.toEqual({ ok: true })
+        expect(calls).toBe(2) // one 429 + one retry that succeeds
+      }
+      finally {
+        vi.unstubAllGlobals()
+        vi.useRealTimers()
+      }
+    })
+
+    it('gives up after the retry cap (throws 429)', async () => {
+      vi.useFakeTimers()
+      const { apiFetch, ApiError } = await import('../src/http')
+      let calls = 0
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        calls += 1
+        return new Response('{"detail":"rate limited"}', { status: 429, headers: { 'content-type': 'application/problem+json' } })
+      }))
+      try {
+        const promise = apiFetch('http://idp.test/api/x', { token: 'tkn' }).catch((e: unknown) => e)
+        await vi.runAllTimersAsync()
+        const err = await promise
+        expect(err).toBeInstanceOf(ApiError)
+        expect((err as { statusCode: number }).statusCode).toBe(429)
+        expect(calls).toBe(4) // initial + 3 retries
+      }
+      finally {
+        vi.unstubAllGlobals()
+        vi.useRealTimers()
+      }
+    })
   })
 })
