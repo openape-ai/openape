@@ -11,26 +11,47 @@
 	auto_https disable_redirects
 }
 
+# Serve the E2E-generated docs (docs/local-stack/, mounted at /docs-site) at
+# /docs on every app host, so the screenshots the runners capture are browsable
+# at e.g. https://id.openape.test/docs. `handle_path` strips /docs and is
+# terminal for those paths; the app `handle` below catches everything else.
+(docs) {
+	redir /docs /docs/
+	handle_path /docs/* {
+		root * /docs-site
+		file_server
+	}
+}
+
 id.openape.test {
 	tls internal
-	reverse_proxy idp:3003 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
+	import docs
+	handle {
+		reverse_proxy idp:3003 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
 	}
 }
 
 troop.openape.test {
 	tls internal
-	reverse_proxy troop:3010 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
+	import docs
+	handle {
+		reverse_proxy troop:3010 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
 	}
 }
 
 chat.openape.test {
 	tls internal
-	reverse_proxy chat:3007 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
+	import docs
+	handle {
+		reverse_proxy chat:3007 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
 	}
 }
