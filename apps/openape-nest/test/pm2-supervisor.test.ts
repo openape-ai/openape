@@ -31,3 +31,21 @@ describe('ecosystemEnvLines', () => {
     expect(ecosystemEnvLines(baseAgent)).not.toContain('OPENAPE_BYPASS_APE_SHELL')
   })
 })
+
+describe('ecosystemEnvLines dev recipe mount', () => {
+  const saved = process.env.OPENAPE_RECIPE_DEV_DIR
+  afterEach(() => {
+    if (saved === undefined) delete process.env.OPENAPE_RECIPE_DEV_DIR
+    else process.env.OPENAPE_RECIPE_DEV_DIR = saved
+  })
+
+  it('forwards OPENAPE_RECIPE_DEV_DIR so the bridge runs the bind-mounted recipe', () => {
+    process.env.OPENAPE_RECIPE_DEV_DIR = '/opt/recipe-dev'
+    expect(ecosystemEnvLines(baseAgent)).toContain('OPENAPE_RECIPE_DEV_DIR: "/opt/recipe-dev"')
+  })
+
+  it('omits it when unset', () => {
+    delete process.env.OPENAPE_RECIPE_DEV_DIR
+    expect(ecosystemEnvLines(baseAgent)).not.toContain('OPENAPE_RECIPE_DEV_DIR')
+  })
+})
