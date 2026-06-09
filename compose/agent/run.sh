@@ -100,8 +100,7 @@ echo "✓ owner login provisioned ($("${COMPOSE[@]}" exec -T nest node -e 'const
 echo "→ Spawn → run → destroy an agent through troop…"
 HOST_ID="$HOST_ID" pw lifecycle.mjs
 
-echo "→ Rendering docs…"
-node compose/docs-index.mjs
+echo "→ Distributing docs to each app…"
 node compose/distribute-docs.mjs
 
 echo "✓ Agent lifecycle test complete — browse the docs at https://troop.openape.test/docs"
