@@ -12,6 +12,14 @@ cd "$(dirname "$0")/../.."   # monorepo root
 COMPOSE=(docker compose -f compose/local-stack.yml)
 EMAIL=demo@openape.test
 
+# `--fresh` (or FRESH=1) → full clean slate first: a plain `down -v` leaves the
+# profile-gated containers holding the volumes, so the CA/DBs survive. reset.sh
+# tears everything down so the CA + IdP DB are regenerated from scratch.
+if [ "${1:-}" = "--fresh" ] || [ "${FRESH:-}" = "1" ]; then
+  echo "→ Fresh reset (down -v, all profiles)…"
+  "$(dirname "$0")/../reset.sh"
+fi
+
 echo "→ Clearing old screenshots…"
 find docs/local-stack/screenshots -name '*.png' -delete 2>/dev/null || true
 

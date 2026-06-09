@@ -1,7 +1,0 @@
-{
-  "idp": "https://id.openape.test",
-  "access_token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0xNzgwOTk0MDQ1ODkwIn0.eyJpc3MiOiJodHRwczovL2lkLm9wZW5hcGUudGVzdCIsInN1YiI6ImRlbW9Ab3BlbmFwZS50ZXN0IiwiYXVkIjoiYXBlcy1jbGkiLCJhY3QiOiJodW1hbiIsImlhdCI6MTc4MDk5NDA1NCwiZXhwIjoxNzgwOTk0MzU0LCJqdGkiOiJhNGQzNGM5OC1mY2UzLTQzYTYtYjc3Zi1kYzkyZDJlMDRlZWQiLCJub25jZSI6IjEyNjgxODVlLTBlNGItNDdkOC1iYmEyLTgxNDc0ODM5Y2MyMiIsImVtYWlsIjoiZGVtb0BvcGVuYXBlLnRlc3QiLCJuYW1lIjoiZGVtb0BvcGVuYXBlLnRlc3QifQ.HFoqwWqUYr8-Xhn_rAecQdpbMkirb-931FNza_MdMBz8Ip8gTHRhydJqfoJS6bHWhrMzHchRgxraW5D6akXjAQ",
-  "refresh_token": "8T9643VcP81k5j3vvuGyIoq0gQaXtIXy9sfrCiaqY2h14rbuKOAr3ACjt7-sQz6b",
-  "email": "demo@openape.test",
-  "expires_at": 1780994355
-}

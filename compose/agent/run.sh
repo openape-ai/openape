@@ -12,6 +12,14 @@ OUTDIR=compose/agent/.out
 mkdir -p "$OUTDIR"
 rm -f "$OUTDIR"/*.json 2>/dev/null || true
 
+# `--fresh` (or FRESH=1) → full clean slate first. This script already resets
+# the IdP DB + nest volume per run; --fresh additionally drops the caddy-data
+# (local CA) volume a plain `down -v` can't, via reset.sh (profile-aware).
+if [ "${1:-}" = "--fresh" ] || [ "${FRESH:-}" = "1" ]; then
+  echo "→ Fresh reset (down -v, all profiles)…"
+  "$(dirname "$0")/../reset.sh"
+fi
+
 pw() { # run a script in the playwright image, on the network, with the agent mounts
   # Mount under /demo so the script resolves `playwright` from /demo/node_modules.
   "${COMPOSE[@]}" run --rm --entrypoint node --workdir /demo \
