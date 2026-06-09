@@ -19,6 +19,18 @@ set -e
 
 mkdir -p /var/log/openape && chmod 1777 /var/log/openape
 
+# Local-CA trust (dev/test stacks behind a `tls internal` Caddy). Caddy keeps
+# its root under a 0700 root-only PKI dir, so an agent uid can't read it to
+# trust it. Root (the nest, PID 1) copies it to a world-readable path that the
+# bridge + `apes agents sync` point NODE_EXTRA_CA_CERTS at. No-op in prod where
+# the CA path is absent and agents talk to a publicly-trusted endpoint.
+LOCAL_CA_SRC=/caddy-data/caddy/pki/authorities/local/root.crt
+LOCAL_CA_DST=/var/lib/openape/local-ca.crt
+if [ -r "$LOCAL_CA_SRC" ]; then
+  install -m 0644 "$LOCAL_CA_SRC" "$LOCAL_CA_DST"
+  echo "[entrypoint] trusted local CA → $LOCAL_CA_DST"
+fi
+
 REGISTRY=/var/lib/openape/nest/agents.json
 HOMES=/var/lib/openape/homes
 

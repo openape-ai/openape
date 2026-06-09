@@ -92,7 +92,12 @@ RUN apt-get update \
 # its supervised agents without a password. The container is the OpenApe
 # sandbox; the human operator never logs in here, so unrestricted
 # in-container privilege drop is the point.
-RUN echo 'root ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/openape-nest \
+# `env_keep += NODE_EXTRA_CA_CERTS` so `sudo -u <agent> apes agents sync`
+# inherits the local-CA trust path (sudo strips env by default). The bridge
+# gets it via its pm2 ecosystem env instead; this covers the direct-sudo path.
+RUN printf '%s\n' \
+      'Defaults env_keep += "NODE_EXTRA_CA_CERTS"' \
+      'root ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/openape-nest \
     && chmod 0440 /etc/sudoers.d/openape-nest
 
 # Nest data dir — bind-mounted by compose so registry + auth survive
