@@ -18,6 +18,7 @@ networks:
 
 volumes:
   caddy-data:
+  nest-data:
 
 services:
   # Local DNS: serves the DDISA discovery TXT for openape.test and forwards the
@@ -86,6 +87,20 @@ services:
       # /.well-known/oauth-client-metadata (mirrors id.openape.ai) instead of
       # requiring pre-registration.
       NUXT_OPENAPE_IDP_SP_METADATA_MODE: permissive
+      # All app/browser traffic reaches the IdP through the Caddy proxy, so the
+      # rate-limiter's socket peer is always the proxy — without this it keys
+      # the per-IP auth cap on one IP for the whole stack (a global 10/min that
+      # the lifecycle test's auth burst trips). Trusting the proxy makes it walk
+      # X-Forwarded-For to the real client. Injected by compose/agent/run.sh
+      # (the proxy's container IP is dynamic); empty in a bare `up`, which is
+      # fine for the screenshot flows that don't burst auth.
+      OPENAPE_RATE_LIMIT_TRUSTED_PROXIES: ${OPENAPE_RATE_LIMIT_TRUSTED_PROXIES:-}
+      # Register the apes CLI as a public client (RFC 8252 loopback redirect),
+      # exactly as id.openape.ai does in prod — so `apes login`'s PKCE flow
+      # (client_id=apes-cli, redirect_uri=http://localhost:9876/callback)
+      # resolves. The agent-lifecycle test drives this flow headlessly to
+      # provision an owner login into the nest.
+      NUXT_OPENAPE_IDP_PUBLIC_CLIENTS: '{"apes-cli":{"client_id":"apes-cli","redirect_uris":["http://localhost:9876/callback"]}}'
       NUXT_TURSO_URL: file:/app/idp.db
       NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
       NITRO_PORT: "3003"
@@ -190,5 +205,72 @@ services:
       - ../docs/local-stack/screenshots:/demo/out
       # Live-mount the script so the flows can be iterated without an image rebuild.
       - ./demo/screenshot.mjs:/demo/screenshot.mjs:ro
+    networks:
+      - openape-test
+
+  # --- Agent lifecycle (spawn / run / destroy) — profile: agent-lifecycle ---
+  # Started by compose/agent/run.sh, not by a bare `up`.
+
+  # Mock OpenAI-compatible LLM so the nest's agents have an endpoint WITHOUT a
+  # ChatGPT subscription holder — a 2nd codex-proxy on a live account would
+  # hard-terminate the first. See compose/mock-llm/server.mjs.
+  mock-llm:
+    build:
+      context: ..
+      dockerfile: compose/mock-llm/Dockerfile
+    image: openape-mock-llm:local
+    profiles: ["agent-lifecycle"]
+    dns:
+      - 172.30.0.53
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # The nest daemon, bound to the LOCAL troop. HOST_ID + DEVICE_SECRET come from
+  # `POST /api/nests/bind` — compose/agent/run.sh binds as demo@openape.test and
+  # injects them. Agents it spawns register at the local IdP and use the mock LLM.
+  nest:
+    build:
+      context: ..
+      dockerfile: apps/openape-nest/Dockerfile
+    image: openape-nest:latest
+    profiles: ["agent-lifecycle"]
+    depends_on:
+      proxy:
+        condition: service_healthy
+      troop:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+      - nest-data:/var/lib/openape/nest
+    environment:
+      OPENAPE_NEST_HOST_ID: ${OPENAPE_NEST_HOST_ID:-}
+      OPENAPE_NEST_DEVICE_SECRET: ${OPENAPE_NEST_DEVICE_SECRET:-}
+      OPENAPE_TROOP_WS_URL: wss://troop.openape.test
+      OPENAPE_BRIDGE_TARGET: troop
+      # The var the agent bridge actually reads for its troop endpoint
+      # (ape-agent bridge.ts readConfig). Without it the bridge defaults to
+      # the PRODUCTION https://troop.openape.ai and its local-IdP-issued token
+      # is meaningless there — the WS just hangs. Point it at the local troop.
+      OPENAPE_TROOP_URL: https://troop.openape.test
+      LITELLM_BASE_URL: http://mock-llm:4000/v1
+      LITELLM_API_KEY: sk-mock
+      APE_CHAT_BRIDGE_MODEL: gpt-5.5
+      OPENAPE_BYPASS_APE_SHELL: "1"
+      HOME: /var/lib/openape/nest
+      NEST_DATA_DIR: /var/lib/openape/nest
+      OPENAPE_NEST_REGISTRY_PATH: /var/lib/openape/nest/agents.json
+      # The world-readable CA copy the entrypoint writes from the root-only
+      # /caddy-data PKI — readable by the nest AND by spawned agent uids (the
+      # bridge + sync), which the raw /caddy-data path is not.
+      NODE_EXTRA_CA_CERTS: /var/lib/openape/local-ca.crt
     networks:
       - openape-test

@@ -20,7 +20,7 @@
 // launchd (one entry total — system-domain after migrate-to-service-
 // user, user-domain otherwise).
 
-import { watch } from 'node:fs'
+import { readFileSync, watch } from 'node:fs'
 import process from 'node:process'
 import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
@@ -65,8 +65,24 @@ try {
   log(`nest: watching ${REGISTRY_PATH} for registry changes`)
 }
 catch (err) {
-  log(`nest: registry watch failed (${err instanceof Error ? err.message : String(err)}) — falling back to 5s poll`)
-  setInterval(() => { void reconcile() }, 5_000).unref()
+  log(`nest: registry watch failed (${err instanceof Error ? err.message : String(err)}) — falling back to 5s change-detecting poll`)
+  // A blind 5s reconcile calls `pm2 startOrReload` for every agent each tick,
+  // reloading healthy bridges so they never stay connected long enough to do
+  // anything (fs.watch is unreliable on bind-mounted files, so containers hit
+  // this path). Only reconcile when the registry bytes actually change; pm2's
+  // own autorestart keeps a crashed bridge alive between registry edits.
+  let lastSig = registrySignature()
+  setInterval(() => {
+    const sig = registrySignature()
+    if (sig === lastSig) return
+    lastSig = sig
+    void reconcile()
+  }, 5_000).unref()
+}
+
+function registrySignature(): string {
+  try { return readFileSync(REGISTRY_PATH, 'utf8') }
+  catch { return '' }
 }
 
 process.on('SIGTERM', () => {

@@ -1,0 +1,64 @@
+{
+  "cookies": [
+    {
+      "name": "troop-locale",
+      "value": "en",
+      "domain": "troop.openape.test",
+      "path": "/",
+      "expires": 1812530043.903386,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "openape-idp",
+      "value": "Fe26.2**49dc6d9c45759465c3f80f46ccc9ec355d1f16b06b8c50b91b96cc79f94ae2e7*mdx7Juo5jkSHe30iOCWU1g*HeFS_L9bNT8C6M9tPyGFjwkEM6tiqvqdhGUtYbs02Oye4B2lR_ZZJMYR-pXv7X9PHP6_QopJuCfwPO3SFtBNAfE7KHp4IH2MLsgZgl3CE70wBteNXAwoHZPiyqKt3CBYmid-vBzcY3Hv9jp_WV_sKaDxoi4kAax5ZLtb8tmp76_Om-nbKcAJ_FRm_jLsXKG6*1781598845880*9f76f8a7f111dc394c7434ca68c3f2b40d2e4ad4eccf11518ed7fda6c5d4c9e6*J6MGDxkQ49NHAArOATuNPIA3IHiY1IrT1djJIXnZqy8",
+      "domain": "id.openape.test",
+      "path": "/",
+      "expires": 1781598840.881147,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "openape-flow",
+      "value": "",
+      "domain": "troop.openape.test",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "openape-sp",
+      "value": "Fe26.2**b1bc0d7a8d716b88cc034f2ecc0e3b697891db53595202659551dfbcc85004d6*h_2T9Jr1vJT4Lfrk2X51GA*ANoSJ-VGaCzaart2dW7kZfoAmdgvvOheT_11ARlcC_Jvzzz7KdQIjEE8iLn72ah9wJsVZeKviF-rQMOAREL62gpBBGUJDiFBMAMNrTbj87d4Kcb8Qj-v8sVfPjKDdP73dqaXWccYqwFaJ-ZyOA6Jo-Xq415EMe7Bf1Qx19x8-y80Vvcs0Riw2iVTHz7h5FaENOn7fnHturzMU7UuU5XymaZz2Q9_sNdBXThULhYBo4awYDcZiTdVEd31Ze3ILwTcOG03IAMU-r-K7-HG6sX42Eh4m-2-ynieeCkb8M33Mk3CiInaYcO_7dY7CmDj43axz5teA2oZLICKxi9rKK69UwaNm2QzBLDIoJvH3f83PoOPMLQExiLm5ex_9G1TQ_dts2z2KeRmdM7lSB7hnPa8uqGUEsBI3cUHwPYyNIVDw6kaOOx6FZlaBH_A8Dq05xjKG3C3dLqYfpqYVClkwZ3nctSfBxe--c7vf-IoXs5q6G_OFIt-uXU9TTXbbQ6fsHT7*1781598845897*854861bc327e851b8c895a0cc995cdeb0ebfe2de2d566af9b377b8f66b9840c7*RA7-lkhA2vt9leOAx8DfCB88UynWzl-wcprPhY_z_Tw",
+      "domain": "troop.openape.test",
+      "path": "/",
+      "expires": 1781598845.898301,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://troop.openape.test",
+      "localStorage": [
+        {
+          "name": "nuxt-color-mode",
+          "value": "dark"
+        }
+      ]
+    },
+    {
+      "origin": "https://id.openape.test",
+      "localStorage": [
+        {
+          "name": "nuxt-color-mode",
+          "value": "dark"
+        }
+      ]
+    }
+  ]
+}
