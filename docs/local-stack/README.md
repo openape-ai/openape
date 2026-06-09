@@ -14,9 +14,22 @@ Chromium drives three real user flows and captures the screenshots below.
 # Bring the stack up + capture the flows (writes screenshots/ here):
 ./compose/demo/run.sh
 
+# Clean-room run (regenerates the CA + DBs from scratch first):
+./compose/demo/run.sh --fresh      # or: FRESH=1 ./compose/demo/run.sh
+# The agent-lifecycle runner takes the same flag:
+./compose/agent/run.sh --fresh
+
+# Tear everything down (containers + volumes; reset.sh names every profile so
+# the nest/mock-llm/playwright containers don't keep the volumes alive):
+./compose/reset.sh
+
 # Or just the stack, to poke at it yourself:
 docker compose -f compose/local-stack.yml up -d --build
 ```
+
+> For a full clean-room pass of *both* flows, reset once then run them without
+> `--fresh` (so the second runner doesn't tear down the first's stack):
+> `./compose/reset.sh && ./compose/demo/run.sh && ./compose/agent/run.sh`.
 
 To open the apps in **your own** browser, point your Mac at the stack's DNS for
 the `.test` zone (one-time):

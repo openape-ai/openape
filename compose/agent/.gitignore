@@ -1,0 +1,3 @@
+# Ephemeral per-run creds/state written by run.sh (device_secret, owner
+# token, browser session) — never commit.
+.out/
