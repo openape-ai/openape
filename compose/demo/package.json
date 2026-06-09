@@ -1,0 +1,9 @@
+{
+  "name": "openape-local-stack-demo",
+  "private": true,
+  "type": "module",
+  "description": "Playwright screenshot runner for the local OpenApe test stack flows.",
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}
