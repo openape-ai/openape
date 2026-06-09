@@ -26,6 +26,16 @@ find docs/local-stack/screenshots -name '*.png' -delete 2>/dev/null || true
 echo "→ Ensuring the stack is up…"
 "${COMPOSE[@]}" up -d >/dev/null
 
+# Every browser request reaches the IdP through the Caddy proxy, so the
+# rate-limiter keys all four SSO flows on the proxy's single IP — with four
+# flows the auth burst trips the 10/min cap (flow 4 got a 429 screenshot).
+# Trust the proxy so the limiter walks X-Forwarded-For (same as agent/run.sh).
+PROXY_ID=$("${COMPOSE[@]}" ps -q proxy)
+PROXY_IP=$(docker inspect "$PROXY_ID" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
+[ -n "$PROXY_IP" ] || { echo "✗ could not resolve proxy IP for rate-limit trust"; exit 1; }
+export OPENAPE_RATE_LIMIT_TRUSTED_PROXIES="$PROXY_IP"
+echo "  (trusting proxy $PROXY_IP for X-Forwarded-For rate-limit keying)"
+
 # Reset the IdP to a clean slate so the demo user is freshly registered (the
 # file DB is ephemeral; recreating the container wipes it) — reproducible
 # screenshots: a real first-time passkey sign-up + first-time consent each run.
