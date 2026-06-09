@@ -1,0 +1,160 @@
+# Local OpenApe test stack — the full web topology in containers, under real
+# https://*.openape.test hostnames, mirroring chatty/prod.
+#
+#   docker compose -f compose/local-stack.yml up -d --build       # bring it up
+#   docker compose -f compose/local-stack.yml run --rm playwright  # capture flows (M2)
+#
+# Dev-only secrets are inline below — this stack is local and ephemeral.
+
+name: openape-test
+
+x-dev-secret: &session-secret dev-session-secret-openape-test-0001
+
+networks:
+  openape-test:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  caddy-data:
+
+services:
+  # Local DNS: serves the DDISA discovery TXT for openape.test and forwards the
+  # rest (incl. *.openape.test A records via the proxy's aliases) to docker DNS.
+  dns:
+    build:
+      context: ..
+      dockerfile: compose/dns.Dockerfile
+    image: openape-dns:local
+    networks:
+      openape-test:
+        ipv4_address: 172.30.0.53
+
+  # TLS terminator + host-routing reverse proxy. tls internal → local CA, shared
+  # to the app containers via caddy-data so their Node https calls trust it.
+  proxy:
+    image: caddy:2
+    depends_on:
+      - dns
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks:
+      openape-test:
+        aliases:
+          - id.openape.test
+          - troop.openape.test
+          - chat.openape.test
+    ports:
+      - "127.0.0.1:443:443"
+    healthcheck:
+      # 127.0.0.1, not localhost — Caddy's admin API binds IPv4-only and
+      # `localhost` resolves to ::1 first inside the container.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  idp:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: openape-free-idp
+        APP_DIR: openape-free-idp
+        PORT: "3003"
+    image: openape-free-idp:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_ISSUER: https://id.openape.test
+      NUXT_OPENAPE_RP_ID: id.openape.test
+      NUXT_OPENAPE_RP_ORIGIN: https://id.openape.test
+      NUXT_OPENAPE_RP_HOST_ALLOWLIST: id.openape.test
+      NUXT_OPENAPE_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_MANAGEMENT_TOKEN: dev-management-token
+      NUXT_OPENAPE_E2E: "1"
+      NUXT_TURSO_URL: file:/app/idp.db
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3003"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  troop:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape/troop"
+        APP_DIR: openape-troop
+        PORT: "3010"
+    image: openape-troop:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      # No NUXT_OPENAPE_URL → the SP performs real DDISA discovery via DNS TXT.
+      NUXT_OPENAPE_CLIENT_ID: troop.openape.test
+      NUXT_OPENAPE_SP_NAME: OpenApe Troop
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3010"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  chat:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape/chat"
+        APP_DIR: openape-chat
+        PORT: "3007"
+    image: openape-chat:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_CLIENT_ID: chat.openape.test
+      NUXT_OPENAPE_SP_NAME: OpenApe Chat
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3007"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

@@ -1,0 +1,14 @@
+# Keep the Docker build context lean — the Nuxt.Dockerfile copies the whole
+# monorepo so pnpm --frozen-lockfile sees the full workspace, but none of these
+# need to ship into the build (they're regenerated or irrelevant at build time).
+**/node_modules
+**/.output
+**/.nuxt
+**/.turbo
+**/dist
+**/.data
+.git
+**/*.log
+**/.DS_Store
+compose/certs
+docs/local-stack/screenshots
