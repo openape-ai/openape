@@ -57,8 +57,7 @@ echo "→ Registration token: ${TOKEN}"
 echo "→ Running the flows…"
 "${COMPOSE[@]}" run --rm -e REG_TOKEN="${TOKEN}" playwright
 
-echo "→ Rendering docs…"
-node compose/docs-index.mjs
+echo "→ Distributing docs to each app…"
 node compose/distribute-docs.mjs
 
-echo "✓ Screenshots in docs/local-stack/screenshots/ — browse them at https://id.openape.test/docs"
+echo "✓ Screenshots in docs/local-stack/screenshots/ — each app serves its own flows at https://<app>.openape.test/docs"
