@@ -144,11 +144,16 @@ describe('free-idp + shapes end-to-end', () => {
     const port = 3311 + Math.floor(Math.random() * 200)
     const baseUrl = `http://127.0.0.1:${port}`
 
-    const build = spawnSync('pnpm', ['--filter', '@openape/apes', 'build'], {
+    // Build via turbo (not `pnpm --filter`): turbo builds @openape/apes's
+    // workspace deps first (build dependsOn ^build), so a fresh checkout — CI,
+    // where apes isn't otherwise "affected" by a free-idp change — doesn't fail
+    // with TS2307 "cannot find module @openape/core". Surface the build output
+    // on failure; `spawnSync` captures it (encoding set) and it's otherwise lost.
+    const build = spawnSync('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=@openape/apes'], {
       cwd: monorepoRoot,
       encoding: 'utf-8',
     })
-    expect(build.status).toBe(0)
+    expect(build.status, `\`@openape/apes\` build failed (status ${build.status}):\n${build.stderr}\n${build.stdout}`).toBe(0)
 
     server = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: appDir,

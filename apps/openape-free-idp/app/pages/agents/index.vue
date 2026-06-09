@@ -46,16 +46,24 @@ function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Derive the IdP the user is actually on, so the enrol instructions + the
+// previewed agent email point at THIS instance (id.openape.ai, id.openape.at,
+// a self-hosted IdP) instead of a hardcoded one — matching the issuer-host
+// derivation the enroll endpoint uses for the real agent email.
+const idpUrl = useRequestURL()
+const idpOrigin = idpUrl.origin
+const idpHost = idpUrl.host
+
 const agentInstructions = computed(() => {
-  return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\nhttps://id.openape.ai/enroll?name=<agent-name>&key=<url-encoded-public-key>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n\nThe agent email will be automatically derived from the logged-in user's email.`
+  return `Generate an Ed25519 keypair and open this URL in the user's browser:\n\n${idpOrigin}/enroll?name=<agent-name>&key=<url-encoded-public-key>\n\nParameters:\n- name: your agent's display name\n- key: the full public key in OpenSSH format (ssh-ed25519 AAAA...), URL-encoded (percent-encode spaces as %20)\n\nThe agent email will be automatically derived from the logged-in user's email.`
 })
 
 const sudoCommand = computed(() => {
   const email = user.value?.email ?? ''
   const name = email.split('@')[0] ?? 'agent'
   const [local, domain] = email.split('@')
-  const agentEmail = `agent+${local}+${(domain ?? '').replace(/\./g, '_')}@id.openape.ai`
-  return `sudo escapes enroll \\\n  --server https://id.openape.ai \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/openape/agent.key`
+  const agentEmail = `agent+${local}+${(domain ?? '').replace(/\./g, '_')}@${idpHost}`
+  return `sudo escapes enroll \\\n  --server ${idpOrigin} \\\n  --agent-email "${agentEmail}" \\\n  --agent-name "${name}-agent" \\\n  --key /etc/openape/agent.key`
 })
 
 const copied = ref('')
