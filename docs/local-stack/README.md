@@ -108,6 +108,26 @@ Signed into Chat as `demo@openape.test` via SSO:
 
 ![Chat dashboard](screenshots/09-chat-dashboard.png)
 
+## Flow 4 — Agent lifecycle (spawn → run → destroy)
+
+The full control-plane round-trip, all in containers: a **nest** daemon binds to
+the local Troop, then an agent is **spawned**, **run** (it answers a chat message
+via a mock LLM — no ChatGPT subscription touched), and **destroyed** — driven by
+`compose/agent/run.sh`.
+
+Spawned — the agent appears in Troop's dashboard:
+
+![Agent spawned](screenshots/agent-01-spawned.png)
+
+Run — the owner sends a message and the agent replies through Troop; the
+`[mock-llm]` reply proves the spawn → bridge → LLM → reply path end-to-end:
+
+![Agent ran](screenshots/agent-02-ran.png)
+
+Destroyed — the agent is torn down and Troop is empty again:
+
+![Agent destroyed](screenshots/agent-03-destroyed.png)
+
 ---
 
 ## How it's wired (notes for the next person)

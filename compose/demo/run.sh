@@ -57,4 +57,7 @@ echo "→ Registration token: ${TOKEN}"
 echo "→ Running the flows…"
 "${COMPOSE[@]}" run --rm -e REG_TOKEN="${TOKEN}" playwright
 
-echo "✓ Screenshots in docs/local-stack/screenshots/"
+echo "→ Rendering docs…"
+node compose/docs-index.mjs
+
+echo "✓ Screenshots in docs/local-stack/screenshots/ — browse them at https://id.openape.test/docs"
