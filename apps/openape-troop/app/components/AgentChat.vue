@@ -421,6 +421,17 @@ onBeforeUnmount(() => stopPolling())
   outline: none;
   min-height: 44px;
   max-height: 140px;
+  /* Explicit colors — without these the textarea inherits the page's
+     light text colour from troop's dark-themed wrapper, which lands as
+     near-invisible faint text on the composer's white background.
+     Override here for both light + dark; placeholder gets its own
+     darker grey so it doesn't look like real typed-in text. */
+  background: #ffffff;
+  color: #111827;
+}
+.composer textarea::placeholder {
+  color: #9ca3af;
+  opacity: 1;
 }
 .composer textarea:focus {
   border-color: #f97316;
@@ -479,6 +490,9 @@ onBeforeUnmount(() => stopPolling())
     background: #1f1f1f;
     color: #f3f4f6;
     border-color: #3a3a3a;
+  }
+  .composer textarea::placeholder {
+    color: #6b7280;
   }
   .composer textarea:disabled {
     background: #161616;
