@@ -1,0 +1,29 @@
+name: preview
+# Per-app PR previews on Coolify: only the app(s) a PR changes get a preview
+# at https://<app>-pr-<n>.preview.openape.ai (torn down on close). The
+# dispatch script computes the affected apps and forwards a signed webhook to
+# Coolify per app — see scripts/preview-dispatch.mjs for the why + mechanics.
+#
+# [skip ci] / [skip cd] in the PR title skips preview deployments (checked by
+# Coolify's handler).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  dispatch:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure base ref for the diff
+        if: github.event.action != 'closed'
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+      - name: Dispatch per-app preview deploys
+        env:
+          COOLIFY_WEBHOOK_URL: https://coolify.openape.ai/webhooks/source/gitea/events/manual
+          COOLIFY_PREVIEW_SECRET_IDP: ${{ secrets.COOLIFY_PREVIEW_SECRET_IDP }}
+          COOLIFY_PREVIEW_SECRET_TROOP: ${{ secrets.COOLIFY_PREVIEW_SECRET_TROOP }}
+          COOLIFY_PREVIEW_SECRET_CHAT: ${{ secrets.COOLIFY_PREVIEW_SECRET_CHAT }}
+        run: node scripts/preview-dispatch.mjs
