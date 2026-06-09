@@ -254,6 +254,9 @@ importers:
       '@vitest/coverage-istanbul':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
+      h3:
+        specifier: 'catalog:'
+        version: 1.15.11
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -349,6 +352,9 @@ importers:
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
+      h3:
+        specifier: 'catalog:'
+        version: 1.15.11
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -490,6 +496,9 @@ importers:
       '@vitest/coverage-istanbul':
         specifier: ^4.1.7
         version: 4.1.7(vitest@4.1.7)
+      h3:
+        specifier: 'catalog:'
+        version: 1.15.11
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
