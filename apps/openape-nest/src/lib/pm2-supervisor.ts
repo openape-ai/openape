@@ -97,7 +97,7 @@ const CHAT_ENV_FORWARDS = [
 // sudo strips PATH/env). Chat agents forward the nest's own env; service agents
 // get per-agent config (the SP URL differs per agent) from the registry entry,
 // falling back to the nest env for the shared LLM bits.
-function ecosystemEnvLines(agent: AgentEntry): string {
+export function ecosystemEnvLines(agent: AgentEntry): string {
   let pairs: Array<[string, string]>
   if (agent.kind === 'service') {
     const br = agent.bridge ?? {}
@@ -115,6 +115,14 @@ function ecosystemEnvLines(agent: AgentEntry): string {
       .filter(k => process.env[k] !== undefined)
       .map(k => [k, process.env[k] as string])
   }
+  // The bridge is spawned via `sudo -u <agent>`, which strips the nest's
+  // environment — this pm2 `env:` block is the ONLY env the bridge (and its
+  // in-process cron runner) sees. OPENAPE_BYPASS_APE_SHELL must ride along or
+  // runApeShell falls back to the gated `ape-shell` (absent in the pod) and
+  // every scheduled `command` task fails to exec (exit -1). Applies to both
+  // kinds — it's a sandbox-level flag, not chat/service-specific.
+  if (process.env.OPENAPE_BYPASS_APE_SHELL === '1')
+    pairs.push(['OPENAPE_BYPASS_APE_SHELL', '1'])
   return pairs.map(([k, v]) => `      ${k}: ${JSON.stringify(v)},`).join('\n')
 }
 
