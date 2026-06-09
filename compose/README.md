@@ -39,6 +39,36 @@ In-pod, services reach each other by their compose service-name
 
 To reset state: `docker compose -f compose/docker-compose.yml down -v`.
 
+## Developing a recipe locally
+
+Iterate on an agent recipe's `tools/` (e.g. `tools/serve.mjs`) without the
+publish → `apes agent deploy` → sync round-trip. Bind-mount your local recipe
+checkout into the nest and point the cron runner at it — add to the
+`openape-nest` service (e.g. a `compose/docker-compose.override.yml`, or the
+equivalent `docker run` flags):
+
+```yaml
+services:
+  openape-nest:
+    volumes:
+      - /abs/path/to/your-recipe:/opt/recipe-dev:ro
+    environment:
+      OPENAPE_RECIPE_DEV_DIR: /opt/recipe-dev
+```
+
+`OPENAPE_RECIPE_DEV_DIR` overrides the synced `~/recipe` for scheduled
+`command` tasks: the in-bridge cron runner runs them with that dir as cwd, so
+an edit to your local `tools/serve.mjs` lands on the next 60s tick — no git
+push, retag, redeploy, or sync.
+
+Caveats:
+- Deploy the recipe once first so the agent has its `command` schedule; the
+  mount only swaps *where* `tools/` resolves, not the schedule itself.
+- Mount the recipe repo root (the dir that contains `tools/`).
+- It's global — every command-running agent uses this dir, so develop one
+  recipe at a time. Remove it (and recreate the container) to return to the
+  synced checkout.
+
 ## Hatching a cloud instance
 
 The same compose file runs on an Exoscale (or any cloud) Linux VM —

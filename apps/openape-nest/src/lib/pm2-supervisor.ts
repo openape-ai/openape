@@ -123,6 +123,12 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
   // kinds — it's a sandbox-level flag, not chat/service-specific.
   if (process.env.OPENAPE_BYPASS_APE_SHELL === '1')
     pairs.push(['OPENAPE_BYPASS_APE_SHELL', '1'])
+  // A bind-mounted dev recipe dir, forwarded so the in-bridge cron runner
+  // (resolveRecipeDir) runs `command` tasks against the operator's local
+  // recipe instead of the synced ~/recipe — iterate on tools/ without a
+  // publish→deploy→sync round-trip.
+  if (process.env.OPENAPE_RECIPE_DEV_DIR)
+    pairs.push(['OPENAPE_RECIPE_DEV_DIR', process.env.OPENAPE_RECIPE_DEV_DIR])
   return pairs.map(([k, v]) => `      ${k}: ${JSON.stringify(v)},`).join('\n')
 }
 
