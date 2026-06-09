@@ -53,6 +53,7 @@ Then visit `https://id.openape.test`, `https://troop.openape.test`,
 | `idp`        | `openape-free-idp` — DDISA Identity Provider (passkeys)              | `https://id.openape.test`    |
 | `troop`      | `openape-troop` — SP (agent control plane)                          | `https://troop.openape.test` |
 | `chat`       | `openape-chat` — SP (chat)                                          | `https://chat.openape.test`  |
+| `org`        | `openape-org` — SP (agent organization)                             | `https://org.openape.test`   |
 | `playwright` | headless-Chromium runner (on the same network) — captures the flows | —                            |
 
 Real DNS, real TLS (Node trusts Caddy's CA — verification is **not** disabled),
@@ -73,6 +74,7 @@ so the docs ship and deploy with the app and can't drift from its flows.
 | Passkey sign-up · account dashboard  | `https://id.openape.test/docs`    |
 | DDISA SSO · agent lifecycle          | `https://troop.openape.test/docs` |
 | One-click SSO · chat home            | `https://chat.openape.test/docs`  |
+| One-click SSO · org home             | `https://org.openape.test/docs`   |
 
 The raw PNGs land in `screenshots/` here first (what the runners write); the
 distribute step is what fans them out to the apps.
@@ -81,7 +83,7 @@ distribute step is what fans them out to the apps.
 
 ## How it's wired (notes for the next person)
 
-- **One parameterized Dockerfile** (`compose/Nuxt.Dockerfile`) builds all three
+- **One parameterized Dockerfile** (`compose/Nuxt.Dockerfile`) builds all the
   Nuxt apps. The build runs the modules' `prepare` (stub + `nuxi prepare`) before
   `turbo build`, and the runtime stage pins the arch-matched `@libsql/*` native
   binding (Nitro can't trace it).

@@ -16,7 +16,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = join(root, 'docs', 'local-stack', 'screenshots')
 
 // Which captured screenshots each app documents — see apps/<app>/docs/flows.md.
-// idp + chat are added as their /docs pages land.
 const ownedBy = {
   'openape-free-idp': [
     '01-idp-landing',
@@ -35,6 +34,10 @@ const ownedBy = {
   'openape-chat': [
     '08-chat-landing',
     '09-chat-dashboard',
+  ],
+  'openape-org': [
+    '10-org-landing',
+    '11-org-home',
   ],
 }
 
