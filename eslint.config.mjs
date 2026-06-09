@@ -16,6 +16,7 @@ export default antfu({
     '**/*.d.ts',
     '**/*.d.vue.ts',
     '**/*.vue.d.ts',
+    '**/*.generated.ts',
     '**/modules/*/src/runtime/**/*.js',
   ],
   rules: {

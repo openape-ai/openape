@@ -102,5 +102,6 @@ HOST_ID="$HOST_ID" pw lifecycle.mjs
 
 echo "→ Rendering docs…"
 node compose/docs-index.mjs
+node compose/distribute-docs.mjs
 
 echo "✓ Agent lifecycle test complete — browse the docs at https://troop.openape.test/docs"
