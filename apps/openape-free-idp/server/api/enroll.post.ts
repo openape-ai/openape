@@ -1,39 +1,9 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createError, defineEventHandler, readBody } from 'h3'
+import { deriveAgentEmail } from '../utils/agent-email'
 
 const PUBLIC_KEY_MAX_LENGTH = 1000
-
-function sanitizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-') || 'agent'
-}
-
-// Hash-suffixed agent emails (#294).
-//
-// The historical derivation collapsed dots in the owner's domain
-// (`replace(/\./g, '_')`) and joined with `+`, so two distinct owners
-// could collide: `foo@example.com` and `foo@example_com` both produced
-// `…+foo+example_com@id.openape.ai`. Same for sanitised names where
-// "Owner" and "o-w-n-e-r" both flatten to `owner`. First-write-wins
-// 409s the second user, but the agent email then misleadingly suggests
-// the wrong owner. Worse, an attacker who pre-enrols a colliding agent
-// can later claim the agent's identity belongs to them.
-//
-// Suffixing a short hash of the canonical owner email makes collisions
-// statistically improbable while staying readable. 8 hex chars = 32 bits
-// of entropy — at our scale (single-digit-thousands of agents per owner
-// at most) the birthday-collision risk is negligible, and across owners
-// the hash is fully owner-scoped so cross-owner collisions are
-// structurally impossible.
-function ownerHash(ownerEmail: string): string {
-  return createHash('sha256').update(ownerEmail.trim().toLowerCase()).digest('hex').slice(0, 8)
-}
-
-function deriveAgentEmail(ownerEmail: string, agentName: string): string {
-  const [local, domain] = ownerEmail.split('@')
-  const safeName = sanitizeName(agentName)
-  return `${safeName}-${ownerHash(ownerEmail)}+${local}+${domain!.replace(/\./g, '_')}@id.openape.ai`
-}
 
 export default defineEventHandler(async (event) => {
   const email = await requireAuth(event)
@@ -104,7 +74,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: `Agent limit reached (${maxAgents}). Delete an existing agent first.` })
   }
 
-  const agentEmail = deriveAgentEmail(effectiveOwner, body.name)
+  // The agent email's domain is the issuing IdP's host (per-request issuer
+  // from the Host header when this instance is multi-tenant, else the static
+  // configured issuer). See server/utils/agent-email.ts for why this isn't a
+  // hardcoded constant.
+  const issuer = (event.context.openapeIssuer as string | undefined)
+    || (config.openapeIdp as { issuer?: string } | undefined)?.issuer
+    || 'https://id.openape.ai'
+  const agentEmail = deriveAgentEmail(effectiveOwner, body.name, new URL(issuer).host)
 
   const existingByEmail = await userStore.findByEmail(agentEmail)
   if (existingByEmail) {
