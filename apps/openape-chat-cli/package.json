@@ -36,7 +36,7 @@
     "citty": "^0.2.2",
     "jose": "catalog:",
     "ofetch": "^1.4.1",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

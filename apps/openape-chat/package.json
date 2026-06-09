@@ -13,15 +13,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.90",
+    "@iconify-json/lucide": "^1.2.111",
     "@libsql/client": "^0.17.3",
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "4.8.2",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
     "@vite-pwa/nuxt": "^1.0.4",
     "drizzle-orm": "^0.44.7",
-    "nuxt": "^4.4.6",
+    "nuxt": "^4.4.8",
     "tailwindcss": "^4.2.1",
     "web-push": "^3.6.7",
     "zod": "^4.3.6"
@@ -29,8 +29,8 @@
   "devDependencies": {
     "@types/node": "^22.19.13",
     "@types/web-push": "^3.6.4",
-    "@vitest/coverage-istanbul": "^4.1.7",
+    "@vitest/coverage-istanbul": "^4.1.8",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }
