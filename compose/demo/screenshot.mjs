@@ -22,6 +22,7 @@ const EMAIL = 'demo@openape.test'
 const IDP = 'https://id.openape.test'
 const TROOP = 'https://troop.openape.test'
 const CHAT = 'https://chat.openape.test'
+const ORG = 'https://org.openape.test'
 const REG_TOKEN = process.env.REG_TOKEN || ''
 
 let step = 0
@@ -156,6 +157,24 @@ await flow('Flow 3 — one-click SSO into chat', async () => {
   await page.waitForTimeout(2500)
   await shot(page, 'chat-dashboard')
   await describe(page, 'chat-dashboard')
+})
+
+// ---- Flow 4: one-click SSO into org ----
+// Org redirects unauthenticated visitors to /login (no email form on the
+// root page yet), so the landing shot IS the login page.
+await flow('Flow 4 — one-click SSO into org', async () => {
+  await page.goto(ORG, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(1000)
+  await shot(page, 'org-landing')
+  await fillEmail(page, EMAIL)
+  // org's OpenApeAuth button is labelled "Continue" (i18n), not "Sign in".
+  await click(page, /continue|weiter|sign in with openape|sign in|login|anmelden/i)
+  await page.waitForTimeout(2500)
+  await approveIfPrompted(page)
+  await page.waitForURL(/org\.openape\.test/, { timeout: 20000 }).catch(() => {})
+  await page.waitForTimeout(2500)
+  await shot(page, 'org-home')
+  await describe(page, 'org-home')
 })
 
 console.log(`\n[done] ${step} screenshots in ${OUT}`)

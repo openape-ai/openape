@@ -4,8 +4,8 @@ import { docsMeta, docsSections } from '../docs.generated'
 // Public flow docs for this app, rendered from docs/flows.md (build-time). The
 // HTML is our own committed content, so v-html is safe here (no user input).
 useSeoMeta({
-  title: 'Troop — flow docs',
-  description: 'How Troop is used end-to-end — captured live from the E2E test stack.',
+  title: 'OpenApe Org — flow docs',
+  description: 'How users get into Org — captured live from the E2E test stack.',
 })
 </script>
 
@@ -14,15 +14,15 @@ useSeoMeta({
     <header class="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur">
       <div class="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4">
         <NuxtLink to="/" class="flex items-center gap-2 font-semibold tracking-tight">
-          <span aria-hidden="true">🦍</span>
-          <span>Troop</span>
+          <span aria-hidden="true">🏢</span>
+          <span>OpenApe Org</span>
         </NuxtLink>
         <span class="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-400 ring-1 ring-primary-500/30">
           Flow docs
         </span>
         <div class="ms-auto">
           <UButton to="/" size="sm" color="primary" variant="soft">
-            Open Troop
+            Open Org
           </UButton>
         </div>
       </div>
