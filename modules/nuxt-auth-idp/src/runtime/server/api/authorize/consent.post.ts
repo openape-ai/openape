@@ -78,10 +78,10 @@ export default defineEventHandler(async (event) => {
     grantedAt: Math.floor(Date.now() / 1000),
   })
 
-  // Re-enter the /authorize flow with the original query string. The
-  // consent gate now passes (`hasConsent` is true if remembered, or
-  // re-evaluation hits the same path with one-shot allow if not — see
-  // note below). The handler issues the code as usual.
+  // Re-enter the /authorize flow with the original query string. The consent
+  // gate now passes: evaluatePolicy re-checks the consent store — for
+  // `allowlist-user` AND the no-`mode` default — sees the approval we just
+  // persisted, and returns `'allow'`. The handler issues the code as usual.
   const resumeUrl = new URL('/authorize', new URL(event.node.req.url ?? '', 'http://x').origin)
   for (const [k, v] of Object.entries(captured.query)) {
     if (typeof v === 'string') resumeUrl.searchParams.set(k, v)
