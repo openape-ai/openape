@@ -43,12 +43,16 @@ export default defineEventHandler(async (event) => {
   const mat = materializeRecipe(manifest.recipe, body.data.params)
   if (!mat.ok) throw createError({ statusCode: 400, statusMessage: mat.reason })
 
-  const plan = buildDeployPlan(manifest.recipe, mat.value, { agentName: name })
+  const plan = buildDeployPlan(manifest.recipe, mat.value, { agentName: name, recipeRef: body.data.repo_ref })
 
   const db = useDb()
   const result = await db
     .update(agents)
-    .set({ systemPrompt: plan.systemPrompt, tools: [...RECIPE_AGENT_TOOLS] })
+    // recipeRef MUST be persisted here — it's the field the agent's sync
+    // reads to check out tools/ at the pinned ref. Without it, re-pointing
+    // updated the prompt/toolset but left the agent stuck on the old recipe
+    // checkout (e.g. a stale tools/serve.mjs), defeating the endpoint.
+    .set({ systemPrompt: plan.systemPrompt, tools: [...RECIPE_AGENT_TOOLS], recipeRef: body.data.repo_ref })
     .where(and(eq(agents.ownerEmail, owner.toLowerCase()), eq(agents.agentName, name)))
     .returning()
 
