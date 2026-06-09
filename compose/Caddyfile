@@ -1,0 +1,36 @@
+# TLS-terminating reverse proxy for the openape.test local stack.
+#
+# `tls internal` issues certs from Caddy's own local CA (root CA written to
+# /data/caddy/pki/authorities/local/root.crt, shared into the app containers so
+# their Node https calls trust it — see compose/local-stack.yml). Each site
+# routes by Host header to the matching app container (resolved via docker's
+# embedded DNS — the proxy keeps the default resolver).
+
+{
+	# No public ACME; the local CA covers every site below.
+	auto_https disable_redirects
+}
+
+id.openape.test {
+	tls internal
+	reverse_proxy idp:3003 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+troop.openape.test {
+	tls internal
+	reverse_proxy troop:3010 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+chat.openape.test {
+	tls internal
+	reverse_proxy chat:3007 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
