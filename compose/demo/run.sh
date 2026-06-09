@@ -59,5 +59,6 @@ echo "→ Running the flows…"
 
 echo "→ Rendering docs…"
 node compose/docs-index.mjs
+node compose/distribute-docs.mjs
 
 echo "✓ Screenshots in docs/local-stack/screenshots/ — browse them at https://id.openape.test/docs"
