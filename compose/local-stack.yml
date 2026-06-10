@@ -205,6 +205,9 @@ services:
       NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
       NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
       NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      # Without this the org server defaults to PROD troop.openape.ai for the
+      # cross-SP exchange + spawn-intent (the redirect/code spawn calls it).
+      NUXT_TROOP_API_BASE: https://troop.openape.test
       NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
       NITRO_PORT: "3020"
       HOST: 0.0.0.0
