@@ -48,13 +48,41 @@ function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { stdio: 'inherit', ...opts })
 }
 
-async function coolify(method, path) {
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${process.env.COOLIFY_TOKEN}` },
-  })
-  const text = await res.text()
-  return { status: res.status, text }
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Coolify API call with an explicit timeout + retries. The build/push of each
+// app succeeds well before this; a transient network blip or a busy Coolify
+// (ETIMEDOUT / 5xx) on the deploy call must NOT fail the whole preview after
+// the image is already in the registry. Never throws — returns {status:0} on
+// exhausted retries so the caller can mark the app failed and move on.
+async function coolify(method, path, { tries = 4, timeoutMs = 30_000 } = {}) {
+  let last = ''
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), timeoutMs)
+    try {
+      const res = await fetch(`${API}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${process.env.COOLIFY_TOKEN}` },
+        signal: ctl.signal,
+      })
+      const text = await res.text()
+      clearTimeout(timer)
+      if (res.status >= 500 && attempt < tries) {
+        console.log(`[preview] coolify ${method} ${path} → HTTP ${res.status}, retry ${attempt}/${tries}`)
+        await sleep(2000 * attempt)
+        continue
+      }
+      return { status: res.status, text }
+    }
+    catch (err) {
+      clearTimeout(timer)
+      last = err?.cause?.code ?? err?.message ?? String(err)
+      console.log(`[preview] coolify ${method} ${path} attempt ${attempt}/${tries} failed: ${last}`)
+      if (attempt < tries) await sleep(2000 * attempt)
+    }
+  }
+  return { status: 0, text: `coolify request failed after ${tries} attempts: ${last}` }
 }
 
 const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
