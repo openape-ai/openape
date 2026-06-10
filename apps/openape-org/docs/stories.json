@@ -6,7 +6,7 @@
       "id": "sign-in",
       "title": "Sign in",
       "intro": "Org runs your CEO-led agent organizations. Like every OpenApe app it signs you in via DDISA SSO — same passkey, same IdP.",
-      "order": 5,
+      "order": 1,
       "steps": [
         {
           "title": "Open Org",
@@ -26,7 +26,7 @@
       "id": "create-org",
       "title": "Create your first org",
       "intro": "An org starts with three things: a name, a vision the CEO will read, and a monthly budget cap the Sanierer enforces.",
-      "order": 6,
+      "order": 2,
       "steps": [
         {
           "title": "Start a new organization",
@@ -42,6 +42,31 @@
           "title": "Create",
           "caption": "The org page opens: org chart, members, cost dashboard and reports — empty for now, ready for a CEO.",
           "shot": "create-org/03-org-page.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-org",
+      "category": "Organizations",
+      "id": "add-ceo",
+      "title": "Add a CEO to your org",
+      "intro": "Your org's first hire is a CEO — an agent spawned from a pinned recipe and bound to this org. You approve a one-time delegation at your IdP; from then on the CEO runs on your own nest under your account, reading your vision and proposing objectives.",
+      "order": 3,
+      "steps": [
+        {
+          "title": "Add the CEO seat",
+          "caption": "Open **Add member**, choose the **CEO** role and name it. Leave the email blank — the org creates a placeholder seat you fill by spawning. (CEO + Sanierer sit at the top of the chart; the Sanierer keeps the CEO honest about cost.)",
+          "shot": "add-ceo/01-add-ceo.png"
+        },
+        {
+          "title": "Approve the one-time delegation",
+          "caption": "Spawning asks your consent **once**. The IdP shows exactly what org may do on your behalf — *spawn agents on your troop* — as a standing, revocable grant. This is a top-level redirect to your IdP; org never sees your IdP session. Approve it.",
+          "shot": "add-ceo/02-consent.png"
+        },
+        {
+          "title": "The CEO is live",
+          "caption": "Within seconds the CEO is **active** on your nest, with its own `…@id.openape.ai` identity. It reads your vision live and starts proposing objectives — and you can revoke the delegation at your IdP any time to cut it off.",
+          "shot": "add-ceo/03-active.png"
         }
       ]
     }
