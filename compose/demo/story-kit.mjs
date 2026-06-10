@@ -136,17 +136,47 @@ export async function ssoInto(page, baseUrl, email) {
 
 // Make screenshots byte-deterministic across runs (no code change ⇒ no PNG
 // diff ⇒ a PNG diff in a PR means a real UI change). Two client-side levers:
-//   - freeze Math.random so any UI randomness (e.g. the spawn dialog's
-//     placeholder name) is the same every run;
-//   - freeze the wall clock with setFixedTime (NOT install) so client-rendered
-//     "now"/relative times are stable — timers keep running, so polling and
-//     websockets still work.
+//   - SEED Math.random (LCG) so any UI randomness (e.g. the spawn dialog's
+//     placeholder name) is the same every run. Seeded, NOT constant: reka-ui
+//     keys its body-scroll-lock map with Math.random(), so a constant makes
+//     the spawn dialog and its recipe <USelect> collide on one key and the
+//     listbox never opens. The LCG keeps values unique within a run but
+//     identical across runs.
+//   - pin the wall clock (Date.now / argless new Date) to a fixed instant
+//     that advances ONE millisecond per Date.now() call, so client-rendered
+//     "now"/relative times are stable. Strictly monotonic, never frozen:
+//     Vue's runtime-dom stamps DOM events with Date.now() (`e._vts`) and
+//     skips handlers when the stamp is <= the handler's attach time — a
+//     hard-frozen clock makes every bubbling Vue handler after the first
+//     silently no-op (the spawn dialog's recipe <USelect> never opened).
+//     Playwright's clock API (`clock.setFixedTime` included) freezes hard
+//     and hits exactly that, so we shim Date ourselves.
 // Server-stamped values (a chat message's own timestamp) are data, not client
 // clock, and stay as captured — those views avoid showing volatile absolute
 // times, or accept that data drives them.
 export async function installDeterminism(page) {
   await page.addInitScript(() => {
-    Math.random = () => 0.42
+    let seed = 42
+    Math.random = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0
+      return seed / 4294967296
+    }
+    const FIXED = 1780304400000 // 2026-06-01T09:00:00Z
+    let tick = 0
+    const RealDate = Date
+    // eslint-disable-next-line no-global-assign
+    Date = class extends RealDate {
+      constructor(...args) {
+        if (args.length === 0)
+          super(FIXED + tick)
+        else
+          super(...args)
+      }
+
+      static now() {
+        tick += 1
+        return FIXED + tick
+      }
+    }
   })
-  await page.clock.setFixedTime(new Date('2026-06-01T09:00:00Z'))
 }
