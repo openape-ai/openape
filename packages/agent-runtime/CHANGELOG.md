@@ -1,5 +1,11 @@
 # @openape/agent-runtime
 
+## 0.2.2
+
+### Patch Changes
+
+- e8f559f: runApeShell accepts an optional cwd
+
 ## 0.2.1
 
 ### Patch Changes

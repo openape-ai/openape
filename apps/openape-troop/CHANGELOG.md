@@ -1,5 +1,20 @@
 # @openape/troop
 
+## 0.1.9
+
+### Patch Changes
+
+- 41c146a: `POST /api/agents/:name/recipe` now persists `recipe_ref`. Re-pointing a
+  deployed agent at a new recipe ref previously updated only the system prompt
+  and toolset, leaving the agent's checked-out `tools/` stuck on the old ref;
+  the iterate-on-deployed-agent path now actually moves the agent to the new
+  version.
+- Updated dependencies [7fa0267]
+- Updated dependencies [5fa8c23]
+- Updated dependencies [e4ce3de]
+  - @openape/auth@0.11.3
+  - @openape/nuxt-auth-sp@0.12.0
+
 ## 0.1.8
 
 ### Patch Changes

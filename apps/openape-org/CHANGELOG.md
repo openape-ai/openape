@@ -1,5 +1,15 @@
 # @openape/org
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [7fa0267]
+- Updated dependencies [5fa8c23]
+- Updated dependencies [e4ce3de]
+  - @openape/auth@0.11.3
+  - @openape/nuxt-auth-sp@0.12.0
+
 ## 0.1.4
 
 ### Patch Changes
