@@ -9,9 +9,9 @@ Org is a DDISA **Service Provider**. A user signs in with the same passkey +
 IdP as everywhere else — Org discovers the IdP from the user's email domain
 and redirects them to authorize; an existing IdP session makes it one click.
 
-Org's login page:
+Org's start page (the sign-in is right there — no extra login hop):
 
-![Org login](/docs/screenshots/10-org-landing.png)
+![Org start page](/docs/screenshots/10-org-landing.png)
 
 ## Org home
 
