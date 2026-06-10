@@ -1,6 +1,6 @@
 ---
 id: recovery-audit
-status: consistent
+status: approved
 app: openape-free-idp
 issue: 462
 tests: []
