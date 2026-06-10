@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { InMemoryRecoveryStore } from '../idp/stores.js'
+import { InMemoryEmailHistoryStore, InMemoryRecoveryStore } from '../idp/stores.js'
 import type { RecoveryToken } from '../idp/stores.js'
 
 const HOUR = 60 * 60 * 1000
@@ -68,6 +68,18 @@ describe('inMemoryRecoveryStore', () => {
     expect(active.map(t => t.token).sort()).toEqual(['t1', 't2'])
   })
 
+  it('listAllForEmail keeps the full audit history, only scoped by email', async () => {
+    const store = new InMemoryRecoveryStore()
+    await store.save(makeToken({ token: 't1' }))
+    await store.save(makeToken({ token: 't2', cancelled: true, cancelledAt: Date.now() }))
+    await store.save(makeToken({ token: 't3', consumed: true }))
+    await store.save(makeToken({ token: 't4', expiresAt: Date.now() - 1 }))
+    await store.save(makeToken({ token: 't5', email: 'bob@example.com' }))
+
+    const history = await store.listAllForEmail('alice@example.com')
+    expect(history.map(t => t.token).sort()).toEqual(['t1', 't2', 't3', 't4'])
+  })
+
   it('cancelAllForEmail flips active rows and returns the count', async () => {
     const store = new InMemoryRecoveryStore()
     await store.save(makeToken({ token: 't1' }))
@@ -96,5 +108,21 @@ describe('inMemoryRecoveryStore', () => {
   it('markConsumed is a no-op for unknown tokens', async () => {
     const store = new InMemoryRecoveryStore()
     await expect(store.markConsumed('unknown')).resolves.toBeUndefined()
+  })
+})
+
+describe('inMemoryEmailHistoryStore', () => {
+  it('records addresses idempotently and always includes the account email', async () => {
+    const store = new InMemoryEmailHistoryStore()
+    await store.record('alice@example.com', 'old@example.com')
+    await store.record('alice@example.com', 'old@example.com')
+
+    const all = await store.listAllForEmail('alice@example.com')
+    expect(all.sort()).toEqual(['alice@example.com', 'old@example.com'])
+  })
+
+  it('listAllForEmail returns just the email itself when nothing was recorded', async () => {
+    const store = new InMemoryEmailHistoryStore()
+    expect(await store.listAllForEmail('bob@example.com')).toEqual(['bob@example.com'])
   })
 })
