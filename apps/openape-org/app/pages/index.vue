@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 const { t } = useI18n()
@@ -31,7 +31,9 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) {
-      await navigateTo('/login')
+      // Session expired — clearing the user swaps the page to the sign-in
+      // state (the start page IS the login page, no /login redirect).
+      await fetchUser()
       return
     }
     error.value = err?.data?.statusMessage || err?.message || t('orgsIndex.error.loadFailed')
@@ -42,7 +44,6 @@ async function load() {
 }
 
 watch(user, (u) => { if (u) load() }, { immediate: true })
-onMounted(() => { if (!user.value) navigateTo('/login') })
 
 async function onCreated(payload: { id: string }) {
   await navigateTo(`/orgs/${payload.id}`)
@@ -50,7 +51,34 @@ async function onCreated(payload: { id: string }) {
 </script>
 
 <template>
-  <div class="min-h-dvh bg-zinc-950 text-zinc-100">
+  <!-- Signed out: the start page IS the login page (DDISA SPs put the email
+       form right on the landing page — no extra hop to /login). -->
+  <div v-if="!user" class="min-h-dvh flex flex-col bg-zinc-950 text-zinc-100">
+    <main class="flex-1 flex items-center justify-center px-4 py-12">
+      <div class="w-full max-w-md space-y-4 text-center">
+        <div class="text-6xl" aria-hidden="true">
+          🏛️
+        </div>
+        <h1 class="text-3xl font-bold tracking-tight">
+          {{ $t('app.title') }}
+        </h1>
+        <OpenApeOAuthErrorAlert
+          class="text-left w-full"
+          :messages="{ access_denied: $t('login.oauth.accessDenied') }"
+        />
+        <UCard class="text-left">
+          <OpenApeAuth
+            :title="$t('login.card.title')"
+            :subtitle="$t('login.card.subtitle')"
+            :button-text="$t('login.card.button')"
+            post-login-redirect="/"
+          />
+        </UCard>
+      </div>
+    </main>
+  </div>
+
+  <div v-else class="min-h-dvh bg-zinc-950 text-zinc-100">
     <header class="border-b border-(--ui-border) px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-10 bg-zinc-950/95 backdrop-blur">
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-2xl shrink-0">🏛️</span>
