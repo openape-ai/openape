@@ -622,6 +622,8 @@ export interface RecoveryStore {
   find: (token: string) => Promise<RecoveryToken | null>
   /** All active (uncancelled, unconsumed, unexpired) tokens for an email. */
   listActiveForEmail: (email: string) => Promise<RecoveryToken[]>
+  /** Full audit history for an email — running, cancelled, consumed and expired attempts alike (#462). */
+  listAllForEmail: (email: string) => Promise<RecoveryToken[]>
   /** Mark a single token as consumed (after a successful enrolment). */
   markConsumed: (token: string) => Promise<void>
   /** Cancel every active token for an email. Returns the count cancelled. Called on every successful login (the active-owner veto). */
@@ -677,6 +679,10 @@ export class InMemoryRecoveryStore implements RecoveryStore {
     const now = Date.now()
     return [...this.tokens.values()].filter(t =>
       t.email === email && !t.cancelled && !t.consumed && t.expiresAt >= now)
+  }
+
+  async listAllForEmail(email: string): Promise<RecoveryToken[]> {
+    return [...this.tokens.values()].filter(t => t.email === email)
   }
 
   async markConsumed(token: string): Promise<void> {
