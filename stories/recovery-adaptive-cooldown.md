@@ -1,21 +1,23 @@
 ---
 id: recovery-adaptive-cooldown
-status: green
+status: documented-pending-review
 app: openape-free-idp
 issue: 462
 tests:
   - apps/openape-free-idp/tests/recovery-adaptive-cooldown.test.ts
   - apps/openape-free-idp/tests/recovery-vacation-settings.test.ts
+  - apps/openape-free-idp/tests/recovery-settings-read.test.ts
   - modules/nuxt-auth-idp/test/recovery-cooldown-enforcement.test.ts
   - compose/demo/stories/idp-recovery.mjs
 guide: recovery-vacation-mode
 ---
 
-> Green-Beweis: alle drei Vitest-Files grün (Kriterien 1–7 implementiert bzw. als
-> Pins bestätigt); adaptive Frist + Settings-Endpoint + lastLoginAt-Pflege im
-> Login-Flow sind umgesetzt. Der Story-Kit-Lauf (`recovery-vacation-mode`,
-> Demo-Stack `compose/demo/stories/idp-recovery.mjs`) steht noch aus und kommt
-> mit dem Demo-Stack-Lauf der green-Phase.
+> Green-Beweis: alle Vitest-Files grün (Kriterien 1–7 implementiert bzw. als
+> Pins bestätigt); adaptive Frist + Settings-Endpoints + lastLoginAt-Pflege im
+> Login-Flow sind umgesetzt. Story-Kit-Lauf `recovery-vacation-mode` auf dem
+> Demo-Stack grün (2026-06-10), Guide-Kapitel mit Screenshots generiert
+> (Konto-Einstellungen: Urlaubs-Schalter + Frist). Menschlicher Guide-Review
+> steht aus.
 
 # Adaptive Wartefrist bei Account-Wiederherstellung
 

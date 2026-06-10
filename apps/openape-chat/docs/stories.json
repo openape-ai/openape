@@ -6,7 +6,7 @@
       "id": "one-click-sso",
       "title": "Sign in with one click",
       "intro": "Chat is a DDISA Service Provider. With an existing IdP session (say, from Troop) you are in with a single click — same passkey, same IdP, no second prompt.",
-      "order": 4,
+      "order": 7,
       "steps": [
         {
           "title": "Open Chat",
