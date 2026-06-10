@@ -6,7 +6,7 @@
       "id": "sign-in",
       "title": "Sign in with OpenApe",
       "intro": "Troop is a DDISA Service Provider: it discovers your IdP from your email domain via a DNS TXT record and redirects you there to authorize — no password, no per-app account.",
-      "order": 3,
+      "order": 6,
       "steps": [
         {
           "title": "Open Troop",
@@ -31,7 +31,7 @@
       "id": "spawn-agent",
       "title": "Spawn your first agent",
       "intro": "Agents run on YOUR machine: a local nest daemon is bound to Troop and receives spawn intents over a websocket. Spawning creates a real OS user, an agent identity at your IdP, and a chat bridge.",
-      "order": 7,
+      "order": 10,
       "steps": [
         {
           "title": "Open the spawn dialog",
@@ -61,7 +61,7 @@
       "id": "chat-with-agent",
       "title": "Chat with your agent",
       "intro": "Every agent has a chat. A reply proves the whole path end-to-end: Troop → nest → bridge → LLM → back.",
-      "order": 8,
+      "order": 11,
       "steps": [
         {
           "title": "Send a message",
@@ -81,7 +81,7 @@
       "id": "inspect-agent",
       "title": "Inspect & configure an agent",
       "intro": "The agent page is also its control panel: system prompt, schedule, tools and run history live next to the chat.",
-      "order": 9,
+      "order": 12,
       "steps": [
         {
           "title": "Open the agent page",
@@ -96,7 +96,7 @@
       "id": "destroy-agent",
       "title": "Destroy an agent",
       "intro": "Tearing an agent down removes the OS user on the nest and de-registers its identity at the IdP — no zombie credentials.",
-      "order": 11,
+      "order": 14,
       "steps": [
         {
           "title": "Destroy it",
