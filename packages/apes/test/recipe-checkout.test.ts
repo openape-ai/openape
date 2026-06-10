@@ -154,3 +154,21 @@ describe('ensureRecipeCheckout — catalog subdirectories', () => {
     expect(existsSync(join(recipeDir, '.recipe-ref'))).toBe(false)
   })
 })
+
+describe('ensureRecipeCheckout — path-traversal hardening', () => {
+  it('refuses a .. segment in the subdir (no clone, no marker)', () => {
+    ensureRecipeCheckout('openape-ai/agent-catalog/../../etc@v1', recipeDir, fakeExec)
+    expect(calls).toHaveLength(0)
+    expect(existsSync(join(recipeDir, '.recipe-ref'))).toBe(false)
+  })
+
+  it('refuses a . segment', () => {
+    ensureRecipeCheckout('openape-ai/agent-catalog/./ceo@v1', recipeDir, fakeExec)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('refuses a backslash in any segment', () => {
+    ensureRecipeCheckout('openape-ai/agent-catalog/..\\\\win@v1', recipeDir, fakeExec)
+    expect(calls).toHaveLength(0)
+  })
+})

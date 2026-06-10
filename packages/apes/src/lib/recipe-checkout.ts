@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import consola from 'consola'
 
 /**
@@ -52,6 +52,13 @@ export function ensureRecipeCheckout(
     consola.warn(`recipe: malformed recipeRef "${recipeRef}" (expected <owner>/<name>[/<subdir>]@<ref>) — skipping checkout`)
     return
   }
+  // Path-traversal guard: the subdir path is operator-supplied (a pasted
+  // "Custom…" ref). Reject `.`/`..`/backslash segments so the cpSync below
+  // cannot escape the staging clone dir.
+  if (segments.some(s => s === '.' || s === '..' || s.includes('\\'))) {
+    consola.warn(`recipe: unsafe path segment in recipeRef "${recipeRef}" — skipping checkout`)
+    return
+  }
   const repoSlug = segments.slice(0, 2).join('/')
   const subdir = segments.slice(2).join('/')
 
@@ -72,6 +79,13 @@ export function ensureRecipeCheckout(
     exec('git', ['clone', '--depth', '1', '--branch', ref, cloneUrl, staging])
     if (subdir) {
       const src = join(staging, subdir)
+      // Belt-and-suspenders: even after the segment guard, assert the
+      // resolved source stays inside the staging clone before copying.
+      if (!resolve(src).startsWith(resolve(staging) + sep)) {
+        consola.warn(`recipe: subdirectory "${subdir}" escapes the checkout dir — skipping`)
+        rmSync(staging, { recursive: true, force: true })
+        return
+      }
       if (!existsSync(src)) {
         consola.warn(`recipe: subdirectory "${subdir}" not found in ${repoSlug}@${ref} — skipping checkout`)
         rmSync(staging, { recursive: true, force: true })
