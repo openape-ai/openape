@@ -133,3 +133,20 @@ export async function ssoInto(page, baseUrl, email) {
   await page.waitForURL(u => u.origin === new URL(baseUrl).origin, { timeout: 20000 }).catch(() => {})
   await page.waitForTimeout(2000)
 }
+
+// Make screenshots byte-deterministic across runs (no code change ⇒ no PNG
+// diff ⇒ a PNG diff in a PR means a real UI change). Two client-side levers:
+//   - freeze Math.random so any UI randomness (e.g. the spawn dialog's
+//     placeholder name) is the same every run;
+//   - freeze the wall clock with setFixedTime (NOT install) so client-rendered
+//     "now"/relative times are stable — timers keep running, so polling and
+//     websockets still work.
+// Server-stamped values (a chat message's own timestamp) are data, not client
+// clock, and stay as captured — those views avoid showing volatile absolute
+// times, or accept that data drives them.
+export async function installDeterminism(page) {
+  await page.addInitScript(() => {
+    Math.random = () => 0.42
+  })
+  await page.clock.setFixedTime(new Date('2026-06-01T09:00:00Z'))
+}

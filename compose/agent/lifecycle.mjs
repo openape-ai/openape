@@ -15,7 +15,7 @@
 import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 import { chromium } from 'playwright'
-import { createStoryKit } from '/demo/src/story-kit.mjs'
+import { createStoryKit, installDeterminism } from '/demo/src/story-kit.mjs'
 
 const OUT = '/demo/out'
 mkdirSync(OUT, { recursive: true })
@@ -28,6 +28,7 @@ const browser = await chromium.launch({ args: ['--ignore-certificate-errors'] })
 const context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: '/out/troop-state.json', viewport: { width: 1280, height: 860 } })
 const api = context.request
 const page = await context.newPage()
+await installDeterminism(page)
 const kit = createStoryKit({ outDir: OUT, page })
 
 // Poll an intent endpoint until the nest reports a result ({pending:false}).
