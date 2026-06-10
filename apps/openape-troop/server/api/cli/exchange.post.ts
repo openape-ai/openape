@@ -102,6 +102,36 @@ export default defineEventHandler(async (event) => {
 
   const act = (claims as { act?: string }).act === 'agent' ? 'agent' : 'human'
 
+  // Revocation check (sp-data-access §5.4): a delegation AuthZ-JWT carries the
+  // `delegation_grant` id. Expiry is visible in the token itself, but the Owner
+  // can REVOKE a standing grant mid-life — only a live check at the IdP catches
+  // that. The IdP's GET /api/grants/:id is unauthenticated status introspection.
+  // Fail closed: if the grant is anything but `approved`, or we can't verify it,
+  // reject — a revoked grant must not be exchangeable within the token's TTL.
+  const grantId = (claims as { delegation_grant?: unknown }).delegation_grant
+  if (typeof grantId === 'string' && grantId) {
+    let grantStatus: string | undefined
+    try {
+      const g = await $fetch<{ status?: string }>(`${idpUrl}/api/grants/${encodeURIComponent(grantId)}`)
+      grantStatus = g?.status
+    }
+    catch (err: any) {
+      if (err?.response?.status === 404 || err?.statusCode === 404) {
+        grantStatus = 'not_found'
+      }
+      else {
+        throw createError({ statusCode: 502, statusMessage: 'could not verify delegation grant status', data: { detail: String(err?.message ?? err) } })
+      }
+    }
+    if (grantStatus !== 'approved') {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'delegation grant not active',
+        data: { detail: `grant ${grantId} is ${grantStatus} (revoked, expired, or not approved)` },
+      })
+    }
+  }
+
   // sp-data-access §5.2: scopes in the request body must be a subset
   // of (a) the catalog, AND (b) the delegation grant's scopes if any.
   // The grant's scopes ride in the token claim `scope` per the spec.
