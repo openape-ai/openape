@@ -22,6 +22,15 @@ watch(open, (now) => {
   error.value = ''
 })
 
+// The agent name is also the OS username + troop agent slug, which troop's
+// spawn-intent enforces as /^[a-z][a-z0-9-]{0,23}$/. Sanitize live so a name
+// like "Ada Lovelace" → "adalovelace" instead of failing with a 400 deep in
+// the spawn flow (lowercase, drop invalid chars, must start with a letter, ≤24).
+watch(() => form.value.agent_name, (v) => {
+  const clean = v.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/^[^a-z]+/, '').slice(0, 24)
+  if (clean !== v) form.value.agent_name = clean
+})
+
 const teamleadOptions = computed(() => {
   const tls = props.existingMembers.filter(m => m.role === 'teamlead')
   return [
