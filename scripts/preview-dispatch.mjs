@@ -27,6 +27,7 @@ const APPS = [
   { name: 'idp', dir: 'apps/openape-free-idp/', secretEnv: 'COOLIFY_PREVIEW_SECRET_IDP' },
   { name: 'troop', dir: 'apps/openape-troop/', secretEnv: 'COOLIFY_PREVIEW_SECRET_TROOP' },
   { name: 'chat', dir: 'apps/openape-chat/', secretEnv: 'COOLIFY_PREVIEW_SECRET_CHAT' },
+  { name: 'org', dir: 'apps/openape-org/', secretEnv: 'COOLIFY_PREVIEW_SECRET_ORG' },
 ]
 
 // A change here affects every app's preview image (shared workspace deps and
