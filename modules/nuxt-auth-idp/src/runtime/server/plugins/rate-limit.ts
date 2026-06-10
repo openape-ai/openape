@@ -8,7 +8,18 @@ interface RateLimitEntry {
 }
 
 const WINDOW_MS = 60_000 // 1 minute
-const MAX_REQUESTS = 10
+const DEFAULT_MAX_REQUESTS = 10
+
+// Per-IP auth cap for the window. Operators whose legitimate traffic
+// drives many auth ceremonies from one client IP (e.g. the local demo
+// stack, compose/local-stack.yml, where one headless browser walks every
+// app's SSO + account flow inside a minute) can raise it via
+// OPENAPE_RATE_LIMIT_MAX_AUTH without disabling the limiter outright.
+// Anything unset/invalid keeps the audited default of 10/min.
+function parseMaxRequests(): number {
+  const raw = Number(process.env.OPENAPE_RATE_LIMIT_MAX_AUTH)
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_REQUESTS
+}
 
 // Rate-limited path-prefixes. Anything brute-forceable (auth ceremonies,
 // agent challenges, push subscriptions, account registration, user lookups)
@@ -124,6 +135,7 @@ export default (nitroApp: NitroApp) => {
   if (process.env.OPENAPE_E2E === '1') return
 
   const trustedProxies = parseTrustedProxies()
+  const maxRequests = parseMaxRequests()
 
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
@@ -144,11 +156,11 @@ export default (nitroApp: NitroApp) => {
     entry.count++
 
     const res = event.node.res
-    res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS))
-    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, MAX_REQUESTS - entry.count)))
+    res.setHeader('X-RateLimit-Limit', String(maxRequests))
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, maxRequests - entry.count)))
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(entry.resetAt / 1000)))
 
-    if (entry.count > MAX_REQUESTS) {
+    if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
       res.setHeader('Retry-After', String(retryAfter))
       res.statusCode = 429
@@ -164,4 +176,4 @@ export default (nitroApp: NitroApp) => {
 }
 
 // Exported for unit tests.
-export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp }
+export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp, parseMaxRequests }
