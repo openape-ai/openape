@@ -1,11 +1,20 @@
 ---
 id: recovery-adaptive-cooldown
-status: approved
+status: red
 app: openape-free-idp
 issue: 462
-tests: []
-guide: null
+tests:
+  - apps/openape-free-idp/tests/recovery-adaptive-cooldown.test.ts
+  - apps/openape-free-idp/tests/recovery-vacation-settings.test.ts
+  - modules/nuxt-auth-idp/test/recovery-cooldown-enforcement.test.ts
+  - compose/demo/stories/idp-recovery.mjs
+guide: recovery-vacation-mode
 ---
+
+> Red-Beweis: Vitest-Tests failen nachweislich (Kriterien 1, 3, 4 + Mail-Zeitpunkt aus 6);
+> Kriterien 2, 5, 7 sind als Pins grün (v1-Verhalten, das die Änderung nicht brechen darf).
+> Der Story-Kit-Lauf (`recovery-vacation-mode`) steht aus und kommt mit dem
+> Demo-Stack-Lauf der green-Phase.
 
 # Adaptive Wartefrist bei Account-Wiederherstellung
 
