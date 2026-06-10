@@ -96,6 +96,12 @@ services:
       # (the proxy's container IP is dynamic); empty in a bare `up`, which is
       # fine for the screenshot flows that don't burst auth.
       OPENAPE_RATE_LIMIT_TRUSTED_PROXIES: ${OPENAPE_RATE_LIMIT_TRUSTED_PROXIES:-}
+      # One headless browser walks every app's SSO + account flow within a
+      # minute — since the #462 recovery stories that's legitimately more
+      # than the audited 10/min default (each /account visit alone costs two
+      # rate-limited calls). Raise the cap locally instead of disabling the
+      # limiter; prod keeps the default.
+      OPENAPE_RATE_LIMIT_MAX_AUTH: "120"
       # Register the apes CLI as a public client (RFC 8252 loopback redirect),
       # exactly as id.openape.ai does in prod — so `apes login`'s PKCE flow
       # (client_id=apes-cli, redirect_uri=http://localhost:9876/callback)

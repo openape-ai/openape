@@ -140,3 +140,25 @@ describe('resolveClientIp (#279 — XFF only honoured behind trusted proxies)', 
     expect(resolveClientIp(event, ['10.0.0.0/8'])).toBe('198.51.100.7')
   })
 })
+
+describe('configurable per-IP auth cap (OPENAPE_RATE_LIMIT_MAX_AUTH)', () => {
+  const { parseMaxRequests } = _internals
+
+  it('defaults to the audited 10/min when unset or invalid', () => {
+    delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTH
+    expect(parseMaxRequests()).toBe(10)
+    process.env.OPENAPE_RATE_LIMIT_MAX_AUTH = 'lots'
+    expect(parseMaxRequests()).toBe(10)
+    process.env.OPENAPE_RATE_LIMIT_MAX_AUTH = '0'
+    expect(parseMaxRequests()).toBe(10)
+    process.env.OPENAPE_RATE_LIMIT_MAX_AUTH = '-5'
+    expect(parseMaxRequests()).toBe(10)
+    delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTH
+  })
+
+  it('honours a positive integer override', () => {
+    process.env.OPENAPE_RATE_LIMIT_MAX_AUTH = '120'
+    expect(parseMaxRequests()).toBe(120)
+    delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTH
+  })
+})
