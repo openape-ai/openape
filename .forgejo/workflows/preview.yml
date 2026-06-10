@@ -26,4 +26,5 @@ jobs:
           COOLIFY_PREVIEW_SECRET_IDP: ${{ secrets.COOLIFY_PREVIEW_SECRET_IDP }}
           COOLIFY_PREVIEW_SECRET_TROOP: ${{ secrets.COOLIFY_PREVIEW_SECRET_TROOP }}
           COOLIFY_PREVIEW_SECRET_CHAT: ${{ secrets.COOLIFY_PREVIEW_SECRET_CHAT }}
+          COOLIFY_PREVIEW_SECRET_ORG: ${{ secrets.COOLIFY_PREVIEW_SECRET_ORG }}
         run: node scripts/preview-dispatch.mjs
