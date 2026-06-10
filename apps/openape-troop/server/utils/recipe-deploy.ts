@@ -119,9 +119,11 @@ export async function fetchRecipeManifest(
     }
   }
   // `owner/name` plus an optional subdirectory path — the subdir selects a
-  // recipe inside a catalog repo (e.g. openape-ai/agent-catalog/ceo).
+  // recipe inside a catalog repo (e.g. openape-ai/agent-catalog/ceo). Each
+  // segment must start with an alphanumeric, so `.`/`..`-only segments
+  // (path traversal) are rejected.
   const slug = host
-  if (!/^[\w.-]+\/[\w.-]+(?:\/[\w.-]+)*$/.test(slug)) {
+  if (!/^[\w-][\w.-]*\/[\w-][\w.-]*(?:\/[\w-][\w.-]*)*$/.test(slug) || slug.split('/').some(s => /^\.+$/.test(s))) {
     return { ok: false, reason: `unsupported repo "${ref.value.repo}" — expected github.com/<owner>/<name>[/<subdir>]` }
   }
   const segments = slug.split('/')
