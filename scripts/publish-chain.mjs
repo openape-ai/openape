@@ -43,6 +43,9 @@ const PACKAGES = [
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/prompt-injection-detector', dir: 'packages/prompt-injection-detector' },
+  // Leaf package, but a workspace dep of @openape/ape-agent — must publish
+  // before it so ape-agent's resolved version range exists on npm.
+  { name: '@openape/sp-tasks', dir: 'packages/sp-tasks' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
   { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
