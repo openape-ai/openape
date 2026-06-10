@@ -62,6 +62,7 @@ export default async function run({ kit, page, EMAIL, IDP }) {
     await s.step('Open your account settings', {
       do: async () => {
         await page.goto(`${IDP}/account`, { waitUntil: 'networkidle' })
+        await page.locator('#recovery-protection').scrollIntoViewIfNeeded()
         await page.waitForTimeout(800)
       },
       shot: 'settings',
@@ -69,7 +70,7 @@ export default async function run({ kit, page, EMAIL, IDP }) {
 
     await s.step('Switch on vacation mode', {
       do: async () => {
-        await click(page, /vacation mode/i)
+        await page.getByRole('switch', { name: /vacation mode/i }).click()
         await page.waitForTimeout(800)
       },
       shot: 'vacation-on',
@@ -97,6 +98,10 @@ export default async function run({ kit, page, EMAIL, IDP }) {
     }, 'The recovery history sits in your account settings, visible only to you while signed in.')
 
     await s.step('Review every attempt', {
+      do: async () => {
+        await page.locator('#recovery-history').scrollIntoViewIfNeeded()
+        await page.waitForTimeout(400)
+      },
       shot: 'history',
     }, 'Each entry shows when the attempt was made, where it came from (IP address and browser, as far as known) and what became of it: still running — including the moment it could complete — finished, cancelled, or expired unused. Entries contain no links or codes an attacker could reuse, and they can neither be edited nor deleted: the cancelled attempt from the previous chapter stays on record forever.')
   })
