@@ -287,6 +287,13 @@ onUnmounted(() => {
         </NuxtLink>
       </div>
 
+      <div class="mt-2 text-sm text-gray-500">
+        Lost access to your passkeys?
+        <NuxtLink to="/recover/request" class="text-primary hover:underline">
+          Recover account
+        </NuxtLink>
+      </div>
+
       <p class="mt-8 text-sm text-gray-500">
         Powered by <NuxtLink to="https://openape.ai" external class="text-gray-400 hover:text-white transition-colors">
           OpenApe
