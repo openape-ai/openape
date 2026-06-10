@@ -50,11 +50,19 @@ describe('parseRecipe', () => {
     expect(r.value.user_addendum).toBe(false)
   })
 
+  it('accepts a chat-only agent with no schedules (empty + omitted)', () => {
+    const empty = parseRecipe('name: ceo\nkind: agent\nintent: hi\nschedules: []\n')
+    expect(empty.ok).toBe(true)
+    if (empty.ok) expect(empty.value.schedules).toEqual([])
+    const omitted = parseRecipe('name: ceo\nkind: agent\nintent: hi\n')
+    expect(omitted.ok).toBe(true)
+    if (omitted.ok) expect(omitted.value.schedules).toEqual([])
+  })
+
   it.each([
     ['rejects non-mapping', 'just a string', /must be a YAML mapping/],
     ['rejects kind:script (v1 agent only)', 'name: x\nkind: script\nintent: hi\nschedules:\n  - cron: "* * * * *"\n', /kind/],
     ['rejects missing intent', 'name: x\nkind: agent\nschedules:\n  - cron: "* * * * *"\n', /intent/],
-    ['rejects no schedules', 'name: x\nkind: agent\nintent: hi\nschedules: []\n', /schedules/],
     ['rejects invalid cron', 'name: x\nkind: agent\nintent: hi\nschedules:\n  - cron: "@hourly"\n', /invalid schedule cron/],
     ['rejects non-kebab name', 'name: BadName\nkind: agent\nintent: hi\nschedules:\n  - cron: "* * * * *"\n', /kebab/],
   ])('%s', (_label, yaml, re) => {
