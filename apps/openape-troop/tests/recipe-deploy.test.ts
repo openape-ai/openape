@@ -180,6 +180,13 @@ describe('fetchRecipeManifest', () => {
     if (!r.ok) expect(r.reason).toMatch(/floating ref/)
   })
 
+  it('rejects a path-traversal subdir (no fetch)', async () => {
+    let fetched = false
+    const r = await fetchRecipeManifest('github.com/openape-ai/agent-catalog/../../etc@v1.0.0', async () => { fetched = true; return { ok: true, status: 200, text: '' } })
+    expect(r.ok).toBe(false)
+    expect(fetched).toBe(false)
+  })
+
   it('rejects an unsupported repo shape', async () => {
     const r = await fetchRecipeManifest('https://gitlab.com/o@v1.0.0', okFetch)
     expect(r.ok).toBe(false)
