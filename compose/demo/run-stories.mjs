@@ -10,6 +10,7 @@ import process from 'node:process'
 import { chromium } from 'playwright'
 import { createStoryKit, installDeterminism } from './story-kit.mjs'
 import chatStories from './stories/chat.mjs'
+import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
 import orgStories from './stories/org.mjs'
 import troopStories from './stories/troop.mjs'
@@ -49,7 +50,7 @@ const ctx = {
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, troopStories, chatStories, orgStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, orgStories])
   await run(ctx)
 
 const failures = kit.finish('demo')
