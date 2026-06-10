@@ -1,5 +1,31 @@
 # @openape/ape-agent
 
+## 2.10.0
+
+### Minor Changes
+
+- 8f68361: Dev recipe mount: `OPENAPE_RECIPE_DEV_DIR` lets a bind-mounted local recipe
+  directory override the synced `~/recipe` for scheduled `command` tasks, so an
+  operator can iterate on a recipe's `tools/` without a publish→deploy→sync
+  round-trip. The nest forwards the variable into each bridge's pm2 env; the
+  in-bridge cron runner (`resolveRecipeDir`) uses it as the command cwd when set,
+  falling back to `~/recipe`.
+
+### Patch Changes
+
+- 8f1c1dc: run scheduled commands from the recipe checkout dir
+- dd62c14: Don't DM the owner for a silent successful `command` schedule. A service
+  agent that polls a queue every minute and drains nothing now records the run
+  in troop but sends no chat message; only a failure or actual output is
+  reported.
+- Updated dependencies [45673bb]
+- Updated dependencies [0e925a7]
+- Updated dependencies [8f1c1dc]
+- Updated dependencies [f0061b4]
+- Updated dependencies [522f6b2]
+  - @openape/apes@1.31.0
+  - @openape/sp-tasks@0.2.0
+
 ## 2.9.2
 
 ### Patch Changes

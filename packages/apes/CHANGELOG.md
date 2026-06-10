@@ -1,5 +1,25 @@
 # @openape/apes
 
+## 1.31.0
+
+### Minor Changes
+
+- 45673bb: Recipe refs support catalog subdirectories: `<owner>/<repo>/<subdir>@<ref>` clones the repo at the pinned ref and uses only the subdirectory as the recipe root (e.g. `openape-ai/agent-catalog/ceo@v0.1.0`).
+- 8f1c1dc: sync writes recipeRef + checks out the recipe repo to ~/recipe
+
+### Patch Changes
+
+- 0e925a7: `apiFetch` now retries on HTTP 429 (the IdP's per-IP rate limit on auth
+  endpoints), honouring `Retry-After` with bounded backoff (≤3 retries, ≤12s
+  each). Rapid IdP-call sequences — e.g. a nest's `agents spawn` (enroll +
+  challenge + authenticate) immediately followed by `agents destroy`
+  (de-register) — bunch on one IP and used to 429 the last call; they now ride
+  it out. Well-behaved backoff, not a bypass.
+- f0061b4: Harden recipe-checkout against path traversal: reject `.`/`..`/backslash segments in a catalog subdir ref and assert the resolved source stays inside the staging clone before copying.
+- Updated dependencies [e8f559f]
+  - @openape/agent-runtime@0.2.2
+  - @openape/shapes@0.7.1
+
 ## 1.30.0
 
 ### Minor Changes
