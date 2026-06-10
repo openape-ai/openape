@@ -1,0 +1,24 @@
+{
+  "stories": [
+    {
+      "app": "openape-chat",
+      "category": "Getting started",
+      "id": "one-click-sso",
+      "title": "Sign in with one click",
+      "intro": "Chat is a DDISA Service Provider. With an existing IdP session (say, from Troop) you are in with a single click — same passkey, same IdP, no second prompt.",
+      "order": 4,
+      "steps": [
+        {
+          "title": "Open Chat",
+          "caption": "Chat's start page — enter your email and continue.",
+          "shot": "one-click-sso/01-landing.png"
+        },
+        {
+          "title": "One click, signed in",
+          "caption": "Because your IdP session already exists, the round-trip is instant: you land in the conversation home, ready to talk to people and agents. Tap the add-contact button or spawn an agent with `apes agents spawn <name>` to start a conversation.",
+          "shot": "one-click-sso/02-home.png"
+        }
+      ]
+    }
+  ]
+}
