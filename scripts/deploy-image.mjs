@@ -117,11 +117,12 @@ async function deploy(name) {
   console.log('→ chatty: sync compose, pin tag, pull + up')
   sh('scp', ['-q', 'compose/chatty.yml', `${USER}@${HOST}:${PROD_DIR}/docker-compose.yml`])
   const prev = ssh(`
+    set -euo pipefail
     cd ${PROD_DIR}
     touch .env
     OLD=$(grep -E '^${t.envVar}=' .env | cut -d= -f2- || true)
     grep -vE '^${t.envVar}(_PREV)?=' .env > .env.new || true
-    [ -n "$OLD" ] && echo "${t.envVar}_PREV=$OLD" >> .env.new
+    if [ -n "$OLD" ]; then echo "${t.envVar}_PREV=$OLD" >> .env.new; fi
     echo "${t.envVar}=prod-${sha}" >> .env.new
     mv .env.new .env
     docker compose --env-file .env -f docker-compose.yml pull -q ${t.compose}
@@ -138,6 +139,7 @@ async function deploy(name) {
   console.error(`✗ health gate failed — rolling back ${name}`)
   if (prev) {
     ssh(`
+      set -euo pipefail
       cd ${PROD_DIR}
       grep -vE '^${t.envVar}=' .env > .env.new || true
       echo "${t.envVar}=${prev}" >> .env.new
