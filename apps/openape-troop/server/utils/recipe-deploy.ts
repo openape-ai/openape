@@ -118,11 +118,16 @@ export async function fetchRecipeManifest(
       return { ok: false, reason: `unsupported repo "${ref.value.repo}" — expected github.com/<owner>/<name>` }
     }
   }
+  // `owner/name` plus an optional subdirectory path — the subdir selects a
+  // recipe inside a catalog repo (e.g. openape-ai/agent-catalog/ceo).
   const slug = host
-  if (!/^[\w.-]+\/[\w.-]+$/.test(slug)) {
-    return { ok: false, reason: `unsupported repo "${ref.value.repo}" — expected github.com/<owner>/<name>` }
+  if (!/^[\w.-]+\/[\w.-]+(?:\/[\w.-]+)*$/.test(slug)) {
+    return { ok: false, reason: `unsupported repo "${ref.value.repo}" — expected github.com/<owner>/<name>[/<subdir>]` }
   }
-  const rawUrl = `https://raw.githubusercontent.com/${slug}/${ref.value.ref}/ape-agent.yaml`
+  const segments = slug.split('/')
+  const repoSlug = segments.slice(0, 2).join('/')
+  const subdir = segments.slice(2).join('/')
+  const rawUrl = `https://raw.githubusercontent.com/${repoSlug}/${ref.value.ref}/${subdir ? `${subdir}/` : ''}ape-agent.yaml`
   let res: Awaited<ReturnType<FetchManifest>>
   try {
     res = await fetchImpl(rawUrl)
