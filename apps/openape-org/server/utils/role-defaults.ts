@@ -31,7 +31,9 @@ export function getRoleDefaults(role: string): RoleDefaults {
   switch (role) {
     case 'ceo':
       return {
-        recipeRef: 'github.com/openape-ai/openape/examples/agent-recipes/ceo@main',
+        // Published standalone (the nest checkout needs a public repo with a
+        // pinned ref) — authored from examples/agent-recipes/ceo.
+        recipeRef: 'github.com/openape-ai/agent-catalog/ceo@v0.1.0',
         recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
       }
 

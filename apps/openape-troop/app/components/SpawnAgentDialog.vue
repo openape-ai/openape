@@ -46,10 +46,18 @@ const RECIPE_INDEX: RecipeIndexEntry[] = [
   {
     id: 'bluesky-summary',
     label: 'Bluesky feed summary',
-    repo_ref: 'github.com/openape-ai/bluesky-summary@v0.1.0',
-    repo_url: 'https://github.com/openape-ai/bluesky-summary',
+    repo_ref: 'github.com/openape-ai/agent-catalog/bluesky-summary@v0.1.0',
+    repo_url: 'https://github.com/openape-ai/agent-catalog/tree/main/bluesky-summary',
     hintKey: 'spawn.recipe.entries.blueskySummary.hint',
     caps: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
+  },
+  {
+    id: 'ceo',
+    label: 'Org CEO',
+    repo_ref: 'github.com/openape-ai/agent-catalog/ceo@v0.1.0',
+    repo_url: 'https://github.com/openape-ai/agent-catalog/tree/main/ceo',
+    hintKey: 'spawn.recipe.entries.ceo.hint',
+    caps: ['ORG_API_TOKEN'],
   },
 ]
 const selectedRecipe = ref<string>(RECIPE_NONE)

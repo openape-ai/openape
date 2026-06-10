@@ -108,3 +108,49 @@ describe('ensureRecipeCheckout', () => {
     expect(existsSync(join(recipeDir, '.recipe-ref'))).toBe(false)
   })
 })
+
+describe('ensureRecipeCheckout — catalog subdirectories', () => {
+  function fakeExecWithSubdir(subpath: string, files: string[]) {
+    return (file: string, args?: readonly string[]): Buffer => {
+      const argv = [...(args ?? [])]
+      calls.push({ file, args: argv })
+      const target = argv.at(-1)
+      if (file === 'git' && argv[0] === 'clone' && target) {
+        mkdirSync(join(target, subpath), { recursive: true })
+        for (const f of files) writeFileSync(join(target, subpath, f), `content of ${f}`)
+      }
+      return Buffer.from('')
+    }
+  }
+
+  it('checks out a catalog subdirectory: clones the repo, copies the subdir into recipeDir', () => {
+    ensureRecipeCheckout('github.com/openape-ai/agent-catalog/ceo@ceo-v0.1.0', recipeDir, fakeExecWithSubdir('ceo', ['ape-agent.yaml']))
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.args).toContain('https://github.com/openape-ai/agent-catalog')
+    expect(calls[0]!.args).toContain('ceo-v0.1.0')
+    // recipeDir contains the SUBDIR's content at its root
+    expect(readFileSync(join(recipeDir, 'ape-agent.yaml'), 'utf8')).toBe('content of ape-agent.yaml')
+    expect(readFileSync(join(recipeDir, '.recipe-ref'), 'utf8')).toBe('github.com/openape-ai/agent-catalog/ceo@ceo-v0.1.0')
+    // staging clone is cleaned up
+    expect(existsSync(`${recipeDir}.checkout`)).toBe(false)
+  })
+
+  it('supports nested subdirectories (owner/repo/a/b@ref)', () => {
+    ensureRecipeCheckout('openape-ai/agent-catalog/nested/deep@v1', recipeDir, fakeExecWithSubdir('nested/deep', ['ape-agent.yaml']))
+    expect(calls[0]!.args).toContain('https://github.com/openape-ai/agent-catalog')
+    expect(existsSync(join(recipeDir, 'ape-agent.yaml'))).toBe(true)
+  })
+
+  it('is a no-op when the marker already matches a subdir ref', () => {
+    mkdirSync(recipeDir, { recursive: true })
+    writeFileSync(join(recipeDir, '.recipe-ref'), 'openape-ai/agent-catalog/ceo@ceo-v0.1.0')
+    ensureRecipeCheckout('openape-ai/agent-catalog/ceo@ceo-v0.1.0', recipeDir, fakeExec)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('warns and leaves no marker when the subdirectory is missing in the repo', () => {
+    ensureRecipeCheckout('openape-ai/agent-catalog/nope@v1', recipeDir, fakeExecWithSubdir('other', ['x']))
+    expect(existsSync(join(recipeDir, '.recipe-ref'))).toBe(false)
+  })
+})
