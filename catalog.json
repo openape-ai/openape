@@ -1,0 +1,7 @@
+{
+  "recipes": [
+    { "id": "ceo", "label": "Org CEO", "caps": ["ORG_API_TOKEN"], "params": ["org_id", "org_name"] },
+    { "id": "service-agent", "label": "SP service agent", "caps": [], "params": ["sp_base_url"] },
+    { "id": "bluesky-summary", "label": "Bluesky feed summary", "caps": ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"], "params": ["topic"] }
+  ]
+}

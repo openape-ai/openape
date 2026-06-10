@@ -1,0 +1,21 @@
+name: service-agent
+kind: agent
+intent: |
+  This agent's work is its scheduled command (tools/serve.mjs): it pulls tasks
+  from its service provider's task queue, asks the LLM to do each one, and posts
+  the result back — all on its own. The chat intent is unused for this agent.
+params:
+  - name: sp_base_url
+    type: string
+    required: true
+    description: Base URL of the service provider whose task queue to serve (e.g. https://zaz.delta-mind.at)
+  - name: model
+    type: string
+    required: false
+    default: gpt-5.5
+    description: Model the worker asks for on each task
+schedules:
+  - cron: "* * * * *"
+    command: node tools/serve.mjs --sp {{sp_base_url}} --model {{model}} --max-runtime 50s
+    description: poll {{sp_base_url}} task queue and resolve
+tools: []
