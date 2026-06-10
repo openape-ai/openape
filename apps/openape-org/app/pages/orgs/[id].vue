@@ -115,159 +115,38 @@ function onLinkAgent(email: string) {
   showLinkAgent.value = true
 }
 
-// Spawn-agent flow per openape-ai/protocol sp-data-access.md (M4β + M4γ).
-//
-// On click:
-//   1. fetch existing standing delegation grants from id.openape.ai
-//      with credentials:'include' — relies on the Owner's IdP session
-//      cookie + the CORS+sameSite=none allowlist we set up in M4α-IdP
-//   2. find a standing grant matching (delegate=org.openape.ai,
-//      audience=troop.openape.ai, scopes ⊇ [troop:spawn-agent])
-//   3. if none (M4γ): redirect the browser to id.openape.ai's
-//      /grant-cross-sp consent page. The Owner sees the scope card
-//      and clicks Approve; IdP creates a standing delegation and
-//      bounces back to ?spawn=<email>&grant_id=<id>. The mount-time
-//      return-handler then resumes the spawn with that grant_id.
-//   4. if found: fetch AuthZ-JWT via /api/grants/{id}/token (still
-//      browser, credentials)
-//   5. POST { subject_token, grant_id } to org's /spawn endpoint;
-//      org server exchanges at troop, calls spawn-intent
-//   6. start the 2s polling loop until troop reports active/failed
+// Spawn-agent flow per openape-ai/protocol sp-data-access.md — cross-SP
+// delegation via OAuth redirect/code (replaces the old browser-fetch +
+// IdP-CORS path). All Owner-authenticated IdP calls happen as top-level
+// redirects to the IdP; the org *server* redeems the code and talks to troop.
+// The browser only navigates — no cross-origin fetch, no IdP CORS/sameSite.
 const spawnError = ref('')
 const spawnPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const pendingSpawnEmail = ref<string | null>(null)
 
-const idpBase = computed(() => (useRuntimeConfig().public as { idpUrl?: string }).idpUrl ?? 'https://id.openape.ai')
-
-interface StandingGrant {
-  id: string
-  type?: string
-  status?: string
-  request?: {
-    delegate?: string
-    audience?: string
-    scopes?: string[]
-    grant_type?: string
-  }
-}
-
-async function findStandingGrant(): Promise<StandingGrant | null> {
-  // Browser → IdP, credentials:'include' relies on CORS allowlist
-  // (set up in PR #522) + sameSite=none on the IdP session cookie.
-  const res = await fetch(`${idpBase.value}/api/grants?role=delegator`, { credentials: 'include' })
-  if (!res.ok) {
-    if (res.status === 401) throw new Error('idp-unauthenticated')
-    throw new Error(`idp /api/grants failed: HTTP ${res.status}`)
-  }
-  const body = await res.json() as { grants?: StandingGrant[] } | StandingGrant[]
-  const grants = Array.isArray(body) ? body : (body.grants ?? [])
-  return grants.find(g =>
-    g.type === 'delegation'
-    && g.status === 'approved'
-    && g.request?.delegate === 'org.openape.ai'
-    && g.request?.audience === 'troop.openape.ai'
-    && (g.request?.scopes ?? []).includes('troop:spawn-agent')
-    && g.request?.grant_type === 'always',
-  ) ?? null
-}
-
-async function fetchAuthzJwt(grantId: string): Promise<string> {
-  const res = await fetch(`${idpBase.value}/api/grants/${encodeURIComponent(grantId)}/token`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  })
-  if (!res.ok) throw new Error(`idp /api/grants/${grantId}/token failed: HTTP ${res.status}`)
-  const body = await res.json() as { authz_jwt: string }
-  return body.authz_jwt
-}
-
-async function onSpawnAgent(email: string) {
+function onSpawnAgent(email: string) {
   if (!org.value) return
   spawnError.value = ''
   pendingSpawnEmail.value = email
-
-  let grant: StandingGrant | null
-  try {
-    grant = await findStandingGrant()
-  }
-  catch (err: any) {
-    if (err?.message === 'idp-unauthenticated') {
-      spawnError.value = t('orgDetail.spawn.idpUnauthenticated')
-      return
-    }
-    spawnError.value = err?.message || t('orgDetail.spawn.failed')
-    return
-  }
-
-  if (!grant) {
-    // M4γ: no standing grant — bounce the Owner through id.openape.ai's
-    // consent page. `spawn=<email>` round-trips so the mount handler
-    // knows which placeholder to resume; `grant_id=<id>` comes back
-    // appended by the IdP on Approve, or `error=access_denied` on Deny.
-    const ret = new URL(window.location.href)
-    ret.searchParams.set('spawn', email)
-    // Clear any stale tokens from a previous round-trip.
-    ret.searchParams.delete('grant_id')
-    ret.searchParams.delete('error')
-    const consent = new URL(`${idpBase.value}/grant-cross-sp`)
-    consent.searchParams.set('delegate', 'org.openape.ai')
-    consent.searchParams.set('audience', 'troop.openape.ai')
-    consent.searchParams.set('scopes', 'troop:spawn-agent')
-    consent.searchParams.set('grant_type', 'always')
-    consent.searchParams.set('return_to', ret.toString())
-    window.location.href = consent.toString()
-    return
-  }
-
-  await spawnWithGrant(email, grant.id)
+  // Top-level navigation: the org server mints PKCE + redirects the Owner to
+  // the IdP's /authorize-cross-sp. The Owner's IdP session cookie travels on
+  // this navigation (no CORS). The IdP returns a single-use code to
+  // /oauth/grants/callback, which the org server redeems server-to-server.
+  window.location.href = `/api/orgs/${org.value.id}/members/${encodeURIComponent(email)}/spawn-authorize`
 }
 
-async function spawnWithGrant(email: string, grantId: string) {
-  if (!org.value) return
-  let subjectToken: string
-  try { subjectToken = await fetchAuthzJwt(grantId) }
-  catch (err: any) { spawnError.value = err?.message || t('orgDetail.spawn.failed'); return }
-
-  try {
-    await ($fetch as any)(`/api/orgs/${org.value.id}/members/${encodeURIComponent(email)}/spawn`, {
-      method: 'POST',
-      body: { subject_token: subjectToken, grant_id: grantId },
-    })
-    await loadAll()
-    ensureSpawnPolling()
-  }
-  catch (err: any) {
-    spawnError.value = err?.data?.statusMessage || err?.message || t('orgDetail.spawn.failed')
-  }
-}
-
-// Return-handler: when the IdP bounces back from /grant-cross-sp it
-// appends ?grant_id=<id> (approved) or ?error=access_denied (denied).
-// We carried the target member in ?spawn=<email>. On mount, drain
-// these query params, surface a deny error if applicable, and resume
-// the spawn with the freshly-minted grant.
-async function handleConsentReturn() {
-  const spawn = String(route.query.spawn ?? '')
-  const grantId = String(route.query.grant_id ?? '')
-  const consentError = String(route.query.error ?? '')
-  if (!spawn) return
-
-  // Strip the round-trip params so a refresh doesn't re-trigger the
-  // spawn / replay the error.
+// Return-handler: the callback bounces back with ?spawned=<email> on success
+// (the new member row is pending → the members watcher starts polling) or
+// ?spawn_error=<msg> on denial/failure. Drain the params either way.
+function handleSpawnReturn() {
+  const spawnErr = String(route.query.spawn_error ?? '')
+  const spawned = String(route.query.spawned ?? '')
+  if (!spawnErr && !spawned) return
   const cleaned = new URL(window.location.href)
-  cleaned.searchParams.delete('spawn')
-  cleaned.searchParams.delete('grant_id')
-  cleaned.searchParams.delete('error')
+  cleaned.searchParams.delete('spawn_error')
+  cleaned.searchParams.delete('spawned')
   window.history.replaceState({}, '', cleaned.toString())
-
-  if (consentError === 'access_denied') {
-    spawnError.value = t('orgDetail.spawn.denied')
-    return
-  }
-  if (!grantId) return
-  await spawnWithGrant(spawn, grantId)
+  if (spawnErr) spawnError.value = spawnErr
 }
 
 function ensureSpawnPolling() {
@@ -299,12 +178,10 @@ onBeforeUnmount(() => {
   if (spawnPollTimer.value) clearInterval(spawnPollTimer.value)
 })
 
-// Resume an in-flight cross-SP consent flow once the page + session
-// are loaded. Gated on `user` because the spawn POST needs the
-// org-session cookie; we just came back from a third-party redirect,
-// so first paint may not have the user resolved yet.
+// Drain the spawn return params (?spawned / ?spawn_error) once the page is
+// loaded — we just came back from the IdP/callback redirect.
 watch(user, (u) => {
-  if (u && route.query.spawn) void handleConsentReturn()
+  if (u && (route.query.spawned || route.query.spawn_error)) handleSpawnReturn()
 }, { immediate: true })
 
 // Destroy-org modal

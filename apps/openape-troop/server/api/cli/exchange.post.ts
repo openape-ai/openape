@@ -1,5 +1,6 @@
 import type { JWTPayload } from 'jose'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { useRuntimeConfig } from 'nitropack/runtime'
 import { signCliToken } from '../../utils/cli-token'
 import { resolveIssuerForToken } from '../../utils/ddisa-issuer'
 import { scopesAreCovered } from '../../utils/scope-catalog'
@@ -14,7 +15,13 @@ interface ExchangeBody {
 // (delegation flows per sp-data-access.md §4, where the IdP mints an
 // AuthZ-JWT with aud=<sp-domain> for the delegate). Either form is
 // trusted because it was signed by the subject's DDISA-resolved IdP.
-const ACCEPTED_AUDIENCES = ['apes-cli', 'troop.openape.ai']
+//
+// troop's own domain is its configured SP client_id — config-derived, not
+// hardcoded, so non-prod hosts (troop.openape.test) work too.
+function ownDomain(): string {
+  const config = useRuntimeConfig()
+  return String((config.openapeSp as { clientId?: string })?.clientId ?? 'troop.openape.ai')
+}
 
 let _idpJwks: ReturnType<typeof createRemoteJWKSet> | null = null
 let _idpJwksUrl = ''
@@ -63,6 +70,7 @@ export default defineEventHandler(async (event) => {
     })
   }
   const idpUrl = resolved.issuer
+  const acceptedAudiences = ['apes-cli', ownDomain()]
 
   let claims: JWTPayload
   try {
@@ -70,7 +78,7 @@ export default defineEventHandler(async (event) => {
     // audience in the token equals any in the list.
     const verified = await jwtVerify(body.subject_token, getIdpJwks(idpUrl), {
       issuer: idpUrl,
-      audience: ACCEPTED_AUDIENCES,
+      audience: acceptedAudiences,
     })
     claims = verified.payload
   }
@@ -79,7 +87,7 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 401,
       statusMessage: 'Invalid subject_token',
-      data: { detail: `Token must be issued by ${idpUrl} with aud in [${ACCEPTED_AUDIENCES.join(', ')}]. ${detail}` },
+      data: { detail: `Token must be issued by ${idpUrl} with aud in [${acceptedAudiences.join(', ')}]. ${detail}` },
     })
   }
 
@@ -136,7 +144,7 @@ export default defineEventHandler(async (event) => {
     access_token: token,
     token_type: 'Bearer' as const,
     expires_at: expiresAt,
-    aud: 'troop.openape.ai',
+    aud: ownDomain(),
     scope: requestedScopes,
     delegate,
   }

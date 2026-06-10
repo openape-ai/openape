@@ -289,6 +289,9 @@ export default defineNuxtModule<ModuleOptions>({
     // Server route handlers — OAuth
     if (routeConfig.oauth) {
       addServerHandler({ route: '/authorize', handler: resolve('./runtime/server/routes/authorize.get') })
+      // Cross-SP delegation authorize (redirect/code flow): issues a single-use
+      // PKCE-bound code for a Receiver SP to redeem server-to-server.
+      addServerHandler({ route: '/authorize-cross-sp', handler: resolve('./runtime/server/routes/authorize-cross-sp.get') })
       addServerHandler({ route: '/token', method: 'post', handler: resolve('./runtime/server/routes/token.post') })
       addServerHandler({ route: '/revoke', method: 'post', handler: resolve('./runtime/server/routes/revoke.post') })
       addServerHandler({ route: '/.well-known/jwks.json', handler: resolve('./runtime/server/routes/well-known/jwks.json.get') })
@@ -349,6 +352,13 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/grants/:id/deny', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/deny.post') })
       addServerHandler({ route: '/api/grants/:id/revoke', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/revoke.post') })
       addServerHandler({ route: '/api/grants/:id/token', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/token.post') })
+      // Redeem a cross-SP delegation code (PKCE) for the AuthZ-JWT — called
+      // server-to-server by the Receiver SP. Static segment, distinct from :id.
+      addServerHandler({ route: '/api/grants/cross-sp-token', method: 'post', handler: resolve('./runtime/server/api/grants/cross-sp-token.post') })
+      // Cross-SP consent page backend: create the standing delegation on
+      // Approve, and the Provider scope catalog the page renders.
+      addServerHandler({ route: '/api/grant-cross-sp', method: 'post', handler: resolve('./runtime/server/api/grant-cross-sp.post') })
+      addServerHandler({ route: '/api/cross-sp-scope-catalog', handler: resolve('./runtime/server/api/cross-sp-scope-catalog.get') })
       addServerHandler({ route: '/api/grants/:id/consume', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/consume.post') })
       addServerHandler({ route: '/api/grants/batch', method: 'post', handler: resolve('./runtime/server/api/grants/batch.post') })
     }

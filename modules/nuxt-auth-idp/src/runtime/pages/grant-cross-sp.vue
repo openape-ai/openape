@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { definePageMeta, navigateTo, useFetch, useIdpAuth, useRoute } from '#imports'
+import { navigateTo, useFetch, useIdpAuth, useRoute } from '#imports'
 
 // /grant-cross-sp — Owner-facing consent page for cross-SP standing
 // grants (sp-data-access.md §4).
@@ -22,10 +22,12 @@ import { definePageMeta, navigateTo, useFetch, useIdpAuth, useRoute } from '#imp
 // the Provider publishes — so the Owner sees the same wording the
 // Receiver agreed to at integration time.
 
-definePageMeta({ middleware: ['idp-auth'] })
-
+// Auth is enforced where it matters: the in-template "signed in?" guard
+// (useIdpAuth below) and the session-gated POST /api/grant-cross-sp. Reaching
+// here unauthenticated is already prevented upstream — /authorize-cross-sp
+// bounces to /login before redirecting to this consent page.
 const route = useRoute()
-const { user, loading: authLoading } = useIdpAuth()
+const { user, loading: authLoading, fetchUser } = useIdpAuth()
 
 const delegate = computed(() => String(route.query.delegate ?? '').trim())
 const audience = computed(() => String(route.query.audience ?? '').trim())
@@ -84,6 +86,9 @@ const processing = ref(false)
 const submitError = ref('')
 
 onMounted(() => {
+  // Populate the Owner session (useIdpAuth.user starts null until fetched —
+  // this page has no auth middleware; the session cookie is read here).
+  void fetchUser()
   if (!paramError.value) refresh()
 })
 
