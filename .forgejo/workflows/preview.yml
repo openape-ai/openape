@@ -1,18 +1,22 @@
 name: preview
-# Per-app PR previews on Coolify: only the app(s) a PR changes get a preview
-# at https://<app>-pr-<n>.preview.openape.ai (torn down on close). The
-# dispatch script computes the affected apps and forwards a signed webhook to
-# Coolify per app — see scripts/preview-dispatch.mjs for the why + mechanics.
+# Per-app PR previews from tested images: only the app(s) a PR changes get
+# built (natively on the `mac` runner — warm pnpm/turbo caches), pushed as
+# registry.openape.ai/<app>:pr-<n> and deployed by Coolify at
+# https://<app>-pr-<n>.preview.openape.ai. Closed PRs tear their previews
+# down. See scripts/preview-dispatch.mjs for the mechanics.
 #
-# [skip ci] / [skip cd] in the PR title skips preview deployments (checked by
-# Coolify's handler).
+# If the mac runner is offline the job just queues — ci/e2e (chatty) are
+# unaffected, only the preview is delayed.
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
+concurrency:
+  group: preview-${{ github.ref }}
+
 jobs:
   dispatch:
-    runs-on: docker
+    runs-on: mac
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,11 +24,10 @@ jobs:
       - name: Ensure base ref for the diff
         if: github.event.action != 'closed'
         run: git fetch --no-tags origin ${{ github.base_ref }}
-      - name: Dispatch per-app preview deploys
+      - name: Build + deploy per-app previews
         env:
-          COOLIFY_WEBHOOK_URL: https://coolify.openape.ai/webhooks/source/gitea/events/manual
-          COOLIFY_PREVIEW_SECRET_IDP: ${{ secrets.COOLIFY_PREVIEW_SECRET_IDP }}
-          COOLIFY_PREVIEW_SECRET_TROOP: ${{ secrets.COOLIFY_PREVIEW_SECRET_TROOP }}
-          COOLIFY_PREVIEW_SECRET_CHAT: ${{ secrets.COOLIFY_PREVIEW_SECRET_CHAT }}
-          COOLIFY_PREVIEW_SECRET_ORG: ${{ secrets.COOLIFY_PREVIEW_SECRET_ORG }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          TURBO_CACHE_DIR: /Users/patrickhofmann/.cache/turbo-openape-ci
         run: node scripts/preview-dispatch.mjs
