@@ -628,6 +628,36 @@ export interface RecoveryStore {
   cancelAllForEmail: (email: string, reason: string) => Promise<number>
 }
 
+// --- E-mail address history (#462) ---
+//
+// "Warn every address ever linked to the account": the recovery
+// warning-broadcast needs the former addresses too, so a single
+// compromised (current) mailbox can't swallow the alarm.
+
+export interface EmailHistoryStore {
+  /** Record that `address` is (or was) linked to the account currently identified by `accountEmail`. Idempotent. */
+  record: (accountEmail: string, address: string) => Promise<void>
+  /** Every address ever linked to the account of `email` — always includes `email` itself. */
+  listAllForEmail: (email: string) => Promise<string[]>
+}
+
+export class InMemoryEmailHistoryStore implements EmailHistoryStore {
+  private history = new Map<string, string[]>()
+
+  async record(accountEmail: string, address: string): Promise<void> {
+    const list = this.history.get(accountEmail) ?? []
+    if (!list.includes(address)) {
+      list.push(address)
+      this.history.set(accountEmail, list)
+    }
+  }
+
+  async listAllForEmail(email: string): Promise<string[]> {
+    const list = this.history.get(email) ?? []
+    return list.includes(email) ? list : [email, ...list]
+  }
+}
+
 export class InMemoryRecoveryStore implements RecoveryStore {
   private tokens = new Map<string, RecoveryToken>()
 

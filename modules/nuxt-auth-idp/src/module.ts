@@ -178,6 +178,7 @@ export default defineNuxtModule<ModuleOptions>({
       '/api/logout': { headers: noCacheHeaders },
       '/api/me': { headers: noCacheHeaders },
       '/api/webauthn/**': { headers: noCacheHeaders },
+      '/api/recovery/**': { headers: noCacheHeaders },
       '/authorize': { headers: noCacheHeaders },
       '/token': { headers: noCacheHeaders },
       '/userinfo': { headers: noCacheHeaders },
@@ -207,6 +208,7 @@ export default defineNuxtModule<ModuleOptions>({
           { name: 'openape-login', path: '/login', file: resolve('./runtime/pages/login.vue') },
           { name: 'openape-register', path: '/register', file: resolve('./runtime/pages/register.vue') },
           { name: 'openape-recover', path: '/recover', file: resolve('./runtime/pages/recover.vue') },
+          { name: 'openape-recover-cancel', path: '/recover/cancel', file: resolve('./runtime/pages/recover-cancel.vue') },
           { name: 'openape-account', path: '/account', file: resolve('./runtime/pages/account.vue') },
           { name: 'openape-passkeys', path: '/passkeys', file: resolve('./runtime/pages/passkeys.vue') },
           { name: 'openape-ssh-keys', path: '/ssh-keys', file: resolve('./runtime/pages/ssh-keys.vue') },
@@ -282,6 +284,13 @@ export default defineNuxtModule<ModuleOptions>({
       // WebAuthn Login
       addServerHandler({ route: '/api/webauthn/login/options', method: 'post', handler: resolve('./runtime/server/api/webauthn/login/options.post') })
       addServerHandler({ route: '/api/webauthn/login/verify', method: 'post', handler: resolve('./runtime/server/api/webauthn/login/verify.post') })
+
+      // Account recovery (#297/#462). The recover page mints challenges
+      // via options/verify; cancel is the one-tap owner veto from the
+      // warning mail/push (tokenized, sessionless) or the account UI.
+      addServerHandler({ route: '/api/recovery/options', method: 'post', handler: resolve('./runtime/server/api/recovery/options.post') })
+      addServerHandler({ route: '/api/recovery/verify', method: 'post', handler: resolve('./runtime/server/api/recovery/verify.post') })
+      addServerHandler({ route: '/api/recovery/cancel', method: 'post', handler: resolve('./runtime/server/api/recovery/cancel.post') })
 
       // WebAuthn Credentials (Device Management)
       addServerHandler({ route: '/api/webauthn/credentials', handler: resolve('./runtime/server/api/webauthn/credentials.get') })

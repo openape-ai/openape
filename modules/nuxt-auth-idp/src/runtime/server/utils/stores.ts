@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { AdminAllowlistStore, ChallengeStore, ClientMetadata, ClientMetadataStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RecoveryStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import type { AdminAllowlistStore, ChallengeStore, ClientMetadata, ClientMetadataStore, CodeStore, ConsentStore, CredentialStore, EmailHistoryStore, JtiStore, KeyStore, RecoveryStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import { createClientMetadataResolver, InMemoryAdminAllowlistStore } from '@openape/auth'
 import { useRuntimeConfig, useEvent } from 'nitropack/runtime'
 import { createChallengeStore } from './challenge-store'
@@ -8,6 +8,7 @@ import { createConsentStore } from './consent-store'
 import { createCredentialStore } from './credential-store'
 import { createJtiStore } from './jti-store'
 import { createKeyStore } from './key-store'
+import { createEmailHistoryStore } from './email-history-store'
 import { createRecoveryStore } from './recovery-store'
 import { createRefreshTokenStore } from './refresh-token-store'
 import { createRegistrationUrlStore } from './registration-url-store'
@@ -30,6 +31,7 @@ interface IdpStores {
   consentStore: ConsentStore
   adminAllowlistStore: AdminAllowlistStore
   recoveryStore: RecoveryStore
+  emailHistoryStore: EmailHistoryStore
 }
 
 // Module-level singleton for the SP client-metadata resolver. The
@@ -75,6 +77,7 @@ function initDefaultStores(): IdpStores {
     consentStore: createConsentStore(),
     adminAllowlistStore: new InMemoryAdminAllowlistStore(),
     recoveryStore: createRecoveryStore(),
+    emailHistoryStore: createEmailHistoryStore(),
   }
 }
 
@@ -93,6 +96,7 @@ function initStoresWithRegistry(event: H3Event): IdpStores {
     consentStore: getStoreFactory<ConsentStore>('consentStore')?.(event) ?? createConsentStore(),
     adminAllowlistStore: getStoreFactory<AdminAllowlistStore>('adminAllowlistStore')?.(event) ?? new InMemoryAdminAllowlistStore(),
     recoveryStore: getStoreFactory<RecoveryStore>('recoveryStore')?.(event) ?? createRecoveryStore(),
+    emailHistoryStore: getStoreFactory<EmailHistoryStore>('emailHistoryStore')?.(event) ?? createEmailHistoryStore(),
   }
 }
 

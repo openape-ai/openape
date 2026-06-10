@@ -19,6 +19,65 @@ function ensureVapidConfigured(): boolean {
   return true
 }
 
+type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect
+
+/**
+ * Deliver one payload to every given subscription, best-effort per
+ * endpoint: 404/410 endpoints are pruned (browser/PWA gone for good),
+ * any other failure is logged — one dead device never blocks the rest.
+ */
+async function deliverToSubscriptions(subs: PushSubscriptionRow[], payload: string, label: string): Promise<void> {
+  const db = useDb()
+  await Promise.all(subs.map(async (sub) => {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+      )
+    }
+    catch (err: unknown) {
+      const status = (err as { statusCode?: number })?.statusCode
+      if (status === 404 || status === 410) {
+        await db
+          .delete(pushSubscriptions)
+          .where(eq(pushSubscriptions.endpoint, sub.endpoint))
+          .catch(() => {})
+        return
+      }
+      console.warn(`[push] ${label} send failed for ${sub.userEmail}: ${(err as Error)?.message ?? err}`)
+    }
+  }))
+}
+
+/**
+ * Recovery warning broadcast (#462): push the "recovery requested"
+ * warning to EVERY device of the owner with a registered subscription.
+ *
+ * The payload carries the warning plus the one-tap cancel link ONLY —
+ * never anything that could complete the recovery or sign someone in.
+ * A push channel is warn-and-veto, exactly like the warning mails to
+ * former addresses.
+ */
+export async function sendRecoveryWarningPush(email: string, opts: { cancelUrl: string }): Promise<void> {
+  if (!ensureVapidConfigured()) return
+
+  const db = useDb()
+  const subs = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userEmail, email))
+  if (subs.length === 0) return
+
+  const payload = JSON.stringify({
+    type: 'recovery-warning',
+    title: 'Account recovery requested',
+    body: `Someone requested account recovery for ${email}. Not you? Cancel it in one tap.`,
+    deep_link: opts.cancelUrl,
+  })
+
+  await deliverToSubscriptions(subs, payload, 'recovery-warning')
+}
+
 /**
  * Best-effort fan-out of a Web Push notification to whoever should
  * approve a freshly-created pending grant.
@@ -76,23 +135,5 @@ export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise
     deep_link: `/grant-approval?grant_id=${encodeURIComponent(grant.id)}`,
   })
 
-  await Promise.all(subs.map(async (sub) => {
-    try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        payload,
-      )
-    }
-    catch (err: unknown) {
-      const status = (err as { statusCode?: number })?.statusCode
-      if (status === 404 || status === 410) {
-        await db
-          .delete(pushSubscriptions)
-          .where(eq(pushSubscriptions.endpoint, sub.endpoint))
-          .catch(() => {})
-        return
-      }
-      console.warn(`[push] approver send failed for ${sub.userEmail}: ${(err as Error)?.message ?? err}`)
-    }
-  }))
+  await deliverToSubscriptions(subs, payload, 'approver')
 }

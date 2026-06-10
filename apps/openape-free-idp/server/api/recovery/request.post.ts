@@ -2,7 +2,8 @@ import type { User } from '@openape/auth'
 import { randomUUID } from 'node:crypto'
 import { createError, defineEventHandler, getHeader, getRequestIP, getRequestURL, readBody } from 'h3'
 import { checkRateLimit } from '../../utils/rate-limiter'
-import { sendRecoveryEmail } from '../../utils/email'
+import { sendRecoveryEmail, sendRecoveryWarningEmail } from '../../utils/email'
+import { sendRecoveryWarningPush } from '../../utils/push'
 
 // Request an account recovery (#297, adaptive cooldown #462).
 //
@@ -59,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const userAgent = getHeader(event, 'user-agent') || undefined
   await checkRateLimit(email, ip)
 
-  const { recoveryStore, userStore } = useIdpStores()
+  const { recoveryStore, userStore, emailHistoryStore } = useIdpStores()
   const user = await userStore.findByEmail(email)
 
   if (!user) {
@@ -91,7 +92,25 @@ export default defineEventHandler(async (event) => {
   const recoveryUrl = `${origin}/recover?token=${token}`
   const cancelUrl = `${origin}/recover/cancel?token=${token}`
 
-  await sendRecoveryEmail(email, recoveryUrl, usableAt, cancelUrl)
+  // Warning broadcast (#462): the recover link goes to the CURRENT
+  // address only; every other address ever linked to the account and
+  // every push-subscribed device gets warning + one-tap cancel — and
+  // nothing that could complete the recovery. The channels are
+  // independent on purpose: one dead mailbox or stale subscription
+  // never silences the rest (failures are logged, not propagated).
+  const linkedAddresses = await emailHistoryStore.listAllForEmail(email)
+  const formerAddresses = linkedAddresses.filter(address => address !== email)
+
+  const channels = await Promise.allSettled([
+    sendRecoveryEmail(email, recoveryUrl, usableAt, cancelUrl),
+    ...formerAddresses.map(to => sendRecoveryWarningEmail(to, email, usableAt, cancelUrl)),
+    sendRecoveryWarningPush(email, { cancelUrl }),
+  ])
+  for (const channel of channels) {
+    if (channel.status === 'rejected') {
+      console.warn(`[recovery] warning channel failed: ${(channel.reason as Error)?.message ?? channel.reason}`)
+    }
+  }
 
   return { ok: true }
 })
