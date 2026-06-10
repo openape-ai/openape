@@ -286,6 +286,21 @@ export const adminAllowlist = sqliteTable('admin_allowlist', {
   primaryKey({ columns: [table.domain, table.clientId] }),
 ])
 
+// E-mail address history (#462). One row per address that is or was
+// linked to an account (keyed by the account's CURRENT email). The
+// recovery warning-broadcast mails every row plus the current address,
+// so a single compromised mailbox can't swallow the alarm. Rows are
+// append-only: a replaced address gets `replaced_at` set, never deleted.
+export const emailHistory = sqliteTable('email_history', {
+  accountEmail: text('account_email').notNull(),
+  address: text('address').notNull(),
+  linkedAt: integer('linked_at').notNull(),
+  replacedAt: integer('replaced_at'),
+}, table => [
+  primaryKey({ columns: [table.accountEmail, table.address] }),
+  index('idx_email_history_account').on(table.accountEmail),
+])
+
 // Account-recovery 72h-hold tokens (#297). Issued by /api/recovery/request,
 // only usable after `usable_at` (72h cooldown), invalidated by either an
 // active-owner login or an explicit cancel. Audit columns survive consumption

@@ -1,6 +1,6 @@
 ---
 id: recovery-broadcast
-status: red
+status: green
 app: openape-free-idp
 issue: 462
 tests:
@@ -11,10 +11,9 @@ tests:
 guide: account-recovery
 ---
 
-> Red-Beweis: Vitest-Tests failen nachweislich (Kriterien 1, 2, 3, 5, 6);
-> Kriterien 4 und 7 sind als Pins grün (Cancel-Permanenz + Rate-Limit existieren in v1).
-> Der Story-Kit-Lauf (`account-recovery`) steht aus und kommt mit dem
-> Demo-Stack-Lauf der green-Phase.
+> Green-Beweis: alle drei Vitest-Files grün (Kriterien 1, 2, 3, 5, 6 implementiert;
+> Kriterien 4 und 7 als Pins weiter grün). Der Story-Kit-Lauf (`account-recovery`)
+> steht weiterhin aus und kommt mit dem Demo-Stack-Lauf.
 
 # Wiederherstellungs-Warnung auf allen Kanälen mit Ein-Tap-Abbruch
 

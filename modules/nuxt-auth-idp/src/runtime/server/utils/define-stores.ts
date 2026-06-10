@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { AdminAllowlistStore, ChallengeStore as WebAuthnChallengeStore, CodeStore, ConsentStore, CredentialStore, JtiStore, KeyStore, RecoveryStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
+import type { AdminAllowlistStore, ChallengeStore as WebAuthnChallengeStore, CodeStore, ConsentStore, CredentialStore, EmailHistoryStore, JtiStore, KeyStore, RecoveryStore, RefreshTokenStore, RegistrationUrlStore, UserStore } from '@openape/auth'
 import type { ShapeStore } from '@openape/grants'
 import type { ExtendedGrantStore } from './grant-store'
 import type { ChallengeStore as GrantChallengeStore } from './grant-challenge-store'
@@ -72,6 +72,12 @@ export function defineAdminAllowlistStore(factory: (event: H3Event) => AdminAllo
 
 export function defineRecoveryStore(factory: (event: H3Event) => RecoveryStore) {
   registerStoreFactory('recoveryStore', factory)
+}
+
+// E-mail address history (recovery warning-broadcast, #462)
+
+export function defineEmailHistoryStore(factory: (event: H3Event) => EmailHistoryStore) {
+  registerStoreFactory('emailHistoryStore', factory)
 }
 
 // Shape Store (Phase 1 — server-side shape registry)
