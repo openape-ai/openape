@@ -71,18 +71,30 @@ await kit.story({
   await s.step('Or attach a recipe instead', {
     do: async () => {
       const dialog = page.getByRole('dialog').first()
+      // Expand the collapsed Recipe section, then pick the curated entry so
+      // the screenshot shows a selected recipe (pinned repo + declared
+      // secret rows), not the empty "None" default.
       await dialog.getByText(/^\s*recipe\s*/i).first().click().catch(() => {})
-      await page.waitForTimeout(800)
-      const recipe = dialog.getByText(/recipe/i).first()
-      await recipe.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+      await page.waitForTimeout(600)
+      await dialog.getByText(/^none$/i).first().click()
+      await page.waitForTimeout(600)
+      await page.getByText(/bluesky feed summary/i).first().click()
+      await page.waitForTimeout(1000)
+      const repo = dialog.getByText(/repository/i).first()
+      await repo.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
       await page.waitForTimeout(500)
     },
     shot: 'recipe-option',
-  }, 'A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`) — pick a curated one or paste your own. The recipe is *additive*: your system prompt rides along on top of the recipe\'s intent, and recipe-declared secrets get their own input rows. Skip it for a pure custom agent.')
+  }, 'A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`). Pick a curated one — here *Bluesky feed summary*, which pins its repo and pre-declares the secrets it needs — or paste your own pinned repo via *Custom…*. The recipe is *additive*: your system prompt rides along on top of the recipe\'s intent. Skip it for a pure custom agent.')
 
   await s.step('Spawn', {
     do: async () => {
       const dialog = page.getByRole('dialog').first()
+      // This story spawns the CUSTOM variant — set the recipe back to None.
+      await dialog.getByText(/bluesky feed summary/i).first().click()
+      await page.waitForTimeout(600)
+      await page.getByRole('option', { name: /^none$/i }).or(page.getByText(/^none$/i)).first().click()
+      await page.waitForTimeout(600)
       await dialog.getByRole('button', { name: /^\s*spawn\s*$/i }).click()
       // The nest provisions the agent (OS user + IdP identity + bridge) —
       // poll the dashboard until it shows up.
