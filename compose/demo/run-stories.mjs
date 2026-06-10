@@ -10,6 +10,7 @@ import process from 'node:process'
 import { chromium } from 'playwright'
 import { createStoryKit, installDeterminism } from './story-kit.mjs'
 import chatStories from './stories/chat.mjs'
+import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
 import troopStories from './stories/troop.mjs'
 // NB: the org guide is captured by compose/agent/org-ceo.mjs instead — its
@@ -50,7 +51,7 @@ const ctx = {
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, troopStories, chatStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories])
   await run(ctx)
 
 const failures = kit.finish('demo')

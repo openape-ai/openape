@@ -1,11 +1,20 @@
 ---
 id: recovery-broadcast
-status: approved
+status: red
 app: openape-free-idp
 issue: 462
-tests: []
-guide: null
+tests:
+  - apps/openape-free-idp/tests/recovery-broadcast.test.ts
+  - apps/openape-free-idp/tests/recovery-warning-push.test.ts
+  - modules/nuxt-auth-idp/test/recovery-cancel-token.test.ts
+  - compose/demo/stories/idp-recovery.mjs
+guide: account-recovery
 ---
+
+> Red-Beweis: Vitest-Tests failen nachweislich (Kriterien 1, 2, 3, 5, 6);
+> Kriterien 4 und 7 sind als Pins grün (Cancel-Permanenz + Rate-Limit existieren in v1).
+> Der Story-Kit-Lauf (`account-recovery`) steht aus und kommt mit dem
+> Demo-Stack-Lauf der green-Phase.
 
 # Wiederherstellungs-Warnung auf allen Kanälen mit Ein-Tap-Abbruch
 

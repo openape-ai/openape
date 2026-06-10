@@ -1,11 +1,18 @@
 ---
 id: recovery-audit
-status: approved
+status: red
 app: openape-free-idp
 issue: 462
-tests: []
-guide: null
+tests:
+  - apps/openape-free-idp/tests/recovery-history-store.test.ts
+  - apps/openape-free-idp/tests/recovery-history-endpoint.test.ts
+  - compose/demo/stories/idp-recovery.mjs
+guide: recovery-history
 ---
+
+> Red-Beweis: alle Vitest-Tests failen nachweislich (Kriterien 1-6).
+> Der Story-Kit-Lauf (`recovery-history`) steht aus und kommt mit dem
+> Demo-Stack-Lauf der green-Phase.
 
 # Sichtbares Audit aller Wiederherstellungs-Ereignisse
 
