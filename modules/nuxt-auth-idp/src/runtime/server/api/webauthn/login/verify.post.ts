@@ -50,6 +50,10 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'User not found' })
   }
 
+  // Account activity feeds the adaptive recovery cooldown (#462): a login
+  // within the last 30 days stretches the recovery wait from 72h to 7d.
+  await userStore.update(user.email, { lastLoginAt: Date.now() })
+
   // Active-owner veto for any pending recovery (#297). A successful
   // login from an existing credential proves the user still has access,
   // so any in-flight recovery is presumptively unauthorised. Silent —
