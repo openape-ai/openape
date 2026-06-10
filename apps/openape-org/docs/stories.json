@@ -6,7 +6,7 @@
       "id": "sign-in",
       "title": "Sign in",
       "intro": "Org runs your CEO-led agent organizations. Like every OpenApe app it signs you in via DDISA SSO — same passkey, same IdP.",
-      "order": 5,
+      "order": 8,
       "steps": [
         {
           "title": "Open Org",
@@ -26,7 +26,7 @@
       "id": "create-org",
       "title": "Create your first org",
       "intro": "An org starts with three things: a name, a vision the CEO will read, and a monthly budget cap the Sanierer enforces.",
-      "order": 6,
+      "order": 9,
       "steps": [
         {
           "title": "Start a new organization",

@@ -1,6 +1,6 @@
 ---
 id: recovery-audit
-status: green
+status: documented-pending-review
 app: openape-free-idp
 issue: 462
 tests:
@@ -11,8 +11,9 @@ guide: recovery-history
 ---
 
 > Green-Beweis: beide Vitest-Files (8 Tests, Kriterien 1-6) grün, Gesamtsuite,
-> Lint und Typecheck grün. Der Story-Kit-Lauf (`recovery-history`) steht noch
-> aus und kommt mit dem Demo-Stack-Lauf.
+> Lint und Typecheck grün. Story-Kit-Lauf `recovery-history` auf dem Demo-Stack
+> grün (2026-06-10), Guide-Kapitel mit Screenshots generiert (Recovery-Historie
+> in den Konto-Einstellungen). Menschlicher Guide-Review steht aus.
 
 # Sichtbares Audit aller Wiederherstellungs-Ereignisse
 
