@@ -34,14 +34,24 @@
       "order": 7,
       "steps": [
         {
-          "title": "Send the spawn intent",
-          "caption": "Use **Spawn agent** in the dashboard (or `apes agents spawn <name>` on the nest machine): pick a name, a model, and a system prompt. Troop forwards the intent to your nest, which provisions the agent.",
-          "shot": null
+          "title": "Open the spawn dialog",
+          "caption": "Hit **Spawn agent** in the dashboard. Name and system prompt are the base of every agent; a quick-start **preset** (calendar assistant, mail triage, daily summary, …) pre-fills the prompt — or keep *Custom (empty)* and write your own.",
+          "shot": "spawn-agent/01-dialog.png"
         },
         {
-          "title": "The agent appears",
-          "caption": "Within seconds the agent shows up in **My Agents** — it now has its own identity at your IdP (`<name>-…@id.openape.ai`) and is reachable from every OpenApe app.",
-          "shot": "spawn-agent/02-spawned.png"
+          "title": "Name it and write the prompt — a custom agent",
+          "caption": "This is a **custom agent**: its behaviour comes entirely from the system prompt you write here (you can refine it later on the agent's page). Model and key are optional — without them the agent uses your nest's default LLM.",
+          "shot": "spawn-agent/02-custom-agent.png"
+        },
+        {
+          "title": "Or attach a recipe instead",
+          "caption": "A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`) — pick a curated one or paste your own. The recipe is *additive*: your system prompt rides along on top of the recipe's intent, and recipe-declared secrets get their own input rows. Skip it for a pure custom agent.",
+          "shot": "spawn-agent/03-recipe-option.png"
+        },
+        {
+          "title": "Spawn",
+          "caption": "Troop forwards the intent to your nest, which provisions the agent. Within seconds it shows up in **My Agents** — it now has its own identity at your IdP (`<name>-…@id.openape.ai`) and is reachable from every OpenApe app.",
+          "shot": "spawn-agent/04-spawned.png"
         }
       ]
     },
