@@ -8,7 +8,7 @@
 import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 import { chromium } from 'playwright'
-import { createStoryKit } from './story-kit.mjs'
+import { createStoryKit, installDeterminism } from './story-kit.mjs'
 import chatStories from './stories/chat.mjs'
 import idpStories from './stories/idp.mjs'
 import orgStories from './stories/org.mjs'
@@ -20,6 +20,7 @@ mkdirSync(OUT, { recursive: true })
 const browser = await chromium.launch({ args: ['--ignore-certificate-errors'] })
 const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 860 } })
 const page = await context.newPage()
+await installDeterminism(page)
 page.on('console', (m) => { if (m.type() === 'error') console.log(`[console.error] ${m.text()}`) })
 page.on('pageerror', e => console.log(`[pageerror] ${e.message}`))
 
