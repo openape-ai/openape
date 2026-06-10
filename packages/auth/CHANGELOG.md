@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.3
+
+### Patch Changes
+
+- 7fa0267: Declare the `ofetch` runtime dependency. `idp/client-metadata.ts` imports it, but
+  it was previously resolved only via workspace hoisting — which broke isolated
+  installs and Docker builds (esbuild "Could not resolve ofetch" / TS2307) the
+  moment the package was built outside the hoisted monorepo `node_modules`.
+- 5fa8c23: Fix an infinite consent loop for users whose email domain has no DDISA `mode`
+  (no `_ddisa` record, or a record that omits `mode`). `evaluatePolicy`'s
+  no-`mode` default returned `'consent'` unconditionally, **ignoring the consent
+  store** — so after the user approved on the consent screen, `/authorize`
+  re-evaluated to `'consent'` again and re-prompted forever; the user could never
+  finish logging in. The default now consults the consent store the same way
+  `allowlist-user` does: prompt once, then remember the approval (`→ 'allow'`).
+  The "don't silently issue assertions for an unknown domain" intent is preserved
+  — the first authorization still prompts.
+
 ## 0.11.2
 
 ### Patch Changes

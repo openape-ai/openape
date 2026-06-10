@@ -1,5 +1,38 @@
 # @openape/nest
 
+## 2.4.0
+
+### Minor Changes
+
+- 8f68361: Dev recipe mount: `OPENAPE_RECIPE_DEV_DIR` lets a bind-mounted local recipe
+  directory override the synced `~/recipe` for scheduled `command` tasks, so an
+  operator can iterate on a recipe's `tools/` without a publish→deploy→sync
+  round-trip. The nest forwards the variable into each bridge's pm2 env; the
+  in-bridge cron runner (`resolveRecipeDir`) uses it as the command cwd when set,
+  falling back to `~/recipe`.
+
+### Patch Changes
+
+- ae491fa: Forward `OPENAPE_BYPASS_APE_SHELL` into each bridge's pm2 env. The bridge is
+  spawned via `sudo -u <agent>`, which strips the nest's environment, so this
+  pm2 `env:` block is the only env the bridge sees. Without the flag the
+  in-bridge cron runner fell back to the gated `ape-shell` (absent in the pod
+  container) and every scheduled `command` task failed to exec (exit -1).
+- 6f1b1c1: Make the nest usable behind a local `tls internal` proxy and stop reload-thrash
+  on the registry-poll fallback. All prod-neutral (the env vars are unset in
+  production, where the bridge talks to a publicly-trusted endpoint):
+  - Forward `NODE_EXTRA_CA_CERTS` and `OPENAPE_TROOP_URL` into each bridge's pm2
+    `env:` block (sudo strips the nest env), and preserve `NODE_EXTRA_CA_CERTS`
+    through `sudo -u <agent>` for `apes agents sync`. A containerized bridge can
+    then trust a local CA and target a non-production troop.
+  - The entrypoint copies a mounted local CA to a world-readable path, since
+    Caddy's root-only PKI dir is unreadable by spawned agent uids.
+  - The registry-watch poll fallback (used when `fs.watch` is unavailable, e.g.
+    bind-mounted files in containers) now reconciles only when the registry
+    actually changes. The previous blind 5s reconcile ran `pm2 startOrReload`
+    for every agent each tick, reloading healthy bridges so they never stayed
+    connected; pm2 autorestart covers liveness between registry edits.
+
 ## 2.3.5
 
 ### Patch Changes
