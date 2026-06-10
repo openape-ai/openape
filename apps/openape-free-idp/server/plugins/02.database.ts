@@ -64,6 +64,16 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_recovery_tokens_email ON recovery_tokens(email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_recovery_tokens_expires_at ON recovery_tokens(expires_at)`)
 
+    // E-mail address history for the recovery warning-broadcast (#462).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS email_history (
+      account_email TEXT NOT NULL,
+      address TEXT NOT NULL,
+      linked_at INTEGER NOT NULL,
+      replaced_at INTEGER,
+      PRIMARY KEY (account_email, address)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_email_history_account ON email_history(account_email)`)
+
     // Schema evolved past migration 0000: extra user columns + shapes table
     // are declared in schema.ts but were never added here. Without these the
     // very first login/register on a fresh DB fails with "no such table".
