@@ -71,16 +71,20 @@ const { data: catalog, pending: catalogLoading, error: catalogError } = useFetch
 // the full surface. The intersection is on `id`; entries the Receiver
 // asked for that the Provider doesn't publish are surfaced separately
 // so the Owner sees the mismatch instead of silently dropping them.
-const scopeRows = computed(() => {
-  const all = catalog.value?.scopes ?? []
-  if (!requestedScopes.value.length) return all
-  return all.filter(s => requestedScopes.value.includes(s.id))
+// What the Owner is actually granting. When specific scopes were requested we
+// show EXACTLY those — enriched with the Provider's catalog description where
+// available, bare id otherwise — so an unavailable/empty catalog can never hide
+// a requested scope or misleadingly imply broader access. Only a genuinely
+// empty request means "full access".
+const displayScopes = computed(() => {
+  const byId = new Map((catalog.value?.scopes ?? []).map(s => [s.id, s]))
+  if (requestedScopes.value.length)
+    return requestedScopes.value.map(id => byId.get(id) ?? { id, description: '' })
+  return catalog.value?.scopes ?? []
 })
-const unknownScopes = computed(() => {
-  if (!catalog.value?.scopes || !requestedScopes.value.length) return []
-  const known = new Set(catalog.value.scopes.map(s => s.id))
-  return requestedScopes.value.filter(id => !known.has(id))
-})
+// True only when the consent screen has nothing concrete to show: no explicit
+// scopes AND the catalog couldn't be loaded — granting that is "full access blind".
+const blindFullAccess = computed(() => !requestedScopes.value.length && !!catalogError.value)
 
 const processing = ref(false)
 const submitError = ref('')
@@ -203,22 +207,16 @@ async function handleDeny() {
           <div v-if="catalogLoading" class="text-sm text-muted">
             Loading scope catalog…
           </div>
-          <UAlert
-            v-else-if="catalogError"
-            color="error"
-            :title="`Could not load scopes from ${audience}`"
-            :description="catalogError?.data?.statusMessage || catalogError?.message || ''"
-          />
-          <ul v-else-if="scopeRows.length" class="space-y-2">
+          <ul v-else-if="displayScopes.length" class="space-y-2">
             <li
-              v-for="scope in scopeRows"
+              v-for="scope in displayScopes"
               :key="scope.id"
               class="text-sm"
             >
               <p class="font-mono text-xs text-emerald-400 break-all">
                 {{ scope.id }}
               </p>
-              <p class="text-muted mt-0.5">
+              <p v-if="scope.description" class="text-muted mt-0.5">
                 {{ scope.description }}
               </p>
             </li>
@@ -227,19 +225,11 @@ async function handleDeny() {
             No scopes requested — full access to <span class="font-mono">{{ audience }}</span> implied.
           </p>
 
-          <UAlert
-            v-if="unknownScopes.length"
-            color="warning"
-            title="Some requested scopes are not in the Provider's catalog"
-          >
-            <template #description>
-              <ul class="font-mono text-xs mt-1">
-                <li v-for="s in unknownScopes" :key="s">
-                  {{ s }}
-                </li>
-              </ul>
-            </template>
-          </UAlert>
+          <!-- Descriptions are nice-to-have; a missing catalog never hides what's
+               granted (displayScopes shows the ids), so this is just a note. -->
+          <p v-if="catalogError && displayScopes.length" class="text-xs text-muted">
+            Couldn't load scope descriptions from <span class="font-mono">{{ audience }}</span> — the ids above are exactly what you're granting.
+          </p>
         </div>
 
         <UAlert
@@ -252,7 +242,7 @@ async function handleDeny() {
           <UButton
             color="success"
             :loading="processing"
-            :disabled="!!catalogError"
+            :disabled="blindFullAccess"
             block
             class="flex-1"
             @click="handleApprove"

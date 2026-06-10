@@ -49,8 +49,8 @@ await kit.story({
       await ceoOpt.waitFor({ state: 'visible', timeout: 5000 })
       await ceoOpt.click()
       await page.waitForTimeout(500)
-      await dialog.locator('input[placeholder="alice"]').first().fill('ada').catch(async () => {
-        await dialog.locator('input[type=text], input:not([type])').first().fill('ada')
+      await dialog.locator('input[placeholder="alice"]').first().fill('Ada').catch(async () => {
+        await dialog.locator('input[type=text], input:not([type])').first().fill('Ada')
       })
       await page.waitForTimeout(400)
     },
