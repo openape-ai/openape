@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import consola from 'consola'
 
@@ -16,10 +16,15 @@ const GITHUB_PREFIX = 'github.com/'
 /**
  * Check out the agent's recipe repo at the operator-pinned ref.
  *
- * `recipeRef` is `<owner>/<name>@<ref>` (optionally prefixed
+ * `recipeRef` is `<owner>/<name>[/<subdir>…]@<ref>` (optionally prefixed
  * `github.com/`). We split on the LAST `@` so a ref that itself
  * contains `@` survives, clone shallow at exactly that ref, and drop a
  * `.recipe-ref` marker so a re-sync at the same ref is a no-op.
+ *
+ * The optional subdir path selects a recipe inside a catalog repo
+ * (e.g. `openape-ai/agent-catalog/ceo@ceo-v0.1.0`): the repo is cloned
+ * to a staging dir and only the subdirectory's content lands in
+ * `recipeDir`, so consumers see the recipe root either way.
  *
  * NEVER throws: a broken recipe (missing repo, bad ref, network blip)
  * must not crash the agent sync — it logs and returns, leaving no
@@ -32,7 +37,7 @@ export function ensureRecipeCheckout(
 ): void {
   const at = recipeRef.lastIndexOf('@')
   if (at <= 0) {
-    consola.warn(`recipe: malformed recipeRef "${recipeRef}" (expected <owner>/<name>@<ref>) — skipping checkout`)
+    consola.warn(`recipe: malformed recipeRef "${recipeRef}" (expected <owner>/<name>[/<subdir>]@<ref>) — skipping checkout`)
     return
   }
   const spec = recipeRef.slice(0, at)
@@ -42,6 +47,13 @@ export function ensureRecipeCheckout(
     consola.warn(`recipe: malformed recipeRef "${recipeRef}" (empty slug or ref) — skipping checkout`)
     return
   }
+  const segments = slug.split('/').filter(Boolean)
+  if (segments.length < 2) {
+    consola.warn(`recipe: malformed recipeRef "${recipeRef}" (expected <owner>/<name>[/<subdir>]@<ref>) — skipping checkout`)
+    return
+  }
+  const repoSlug = segments.slice(0, 2).join('/')
+  const subdir = segments.slice(2).join('/')
 
   const markerPath = join(recipeDir, MARKER_FILE)
   if (existsSync(markerPath)) {
@@ -51,14 +63,29 @@ export function ensureRecipeCheckout(
     catch { /* unreadable marker — fall through and re-clone */ }
   }
 
-  const cloneUrl = `https://github.com/${slug}`
+  const cloneUrl = `https://github.com/${repoSlug}`
+  const staging = subdir ? `${recipeDir}.checkout` : recipeDir
   try {
     rmSync(recipeDir, { recursive: true, force: true })
-    exec('git', ['clone', '--depth', '1', '--branch', ref, cloneUrl, recipeDir])
+    if (subdir)
+      rmSync(staging, { recursive: true, force: true })
+    exec('git', ['clone', '--depth', '1', '--branch', ref, cloneUrl, staging])
+    if (subdir) {
+      const src = join(staging, subdir)
+      if (!existsSync(src)) {
+        consola.warn(`recipe: subdirectory "${subdir}" not found in ${repoSlug}@${ref} — skipping checkout`)
+        rmSync(staging, { recursive: true, force: true })
+        return
+      }
+      cpSync(src, recipeDir, { recursive: true })
+      rmSync(staging, { recursive: true, force: true })
+    }
     writeFileSync(markerPath, recipeRef)
     consola.info(`recipe: checked out ${slug}@${ref} → ${recipeDir}`)
   }
   catch (err) {
     consola.warn(`recipe: checkout of ${slug}@${ref} failed — ${err instanceof Error ? err.message : String(err)}`)
+    if (subdir)
+      rmSync(staging, { recursive: true, force: true })
   }
 }

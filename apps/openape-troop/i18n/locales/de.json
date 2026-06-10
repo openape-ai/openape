@@ -332,7 +332,7 @@
       },
       "repo": {
         "label": "Repository",
-        "description": "github.com/<owner>/<name>{'@'}<tag|commit> — die Pinned-Ref ist verpflichtend.",
+        "description": "github.com/<owner>/<name>[/<dir>]{'@'}<tag|commit> — die Pinned-Ref ist verpflichtend.",
         "openAria": "Recipe-Repo öffnen (Docs + benötigte Secrets)"
       },
       "params": {
@@ -343,6 +343,9 @@
       "entries": {
         "blueskySummary": {
           "hint": "Zweimal täglich ein Digest deiner Bluesky-Home-Timeline. Param: topic."
+        },
+        "ceo": {
+          "hint": "CEO für eine org.openape.ai-Organisation — liest Vision/Team/Objectives/Kosten live. Params: org_id, org_name."
         }
       }
     },

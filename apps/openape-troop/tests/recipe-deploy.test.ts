@@ -147,6 +147,16 @@ schedules:
 })
 
 describe('fetchRecipeManifest', () => {
+  it('resolves a catalog subdirectory to <owner>/<name>/<ref>/<subdir>/ape-agent.yaml', async () => {
+    let url = ''
+    const r = await fetchRecipeManifest('github.com/openape-ai/agent-catalog/ceo@v0.1.0', async (u) => {
+      url = u
+      return { ok: true, status: 200, text: MANIFEST }
+    })
+    expect(url).toBe('https://raw.githubusercontent.com/openape-ai/agent-catalog/v0.1.0/ceo/ape-agent.yaml')
+    expect(r.ok).toBe(true)
+  })
+
   const okFetch = async () => ({ ok: true, status: 200, text: MANIFEST })
 
   it('fetches + parses a pinned manifest from a github raw URL', async () => {
