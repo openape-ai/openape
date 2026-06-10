@@ -79,18 +79,14 @@ pnpm turbo run test --filter=openape-agent-mail
 
 ## Publish Flow
 
-Uses Changesets with a single root `.changeset/config.json`. GitHub Actions handles publishing automatically.
+Uses Changesets with a single root `.changeset/config.json`. **Publishing is local** — es gibt KEINEN CI-Release-Workflow (`.forgejo/workflows/` hat nur `ci`/`e2e`/`preview`; kein `release.yml`). `scripts/publish-chain.mjs` baut + published in Dependency-Reihenfolge (`pnpm publish --access public --ignore-scripts`, **ohne** `--provenance` — dafür bräuchte es GH-Actions-OIDC).
 
-1. `pnpm changeset` — create a changeset describing changes
-2. Push to main → Changesets bot creates a "Release" PR
-3. Merge the Release PR → packages are published to npm with `--provenance`
+1. `pnpm changeset` — pro Änderung einen Changeset anlegen
+2. `pnpm version-packages` (= `changeset version`) — Changesets konsumieren, Versionen + CHANGELOGs bumpen
+3. `pnpm release:dry` — prüfen, was published würde; dann `pnpm release` — published zu npm (npm-Login als Maintainer nötig)
+4. `main` ist protected → den „version packages"-Commit per Branch + PR + grünem CI mergen (kein Direct-Push)
 
-Manual (if needed):
-```bash
-pnpm changeset
-pnpm version-packages
-pnpm release
-```
+> **publish-chain `PACKAGES`-Liste ist manuell** (nicht aus `private:false` abgeleitet): neue publishable Packages dort in Dependency-Reihenfolge VOR ihren Consumern eintragen, sonst zeigt ein Consumer auf eine nicht-existente npm-Version.
 
 ## Deploy Flow
 
