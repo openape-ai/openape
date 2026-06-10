@@ -14,6 +14,9 @@ function rowToUser(row: UserRow): User {
     type: row.type as User['type'],
     isActive: row.isActive,
     createdAt: row.createdAt,
+    lastLoginAt: row.lastLoginAt ?? undefined,
+    recoveryVacationMode: row.recoveryVacationMode,
+    recoveryVacationDays: row.recoveryVacationDays ?? undefined,
   }
 }
 
@@ -90,6 +93,9 @@ export function createDrizzleUserStore(): UserStore {
       if (data.approver !== undefined) updates.approver = data.approver
       if (data.type !== undefined) updates.type = data.type
       if (data.isActive !== undefined) updates.isActive = data.isActive
+      if (data.lastLoginAt !== undefined) updates.lastLoginAt = data.lastLoginAt
+      if (data.recoveryVacationMode !== undefined) updates.recoveryVacationMode = data.recoveryVacationMode
+      if (data.recoveryVacationDays !== undefined) updates.recoveryVacationDays = data.recoveryVacationDays
 
       await db.update(users).set(updates).where(eq(users.email, email))
       const updated = await db.select().from(users).where(eq(users.email, email)).get()

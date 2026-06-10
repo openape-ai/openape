@@ -67,6 +67,10 @@ export const users = sqliteTable('users', {
   publicKey: text('public_key'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at').notNull(),
+  // Adaptive recovery cooldown (#462): activity timestamp + vacation switch.
+  lastLoginAt: integer('last_login_at'),
+  recoveryVacationMode: integer('recovery_vacation_mode', { mode: 'boolean' }).notNull().default(false),
+  recoveryVacationDays: integer('recovery_vacation_days'),
 }, table => [
   index('idx_users_id').on(table.id),
   index('idx_users_owner').on(table.owner),

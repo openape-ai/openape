@@ -1,17 +1,25 @@
+import type { User } from '@openape/auth'
 import { randomUUID } from 'node:crypto'
 import { createError, defineEventHandler, getHeader, getRequestIP, getRequestURL, readBody } from 'h3'
 import { checkRateLimit } from '../../utils/rate-limiter'
 import { sendRecoveryEmail } from '../../utils/email'
 
-// Request an account recovery (#297).
+// Request an account recovery (#297, adaptive cooldown #462).
 //
 // Always returns 202 regardless of whether the email is registered —
 // matches the existing register-endpoint enumeration mitigation.
 //
-// When the email IS registered, we mint a 72h-aged token and mail the
+// When the email IS registered, we mint an aged token and mail the
 // owner two CTAs: a CANCEL link (active-owner veto, works immediately)
-// and a RECOVER link (becomes usable after 72h). Active session on any
-// existing device also cancels the recovery via the login hook.
+// and a RECOVER link (becomes usable after the cooldown). Active session
+// on any existing device also cancels the recovery via the login hook.
+//
+// The cooldown adapts to account activity (#462): owners who signed in
+// within the last 30 days get 7 days to veto, dormant accounts keep the
+// 72h default, and the vacation switch stretches the wait to an
+// owner-configured maximum of 14 days. The deadline is fixed HERE, at
+// request time — later logins or settings changes never shorten a
+// running cooldown (enforced module-side against the stored usableAt).
 //
 // For unknown emails we still pretend by waiting the same wall-clock
 // duration the mail-send takes — no token is created. The body of the
@@ -20,8 +28,24 @@ import { sendRecoveryEmail } from '../../utils/email'
 // "registered, owner didn't notice yet" via mail-deliverability signals.
 
 const HOUR_MS = 60 * 60 * 1000
-const COOLDOWN_MS = 72 * HOUR_MS
-const POST_COOLDOWN_WINDOW_MS = 14 * 24 * HOUR_MS
+const DAY_MS = 24 * HOUR_MS
+const INACTIVE_COOLDOWN_MS = 72 * HOUR_MS
+const ACTIVE_COOLDOWN_MS = 7 * DAY_MS
+const ACTIVITY_WINDOW_MS = 30 * DAY_MS
+const VACATION_DEFAULT_DAYS = 14
+const VACATION_MAX_DAYS = 14
+const POST_COOLDOWN_WINDOW_MS = 14 * DAY_MS
+
+function recoveryCooldownMs(user: User, now: number): number {
+  if (user.recoveryVacationMode) {
+    const days = Math.min(user.recoveryVacationDays ?? VACATION_DEFAULT_DAYS, VACATION_MAX_DAYS)
+    return days * DAY_MS
+  }
+  if (user.lastLoginAt && now - user.lastLoginAt < ACTIVITY_WINDOW_MS) {
+    return ACTIVE_COOLDOWN_MS
+  }
+  return INACTIVE_COOLDOWN_MS
+}
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string }>(event)
@@ -48,7 +72,7 @@ export default defineEventHandler(async (event) => {
 
   const now = Date.now()
   const token: string = randomUUID()
-  const usableAt = now + COOLDOWN_MS
+  const usableAt = now + recoveryCooldownMs(user, now)
   const expiresAt = usableAt + POST_COOLDOWN_WINDOW_MS
 
   await recoveryStore.save({
