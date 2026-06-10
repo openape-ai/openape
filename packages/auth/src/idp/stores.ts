@@ -377,6 +377,9 @@ export interface User {
   type?: 'human' | 'agent' // determines act claim. Default: 'human' if no owner, 'agent' if owner set
   isActive: boolean
   createdAt: number
+  lastLoginAt?: number // ms epoch of the last successful passkey login (#462)
+  recoveryVacationMode?: boolean // vacation switch: stretch the recovery cooldown (#462)
+  recoveryVacationDays?: number // owner-configured vacation cooldown in days, capped at 14 (#462)
 }
 
 export interface UserListOptions {

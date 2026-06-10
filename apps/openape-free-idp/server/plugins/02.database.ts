@@ -70,11 +70,23 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE TABLE IF NOT EXISTS users (
       email TEXT PRIMARY KEY NOT NULL, id TEXT, name TEXT NOT NULL,
       owner TEXT, approver TEXT, type TEXT, public_key TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+      is_active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL,
+      last_login_at INTEGER,
+      recovery_vacation_mode INTEGER NOT NULL DEFAULT 0,
+      recovery_vacation_days INTEGER
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_id ON users(id)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_users_approver ON users(approver)`)
+
+    // Adaptive recovery cooldown (#462): activity timestamp + vacation
+    // switch on existing user tables.
+    try { await db.run(sql`ALTER TABLE users ADD COLUMN last_login_at INTEGER`) }
+    catch { /* already present */ }
+    try { await db.run(sql`ALTER TABLE users ADD COLUMN recovery_vacation_mode INTEGER NOT NULL DEFAULT 0`) }
+    catch { /* already present */ }
+    try { await db.run(sql`ALTER TABLE users ADD COLUMN recovery_vacation_days INTEGER`) }
+    catch { /* already present */ }
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS shapes (
       cli_id TEXT PRIMARY KEY, executable TEXT NOT NULL, description TEXT NOT NULL,
