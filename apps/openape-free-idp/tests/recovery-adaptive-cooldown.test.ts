@@ -37,6 +37,11 @@ vi.mock('../server/utils/rate-limiter', () => ({
 
 vi.mock('../server/utils/email', () => ({
   sendRecoveryEmail: (...args: any[]) => sendRecoveryEmailMock(...args),
+  sendRecoveryWarningEmail: vi.fn(async () => {}),
+}))
+
+vi.mock('../server/utils/push', () => ({
+  sendRecoveryWarningPush: vi.fn(async () => {}),
 }))
 
 let recoveryStore: InMemoryRecoveryStore
@@ -57,6 +62,9 @@ beforeEach(() => {
     recoveryStore,
     userStore: {
       findByEmail: async (email: string) => (user && email === EMAIL ? user : null),
+    },
+    emailHistoryStore: {
+      listAllForEmail: async (email: string) => [email],
     },
   }))
 })

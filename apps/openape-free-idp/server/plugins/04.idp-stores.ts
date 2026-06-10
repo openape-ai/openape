@@ -10,6 +10,7 @@ import { createDrizzleSshKeyStore } from '../utils/drizzle-ssh-key-store'
 import { createDrizzleConsentStore } from '../utils/drizzle-consent-store'
 import { createDrizzleAdminAllowlistStore } from '../utils/drizzle-admin-allowlist-store'
 import { createDrizzleRecoveryStore } from '../utils/drizzle-recovery-store'
+import { createDrizzleEmailHistoryStore } from '../utils/drizzle-email-history-store'
 
 export default defineNitroPlugin(() => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -41,4 +42,7 @@ export default defineNitroPlugin(() => {
 
   // Account-recovery 72h-hold (#297)
   defineRecoveryStore(() => createDrizzleRecoveryStore())
+
+  // E-mail address history for the recovery warning-broadcast (#462)
+  defineEmailHistoryStore(() => createDrizzleEmailHistoryStore())
 })
