@@ -45,7 +45,7 @@
         },
         {
           "title": "Or attach a recipe instead",
-          "caption": "A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`) — pick a curated one or paste your own. The recipe is *additive*: your system prompt rides along on top of the recipe's intent, and recipe-declared secrets get their own input rows. Skip it for a pure custom agent.",
+          "caption": "A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`). Pick a curated one — here *Bluesky feed summary*, which pins its repo and pre-declares the secrets it needs — or paste your own pinned repo via *Custom…*. The recipe is *additive*: your system prompt rides along on top of the recipe's intent. Skip it for a pure custom agent.",
           "shot": "spawn-agent/03-recipe-option.png"
         },
         {
