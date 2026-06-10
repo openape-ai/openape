@@ -22,15 +22,17 @@ fi
 
 pw() { # run a script in the playwright image, on the network, with the agent mounts
   # Mount under /demo so the script resolves `playwright` from /demo/node_modules.
+  # The service itself mounts docs/local-stack:/demo/out and compose/demo:/demo/src
+  # (story kit + captures) — see compose/local-stack.yml.
   "${COMPOSE[@]}" run --rm --entrypoint node --workdir /demo \
     -e "REG_TOKEN=${REG_TOKEN:-}" \
     -e "HOST_ID=${HOST_ID:-}" \
     -e "KEEP=${KEEP:-}" \
     -v "$(pwd)/compose/agent:/demo/agent:ro" \
     -v "$(pwd)/$OUTDIR:/out" \
-    -v "$(pwd)/docs/local-stack/screenshots:/demo/out" \
     playwright "/demo/agent/$1"
 }
+rm -f docs/local-stack/manifest-agent.json
 
 echo "→ Resetting the IdP + nest, bringing the stack up…"
 "${COMPOSE[@]}" up -d >/dev/null

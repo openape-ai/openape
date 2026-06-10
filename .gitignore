@@ -26,3 +26,8 @@ components.d.ts
 # Local dev SQLite databases (each SP creates one when NUXT_TURSO_URL is unset)
 apps/openape-troop/openape-troop.db
 apps/openape-org/openape-org.db
+
+# Story-capture intermediates — the committed truth lives per app under
+# apps/<app>/docs/stories.json + apps/<app>/public/docs/screenshots/.
+docs/local-stack/screenshots/
+docs/local-stack/manifest-*.json

@@ -20,8 +20,9 @@ if [ "${1:-}" = "--fresh" ] || [ "${FRESH:-}" = "1" ]; then
   "$(dirname "$0")/../reset.sh"
 fi
 
-echo "→ Clearing old screenshots…"
-find docs/local-stack/screenshots -name '*.png' -delete 2>/dev/null || true
+echo "→ Clearing old captures…"
+rm -rf docs/local-stack/screenshots
+rm -f docs/local-stack/manifest-demo.json
 
 echo "→ Ensuring the stack is up…"
 "${COMPOSE[@]}" up -d >/dev/null
@@ -36,11 +37,12 @@ PROXY_IP=$(docker inspect "$PROXY_ID" --format '{{range .NetworkSettings.Network
 export OPENAPE_RATE_LIMIT_TRUSTED_PROXIES="$PROXY_IP"
 echo "  (trusting proxy $PROXY_IP for X-Forwarded-For rate-limit keying)"
 
-# Reset the IdP to a clean slate so the demo user is freshly registered (the
-# file DB is ephemeral; recreating the container wipes it) — reproducible
-# screenshots: a real first-time passkey sign-up + first-time consent each run.
-echo "→ Resetting the IdP to a clean slate…"
-"${COMPOSE[@]}" up -d --force-recreate idp >/dev/null
+# Reset the IdP AND the org app to a clean slate (their file DBs are
+# ephemeral; recreating the containers wipes them) — reproducible stories: a
+# real first-time passkey sign-up, first-time consent, and a genuinely empty
+# org list for the create-org story.
+echo "→ Resetting idp + org to a clean slate…"
+"${COMPOSE[@]}" up -d --force-recreate idp org >/dev/null
 printf "  waiting for idp…"
 for _ in $(seq 1 30); do
   [ "$("${COMPOSE[@]}" ps idp --format '{{.Health}}' 2>/dev/null)" = "healthy" ] && break
@@ -64,8 +66,8 @@ process.stdout.write(row ? row.token : "");
 if [ -z "${TOKEN}" ]; then echo "✗ no registration token found"; exit 1; fi
 echo "→ Registration token: ${TOKEN}"
 
-echo "→ Running the flows…"
-"${COMPOSE[@]}" run --rm -e REG_TOKEN="${TOKEN}" playwright
+echo "→ Running the stories…"
+"${COMPOSE[@]}" run --rm -e REG_TOKEN="${TOKEN}" playwright node /demo/src/run-stories.mjs
 
 echo "→ Distributing docs to each app…"
 node compose/distribute-docs.mjs

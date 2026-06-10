@@ -238,9 +238,10 @@ services:
     dns:
       - 172.30.0.53
     volumes:
-      - ../docs/local-stack/screenshots:/demo/out
-      # Live-mount the script so the flows can be iterated without an image rebuild.
-      - ./demo/screenshot.mjs:/demo/screenshot.mjs:ro
+      # Stories write screenshots + the manifest under docs/local-stack/.
+      - ../docs/local-stack:/demo/out
+      # Live-mount the story scripts — iterate without an image rebuild.
+      - ./demo:/demo/src:ro
     networks:
       - openape-test
 

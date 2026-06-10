@@ -1,0 +1,64 @@
+{
+  "stories": [
+    {
+      "app": "openape-free-idp",
+      "category": "Getting started",
+      "id": "create-identity",
+      "title": "Create your identity",
+      "intro": "Register a WebAuthn passkey — no password, ever. Your OpenApe ID becomes the DDISA authority for your identity: every Service Provider logs you in via DNS-discovered SSO without ever seeing a credential.",
+      "order": 1,
+      "steps": [
+        {
+          "title": "Open OpenApe ID",
+          "caption": "The landing page asks for nothing but your email. Click **Create account** to start.",
+          "shot": "create-identity/01-landing.png"
+        },
+        {
+          "title": "Request your registration link",
+          "caption": "Enter your email — OpenApe ID sends you a one-time registration link.",
+          "shot": "create-identity/02-request-link.png"
+        },
+        {
+          "title": "Register your passkey",
+          "caption": "The link opens the passkey ceremony. Your device (Touch ID, Windows Hello, a security key) creates the credential — in this E2E run a virtual authenticator answers headlessly.",
+          "shot": "create-identity/03-register-passkey.png"
+        },
+        {
+          "title": "Done — you are signed in",
+          "caption": "That's the whole sign-up: one passkey, no password to remember or leak.",
+          "shot": "create-identity/04-registered.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-free-idp",
+      "category": "Account",
+      "id": "account-dashboard",
+      "title": "Your account dashboard",
+      "intro": "The dashboard is home base for your identity: passkeys, agent identities, permissions and connected services.",
+      "order": 2,
+      "steps": [
+        {
+          "title": "Open your dashboard",
+          "caption": "Signed in, the root page shows your account: registered passkeys, the agents acting under your identity, and the services you have authorized.",
+          "shot": "account-dashboard/01-dashboard.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-free-idp",
+      "category": "Agents",
+      "id": "agent-identities",
+      "title": "Your agent identities",
+      "intro": "Agents are first-class identities under your account: the IdP mints them a DDISA email and you stay in control.",
+      "order": 10,
+      "steps": [
+        {
+          "title": "Open Agents at your IdP",
+          "caption": "Every agent spawned from your nests appears here with its own `…@id.openape.ai` identity — inspect it, or revoke it independently of your own keys.",
+          "shot": "agent-identities/01-agents.png"
+        }
+      ]
+    }
+  ]
+}

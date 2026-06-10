@@ -1,0 +1,49 @@
+{
+  "stories": [
+    {
+      "app": "openape-org",
+      "category": "Getting started",
+      "id": "sign-in",
+      "title": "Sign in",
+      "intro": "Org runs your CEO-led agent organizations. Like every OpenApe app it signs you in via DDISA SSO — same passkey, same IdP.",
+      "order": 5,
+      "steps": [
+        {
+          "title": "Open Org",
+          "caption": "The start page is the sign-in: enter your email and continue.",
+          "shot": "sign-in/01-landing.png"
+        },
+        {
+          "title": "Signed in — your organizations",
+          "caption": "On first visit the list is empty — each org you create is a virtual company with its own CEO, team, budget and reports.",
+          "shot": "sign-in/02-home-empty.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-org",
+      "category": "Organizations",
+      "id": "create-org",
+      "title": "Create your first org",
+      "intro": "An org starts with three things: a name, a vision the CEO will read, and a monthly budget cap the Sanierer enforces.",
+      "order": 6,
+      "steps": [
+        {
+          "title": "Start a new organization",
+          "caption": "Click **Create your first org**. The dialog asks for the basics — you can refine the vision and grow the team later.",
+          "shot": "create-org/01-dialog.png"
+        },
+        {
+          "title": "Name, vision, budget",
+          "caption": "The vision is plain prose — the CEO reads it. The monthly budget is the hard cap: above it, the Sanierer stops the CEO from hiring more.",
+          "shot": "create-org/02-filled.png"
+        },
+        {
+          "title": "Create",
+          "caption": "The org page opens: org chart, members, cost dashboard and reports — empty for now, ready for a CEO.",
+          "shot": "create-org/03-org-page.png"
+        }
+      ]
+    }
+  ]
+}
