@@ -1,6 +1,6 @@
 ---
 id: recovery-adaptive-cooldown
-status: red
+status: green
 app: openape-free-idp
 issue: 462
 tests:
@@ -11,10 +11,11 @@ tests:
 guide: recovery-vacation-mode
 ---
 
-> Red-Beweis: Vitest-Tests failen nachweislich (Kriterien 1, 3, 4 + Mail-Zeitpunkt aus 6);
-> Kriterien 2, 5, 7 sind als Pins grün (v1-Verhalten, das die Änderung nicht brechen darf).
-> Der Story-Kit-Lauf (`recovery-vacation-mode`) steht aus und kommt mit dem
-> Demo-Stack-Lauf der green-Phase.
+> Green-Beweis: alle drei Vitest-Files grün (Kriterien 1–7 implementiert bzw. als
+> Pins bestätigt); adaptive Frist + Settings-Endpoint + lastLoginAt-Pflege im
+> Login-Flow sind umgesetzt. Der Story-Kit-Lauf (`recovery-vacation-mode`,
+> Demo-Stack `compose/demo/stories/idp-recovery.mjs`) steht noch aus und kommt
+> mit dem Demo-Stack-Lauf der green-Phase.
 
 # Adaptive Wartefrist bei Account-Wiederherstellung
 
