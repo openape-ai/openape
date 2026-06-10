@@ -49,28 +49,55 @@ await kit.story({
   title: 'Spawn your first agent',
   intro: 'Agents run on YOUR machine: a local nest daemon is bound to Troop and receives spawn intents over a websocket. Spawning creates a real OS user, an agent identity at your IdP, and a chat bridge.',
 }, async (s) => {
-  await s.step('Send the spawn intent', {
-    do: async () => {
-      const r = await api.post(`${TROOP}/api/agents/spawn-intent`, {
-        headers: { 'content-type': 'application/json' },
-        data: { name: NAME, host_id: HOST_ID, bridge_base_url: 'http://mock-llm:4000/v1', bridge_model: 'gpt-5.5', bridge_key: 'sk-mock', system_prompt: 'You are a test agent. Reply briefly.' },
-      })
-      const b = await r.json().catch(() => ({}))
-      if (!b.intent_id)
-        throw new Error(`no intent_id (status ${r.status()})`)
-      const res = await pollIntent(`/api/agents/spawn-intent/${b.intent_id}`)
-      if (!res?.ok)
-        throw new Error(`spawn failed: ${JSON.stringify(res)}`)
-    },
-  }, 'Use **Spawn agent** in the dashboard (or `apes agents spawn <name>` on the nest machine): pick a name, a model, and a system prompt. Troop forwards the intent to your nest, which provisions the agent.')
-
-  await s.step('The agent appears', {
+  await s.step('Open the spawn dialog', {
     do: async () => {
       await page.goto(`${TROOP}/agents`, { waitUntil: 'networkidle' }).catch(() => {})
-      await page.waitForTimeout(2500)
+      await page.waitForTimeout(2000)
+      await page.getByRole('button', { name: /spawn agent/i }).first().click()
+      await page.waitForTimeout(1000)
+    },
+    shot: 'dialog',
+  }, 'Hit **Spawn agent** in the dashboard. Name and system prompt are the base of every agent; a quick-start **preset** (calendar assistant, mail triage, daily summary, …) pre-fills the prompt — or keep *Custom (empty)* and write your own.')
+
+  await s.step('Name it and write the prompt — a custom agent', {
+    do: async () => {
+      const dialog = page.getByRole('dialog').first()
+      await dialog.locator('input[type=text], input:not([type])').first().fill(NAME)
+      await dialog.locator('textarea').first().fill('You are a test agent. Reply briefly.')
+    },
+    shot: 'custom-agent',
+  }, 'This is a **custom agent**: its behaviour comes entirely from the system prompt you write here (you can refine it later on the agent\'s page). Model and key are optional — without them the agent uses your nest\'s default LLM.')
+
+  await s.step('Or attach a recipe instead', {
+    do: async () => {
+      const dialog = page.getByRole('dialog').first()
+      await dialog.getByText(/^\s*recipe\s*/i).first().click().catch(() => {})
+      await page.waitForTimeout(800)
+      const recipe = dialog.getByText(/recipe/i).first()
+      await recipe.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+      await page.waitForTimeout(500)
+    },
+    shot: 'recipe-option',
+  }, 'A **recipe agent** gets its intent, tools and schedule from a pinned repository (`github.com/<owner>/<repo>@<ref>`) — pick a curated one or paste your own. The recipe is *additive*: your system prompt rides along on top of the recipe\'s intent, and recipe-declared secrets get their own input rows. Skip it for a pure custom agent.')
+
+  await s.step('Spawn', {
+    do: async () => {
+      const dialog = page.getByRole('dialog').first()
+      await dialog.getByRole('button', { name: /^\s*spawn\s*$/i }).click()
+      // The nest provisions the agent (OS user + IdP identity + bridge) —
+      // poll the dashboard until it shows up.
+      let visible = false
+      for (let i = 0; i < 30 && !visible; i++) {
+        await page.waitForTimeout(3000)
+        await page.goto(`${TROOP}/agents`, { waitUntil: 'networkidle' }).catch(() => {})
+        visible = await page.getByText(NAME).first().isVisible().catch(() => false)
+      }
+      if (!visible)
+        throw new Error('spawned agent never appeared in the dashboard')
+      await page.waitForTimeout(1500)
     },
     shot: 'spawned',
-  }, 'Within seconds the agent shows up in **My Agents** — it now has its own identity at your IdP (`<name>-…@id.openape.ai`) and is reachable from every OpenApe app.')
+  }, 'Troop forwards the intent to your nest, which provisions the agent. Within seconds it shows up in **My Agents** — it now has its own identity at your IdP (`<name>-…@id.openape.ai`) and is reachable from every OpenApe app.')
 })
 
 await kit.story({
