@@ -11,8 +11,9 @@ import { chromium } from 'playwright'
 import { createStoryKit, installDeterminism } from './story-kit.mjs'
 import chatStories from './stories/chat.mjs'
 import idpStories from './stories/idp.mjs'
-import orgStories from './stories/org.mjs'
 import troopStories from './stories/troop.mjs'
+// NB: the org guide is captured by compose/agent/org-ceo.mjs instead — its
+// final story spawns a real CEO agent, which needs a bound nest.
 
 const OUT = '/demo/out'
 mkdirSync(OUT, { recursive: true })
@@ -49,7 +50,7 @@ const ctx = {
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, troopStories, chatStories, orgStories])
+for (const run of [idpStories, troopStories, chatStories])
   await run(ctx)
 
 const failures = kit.finish('demo')
