@@ -65,6 +65,11 @@ export function createDrizzleRecoveryStore(): RecoveryStore {
         .map(rowToToken)
     },
 
+    async listAllForEmail(email) {
+      const rows = await db.select().from(recoveryTokens).where(eq(recoveryTokens.email, email)).all()
+      return rows.map(rowToToken)
+    },
+
     async markConsumed(token) {
       await db.update(recoveryTokens).set({ consumed: true }).where(eq(recoveryTokens.token, token))
     },

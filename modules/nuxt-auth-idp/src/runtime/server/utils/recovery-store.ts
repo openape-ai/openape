@@ -34,6 +34,18 @@ export function createRecoveryStore(): RecoveryStore {
       return out
     },
 
+    async listAllForEmail(email) {
+      const keys = await storage.getKeys(PREFIX)
+      const out: RecoveryToken[] = []
+      for (const key of keys) {
+        const entry = await storage.getItem<RecoveryToken>(key)
+        if (!entry) continue
+        if (entry.email !== email) continue
+        out.push(entry)
+      }
+      return out
+    },
+
     async markConsumed(token) {
       const entry = await storage.getItem<RecoveryToken>(`${PREFIX}${token}`)
       if (!entry) return

@@ -1,6 +1,6 @@
 ---
 id: recovery-audit
-status: red
+status: green
 app: openape-free-idp
 issue: 462
 tests:
@@ -10,9 +10,9 @@ tests:
 guide: recovery-history
 ---
 
-> Red-Beweis: alle Vitest-Tests failen nachweislich (Kriterien 1-6).
-> Der Story-Kit-Lauf (`recovery-history`) steht aus und kommt mit dem
-> Demo-Stack-Lauf der green-Phase.
+> Green-Beweis: beide Vitest-Files (8 Tests, Kriterien 1-6) grün, Gesamtsuite,
+> Lint und Typecheck grün. Der Story-Kit-Lauf (`recovery-history`) steht noch
+> aus und kommt mit dem Demo-Stack-Lauf.
 
 # Sichtbares Audit aller Wiederherstellungs-Ereignisse
 
