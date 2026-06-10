@@ -94,27 +94,23 @@ pnpm release
 
 ## Deploy Flow
 
-All apps are self-hosted on `chatty.delta-mind.at` via SSH + systemd. Deployment is orchestrated by `scripts/deploy.mjs` (replaces the retired per-app GitHub Actions deploy workflows).
+**Prod = tested images** (seit 2026-06-10): die vier Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`).
 
 ```bash
-pnpm deploy <target...>      # deploy named target(s)
-pnpm deploy --all            # deploy every target
-pnpm deploy --changed[=ref]  # deploy targets whose paths changed vs ref
-pnpm deploy --dry-run ...    # print plan, touch nothing
-pnpm deploy --list           # list known targets
+pnpm run deploy:image <target...>   # free-idp | troop | chat | org
+pnpm run deploy:image --all
 ```
 
-Targets (each maps to a `scripts/deploy-<t>.sh` + systemd service on chatty):
+Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-Image (`compose/preview-package.Dockerfile`, identisches Artefakt-Format wie die PR-Previews, Tag `prod-<sha>`) → lokaler Smoke-Test (`/api/health`) → push → chatty pullt + `compose up` → externes Health-Gate → bei Fehler automatischer Rollback auf `<APP>_TAG_PREV`. Kein Build auf chatty. Die Container mounten das bestehende `/home/openape/projects/<app>/shared` (gleicher Pfad, gleiche `.env`), nginx-Ports unverändert (`127.0.0.1:<port>`).
 
-| Target     | App dir                  | Service                      |
-|------------|--------------------------|------------------------------|
-| `org`      | apps/openape-org         | openape-org.service          |
-| `troop`    | apps/openape-troop       | openape-troop.service        |
-| `chat`     | apps/openape-chat        | openape-chat.service         |
-| `docs`     | apps/docs                | static symlink swap (no svc) |
-| `free-idp` | apps/openape-free-idp    | openape-free-idp.service     |
+| Target     | Port | Image                  |
+|------------|------|------------------------|
+| `free-idp` | 3003 | openape-free-idp       |
+| `troop`    | 3010 | openape-troop          |
+| `chat`     | 3007 | openape-chat           |
+| `org`      | 3020 | openape-org            |
 
-SSH user defaults to `openape`; override with `CHATTY_USER` / `CHATTY_HOST` env vars. Each deploy script builds locally, rsyncs to chatty, swaps the `current` symlink, restarts the service, and health-checks. `scripts/deploy.mjs` adds path-based change detection and automatic rollback on failure.
+**Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Das alte rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) bleibt für `docs` (statisches Site-Deploy) und als Legacy-Pfad erhalten.
 
 ## Workflow: Definition of Done
 
