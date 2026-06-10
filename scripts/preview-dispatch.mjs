@@ -1,39 +1,39 @@
 #!/usr/bin/env node
-// Per-app PR previews: trigger Coolify preview deploys for ONLY the apps a
-// PR actually changes.
+// Per-app PR previews from TESTED images: build only the apps a PR changes,
+// push each as registry.openape.ai/<app>:pr-<n>, and let Coolify deploy that
+// exact artifact.
 //
-// Why this exists: Coolify's gitea webhook handler runs the whole preview
-// lifecycle natively (create + FQDN on open, redeploy on sync, teardown on
-// close), but its pull_request path ignores watch_paths — pointing the repo
-// webhook straight at Coolify previews EVERY app on EVERY PR. So CI runs this
-// script on pull_request events instead: it computes the affected apps from
-// the git diff and re-signs the event payload with each affected app's own
-// Coolify webhook secret. Coolify authenticates a payload per app (HMAC
-// against that app's manual_webhook_secret_gitea), so only the apps we sign
-// for act — the rest of the lifecycle stays native Coolify.
+// Runs on the `mac` runner (fast native builds, warm pnpm/turbo caches). The
+// flow per affected app: `turbo run build` → COPY-only amd64 image
+// (compose/preview-package.Dockerfile) → push → Coolify
+// `POST /deploy?uuid&pr&docker_tag` (for dockerimage apps Coolify upserts the
+// ApplicationPreview itself — no webhook needed). `closed` tears every app's
+// preview down via `DELETE /applications/<uuid>/previews/<n>` (404 = none).
 //
-// env: GITHUB_EVENT_PATH            Forgejo Actions event payload (the
-//                                   pull_request webhook payload verbatim)
-//      GITHUB_BASE_REF              PR base branch
-//      COOLIFY_WEBHOOK_URL          Coolify's gitea manual-webhook endpoint
-//      COOLIFY_PREVIEW_SECRET_IDP / _TROOP / _CHAT
-//                                   per-app secrets (Forgejo Actions secrets)
+// env: GITHUB_EVENT_PATH   Forgejo Actions event payload
+//      GITHUB_BASE_REF     PR base branch
+//      COOLIFY_API         default https://coolify.openape.ai/api/v1
+//      COOLIFY_TOKEN       deploy-scoped Coolify API token
+//      REGISTRY_USER / REGISTRY_PASSWORD   push creds for registry.openape.ai
 
 import { execFileSync } from 'node:child_process'
-import { createHmac, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import process from 'node:process'
+
+const REGISTRY = 'registry.openape.ai'
+const API = process.env.COOLIFY_API || 'https://coolify.openape.ai/api/v1'
 
 const APPS = [
-  { name: 'idp', dir: 'apps/openape-free-idp/', secretEnv: 'COOLIFY_PREVIEW_SECRET_IDP' },
-  { name: 'troop', dir: 'apps/openape-troop/', secretEnv: 'COOLIFY_PREVIEW_SECRET_TROOP' },
-  { name: 'chat', dir: 'apps/openape-chat/', secretEnv: 'COOLIFY_PREVIEW_SECRET_CHAT' },
-  { name: 'org', dir: 'apps/openape-org/', secretEnv: 'COOLIFY_PREVIEW_SECRET_ORG' },
+  { name: 'idp', dir: 'apps/openape-free-idp/', filter: 'openape-free-idp', image: 'openape-free-idp', port: 3003, uuid: 't13z5yj6xw87cy7bwz00y93x' },
+  { name: 'troop', dir: 'apps/openape-troop/', filter: '@openape/troop', image: 'openape-troop', port: 3010, uuid: 'hke1tnc7xxy2pc8uf8ch6bud' },
+  { name: 'chat', dir: 'apps/openape-chat/', filter: '@openape/chat', image: 'openape-chat', port: 3007, uuid: 'zmgz7sm50unh49bzclgjbfmh' },
+  { name: 'org', dir: 'apps/openape-org/', filter: '@openape/org', image: 'openape-org', port: 3020, uuid: 'sf7j3jqd5u8wavamqqtx5g4z' },
 ]
 
 // A change here affects every app's preview image (shared workspace deps and
-// the parameterized Dockerfile all previews build from).
+// the packaging Dockerfile all previews are built with).
 const SHARED_PREFIXES = ['packages/', 'modules/']
-const SHARED_FILES = ['pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'turbo.json', 'compose/Nuxt.Dockerfile']
+const SHARED_FILES = ['pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'turbo.json', 'compose/preview-package.Dockerfile']
 
 function affectedApps(changedFiles) {
   const touchesShared = changedFiles.some(f =>
@@ -44,64 +44,84 @@ function affectedApps(changedFiles) {
   return APPS.filter(app => changedFiles.some(f => f.startsWith(app.dir)))
 }
 
+function sh(cmd, args, opts = {}) {
+  return execFileSync(cmd, args, { stdio: 'inherit', ...opts })
+}
+
+async function coolify(method, path) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${process.env.COOLIFY_TOKEN}` },
+  })
+  const text = await res.text()
+  return { status: res.status, text }
+}
+
 const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
-// Coolify's handler expects gitea's action name; Actions may report the
-// GitHub-compatible alias.
-const action = event.action === 'synchronize' ? 'synchronized' : event.action
-if (!['opened', 'synchronized', 'reopened', 'closed'].includes(action)) {
+const action = event.action === 'synchronized' ? 'synchronize' : event.action
+const pr = event.number
+if (!pr) {
+  console.log('[preview] no PR number in event — nothing to do')
+  process.exit(0)
+}
+
+if (action === 'closed') {
+  // Teardown for every app — apps without a preview answer 404, which is fine.
+  let failed = false
+  for (const app of APPS) {
+    const { status, text } = await coolify('DELETE', `/applications/${app.uuid}/previews/${pr}`)
+    const ok = status === 200 || status === 404
+    console.log(`[preview] ${app.name}: teardown HTTP ${status}${ok ? '' : ` — ${text.slice(0, 200)}`}`)
+    if (!ok)
+      failed = true
+  }
+  process.exit(failed ? 1 : 0)
+}
+
+if (!['opened', 'synchronize', 'reopened'].includes(action)) {
   console.log(`[preview] action '${event.action}' needs no dispatch`)
   process.exit(0)
 }
 
-let targets
-if (action === 'closed') {
-  // Teardown is idempotent — apps without a preview answer
-  // "No preview deployment found".
-  targets = APPS
-}
-else {
-  const base = process.env.GITHUB_BASE_REF || 'main'
-  const changed = execFileSync('git', ['diff', '--name-only', `origin/${base}...HEAD`], { encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean)
-  targets = affectedApps(changed)
-  console.log(`[preview] ${changed.length} changed files → apps: ${targets.map(a => a.name).join(', ') || '(none)'}`)
-}
+const base = process.env.GITHUB_BASE_REF || 'main'
+const changed = execFileSync('git', ['diff', '--name-only', `origin/${base}...HEAD`], { encoding: 'utf8' })
+  .split('\n')
+  .filter(Boolean)
+const targets = affectedApps(changed)
+console.log(`[preview] ${changed.length} changed files → apps: ${targets.map(a => a.name).join(', ') || '(none)'}`)
+if (targets.length === 0)
+  process.exit(0)
 
-const body = JSON.stringify({ ...event, action })
+console.log('[preview] pnpm install…')
+sh('pnpm', ['install', '--frozen-lockfile'])
+sh('docker', ['login', REGISTRY, '-u', process.env.REGISTRY_USER, '--password-stdin'], {
+  input: process.env.REGISTRY_PASSWORD,
+  stdio: ['pipe', 'inherit', 'inherit'],
+})
+
 let failed = false
 for (const app of targets) {
-  const secret = process.env[app.secretEnv]
-  if (!secret) {
-    console.error(`[preview] ${app.name}: secret ${app.secretEnv} is not set`)
-    failed = true
-    continue
-  }
-  const signature = createHmac('sha256', secret).update(body).digest('hex')
-  const res = await fetch(process.env.COOLIFY_WEBHOOK_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Gitea-Event': 'pull_request',
-      'X-Gitea-Delivery': randomUUID(),
-      'X-Hub-Signature-256': `sha256=${signature}`,
-    },
-    body,
-  })
-  const text = await res.text()
-  // Coolify's response lists every app matching the repo; only the app we
-  // signed for authenticates — the others appear as failed entries, which is
-  // expected and not ours to judge.
-  let mine
-  try {
-    mine = JSON.parse(text).find(e => e.application === app.name || e.application_name === app.name)
-  }
-  catch {}
-  const ok = res.status === 200 && mine
-    && (mine.status !== 'failed' || /no preview deployment found/i.test(mine.message ?? ''))
-  console.log(`[preview] ${app.name}: HTTP ${res.status} — ${mine ? `${mine.status ?? ''} ${mine.message ?? ''}`.trim() : text.slice(0, 200)}`)
+  const tag = `${REGISTRY}/${app.image}:pr-${pr}`
+  console.log(`\n[preview] ${app.name}: build → ${tag}`)
+  sh('pnpm', ['turbo', 'run', 'build', `--filter=${app.filter}`])
+  sh('docker', [
+    'buildx',
+    'build',
+    '--platform',
+    'linux/amd64',
+    '-f',
+    'compose/preview-package.Dockerfile',
+    '--build-arg',
+    `PORT=${app.port}`,
+    '-t',
+    tag,
+    '--push',
+    `${app.dir}.output`,
+  ])
+  const { status, text } = await coolify('POST', `/deploy?uuid=${app.uuid}&pr=${pr}&docker_tag=pr-${pr}`)
+  const ok = status === 200 && /queued/i.test(text)
+  console.log(`[preview] ${app.name}: deploy HTTP ${status} — ${text.slice(0, 200)}`)
   if (!ok)
     failed = true
 }
-if (failed)
-  process.exit(1)
+process.exit(failed ? 1 : 0)
