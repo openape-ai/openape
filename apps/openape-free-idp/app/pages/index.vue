@@ -27,7 +27,7 @@ async function handleLogout() {
         </div>
         <div class="w-full space-y-2">
           <UButton
-            to="/account"
+            to="/passkeys"
             color="primary"
             variant="outline"
             size="lg"
@@ -35,6 +35,16 @@ async function handleLogout() {
             icon="i-lucide-key-round"
           >
             Passkeys verwalten
+          </UButton>
+          <UButton
+            to="/ssh-keys"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-terminal"
+          >
+            SSH-Keys verwalten
           </UButton>
           <UButton
             to="/agents"
@@ -57,7 +67,17 @@ async function handleLogout() {
             Berechtigungen
           </UButton>
           <UButton
-            to="/account#connected-services"
+            to="/delegations"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-shield-check"
+          >
+            Delegationen
+          </UButton>
+          <UButton
+            to="/connected-services"
             color="primary"
             variant="outline"
             size="lg"
