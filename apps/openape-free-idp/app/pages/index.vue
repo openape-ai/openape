@@ -87,6 +87,16 @@ async function handleLogout() {
             Verbundene Dienste
           </UButton>
           <UButton
+            to="/recovery-protection"
+            color="primary"
+            variant="outline"
+            size="lg"
+            block
+            icon="i-lucide-life-buoy"
+          >
+            Wiederherstellungsschutz
+          </UButton>
+          <UButton
             to="/admin"
             color="primary"
             variant="outline"

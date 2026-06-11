@@ -43,12 +43,15 @@ export default async function run({ kit, page, EMAIL, IDP }) {
 
     await s.step('Cancel it in one tap', {
       do: async () => {
-        await page.goto(`${IDP}/account`, { waitUntil: 'networkidle' })
+        await page.goto(IDP, { waitUntil: 'networkidle' })
+        await click(page, /wiederherstellungsschutz/i)
+        await page.waitForURL(/\/recovery-protection/, { timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(800)
         await click(page, /cancel recovery/i)
         await page.waitForTimeout(1000)
       },
       shot: 'cancelled',
-    }, 'Didn\'t request it? Tap **Cancel recovery** in any warning — or right here in your account — and the attempt is dead for good. A cancelled recovery can never be completed, not even after its waiting period would have ended. Signing in with one of your existing passkeys cancels it automatically, too.')
+    }, 'Didn\'t request it? Tap **Cancel recovery** in any warning — or on your **Recovery protection** page, one click from the dashboard — and the attempt is dead for good. A cancelled recovery can never be completed, not even after its waiting period would have ended. Signing in with one of your existing passkeys cancels it automatically, too.')
   })
 
   // story: recovery-adaptive-cooldown
@@ -59,14 +62,15 @@ export default async function run({ kit, page, EMAIL, IDP }) {
     title: 'Vacation mode: a longer shield while you are away',
     intro: 'The recovery waiting period adapts to how you use your account: 7 days while you are active, 72 hours once an account has been dormant for a month. Going off-grid? Vacation mode stretches the shield to up to 14 days so nobody can take over your account while you cannot react.',
   }, async (s) => {
-    await s.step('Open your account settings', {
+    await s.step('Open Recovery protection', {
       do: async () => {
-        await page.goto(`${IDP}/account`, { waitUntil: 'networkidle' })
-        await page.locator('#recovery-protection').scrollIntoViewIfNeeded()
+        await page.goto(IDP, { waitUntil: 'networkidle' })
+        await click(page, /wiederherstellungsschutz/i)
+        await page.waitForURL(/\/recovery-protection/, { timeout: 10000 }).catch(() => {})
         await page.waitForTimeout(800)
       },
       shot: 'settings',
-    }, 'Vacation mode lives in your account settings. Only you, signed in, can change it — there is no way to flip it from the outside.')
+    }, 'Open **Recovery protection** from your dashboard. Vacation mode lives here, in your account settings — only you, signed in, can change it. There is no way to flip it from the outside.')
 
     await s.step('Switch on vacation mode', {
       do: async () => {
@@ -89,13 +93,15 @@ export default async function run({ kit, page, EMAIL, IDP }) {
     title: 'See every recovery attempt — nothing disappears',
     intro: 'Every recovery attempt against your account is on permanent record: when it happened, where it came from, and how it ended. Attackers cannot probe quietly, and nobody — not even you — can scrub the record.',
   }, async (s) => {
-    await s.step('Open your account settings', {
+    await s.step('Open Recovery protection', {
       do: async () => {
-        await page.goto(`${IDP}/account`, { waitUntil: 'networkidle' })
+        await page.goto(IDP, { waitUntil: 'networkidle' })
+        await click(page, /wiederherstellungsschutz/i)
+        await page.waitForURL(/\/recovery-protection/, { timeout: 10000 }).catch(() => {})
         await page.waitForTimeout(800)
       },
       shot: 'settings',
-    }, 'The recovery history sits in your account settings, visible only to you while signed in.')
+    }, 'The recovery history sits on your **Recovery protection** page, right under vacation mode — visible only to you while signed in.')
 
     await s.step('Review every attempt', {
       do: async () => {
