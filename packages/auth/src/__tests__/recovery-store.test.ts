@@ -105,6 +105,22 @@ describe('inMemoryRecoveryStore', () => {
     expect(count).toBe(1)
   })
 
+  // story: recovery-audit — criterion 6, parity pin for issue #583:
+  // an expired attempt stays "expired" in the audit history; the returned
+  // count covers only the rows actually changed.
+  it('cancelAllForEmail skips expired tokens — their history outcome stays "expired"', async () => {
+    const store = new InMemoryRecoveryStore()
+    await store.save(makeToken({ token: 't1' }))
+    await store.save(makeToken({ token: 't2', expiresAt: Date.now() - 1 }))
+
+    const count = await store.cancelAllForEmail('alice@example.com', 'login-veto')
+    expect(count).toBe(1)
+
+    const history = await store.listAllForEmail('alice@example.com')
+    expect(history.find(t => t.token === 't2')?.cancelled).toBe(false)
+    expect(history.find(t => t.token === 't1')?.cancelled).toBe(true)
+  })
+
   it('markConsumed is a no-op for unknown tokens', async () => {
     const store = new InMemoryRecoveryStore()
     await expect(store.markConsumed('unknown')).resolves.toBeUndefined()
