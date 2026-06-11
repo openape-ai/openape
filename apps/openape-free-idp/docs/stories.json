@@ -85,7 +85,7 @@
         },
         {
           "title": "Cancel it in one tap",
-          "caption": "Didn't request it? Tap **Cancel recovery** in any warning — or right here in your account — and the attempt is dead for good. A cancelled recovery can never be completed, not even after its waiting period would have ended. Signing in with one of your existing passkeys cancels it automatically, too.",
+          "caption": "Didn't request it? Tap **Cancel recovery** in any warning — or on your **Recovery protection** page, one click from the dashboard — and the attempt is dead for good. A cancelled recovery can never be completed, not even after its waiting period would have ended. Signing in with one of your existing passkeys cancels it automatically, too.",
           "shot": "account-recovery/04-cancelled.png"
         }
       ]
@@ -99,8 +99,8 @@
       "order": 4,
       "steps": [
         {
-          "title": "Open your account settings",
-          "caption": "Vacation mode lives in your account settings. Only you, signed in, can change it — there is no way to flip it from the outside.",
+          "title": "Open Recovery protection",
+          "caption": "Open **Recovery protection** from your dashboard. Vacation mode lives here, in your account settings — only you, signed in, can change it. There is no way to flip it from the outside.",
           "shot": "recovery-vacation-mode/01-settings.png"
         },
         {
@@ -124,8 +124,8 @@
       "order": 5,
       "steps": [
         {
-          "title": "Open your account settings",
-          "caption": "The recovery history sits in your account settings, visible only to you while signed in.",
+          "title": "Open Recovery protection",
+          "caption": "The recovery history sits on your **Recovery protection** page, right under vacation mode — visible only to you while signed in.",
           "shot": "recovery-history/01-settings.png"
         },
         {
@@ -141,7 +141,7 @@
       "id": "agent-identities",
       "title": "Your agent identities",
       "intro": "Agents are first-class identities under your account: the IdP mints them a DDISA email and you stay in control.",
-      "order": 13,
+      "order": 11,
       "steps": [
         {
           "title": "Open Agents at your IdP",
