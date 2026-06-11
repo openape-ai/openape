@@ -186,6 +186,49 @@ describe('authorize.get — DDISA allowlist-user flow (#301)', () => {
   })
 })
 
+describe('authorize.get — login_hint normalization (double-login fix)', () => {
+  // Repro for the "have to log in twice with a passkey" bug: the SP
+  // passes login_hint = the email the user typed (raw casing), the IdP
+  // session stores the canonical user.email. A case-/whitespace-only
+  // difference made the re-login guard fire AFTER a successful ceremony,
+  // bouncing the user back to /login for a second passkey prompt.
+  // Email comparison must be case-insensitive and whitespace-trimmed.
+
+  function assertBouncedToLogin() {
+    expect(sessionUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      pendingAuthorize: expect.objectContaining({ client_id: 'app.example.com' }),
+      returnTo: expect.stringContaining('/authorize?'),
+    }))
+    const target = mockSendRedirect.mock.calls[0][1]
+    expect(target).toMatch(/^\/login\?/)
+  }
+
+  function assertIssuedCode() {
+    // No re-login stash, proceeds straight to the SP callback with a code.
+    expect(sessionUpdate).not.toHaveBeenCalledWith(expect.objectContaining({
+      pendingAuthorize: expect.anything(),
+    }))
+    const target = mockSendRedirect.mock.calls[0][1]
+    expect(target).toMatch(/^https:\/\/app\.example\.com\/auth\/callback\?code=/)
+  }
+
+  it('does NOT bounce to /login when login_hint differs only in case', async () => {
+    // session userId = 'patrick@hofmann.eco' (canonical, from beforeEach)
+    await callAuthorize({ login_hint: 'Patrick@Hofmann.eco' })
+    assertIssuedCode()
+  })
+
+  it('does NOT bounce to /login when login_hint has surrounding whitespace', async () => {
+    await callAuthorize({ login_hint: '  patrick@hofmann.eco  ' })
+    assertIssuedCode()
+  })
+
+  it('still bounces to /login when login_hint is a genuinely different user', async () => {
+    await callAuthorize({ login_hint: 'someone-else@hofmann.eco' })
+    assertBouncedToLogin()
+  })
+})
+
 describe('consent.post — approve/cancel/csrf', () => {
   beforeEach(() => {
     pendingConsent = {
