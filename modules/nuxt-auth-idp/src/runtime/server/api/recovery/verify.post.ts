@@ -87,8 +87,9 @@ export default defineEventHandler(async (event) => {
   await credentialStore.save(credential)
   await recoveryStore.markConsumed(body.token)
 
-  // Audit trail — for now console-only. A future audit-store could
-  // persist these for surfacing in account settings.
+  // Ops log only. The durable audit trail is the recovery store itself
+  // (tokens survive consumption and are surfaced via listAllForEmail,
+  // #462) — this warn adds token id + invalidateOthers for server logs.
   console.warn('[openape-idp] recovery completed', {
     email: recovery.email,
     token: recovery.token,
