@@ -53,14 +53,13 @@ examples/         # Example apps + E2E tests
 
 ## Dependency Graph (Publish Order)
 
-```
-core (no deps)
-  └─► auth (depends on core)
-  └─► grants (depends on core)
-  └─► proxy (depends on core, grants)
-        └─► nuxt-auth-idp (depends on auth, core, grants)
-        └─► nuxt-auth-sp (depends on auth, core)
-```
+`packages/core` ist die Wurzel (keine internen Deps); alles andere hängt direkt
+oder transitiv daran. Der vollständige, aktuelle Überblick steht in
+`ARCHITECTURE.md` („Building blocks"); die **maßgebliche Publish-Reihenfolge**
+ist die manuell gepflegte `PACKAGES`-Liste in `scripts/publish-chain.mjs` —
+neue publishable Packages dort VOR ihren Consumern eintragen. Kein Graph mehr
+hier: die frühere 6-Package-Skizze war gegenüber den real ~18 Packages
+veraltet (Drift-Fund des arch-extract-Laufs, 2026-06-11).
 
 All `@openape/*` dependencies use `workspace:*` protocol.
 
