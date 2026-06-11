@@ -4,7 +4,7 @@
   },
   "common": {
     "loading": "Lädt…",
-    "save": "Speichern",
+    "save": "Änderungen speichern",
     "cancel": "Abbrechen",
     "close": "Schließen",
     "retry": "Erneut versuchen",
@@ -133,10 +133,10 @@
     "unassigned": "Nicht zugewiesene Spezialisten",
     "other": "Andere Rollen",
     "noAgentYet": "(noch kein Agent)",
-    "linkAgentCta": "Bestehenden verbinden…",
+    "linkAgentCta": "Gespawnten Agent verbinden",
     "spawnCta": "Agent spawnen",
     "spawnRetry": "Erneut versuchen",
-    "spawning": "Spawne… am iPhone bestätigen",
+    "spawning": "Spawne…",
     "spawnFailedGeneric": "Spawn fehlgeschlagen"
   },
   "linkAgent": {
@@ -266,6 +266,11 @@
       "modalBody": "Das löscht {name} samt aller Mitglieder, Ziele, Reports und Kostendaten dauerhaft. Nicht rückgängig machbar.",
       "typeToConfirm": "Tippe {name} zur Bestätigung",
       "confirmButton": "Für immer löschen"
+    },
+    "delegations": {
+      "title": "Delegationen",
+      "description": "Apps, die du in deinem Namen handeln lässt — z.B. diese Org, die Agents auf deinem Troop spawnt. Du hast jede einmal freigegeben; widerrufen kannst du sie an deinem IdP.",
+      "manage": "Am IdP verwalten"
     }
   }
 }

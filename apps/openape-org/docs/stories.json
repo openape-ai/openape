@@ -69,6 +69,31 @@
           "shot": "add-ceo/03-active.png"
         }
       ]
+    },
+    {
+      "app": "openape-org",
+      "category": "Organizations",
+      "id": "revoke-delegation",
+      "title": "Revoke a delegation",
+      "intro": "When you spawned the CEO you approved a standing delegation — org may spawn agents on your troop on your behalf. It's revocable any time, and the moment you revoke it the next spawn that service attempts is refused.",
+      "order": 4,
+      "steps": [
+        {
+          "title": "Find your delegations in Settings",
+          "caption": "In your org's **Settings** there's a **Delegations** card. The delegations live at your IdP — the single place that knows everything acting on your behalf — so org just links you there.",
+          "shot": "revoke-delegation/01-settings-card.png"
+        },
+        {
+          "title": "See what's acting on your behalf",
+          "caption": "Your IdP lists every standing delegation: here **org.openape.ai** may act for you at **troop.openape.ai** with exactly the `troop:spawn-agent` permission you approved — nothing more.",
+          "shot": "revoke-delegation/02-delegations-list.png"
+        },
+        {
+          "title": "Revoke it",
+          "caption": "One click and a confirm. The grant is gone — the org can no longer spawn on your troop, and troop refuses any token minted from it. Spawning again would prompt a fresh consent.",
+          "shot": "revoke-delegation/03-revoked.png"
+        }
+      ]
     }
   ]
 }

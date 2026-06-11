@@ -124,6 +124,10 @@ const spawnError = ref('')
 const spawnPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const pendingSpawnEmail = ref<string | null>(null)
 
+// Where the Owner manages/revokes the standing delegations they approved.
+// Lives at the IdP (same-origin there, no cross-origin call from org).
+const delegationsUrl = computed(() => `${(useRuntimeConfig().public as { idpUrl?: string }).idpUrl ?? 'https://id.openape.ai'}/delegations`)
+
 function onSpawnAgent(email: string) {
   if (!org.value) return
   spawnError.value = ''
@@ -305,6 +309,20 @@ async function destroyOrg() {
               {{ $t('common.save') }}
             </UButton>
           </div>
+
+          <UCard>
+            <template #header>
+              <h3 class="text-sm font-semibold">
+                {{ $t('settings.delegations.title') }}
+              </h3>
+              <p class="text-xs text-muted mt-1">
+                {{ $t('settings.delegations.description') }}
+              </p>
+            </template>
+            <UButton :to="delegationsUrl" external target="_blank" color="neutral" variant="soft" size="sm" icon="i-lucide-shield-check" trailing-icon="i-lucide-external-link">
+              {{ $t('settings.delegations.manage') }}
+            </UButton>
+          </UCard>
 
           <section class="mt-8 pt-6 border-t border-red-500/20">
             <h3 class="text-sm font-medium text-red-400 mb-1">
