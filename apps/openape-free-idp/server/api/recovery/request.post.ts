@@ -1,6 +1,7 @@
 import type { User } from '@openape/auth'
 import { randomUUID } from 'node:crypto'
 import { createError, defineEventHandler, getHeader, getRequestIP, getRequestURL, readBody } from 'h3'
+import { VACATION_DEFAULT_DAYS, VACATION_MAX_DAYS } from '../../../shared/recovery-policy'
 import { checkRateLimit } from '../../utils/rate-limiter'
 import { sendRecoveryEmail, sendRecoveryWarningEmail } from '../../utils/email'
 import { sendRecoveryWarningPush } from '../../utils/push'
@@ -33,8 +34,6 @@ const DAY_MS = 24 * HOUR_MS
 const INACTIVE_COOLDOWN_MS = 72 * HOUR_MS
 const ACTIVE_COOLDOWN_MS = 7 * DAY_MS
 const ACTIVITY_WINDOW_MS = 30 * DAY_MS
-const VACATION_DEFAULT_DAYS = 14
-const VACATION_MAX_DAYS = 14
 const POST_COOLDOWN_WINDOW_MS = 14 * DAY_MS
 
 function recoveryCooldownMs(user: User, now: number): number {

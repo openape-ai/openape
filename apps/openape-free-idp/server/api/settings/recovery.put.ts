@@ -1,4 +1,5 @@
 import { createError, defineEventHandler, readBody } from 'h3'
+import { VACATION_MAX_DAYS } from '../../../shared/recovery-policy'
 
 // Vacation switch for the adaptive recovery cooldown (#462).
 //
@@ -7,8 +8,6 @@ import { createError, defineEventHandler, readBody } from 'h3'
 // another account's recovery window. The vacation wait is hard-capped
 // at 14 days; longer values are rejected, not clamped, so the owner
 // knows exactly what protection is in force.
-
-const VACATION_MAX_DAYS = 14
 
 export default defineEventHandler(async (event) => {
   // requireAuth + useIdpStores are auto-imported module utils.
