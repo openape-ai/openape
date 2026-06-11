@@ -133,8 +133,14 @@ export default defineEventHandler(async (event) => {
   }
   else {
     const session = await getAppSession(event)
-    const loginHint = String(query.login_hint ?? '')
-    if (!session.data.userId || (loginHint && session.data.userId !== loginHint)) {
+    // Email comparison must be case-insensitive and whitespace-trimmed:
+    // the SP passes login_hint as the user typed it, while the session
+    // holds the canonical user.email. A casing-only difference here used
+    // to re-fire the re-login guard right after a successful passkey
+    // ceremony, forcing a second prompt before the redirect back.
+    const loginHint = String(query.login_hint ?? '').trim().toLowerCase()
+    const sessionUserId = session.data.userId?.trim().toLowerCase()
+    if (!session.data.userId || (loginHint && sessionUserId !== loginHint)) {
       const returnTo = `/authorize?${new URLSearchParams(query as Record<string, string>).toString()}`
       await session.update({ pendingAuthorize: params, returnTo })
       const loginUrl = new URL('/login', getRequestURL(event).origin)
