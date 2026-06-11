@@ -4,7 +4,7 @@
   },
   "common": {
     "loading": "Loading…",
-    "save": "Save",
+    "save": "Save changes",
     "cancel": "Cancel",
     "close": "Close",
     "retry": "Retry",
@@ -133,10 +133,10 @@
     "unassigned": "Unassigned specialists",
     "other": "Other roles",
     "noAgentYet": "(no agent yet)",
-    "linkAgentCta": "Link existing…",
+    "linkAgentCta": "Link a spawned agent",
     "spawnCta": "Spawn agent",
     "spawnRetry": "Retry spawn",
-    "spawning": "Spawning… approve on iPhone",
+    "spawning": "Spawning…",
     "spawnFailedGeneric": "Spawn failed"
   },
   "linkAgent": {
@@ -266,6 +266,11 @@
       "modalBody": "This permanently deletes {name} along with all its members, objectives, reports and cost data. This cannot be undone.",
       "typeToConfirm": "Type {name} to confirm",
       "confirmButton": "Delete forever"
+    },
+    "delegations": {
+      "title": "Delegations",
+      "description": "Apps you've let act on your behalf — like this org spawning agents on your troop. You approved each once; you can revoke any at your IdP.",
+      "manage": "Manage at your IdP"
     }
   }
 }
