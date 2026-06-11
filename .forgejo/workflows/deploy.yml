@@ -1,0 +1,31 @@
+name: deploy
+# Tested-image prod deploy, manually dispatched. Same path as the local
+# `pnpm run deploy:image` (scripts/deploy-image.mjs: turbo build → COPY-only
+# amd64 image → local smoke test → push → chatty pulls + compose up → health
+# gate → auto-rollback) — only the trigger moves into CI: the `mac` runner's
+# LaunchAgent session has keychain/registry access that headless shells lack.
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'free-idp | troop | chat | org | --all (space-separated)'
+        required: true
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, push and roll out tested images
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          TURBO_CACHE_DIR: /Users/patrickhofmann/.cache/turbo-openape-ci
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$REGISTRY_PASSWORD" | docker login registry.openape.ai -u "$REGISTRY_USER" --password-stdin
+          node scripts/deploy-image.mjs ${{ inputs.targets }}
