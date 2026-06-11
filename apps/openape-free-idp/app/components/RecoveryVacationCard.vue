@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { VACATION_MAX_DAYS } from '../../shared/recovery-policy'
+import { VACATION_MAX_DAYS } from '#shared/recovery-policy'
 
 // Vacation switch for the adaptive recovery cooldown (#462,
 // story recovery-adaptive-cooldown). Reads/writes the owner-only
