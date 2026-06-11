@@ -34,28 +34,28 @@
       "app": "openape-free-idp",
       "category": "Account",
       "id": "account-dashboard",
-      "title": "Your account — one page per thing",
-      "intro": "The dashboard is home base for your identity. Every button opens a focused page that shows exactly what it names — passkeys, SSH keys, connected services, delegations — rather than one long settings dump.",
+      "title": "Your account dashboard",
+      "intro": "Your dashboard is home base for your identity. Passkeys, SSH keys, agents, permissions, delegations and connected services each have their own page, so you go straight to the one you need.",
       "order": 2,
       "steps": [
         {
-          "title": "Your dashboard",
-          "caption": "Signed in, the root page is your hub: **Passkeys**, **SSH-Keys**, **Agents**, **Berechtigungen**, **Delegationen** and **Verbundene Dienste** — each its own button leading to its own page.",
+          "title": "Open your dashboard",
+          "caption": "Once you're signed in, the dashboard brings together everything tied to your identity — passkeys, SSH keys, agents, permissions, delegations and connected services. Choose an area to open it.",
           "shot": "account-dashboard/01-dashboard.png"
         },
         {
-          "title": "Passkeys — just your passkeys",
-          "caption": "**Passkeys verwalten** opens *only* your passkeys — add a device, remove an old one. Nothing else on the page.",
+          "title": "Manage your passkeys",
+          "caption": "Open **Passkeys** to manage how you sign in — add a new device, or remove one you no longer use.",
           "shot": "account-dashboard/02-passkeys.png"
         },
         {
-          "title": "SSH keys — just your keys",
-          "caption": "**SSH-Keys verwalten** is only your SSH public keys for *Sign in with SSH Key* — paste one, remove one.",
+          "title": "Manage your SSH keys",
+          "caption": "**SSH keys** holds the public keys for *Sign in with SSH Key*. Paste a key to add it, or remove one you've retired.",
           "shot": "account-dashboard/03-ssh-keys.png"
         },
         {
-          "title": "Connected services — just your consents",
-          "caption": "**Verbundene Dienste** lists the apps you approved at sign-in. Revoke one and it asks for consent again next time. (Your **Delegationen** — apps acting for you at *another* service — get their own page too.)",
+          "title": "Review connected services",
+          "caption": "**Connected services** lists the apps you've signed in to with your OpenApe ID. Revoke one and you'll be asked to approve it again next time. Apps acting for you at *another* service live under **Delegations**.",
           "shot": "account-dashboard/04-connected-services.png"
         }
       ]
