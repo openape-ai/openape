@@ -1,5 +1,5 @@
 import type { RecoveryStore, RecoveryToken } from '@openape/auth'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, gte } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { recoveryTokens } from '../database/schema'
 
@@ -89,6 +89,7 @@ export function createDrizzleRecoveryStore(): RecoveryStore {
           eq(recoveryTokens.email, email),
           eq(recoveryTokens.cancelled, false),
           eq(recoveryTokens.consumed, false),
+          gte(recoveryTokens.expiresAt, now),
         ))
       return active.length
     },

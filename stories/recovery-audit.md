@@ -6,6 +6,9 @@ issue: 462
 tests:
   - apps/openape-free-idp/tests/recovery-history-store.test.ts
   - apps/openape-free-idp/tests/recovery-history-endpoint.test.ts
+  - apps/openape-free-idp/tests/recovery-cancel-expired.test.ts
+  - packages/auth/src/__tests__/recovery-store.test.ts
+  - modules/nuxt-auth-idp/test/recovery-store-unstorage.test.ts
   - compose/demo/stories/idp-recovery.mjs
 guide: recovery-history
 ---
@@ -14,6 +17,11 @@ guide: recovery-history
 > Lint und Typecheck grün. Story-Kit-Lauf `recovery-history` auf dem Demo-Stack
 > grün (2026-06-10), Guide-Kapitel mit Screenshots generiert (Recovery-Historie
 > in den Konto-Einstellungen). Guide-Review durch Patrick bestanden (2026-06-11).
+>
+> Fix #583 (Drizzle-Parität für Kriterium 6): `cancelAllForEmail` im Drizzle-Store
+> cancelte abgelaufene Tokens nach — Regressionstest + Paritäts-Pins für
+> InMemory/Unstorage ergänzt, UPDATE-WHERE auf `expiresAt >= now` eingegrenzt
+> (2026-06-11).
 
 UI auf neue Account-IA umgezogen (main 054075b6): Recovery-Historie lebt jetzt auf der Fokus-Seite /recovery-protection (verlinkt vom Account-Hub und Dashboard); Kriterien unverändert.
 
