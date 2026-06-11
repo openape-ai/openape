@@ -46,15 +46,46 @@ export default async function run({ kit, page, EMAIL, IDP, REG_TOKEN }) {
     app: 'openape-free-idp',
     category: 'Account',
     id: 'account-dashboard',
-    title: 'Your account dashboard',
-    intro: 'The dashboard is home base for your identity: passkeys, agent identities, permissions and connected services.',
+    title: 'Your account — one page per thing',
+    intro: 'The dashboard is home base for your identity. Every button opens a focused page that shows exactly what it names — passkeys, SSH keys, connected services, delegations — rather than one long settings dump.',
   }, async (s) => {
-    await s.step('Open your dashboard', {
+    await s.step('Your dashboard', {
       do: async () => {
         await page.goto(IDP, { waitUntil: 'networkidle' })
         await page.waitForTimeout(1200)
       },
       shot: 'dashboard',
-    }, 'Signed in, the root page shows your account: registered passkeys, the agents acting under your identity, and the services you have authorized.')
+    }, 'Signed in, the root page is your hub: **Passkeys**, **SSH-Keys**, **Agents**, **Berechtigungen**, **Delegationen** and **Verbundene Dienste** — each its own button leading to its own page.')
+
+    await s.step('Passkeys — just your passkeys', {
+      do: async () => {
+        await click(page, /passkeys verwalten/i)
+        await page.waitForURL(/\/passkeys/, { timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(1000)
+      },
+      shot: 'passkeys',
+    }, '**Passkeys verwalten** opens *only* your passkeys — add a device, remove an old one. Nothing else on the page.')
+
+    await s.step('SSH keys — just your keys', {
+      do: async () => {
+        await page.goBack({ waitUntil: 'networkidle' }).catch(() => {})
+        await page.waitForTimeout(600)
+        await click(page, /ssh-keys verwalten/i)
+        await page.waitForURL(/\/ssh-keys/, { timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(1000)
+      },
+      shot: 'ssh-keys',
+    }, '**SSH-Keys verwalten** is only your SSH public keys for *Sign in with SSH Key* — paste one, remove one.')
+
+    await s.step('Connected services — just your consents', {
+      do: async () => {
+        await page.goBack({ waitUntil: 'networkidle' }).catch(() => {})
+        await page.waitForTimeout(600)
+        await click(page, /verbundene dienste/i)
+        await page.waitForURL(/\/connected-services/, { timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(1000)
+      },
+      shot: 'connected-services',
+    }, '**Verbundene Dienste** lists the apps you approved at sign-in. Revoke one and it asks for consent again next time. (Your **Delegationen** — apps acting for you at *another* service — get their own page too.)')
   })
 }

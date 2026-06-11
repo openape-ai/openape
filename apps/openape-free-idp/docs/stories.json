@@ -34,14 +34,29 @@
       "app": "openape-free-idp",
       "category": "Account",
       "id": "account-dashboard",
-      "title": "Your account dashboard",
-      "intro": "The dashboard is home base for your identity: passkeys, agent identities, permissions and connected services.",
+      "title": "Your account — one page per thing",
+      "intro": "The dashboard is home base for your identity. Every button opens a focused page that shows exactly what it names — passkeys, SSH keys, connected services, delegations — rather than one long settings dump.",
       "order": 2,
       "steps": [
         {
-          "title": "Open your dashboard",
-          "caption": "Signed in, the root page shows your account: registered passkeys, the agents acting under your identity, and the services you have authorized.",
+          "title": "Your dashboard",
+          "caption": "Signed in, the root page is your hub: **Passkeys**, **SSH-Keys**, **Agents**, **Berechtigungen**, **Delegationen** and **Verbundene Dienste** — each its own button leading to its own page.",
           "shot": "account-dashboard/01-dashboard.png"
+        },
+        {
+          "title": "Passkeys — just your passkeys",
+          "caption": "**Passkeys verwalten** opens *only* your passkeys — add a device, remove an old one. Nothing else on the page.",
+          "shot": "account-dashboard/02-passkeys.png"
+        },
+        {
+          "title": "SSH keys — just your keys",
+          "caption": "**SSH-Keys verwalten** is only your SSH public keys for *Sign in with SSH Key* — paste one, remove one.",
+          "shot": "account-dashboard/03-ssh-keys.png"
+        },
+        {
+          "title": "Connected services — just your consents",
+          "caption": "**Verbundene Dienste** lists the apps you approved at sign-in. Revoke one and it asks for consent again next time. (Your **Delegationen** — apps acting for you at *another* service — get their own page too.)",
+          "shot": "account-dashboard/04-connected-services.png"
         }
       ]
     },
