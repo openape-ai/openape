@@ -12,7 +12,9 @@ guide: account-recovery
 ---
 
 > Green-Beweis: alle drei Vitest-Files grün (Kriterien 1, 2, 3, 5, 6 implementiert;
-> Kriterien 4 und 7 als Pins weiter grün). Story-Kit-Lauf `account-recovery` auf
+> Kriterien 4 und 7 als Pins weiter grün).
+> UI auf neue Account-IA umgezogen (main 054075b6): Cancel-Step läuft über die
+> Fokus-Seite /recovery-protection. Kriterien unverändert. Story-Kit-Lauf `account-recovery` auf
 > dem Demo-Stack grün (2026-06-10), Guide-Kapitel mit Screenshots generiert
 > (Lost-access-Flow + Ein-Tap-Abbruch im Konto). Guide-Review durch Patrick bestanden (2026-06-11).
 
