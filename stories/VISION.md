@@ -29,6 +29,6 @@ darf nie ausreichen, um einen Account geräuschlos zu übernehmen.
 
 - Passkey-Sign-in/Sign-up, DDISA-Discovery, Consent + Grants (Bestand, v1)
 - Account-Recovery v1: 72h-Mail-Hold mit Abbruch bei Login (Bestand, #297/PR #460)
-- (geplant, #462) Adaptive Recovery-Wartefrist nach Konto-Aktivität (72h inaktiv / 7d aktiv / bis 14d Urlaubs-Schalter)
-- (geplant, #462) Recovery-Warnung auf allen Kanälen (Push + alle je verknüpften E-Mail-Adressen) mit Ein-Tap-Abbruch
-- (geplant, #462) Sichtbares Audit aller Recovery-Ereignisse in den Konto-Einstellungen
+- (Bestand, #462) Adaptive Recovery-Wartefrist nach Konto-Aktivität (72h inaktiv / 7d aktiv / bis 14d Urlaubs-Schalter)
+- (Bestand, #462) Recovery-Warnung auf allen Kanälen (Push + alle je verknüpften E-Mail-Adressen) mit Ein-Tap-Abbruch
+- (Bestand, #462) Sichtbares Audit aller Recovery-Ereignisse in den Konto-Einstellungen
