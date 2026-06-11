@@ -12,23 +12,44 @@ function getResend(): Resend {
   return _resend
 }
 
-export async function sendRegistrationEmail(email: string, registerUrl: string) {
-  const config = useRuntimeConfig()
-  const resend = getResend()
-
-  // The Resend SDK returns { data, error } and does NOT throw on API failures
-  // (invalid key, unverified sender domain, rate limit, etc.). Without checking
-  // `error` we'd return 200 to the caller while the email is silently dropped.
-  const { data, error } = await resend.emails.send({
-    from: config.resendFrom,
-    to: email,
-    subject: 'Dein Account — OpenApe',
-    html: `
-      <div style="font-family: 'Public Sans', system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+/** Shared outer markup of every mail: brand header wrapping the card. */
+function brandedHtml(maxWidthPx: number, cardHtml: string): string {
+  return `
+      <div style="font-family: 'Public Sans', system-ui, sans-serif; max-width: ${maxWidthPx}px; margin: 0 auto; padding: 40px 20px;">
         <div style="text-align: center; margin-bottom: 32px;">
           <span style="font-size: 32px;">🦍</span>
           <span style="font-size: 20px; font-weight: bold; margin-left: 8px; color: #f5f5f5;">OpenApe</span>
         </div>
+        ${cardHtml}
+      </div>
+    `
+}
+
+// The Resend SDK returns { data, error } and does NOT throw on API failures
+// (invalid key, unverified sender domain, rate limit, etc.). Without checking
+// `error` we'd return 200 to the caller while the email is silently dropped.
+async function sendViaResend(label: string, to: string, subject: string, html: string): Promise<void> {
+  const config = useRuntimeConfig()
+  const { data, error } = await getResend().emails.send({
+    from: config.resendFrom,
+    to,
+    subject,
+    html,
+  })
+
+  if (error) {
+    console.error(`[email] resend ${label} failed for`, to, 'from', config.resendFrom, error)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Email delivery failed',
+      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
+    })
+  }
+  console.info(`[email] ${label} email queued id=${data?.id ?? 'unknown'} to=${to}`)
+}
+
+export async function sendRegistrationEmail(email: string, registerUrl: string) {
+  await sendViaResend('registration', email, 'Dein Account — OpenApe', brandedHtml(480, `
         <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px; text-align: center;">
           <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Account erstellen</h2>
           <p style="color: #a1a1aa; margin: 0 0 24px 0; font-size: 14px; line-height: 1.6;">
@@ -43,19 +64,7 @@ export async function sendRegistrationEmail(email: string, registerUrl: string) 
             Falls du diese Registrierung nicht angefordert hast, ignoriere diese Email.
           </p>
         </div>
-      </div>
-    `,
-  })
-
-  if (error) {
-    console.error('[email] resend failed for', email, 'from', config.resendFrom, error)
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'Email delivery failed',
-      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
-    })
-  }
-  console.info(`[email] registration email queued id=${data?.id ?? 'unknown'} to=${email}`)
+    `))
 }
 
 export async function sendRecoveryEmail(
@@ -64,24 +73,13 @@ export async function sendRecoveryEmail(
   usableAt: number,
   cancelUrl: string,
 ) {
-  const config = useRuntimeConfig()
-  const resend = getResend()
   const usableAtIso = `${new Date(usableAt).toISOString().replace('T', ' ').slice(0, 16)} UTC`
 
   // The mail also serves as the warning-broadcast: even if the user
   // didn't initiate the recovery, this is their notification + cancel
   // link. Keep the cancel CTA visually equal to the recovery CTA so a
   // confused-but-authentic owner can act without fumbling.
-  const { data, error } = await resend.emails.send({
-    from: config.resendFrom,
-    to: email,
-    subject: 'Konto-Wiederherstellung angefordert — OpenApe',
-    html: `
-      <div style="font-family: 'Public Sans', system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <span style="font-size: 32px;">🦍</span>
-          <span style="font-size: 20px; font-weight: bold; margin-left: 8px; color: #f5f5f5;">OpenApe</span>
-        </div>
+  await sendViaResend('recovery', email, 'Konto-Wiederherstellung angefordert — OpenApe', brandedHtml(520, `
         <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px;">
           <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Wiederherstellung deines Kontos</h2>
           <p style="color: #a1a1aa; margin: 0 0 16px 0; font-size: 14px; line-height: 1.6;">
@@ -110,19 +108,7 @@ export async function sendRecoveryEmail(
             Dieser Link ist bis ${usableAtIso} und 14 Tage darüber hinaus gültig.
           </p>
         </div>
-      </div>
-    `,
-  })
-
-  if (error) {
-    console.error('[email] resend recovery failed for', email, 'from', config.resendFrom, error)
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'Email delivery failed',
-      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
-    })
-  }
-  console.info(`[email] recovery email queued id=${data?.id ?? 'unknown'} to=${email}`)
+    `))
 }
 
 /**
@@ -138,20 +124,9 @@ export async function sendRecoveryWarningEmail(
   usableAt: number,
   cancelUrl: string,
 ) {
-  const config = useRuntimeConfig()
-  const resend = getResend()
   const usableAtIso = `${new Date(usableAt).toISOString().replace('T', ' ').slice(0, 16)} UTC`
 
-  const { data, error } = await resend.emails.send({
-    from: config.resendFrom,
-    to,
-    subject: 'Warnung: Konto-Wiederherstellung angefordert — OpenApe',
-    html: `
-      <div style="font-family: 'Public Sans', system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <span style="font-size: 32px;">🦍</span>
-          <span style="font-size: 20px; font-weight: bold; margin-left: 8px; color: #f5f5f5;">OpenApe</span>
-        </div>
+  await sendViaResend('recovery warning', to, 'Warnung: Konto-Wiederherstellung angefordert — OpenApe', brandedHtml(520, `
         <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px;">
           <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Wiederherstellung deines Kontos angefordert</h2>
           <p style="color: #a1a1aa; margin: 0 0 16px 0; font-size: 14px; line-height: 1.6;">
@@ -172,17 +147,5 @@ export async function sendRecoveryWarningEmail(
             Diese Warnung enthält bewusst keinen Link zum Abschließen der Wiederherstellung.
           </p>
         </div>
-      </div>
-    `,
-  })
-
-  if (error) {
-    console.error('[email] resend recovery warning failed for', to, 'from', config.resendFrom, error)
-    throw createError({
-      statusCode: 502,
-      statusMessage: 'Email delivery failed',
-      data: { title: 'Email delivery failed', detail: error.message ?? error.name ?? 'unknown Resend error' },
-    })
-  }
-  console.info(`[email] recovery warning email queued id=${data?.id ?? 'unknown'} to=${to}`)
+    `))
 }
