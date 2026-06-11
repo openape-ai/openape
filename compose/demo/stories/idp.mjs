@@ -46,27 +46,27 @@ export default async function run({ kit, page, EMAIL, IDP, REG_TOKEN }) {
     app: 'openape-free-idp',
     category: 'Account',
     id: 'account-dashboard',
-    title: 'Your account — one page per thing',
-    intro: 'The dashboard is home base for your identity. Every button opens a focused page that shows exactly what it names — passkeys, SSH keys, connected services, delegations — rather than one long settings dump.',
+    title: 'Your account dashboard',
+    intro: 'Your dashboard is home base for your identity. Passkeys, SSH keys, agents, permissions, delegations and connected services each have their own page, so you go straight to the one you need.',
   }, async (s) => {
-    await s.step('Your dashboard', {
+    await s.step('Open your dashboard', {
       do: async () => {
         await page.goto(IDP, { waitUntil: 'networkidle' })
         await page.waitForTimeout(1200)
       },
       shot: 'dashboard',
-    }, 'Signed in, the root page is your hub: **Passkeys**, **SSH-Keys**, **Agents**, **Berechtigungen**, **Delegationen** and **Verbundene Dienste** — each its own button leading to its own page.')
+    }, 'Once you\'re signed in, the dashboard brings together everything tied to your identity — passkeys, SSH keys, agents, permissions, delegations and connected services. Choose an area to open it.')
 
-    await s.step('Passkeys — just your passkeys', {
+    await s.step('Manage your passkeys', {
       do: async () => {
         await click(page, /passkeys verwalten/i)
         await page.waitForURL(/\/passkeys/, { timeout: 10000 }).catch(() => {})
         await page.waitForTimeout(1000)
       },
       shot: 'passkeys',
-    }, '**Passkeys verwalten** opens *only* your passkeys — add a device, remove an old one. Nothing else on the page.')
+    }, 'Open **Passkeys** to manage how you sign in — add a new device, or remove one you no longer use.')
 
-    await s.step('SSH keys — just your keys', {
+    await s.step('Manage your SSH keys', {
       do: async () => {
         await page.goBack({ waitUntil: 'networkidle' }).catch(() => {})
         await page.waitForTimeout(600)
@@ -75,9 +75,9 @@ export default async function run({ kit, page, EMAIL, IDP, REG_TOKEN }) {
         await page.waitForTimeout(1000)
       },
       shot: 'ssh-keys',
-    }, '**SSH-Keys verwalten** is only your SSH public keys for *Sign in with SSH Key* — paste one, remove one.')
+    }, '**SSH keys** holds the public keys for *Sign in with SSH Key*. Paste a key to add it, or remove one you\'ve retired.')
 
-    await s.step('Connected services — just your consents', {
+    await s.step('Review connected services', {
       do: async () => {
         await page.goBack({ waitUntil: 'networkidle' }).catch(() => {})
         await page.waitForTimeout(600)
@@ -86,6 +86,6 @@ export default async function run({ kit, page, EMAIL, IDP, REG_TOKEN }) {
         await page.waitForTimeout(1000)
       },
       shot: 'connected-services',
-    }, '**Verbundene Dienste** lists the apps you approved at sign-in. Revoke one and it asks for consent again next time. (Your **Delegationen** — apps acting for you at *another* service — get their own page too.)')
+    }, '**Connected services** lists the apps you\'ve signed in to with your OpenApe ID. Revoke one and you\'ll be asked to approve it again next time. Apps acting for you at *another* service live under **Delegations**.')
   })
 }
