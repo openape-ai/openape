@@ -15,6 +15,8 @@ guide: recovery-history
 > grün (2026-06-10), Guide-Kapitel mit Screenshots generiert (Recovery-Historie
 > in den Konto-Einstellungen). Guide-Review durch Patrick bestanden (2026-06-11).
 
+UI auf neue Account-IA umgezogen (main 054075b6): Recovery-Historie lebt jetzt auf der Fokus-Seite /recovery-protection (verlinkt vom Account-Hub und Dashboard); Kriterien unverändert.
+
 # Sichtbares Audit aller Wiederherstellungs-Ereignisse
 
 Als Account-Inhaber möchte ich in meinen Konto-Einstellungen sehen, wer wann versucht

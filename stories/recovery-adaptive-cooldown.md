@@ -18,6 +18,8 @@ guide: recovery-vacation-mode
 > Demo-Stack grün (2026-06-10), Guide-Kapitel mit Screenshots generiert
 > (Konto-Einstellungen: Urlaubs-Schalter + Frist). Guide-Review durch Patrick bestanden (2026-06-11).
 
+UI auf neue Account-IA umgezogen (main 054075b6): Urlaubs-Schalter lebt jetzt auf der Fokus-Seite /recovery-protection (verlinkt vom Account-Hub und Dashboard); Kriterien unverändert.
+
 # Adaptive Wartefrist bei Account-Wiederherstellung
 
 Als Account-Inhaber möchte ich, dass die Wartefrist einer Account-Wiederherstellung
