@@ -1,6 +1,6 @@
 ---
 id: recovery-adaptive-cooldown
-status: documented-pending-review
+status: documented
 app: openape-free-idp
 issue: 462
 tests:
@@ -16,8 +16,7 @@ guide: recovery-vacation-mode
 > Pins bestätigt); adaptive Frist + Settings-Endpoints + lastLoginAt-Pflege im
 > Login-Flow sind umgesetzt. Story-Kit-Lauf `recovery-vacation-mode` auf dem
 > Demo-Stack grün (2026-06-10), Guide-Kapitel mit Screenshots generiert
-> (Konto-Einstellungen: Urlaubs-Schalter + Frist). Menschlicher Guide-Review
-> steht aus.
+> (Konto-Einstellungen: Urlaubs-Schalter + Frist). Guide-Review durch Patrick bestanden (2026-06-11).
 
 # Adaptive Wartefrist bei Account-Wiederherstellung
 
