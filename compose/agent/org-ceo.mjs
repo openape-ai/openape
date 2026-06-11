@@ -92,6 +92,43 @@ await kit.story({
   }, 'Within seconds the CEO is **active** on your nest, with its own `…@id.openape.ai` identity. It reads your vision live and starts proposing objectives — and you can revoke the delegation at your IdP any time to cut it off.')
 })
 
+await kit.story({
+  app: 'openape-org',
+  category: 'Organizations',
+  id: 'revoke-delegation',
+  title: 'Revoke a delegation',
+  intro: 'When you spawned the CEO you approved a standing delegation — org may spawn agents on your troop on your behalf. It\'s revocable any time, and the moment you revoke it the next spawn that service attempts is refused.',
+}, async (s) => {
+  await s.step('Find your delegations in Settings', {
+    do: async () => {
+      await page.getByRole('tab', { name: /settings/i }).first().click().catch(() => {})
+      await page.waitForTimeout(800)
+      const card = page.getByText(/^\s*delegations\s*$/i).first()
+      await card.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+      await page.waitForTimeout(500)
+    },
+    shot: 'settings-card',
+  }, 'In your org\'s **Settings** there\'s a **Delegations** card. The delegations live at your IdP — the single place that knows everything acting on your behalf — so org just links you there.')
+
+  await s.step('See what\'s acting on your behalf', {
+    do: async () => {
+      await page.goto(`${IDP}/delegations`, { waitUntil: 'networkidle' }).catch(() => {})
+      await page.waitForTimeout(2500)
+    },
+    shot: 'delegations-list',
+  }, 'Your IdP lists every standing delegation: here **org.openape.ai** may act for you at **troop.openape.ai** with exactly the `troop:spawn-agent` permission you approved — nothing more.')
+
+  await s.step('Revoke it', {
+    do: async () => {
+      await page.getByRole('button', { name: /^revoke$/i }).first().click().catch(() => {})
+      await page.waitForTimeout(500)
+      await page.getByRole('button', { name: /confirm revoke/i }).first().click().catch(() => {})
+      await page.waitForTimeout(2500)
+    },
+    shot: 'revoked',
+  }, 'One click and a confirm. The grant is gone — the org can no longer spawn on your troop, and troop refuses any token minted from it. Spawning again would prompt a fresh consent.')
+})
+
 const failures = kit.finish('org')
 console.log('=== org-ceo done ===')
 await browser.close()
