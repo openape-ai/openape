@@ -290,12 +290,11 @@ export const adminAllowlist = sqliteTable('admin_allowlist', {
 // linked to an account (keyed by the account's CURRENT email). The
 // recovery warning-broadcast mails every row plus the current address,
 // so a single compromised mailbox can't swallow the alarm. Rows are
-// append-only: a replaced address gets `replaced_at` set, never deleted.
+// append-only and never deleted.
 export const emailHistory = sqliteTable('email_history', {
   accountEmail: text('account_email').notNull(),
   address: text('address').notNull(),
   linkedAt: integer('linked_at').notNull(),
-  replacedAt: integer('replaced_at'),
 }, table => [
   primaryKey({ columns: [table.accountEmail, table.address] }),
   index('idx_email_history_account').on(table.accountEmail),

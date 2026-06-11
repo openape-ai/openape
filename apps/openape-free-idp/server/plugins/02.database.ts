@@ -69,7 +69,6 @@ export default defineNitroPlugin(async () => {
       account_email TEXT NOT NULL,
       address TEXT NOT NULL,
       linked_at INTEGER NOT NULL,
-      replaced_at INTEGER,
       PRIMARY KEY (account_email, address)
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_email_history_account ON email_history(account_email)`)
