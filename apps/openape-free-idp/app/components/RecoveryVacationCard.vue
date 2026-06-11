@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { VACATION_MAX_DAYS } from '../../shared/recovery-policy'
 
 // Vacation switch for the adaptive recovery cooldown (#462,
 // story recovery-adaptive-cooldown). Reads/writes the owner-only
 // /api/settings/recovery endpoints; the 14-day cap is enforced
 // server-side, the UI mirrors it.
-
-const VACATION_MAX_DAYS = 14
 
 const vacationMode = ref(false)
 const vacationDays = ref(VACATION_MAX_DAYS)
