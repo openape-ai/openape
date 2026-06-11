@@ -1,7 +1,7 @@
 import type { User } from '@openape/auth'
 import { randomUUID } from 'node:crypto'
 import { createError, defineEventHandler, getHeader, getRequestIP, getRequestURL, readBody } from 'h3'
-import { VACATION_DEFAULT_DAYS, VACATION_MAX_DAYS } from '../../../shared/recovery-policy'
+import { VACATION_DEFAULT_DAYS, VACATION_MAX_DAYS } from '#shared/recovery-policy'
 import { checkRateLimit } from '../../utils/rate-limiter'
 import { sendRecoveryEmail, sendRecoveryWarningEmail } from '../../utils/email'
 import { sendRecoveryWarningPush } from '../../utils/push'

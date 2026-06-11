@@ -27,7 +27,10 @@ Harte Regeln:
    der Antwort (was, warum jetzt einfacher). Keine Begründung möglich → nicht ändern.
 4. **Kein Scope-Creep:** keine neuen Features, keine API-Änderungen, keine
    Dependency-Änderungen, keine Umbenennungs-Kaskaden durch fremde Packages.
-5. **DoD:** `pnpm lint`, `pnpm typecheck`, Tests des Scopes + Gesamtsuite grün.
+5. **DoD:** `pnpm lint`, `pnpm typecheck`, Tests des Scopes + Gesamtsuite grün —
+   und bei berührtem App-Code zusätzlich `pnpm turbo run build --filter=<app> --force`
+   (lint/typecheck/tests fangen Vite-/Nitro-Resolve-Fehler NICHT; ein Import, der
+   nur im Editor auflöst, fällt erst im frischen Prod-Build um).
    Ein Commit pro Lauf (`chore(scope): <linse> …`, ≤80 Zeichen, kein AI-Co-Author).
 6. Findest du dabei einen echten Bug: NICHT fixen — melden (er braucht eine Story
    bzw. ein Issue, kein stilles Mitflicken).
