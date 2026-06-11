@@ -1,6 +1,6 @@
 ---
 id: recovery-broadcast
-status: documented-pending-review
+status: documented
 app: openape-free-idp
 issue: 462
 tests:
@@ -14,8 +14,7 @@ guide: account-recovery
 > Green-Beweis: alle drei Vitest-Files grün (Kriterien 1, 2, 3, 5, 6 implementiert;
 > Kriterien 4 und 7 als Pins weiter grün). Story-Kit-Lauf `account-recovery` auf
 > dem Demo-Stack grün (2026-06-10), Guide-Kapitel mit Screenshots generiert
-> (Lost-access-Flow + Ein-Tap-Abbruch im Konto). Menschlicher Guide-Review
-> steht aus.
+> (Lost-access-Flow + Ein-Tap-Abbruch im Konto). Guide-Review durch Patrick bestanden (2026-06-11).
 
 # Wiederherstellungs-Warnung auf allen Kanälen mit Ein-Tap-Abbruch
 
