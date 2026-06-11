@@ -1,6 +1,14 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Nuxt's shared/ directory alias — vitest runs outside Nuxt and
+      // doesn't know it.
+      '#shared': fileURLToPath(new URL('./shared', import.meta.url)),
+    },
+  },
   test: {
     include: ['tests/**/*.test.ts'],
     globals: true,

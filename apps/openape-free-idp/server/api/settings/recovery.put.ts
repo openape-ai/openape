@@ -1,5 +1,5 @@
 import { createError, defineEventHandler, readBody } from 'h3'
-import { VACATION_MAX_DAYS } from '../../../shared/recovery-policy'
+import { VACATION_MAX_DAYS } from '#shared/recovery-policy'
 
 // Vacation switch for the adaptive recovery cooldown (#462).
 //
