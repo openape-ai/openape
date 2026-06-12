@@ -1,0 +1,36 @@
+{
+  "name": "openape-coder",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "turbo": {
+    "tags": [
+      "app"
+    ]
+  },
+  "scripts": {
+    "postinstall": "nuxt prepare",
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3030",
+    "nuxt-prepare": "nuxi prepare",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.90",
+    "@libsql/client": "^0.17.3",
+    "@nuxt/ui": "4.7.1",
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "drizzle-orm": "^0.44.7",
+    "nuxt": "^4.4.6",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.13",
+    "h3": "catalog:",
+    "marked": "^17.0.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  }
+}
