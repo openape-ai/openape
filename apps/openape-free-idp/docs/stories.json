@@ -134,21 +134,6 @@
           "shot": "recovery-history/02-history.png"
         }
       ]
-    },
-    {
-      "app": "openape-free-idp",
-      "category": "Agents",
-      "id": "agent-identities",
-      "title": "Your agent identities",
-      "intro": "Agents are first-class identities under your account: the IdP mints them a DDISA email and you stay in control.",
-      "order": 11,
-      "steps": [
-        {
-          "title": "Open Agents at your IdP",
-          "caption": "Every agent spawned from your nests appears here with its own `…@id.openape.ai` identity — inspect it, or revoke it independently of your own keys.",
-          "shot": "agent-identities/01-agents.png"
-        }
-      ]
     }
   ]
 }

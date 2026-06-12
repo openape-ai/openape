@@ -10,6 +10,7 @@ import process from 'node:process'
 import { chromium } from 'playwright'
 import { createStoryKit, installDeterminism } from './story-kit.mjs'
 import chatStories from './stories/chat.mjs'
+import coderStories from './stories/coder.mjs'
 import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
 import troopStories from './stories/troop.mjs'
@@ -48,10 +49,11 @@ const ctx = {
   TROOP: 'https://troop.openape.test',
   CHAT: 'https://chat.openape.test',
   ORG: 'https://org.openape.test',
+  CODER: 'https://coder.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, coderStories])
   await run(ctx)
 
 const failures = kit.finish('demo')

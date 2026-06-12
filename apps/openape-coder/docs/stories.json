@@ -1,0 +1,114 @@
+{
+  "stories": [
+    {
+      "app": "openape-coder",
+      "category": "Getting started",
+      "id": "sign-in",
+      "title": "Sign in to Coder",
+      "intro": "Coder is where a software project lives: its vision, the repos it touches, its team and its user stories. Like every OpenApe app you sign in with your email domain and a passkey — no new account, no password.",
+      "order": 8,
+      "steps": [
+        {
+          "title": "Open Coder",
+          "caption": "The start page is the sign-in: enter your email and continue.",
+          "shot": "sign-in/01-landing.png"
+        },
+        {
+          "title": "Signed in — your projects",
+          "caption": "On your first visit the list is empty. You only ever see projects you belong to — nobody outside a project can tell it, or its people, exist.",
+          "shot": "sign-in/02-home-empty.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-coder",
+      "category": "Projects",
+      "id": "create-project",
+      "title": "Create a project",
+      "intro": "A project is the home for one software effort. You create it, become its admin, and give it a vision and the repos it touches — the shared context everyone on the team reads.",
+      "order": 9,
+      "steps": [
+        {
+          "title": "Start a new project",
+          "caption": "Click **New project** and name it. As its creator you become the project admin.",
+          "shot": "create-project/01-dialog.png"
+        },
+        {
+          "title": "Name it",
+          "caption": "The project page opens: an overview with its vision and repos, a members panel, and the story board.",
+          "shot": "create-project/02-project-page.png"
+        },
+        {
+          "title": "Vision and repos",
+          "caption": "The vision is plain prose; the repos are full URLs to the code it touches — GitHub, GitLab, Forgejo or self-hosted, never just `owner/repo`. Both stay editable as the project grows.",
+          "shot": "create-project/03-scope-saved.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-coder",
+      "category": "Stories",
+      "id": "add-story",
+      "title": "Add a user story",
+      "intro": "User stories live in the project, where everyone can see them — not in mail threads. A story has the usual parts and can carry repos, links, test references and a status.",
+      "order": 10,
+      "steps": [
+        {
+          "title": "Open the story board",
+          "caption": "The board shows every story in the project at a glance. It is empty for a new project.",
+          "shot": "add-story/01-board-empty.png"
+        },
+        {
+          "title": "Write the story",
+          "caption": "Give it a title and the story sentence — *As … I want … so that …*. The optional repos, links and test references can be added afterwards.",
+          "shot": "add-story/02-story-dialog.png"
+        },
+        {
+          "title": "Story created",
+          "caption": "The story opens, laid out for reading — sentence, criteria and any references — no files or code to open.",
+          "shot": "add-story/03-story-detail.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-coder",
+      "category": "Stories",
+      "id": "story-board",
+      "title": "Browse the board",
+      "intro": "Back on the board, every story shows its status. Group or filter to see exactly where the project stands.",
+      "order": 11,
+      "steps": [
+        {
+          "title": "All stories with status",
+          "caption": "Each story carries a status badge. The board groups them so you read the project state in one look.",
+          "shot": "story-board/01-board.png"
+        }
+      ]
+    },
+    {
+      "app": "openape-coder",
+      "category": "Team",
+      "id": "invite-members",
+      "title": "Invite the team",
+      "intro": "A project admin adds people by email and controls, per member, what they may do. No email is sent — a new member is added read-only and sees it in their inbox at the next sign-in. Every write capability is granted explicitly.",
+      "order": 12,
+      "steps": [
+        {
+          "title": "Open the members panel",
+          "caption": "The Members panel lists who belongs to the project and their role.",
+          "shot": "invite-members/01-members.png"
+        },
+        {
+          "title": "Add by email",
+          "caption": "Add a person by email address. The app never reveals whether that address already has an OpenApe identity — and only a human admin, never an agent, can do it.",
+          "shot": "invite-members/02-invite-dialog.png"
+        },
+        {
+          "title": "They'll see it in their inbox",
+          "caption": "No email is sent: the new member is added as read-only and learns of it from an inbox notification the next time they sign in. The optional button drafts a heads-up in your own mail client — nothing leaves through our server.",
+          "shot": "invite-members/03-member-added.png"
+        }
+      ]
+    }
+  ]
+}
