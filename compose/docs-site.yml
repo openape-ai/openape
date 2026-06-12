@@ -1,0 +1,23 @@
+# Prod compose for docs.openape.ai on chatty. Traefik (coolify network)
+# routes Host(`docs.openape.ai`) → http://site-docs:80; no published ports.
+# Deployed by scripts/deploy-docs-site.mjs, tag pinned via .env
+# (DOCS_TAG / DOCS_TAG_PREV for rollback).
+
+name: site-docs
+
+networks:
+  coolify:
+    external: true
+
+services:
+  web:
+    image: registry.openape.ai/site-docs:${DOCS_TAG:-unset}
+    container_name: site-docs
+    restart: unless-stopped
+    networks:
+      - coolify
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
