@@ -1,5 +1,12 @@
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
+  // Client-only render. Coder is fully behind the passkey login with no SEO
+  // surface, and every page branches on the SP session (signed-in vs the
+  // sign-in landing). Resolving that auth state differs between server and
+  // client, which produced "Hydration completed but contains mismatches"
+  // warnings (#650). SPA mode removes the server render — and thus the
+  // mismatch — entirely; the Nitro API/OAuth routes are unaffected.
+  ssr: false,
   // asyncContext for useEvent() in server utils — same as org/troop.
   nitro: { experimental: { asyncContext: true } },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-sp'],
