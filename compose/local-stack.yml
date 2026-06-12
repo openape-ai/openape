@@ -48,6 +48,7 @@ services:
           - troop.openape.test
           - chat.openape.test
           - org.openape.test
+          - coder.openape.test
     ports:
       - "127.0.0.1:443:443"
     healthcheck:
@@ -221,6 +222,40 @@ services:
       - openape-test
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  coder:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: openape-coder
+        APP_DIR: openape-coder
+        PORT: "3030"
+    image: openape-coder:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: coder.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Coder
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NUXT_TURSO_URL: file:/tmp/openape-coder.db
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3030"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3030/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 30

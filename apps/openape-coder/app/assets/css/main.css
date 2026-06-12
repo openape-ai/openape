@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* iOS Safari zooms inputs <16px on focus — keep a 16px floor on touch
+ * devices only (same workaround as org/troop). */
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

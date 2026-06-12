@@ -41,8 +41,8 @@ echo "  (trusting proxy $PROXY_IP for X-Forwarded-For rate-limit keying)"
 # ephemeral; recreating the containers wipes them) — reproducible stories: a
 # real first-time passkey sign-up, first-time consent, and a genuinely empty
 # org list for the create-org story.
-echo "→ Resetting idp + org to a clean slate…"
-"${COMPOSE[@]}" up -d --force-recreate idp org >/dev/null
+echo "→ Resetting idp + org + coder to a clean slate…"
+"${COMPOSE[@]}" up -d --force-recreate idp org coder >/dev/null
 printf "  waiting for idp…"
 for _ in $(seq 1 30); do
   [ "$("${COMPOSE[@]}" ps idp --format '{{.Health}}' 2>/dev/null)" = "healthy" ] && break
