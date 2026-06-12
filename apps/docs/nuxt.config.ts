@@ -39,6 +39,10 @@ export default defineNuxtConfig({
       ],
       crawlLinks: true,
       autoSubfolderIndex: false,
+      // nuxt-og-image 400s on its static og.png routes in clean builds
+      // ("Invalid island request hash") — OG images are non-essential,
+      // don't fail the whole prerender over them.
+      failOnError: false,
     },
   },
 

@@ -55,12 +55,6 @@ const TARGETS = {
     service: 'openape-chat.service',
     paths: ['apps/openape-chat/**', 'modules/nuxt-auth-sp/**', 'packages/auth/**', 'packages/core/**', 'scripts/deploy-chat.sh', 'pnpm-lock.yaml'],
   },
-  docs: {
-    script: 'deploy-docs.sh',
-    base: '/home/openape/projects/docs',
-    service: null,
-    paths: ['apps/docs/**', 'scripts/deploy-docs.sh', 'pnpm-lock.yaml'],
-  },
   'free-idp': {
     script: 'deploy-free-idp.sh',
     base: '/home/openape/projects/openape-free-idp',
