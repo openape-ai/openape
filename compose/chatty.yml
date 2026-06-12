@@ -31,6 +31,7 @@ services:
       - /home/openape/projects/openape-free-idp/shared:/home/openape/projects/openape-free-idp/shared
     ports:
       - "127.0.0.1:3003:3003"
+      - "10.0.1.1:3003:3003"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -50,6 +51,7 @@ services:
       - /home/openape/projects/openape-troop/shared:/home/openape/projects/openape-troop/shared
     ports:
       - "127.0.0.1:3010:3010"
+      - "10.0.1.1:3010:3010"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -69,6 +71,7 @@ services:
       - /home/openape/projects/openape-chat/shared:/home/openape/projects/openape-chat/shared
     ports:
       - "127.0.0.1:3007:3007"
+      - "10.0.1.1:3007:3007"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -88,6 +91,7 @@ services:
       - /home/openape/projects/openape-org/shared:/home/openape/projects/openape-org/shared
     ports:
       - "127.0.0.1:3020:3020"
+      - "10.0.1.1:3020:3020"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
