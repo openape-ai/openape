@@ -29,6 +29,7 @@ export {
 } from './sp-client.js'
 export { exchangeWithDelegation, type DelegationExchangeRequest, type DelegationExchangeResponse } from './delegation-exchange.js'
 export { exchangeForSpToken, type ExchangeRequest } from './exchange.js'
+export { refreshAgentToken } from './agent-refresh.js'
 export { ensureFreshIdpAuth } from './refresh.js'
 export {
   clearAllSpTokens,
