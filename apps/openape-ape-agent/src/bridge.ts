@@ -44,6 +44,7 @@ import { createHeuristicDetector, decide } from '@openape/prompt-injection-detec
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
+import { startSecretsWatcher } from '@openape/apes'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
@@ -433,6 +434,16 @@ class Bridge {
 
 async function main(): Promise<void> {
   const cfg = readConfig()
+
+  // Materialize sealed secrets (secrets.d/*.blob) into this process's env at
+  // boot and watch for changes, so the bash/http tools the runLoop spawns
+  // inherit them (FORGEJO_TOKEN, GH_TOKEN, …). Without this the agent's
+  // LLM-driven tool calls run with no credentials — only the `apes agents
+  // run/code` sidecars materialized them, which the bridge never invokes.
+  // Best-effort: a missing key / empty dir must not block the bridge.
+  try { startSecretsWatcher({ log: m => log(m) }) }
+  catch (err) { log(`secrets materialize skipped: ${err instanceof Error ? err.message : String(err)}`) }
+
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
   if (onDisk.email.toLowerCase() !== idpId.email.toLowerCase()) {
