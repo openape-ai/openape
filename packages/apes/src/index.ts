@@ -59,3 +59,8 @@ export type {
   ToolDefinition,
   ApeShellResult,
 } from '@openape/agent-runtime'
+
+// Sealed-secret materialization — the agent runtime opens secrets.d blobs
+// with its private key and injects them into process.env so its tools (bash
+// etc.) see them. Exported so the ape-agent bridge can materialize at boot.
+export { materializeSecrets, startSecretsWatcher } from './lib/agent-secrets-runtime'
