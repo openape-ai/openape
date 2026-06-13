@@ -272,5 +272,20 @@
       "description": "Apps, die du in deinem Namen handeln lässt — z.B. diese Org, die Agents auf deinem Troop spawnt. Du hast jede einmal freigegeben; widerrufen kannst du sie an deinem IdP.",
       "manage": "Am IdP verwalten"
     }
+  },
+  "persona": {
+    "subtitle": "Wähle eine Persona, um deine Firma zusammenzustellen. Jeder Agent holt sich seine Aufgaben selbst und arbeitet sie autonom ab.",
+    "custom": "Eigene Rolle (keine Persona)",
+    "chartRole": "Org-Rolle",
+    "field": {
+      "label": "Persona",
+      "description": "Welche Rolle dieses Teammitglied übernimmt. Bestimmt das Recipe, mit dem der Agent gespawnt wird.",
+      "placeholder": "Persona wählen…"
+    },
+    "tag": {
+      "coding": "Arbeitet an Code",
+      "knowledge": "Wissensarbeit",
+      "autonomous": "Holt sich Aufgaben selbst"
+    }
   }
 }

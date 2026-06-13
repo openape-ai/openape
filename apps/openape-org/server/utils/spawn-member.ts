@@ -3,6 +3,7 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 import { orgMembers } from '../database/schema'
 import { getRoleDefaults, instantiateRoleDefaults } from './role-defaults'
+import { getPersona } from './persona-catalog'
 
 export interface SpawnOrgRef { id: string, name: string }
 
@@ -42,7 +43,16 @@ export async function spawnMemberViaTroop(
     throw createError({ statusCode: 502, statusMessage: `troop /api/cli/exchange rejected: ${err?.data?.statusMessage ?? err?.data?.detail ?? err?.message ?? 'unknown'}` })
   }
 
-  const defaults = instantiateRoleDefaults(getRoleDefaults(member.role), { org_id: org.id, org_name: org.name })
+  // A member created from a catalog persona spawns that persona's recipe;
+  // otherwise fall back to the legacy per-role defaults. Either way the
+  // {{org_id}} / {{org_name}} placeholders in the params are substituted here.
+  const persona = getPersona(member.persona)
+  const defaults = persona
+    ? instantiateRoleDefaults(
+        { recipeRef: persona.recipeRef, recipeParams: persona.recipeParams },
+        { org_id: org.id, org_name: org.name },
+      )
+    : instantiateRoleDefaults(getRoleDefaults(member.role), { org_id: org.id, org_name: org.name })
   const spawnBody: Record<string, unknown> = { name: member.agentName }
   if (defaults.systemPrompt) spawnBody.system_prompt = defaults.systemPrompt
   if (defaults.recipeRef) spawnBody.recipe = { repo_ref: defaults.recipeRef, params: defaults.recipeParams ?? {} }
