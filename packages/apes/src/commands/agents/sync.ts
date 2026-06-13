@@ -1,6 +1,7 @@
 import { chownSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { refreshAgentToken } from '@openape/cli-auth'
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { readAgentEncryptionPublicKey } from '../../lib/agent-secrets-runtime'
@@ -78,6 +79,28 @@ export const syncAgentCommand = defineCommand({
   async run({ args }) {
     const auth = readAuthJson()
     const agentName = agentNameFromEmail(auth.email)
+
+    // Refresh the agent's short-lived DDISA token via its ed25519 key before
+    // talking to troop. The bridge keeps a fresh token only in-memory and
+    // never writes it back, so this command — and the secret-apply / `apes
+    // agents run` sidecars that read the same auth.json — otherwise reuse an
+    // expired cached token and troop answers 401 "Invalid or expired agent
+    // JWT" (silently breaking config + sealed-secret delivery). Persist the
+    // fresh token so those sidecars benefit too; preserve the file's owner so
+    // the agent can still read it whether sync runs as the agent or as root.
+    const refreshed = await refreshAgentToken({ ...auth, expires_at: auth.expires_at ?? 0 }).catch(() => null)
+    if (refreshed?.access_token && refreshed.access_token !== auth.access_token) {
+      auth.access_token = refreshed.access_token
+      if (typeof refreshed.expires_at === 'number') auth.expires_at = refreshed.expires_at
+      try {
+        const { uid, gid } = statSync(AUTH_PATH)
+        writeFileSync(AUTH_PATH, `${JSON.stringify(auth, null, 2)}\n`)
+        try { chownSync(AUTH_PATH, uid, gid) }
+        catch { /* best-effort re-chown */ }
+      }
+      catch { /* best-effort persist — the in-memory fresh token is still used below */ }
+    }
+
     const troopUrl = resolveTroopUrl(args['troop-url'] as string | undefined)
     const client = new TroopClient(troopUrl, auth.access_token)
 
