@@ -272,5 +272,20 @@
       "description": "Apps you've let act on your behalf — like this org spawning agents on your troop. You approved each once; you can revoke any at your IdP.",
       "manage": "Manage at your IdP"
     }
+  },
+  "persona": {
+    "subtitle": "Pick a persona to assemble your company. Each agent polls its own tasks and works them autonomously.",
+    "custom": "Custom role (no persona)",
+    "chartRole": "Chart role",
+    "field": {
+      "label": "Persona",
+      "description": "Which role this team member plays. Drives the recipe the agent is spawned from.",
+      "placeholder": "Choose a persona…"
+    },
+    "tag": {
+      "coding": "Works on code",
+      "knowledge": "Knowledge work",
+      "autonomous": "Polls its own tasks"
+    }
   }
 }
