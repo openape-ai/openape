@@ -16,6 +16,7 @@ const Body = z.object({
   agent_email: z.string().email().optional(),
   agent_name: z.string().min(1).max(64).optional(),
   role: z.enum(['ceo', 'teamlead', 'specialist', 'sanierer', 'other']).optional(),
+  persona: z.string().min(1).max(64).nullable().optional(),
   reports_to_email: z.string().email().nullable().optional(),
   status: z.enum(['invited', 'active', 'retired']).optional(),
 })
@@ -47,6 +48,7 @@ export default defineEventHandler(async (event) => {
       agentEmail: newEmail,
       agentName: parsed.data.agent_name ?? row.agentName,
       role: parsed.data.role ?? row.role,
+      persona: parsed.data.persona !== undefined ? parsed.data.persona : row.persona,
       reportsToEmail: parsed.data.reports_to_email !== undefined ? parsed.data.reports_to_email : row.reportsToEmail,
       // Once a real email is bound, default the status to 'active'
       // unless the caller said otherwise — the placeholder lived as
@@ -62,6 +64,7 @@ export default defineEventHandler(async (event) => {
   const updates: Record<string, unknown> = {}
   if (parsed.data.agent_name !== undefined) updates.agentName = parsed.data.agent_name
   if (parsed.data.role !== undefined) updates.role = parsed.data.role
+  if (parsed.data.persona !== undefined) updates.persona = parsed.data.persona
   if (parsed.data.reports_to_email !== undefined) updates.reportsToEmail = parsed.data.reports_to_email
   if (parsed.data.status !== undefined) {
     updates.status = parsed.data.status
