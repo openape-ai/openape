@@ -48,7 +48,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-crown',
     summary: 'Turns the Owner\'s vision into objectives and keeps the company pointed at them.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/ceo@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/ceo@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -59,7 +59,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-cpu',
     summary: 'Owns technical strategy, architecture direction and engineering standards.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/cto@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/cto@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -70,7 +70,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-compass',
     summary: 'Maintains the backlog — converts goals into well-specified, prioritized tasks.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/product-manager@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/product-manager@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -81,7 +81,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-users',
     summary: 'Decomposes engineering objectives into stories and routes them to engineers.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/engineering-manager@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/engineering-manager@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -92,7 +92,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-calendar-clock',
     summary: 'Keeps timelines, dependencies and risks visible; chases blockers across teams.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/project-manager@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/project-manager@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -103,7 +103,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-server',
     summary: 'Implements server-side features, APIs and data access against assigned issues.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/backend-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/backend-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -114,7 +114,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-layout-dashboard',
     summary: 'Builds UI components and flows; verifies them render and behave correctly.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/frontend-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/frontend-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -125,7 +125,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-layers',
     summary: 'Ships end-to-end features spanning UI, API and data.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/fullstack-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/fullstack-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -136,7 +136,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-container',
     summary: 'Owns CI/CD, containers and deploy pipelines (proposes, never self-deploys prod).',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/devops-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/devops-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -147,7 +147,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-activity',
     summary: 'Watches health/SLOs, triages incidents, files and fixes reliability issues.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/site-reliability-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/site-reliability-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -158,7 +158,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-bug',
     summary: 'Writes and strengthens tests; reproduces bugs before they are fixed.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/qa-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/qa-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -169,7 +169,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-shield-check',
     summary: 'Reviews changes for vulnerabilities and hardens the codebase (read-first).',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/security-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/security-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -180,7 +180,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-database',
     summary: 'Builds and maintains data pipelines, schemas and ETL jobs.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/data-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/data-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -191,7 +191,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-brain-circuit',
     summary: 'Prototypes, evaluates and ships ML/LLM features with honest metrics.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/ml-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/ml-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -202,7 +202,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-smartphone',
     summary: 'Implements mobile/cross-platform app features and verifies builds.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/mobile-engineer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/mobile-engineer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -213,7 +213,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-git-pull-request-arrow',
     summary: 'Reviews open PRs for correctness, style and risk — approves or requests changes.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/code-reviewer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/code-reviewer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -224,7 +224,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-rocket',
     summary: 'Owns the merge gate and release notes; coordinates safe rollouts (Owner approves prod).',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/release-manager@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/release-manager@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -235,7 +235,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-book-open',
     summary: 'Writes and updates docs from the code and shipped changes — keeps docs from drifting.',
     coding: true,
-    recipeRef: 'github.com/openape-ai/agent-catalog/technical-writer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/technical-writer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}', forge_base: 'https://git.openape.ai' },
   },
   {
@@ -246,7 +246,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-palette',
     summary: 'Specifies flows, interaction and copy so frontend engineers can build without guessing.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/ux-designer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/ux-designer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -257,7 +257,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-pen-tool',
     summary: 'Produces blog, social and announcement copy from real shipped work.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/content-marketer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/content-marketer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -268,7 +268,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-bar-chart-3',
     summary: 'Answers questions from data with honest, reproducible analysis.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/data-analyst@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/data-analyst@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -279,7 +279,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-search',
     summary: 'Runs multi-source research and delivers cited, fact-checked briefs.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/research-analyst@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/research-analyst@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -290,7 +290,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-trending-up',
     summary: 'Designs and tracks growth experiments; reports what actually moved the metric.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/growth-marketer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/growth-marketer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -301,7 +301,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-handshake',
     summary: 'Researches leads and drafts tailored outreach for the Owner to send.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/sales-development-rep@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/sales-development-rep@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -312,7 +312,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-life-buoy',
     summary: 'Triages support requests, answers what it can, routes the rest with context.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/customer-support-agent@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/customer-support-agent@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -323,7 +323,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-messages-square',
     summary: 'Monitors community channels, summarizes signal, drafts responses.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/community-manager@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/community-manager@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -334,7 +334,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-user-plus',
     summary: 'Identifies capability gaps and proposes which persona to spawn next.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/recruiter@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/recruiter@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -345,7 +345,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-piggy-bank',
     summary: 'Watches budget and cost/output ratio; alerts the Owner directly on breaches.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/finance-controller@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/finance-controller@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
   {
@@ -356,7 +356,7 @@ export const PERSONAS: Persona[] = [
     icon: 'i-lucide-scale',
     summary: 'Reviews content and changes for legal/compliance risk; flags, never approves.',
     coding: false,
-    recipeRef: 'github.com/openape-ai/agent-catalog/legal-compliance-officer@v0.1.0',
+    recipeRef: 'github.com/openape-ai/agent-catalog/legal-compliance-officer@v0.2.0',
     recipeParams: { org_id: '{{org_id}}', org_name: '{{org_name}}' },
   },
 ]
