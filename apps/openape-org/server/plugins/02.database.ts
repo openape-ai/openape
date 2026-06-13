@@ -87,6 +87,8 @@ export default defineNitroPlugin(async () => {
       sql`ALTER TABLE org_members ADD COLUMN spawn_troop_bearer TEXT`,
       sql`ALTER TABLE org_members ADD COLUMN spawn_troop_bearer_expires_at INTEGER`,
       sql`ALTER TABLE org_members ADD COLUMN spawn_grant_id TEXT`,
+      // Persona catalog key the member was created from (selects the recipe).
+      sql`ALTER TABLE org_members ADD COLUMN persona TEXT`,
     ]) {
       try { await db.run(stmt) }
       catch { /* already exists */ }
