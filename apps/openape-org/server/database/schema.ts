@@ -35,6 +35,10 @@ export const orgMembers = sqliteTable('org_members', {
   agentEmail: text('agent_email').notNull(),
   agentName: text('agent_name').notNull(),
   role: text('role').notNull(),
+  // Catalog persona key (e.g. 'backend-engineer') the member was created
+  // from. Drives which recipe spawn-member deploys; null for members with a
+  // bare structural role only (the legacy per-role defaults still apply).
+  persona: text('persona'),
   reportsToEmail: text('reports_to_email'),
   status: text('status').notNull().default('invited'),
   spawnedAt: integer('spawned_at'),
