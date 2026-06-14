@@ -121,6 +121,13 @@ COPY --from=build /tmp/deploy/codex-proxy ./codex-proxy
 # the same way the host setup does.
 RUN npm install -g pm2
 
+# ape-tasks: the persona agents' `tasks.list` tool shells out to the
+# `ape-tasks` CLI, and their operating protocol uses it to read/update
+# tasks.openape.ai. Without it on PATH the agents report "ape-tasks: command
+# not found" and can't see their assigned work. Installed globally so every
+# agent user resolves it.
+RUN npm install -g @openape/ape-tasks
+
 # Symlink the binaries onto PATH so the nest's subprocess calls
 # (`apes run --as ...`, `openape-nest`, `ape-agent`) resolve without
 # further plumbing.
