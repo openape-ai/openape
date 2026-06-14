@@ -42,6 +42,7 @@ export { extractOption, extractWrappedCommand } from './shapes/commands/explain.
 export { loadAuth, saveAuth, clearAuth, loadConfig, saveConfig, getIdpUrl, getAuthToken, getRequesterIdentity } from './config'
 export type { AuthData, ApesConfig } from './config'
 export { apiFetch, discoverEndpoints, ApiError } from './http'
+export { materializeSecrets, startSecretsWatcher } from './lib/agent-secrets-runtime'
 export { parseDuration } from './duration'
 export { CliError, CliExit } from './errors'
 
