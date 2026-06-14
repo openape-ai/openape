@@ -312,6 +312,42 @@ describe('sessionHost.tickAll', () => {
     expect(starts).toEqual(['a'])
   })
 
+  it('logs the stranded agents by name before retrying them on the tick', async () => {
+    const lines: string[] = []
+    let failNext = true
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a' && failNext) {
+          failNext = false
+          throw new Error('startboom:a')
+        }
+      },
+      async stop() {},
+      async tick() {},
+    })
+    const host = new SessionHost({ log: line => lines.push(line), createSession: factory })
+    await host.reconcile([entry('a')]) // start throws → a desired but absent
+    lines.length = 0
+    await host.tickAll()
+    expect(lines.some(l => l.includes('1 agent(s) stranded') && l.includes('a'))).toBe(true)
+  })
+
+  it('does not log stranded when every desired agent is live', async () => {
+    const lines: string[] = []
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {},
+      async stop() {},
+      async tick() {},
+    })
+    const host = new SessionHost({ log: line => lines.push(line), createSession: factory })
+    await host.reconcile([entry('a')])
+    lines.length = 0
+    await host.tickAll()
+    expect(lines.some(l => l.includes('stranded'))).toBe(false)
+  })
+
   it('does not re-start a live agent on the tick', async () => {
     const starts: string[] = []
     const factory = (e: AgentEntry): HostedSession => ({
