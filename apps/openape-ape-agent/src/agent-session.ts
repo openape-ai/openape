@@ -1,4 +1,3 @@
-import { materializeSecrets } from '@openape/apes'
 import type { BridgeConfig } from './bridge-config'
 
 export class AgentSession {
@@ -24,11 +23,5 @@ export class AgentSession {
     const base = this.config.endpoint.replace(/^http/, 'ws')
     const token = encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))
     return `${base}/_ws/chat?token=${token}`
-  }
-
-  secretsEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = {}
-    materializeSecrets({ env })
-    return env
   }
 }
