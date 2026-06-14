@@ -24,6 +24,8 @@ import { readFileSync, watch } from 'node:fs'
 import process from 'node:process'
 import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
+import type { AgentSupervisor } from './lib/session-host'
+import { SessionHost } from './lib/session-host'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
@@ -34,14 +36,20 @@ function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
 }
 
-const supervisor = new Pm2Supervisor({ apesBin: APES_BIN, log })
+// Flag flips supervision from per-agent pm2 daemons to one in-process
+// SessionHost (single-process-nest, 26 processes → 1). Off = unchanged.
+const INPROCESS = process.env.OPENAPE_NEST_INPROCESS === '1'
+const supervisor: AgentSupervisor = INPROCESS
+  ? new SessionHost({ log })
+  : new Pm2Supervisor({ apesBin: APES_BIN, log })
+if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (M2 scaffold)')
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
 
 async function reconcile(): Promise<void> {
   try {
     await supervisor.reconcile(listAgents())
-    log('nest: pm2-supervisor reconciled with registry')
+    log('nest: supervisor reconciled with registry')
   }
   catch (err) {
     log(`nest: reconcile failed: ${err instanceof Error ? err.message : String(err)}`)
