@@ -5,6 +5,16 @@
   "type": "module",
   "license": "MIT",
   "private": false,
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "ape-agent": "./dist/bridge.mjs",
     "openape-chat-bridge": "./dist/bridge.mjs",
