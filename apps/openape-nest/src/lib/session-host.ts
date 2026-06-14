@@ -114,6 +114,15 @@ export class SessionHost implements AgentSupervisor {
   private reconciling = false
   /** Latest desired set requested while a reconcile was already running. */
   private pendingDesired: AgentEntry[] | undefined
+  /**
+   * The stranded set last announced by {@link tickAll}, as a stable sorted key.
+   * The tick retries stranded agents every cadence, but an agent whose start
+   * keeps failing would otherwise re-log the same line on every tick (every
+   * 60s). Logging only when the set changes keeps the signal — you see when an
+   * agent strands or recovers — without the steady-state spam. `undefined` once
+   * nothing is stranded, so a later strand of the same agent logs again.
+   */
+  private lastStrandedKey: string | undefined
 
   constructor(private readonly deps: { log: (line: string) => void, createSession?: SessionFactory }) {
     this.createSession = deps.createSession ?? createPlaceholderSession
@@ -245,8 +254,19 @@ export class SessionHost implements AgentSupervisor {
       // Make a stuck rollout visible: without this the retry below is silent, so
       // an agent whose start keeps failing would never surface in the nest log.
       // This is what the cutover health check ("all agents live") watches for.
-      this.deps.log(`session-host: ${stranded.length} agent(s) stranded, retrying: ${stranded.map(e => e.name).join(', ')}`)
+      // Log only when the stranded set changes — the retry runs every tick, but
+      // re-logging the same names every cadence would bury the nest log.
+      const names = stranded.map(e => e.name)
+      const key = [...names].sort().join(',')
+      if (key !== this.lastStrandedKey) {
+        this.deps.log(`session-host: ${stranded.length} agent(s) stranded, retrying: ${names.join(', ')}`)
+        this.lastStrandedKey = key
+      }
       await this.reconcile([...this.desired.values()])
+    }
+    else {
+      // Nothing stranded: clear the key so a fresh strand later logs again.
+      this.lastStrandedKey = undefined
     }
 
     for (const { session } of this.sessions.values()) {
