@@ -28,6 +28,16 @@ The `schemas/` directory contains validators for these document shapes:
 
 See [`schemas/README.md`](./schemas/README.md) for schema-specific notes.
 
+## Run the checks
+
+From the repository root:
+
+```bash
+pnpm --filter @openape/protocol-conformance test
+pnpm --filter @openape/protocol-conformance typecheck
+pnpm --filter @openape/protocol-conformance lint
+```
+
 ## Test harness
 
 The shared harness lives in [`test/harness.ts`](./test/harness.ts).
@@ -37,6 +47,8 @@ The shared harness lives in [`test/harness.ts`](./test/harness.ts).
 `getValidator` returns a validator wrapper for one preloaded schema file.
 
 ```ts
+import { getValidator } from './test/harness.js'
+
 const { validate } = getValidator('grant.json')
 const result = validate(data)
 ```
@@ -50,21 +62,48 @@ The returned `validate(data)` method reports:
 
 The package currently validates these concrete protocol shapes:
 
-- [`test/manifest.test.ts`](./test/manifest.test.ts) checks OpenAPE manifest and scope catalog shapes
-- [`test/discovery.test.ts`](./test/discovery.test.ts) checks the OpenID discovery document extensions emitted by the server
-- [`test/grant.test.ts`](./test/grant.test.ts) checks pending, approved, and standing grant objects
-- [`test/authz-jwt.test.ts`](./test/authz-jwt.test.ts) checks JWT claims emitted for command grants and delegation grants
+### Authorization JWT claims
 
-## Usage
+[`test/authz-jwt.test.ts`](./test/authz-jwt.test.ts) issues authorization JWTs with `issueAuthzJWT()` and validates the decoded claims against `schemas/authz-jwt-claims.json`.
 
-Run the package tests:
+It covers:
+
+- a basic approved one-time grant
+- a delegation grant with `scopes`
+- a delegation grant with a `delegate`
+
+### Discovery document extensions
+
+[`test/discovery.test.ts`](./test/discovery.test.ts) builds a discovery document in the same shape as the server discovery handler and validates it against `schemas/openid-configuration-extensions.json`.
+
+It checks:
+
+- required DDISA extension fields
+- full-document schema validity
+- a valid subset of `ddisa_auth_methods_supported`
+- canonical `ddisa_auth_*` endpoint names
+
+### Grant objects
+
+[`test/grant.test.ts`](./test/grant.test.ts) creates and approves grants with `@openape/grants`, then validates the resulting objects against `schemas/grant.json`.
+
+It covers:
+
+- an approved command grant
+- a pending grant
+- an approved grant with `type: "standing"`
+
+### Service-provider manifest and scope catalog
+
+[`test/manifest.test.ts`](./test/manifest.test.ts) validates two related protocol shapes:
+
+- an `openape.json` manifest accepted by `validateOpenApeManifest()` from `@openape/core`
+- an array-based scope catalog validated against `schemas/sp-scope-catalog.json`
+
+## Refresh mirrored schemas
+
+To update the schema mirror from a sibling `protocol` checkout:
 
 ```bash
-pnpm --filter @openape/protocol-conformance test
-```
-
-Run type checking:
-
-```bash
-pnpm --filter @openape/protocol-conformance typecheck
+pnpm --filter @openape/protocol-conformance sync-schemas
 ```
