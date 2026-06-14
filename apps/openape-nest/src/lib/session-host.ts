@@ -30,6 +30,19 @@ export interface HostedSession {
 
 export type SessionFactory = (entry: AgentEntry) => HostedSession
 
+/**
+ * A read-only snapshot of what the host wants versus what it actually runs.
+ * `stranded` is `desired \ hosted` — agents the registry asks for whose
+ * `start()` has not (yet) succeeded. The cutover health surface and the M2
+ * acceptance check ("all 13 agents live") read this; all three lists are
+ * sorted so the snapshot is deterministic.
+ */
+export interface SessionHostStatus {
+  desired: string[]
+  hosted: string[]
+  stranded: string[]
+}
+
 /** A live session together with the registry entry it was started from. */
 interface LiveSession {
   session: HostedSession
@@ -262,5 +275,19 @@ export class SessionHost implements AgentSupervisor {
     const count = this.sessions.size
     this.sessions.clear()
     this.deps.log(`session-host: stopped all ${count} session(s)`)
+  }
+
+  /**
+   * A read-only snapshot of desired vs. live agents. `stranded` lists desired
+   * agents that are not live — an agent whose `start()` failed and is waiting
+   * for the next tick/reconcile retry. Pure observation: it mutates nothing and
+   * is what a nest health surface (and the cutover check that all agents are
+   * live) reads to tell a healthy host from one with stuck starts.
+   */
+  status(): SessionHostStatus {
+    const desired = [...this.desired.keys()].sort()
+    const hosted = [...this.sessions.keys()].sort()
+    const stranded = desired.filter(name => !this.sessions.has(name))
+    return { desired, hosted, stranded }
   }
 }

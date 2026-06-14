@@ -445,3 +445,37 @@ describe('sessionHost.reconcile serialization', () => {
     expect(starts.sort()).toEqual(['a', 'c']) // b never starts — only the latest set replays
   })
 })
+
+describe('sessionHost.status', () => {
+  it('reports an empty status before any reconcile', () => {
+    const { host } = makeHost()
+    expect(host.status()).toEqual({ desired: [], hosted: [], stranded: [] })
+  })
+
+  it('lists every reconciled agent as desired and hosted, none stranded', async () => {
+    const { host } = makeHost()
+    await host.reconcile([entry('b'), entry('a')])
+    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['a', 'b'], stranded: [] })
+  })
+
+  it('reports an agent whose start failed as desired and stranded, not hosted', async () => {
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a')
+          throw new Error('startboom:a')
+      },
+      async stop() {},
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a'), entry('b')])
+    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['b'], stranded: ['a'] })
+  })
+
+  it('drops an agent from desired and hosted once it leaves the registry', async () => {
+    const { host } = makeHost()
+    await host.reconcile([entry('a'), entry('b')])
+    await host.reconcile([entry('a')])
+    expect(host.status()).toEqual({ desired: ['a'], hosted: ['a'], stranded: [] })
+  })
+})
