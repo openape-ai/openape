@@ -7,3 +7,5 @@
 export { AgentSession } from './agent-session'
 export { readConfig } from './bridge-config'
 export type { BridgeConfig } from './bridge-config'
+export { readAgentIdentity } from './identity'
+export type { AgentIdentity } from './identity'
