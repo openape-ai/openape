@@ -240,8 +240,14 @@ export class SessionHost implements AgentSupervisor {
     // reconcile can never double-start the same agent. With placeholder
     // sessions `start()` never fails, so every desired agent is already live
     // and this is a no-op.
-    if ([...this.desired.values()].some(entry => !this.sessions.has(entry.name)))
+    const stranded = [...this.desired.values()].filter(entry => !this.sessions.has(entry.name))
+    if (stranded.length) {
+      // Make a stuck rollout visible: without this the retry below is silent, so
+      // an agent whose start keeps failing would never surface in the nest log.
+      // This is what the cutover health check ("all agents live") watches for.
+      this.deps.log(`session-host: ${stranded.length} agent(s) stranded, retrying: ${stranded.map(e => e.name).join(', ')}`)
       await this.reconcile([...this.desired.values()])
+    }
 
     for (const { session } of this.sessions.values()) {
       if (!session.tick)
