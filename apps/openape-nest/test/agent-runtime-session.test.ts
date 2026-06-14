@@ -151,6 +151,28 @@ describe('createAgentRuntimeSession', () => {
     expect(lines).toContain('agent-runtime: x backend disconnected')
   })
 
+  it('routes an inbound message frame and logs its chat, ignoring noise', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const ctxWithSocket = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithSocket, line => lines.push(line))
+
+    await session.start()
+    ws.emit('message', JSON.stringify({ type: 'message', chat_id: 'chat-9', payload: { body: 'hi' } }))
+    ws.emit('message', JSON.stringify({ type: 'presence', payload: { online: true } }))
+    ws.emit('message', 'not json')
+
+    // Only the accepted message frame is logged; the body never appears.
+    expect(lines.filter(line => line.includes('message in chat')))
+      .toEqual(['agent-runtime: > backend message in chat chat-9'])
+    expect(lines.some(line => line.includes('hi'))).toBe(false)
+  })
+
   it('closes the chat socket on stop', async () => {
     const lines: string[] = []
     const ws = fakeSocket()

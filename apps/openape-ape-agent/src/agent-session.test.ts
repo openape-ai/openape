@@ -38,3 +38,58 @@ describe('AgentSession.chatSocketUrl', () => {
       .toBe('wss://troop.openape.ai/_ws/chat?token=a%2Fb%2Bc%3Dd')
   })
 })
+
+describe('AgentSession.parseChatFrame', () => {
+  const session = new AgentSession(
+    'agent@example.com',
+    'owner@example.com',
+    {} as BridgeConfig,
+  )
+
+  it('decodes a message frame from a JSON string', () => {
+    const frame = JSON.stringify({
+      type: 'message',
+      chat_id: 'chat-1',
+      payload: { id: 'm1', body: 'hi' },
+    })
+    expect(session.parseChatFrame(frame)).toEqual({
+      chatId: 'chat-1',
+      payload: { id: 'm1', body: 'hi' },
+    })
+  })
+
+  it('decodes a message frame delivered as a Buffer', () => {
+    const frame = Buffer.from(JSON.stringify({
+      type: 'message',
+      chat_id: 'chat-2',
+      payload: { body: 'hi' },
+    }))
+    expect(session.parseChatFrame(frame)).toEqual({
+      chatId: 'chat-2',
+      payload: { body: 'hi' },
+    })
+  })
+
+  it('defaults a missing chat_id to an empty string', () => {
+    const frame = JSON.stringify({ type: 'message', payload: { body: 'hi' } })
+    expect(session.parseChatFrame(frame)).toEqual({
+      chatId: '',
+      payload: { body: 'hi' },
+    })
+  })
+
+  it('ignores non-message frame types', () => {
+    const frame = JSON.stringify({ type: 'presence', payload: { online: true } })
+    expect(session.parseChatFrame(frame)).toBeNull()
+  })
+
+  it('ignores message frames without a payload', () => {
+    expect(session.parseChatFrame(JSON.stringify({ type: 'message' }))).toBeNull()
+  })
+
+  it('ignores invalid JSON and empty data', () => {
+    expect(session.parseChatFrame('not json')).toBeNull()
+    expect(session.parseChatFrame('')).toBeNull()
+    expect(session.parseChatFrame(undefined)).toBeNull()
+  })
+})
