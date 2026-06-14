@@ -117,7 +117,7 @@ interface Message {
   editedAt: number | null
 }
 
-interface BridgeConfig {
+export interface BridgeConfig {
   endpoint: string
   apesBin: string
   model: string
