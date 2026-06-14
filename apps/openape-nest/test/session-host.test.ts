@@ -187,6 +187,60 @@ describe('sessionHost.reconcile config changes', () => {
     await host.reconcile([{ ...configured('a', 'gpt-5.4'), registeredAt: 999 }])
     expect(events).toEqual([])
   })
+
+  it('isolates a throwing restart so the other agents still reconcile', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    let failNextStart = false
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a' && failNextStart) {
+          failNextStart = false
+          throw new Error('startboom:a')
+        }
+        events.push(`start:${e.name}:${e.bridge?.model ?? '-'}`)
+      },
+      async stop() {
+        events.push(`stop:${e.name}`)
+      },
+    })
+    const host = new SessionHost({ log: line => lines.push(line), createSession: factory })
+    await host.reconcile([configured('a', 'gpt-5.4'), configured('b', 'gpt-5.4')])
+    events.length = 0
+    lines.length = 0
+    failNextStart = true
+    // a's config changes (restart) and its new start throws; b is untouched.
+    await host.reconcile([configured('a', 'gpt-5.5'), configured('b', 'gpt-5.4')])
+    expect(events).toEqual(['stop:a']) // stopped, but the new start failed
+    expect(lines).toContain('session-host: ! a restart failed: startboom:a')
+  })
+
+  it('leaves an agent absent after a failed restart so the next reconcile retries it', async () => {
+    const events: string[] = []
+    let failNextStart = false
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a' && failNextStart) {
+          failNextStart = false
+          throw new Error('startboom:a')
+        }
+        events.push(`start:${e.name}:${e.bridge?.model ?? '-'}`)
+      },
+      async stop() {
+        events.push(`stop:${e.name}`)
+      },
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([configured('a', 'gpt-5.4')])
+    events.length = 0
+    failNextStart = true
+    await host.reconcile([configured('a', 'gpt-5.5')]) // restart: stop ok, start throws → a absent
+    expect(events).toEqual(['stop:a'])
+    await host.reconcile([configured('a', 'gpt-5.5')]) // a desired but not live → started fresh
+    expect(events).toEqual(['stop:a', 'start:a:gpt-5.5'])
+  })
 })
 
 describe('sessionHost.tickAll', () => {
