@@ -35,6 +35,36 @@ describe('storage paths', () => {
     expect(getAuthFile()).toBe(join(tmpHome, 'auth.json'))
     expect(getSpTokensDir()).toBe(join(tmpHome, 'sp-tokens'))
   })
+
+  it('explicit authHome wins over the env override and resolves <home>/.config/apes', () => {
+    const agentHome = mkdtempSync(join(tmpdir(), 'cli-auth-agent-home-'))
+    try {
+      expect(getConfigDir(agentHome)).toBe(join(agentHome, '.config', 'apes'))
+      expect(getAuthFile(agentHome)).toBe(join(agentHome, '.config', 'apes', 'auth.json'))
+    }
+    finally {
+      rmSync(agentHome, { recursive: true, force: true })
+    }
+  })
+
+  it('persists and reads back from the per-agent authHome, isolated from the env home', () => {
+    const agentHome = mkdtempSync(join(tmpdir(), 'cli-auth-agent-home-'))
+    try {
+      saveIdpAuth({
+        idp: 'https://id.openape.ai',
+        access_token: 'agent-token',
+        email: 'agent@id.openape.ai',
+        expires_at: 999,
+      }, agentHome)
+
+      expect(loadIdpAuth(agentHome)?.access_token).toBe('agent-token')
+      // The ambient env home stays untouched.
+      expect(loadIdpAuth()).toBeNull()
+    }
+    finally {
+      rmSync(agentHome, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('IdP auth roundtrip', () => {
