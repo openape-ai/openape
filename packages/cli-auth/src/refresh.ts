@@ -40,9 +40,17 @@ async function getTokenEndpoint(idp: string): Promise<string> {
  * `~/.config/apes/auth.json` file but rely on apes to own the lock for now.
  * Cross-package locking is a follow-up — for the MVP single-user case it
  * effectively never races.
+ *
+ * `authHome` selects whose `auth.json` to read and persist (an OS home dir;
+ * see `getConfigDir`). Omitted = the current process's home, byte-identical to
+ * before. The single-process Nest passes each hosted agent's home so one
+ * daemon can refresh every agent's own token without env juggling.
  */
-export async function ensureFreshIdpAuth(now: number = Math.floor(Date.now() / 1000)): Promise<IdpAuth> {
-  const auth = loadIdpAuth()
+export async function ensureFreshIdpAuth(
+  now: number = Math.floor(Date.now() / 1000),
+  authHome?: string,
+): Promise<IdpAuth> {
+  const auth = loadIdpAuth(authHome)
   if (!auth) {
     throw new NotLoggedInError()
   }
@@ -59,7 +67,7 @@ export async function ensureFreshIdpAuth(now: number = Math.floor(Date.now() / 1
   if (!auth.refresh_token) {
     const refreshed = await refreshAgentToken(auth, now)
     if (refreshed) {
-      saveIdpAuth(refreshed)
+      saveIdpAuth(refreshed, authHome)
       return refreshed
     }
     throw new NotLoggedInError(
@@ -88,7 +96,7 @@ export async function ensureFreshIdpAuth(now: number = Math.floor(Date.now() / 1
     if (status === 400 || status === 401) {
       // Refresh-token family revoked or already-rotated. Clear it so we don't
       // loop refreshing on every subsequent invocation; user must re-login.
-      saveIdpAuth({ ...auth, refresh_token: undefined })
+      saveIdpAuth({ ...auth, refresh_token: undefined }, authHome)
       throw new NotLoggedInError(
         `Refresh token rejected by ${auth.idp}. Run \`apes login\` again.`,
       )
@@ -110,6 +118,6 @@ export async function ensureFreshIdpAuth(now: number = Math.floor(Date.now() / 1
     refresh_token: response.refresh_token ?? auth.refresh_token,
     expires_at: now + (response.expires_in ?? 3600),
   }
-  saveIdpAuth(next)
+  saveIdpAuth(next, authHome)
   return next
 }
