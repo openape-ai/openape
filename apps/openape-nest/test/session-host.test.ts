@@ -545,13 +545,13 @@ describe('sessionHost.reconcile serialization', () => {
 describe('sessionHost.status', () => {
   it('reports an empty status before any reconcile', () => {
     const { host } = makeHost()
-    expect(host.status()).toEqual({ desired: [], hosted: [], stranded: [] })
+    expect(host.status()).toEqual({ desired: [], hosted: [], stranded: [], errored: [] })
   })
 
   it('lists every reconciled agent as desired and hosted, none stranded', async () => {
     const { host } = makeHost()
     await host.reconcile([entry('b'), entry('a')])
-    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['a', 'b'], stranded: [] })
+    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['a', 'b'], stranded: [], errored: [] })
   })
 
   it('reports an agent whose start failed as desired and stranded, not hosted', async () => {
@@ -565,13 +565,50 @@ describe('sessionHost.status', () => {
     })
     const host = new SessionHost({ log: () => {}, createSession: factory })
     await host.reconcile([entry('a'), entry('b')])
-    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['b'], stranded: ['a'] })
+    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['b'], stranded: ['a'], errored: [] })
   })
 
   it('drops an agent from desired and hosted once it leaves the registry', async () => {
     const { host } = makeHost()
     await host.reconcile([entry('a'), entry('b')])
     await host.reconcile([entry('a')])
-    expect(host.status()).toEqual({ desired: ['a'], hosted: ['a'], stranded: [] })
+    expect(host.status()).toEqual({ desired: ['a'], hosted: ['a'], stranded: [], errored: [] })
+  })
+
+  it('reports a hosted agent whose last tick threw as errored, not the healthy one', async () => {
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {},
+      async stop() {},
+      async tick() {
+        if (e.name === 'a')
+          throw new Error('tickboom:a')
+      },
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a'), entry('b')])
+    expect(host.status().errored).toEqual([])
+    await host.tickAll()
+    expect(host.status()).toEqual({ desired: ['a', 'b'], hosted: ['a', 'b'], stranded: [], errored: ['a'] })
+  })
+
+  it('clears the errored flag once a previously failing tick succeeds again', async () => {
+    const failing = new Set<string>(['a'])
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {},
+      async stop() {},
+      async tick() {
+        if (failing.has(e.name))
+          throw new Error(`tickboom:${e.name}`)
+      },
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a')])
+    await host.tickAll()
+    expect(host.status().errored).toEqual(['a'])
+    failing.delete('a')
+    await host.tickAll()
+    expect(host.status().errored).toEqual([])
   })
 })
