@@ -89,6 +89,13 @@ function createPlaceholderSession(entry: AgentEntry): HostedSession {
 export class SessionHost implements AgentSupervisor {
   /** Live sessions, keyed by agent name. */
   private readonly sessions = new Map<string, LiveSession>()
+  /**
+   * The latest desired agent set, kept so the central tick can retry an agent
+   * whose `start()` failed and left it absent. `reconcile` only re-fires on a
+   * registry change, so without this a stranded agent would wait for the next
+   * edit; the tick gives it the in-process parallel to pm2's autorestart.
+   */
+  private desired = new Map<string, AgentEntry>()
   private readonly createSession: SessionFactory
   /** True while a reconcile is in flight, to serialize overlapping calls. */
   private reconciling = false
@@ -138,6 +145,7 @@ export class SessionHost implements AgentSupervisor {
 
   private async reconcileOnce(desired: AgentEntry[]): Promise<void> {
     const next = new Map(desired.map(a => [a.name, a]))
+    this.desired = next
     const toStart = [...next.values()].filter(entry => !this.sessions.has(entry.name))
     const toStop = [...this.sessions.values()].filter(live => !next.has(live.entry.name))
     const toRestart = [...next.values()].filter((entry) => {
@@ -204,6 +212,16 @@ export class SessionHost implements AgentSupervisor {
    * logged and the next tick retries.
    */
   async tickAll(): Promise<void> {
+    // Before advancing, retry any desired agent that isn't live — e.g. a
+    // transient `start()` failure left it absent. Route the retry back through
+    // the already-serialized, idempotent `reconcile` rather than starting here:
+    // that reuses the coalescing guard, so a tick firing during an in-flight
+    // reconcile can never double-start the same agent. With placeholder
+    // sessions `start()` never fails, so every desired agent is already live
+    // and this is a no-op.
+    if ([...this.desired.values()].some(entry => !this.sessions.has(entry.name)))
+      await this.reconcile([...this.desired.values()])
+
     for (const { session } of this.sessions.values()) {
       if (!session.tick)
         continue
