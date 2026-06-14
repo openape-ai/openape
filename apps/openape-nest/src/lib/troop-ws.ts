@@ -40,6 +40,20 @@ const HEARTBEAT_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
 
+// Run a command AS an agent via the nest's root→agent sudo path (the
+// Dockerfile grants root NOPASSWD sudo to any agent). Used for secret
+// delivery / config sync instead of `apes run --as <agent>`, because that
+// routes through the grant-mediated `escapes` binary which isn't installed
+// in the nest image — every such call fails at exec. The nest dropping to
+// the agent user to write a sealed blob into the agent's own home (or run
+// the agent's own sync) needs no grant boundary: it's root delegating to
+// the agent, not the agent escalating. Same model as the periodic reconcile
+// (`sudo -n -H -u <agent> apes agents sync`).
+const SUDO_BIN = 'sudo'
+function sudoAs(name: string, cmd: string[]): string[] {
+  return ['-n', '-H', '-u', name, '--', ...cmd]
+}
+
 interface SpawnIntentFrame {
   type: 'spawn-intent'
   intent_id: string
@@ -266,7 +280,7 @@ export class TroopWs {
     const name = agentNameFromEmail(frame.agent_email)
     if (!name) return
     this.opts.log(`troop-ws: config-update for ${name} — running sync`)
-    await this.runApes(['run', '--as', name, '--wait', '--', 'apes', 'agents', 'sync'], `config-update sync ${name}`)
+    await this.runAsAgent(name, ['apes', 'agents', 'sync'], `config-update sync ${name}`)
   }
 
   private async handleSecretUpdate(frame: SecretUpdateFrame): Promise<void> {
@@ -282,7 +296,7 @@ export class TroopWs {
     // user so it lands in the agent's own home with mode 600.
     this.opts.log(`troop-ws: secret-update ${name}/${frame.env}`)
     try {
-      await runWithInput(this.opts.apesBin, ['run', '--as', name, '--wait', '--', 'sh', '-c', plan.script], frame.blob)
+      await runWithInput(SUDO_BIN, sudoAs(name, ['sh', '-c', plan.script]), frame.blob)
     }
     catch (err) {
       this.opts.log(`troop-ws: secret-update ${name}/${frame.env} failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -298,7 +312,7 @@ export class TroopWs {
       return
     }
     this.opts.log(`troop-ws: secret-revoke ${name}/${frame.env}`)
-    await this.runApes(['run', '--as', name, '--wait', '--', 'sh', '-c', plan.script], `secret-revoke ${name}/${frame.env}`)
+    await this.runAsAgent(name, ['sh', '-c', plan.script], `secret-revoke ${name}/${frame.env}`)
   }
 
   private async handleSpawnIntent(frame: SpawnIntentFrame): Promise<void> {
@@ -355,6 +369,14 @@ export class TroopWs {
 
   private async runApes(args: string[], label: string): Promise<void> {
     try { await runWithCapture(this.opts.apesBin, args) }
+    catch (err) {
+      this.opts.log(`troop-ws: ${label} failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  // Run `cmd` as the agent user via sudo (see SUDO_BIN/sudoAs note below).
+  private async runAsAgent(name: string, cmd: string[], label: string): Promise<void> {
+    try { await runWithCapture(SUDO_BIN, sudoAs(name, cmd)) }
     catch (err) {
       this.opts.log(`troop-ws: ${label} failed: ${err instanceof Error ? err.message : String(err)}`)
     }
