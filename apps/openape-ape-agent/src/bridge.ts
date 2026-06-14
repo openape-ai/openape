@@ -44,6 +44,7 @@ import { createHeuristicDetector, decide } from '@openape/prompt-injection-detec
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
+import { startSecretsWatcher } from '@openape/apes'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
@@ -433,6 +434,18 @@ class Bridge {
 
 async function main(): Promise<void> {
   const cfg = readConfig()
+
+  // Materialize sealed secrets (secrets.d/*.blob) into this process's env
+  // before the agent loop starts, then watch for rotate/revoke. Without
+  // this the agent's bash tools never see delivered secrets like
+  // FORGEJO_TOKEN — the blobs survive a nest recreate but stay sealed.
+  try {
+    startSecretsWatcher({ log: m => log(m) })
+  }
+  catch (err) {
+    log(`secrets watcher failed to start: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
   if (onDisk.email.toLowerCase() !== idpId.email.toLowerCase()) {
