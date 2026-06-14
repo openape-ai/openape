@@ -66,6 +66,39 @@ describe('createAgentRuntimeSession', () => {
     ])
   })
 
+  it('resolves and logs the token-redacted chat socket url when a bearer is supplied', async () => {
+    const lines: string[] = []
+    let calls = 0
+    const ctxWithBearer = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => {
+        calls++
+        return 'Bearer tok-secret-123'
+      },
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithBearer, line => lines.push(line))
+
+    await session.start()
+
+    // The factory exercised the real bearer → chatSocketUrl path once...
+    expect(calls).toBe(1)
+    expect(lines).toContain(
+      'agent-runtime: ~ backend chat socket wss://troop.openape.ai/_ws/chat?token=<redacted>',
+    )
+    // ...and never leaked the bearer token into the log.
+    expect(lines.some(line => line.includes('tok-secret-123'))).toBe(false)
+  })
+
+  it('does not resolve a socket url when no bearer is supplied', async () => {
+    const lines: string[] = []
+    const session = createAgentRuntimeSession(entry('qa'), ctx, line => lines.push(line))
+
+    await session.start()
+
+    expect(lines.some(line => line.includes('chat socket'))).toBe(false)
+  })
+
   it('plugs into SessionHost as the injected session factory', async () => {
     const lines: string[] = []
     const host = new SessionHost({

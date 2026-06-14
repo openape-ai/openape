@@ -14,6 +14,25 @@ import { resolveBridgeConfig } from './bridge-config'
 export interface AgentRuntimeContext {
   ownerEmail: string
   bridgeConfig: BridgeConfig
+  /**
+   * Resolves this agent's troop bearer (`Bearer <jwt>`). Optional: when present,
+   * the factory derives the agent's chat-socket URL at start time — the last
+   * step before the WS-open increment actually connects. Left unset by
+   * {@link resolveAgentRuntimeContext} for now: the production bearer must come
+   * from the agent's *own* home via `@openape/cli-auth`'s `ensureFreshIdpAuth`
+   * (which also refreshes the 1h-expiring agent token), and home-injecting that
+   * published helper is a separate, owner-gated step. Tests inject a stub.
+   */
+  bearer?: () => Promise<string>
+}
+
+/**
+ * Strip the bearer token from a chat-socket URL so it is safe to log. The token
+ * rides in the `token` query param ({@link AgentSession.chatSocketUrl}); the
+ * nest log must never carry it in the clear.
+ */
+function redactSocketToken(url: string): string {
+  return url.replace(/([?&]token=)[^&]*/, '$1<redacted>')
 }
 
 /**
@@ -75,6 +94,13 @@ export function createAgentRuntimeSession(
         return
       session = new AgentSession(entry.email, ctx.ownerEmail, ctx.bridgeConfig)
       log(`agent-runtime: + ${entry.name} hosting ${session.describe()}`)
+      if (ctx.bearer) {
+        // Resolve the exact troop chat-socket URL the WS-open increment will
+        // connect to, exercising the bearer → chatSocketUrl path end-to-end.
+        // The socket is not opened yet; log the URL with its token redacted.
+        const url = session.chatSocketUrl(await ctx.bearer())
+        log(`agent-runtime: ~ ${entry.name} chat socket ${redactSocketToken(url)}`)
+      }
     },
     async stop() {
       if (!session)
