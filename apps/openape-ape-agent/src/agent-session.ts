@@ -1,5 +1,5 @@
 import { materializeSecrets } from '@openape/apes'
-import type { BridgeConfig } from './bridge'
+import type { BridgeConfig } from './bridge-config'
 
 export class AgentSession {
   constructor(
