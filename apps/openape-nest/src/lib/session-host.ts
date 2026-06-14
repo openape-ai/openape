@@ -112,4 +112,27 @@ export class SessionHost implements AgentSupervisor {
       }
     }
   }
+
+  /**
+   * Stop every live session — the process-shutdown counterpart to
+   * {@link reconcile}'s per-agent stop. The nest calls this on SIGTERM/SIGINT
+   * so that once sessions hold real resources (WS sockets, runtime loops) they
+   * close cleanly instead of being killed mid-flight. Each stop is isolated in
+   * its own try/catch so one session failing to stop never blocks the others;
+   * the map is cleared regardless so the host ends up with no live sessions.
+   */
+  async stopAll(): Promise<void> {
+    for (const session of this.sessions.values()) {
+      try {
+        await session.stop()
+      }
+      catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        this.deps.log(`session-host: ! ${session.name} stop failed: ${reason}`)
+      }
+    }
+    const count = this.sessions.size
+    this.sessions.clear()
+    this.deps.log(`session-host: stopped all ${count} session(s)`)
+  }
 }
