@@ -22,8 +22,9 @@
 
 import { readFileSync, watch } from 'node:fs'
 import process from 'node:process'
-import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
+import { listAgents, REGISTRY_PATH } from './lib/registry'
+import { resolveNestTickMs } from './lib/tick-ms'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
@@ -33,6 +34,8 @@ const RECONCILE_DEBOUNCE_MS = 1000
 function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
 }
+
+resolveNestTickMs(process.env.OPENAPE_NEST_TICK_MS, log)
 
 const supervisor = new Pm2Supervisor({ apesBin: APES_BIN, log })
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })

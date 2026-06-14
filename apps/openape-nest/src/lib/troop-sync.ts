@@ -15,10 +15,11 @@ import { execFile } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { listAgents } from './registry'
+import { resolveNestTickMs } from './tick-ms'
 
 const execFileAsync = promisify(execFile)
 
-const TICK_MS = 5 * 60 * 1000 // 5 min — matches the legacy StartInterval
+const TICK_MS = resolveNestTickMs(process.env.OPENAPE_NEST_TICK_MS)
 
 export interface TroopSyncDeps {
   apesBin: string
@@ -37,7 +38,7 @@ export class TroopSync {
     // reconcile finishes first, then the regular interval.
     setTimeout(() => this.tick(), 30_000).unref()
     this.timer = setInterval(() => this.tick(), TICK_MS)
-    this.deps.log('troop-sync: loop started (interval=5min)')
+    this.deps.log(`troop-sync: loop started (interval=${TICK_MS}ms)`)
   }
 
   stop(): void {
