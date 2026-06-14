@@ -49,6 +49,70 @@ describe('sessionHost.reconcile', () => {
   })
 })
 
+describe('sessionHost.reconcile error isolation', () => {
+  function lifecycleSession(events: string[], opts: { throwStartOn?: string, throwStopOn?: string } = {}) {
+    return (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (opts.throwStartOn === e.name)
+          throw new Error(`startboom:${e.name}`)
+        events.push(`start:${e.name}`)
+      },
+      async stop() {
+        if (opts.throwStopOn === e.name)
+          throw new Error(`stopboom:${e.name}`)
+        events.push(`stop:${e.name}`)
+      },
+    })
+  }
+
+  it('isolates a throwing start so the other agents still start', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: lifecycleSession(events, { throwStartOn: 'a' }) })
+    await host.reconcile([entry('a'), entry('b')])
+    expect(events).toEqual(['start:b'])
+    expect(lines).toContain('session-host: ! a start failed: startboom:a')
+    expect(lines).toContain('session-host: + b (started)')
+  })
+
+  it('retries a failed start on the next reconcile', async () => {
+    const events: string[] = []
+    let failNext = true
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a' && failNext) {
+          failNext = false
+          throw new Error('startboom:a')
+        }
+        events.push(`start:${e.name}`)
+      },
+      async stop() {},
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a')]) // start throws → a stays absent
+    expect(events).toEqual([])
+    await host.reconcile([entry('a')]) // a still desired but not live → retried
+    expect(events).toEqual(['start:a'])
+  })
+
+  it('isolates a throwing stop and still drops the agent from the live set', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: lifecycleSession(events, { throwStopOn: 'a' }) })
+    await host.reconcile([entry('a'), entry('b')])
+    events.length = 0
+    lines.length = 0
+    await host.reconcile([]) // both leave; a's stop throws
+    expect(events).toEqual(['stop:b'])
+    expect(lines).toContain('session-host: ! a stop failed: stopboom:a')
+    // a was dropped despite the failed stop: a later reconcile re-adds it as new.
+    await host.reconcile([entry('a')])
+    expect(events).toContain('start:a')
+  })
+})
+
 describe('sessionHost lifecycle seam', () => {
   it('starts and stops the injected session exactly at the transitions', async () => {
     const events: string[] = []
