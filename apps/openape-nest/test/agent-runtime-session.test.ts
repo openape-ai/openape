@@ -29,13 +29,41 @@ describe('createAgentRuntimeSession', () => {
     )
   })
 
-  it('logs on stop', async () => {
+  it('retains the constructed AgentSession and tears it down on stop', async () => {
+    const lines: string[] = []
+    const session = createAgentRuntimeSession(entry('qa'), ctx, line => lines.push(line))
+
+    await session.start()
+    await session.stop()
+
+    // stop names the identity of the *retained* instance, proving it held the
+    // session constructed by start() rather than discarding it.
+    expect(lines).toContain('agent-runtime: - qa stopped qa@example.test (owner owner@example.test)')
+  })
+
+  it('stop is a no-op when nothing was started', async () => {
     const lines: string[] = []
     const session = createAgentRuntimeSession(entry('qa'), ctx, line => lines.push(line))
 
     await session.stop()
 
-    expect(lines).toContain('agent-runtime: - qa stopped')
+    expect(lines).toEqual([])
+  })
+
+  it('start and stop are idempotent against the retained instance', async () => {
+    const lines: string[] = []
+    const session = createAgentRuntimeSession(entry('backend'), ctx, line => lines.push(line))
+
+    await session.start()
+    await session.start()
+    await session.stop()
+    await session.stop()
+
+    // one host line, one stop line — the second start/stop are guarded no-ops.
+    expect(lines).toEqual([
+      'agent-runtime: + backend hosting backend@example.test (owner owner@example.test)',
+      'agent-runtime: - backend stopped backend@example.test (owner owner@example.test)',
+    ])
   })
 
   it('plugs into SessionHost as the injected session factory', async () => {
