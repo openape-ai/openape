@@ -42,11 +42,20 @@ export function resolveAgentRuntimeContext(
 /**
  * Real {@link HostedSession} factory: wraps an `@openape/ape-agent`
  * {@link AgentSession} so the SessionHost hosts the actual agent runtime instead
- * of the no-op placeholder. This is the first increment to carry the real
- * runtime object across the package boundary — `start()` constructs the
- * AgentSession from the registry entry and the nest-supplied context. Opening
- * the troop WS, running the LLM loop, and dropping tool calls to `sudo -u
- * <agent>` land behind this same seam in the following increments.
+ * of the no-op placeholder. `start()` constructs the AgentSession from the
+ * registry entry and the nest-supplied context and **retains it** on the
+ * session; `stop()` tears that retained instance down. Holding the constructed
+ * AgentSession (rather than discarding it after logging) is the seam the next
+ * increments hang off: opening the troop WS, running the LLM loop, and dropping
+ * tool calls to `sudo -u <agent>` all act on this same retained instance.
+ *
+ * `start()`/`stop()` are idempotent against the retained instance: a second
+ * `start()` while already hosting is a no-op (so a retry never constructs — and,
+ * once the WS lands, never re-opens — a duplicate), and `stop()` only tears down
+ * an instance it actually holds (so a double-stop never closes a socket twice).
+ * The SessionHost already serializes reconcile and retries stranded starts via
+ * the central tick, so these guards keep that machinery from doubling up the
+ * real runtime once `start()` has side effects.
  *
  * Wired into {@link SessionHost} via its injectable `createSession` option; the
  * default factory stays the placeholder, so the OPENAPE_NEST_INPROCESS path is
@@ -57,14 +66,22 @@ export function createAgentRuntimeSession(
   ctx: AgentRuntimeContext,
   log: (line: string) => void,
 ): HostedSession {
+  let session: AgentSession | undefined
+
   return {
     name: entry.name,
     async start() {
-      const session = new AgentSession(entry.email, ctx.ownerEmail, ctx.bridgeConfig)
+      if (session)
+        return
+      session = new AgentSession(entry.email, ctx.ownerEmail, ctx.bridgeConfig)
       log(`agent-runtime: + ${entry.name} hosting ${session.describe()}`)
     },
     async stop() {
-      log(`agent-runtime: - ${entry.name} stopped`)
+      if (!session)
+        return
+      const hosted = session.describe()
+      session = undefined
+      log(`agent-runtime: - ${entry.name} stopped ${hosted}`)
     },
   }
 }
