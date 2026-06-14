@@ -31,6 +31,10 @@ import { readNestVersion, TroopWs } from './lib/troop-ws'
 
 const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
 const RECONCILE_DEBOUNCE_MS = 1000
+// Central scheduler cadence for the in-process path — one tick drives every
+// hosted session (replacing the 13 per-agent `setInterval`s of the pm2 model).
+// Matches the historical per-agent cron cadence (cron-runner.ts: 60s).
+const TICK_INTERVAL_MS = Number(process.env.OPENAPE_NEST_TICK_MS ?? 60_000)
 
 function log(line: string): void {
   process.stderr.write(`${new Date().toISOString()}  ${line}\n`)
@@ -39,9 +43,8 @@ function log(line: string): void {
 // Flag flips supervision from per-agent pm2 daemons to one in-process
 // SessionHost (single-process-nest, 26 processes → 1). Off = unchanged.
 const INPROCESS = process.env.OPENAPE_NEST_INPROCESS === '1'
-const supervisor: AgentSupervisor = INPROCESS
-  ? new SessionHost({ log })
-  : new Pm2Supervisor({ apesBin: APES_BIN, log })
+const sessionHost = INPROCESS ? new SessionHost({ log }) : undefined
+const supervisor: AgentSupervisor = sessionHost ?? new Pm2Supervisor({ apesBin: APES_BIN, log })
 if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (M2 scaffold)')
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
@@ -59,6 +62,17 @@ async function reconcile(): Promise<void> {
 void reconcile()
 troopSync.start()
 troopWs.start()
+
+// Central scheduler tick — only on the in-process path. Each tick advances
+// every live session once (SessionHost.tickAll). Non-breaking until the real
+// runtime loop lands: placeholder sessions have no `tick`, so tickAll is a
+// no-op. unref'd so it never keeps the process alive on its own.
+let tickTimer: NodeJS.Timeout | undefined
+if (sessionHost) {
+  tickTimer = setInterval(() => { void sessionHost.tickAll() }, TICK_INTERVAL_MS)
+  tickTimer.unref()
+  log(`nest: central scheduler tick every ${TICK_INTERVAL_MS}ms (in-process)`)
+}
 
 // Watch the registry file for changes. fs.watch fires once per
 // "something happened" — debounce with a small timer because some
@@ -98,6 +112,7 @@ process.on('SIGTERM', () => {
   troopSync.stop()
   troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
+  if (tickTimer) clearInterval(tickTimer)
   process.exit(0)
 })
 
@@ -106,5 +121,6 @@ process.on('SIGINT', () => {
   troopSync.stop()
   troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
+  if (tickTimer) clearInterval(tickTimer)
   process.exit(0)
 })
