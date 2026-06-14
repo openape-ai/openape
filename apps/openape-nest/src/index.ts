@@ -107,20 +107,19 @@ function registrySignature(): string {
   catch { return '' }
 }
 
-process.on('SIGTERM', () => {
-  log('nest: SIGTERM — stopping')
+// Graceful shutdown. On the in-process path the SessionHost owns live sessions
+// (WS sockets + runtime loops once they land), so stop them before exit instead
+// of letting the signal kill them mid-flight. With the flag off sessionHost is
+// undefined, so this is unchanged from the pm2 path.
+async function shutdown(signal: string): Promise<void> {
+  log(`nest: ${signal} — stopping`)
   troopSync.stop()
   troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
   if (tickTimer) clearInterval(tickTimer)
+  if (sessionHost) await sessionHost.stopAll()
   process.exit(0)
-})
+}
 
-process.on('SIGINT', () => {
-  log('nest: SIGINT — stopping')
-  troopSync.stop()
-  troopWs.stop()
-  if (reconcileTimer) clearTimeout(reconcileTimer)
-  if (tickTimer) clearInterval(tickTimer)
-  process.exit(0)
-})
+process.on('SIGTERM', () => { void shutdown('SIGTERM') })
+process.on('SIGINT', () => { void shutdown('SIGINT') })
