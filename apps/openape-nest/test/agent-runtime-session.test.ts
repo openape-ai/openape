@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentEntry } from '../src/lib/registry'
 import { SessionHost } from '../src/lib/session-host'
+import type { ChatSocket, ChatSocketFactory } from '../src/lib/agent-runtime-session'
 import { createAgentRuntimeSession, resolveAgentRuntimeContext } from '../src/lib/agent-runtime-session'
 
 function entry(name: string): AgentEntry {
@@ -97,6 +98,88 @@ describe('createAgentRuntimeSession', () => {
     await session.start()
 
     expect(lines.some(line => line.includes('chat socket'))).toBe(false)
+  })
+
+  function fakeSocket() {
+    const handlers: Record<string, (arg?: unknown) => void> = {}
+    let closed = false
+    const created: string[] = []
+    const factory: ChatSocketFactory = (url) => {
+      created.push(url)
+      const sock = {
+        on: (event: string, cb: (arg?: unknown) => void) => {
+          handlers[event] = cb
+        },
+        close: () => {
+          closed = true
+        },
+      }
+      return sock as unknown as ChatSocket
+    }
+    return {
+      created,
+      get closed() {
+        return closed
+      },
+      emit(event: string, arg?: unknown) {
+        handlers[event]?.(arg)
+      },
+      factory,
+    }
+  }
+
+  it('opens the chat socket and logs lifecycle events when a bearer is supplied', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const ctxWithSocket = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithSocket, line => lines.push(line))
+
+    await session.start()
+    expect(ws.created).toEqual(['wss://troop.openape.ai/_ws/chat?token=tok-secret-123'])
+
+    ws.emit('open')
+    ws.emit('error', new Error('boom'))
+    ws.emit('close')
+
+    expect(lines).toContain('agent-runtime: = backend connected')
+    expect(lines).toContain('agent-runtime: ! backend socket error: boom')
+    expect(lines).toContain('agent-runtime: x backend disconnected')
+  })
+
+  it('closes the chat socket on stop', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const ctxWithSocket = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+    }
+    const session = createAgentRuntimeSession(entry('qa'), ctxWithSocket, line => lines.push(line))
+
+    await session.start()
+    expect(ws.closed).toBe(false)
+    await session.stop()
+    expect(ws.closed).toBe(true)
+  })
+
+  it('opens no socket when no bearer is supplied', async () => {
+    const ws = fakeSocket()
+    const ctxNoBearer = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      chatSocketFactory: ws.factory,
+    }
+    const session = createAgentRuntimeSession(entry('qa'), ctxNoBearer, () => {})
+
+    await session.start()
+
+    expect(ws.created).toEqual([])
   })
 
   it('plugs into SessionHost as the injected session factory', async () => {
