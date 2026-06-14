@@ -1,3 +1,4 @@
+import { materializeSecrets } from '@openape/apes'
 import type { BridgeConfig } from './bridge'
 
 export class AgentSession {
@@ -9,5 +10,11 @@ export class AgentSession {
 
   describe(): string {
     return `${this.email} (owner ${this.ownerEmail})`
+  }
+
+  secretsEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {}
+    materializeSecrets({ env })
+    return env
   }
 }
