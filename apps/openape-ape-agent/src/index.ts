@@ -5,4 +5,5 @@
 // importable surface alongside them.
 
 export { AgentSession } from './agent-session'
-export type { BridgeConfig } from './bridge'
+export { readConfig } from './bridge-config'
+export type { BridgeConfig } from './bridge-config'
