@@ -51,6 +51,11 @@ function sameAgentConfig(a: AgentEntry, b: AgentEntry): boolean {
   return JSON.stringify(restA) === JSON.stringify(restB)
 }
 
+/** Human-readable text for a thrown value, used in per-session failure logs. */
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /**
  * Placeholder session: runs nothing, opens no socket. Keeps the in-process
  * path behaviourally identical to "flag off" until the real runtime loop
@@ -105,25 +110,49 @@ export class SessionHost implements AgentSupervisor {
       return live !== undefined && !sameAgentConfig(live.entry, entry)
     })
 
+    // Each transition is isolated in its own try/catch so one agent failing to
+    // start, stop or restart never aborts the reconcile for the others — the
+    // same per-session resilience tickAll/stopAll already give. A failed start
+    // or restart leaves the agent absent from (or unchanged in) the live map, so
+    // the next reconcile naturally retries it.
+
     // Restart agents whose config changed (model swap, key rotation): stop the
     // stale session, then start a fresh one from the new entry. This is the
     // in-process parallel to the pm2 path rewriting ecosystem.config.js and
     // `startOrReload`ing the daemon so the change actually takes effect.
     for (const entry of toRestart) {
-      await this.sessions.get(entry.name)!.session.stop()
-      await this.startSession(entry)
-      this.deps.log(`session-host: ~ ${entry.name} (config changed, restarted)`)
+      try {
+        await this.sessions.get(entry.name)!.session.stop()
+        await this.startSession(entry)
+        this.deps.log(`session-host: ~ ${entry.name} (config changed, restarted)`)
+      }
+      catch (err) {
+        this.deps.log(`session-host: ! ${entry.name} restart failed: ${errText(err)}`)
+      }
     }
 
     for (const entry of toStart) {
-      await this.startSession(entry)
-      this.deps.log(`session-host: + ${entry.name} (started)`)
+      try {
+        await this.startSession(entry)
+        this.deps.log(`session-host: + ${entry.name} (started)`)
+      }
+      catch (err) {
+        this.deps.log(`session-host: ! ${entry.name} start failed: ${errText(err)}`)
+      }
     }
 
+    // An agent gone from the registry is dropped from the live map regardless of
+    // whether its stop() succeeds — there is no registry entry left to retry
+    // against, so a stuck stop must not keep the session live and ticking.
     for (const live of toStop) {
-      await live.session.stop()
+      try {
+        await live.session.stop()
+        this.deps.log(`session-host: - ${live.entry.name} (gone from registry, stopped)`)
+      }
+      catch (err) {
+        this.deps.log(`session-host: ! ${live.entry.name} stop failed: ${errText(err)}`)
+      }
       this.sessions.delete(live.entry.name)
-      this.deps.log(`session-host: - ${live.entry.name} (gone from registry, stopped)`)
     }
 
     if (toStart.length || toStop.length || toRestart.length)
@@ -147,8 +176,7 @@ export class SessionHost implements AgentSupervisor {
         await session.tick()
       }
       catch (err) {
-        const reason = err instanceof Error ? err.message : String(err)
-        this.deps.log(`session-host: ! ${session.name} tick failed: ${reason}`)
+        this.deps.log(`session-host: ! ${session.name} tick failed: ${errText(err)}`)
       }
     }
   }
@@ -167,8 +195,7 @@ export class SessionHost implements AgentSupervisor {
         await session.stop()
       }
       catch (err) {
-        const reason = err instanceof Error ? err.message : String(err)
-        this.deps.log(`session-host: ! ${session.name} stop failed: ${reason}`)
+        this.deps.log(`session-host: ! ${session.name} stop failed: ${errText(err)}`)
       }
     }
     const count = this.sessions.size
