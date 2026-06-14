@@ -407,6 +407,9 @@ importers:
 
   apps/openape-nest:
     dependencies:
+      '@openape/ape-agent':
+        specifier: workspace:*
+        version: link:../openape-ape-agent
       '@openape/cli-auth':
         specifier: workspace:*
         version: link:../../packages/cli-auth
