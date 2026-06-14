@@ -1,18 +1,55 @@
 # @openape/protocol-conformance
 
-`@openape/protocol-conformance` keeps a local copy of OpenApe protocol JSON schemas and validates representative runtime objects against them in tests.
+`@openape/protocol-conformance` validates OpenApe protocol artifacts against the JSON schemas in `packages/protocol-conformance/schemas`.
 
-## What this package contains
+## What it contains
 
-- `schemas/` — protocol JSON schemas mirrored from `openape-ai/protocol`
-- `test/harness.ts` — an Ajv 2020-12 validator that preloads every schema so `$ref` resolution works across files
-- `test/*.test.ts` — conformance tests that validate objects produced by the current OpenApe packages against the mirrored schemas
+This package contains:
 
-This package is private and does not publish a runtime API.
+- JSON schemas for protocol documents such as grants, discovery extensions, manifests, delegations, and error payloads
+- test helpers that load those schemas into Ajv 2020-12
+- conformance tests that validate real objects produced by `@openape/core`, `@openape/grants`, and `@openape/server`
 
-## Included schema files
+The package does not currently expose a public runtime entrypoint. The source of truth is the schema set plus the test harness in `test/harness.ts`.
 
-The package currently validates these schema files:
+## Validate a schema in tests
+
+Use `getValidator()` from `test/harness.ts` to load one of the preloaded schemas and validate a value against it.
+
+```ts
+import { getValidator } from './test/harness.js'
+
+const { validate } = getValidator('grant.json')
+const result = validate({
+  id: 'grant-123',
+  status: 'approved',
+  request: {
+    requester: 'agent@example.com',
+    target_host: 'macmini.local',
+    audience: 'apes',
+    grant_type: 'once',
+  },
+  created_at: 1710000000,
+  decided_by: 'admin@example.com',
+  decided_at: 1710000060,
+})
+
+console.log(result.valid)
+console.log(result.errors)
+```
+
+`validate(data)` returns:
+
+- `valid`: `true` when the value matches the schema
+- `errors`: an empty string on success, or a formatted JSON string of Ajv errors on failure
+
+## Available validator helper
+
+### `getValidator(schemaFilename: string)`
+
+Returns a validator wrapper for one of the schemas preloaded by the test harness.
+
+Accepted schema filenames are:
 
 - `authz-jwt-claims.json`
 - `client-metadata.json`
@@ -24,49 +61,10 @@ The package currently validates these schema files:
 - `openid-configuration-extensions.json`
 - `sp-scope-catalog.json`
 
-## What the tests cover
+If the filename is not preloaded, `getValidator()` throws `Schema not pre-loaded: <filename>`.
+If Ajv cannot resolve the schema by `$id`, it throws `Validator not found for schema id: <schemaId>`.
 
-The tests document the wire formats the repository currently produces and accepts.
-
-### `test/manifest.test.ts`
-
-Validates:
-
-- an `OpenApeManifest` object with `validateOpenApeManifest` from `@openape/core`
-- an array-form scope catalog against `sp-scope-catalog.json`
-
-### `test/discovery.test.ts`
-
-Builds a discovery document in the same shape as the server discovery handler and validates it against `openid-configuration-extensions.json`.
-
-The test covers:
-
-- required DDISA extension fields such as `ddisa_version`
-- supported DDISA auth methods
-- canonical `ddisa_auth_*` endpoint names
-- OpenApe grant and delegation extension fields
-
-### `test/grant.test.ts`
-
-Creates grants with `@openape/grants` and validates:
-
-- an approved grant against `grant.json`
-- a pending grant against `grant.json`
-- a standing grant object against `grant.json`
-
-### `test/authz-jwt.test.ts`
-
-Issues authorization JWTs with `@openape/grants`, decodes their claims, and validates the claims against `authz-jwt-claims.json`.
-
-The test covers:
-
-- a basic approved once-grant token
-- delegation token claims with `scopes`
-- delegation token claims with `delegate`
-
-## Run the checks
-
-From the repo root:
+## Run the package checks
 
 ```bash
 pnpm --filter @openape/protocol-conformance lint
@@ -74,12 +72,10 @@ pnpm --filter @openape/protocol-conformance typecheck
 pnpm --filter @openape/protocol-conformance test
 ```
 
-## Refresh the mirrored schemas
-
-Update the local schema mirror with:
+## Sync schemas
 
 ```bash
 pnpm --filter @openape/protocol-conformance sync-schemas
 ```
 
-`schemas/README.md` remains the source of truth for the mirror policy and refresh command.
+This runs `scripts/sync-protocol-schemas.mjs` from the repository root.
