@@ -120,3 +120,46 @@ describe('sessionHost.tickAll', () => {
     await expect(host.tickAll()).resolves.toBeUndefined()
   })
 })
+
+describe('sessionHost.stopAll', () => {
+  function stoppingSession(events: string[], opts: { throwOn?: string } = {}) {
+    return (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {},
+      async stop() {
+        if (opts.throwOn === e.name)
+          throw new Error(`boom:${e.name}`)
+        events.push(`stop:${e.name}`)
+      },
+    })
+  }
+
+  it('stops every live session and reports the count', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: stoppingSession(events) })
+    await host.reconcile([entry('a'), entry('b')])
+    await host.stopAll()
+    expect(events.sort()).toEqual(['stop:a', 'stop:b'])
+    expect(lines).toContain('session-host: stopped all 2 session(s)')
+  })
+
+  it('isolates a throwing stop so the other sessions still stop', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: stoppingSession(events, { throwOn: 'a' }) })
+    await host.reconcile([entry('a'), entry('b')])
+    await host.stopAll()
+    expect(events).toEqual(['stop:b'])
+    expect(lines).toContain('session-host: ! a stop failed: boom:a')
+  })
+
+  it('clears the live set so a session is not stopped twice', async () => {
+    const events: string[] = []
+    const host = new SessionHost({ log: () => {}, createSession: stoppingSession(events) })
+    await host.reconcile([entry('a')])
+    await host.stopAll()
+    await host.stopAll()
+    expect(events).toEqual(['stop:a'])
+  })
+})
