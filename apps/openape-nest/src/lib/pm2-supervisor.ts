@@ -158,9 +158,16 @@ module.exports = {
     name: '${pm2AppName(agent.name)}',
     script: '${script}',
     autorestart: true,
-    max_restarts: 10,
+    // A bridge must never stay dead. With exponential backoff the delay
+    // grows on each rapid crash (capped by pm2), so a flapping bridge
+    // (e.g. a transient LLM/token outage) keeps retrying instead of
+    // hammering — and min_uptime resets the counter once it stays up
+    // 30s, so the high cap is only ever reached by a genuinely broken
+    // bridge, not a recoverable hiccup. The old max_restarts:10 let pm2
+    // give up permanently after 10 crashes, which stranded agents.
+    max_restarts: 1000,
     min_uptime: '30s',
-    restart_delay: 2000,
+    exp_backoff_restart_delay: 2000,
     merge_logs: true,${envBlock}
   }],
 }
