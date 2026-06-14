@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentEntry } from '../src/lib/registry'
+import type { HostedSession } from '../src/lib/session-host'
 import { SessionHost } from '../src/lib/session-host'
 
 function entry(name: string): AgentEntry {
@@ -13,29 +14,29 @@ function makeHost() {
 }
 
 describe('sessionHost.reconcile', () => {
-  it('logs an add for every agent on the first reconcile', async () => {
+  it('starts a session for every agent on the first reconcile', async () => {
     const { host, lines } = makeHost()
     await host.reconcile([entry('a'), entry('b')])
-    expect(lines).toContain('session-host: + a (start pending)')
-    expect(lines).toContain('session-host: + b (start pending)')
+    expect(lines).toContain('session-host: + a (started)')
+    expect(lines).toContain('session-host: + b (started)')
     expect(lines).toContain('session-host: now hosting 2 agent(s)')
   })
 
-  it('logs a removal when an agent disappears from the registry', async () => {
+  it('stops a session when an agent disappears from the registry', async () => {
     const { host, lines } = makeHost()
     await host.reconcile([entry('a'), entry('b')])
     lines.length = 0
     await host.reconcile([entry('a')])
-    expect(lines).toContain('session-host: - b (gone from registry, stop pending)')
+    expect(lines).toContain('session-host: - b (gone from registry, stopped)')
     expect(lines.some(line => line.startsWith('session-host: + '))).toBe(false)
   })
 
-  it('logs an add when a new agent appears alongside existing ones', async () => {
+  it('starts a session when a new agent appears alongside existing ones', async () => {
     const { host, lines } = makeHost()
     await host.reconcile([entry('a')])
     lines.length = 0
     await host.reconcile([entry('a'), entry('b')])
-    expect(lines).toContain('session-host: + b (start pending)')
+    expect(lines).toContain('session-host: + b (started)')
     expect(lines.some(line => line.startsWith('session-host: - '))).toBe(false)
   })
 
@@ -45,5 +46,29 @@ describe('sessionHost.reconcile', () => {
     lines.length = 0
     await host.reconcile([entry('a')])
     expect(lines).toContain('session-host: reconcile no-op (1 agent(s))')
+  })
+})
+
+describe('sessionHost lifecycle seam', () => {
+  it('starts and stops the injected session exactly at the transitions', async () => {
+    const events: string[] = []
+    function fakeSession(e: AgentEntry): HostedSession {
+      return {
+        name: e.name,
+        async start() {
+          events.push(`start:${e.name}`)
+        },
+        async stop() {
+          events.push(`stop:${e.name}`)
+        },
+      }
+    }
+    const host = new SessionHost({ log: () => {}, createSession: fakeSession })
+
+    await host.reconcile([entry('a')])
+    await host.reconcile([entry('a')]) // no-op: no extra start
+    await host.reconcile([]) // a leaves: stop
+
+    expect(events).toEqual(['start:a', 'stop:a'])
   })
 })
