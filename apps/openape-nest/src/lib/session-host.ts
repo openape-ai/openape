@@ -164,8 +164,16 @@ export class SessionHost implements AgentSupervisor {
     // in-process parallel to the pm2 path rewriting ecosystem.config.js and
     // `startOrReload`ing the daemon so the change actually takes effect.
     for (const entry of toRestart) {
+      const stale = this.sessions.get(entry.name)!.session
+      // Drop the stale session from the live map up front: the old config must
+      // never stay live past a restart attempt. On success startSession re-adds
+      // it with the new entry; on any failure (stop or start throws) the agent is
+      // left absent — exactly like a failed start — so tickAll and the next
+      // reconcile retry it as a fresh start instead of stranding a stopped
+      // session that would still be ticked.
+      this.sessions.delete(entry.name)
       try {
-        await this.sessions.get(entry.name)!.session.stop()
+        await stale.stop()
         await this.startSession(entry)
         this.deps.log(`session-host: ~ ${entry.name} (config changed, restarted)`)
       }
