@@ -1,5 +1,15 @@
 import type { BridgeConfig } from './bridge-config'
 
+/**
+ * A decoded inbound troop chat frame worth acting on: the chat it belongs to
+ * plus the raw payload (`{id, chatId, role, body, ...}`). Produced by
+ * {@link AgentSession.parseChatFrame} after the protocol envelope is stripped.
+ */
+export interface TroopChatFrame {
+  chatId: string
+  payload: Record<string, unknown>
+}
+
 export class AgentSession {
   constructor(
     readonly email: string,
@@ -23,5 +33,32 @@ export class AgentSession {
     const base = this.config.endpoint.replace(/^http/, 'ws')
     const token = encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))
     return `${base}/_ws/chat?token=${token}`
+  }
+
+  /**
+   * Decode one raw troop chat-socket frame into a {@link TroopChatFrame}, or
+   * `null` for frames the agent ignores. Ports the exact decode + filter the
+   * per-agent bridge applies in `pumpOnce`: tolerate string or `Buffer` data,
+   * skip anything that is not valid JSON, and keep only `{type:'message'}`
+   * frames that carry a payload. This is the canonical home for the framing
+   * rule once the nest drives the connection — the WS-message increment routes
+   * accepted frames into the agent loop with no second copy of the rule.
+   */
+  parseChatFrame(data: unknown): TroopChatFrame | null {
+    const text = typeof data === 'string'
+      ? data
+      : Buffer.isBuffer(data) ? data.toString('utf8') : ''
+    if (!text)
+      return null
+    let frame: { type?: string, chat_id?: string, payload?: Record<string, unknown> }
+    try {
+      frame = JSON.parse(text) as typeof frame
+    }
+    catch {
+      return null
+    }
+    if (frame.type !== 'message' || !frame.payload)
+      return null
+    return { chatId: frame.chat_id ?? '', payload: frame.payload }
   }
 }
