@@ -235,6 +235,58 @@ describe('sessionHost.tickAll', () => {
     await host.reconcile([entry('a')])
     await expect(host.tickAll()).resolves.toBeUndefined()
   })
+
+  it('retries a stranded start on the tick, without a registry change', async () => {
+    const starts: string[] = []
+    let failNext = true
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        if (e.name === 'a' && failNext) {
+          failNext = false
+          throw new Error('startboom:a')
+        }
+        starts.push(e.name)
+      },
+      async stop() {},
+      async tick() {},
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a')]) // start throws → a desired but absent
+    expect(starts).toEqual([])
+    await host.tickAll() // tick retries the stranded agent
+    expect(starts).toEqual(['a'])
+  })
+
+  it('does not re-start a live agent on the tick', async () => {
+    const starts: string[] = []
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() { starts.push(e.name) },
+      async stop() {},
+      async tick() {},
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a')])
+    await host.tickAll()
+    await host.tickAll()
+    expect(starts).toEqual(['a']) // started once, never restarted by the tick
+  })
+
+  it('does not retry an agent that left the registry', async () => {
+    const starts: string[] = []
+    const factory = (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() { starts.push(e.name) },
+      async stop() {},
+      async tick() {},
+    })
+    const host = new SessionHost({ log: () => {}, createSession: factory })
+    await host.reconcile([entry('a')])
+    await host.reconcile([]) // a removed → no longer desired
+    await host.tickAll()
+    expect(starts).toEqual(['a']) // not re-started after leaving the registry
+  })
 })
 
 describe('sessionHost.stopAll', () => {
