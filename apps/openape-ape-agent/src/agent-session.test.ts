@@ -1,4 +1,4 @@
-import type { BridgeConfig } from './bridge'
+import type { BridgeConfig } from './bridge-config'
 import { describe, expect, it, vi } from 'vitest'
 import * as apes from '@openape/apes'
 import { AgentSession } from './agent-session'

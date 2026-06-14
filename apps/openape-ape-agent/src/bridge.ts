@@ -45,6 +45,8 @@ import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
 import { startSecretsWatcher } from '@openape/apes'
+import type { BridgeConfig } from './bridge-config'
+import { readConfig } from './bridge-config'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
@@ -94,13 +96,6 @@ function resolveTools(envFallback: string[]): string[] {
   return envFallback
 }
 
-const DEFAULT_ENDPOINT = 'https://troop.openape.ai'
-const DEFAULT_APES_BIN = 'apes'
-const DEFAULT_MAX_STEPS = 10
-const DEFAULT_SYSTEM_PROMPT
-  = 'You are a helpful assistant in a 1:1 chat. Be concise and friendly. '
-    + 'When asked for facts, say "I don\'t know" rather than guess.'
-
 const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
@@ -116,47 +111,6 @@ interface Message {
   replyTo: string | null
   createdAt: number
   editedAt: number | null
-}
-
-export interface BridgeConfig {
-  endpoint: string
-  apesBin: string
-  model: string
-  systemPrompt: string
-  tools: string[]
-  maxSteps: number
-  roomFilter?: string
-}
-
-function readConfig(): BridgeConfig {
-  const toolsRaw = process.env.APE_CHAT_BRIDGE_TOOLS ?? ''
-  const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
-  const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
-  const maxSteps = maxStepsRaw ? Number.parseInt(maxStepsRaw, 10) : DEFAULT_MAX_STEPS
-
-  // Model is required — there's no safe built-in default. A wrong
-  // default silently routes to a model the user's LiteLLM proxy
-  // doesn't know about and 400s every chat-completion request,
-  // visible only as a runtime error in the chat UI. Failing at
-  // startup with a pointer to the fix is much friendlier.
-  const model = process.env.APE_CHAT_BRIDGE_MODEL
-  if (!model) {
-    throw new Error(
-      'APE_CHAT_BRIDGE_MODEL is not set. Set it in the container env '
-      + '(compose environment: block) or globally in `~/litellm/.env`. '
-      + 'Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only).',
-    )
-  }
-
-  return {
-    endpoint: (process.env.OPENAPE_TROOP_URL ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
-    apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
-    model,
-    systemPrompt: process.env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
-    tools,
-    maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
-    roomFilter: process.env.APE_CHAT_BRIDGE_ROOM,
-  }
 }
 
 async function getIdentity(): Promise<{ email: string }> {
