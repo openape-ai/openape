@@ -50,6 +50,7 @@ import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { composeSystemPrompt } from './skills'
 import { ThreadSession } from './thread-session'
+import { AgentSession } from './agent-session'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
 
@@ -454,8 +455,10 @@ async function main(): Promise<void> {
     )
   }
 
+  const session = new AgentSession(onDisk.email, onDisk.ownerEmail, cfg)
+
   log(
-    `bridge starting — agent=${onDisk.email} owner=${onDisk.ownerEmail} `
+    `bridge starting — agent=${session.describe()} `
     + `apes=${cfg.apesBin} model=${cfg.model} tools=[${cfg.tools.join(',') || 'none'}] `
     + `max_steps=${cfg.maxSteps} room=${cfg.roomFilter ?? '*'}`,
   )
