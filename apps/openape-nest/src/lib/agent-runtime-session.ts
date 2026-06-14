@@ -2,7 +2,24 @@ import type { BridgeConfig } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity } from '@openape/ape-agent'
+import WebSocket from 'ws'
 import { resolveBridgeConfig } from './bridge-config'
+
+/**
+ * Minimal view of the troop chat WebSocket the runtime session drives — just the
+ * lifecycle surface it wires (`open`/`close`/`error`) plus `close()` for
+ * teardown. The real `ws` {@link WebSocket} satisfies this; tests inject a fake.
+ */
+export interface ChatSocket {
+  on: ((event: 'open' | 'close', cb: () => void) => void) &
+    ((event: 'error', cb: (err: Error) => void) => void)
+  close: () => void
+}
+
+/** Opens a chat socket for the given URL. Defaults to the real `ws` client. */
+export type ChatSocketFactory = (url: string) => ChatSocket
+
+const defaultChatSocketFactory: ChatSocketFactory = url => new WebSocket(url)
 
 /**
  * Per-agent context the nest supplies to construct an agent's runtime. The
@@ -24,6 +41,13 @@ export interface AgentRuntimeContext {
    * published helper is a separate, owner-gated step. Tests inject a stub.
    */
   bearer?: () => Promise<string>
+  /**
+   * Opens the troop chat WebSocket. Defaults to the real `ws` client; tests
+   * inject a fake to observe lifecycle wiring without a live socket. Only ever
+   * called when {@link bearer} is set, so production (where
+   * {@link resolveAgentRuntimeContext} leaves `bearer` unset) never connects.
+   */
+  chatSocketFactory?: ChatSocketFactory
 }
 
 /**
@@ -86,6 +110,7 @@ export function createAgentRuntimeSession(
   log: (line: string) => void,
 ): HostedSession {
   let session: AgentSession | undefined
+  let socket: ChatSocket | undefined
 
   return {
     name: entry.name,
@@ -95,17 +120,26 @@ export function createAgentRuntimeSession(
       session = new AgentSession(entry.email, ctx.ownerEmail, ctx.bridgeConfig)
       log(`agent-runtime: + ${entry.name} hosting ${session.describe()}`)
       if (ctx.bearer) {
-        // Resolve the exact troop chat-socket URL the WS-open increment will
-        // connect to, exercising the bearer → chatSocketUrl path end-to-end.
-        // The socket is not opened yet; log the URL with its token redacted.
+        // Open the troop chat WS on the retained session, mirroring the
+        // per-agent bridge's `pumpOnce`. The URL (with its token redacted) is
+        // logged; message frames are routed into the agent loop by a later
+        // increment. The token rides the URL only — never the log.
         const url = session.chatSocketUrl(await ctx.bearer())
         log(`agent-runtime: ~ ${entry.name} chat socket ${redactSocketToken(url)}`)
+        const factory = ctx.chatSocketFactory ?? defaultChatSocketFactory
+        socket = factory(url)
+        socket.on('open', () => log(`agent-runtime: = ${entry.name} connected`))
+        socket.on('close', () => log(`agent-runtime: x ${entry.name} disconnected`))
+        socket.on('error', err =>
+          log(`agent-runtime: ! ${entry.name} socket error: ${err.message}`))
       }
     },
     async stop() {
       if (!session)
         return
       const hosted = session.describe()
+      socket?.close()
+      socket = undefined
       session = undefined
       log(`agent-runtime: - ${entry.name} stopped ${hosted}`)
     },
