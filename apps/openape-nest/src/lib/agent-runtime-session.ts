@@ -1,7 +1,8 @@
 import type { BridgeConfig } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
-import { AgentSession } from '@openape/ape-agent'
+import { AgentSession, readAgentIdentity } from '@openape/ape-agent'
+import { resolveBridgeConfig } from './bridge-config'
 
 /**
  * Per-agent context the nest supplies to construct an agent's runtime. The
@@ -13,6 +14,29 @@ import { AgentSession } from '@openape/ape-agent'
 export interface AgentRuntimeContext {
   ownerEmail: string
   bridgeConfig: BridgeConfig
+}
+
+/**
+ * Resolve the full {@link AgentRuntimeContext} for one hosted agent from the
+ * registry entry and the nest's env. The owner email comes from the agent's own
+ * identity file (`<home>/.config/apes/auth.json`) via the bridge's own
+ * {@link readAgentIdentity} — pointed at the registry entry's `home` so the one
+ * daemon reads each agent's identity from that agent's home, with no second copy
+ * of the auth.json parsing/fallback rules. The bridge config is resolved from the
+ * nest env with the per-agent registry override (see {@link resolveBridgeConfig}).
+ *
+ * Pure resolver: it reads files but mutates nothing and is not wired into
+ * index.ts yet — it completes the context the {@link createAgentRuntimeSession}
+ * factory needs before the WS-opening increment.
+ */
+export function resolveAgentRuntimeContext(
+  entry: AgentEntry,
+  env: NodeJS.ProcessEnv,
+): AgentRuntimeContext {
+  return {
+    ownerEmail: readAgentIdentity(entry.home).ownerEmail,
+    bridgeConfig: resolveBridgeConfig(entry, env),
+  }
 }
 
 /**
