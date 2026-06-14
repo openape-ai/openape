@@ -73,6 +73,58 @@ describe('sessionHost lifecycle seam', () => {
   })
 })
 
+describe('sessionHost.reconcile config changes', () => {
+  function configured(name: string, model: string): AgentEntry {
+    return { ...entry(name), bridge: { model } }
+  }
+
+  function recordingSession(events: string[]) {
+    return (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        events.push(`start:${e.name}:${e.bridge?.model ?? '-'}`)
+      },
+      async stop() {
+        events.push(`stop:${e.name}`)
+      },
+    })
+  }
+
+  it('restarts a session when its registry config changes', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: recordingSession(events) })
+    await host.reconcile([configured('a', 'gpt-5.4')])
+    events.length = 0
+    lines.length = 0
+    await host.reconcile([configured('a', 'gpt-5.5')])
+    // Old session stops before the new one starts, and the new one carries the new config.
+    expect(events).toEqual(['stop:a', 'start:a:gpt-5.5'])
+    expect(lines).toContain('session-host: ~ a (config changed, restarted)')
+  })
+
+  it('does not restart a session when the config is unchanged', async () => {
+    const events: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: recordingSession(events) })
+    await host.reconcile([configured('a', 'gpt-5.4')])
+    events.length = 0
+    lines.length = 0
+    await host.reconcile([configured('a', 'gpt-5.4')])
+    expect(events).toEqual([])
+    expect(lines).toContain('session-host: reconcile no-op (1 agent(s))')
+  })
+
+  it('ignores registeredAt when deciding whether to restart', async () => {
+    const events: string[] = []
+    const host = new SessionHost({ log: () => {}, createSession: recordingSession(events) })
+    await host.reconcile([{ ...configured('a', 'gpt-5.4'), registeredAt: 1 }])
+    events.length = 0
+    await host.reconcile([{ ...configured('a', 'gpt-5.4'), registeredAt: 999 }])
+    expect(events).toEqual([])
+  })
+})
+
 describe('sessionHost.tickAll', () => {
   function tickingSession(ticks: string[], opts: { throwOn?: string } = {}) {
     return (e: AgentEntry): HostedSession => ({
