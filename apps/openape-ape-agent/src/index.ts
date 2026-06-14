@@ -5,6 +5,7 @@
 // importable surface alongside them.
 
 export { AgentSession } from './agent-session'
+export type { TroopChatFrame } from './agent-session'
 export { readConfig } from './bridge-config'
 export type { BridgeConfig } from './bridge-config'
 export { readAgentIdentity } from './identity'

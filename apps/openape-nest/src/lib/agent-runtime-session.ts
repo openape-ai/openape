@@ -12,7 +12,8 @@ import { resolveBridgeConfig } from './bridge-config'
  */
 export interface ChatSocket {
   on: ((event: 'open' | 'close', cb: () => void) => void) &
-    ((event: 'error', cb: (err: Error) => void) => void)
+    ((event: 'error', cb: (err: Error) => void) => void) &
+    ((event: 'message', cb: (data: unknown) => void) => void)
   close: () => void
 }
 
@@ -132,6 +133,15 @@ export function createAgentRuntimeSession(
         socket.on('close', () => log(`agent-runtime: x ${entry.name} disconnected`))
         socket.on('error', err =>
           log(`agent-runtime: ! ${entry.name} socket error: ${err.message}`))
+        socket.on('message', (data) => {
+          // Decode the troop frame with the agent's own canonical parser, then
+          // route accepted messages. Dispatch into the LLM loop lands in a later
+          // increment; for now an accepted frame is logged (no body, no token).
+          const frame = session?.parseChatFrame(data)
+          if (!frame)
+            return
+          log(`agent-runtime: > ${entry.name} message in chat ${frame.chatId}`)
+        })
       }
     },
     async stop() {
