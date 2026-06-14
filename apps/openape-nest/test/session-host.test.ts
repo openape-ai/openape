@@ -279,3 +279,63 @@ describe('sessionHost.stopAll', () => {
     expect(events).toEqual(['stop:a'])
   })
 })
+
+describe('sessionHost.reconcile serialization', () => {
+  /**
+   * A session whose start() blocks until `release()` is called, so a test can
+   * hold one reconcile mid-flight and fire a second one concurrently.
+   */
+  function gatedSession(starts: string[], gate: Promise<void>) {
+    return (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {
+        await gate
+        starts.push(e.name)
+      },
+      async stop() {},
+    })
+  }
+
+  it('does not start the same agent twice when reconciles overlap', async () => {
+    const starts: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const host = new SessionHost({ log: () => {}, createSession: gatedSession(starts, gate) })
+
+    const first = host.reconcile([entry('a')]) // begins start('a'), blocks on gate
+    const second = host.reconcile([entry('a')]) // overlaps: queued, not run concurrently
+    release()
+    await Promise.all([first, second])
+
+    expect(starts).toEqual(['a']) // started once despite the overlap
+  })
+
+  it('applies a reconcile that arrives mid-run once the current one drains', async () => {
+    const starts: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const host = new SessionHost({ log: () => {}, createSession: gatedSession(starts, gate) })
+
+    const first = host.reconcile([entry('a')]) // blocks on gate
+    const second = host.reconcile([entry('a'), entry('b')]) // queued with the newer desired set
+    release()
+    await Promise.all([first, second])
+
+    expect(starts.sort()).toEqual(['a', 'b']) // b from the queued reconcile, each once
+  })
+
+  it('keeps only the latest desired set when several reconciles queue', async () => {
+    const starts: string[] = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const host = new SessionHost({ log: () => {}, createSession: gatedSession(starts, gate) })
+
+    const first = host.reconcile([entry('a')]) // blocks on gate
+    const stale = host.reconcile([entry('a'), entry('b')]) // queued, then superseded
+    const latest = host.reconcile([entry('a'), entry('c')]) // overwrites the pending set
+    release()
+    await Promise.all([first, stale, latest])
+
+    expect(starts.sort()).toEqual(['a', 'c']) // b never starts — only the latest set replays
+  })
+})

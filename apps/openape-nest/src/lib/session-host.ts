@@ -90,6 +90,10 @@ export class SessionHost implements AgentSupervisor {
   /** Live sessions, keyed by agent name. */
   private readonly sessions = new Map<string, LiveSession>()
   private readonly createSession: SessionFactory
+  /** True while a reconcile is in flight, to serialize overlapping calls. */
+  private reconciling = false
+  /** Latest desired set requested while a reconcile was already running. */
+  private pendingDesired: AgentEntry[] | undefined
 
   constructor(private readonly deps: { log: (line: string) => void, createSession?: SessionFactory }) {
     this.createSession = deps.createSession ?? createPlaceholderSession
@@ -101,7 +105,38 @@ export class SessionHost implements AgentSupervisor {
     this.sessions.set(entry.name, { session, entry })
   }
 
+  /**
+   * Reconcile the live sessions to `desired`, serialized against itself.
+   *
+   * `index.ts` drives reconcile from several sources — the initial run, the
+   * debounced fs.watch handler, and the 5s change-detecting poll — which can
+   * overlap once `start()` does real async work (opening a WS socket). The live
+   * map is only written *after* `await session.start()`, so two concurrent runs
+   * would both find the same agent in `toStart` and start it twice. Only one
+   * reconcile runs at a time; a request arriving mid-run is remembered (latest
+   * wins — reconcile is declarative, only the newest desired state matters) and
+   * replayed once the current run drains.
+   */
   async reconcile(desired: AgentEntry[]): Promise<void> {
+    if (this.reconciling) {
+      this.pendingDesired = desired
+      return
+    }
+    this.reconciling = true
+    try {
+      await this.reconcileOnce(desired)
+      while (this.pendingDesired) {
+        const next = this.pendingDesired
+        this.pendingDesired = undefined
+        await this.reconcileOnce(next)
+      }
+    }
+    finally {
+      this.reconciling = false
+    }
+  }
+
+  private async reconcileOnce(desired: AgentEntry[]): Promise<void> {
     const next = new Map(desired.map(a => [a.name, a]))
     const toStart = [...next.values()].filter(entry => !this.sessions.has(entry.name))
     const toStop = [...this.sessions.values()].filter(live => !next.has(live.entry.name))
