@@ -30,6 +30,27 @@ export interface HostedSession {
 
 export type SessionFactory = (entry: AgentEntry) => HostedSession
 
+/** A live session together with the registry entry it was started from. */
+interface LiveSession {
+  session: HostedSession
+  entry: AgentEntry
+}
+
+/**
+ * Two registry entries describe the same running agent when every field the
+ * runtime depends on matches. `registeredAt` is excluded — it is provenance
+ * metadata, not runtime config, and never changes for a live agent. Everything
+ * else (email, uid, home, bridge config, kind, service) feeds the session, so a
+ * change there means the session must restart to pick it up. Both entries come
+ * from the same registry parse, so their key order is stable and a plain
+ * serialization compares correctly.
+ */
+function sameAgentConfig(a: AgentEntry, b: AgentEntry): boolean {
+  const { registeredAt: _a, ...restA } = a
+  const { registeredAt: _b, ...restB } = b
+  return JSON.stringify(restA) === JSON.stringify(restB)
+}
+
 /**
  * Placeholder session: runs nothing, opens no socket. Keeps the in-process
  * path behaviourally identical to "flag off" until the real runtime loop
@@ -55,38 +76,57 @@ function createPlaceholderSession(entry: AgentEntry): HostedSession {
  * Gated behind OPENAPE_NEST_INPROCESS=1 — with the flag off the proven
  * pm2 path is untouched. This increment turns the desired agent set into
  * real {@link HostedSession} lifecycle calls: each added agent gets a
- * session started, each removed agent gets its session stopped. The session
+ * session started, each removed agent gets its session stopped, and an agent
+ * whose registry config changed gets its session restarted. The session
  * factory is injectable (default: a no-op placeholder), so the per-agent
  * runtime loop + sudo-drop tool execution drop in without touching the host.
  */
 export class SessionHost implements AgentSupervisor {
   /** Live sessions, keyed by agent name. */
-  private readonly sessions = new Map<string, HostedSession>()
+  private readonly sessions = new Map<string, LiveSession>()
   private readonly createSession: SessionFactory
 
   constructor(private readonly deps: { log: (line: string) => void, createSession?: SessionFactory }) {
     this.createSession = deps.createSession ?? createPlaceholderSession
   }
 
+  private async startSession(entry: AgentEntry): Promise<void> {
+    const session = this.createSession(entry)
+    await session.start()
+    this.sessions.set(entry.name, { session, entry })
+  }
+
   async reconcile(desired: AgentEntry[]): Promise<void> {
     const next = new Map(desired.map(a => [a.name, a]))
     const toStart = [...next.values()].filter(entry => !this.sessions.has(entry.name))
-    const toStop = [...this.sessions.values()].filter(session => !next.has(session.name))
+    const toStop = [...this.sessions.values()].filter(live => !next.has(live.entry.name))
+    const toRestart = [...next.values()].filter((entry) => {
+      const live = this.sessions.get(entry.name)
+      return live !== undefined && !sameAgentConfig(live.entry, entry)
+    })
+
+    // Restart agents whose config changed (model swap, key rotation): stop the
+    // stale session, then start a fresh one from the new entry. This is the
+    // in-process parallel to the pm2 path rewriting ecosystem.config.js and
+    // `startOrReload`ing the daemon so the change actually takes effect.
+    for (const entry of toRestart) {
+      await this.sessions.get(entry.name)!.session.stop()
+      await this.startSession(entry)
+      this.deps.log(`session-host: ~ ${entry.name} (config changed, restarted)`)
+    }
 
     for (const entry of toStart) {
-      const session = this.createSession(entry)
-      await session.start()
-      this.sessions.set(entry.name, session)
+      await this.startSession(entry)
       this.deps.log(`session-host: + ${entry.name} (started)`)
     }
 
-    for (const session of toStop) {
-      await session.stop()
-      this.sessions.delete(session.name)
-      this.deps.log(`session-host: - ${session.name} (gone from registry, stopped)`)
+    for (const live of toStop) {
+      await live.session.stop()
+      this.sessions.delete(live.entry.name)
+      this.deps.log(`session-host: - ${live.entry.name} (gone from registry, stopped)`)
     }
 
-    if (toStart.length || toStop.length)
+    if (toStart.length || toStop.length || toRestart.length)
       this.deps.log(`session-host: now hosting ${this.sessions.size} agent(s)`)
     else
       this.deps.log(`session-host: reconcile no-op (${this.sessions.size} agent(s))`)
@@ -100,7 +140,7 @@ export class SessionHost implements AgentSupervisor {
    * logged and the next tick retries.
    */
   async tickAll(): Promise<void> {
-    for (const session of this.sessions.values()) {
+    for (const { session } of this.sessions.values()) {
       if (!session.tick)
         continue
       try {
@@ -122,7 +162,7 @@ export class SessionHost implements AgentSupervisor {
    * the map is cleared regardless so the host ends up with no live sessions.
    */
   async stopAll(): Promise<void> {
-    for (const session of this.sessions.values()) {
+    for (const { session } of this.sessions.values()) {
       try {
         await session.stop()
       }
