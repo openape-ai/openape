@@ -72,3 +72,51 @@ describe('sessionHost lifecycle seam', () => {
     expect(events).toEqual(['start:a', 'stop:a'])
   })
 })
+
+describe('sessionHost.tickAll', () => {
+  function tickingSession(ticks: string[], opts: { throwOn?: string } = {}) {
+    return (e: AgentEntry): HostedSession => ({
+      name: e.name,
+      async start() {},
+      async stop() {},
+      async tick() {
+        if (opts.throwOn === e.name)
+          throw new Error(`boom:${e.name}`)
+        ticks.push(e.name)
+      },
+    })
+  }
+
+  it('ticks every live session once', async () => {
+    const ticks: string[] = []
+    const host = new SessionHost({ log: () => {}, createSession: tickingSession(ticks) })
+    await host.reconcile([entry('a'), entry('b')])
+    await host.tickAll()
+    expect(ticks.sort()).toEqual(['a', 'b'])
+  })
+
+  it('does not tick a session that left the registry', async () => {
+    const ticks: string[] = []
+    const host = new SessionHost({ log: () => {}, createSession: tickingSession(ticks) })
+    await host.reconcile([entry('a'), entry('b')])
+    await host.reconcile([entry('a')])
+    await host.tickAll()
+    expect(ticks).toEqual(['a'])
+  })
+
+  it('isolates a throwing tick so the other sessions still advance', async () => {
+    const ticks: string[] = []
+    const lines: string[] = []
+    const host = new SessionHost({ log: line => lines.push(line), createSession: tickingSession(ticks, { throwOn: 'a' }) })
+    await host.reconcile([entry('a'), entry('b')])
+    await host.tickAll()
+    expect(ticks).toEqual(['b'])
+    expect(lines).toContain('session-host: ! a tick failed: boom:a')
+  })
+
+  it('is a no-op for placeholder sessions without a tick', async () => {
+    const { host } = makeHost()
+    await host.reconcile([entry('a')])
+    await expect(host.tickAll()).resolves.toBeUndefined()
+  })
+})

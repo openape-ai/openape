@@ -19,6 +19,13 @@ export interface HostedSession {
   readonly name: string
   start: () => Promise<void>
   stop: () => Promise<void>
+  /**
+   * Advance this session once — the in-process replacement for the per-agent
+   * scheduler `setInterval`. The host calls this for every live session on a
+   * single central tick. Optional until the runtime loop lands: the
+   * placeholder omits it, making the tick a no-op for that session.
+   */
+  tick?: () => Promise<void>
 }
 
 export type SessionFactory = (entry: AgentEntry) => HostedSession
@@ -83,5 +90,26 @@ export class SessionHost implements AgentSupervisor {
       this.deps.log(`session-host: now hosting ${this.sessions.size} agent(s)`)
     else
       this.deps.log(`session-host: reconcile no-op (${this.sessions.size} agent(s))`)
+  }
+
+  /**
+   * Advance every live session once. This is the single central scheduler tick
+   * that replaces the 13 per-agent `setInterval`s of the pm2 model. Each
+   * session's tick is isolated in its own try/catch so one agent throwing never
+   * stalls the others (the per-session resilience M2 calls for); the failure is
+   * logged and the next tick retries.
+   */
+  async tickAll(): Promise<void> {
+    for (const session of this.sessions.values()) {
+      if (!session.tick)
+        continue
+      try {
+        await session.tick()
+      }
+      catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        this.deps.log(`session-host: ! ${session.name} tick failed: ${reason}`)
+      }
+    }
   }
 }
