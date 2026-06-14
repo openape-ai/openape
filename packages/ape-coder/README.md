@@ -1,13 +1,14 @@
 # @openape/ape-coder
 
-CLI for [coder.openape.ai](https://coder.openape.ai). Use it to list the projects you can access, read project stories, rename a story, and sync repo story files with the service.
+`@openape/ape-coder` provides the `ape-coder` CLI for `coder.openape.ai`. Use it to list the projects you can access, read project stories, rename a story, and sync repo story files with a bound coder project.
 
-`ape-coder` uses the shared OpenApe SSO session from [`apes login`](../apes/README.md). It does not keep a separate login.
+`ape-coder` reuses the shared OpenApe SSO session from [`apes login`](../apes/README.md). It does not keep a separate login.
 
 ## Install
 
 ```bash
 pnpm add -D @openape/ape-coder
+pnpm exec ape-coder --help
 ```
 
 ## Authentication
@@ -16,21 +17,28 @@ Sign in once on the device with the shared OpenApe CLI session:
 
 ```bash
 apes login <email>
-```
-
-Then check the active identity:
-
-```bash
 ape-coder whoami
 ```
 
-To clear only the cached token for coder.openape.ai:
+If you are not signed in, commands fail with a prompt to run `apes login`.
+
+To clear only the cached token for `coder.openape.ai`:
 
 ```bash
 ape-coder logout
 ```
 
-If you are not signed in, commands fail with a prompt to run `apes login`.
+## Service URL
+
+By default, the CLI talks to `https://coder.openape.ai`.
+
+To use another deployment, set `OPENAPE_CODER_URL`:
+
+```bash
+export OPENAPE_CODER_URL="https://coder.example.com"
+```
+
+`ape-coder sync` can also read a repo-specific `coderUrl` from `.ape-coder/config`.
 
 ## Commands
 
@@ -72,7 +80,7 @@ ape-coder stories set-title <project-id> <story-id> "New title" --json
 
 ### `ape-coder sync`
 
-Synchronizes repo story files with the bound project in coder.openape.ai.
+Synchronizes repo story files with the bound project in `coder.openape.ai`.
 
 ```bash
 ape-coder sync
@@ -101,6 +109,8 @@ Fields:
 - `coderUrl` — optional service URL; defaults to `https://coder.openape.ai`.
 - `storiesDir` — optional repo-relative story folder; defaults to `.ape-coder/stories`.
 
+If `projectId` is missing, sync stops before it talks to the service.
+
 ## Story file format
 
 Each local story file is Markdown with frontmatter.
@@ -108,7 +118,7 @@ Each local story file is Markdown with frontmatter.
 ```md
 ---
 id: story_123
-rev: 2e7b2c...
+rev: 4c7c6d...
 title: "Rename stories from the CLI"
 storySentence: "As a writer, I want to rename a story from the terminal."
 status: approved
@@ -121,9 +131,9 @@ testReferences: ["packages/ape-coder/test/coder-cli.test.ts"]
 - Permission errors are returned as-is.
 ```
 
-Frontmatter fields map to the service story fields:
+Frontmatter fields map to the coder story record:
 
-- `id`
+- `id` — story id, or omitted for a new local story.
 - `rev` — last synced content hash.
 - `title`
 - `storySentence`
@@ -144,30 +154,9 @@ These commands support `--json` for machine-readable output:
 - `ape-coder stories set-title <project> <story> <title>`
 - `ape-coder sync`
 
-## Authentication behavior
-
-- `ape-coder` exchanges the shared `apes login` session for a service token for coder.openape.ai.
-- `ape-coder login` is a stub that points to `apes login`.
-- `ape-coder logout` clears the cached coder service token only. It does not end the shared IdP session.
-
-## Environment
-
-- `OPENAPE_CODER_URL` — override the default `https://coder.openape.ai`.
-
 ## Development
-
-Package scripts:
 
 ```bash
 pnpm --filter @openape/ape-coder lint
 pnpm --filter @openape/ape-coder typecheck
-pnpm --filter @openape/ape-coder test
 ```
-
-## Package contents
-
-- `src/cli.ts`: CLI entrypoint and command registration.
-- `src/coder-api.ts`: authenticated API client for coder.openape.ai.
-- `src/handlers.ts`: command handlers for listing projects and reading or editing stories.
-- `src/sync.ts`: repo config parsing, story file parsing, diffing, conflict handling, and sync execution.
-- `src/commands/*`: command definitions for auth helpers, projects, stories, and sync.
