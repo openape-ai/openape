@@ -6,7 +6,7 @@ import { useOpenApeAuth } from '#imports'
 // list (card per company → click into its hierarchy). Toggle to the Nests view.
 useSeoMeta({ title: () => 'Firmen' })
 
-const { user, fetchUser } = useOpenApeAuth()
+const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
 interface OrgRow { id: string, name: string, visionMd: string, budgetMonthlyEur: number, memberCount: number }
@@ -18,6 +18,20 @@ const error = ref('')
 const showCreate = ref(false)
 const createForm = reactive({ name: '', vision: '' })
 const creating = ref(false)
+
+// Plain-text preview for the 2-line card snippet — markdown syntax stripped
+// (block markdown would break the line-clamp; the full render is on the detail).
+function preview(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/[*_~>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 async function load() {
   loading.value = true
@@ -53,9 +67,12 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
         <ViewToggle active="companies" />
       </div>
-      <UButton color="primary" size="sm" icon="i-lucide-plus" @click="showCreate = true">
-        <span class="hidden sm:inline">Firma</span>
-      </UButton>
+      <div class="flex items-center gap-2 shrink-0">
+        <UButton color="primary" size="sm" icon="i-lucide-plus" @click="showCreate = true">
+          <span class="hidden sm:inline">Firma</span>
+        </UButton>
+        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout" />
+      </div>
     </header>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
@@ -99,7 +116,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
                   {{ o.name }}
                 </h3>
                 <p v-if="o.visionMd" class="text-xs text-zinc-500 mt-1 line-clamp-2">
-                  {{ o.visionMd }}
+                  {{ preview(o.visionMd) }}
                 </p>
               </div>
               <UIcon name="i-lucide-chevron-right" class="text-zinc-500 shrink-0 size-5 mt-1" />
