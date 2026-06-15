@@ -1,7 +1,7 @@
 import type { BridgeConfig, TroopMessage } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
-import { AgentSession, readAgentIdentity } from '@openape/ape-agent'
+import { AgentSession, readAgentIdentity, TroopChatApi } from '@openape/ape-agent'
 import { ensureFreshIdpAuth } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import { resolveBridgeConfig } from './bridge-config'
@@ -57,9 +57,11 @@ export interface AgentRuntimeContext {
    * blocked message and the agent's own reply on an accepted one. Mirrors the
    * per-agent bridge's `this.chat.postMessage(roomId, text, { replyTo, threadId })`
    * (`bridge.ts`). Optional and only consulted inside the bearer-gated socket
-   * block; {@link resolveAgentRuntimeContext} leaves it unset, so the production
-   * path neither refuses nor replies until the real HTTP poster (`TroopChatApi`)
-   * is wired. Tests inject a spy.
+   * block; {@link resolveAgentRuntimeContext} now wires the production poster — a
+   * canonical `TroopChatApi` bound to the agent's troop endpoint + bearer — so the
+   * production path posts the injection refusal back. The accepted-message reply
+   * additionally needs {@link runTurn} (still unset in production), so a clean
+   * message produces no post until the runLoop runner lands. Tests inject a spy.
    */
   chatPoster?: (
     roomId: string,
@@ -104,15 +106,29 @@ function redactSocketToken(url: string): string {
  * juggling. The call is lazy (only fired when the factory opens the socket), so
  * resolving the context itself reads only the identity file and never the
  * network.
+ *
+ * The {@link AgentRuntimeContext.chatPoster} is the agent's canonical
+ * {@link TroopChatApi}, bound to the resolved troop endpoint and the same lazy
+ * `bearer` — no second copy of troop's POST shape. Constructing it is cheap
+ * (endpoint + bearer only); the first network call happens when the seam posts a
+ * refusal (or, once {@link AgentRuntimeContext.runTurn} lands, a reply), so
+ * resolving the context still touches no network.
  */
 export function resolveAgentRuntimeContext(
   entry: AgentEntry,
   env: NodeJS.ProcessEnv,
 ): AgentRuntimeContext {
+  const bridgeConfig = resolveBridgeConfig(entry, env)
+  const bearer = async (): Promise<string> =>
+    `Bearer ${(await ensureFreshIdpAuth(undefined, entry.home)).access_token}`
+  const chat = new TroopChatApi(bridgeConfig.endpoint, bearer)
   return {
     ownerEmail: readAgentIdentity(entry.home).ownerEmail,
-    bridgeConfig: resolveBridgeConfig(entry, env),
-    bearer: async () => `Bearer ${(await ensureFreshIdpAuth(undefined, entry.home)).access_token}`,
+    bridgeConfig,
+    bearer,
+    chatPoster: async (roomId, text, opts) => {
+      await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
+    },
   }
 }
 
