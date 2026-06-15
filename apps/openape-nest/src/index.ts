@@ -26,6 +26,7 @@ import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
 import type { AgentSupervisor } from './lib/session-host'
 import { SessionHost } from './lib/session-host'
+import { createAgentRuntimeSession, resolveAgentRuntimeContext } from './lib/agent-runtime-session'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
@@ -42,10 +43,26 @@ function log(line: string): void {
 
 // Flag flips supervision from per-agent pm2 daemons to one in-process
 // SessionHost (single-process-nest, 26 processes → 1). Off = unchanged.
+//
+// On the in-process path the host now builds the real agent runtime
+// ({@link createAgentRuntimeSession}) instead of the no-op placeholder: each
+// hosted agent gets an `@openape/ape-agent` AgentSession, resolved from its own
+// home + the nest env via {@link resolveAgentRuntimeContext}. That resolver
+// leaves `bearer` unset, so the session constructs and logs `describe()` but
+// opens no troop WS and runs no LLM loop yet — the connecting bearer is the next
+// (owner-gated) seam. So this wiring stays behaviourally inert until that lands,
+// and the whole path is gated behind OPENAPE_NEST_INPROCESS=1 (default off →
+// pm2 path untouched).
 const INPROCESS = process.env.OPENAPE_NEST_INPROCESS === '1'
-const sessionHost = INPROCESS ? new SessionHost({ log }) : undefined
+const sessionHost = INPROCESS
+  ? new SessionHost({
+      log,
+      createSession: entry =>
+        createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env), log),
+    })
+  : undefined
 const supervisor: AgentSupervisor = sessionHost ?? new Pm2Supervisor({ apesBin: APES_BIN, log })
-if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (M2 scaffold)')
+if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (real agent runtime)')
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
 
