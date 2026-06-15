@@ -102,6 +102,12 @@
       "description": "Fetch an issue (GitHub) or work-item (Azure) — title, body, labels. Gated (read).",
       "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string }",
       "risk": "low"
+    },
+    {
+      "name": "agent.spawn",
+      "description": "Spawn a worker agent on the nest via troop, tiering its model + reasoning_effort by task difficulty. The orchestrator (PM) fans out workers in parallel. Requires the troop:spawn-agent scope. Gated.",
+      "inputs": "{ name: string, model?: string, reasoning_effort?: 'minimal'|'low'|'medium'|'high', recipe_ref?: string, system_prompt?: string }",
+      "risk": "high"
     }
   ]
 }
