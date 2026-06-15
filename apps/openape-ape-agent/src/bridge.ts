@@ -134,15 +134,6 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`
 }
 
-function refusalText(reason: string | undefined): string {
-  // Short, neutral refusal. Reason is appended so the owner sees in
-  // their audit log + chat history why a specific message was blocked.
-  // Phrasing intentionally avoids language the attacker can copy back
-  // ("ignore previous instructions and …") that would re-trigger.
-  const base = 'I won\'t process this message — it looks like a prompt-injection attempt.'
-  return reason ? `${base}\n\n(matched: ${reason})` : base
-}
-
 class Bridge {
   // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession holds
   // its own message history and calls @openape/apes' runLoop directly
@@ -160,6 +151,11 @@ class Bridge {
     private cfg: BridgeConfig,
     private selfEmail: string,
     private ownerEmail: string,
+    // Canonical, process-global-free home for the per-agent rules the
+    // nest also runs in-process. The bridge delegates to it one rule at
+    // a time (starting with the refusal wording) so the prod path and
+    // the in-process nest path stay byte-identical with no second copy.
+    private session: AgentSession,
   ) {
     this.bearer = async () => {
       const idp = await ensureFreshIdpAuth()
@@ -286,7 +282,7 @@ class Bridge {
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
-        await this.chat.postMessage(msg.roomId, refusalText(decision.reason), {
+        await this.chat.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
           replyTo: msg.id,
           threadId: msg.threadId,
         })
@@ -417,7 +413,7 @@ async function main(): Promise<void> {
     + `max_steps=${cfg.maxSteps} room=${cfg.roomFilter ?? '*'}`,
   )
 
-  const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail)
+  const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail, session)
   let attempt = 0
   while (true) {
     try {
