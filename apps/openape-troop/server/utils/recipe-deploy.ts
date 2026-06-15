@@ -9,9 +9,10 @@ import { parseRecipe, parseRepoRef } from './agent-recipe'
 // plans.openape.ai 01KRTAE8 (M3).
 
 // Recipe agents drive everything through the built-in toolset — the
-// repo's tools/ scripts are invoked via bash; http/file/time round it
-// out. Owners can narrow later in the troop UI.
-export const RECIPE_AGENT_TOOLS = ['bash', 'http', 'file', 'time'] as const
+// repo's tools/ scripts are invoked via bash; explicit catalog tool
+// names for http/file/time round it out. Owners can narrow later in
+// the troop UI.
+export const RECIPE_AGENT_TOOLS = ['bash', 'http.get', 'http.post', 'file.read', 'file.write', 'time.now'] as const
 
 export interface DeploySchedule {
   taskId: string
