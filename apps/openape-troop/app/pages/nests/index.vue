@@ -7,7 +7,7 @@ import { useOpenApeAuth } from '#imports'
 // the Companies view.
 useSeoMeta({ title: () => 'Nests' })
 
-const { user, fetchUser } = useOpenApeAuth()
+const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
 interface Nest { host_id: string, display_name: string, pod_uuid: string | null, status: string, created_at: number, last_seen_at: number | null, last_ip: string | null }
@@ -58,6 +58,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
         <ViewToggle active="nests" />
       </div>
+      <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" class="shrink-0" @click="logout" />
     </header>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
