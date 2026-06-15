@@ -59,6 +59,10 @@ export const spawnAgentCommand = defineCommand({
       type: 'string',
       description: 'Model the bridge sends in chat-completion requests (default: claude-haiku-4-5). Override when fronting a proxy that doesn\'t route the default — e.g. ChatGPT-only proxy needs `gpt-5.4`.',
     },
+    'bridge-reasoning-effort': {
+      type: 'string',
+      description: 'Reasoning/thinking depth for gpt-5.x (minimal|low|medium|high). Tier compute by task difficulty on the same model — quick-win=low, research=high.',
+    },
     'kind': {
       type: 'string',
       description: 'Agent kind: "user" (default, connects to troop-chat) or "service" (polls an SP backend\'s task queue and runs each task through the LLM). With "service", --serves is required.',
@@ -207,6 +211,7 @@ export const spawnAgentCommand = defineCommand({
               baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
               apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
               model: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
+              reasoningEffort: typeof args['bridge-reasoning-effort'] === 'string' ? args['bridge-reasoning-effort'] : undefined,
             }
           : undefined,
       })

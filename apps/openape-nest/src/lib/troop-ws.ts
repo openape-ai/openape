@@ -58,7 +58,7 @@ interface SpawnIntentFrame {
   type: 'spawn-intent'
   intent_id: string
   name: string
-  bridge?: { key?: string, base_url?: string, model?: string }
+  bridge?: { key?: string, base_url?: string, model?: string, reasoning_effort?: string }
   soul?: string
   skills?: Array<{ name: string, description: string, body: string }>
 }
@@ -321,6 +321,7 @@ export class TroopWs {
     if (frame.bridge?.key) args.push('--bridge-key', frame.bridge.key)
     if (frame.bridge?.base_url) args.push('--bridge-base-url', frame.bridge.base_url)
     if (frame.bridge?.model) args.push('--bridge-model', frame.bridge.model)
+    if (frame.bridge?.reasoning_effort) args.push('--bridge-reasoning-effort', frame.bridge.reasoning_effort)
     try {
       const { stdout } = await runWithCapture(this.opts.apesBin, args)
       // Parse the spawned agent email out of the spawn output line:

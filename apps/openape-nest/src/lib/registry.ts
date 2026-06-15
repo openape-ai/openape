@@ -31,6 +31,8 @@ export interface AgentEntry {
     baseUrl?: string
     apiKey?: string
     model?: string
+    /** Reasoning/thinking depth (gpt-5.x) — PM tiers compute by difficulty. */
+    reasoningEffort?: string
   }
   /**
    * Agent kind. 'user' (default, also when absent → backward-compatible)
