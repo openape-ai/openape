@@ -1,4 +1,4 @@
-import type { BridgeConfig } from '@openape/ape-agent'
+import type { BridgeConfig, TroopMessage } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity } from '@openape/ape-agent'
@@ -53,19 +53,30 @@ export interface AgentRuntimeContext {
    */
   chatSocketFactory?: ChatSocketFactory
   /**
-   * Posts a chat message back to troop — a prompt-injection refusal now, agent
-   * replies once the runLoop dispatch lands. Mirrors the per-agent bridge's
-   * `this.chat.postMessage(roomId, refusalText(...), { replyTo, threadId })`
+   * Posts a chat message back to troop — both the prompt-injection refusal on a
+   * blocked message and the agent's own reply on an accepted one. Mirrors the
+   * per-agent bridge's `this.chat.postMessage(roomId, text, { replyTo, threadId })`
    * (`bridge.ts`). Optional and only consulted inside the bearer-gated socket
-   * block, so production — where {@link resolveAgentRuntimeContext} leaves
-   * `bearer` unset — never posts. Tests inject a spy. The real HTTP poster
-   * (`TroopChatApi`) gets wired in when the production bearer lands.
+   * block; {@link resolveAgentRuntimeContext} leaves it unset, so the production
+   * path neither refuses nor replies until the real HTTP poster (`TroopChatApi`)
+   * is wired. Tests inject a spy.
    */
   chatPoster?: (
     roomId: string,
     text: string,
     opts: { replyTo: string, threadId: string },
   ) => Promise<void>
+  /**
+   * Runs one agent turn on an accepted, non-blocked {@link TroopMessage} and
+   * resolves the reply text to post back (or `null`/empty when the turn produced
+   * nothing). This is the dispatch seam: the canonical `runLoop` runner
+   * (`@openape/apes` via the bridge's `ThreadSession`) binds here in the next
+   * increment. Optional and only consulted for accepted messages inside the
+   * bearer-gated socket block; {@link resolveAgentRuntimeContext} leaves it
+   * unset, so the production path logs the accepted message but runs no turn
+   * until the runner is wired. Tests inject a stub.
+   */
+  runTurn?: (message: TroopMessage) => Promise<string | null>
 }
 
 /**
@@ -196,6 +207,26 @@ export function createAgentRuntimeSession(
                 return
               }
               log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
+              // Dispatch the accepted message into the agent turn and post the
+              // reply back, mirroring the bridge's accept path (`handleInbound`
+              // → `ThreadSession` → `runLoop` → `postMessage`). The runner and
+              // poster are injected; production leaves both unset (see
+              // resolveAgentRuntimeContext), so this stays inert until the
+              // canonical runLoop runner + HTTP poster are wired. A failed turn
+              // or post is logged, not thrown — same as the bridge.
+              if (!ctx.runTurn)
+                return
+              const reply = await ctx.runTurn(message).catch((err) => {
+                log(`agent-runtime: ! ${entry.name} turn error: ${err instanceof Error ? err.message : String(err)}`)
+                return null
+              })
+              if (reply && reply.trim() && ctx.chatPoster) {
+                await ctx.chatPoster(message.roomId, reply, {
+                  replyTo: message.id,
+                  threadId: message.threadId,
+                }).catch(err =>
+                  log(`agent-runtime: ! ${entry.name} failed to post reply: ${err instanceof Error ? err.message : String(err)}`))
+              }
             })
             .catch(err =>
               log(`agent-runtime: ! ${entry.name} injection screen error: ${err instanceof Error ? err.message : String(err)}`))
