@@ -26,12 +26,8 @@ const loading = ref(true)
 const error = ref('')
 
 const activeOrg = computed(() => orgs.value.find(o => o.id === activeOrgId.value) ?? null)
-const live = computed(() => members.value.filter(m => m.status !== 'retired'))
-const ceo = computed(() => live.value.find(m => m.role === 'ceo') ?? null)
-const team = computed(() => live.value.filter(m => m.role !== 'ceo'))
-
+const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?? '')
 const roleLabel: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitglied' }
-function statusColor(s: string) { return s === 'active' ? 'success' : s === 'invited' ? 'warning' : 'neutral' }
 
 async function loadMembers(orgId: string) { members.value = await ($fetch as any)(`/api/orgs/${orgId}/members`) }
 
@@ -53,7 +49,6 @@ async function load() {
 }
 
 async function switchOrg(id: string) { activeOrgId.value = id; await loadMembers(id) }
-function talkToCeo() { if (ceo.value) navigateTo(`/agents/${ceo.value.agentName}`) }
 
 // ── Create org ──
 const createForm = reactive({ name: '', vision: '' })
@@ -97,7 +92,7 @@ async function addMember() {
 
 // ── Spawn an invited member (in-process intent → poll → PK-swap) ──
 const spawning = reactive<Record<string, string>>({}) // email → status text
-async function spawnMember(m: Member) {
+async function spawnMember(m: { agentEmail: string, persona: string | null }) {
   if (!activeOrgId.value || !m.persona) return
   spawning[m.agentEmail] = 'startet …'
   try {
@@ -245,91 +240,9 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           </button>
         </div>
 
-        <!-- CEO — the primary point of contact -->
+        <!-- Company hierarchy — CEO is the Owner's front door; structure preserved -->
         <section v-if="tab === 'firma'" class="mb-10">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
-            Ihr Ansprechpartner
-          </h3>
-          <div
-            v-if="ceo"
-            class="rounded-2xl border border-primary-500/40 bg-gradient-to-br from-primary-950/40 to-zinc-900 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6"
-          >
-            <div class="flex items-center gap-4 flex-1 min-w-0">
-              <div class="size-16 rounded-full bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-2xl shrink-0">
-                👔
-              </div>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="text-xl font-semibold truncate">{{ ceo.agentName }}</span>
-                  <UBadge :color="statusColor(ceo.status)" variant="subtle" size="sm">
-                    {{ ceo.status }}
-                  </UBadge>
-                </div>
-                <p class="text-sm text-primary-300/80">
-                  CEO · steuert die Firma in Ihrem Auftrag
-                </p>
-              </div>
-            </div>
-            <UButton
-              v-if="ceo.status === 'active'"
-              color="primary"
-              size="xl"
-              icon="i-lucide-message-circle"
-              @click="talkToCeo"
-            >
-              Mit dem CEO sprechen
-            </UButton>
-            <UButton
-              v-else
-              color="primary"
-              variant="soft"
-              size="lg"
-              icon="i-lucide-sparkles"
-              :loading="!!spawning[ceo.agentEmail]"
-              @click="spawnMember(ceo)"
-            >
-              {{ spawning[ceo.agentEmail] || 'CEO spawnen' }}
-            </UButton>
-          </div>
-          <div v-else class="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 text-zinc-400">
-            Noch kein CEO ernannt. Über „Mitglied“ einen CEO anlegen.
-          </div>
-        </section>
-
-        <!-- The team — context only, steered through the CEO -->
-        <section v-if="tab === 'firma' && team.length">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
-            Team <span class="normal-case font-normal text-zinc-600">· über den CEO gesteuert</span>
-          </h3>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div
-              v-for="m in team"
-              :key="m.agentEmail"
-              class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-medium truncate">{{ m.agentName }}</span>
-                <UBadge :color="statusColor(m.status)" variant="subtle" size="sm">
-                  {{ m.status }}
-                </UBadge>
-              </div>
-              <p class="mt-1 text-sm text-zinc-500">
-                {{ roleLabel[m.role] ?? m.role }}
-              </p>
-              <UButton
-                v-if="m.status !== 'active' && m.persona"
-                color="neutral"
-                variant="soft"
-                size="xs"
-                class="mt-3"
-                icon="i-lucide-sparkles"
-                :loading="!!spawning[m.agentEmail]"
-                @click="spawnMember(m)"
-              >
-                {{ spawning[m.agentEmail] || 'Spawnen' }}
-              </UButton>
-            </div>
-          </div>
+          <CompanyChart :members="members" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" />
         </section>
 
         <!-- Business dashboard tabs -->
