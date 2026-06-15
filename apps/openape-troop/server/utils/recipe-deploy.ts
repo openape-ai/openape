@@ -13,8 +13,9 @@ import { parseRecipe, parseRepoRef } from './agent-recipe'
 // scripts are invoked via bash; http/file/time round it out. A recipe that
 // DOES declare `tools:` (e.g. an orchestrator that calls agent.spawn /
 // tasks.list directly) gets exactly that set on its scheduled tasks. Owners
-// can narrow later in the troop UI.
-export const RECIPE_AGENT_TOOLS = ['bash', 'http', 'file', 'time'] as const
+// can narrow later in the troop UI. Values must match server/tool-catalog.json
+// exactly because task creation validates names.
+export const RECIPE_AGENT_TOOLS = ['bash', 'http.get', 'http.post', 'file.read', 'file.write', 'time.now'] as const
 
 export interface DeploySchedule {
   taskId: string
