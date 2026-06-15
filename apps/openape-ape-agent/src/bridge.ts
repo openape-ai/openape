@@ -187,7 +187,7 @@ class Bridge {
     if (!apiKey) {
       throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
     }
-    return { apiBase, apiKey, model: this.cfg.model }
+    return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
   }
 
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {

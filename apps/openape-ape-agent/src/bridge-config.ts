@@ -11,10 +11,18 @@ const DEFAULT_SYSTEM_PROMPT
   = 'You are a helpful assistant in a 1:1 chat. Be concise and friendly. '
     + 'When asked for facts, say "I don\'t know" rather than guess.'
 
+const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
+export type ReasoningEffort = typeof REASONING_EFFORTS[number]
+
 export interface BridgeConfig {
   endpoint: string
   apesBin: string
   model: string
+  /**
+   * Reasoning/thinking depth for gpt-5.x. Lets the PM tier compute by task
+   * difficulty without changing the model. Omitted = proxy/model default.
+   */
+  reasoningEffort?: ReasoningEffort
   systemPrompt: string
   tools: string[]
   maxSteps: number
@@ -47,10 +55,17 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     )
   }
 
+  // Optional reasoning depth; ignore an unknown value rather than 400 every turn.
+  const effortRaw = env.APE_CHAT_BRIDGE_REASONING_EFFORT
+  const reasoningEffort = REASONING_EFFORTS.includes(effortRaw as ReasoningEffort)
+    ? (effortRaw as ReasoningEffort)
+    : undefined
+
   return {
     endpoint: (env.OPENAPE_TROOP_URL ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
     apesBin: env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
     model,
+    reasoningEffort,
     systemPrompt: env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
