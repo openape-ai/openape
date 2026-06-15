@@ -194,6 +194,11 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE nests ADD COLUMN device_secret_hash TEXT`)
     }
     catch { /* column already exists */ }
+    // last_ip: captured from the WS upgrade on `hello` (added after nests).
+    try {
+      await db.run(sql`ALTER TABLE nests ADD COLUMN last_ip TEXT`)
+    }
+    catch { /* column already exists */ }
 
     // ── Org / company layer (B0 merge). Additive tables only — owner-session
     // surface, no overlap with the machine tables above. ──
