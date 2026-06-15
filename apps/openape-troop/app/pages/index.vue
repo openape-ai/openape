@@ -7,7 +7,7 @@ const { user, loading, fetchUser, login } = useOpenApeAuth()
 await fetchUser()
 
 if (user.value) {
-  await navigateTo('/agents')
+  await navigateTo('/companies')
 }
 
 const email = ref('')
