@@ -206,6 +206,7 @@ onBeforeUnmount(() => stopPolling())
             >
               <span /> <span /> <span />
             </div>
+            <MarkdownText v-else-if="m.role === 'agent'" :content="m.body" />
             <pre v-else class="body">{{ m.body }}</pre>
             <div
               v-if="m.streamingStatus"
