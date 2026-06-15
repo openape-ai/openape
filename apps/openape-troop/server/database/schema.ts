@@ -251,3 +251,110 @@ export type Chat = typeof chats.$inferSelect
 export type NewChat = typeof chats.$inferInsert
 export type ChatMessage = typeof chatMessages.$inferSelect
 export type NewChatMessage = typeof chatMessages.$inferInsert
+
+// ── Org / company layer (merged in from the former openape-org app, B0). ──
+//
+// Troop is the control plane; the org layer is the business view the Owner
+// sees — the company, its people (agents), what it's working on, what it
+// reports, what it costs. `org_members.agentEmail` references `agents.email`
+// (the agent's DDISA identity) by value — the same string-key join troop uses
+// everywhere; a hard FK is a later hardening step. Org has no external machine
+// consumers, so these tables and their endpoints are owner-session only and do
+// NOT touch troop's machine surface (/api/agents/me/*, nest-ws, cli/exchange).
+
+// organizations — one row per virtual company. `visionMd` is owner-maintained
+// Markdown the CEO reads on every interaction; never agent-edited.
+export const organizations = sqliteTable('organizations', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  name: text('name').notNull(),
+  visionMd: text('vision_md').notNull().default(''),
+  budgetMonthlyEur: integer('budget_monthly_eur').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  index('idx_org_owner').on(table.ownerEmail),
+])
+
+// org_members — agents working for this org, with hierarchy + role. `role`:
+// ceo / teamlead / specialist / sanierer / other. `reportsToEmail` is the
+// parent agent (null for CEO + Sanierer, who report to the Owner). The CEO is
+// the Owner's primary point of contact (talk to the CEO, not down the chain).
+export const orgMembers = sqliteTable('org_members', {
+  orgId: text('org_id').notNull(),
+  agentEmail: text('agent_email').notNull(),
+  agentName: text('agent_name').notNull(),
+  role: text('role').notNull(),
+  persona: text('persona'),
+  reportsToEmail: text('reports_to_email'),
+  status: text('status').notNull().default('invited'),
+  spawnedAt: integer('spawned_at'),
+  retiredAt: integer('retired_at'),
+  createdAt: integer('created_at').notNull(),
+  // In-flight troop spawn tracking (placeholder row → real agent on success).
+  spawnIntentId: text('spawn_intent_id'),
+  spawnStatus: text('spawn_status'),
+  spawnError: text('spawn_error'),
+  spawnTroopBearer: text('spawn_troop_bearer'),
+  spawnTroopBearerExpiresAt: integer('spawn_troop_bearer_expires_at'),
+  spawnGrantId: text('spawn_grant_id'),
+}, table => [
+  primaryKey({ columns: [table.orgId, table.agentEmail] }),
+  index('idx_org_members_org').on(table.orgId),
+  index('idx_org_members_role').on(table.orgId, table.role),
+])
+
+// objectives — flat Kanban list of what the org is working on. CEO writes here.
+export const objectives = sqliteTable('objectives', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('planned'),
+  targetDate: integer('target_date'),
+  parentId: text('parent_id'),
+  createdByEmail: text('created_by_email').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  index('idx_objectives_org').on(table.orgId),
+  index('idx_objectives_status').on(table.orgId, table.status),
+])
+
+// reports — markdown reports produced by agents (daily/weekly/quarterly/alert/adhoc).
+export const reports = sqliteTable('reports', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull(),
+  kind: text('kind').notNull(),
+  title: text('title').notNull(),
+  bodyMd: text('body_md').notNull(),
+  generatedByEmail: text('generated_by_email').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_reports_org').on(table.orgId, table.createdAt),
+])
+
+// cost_snapshots — one row per (org, day). Rolling 30 days feeds the budget check.
+export const costSnapshots = sqliteTable('cost_snapshots', {
+  orgId: text('org_id').notNull(),
+  day: text('day').notNull(),
+  tokensIn: integer('tokens_in').notNull().default(0),
+  tokensOut: integer('tokens_out').notNull().default(0),
+  inferenceCostCents: integer('inference_cost_cents').notNull().default(0),
+  infraCostCents: integer('infra_cost_cents').notNull().default(0),
+  outputArtifactsCount: integer('output_artifacts_count').notNull().default(0),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.orgId, table.day] }),
+])
+
+export type Organization = typeof organizations.$inferSelect
+export type NewOrganization = typeof organizations.$inferInsert
+export type OrgMember = typeof orgMembers.$inferSelect
+export type NewOrgMember = typeof orgMembers.$inferInsert
+export type Objective = typeof objectives.$inferSelect
+export type NewObjective = typeof objectives.$inferInsert
+export type Report = typeof reports.$inferSelect
+export type NewReport = typeof reports.$inferInsert
+export type CostSnapshot = typeof costSnapshots.$inferSelect
+export type NewCostSnapshot = typeof costSnapshots.$inferInsert
