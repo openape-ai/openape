@@ -17,6 +17,7 @@ import { forgeTools } from './forge'
 import { gitWorktreeTools } from './git-worktree'
 import { httpTools } from './http'
 import { mailTools } from './mail'
+import { spawnTools } from './spawn'
 import { tasksTools } from './tasks'
 import { timeTools } from './time'
 import { verifyTools } from './verify'
@@ -40,6 +41,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   ...gitWorktreeTools,
   ...verifyTools,
   ...forgeTools,
+  ...spawnTools,
 ]
 
 export const TOOLS: Record<string, ToolDefinition> = Object.fromEntries(
