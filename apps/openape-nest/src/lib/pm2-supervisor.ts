@@ -82,6 +82,7 @@ function ecosystemPath(agentName: string): string {
 // mirroring the macOS path where the bridge logs a fatal if the model is absent.
 const CHAT_ENV_FORWARDS = [
   'APE_CHAT_BRIDGE_MODEL',
+  'APE_CHAT_BRIDGE_REASONING_EFFORT',
   'LITELLM_BASE_URL',
   'LITELLM_API_KEY',
   'APE_CHAT_BRIDGE_TOOLS',
@@ -119,6 +120,15 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
     pairs = CHAT_ENV_FORWARDS
       .filter(k => process.env[k] !== undefined)
       .map(k => [k, process.env[k] as string])
+    // Per-agent overrides from the registry bridge entry — the PM-orchestrator
+    // sets these when it spawns a worker at a chosen model + reasoning depth.
+    // They win over the forwarded nest-global env.
+    const br = agent.bridge ?? {}
+    const overrides: Array<[string, string]> = []
+    if (br.model) overrides.push(['APE_CHAT_BRIDGE_MODEL', br.model])
+    if (br.reasoningEffort) overrides.push(['APE_CHAT_BRIDGE_REASONING_EFFORT', br.reasoningEffort])
+    const overrideKeys = new Set(overrides.map(o => o[0]))
+    pairs = pairs.filter(p => !overrideKeys.has(p[0])).concat(overrides)
   }
   // The bridge is spawned via `sudo -u <agent>`, which strips the nest's
   // environment — this pm2 `env:` block is the ONLY env the bridge (and its
