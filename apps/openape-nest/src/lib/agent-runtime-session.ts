@@ -139,13 +139,15 @@ export function createAgentRuntimeSession(
           // every message back to its sender, so the agent's own replies arrive
           // here too; skip them via the canonical self-echo guard before the
           // runLoop-dispatch increment would otherwise loop the agent forever.
-          // Dispatch into the LLM loop lands in a later increment; for now the
-          // translated message's room + sender are logged (no body, no token).
+          // Then apply the same pre-loop dispatch filter the bridge uses (empty
+          // body / room scope) so noise never reaches the loop. Dispatch into
+          // the LLM loop lands in a later increment; for now an accepted
+          // message's room + sender are logged (no body, no token).
           const frame = session?.parseChatFrame(data)
           if (!frame || !session)
             return
           const message = session.toMessage(frame)
-          if (session.isOwnEcho(message))
+          if (session.isOwnEcho(message) || !session.shouldDispatch(message))
             return
           log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
         })
