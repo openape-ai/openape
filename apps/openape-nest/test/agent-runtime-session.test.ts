@@ -179,6 +179,25 @@ describe('createAgentRuntimeSession', () => {
     expect(lines.some(line => line.includes('hi') || line.includes('echo'))).toBe(false)
   })
 
+  it('skips a message with an empty body via the dispatch filter', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const ctxWithSocket = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithSocket, line => lines.push(line))
+
+    await session.start()
+    // An empty/whitespace body carries nothing to act on — the dispatch filter
+    // drops it before the (later) runLoop dispatch, exactly like the bridge.
+    ws.emit('message', JSON.stringify({ type: 'message', chat_id: 'chat-9', payload: { body: '   ' } }))
+
+    expect(lines.some(line => line.includes('message from'))).toBe(false)
+  })
+
   it('closes the chat socket on stop', async () => {
     const lines: string[] = []
     const ws = fakeSocket()

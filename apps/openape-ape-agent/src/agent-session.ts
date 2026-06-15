@@ -118,4 +118,23 @@ export class AgentSession {
   isOwnEcho(message: TroopMessage): boolean {
     return message.senderEmail === this.email
   }
+
+  /**
+   * Whether a translated, non-echo {@link TroopMessage} should reach the agent
+   * loop. Ports the bridge's remaining pre-loop guards in `handleInbound`: an
+   * empty or whitespace-only body carries nothing to act on, and a configured
+   * `roomFilter` scopes the agent to a single chat. (The bridge's `threadId`
+   * guard is moot here — {@link toMessage} always synthesizes `'main'`.) The
+   * own-echo guard stays {@link isOwnEcho}, applied first by the caller. This is
+   * the canonical home for the dispatch-filter rule once the nest drives the
+   * connection: the runLoop-dispatch increment runs the loop only for messages
+   * this accepts, with no second copy of the guards.
+   */
+  shouldDispatch(message: TroopMessage): boolean {
+    if (!message.body.trim())
+      return false
+    if (this.config.roomFilter && message.roomId !== this.config.roomFilter)
+      return false
+    return true
+  }
 }

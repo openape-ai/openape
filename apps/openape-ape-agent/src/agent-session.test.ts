@@ -1,4 +1,5 @@
 import type { BridgeConfig } from './bridge-config'
+import type { TroopMessage } from './agent-session'
 import { describe, expect, it } from 'vitest'
 import { AgentSession } from './agent-session'
 
@@ -164,5 +165,47 @@ describe('AgentSession.isOwnEcho', () => {
       payload: { id: 'm2', body: 'hi', createdAt: 1700000001 },
     })
     expect(session.isOwnEcho(inbound)).toBe(false)
+  })
+})
+
+describe('AgentSession.shouldDispatch', () => {
+  function session(roomFilter?: string): AgentSession {
+    return new AgentSession(
+      'agent@example.com',
+      'owner@example.com',
+      { roomFilter } as BridgeConfig,
+    )
+  }
+
+  function message(overrides: Partial<TroopMessage> = {}): TroopMessage {
+    return {
+      id: 'm1',
+      roomId: 'chat-1',
+      threadId: 'main',
+      senderEmail: 'owner@example.com',
+      senderAct: 'human',
+      body: 'hello',
+      replyTo: null,
+      createdAt: 1700000000,
+      editedAt: null,
+      ...overrides,
+    }
+  }
+
+  it('accepts a non-empty message when no room filter is configured', () => {
+    expect(session().shouldDispatch(message())).toBe(true)
+  })
+
+  it('rejects an empty or whitespace-only body', () => {
+    expect(session().shouldDispatch(message({ body: '' }))).toBe(false)
+    expect(session().shouldDispatch(message({ body: '   ' }))).toBe(false)
+  })
+
+  it('rejects a message outside the configured room filter', () => {
+    expect(session('chat-allowed').shouldDispatch(message({ roomId: 'chat-other' }))).toBe(false)
+  })
+
+  it('accepts a message inside the configured room filter', () => {
+    expect(session('chat-allowed').shouldDispatch(message({ roomId: 'chat-allowed' }))).toBe(true)
   })
 })
