@@ -269,6 +269,99 @@ describe('createAgentRuntimeSession', () => {
     expect(posted).toHaveLength(0)
   })
 
+  it('runs the agent turn on an accepted message and posts the reply back', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const turned: string[] = []
+    const posted: Array<{ roomId: string, text: string, opts: { replyTo: string, threadId: string } }> = []
+    const ctxWithRunner = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+      runTurn: async (message: { body: string }) => {
+        turned.push(message.body)
+        return 'the agent reply'
+      },
+      chatPoster: async (roomId: string, text: string, opts: { replyTo: string, threadId: string }) => {
+        posted.push({ roomId, text, opts })
+      },
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithRunner, line => lines.push(line))
+
+    await session.start()
+    ws.emit('message', JSON.stringify({
+      type: 'message',
+      chat_id: 'chat-9',
+      payload: { id: 'msg-1', body: 'do the thing' },
+    }))
+    await flush()
+
+    // The accepted message reached the turn runner, and its reply was posted
+    // back threaded to the triggering message (threadId is the synthetic 'main').
+    expect(turned).toEqual(['do the thing'])
+    expect(posted).toEqual([
+      { roomId: 'chat-9', text: 'the agent reply', opts: { replyTo: 'msg-1', threadId: 'main' } },
+    ])
+  })
+
+  it('runs the turn but posts nothing when the reply is empty', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const posted: unknown[] = []
+    const ctxWithRunner = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+      runTurn: async () => '   ',
+      chatPoster: async () => {
+        posted.push(true)
+      },
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithRunner, line => lines.push(line))
+
+    await session.start()
+    ws.emit('message', JSON.stringify({
+      type: 'message',
+      chat_id: 'chat-9',
+      payload: { id: 'msg-1', body: 'hi there' },
+    }))
+    await flush()
+
+    expect(posted).toHaveLength(0)
+  })
+
+  it('logs and swallows a turn-runner error without posting', async () => {
+    const lines: string[] = []
+    const ws = fakeSocket()
+    const posted: unknown[] = []
+    const ctxWithRunner = {
+      ownerEmail: 'owner@example.test',
+      bridgeConfig: { endpoint: 'https://troop.openape.ai' } as BridgeConfig,
+      bearer: async () => 'Bearer tok-secret-123',
+      chatSocketFactory: ws.factory,
+      runTurn: async () => {
+        throw new Error('llm down')
+      },
+      chatPoster: async () => {
+        posted.push(true)
+      },
+    }
+    const session = createAgentRuntimeSession(entry('backend'), ctxWithRunner, line => lines.push(line))
+
+    await session.start()
+    ws.emit('message', JSON.stringify({
+      type: 'message',
+      chat_id: 'chat-9',
+      payload: { id: 'msg-1', body: 'hi there' },
+    }))
+    await flush()
+
+    expect(lines).toContain('agent-runtime: ! backend turn error: llm down')
+    expect(posted).toHaveLength(0)
+  })
+
   it('closes the chat socket on stop', async () => {
     const lines: string[] = []
     const ws = fakeSocket()
