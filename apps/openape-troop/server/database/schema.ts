@@ -239,6 +239,9 @@ export const nests = sqliteTable('nests', {
   // on every reconnect to mint a short-lived nest:* troop token. Revoking the
   // nest (status='revoked') makes that exchange fail — one-click cut-off.
   deviceSecretHash: text('device_secret_hash'),
+  // Client IP captured from the WS upgrade request (x-forwarded-for behind the
+  // edge) on the nest's `hello` — the current address the device connects from.
+  lastIp: text('last_ip'),
 }, table => [
   primaryKey({ columns: [table.ownerEmail, table.hostId] }),
   index('idx_nests_owner').on(table.ownerEmail),
