@@ -9,6 +9,12 @@ interface RateLimitEntry {
 
 const WINDOW_MS = 60_000 // 1 minute
 const DEFAULT_MAX_REQUESTS = 10
+// Agents re-authenticate (challenge → authenticate) on a token-expiry
+// cadence, and many agents owned by one human share that human's egress
+// IP. Their machine traffic must not consume the human's strict
+// brute-force budget, so `/api/agent/*` gets its OWN per-IP bucket with a
+// higher default. Tunable via OPENAPE_RATE_LIMIT_MAX_AGENT.
+const DEFAULT_MAX_AGENT = 120
 
 // Per-IP auth cap for the window. Operators whose legitimate traffic
 // drives many auth ceremonies from one client IP (e.g. the local demo
@@ -21,12 +27,23 @@ function parseMaxRequests(): number {
   return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_REQUESTS
 }
 
+// Separate, higher cap for agent challenge/authenticate traffic.
+function parseMaxAgentRequests(): number {
+  const raw = Number(process.env.OPENAPE_RATE_LIMIT_MAX_AGENT)
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_AGENT
+}
+
 // Rate-limited path-prefixes. Anything brute-forceable (auth ceremonies,
 // agent challenges, push subscriptions, account registration, user lookups)
 // is in here. The hyphen in `my-agents` is escaped explicitly. Extended in
 // #292 to cover the free-idp's custom paths (enroll, register, my-agents,
 // push, users) which were previously unlimited — see audit 2026-05-04.
 const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users)\b|authorize\b|token\b)/
+
+// Agent-only auth paths (challenge/authenticate). These get the separate,
+// higher-capacity bucket so machine re-auth never throttles the human
+// `/authorize` + `/token` browser login from the same IP.
+const RE_AGENT_PATHS = /^\/api\/agent\b/
 
 const store = new Map<string, RateLimitEntry>()
 
@@ -135,7 +152,8 @@ export default (nitroApp: NitroApp) => {
   if (process.env.OPENAPE_E2E === '1') return
 
   const trustedProxies = parseTrustedProxies()
-  const maxRequests = parseMaxRequests()
+  const maxAuth = parseMaxRequests()
+  const maxAgent = parseMaxAgentRequests()
 
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
@@ -144,7 +162,11 @@ export default (nitroApp: NitroApp) => {
     cleanup()
 
     const ip = resolveClientIp(event, trustedProxies)
-    const key = `${ip}:auth`
+    // Agent challenge/authenticate gets its own per-IP bucket + cap so the
+    // human browser login (/authorize, /token) keeps the strict budget.
+    const isAgent = RE_AGENT_PATHS.test(path)
+    const key = isAgent ? `${ip}:agent` : `${ip}:auth`
+    const maxRequests = isAgent ? maxAgent : maxAuth
     const now = Date.now()
 
     let entry = store.get(key)
