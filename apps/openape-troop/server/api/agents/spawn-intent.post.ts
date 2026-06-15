@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { parseAgentEmail } from '../../utils/agent-email'
 import { materializeRecipe } from '../../utils/agent-recipe'
 import { requireOwnerWithScope } from '../../utils/auth'
 import { listNestPeersForOwner } from '../../utils/nest-registry'
@@ -48,7 +49,12 @@ export default defineEventHandler(async (event) => {
   // Scope-gate: first-party (session / aud=apes-cli Bearer) auto-passes.
   // Delegated callers (Receiver SPs) need `troop:spawn-agent` in their
   // CLI token, minted at /api/cli/exchange per sp-data-access.md.
-  const { owner } = await requireOwnerWithScope(event, 'troop:spawn-agent')
+  const { owner: caller } = await requireOwnerWithScope(event, 'troop:spawn-agent')
+  // An agent dispatching workers (act=agent — e.g. the PM-orchestrator) carries
+  // its OWN email as the caller, but nests + stashed deploys are keyed under the
+  // HUMAN owner. Normalize so an agent's spawn targets its owner's nest; a human
+  // caller's email isn't an agent email so parseAgentEmail returns null (no-op).
+  const owner = parseAgentEmail(caller)?.ownerEmail ?? caller
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message ?? 'invalid body' })
