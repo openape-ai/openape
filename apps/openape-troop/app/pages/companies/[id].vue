@@ -138,16 +138,8 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
       <UAlert v-else-if="error" color="error" variant="subtle" :title="error" />
 
       <template v-else-if="org">
-        <div class="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-3xl font-bold tracking-tight">
-              {{ org.name }}
-            </h2>
-            <p v-if="org.visionMd" class="mt-2 text-zinc-400 max-w-2xl whitespace-pre-line">
-              {{ org.visionMd }}
-            </p>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
+        <div class="mb-6">
+          <div class="flex items-center justify-end gap-2 mb-3">
             <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-pencil" @click="openEdit">
               Bearbeiten
             </UButton>
@@ -155,13 +147,17 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               Mitglied
             </UButton>
           </div>
+          <h2 class="text-3xl font-bold tracking-tight">
+            {{ org.name }}
+          </h2>
+          <MarkdownText v-if="org.visionMd" :content="org.visionMd" class="mt-2 text-zinc-400" />
         </div>
 
-        <div class="flex gap-1 border-b border-zinc-800/80 mb-8">
+        <div class="flex gap-1 border-b border-zinc-800/80 mb-8 overflow-x-auto">
           <button
             v-for="t in TABS"
             :key="t.key"
-            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2"
+            class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 shrink-0"
             :class="tab === t.key ? 'border-primary-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'"
             @click="tab = t.key"
           >
