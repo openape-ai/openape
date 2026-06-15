@@ -47,6 +47,33 @@ describe('buildDeployPlan', () => {
     expect(plan.schedules[1]!.userPrompt).toMatch(/Run your configured task/)
   })
 
+  it('gives scheduled tasks the recipe-declared tools when present (orchestrator pattern)', () => {
+    const manifest = `
+name: pm
+kind: agent
+intent: Orchestrate {{org}}.
+params:
+  - name: org
+    type: string
+    required: true
+schedules:
+  - cron: "*/10 * * * *"
+    description: triage + dispatch
+tools:
+  - tasks.list
+  - agent.spawn
+  - agent.destroy
+`
+    const r = parseRecipe(manifest)
+    if (!r.ok) throw new Error(r.reason)
+    const mat = materializeRecipe(r.value, { org: 'Werkstatt' })
+    if (!mat.ok) throw new Error(mat.reason)
+    const plan = buildDeployPlan(r.value, mat.value)
+
+    // declared tools flow onto the scheduled task — NOT the bash-centric default
+    expect(plan.schedules[0]!.tools).toEqual(['tasks.list', 'agent.spawn', 'agent.destroy'])
+  })
+
   it('excludes optional capabilities from requiredCapabilities (multi-forge recipe)', () => {
     const manifest = `
 name: coding-agent
