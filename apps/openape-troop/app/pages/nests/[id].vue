@@ -13,14 +13,14 @@ const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
 
 interface Nest { host_id: string, display_name: string, pod_uuid: string | null, status: string, created_at: number, last_seen_at: number | null, last_ip: string | null }
-interface Agent { agentName: string, email: string, hostId: string | null, lastSeenAt: number | null, taskCount: number, lastRunStatus: 'running' | 'ok' | 'error' | null }
+interface Agent { agentName: string, email: string, hostId: string | null, hostname: string | null, nestHostId: string | null, lastSeenAt: number | null, taskCount: number, lastRunStatus: 'running' | 'ok' | 'error' | null }
 
 const nest = ref<Nest | null>(null)
 const agents = ref<Agent[]>([])
 const loading = ref(true)
 const error = ref('')
 
-const nestAgents = computed(() => agents.value.filter(a => a.hostId === hostId.value))
+const nestAgents = computed(() => agents.value.filter(a => (a.nestHostId ?? a.hostId) === hostId.value))
 function fmtTs(ts: number | null) { return ts ? new Date(ts * 1000).toLocaleString('de-AT') : '—' }
 function runColor(s: string | null) { return s === 'ok' ? 'success' : s === 'error' ? 'error' : s === 'running' ? 'primary' : 'neutral' }
 
@@ -32,9 +32,17 @@ async function load() {
       ($fetch as any)('/api/nests'),
       ($fetch as any)('/api/agents'),
     ])
-    nest.value = (n as Nest[]).find(x => x.host_id === hostId.value) ?? null
     agents.value = a
-    if (!nest.value) error.value = 'Nest nicht gefunden.'
+    nest.value = (n as Nest[]).find(x => x.host_id === hostId.value) ?? null
+    if (!nest.value) {
+      // Not a bound device — synthesize the nest from the agents that report
+      // this host_id (e.g. a container the agents run in, not formally bound).
+      const onHost = nestAgents.value
+      if (onHost.length) {
+        nest.value = { host_id: hostId.value, display_name: onHost[0]!.hostname || hostId.value, pod_uuid: null, status: 'unbound', created_at: 0, last_seen_at: onHost[0]!.lastSeenAt, last_ip: null }
+      }
+      else { error.value = 'Nest nicht gefunden.' }
+    }
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }

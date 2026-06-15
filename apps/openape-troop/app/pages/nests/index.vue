@@ -11,16 +11,16 @@ const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
 interface Nest { host_id: string, display_name: string, pod_uuid: string | null, status: string, created_at: number, last_seen_at: number | null, last_ip: string | null }
-interface Agent { agentName: string, hostId: string | null }
+interface Agent { agentName: string, hostId: string | null, hostname: string | null, nestHostId: string | null }
+interface MergedNest { host_id: string, display_name: string, status: string, last_ip: string | null, last_seen_at: number | null, bound: boolean, agentCount: number }
 
 const nests = ref<Nest[]>([])
 const agents = ref<Agent[]>([])
 const loading = ref(true)
 const error = ref('')
 
-function agentCount(hostId: string) { return agents.value.filter(a => a.hostId === hostId).length }
 function lastSeen(ts: number | null) {
-  if (!ts) return 'nie'
+  if (!ts) return '—'
   const mins = Math.floor((Date.now() / 1000 - ts) / 60)
   if (mins < 1) return 'gerade eben'
   if (mins < 60) return `vor ${mins} min`
@@ -28,7 +28,31 @@ function lastSeen(ts: number | null) {
   if (h < 24) return `vor ${h} h`
   return `vor ${Math.floor(h / 24)} d`
 }
-const liveNests = computed(() => nests.value.filter(n => n.status !== 'revoked'))
+
+// A nest = a host that agents actually run on. Bound devices (from /api/nests)
+// carry IP/status/last-seen; but agents report their own host_id (e.g. the
+// container they run in), which may not match a bound device row. Merge both,
+// keyed by host_id, so every agent shows up under its host.
+const mergedNests = computed<MergedNest[]>(() => {
+  const map = new Map<string, MergedNest>()
+  for (const n of nests.value) {
+    if (n.status === 'revoked') continue
+    map.set(n.host_id, { host_id: n.host_id, display_name: n.display_name, status: n.status, last_ip: n.last_ip, last_seen_at: n.last_seen_at, bound: true, agentCount: 0 })
+  }
+  for (const a of agents.value) {
+    // Group by the nest the agent belongs to; fall back to its runtime host
+    // for legacy agents that predate nest_host_id.
+    const hid = a.nestHostId ?? a.hostId
+    if (!hid) continue
+    let m = map.get(hid)
+    if (!m) {
+      m = { host_id: hid, display_name: a.hostname || hid, status: 'unbound', last_ip: null, last_seen_at: null, bound: false, agentCount: 0 }
+      map.set(hid, m)
+    }
+    m.agentCount++
+  }
+  return [...map.values()].sort((x, y) => y.agentCount - x.agentCount)
+})
 
 async function load() {
   loading.value = true
@@ -75,7 +99,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         Lädt …
       </p>
 
-      <div v-else-if="!liveNests.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
+      <div v-else-if="!mergedNests.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
         <div class="text-5xl">
           🪺
         </div>
@@ -88,7 +112,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
       </div>
 
       <ul v-else class="space-y-3">
-        <li v-for="n in liveNests" :key="n.host_id">
+        <li v-for="n in mergedNests" :key="n.host_id">
           <NuxtLink
             :to="`/nests/${encodeURIComponent(n.host_id)}`"
             class="block rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 hover:bg-zinc-900 transition-colors"
@@ -131,7 +155,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
                   Agents
                 </dt>
                 <dd class="font-medium">
-                  {{ agentCount(n.host_id) }}
+                  {{ n.agentCount }}
                 </dd>
               </div>
               <div>
