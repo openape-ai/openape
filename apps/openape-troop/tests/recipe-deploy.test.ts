@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { materializeRecipe, parseRecipe } from '../server/utils/agent-recipe'
+import toolCatalog from '../server/tool-catalog.json'
 import { buildDeployPlan, fetchRecipeManifest, RECIPE_AGENT_TOOLS } from '../server/utils/recipe-deploy'
 
 const MANIFEST = `
@@ -26,6 +27,12 @@ function recipe() {
 }
 
 describe('buildDeployPlan', () => {
+  it('uses only known catalog tool names for recipe agents', () => {
+    const knownTools = new Set(toolCatalog.tools.map(t => t.name))
+    expect(RECIPE_AGENT_TOOLS.length).toBeGreaterThan(0)
+    expect(RECIPE_AGENT_TOOLS.every(tool => knownTools.has(tool))).toBe(true)
+  })
+
   it('maps a materialized recipe to system prompt + schedules + caps', () => {
     const rec = recipe()
     const mat = materializeRecipe(rec, { topic: 'AI agents' })
