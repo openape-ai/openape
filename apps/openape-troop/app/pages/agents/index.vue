@@ -161,13 +161,13 @@ const nestGroups = computed<NestGroup[]>(() => {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <UButton
-          to="/company"
+          to="/companies"
           color="neutral"
           variant="ghost"
           size="sm"
           icon="i-lucide-building-2"
         >
-          <span class="hidden sm:inline">Firma</span>
+          <span class="hidden sm:inline">Firmen</span>
         </UButton>
         <LocaleSwitcher />
         <UButton
