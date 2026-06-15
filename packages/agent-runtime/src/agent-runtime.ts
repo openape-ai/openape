@@ -28,6 +28,13 @@ export interface RuntimeConfig {
   apiBase: string // LITELLM_BASE_URL (e.g. "http://127.0.0.1:4000/v1")
   apiKey: string // LITELLM_API_KEY (or LITELLM_MASTER_KEY)
   model: string
+  /**
+   * Reasoning/thinking depth for models that support it (gpt-5.x via the
+   * codex-proxy). Lets the PM-orchestrator tier compute by task difficulty —
+   * `minimal`/`low` for quick wins, `high` for research/architecture — on the
+   * same model. Omitted = the proxy/model default.
+   */
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
 }
 
 export interface TraceEntry {
@@ -162,6 +169,7 @@ export async function runLoop(opts: RunOptions): Promise<RunResult> {
     const requestBody = {
       model: opts.config.model,
       messages,
+      ...(opts.config.reasoningEffort ? { reasoning_effort: opts.config.reasoningEffort } : {}),
       ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
       ...(opts.streamAggregate ? { stream: true } : {}),
     }

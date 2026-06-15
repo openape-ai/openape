@@ -35,6 +35,38 @@ describe('runLoop — happy path', () => {
   })
 })
 
+describe('runLoop — reasoning effort', () => {
+  function bodyOf(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
+    return JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+  }
+
+  it('puts reasoning_effort in the request body when config sets it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(chatResponse({ content: 'ok' }))
+    await runLoop({
+      config: { ...config, reasoningEffort: 'high' },
+      systemPrompt: 's',
+      userMessage: 'go',
+      tools: [],
+      maxSteps: 5,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    })
+    expect(bodyOf(fetchMock).reasoning_effort).toBe('high')
+  })
+
+  it('omits reasoning_effort when config does not set it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(chatResponse({ content: 'ok' }))
+    await runLoop({
+      config,
+      systemPrompt: 's',
+      userMessage: 'go',
+      tools: [],
+      maxSteps: 5,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    })
+    expect(bodyOf(fetchMock)).not.toHaveProperty('reasoning_effort')
+  })
+})
+
 describe('runLoop — tool calling', () => {
   const echoTool: ToolDefinition = {
     name: 'echo',
