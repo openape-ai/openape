@@ -51,15 +51,17 @@ export const tasksTools: ToolDefinition[] = [
         notes: { type: 'string' },
         priority: { type: 'string', enum: ['low', 'med', 'high'] },
         due_at: { type: 'string', description: 'ISO date or +Nh/+Nd shorthand.' },
+        dedup_key: { type: 'string', description: 'Stable id for the source (e.g. a mail Message-ID). If an open task with this key already exists, no duplicate is created — pass it for recurring triage so the same item is not filed twice.' },
       },
       required: ['title'],
     },
     execute: async (args: unknown) => {
-      const a = args as { title: string, notes?: string, priority?: string, due_at?: string }
+      const a = args as { title: string, notes?: string, priority?: string, due_at?: string, dedup_key?: string }
       const argv = ['new', '--title', a.title, '--json']
       if (a.notes) argv.push('--notes', a.notes)
       if (a.priority) argv.push('--priority', a.priority)
       if (a.due_at) argv.push('--due', a.due_at)
+      if (a.dedup_key) argv.push('--dedup-key', a.dedup_key)
       const out = ape(argv)
       try { return JSON.parse(out) }
       catch { return { raw: out } }
