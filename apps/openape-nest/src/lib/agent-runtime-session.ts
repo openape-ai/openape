@@ -135,12 +135,14 @@ export function createAgentRuntimeSession(
           log(`agent-runtime: ! ${entry.name} socket error: ${err.message}`))
         socket.on('message', (data) => {
           // Decode the troop frame with the agent's own canonical parser, then
-          // route accepted messages. Dispatch into the LLM loop lands in a later
-          // increment; for now an accepted frame is logged (no body, no token).
+          // translate it into the message the agent loop runs on. Dispatch into
+          // the LLM loop lands in a later increment; for now the translated
+          // message's room + sender are logged (no body, no token).
           const frame = session?.parseChatFrame(data)
-          if (!frame)
+          if (!frame || !session)
             return
-          log(`agent-runtime: > ${entry.name} message in chat ${frame.chatId}`)
+          const message = session.toMessage(frame)
+          log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
         })
       }
     },
