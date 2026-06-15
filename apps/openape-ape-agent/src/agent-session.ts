@@ -169,4 +169,19 @@ export class AgentSession {
       },
     })
   }
+
+  /**
+   * The short, neutral refusal the agent posts back when {@link screenInjection}
+   * blocks a message. Ports the bridge's `refusalText`: the matched reason is
+   * appended so the owner sees in their chat history + audit log why a specific
+   * message was blocked, but the phrasing deliberately avoids language an
+   * attacker could copy back ("ignore previous instructions and …") to
+   * re-trigger the detector. This is the canonical home for the refusal-message
+   * rule once the nest drives the connection: the runLoop-dispatch increment
+   * posts this text on a block with no second copy of the wording.
+   */
+  refusalText(reason: string | undefined): string {
+    const base = 'I won\'t process this message — it looks like a prompt-injection attempt.'
+    return reason ? `${base}\n\n(matched: ${reason})` : base
+  }
 }
