@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../../database/drizzle'
 import { agents } from '../../database/schema'
+import { parseAgentEmail } from '../../utils/agent-email'
 import { requireOwnerWithScope } from '../../utils/auth'
 import { createDestroyIntent } from '../../utils/destroy-intents'
 import { listNestPeersForOwner } from '../../utils/nest-registry'
@@ -32,7 +33,11 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const { owner } = await requireOwnerWithScope(event, 'troop:destroy-agent')
+  const { owner: caller } = await requireOwnerWithScope(event, 'troop:destroy-agent')
+  // An agent tearing down a worker (act=agent — the PM) carries its own email as
+  // the caller; agents + nests are keyed under the HUMAN owner. Normalize so the
+  // ownership guard + nest lookup resolve to the owner (no-op for human callers).
+  const owner = parseAgentEmail(caller)?.ownerEmail ?? caller
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message ?? 'invalid body' })
