@@ -140,16 +140,28 @@ export function createAgentRuntimeSession(
           // here too; skip them via the canonical self-echo guard before the
           // runLoop-dispatch increment would otherwise loop the agent forever.
           // Then apply the same pre-loop dispatch filter the bridge uses (empty
-          // body / room scope) so noise never reaches the loop. Dispatch into
-          // the LLM loop lands in a later increment; for now an accepted
-          // message's room + sender are logged (no body, no token).
+          // body / room scope) so noise never reaches the loop. Surviving
+          // messages are screened for prompt injection — the bridge's
+          // choke-point before the runtime — and blocked ones are refused (no
+          // dispatch). Dispatch into the LLM loop lands in a later increment;
+          // for now an accepted message's room + sender are logged (no body,
+          // no token).
           const frame = session?.parseChatFrame(data)
           if (!frame || !session)
             return
           const message = session.toMessage(frame)
           if (session.isOwnEcho(message) || !session.shouldDispatch(message))
             return
-          log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
+          void session.screenInjection(message)
+            .then((decision) => {
+              if (decision.blocked) {
+                log(`agent-runtime: ! ${entry.name} BLOCKED prompt-injection in chat ${message.roomId} (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
+                return
+              }
+              log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
+            })
+            .catch(err =>
+              log(`agent-runtime: ! ${entry.name} injection screen error: ${err instanceof Error ? err.message : String(err)}`))
         })
       }
     },

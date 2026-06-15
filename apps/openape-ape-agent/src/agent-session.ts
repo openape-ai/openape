@@ -1,4 +1,6 @@
+import type { DecisionResult, Detector } from '@openape/prompt-injection-detector'
 import type { BridgeConfig } from './bridge-config'
+import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
 
 /**
  * A decoded inbound troop chat frame worth acting on: the chat it belongs to
@@ -28,6 +30,13 @@ export interface TroopMessage {
 }
 
 export class AgentSession {
+  /**
+   * Lazily-created prompt-injection detector, shared across this session's
+   * messages. Matches the per-agent bridge, which holds one
+   * `createHeuristicDetector()` for its lifetime.
+   */
+  private injectionDetector: Detector | undefined
+
   constructor(
     readonly email: string,
     readonly ownerEmail: string,
@@ -136,5 +145,28 @@ export class AgentSession {
     if (this.config.roomFilter && message.roomId !== this.config.roomFilter)
       return false
     return true
+  }
+
+  /**
+   * Screen an accepted, non-echo {@link TroopMessage} for prompt injection
+   * before it reaches the agent loop. Ports the bridge's `handleInbound`
+   * choke-point: the bridge runs every inbound message through a heuristic
+   * detector and refuses to forward it when the score crosses the threshold,
+   * because once the text is in the loop's history a refusal is harder and
+   * inconsistent. The owner gets a higher bar (legitimate "run shell, do X"
+   * instructions aren't refused) — handled by `decide` keying the threshold off
+   * `sender.isOwner`. This is the canonical home for the screening rule once the
+   * nest drives the connection: the runLoop-dispatch increment refuses blocked
+   * messages with no second copy of the detector setup or the sender mapping.
+   */
+  async screenInjection(message: TroopMessage): Promise<DecisionResult> {
+    this.injectionDetector ??= createHeuristicDetector()
+    return decide(this.injectionDetector, {
+      text: message.body,
+      sender: {
+        email: message.senderEmail,
+        isOwner: message.senderEmail === this.ownerEmail,
+      },
+    })
   }
 }
