@@ -108,6 +108,12 @@
       "description": "Spawn a worker agent on the nest via troop, tiering its model + reasoning_effort by task difficulty. The orchestrator (PM) fans out workers in parallel. Requires the troop:spawn-agent scope. Gated.",
       "inputs": "{ name: string, model?: string, reasoning_effort?: 'minimal'|'low'|'medium'|'high', recipe_ref?: string, system_prompt?: string }",
       "risk": "high"
+    },
+    {
+      "name": "agent.destroy",
+      "description": "Destroy a worker agent on the nest (full teardown). The PM tears down ephemeral workers after collecting their result. Requires the troop:destroy-agent scope. Gated.",
+      "inputs": "{ name: string }",
+      "risk": "high"
     }
   ]
 }

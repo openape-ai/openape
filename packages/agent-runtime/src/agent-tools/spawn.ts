@@ -25,6 +25,22 @@ function readAgentToken(): string {
   return auth.access_token
 }
 
+/**
+ * Exchange this agent's IdP token for a troop-scoped bearer. Throws on failure
+ * (e.g. the agent lacks the scope) with a message the model can relay.
+ */
+async function exchangeBearer(base: string, scope: string): Promise<string> {
+  const res = await fetch(`${base}/api/cli/exchange`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ subject_token: readAgentToken(), scopes: [scope] }),
+  })
+  if (!res.ok) {
+    throw new Error(`token exchange ${res.status} — ${(await res.text().catch(() => '')).slice(0, 200)} (does this agent hold the ${scope} scope?)`)
+  }
+  return ((await res.json()) as { access_token: string }).access_token
+}
+
 export const spawnTools: ToolDefinition[] = [
   {
     name: 'agent.spawn',
@@ -55,24 +71,13 @@ export const spawnTools: ToolDefinition[] = [
         system_prompt?: string
       }
       const base = troopBase()
-      let token: string
+      let bearer: string
       try {
-        token = readAgentToken()
+        bearer = await exchangeBearer(base, 'troop:spawn-agent')
       }
       catch (err) {
         return `spawn failed: ${err instanceof Error ? err.message : String(err)}`
       }
-
-      const exRes = await fetch(`${base}/api/cli/exchange`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ subject_token: token, scopes: ['troop:spawn-agent'] }),
-      })
-      if (!exRes.ok) {
-        return `spawn failed: token exchange ${exRes.status} — ${(await exRes.text().catch(() => '')).slice(0, 200)} `
-          + '(does this agent hold the troop:spawn-agent scope?)'
-      }
-      const ex = await exRes.json() as { access_token: string }
 
       const body: Record<string, unknown> = { name: a.name }
       if (a.model) body.bridge_model = a.model
@@ -82,7 +87,7 @@ export const spawnTools: ToolDefinition[] = [
 
       const spRes = await fetch(`${base}/api/agents/spawn-intent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${ex.access_token}` },
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
         body: JSON.stringify(body),
       })
       if (!spRes.ok) {
@@ -90,6 +95,41 @@ export const spawnTools: ToolDefinition[] = [
       }
       const sp = await spRes.json() as { intent_id?: string }
       return `spawned worker "${a.name}" (model=${a.model ?? 'default'}, reasoning=${a.reasoning_effort ?? 'default'}); intent=${sp.intent_id ?? '?'}`
+    },
+  },
+  {
+    name: 'agent.destroy',
+    description:
+      'Destroy a worker agent on the nest (full teardown: OS user, IdP, bridge). The PM '
+      + 'calls this after collecting an ephemeral worker\'s result, so workers do not linger '
+      + 'idle. Requires the troop:destroy-agent scope.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'the worker agent name to destroy' },
+      },
+      required: ['name'],
+    },
+    execute: async (args) => {
+      const a = args as { name: string }
+      const base = troopBase()
+      let bearer: string
+      try {
+        bearer = await exchangeBearer(base, 'troop:destroy-agent')
+      }
+      catch (err) {
+        return `destroy failed: ${err instanceof Error ? err.message : String(err)}`
+      }
+      const res = await fetch(`${base}/api/agents/destroy-intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
+        body: JSON.stringify({ name: a.name }),
+      })
+      if (!res.ok) {
+        return `destroy failed: destroy-intent ${res.status} — ${(await res.text().catch(() => '')).slice(0, 200)}`
+      }
+      const d = await res.json() as { intent_id?: string }
+      return `destroying worker "${a.name}"; intent=${d.intent_id ?? '?'}`
     },
   },
 ]
