@@ -88,8 +88,8 @@ watch(() => props.orgId, load, { immediate: true })
           </div>
           <span class="text-xs text-zinc-500 shrink-0">{{ fmtDate(r.createdAt) }}</span>
         </button>
-        <div v-if="expanded === r.id" class="px-4 pb-4 text-sm text-zinc-300 whitespace-pre-line border-t border-zinc-800/60 pt-3">
-          {{ r.bodyMd }}
+        <div v-if="expanded === r.id" class="px-4 pb-4 text-sm text-zinc-300 border-t border-zinc-800/60 pt-3">
+          <MarkdownText :content="r.bodyMd" />
         </div>
       </div>
     </div>
