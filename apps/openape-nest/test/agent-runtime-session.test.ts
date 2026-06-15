@@ -151,7 +151,7 @@ describe('createAgentRuntimeSession', () => {
     expect(lines).toContain('agent-runtime: x backend disconnected')
   })
 
-  it('routes an inbound message frame and logs its chat, ignoring noise', async () => {
+  it('translates an inbound message frame and logs its sender + chat, ignoring noise', async () => {
     const lines: string[] = []
     const ws = fakeSocket()
     const ctxWithSocket = {
@@ -163,14 +163,19 @@ describe('createAgentRuntimeSession', () => {
     const session = createAgentRuntimeSession(entry('backend'), ctxWithSocket, line => lines.push(line))
 
     await session.start()
+    // A human message (no role → human) and an agent echo; only their
+    // translated sender role + room are logged, never the body.
     ws.emit('message', JSON.stringify({ type: 'message', chat_id: 'chat-9', payload: { body: 'hi' } }))
+    ws.emit('message', JSON.stringify({ type: 'message', chat_id: 'chat-9', payload: { role: 'agent', body: 'echo' } }))
     ws.emit('message', JSON.stringify({ type: 'presence', payload: { online: true } }))
     ws.emit('message', 'not json')
 
-    // Only the accepted message frame is logged; the body never appears.
-    expect(lines.filter(line => line.includes('message in chat')))
-      .toEqual(['agent-runtime: > backend message in chat chat-9'])
-    expect(lines.some(line => line.includes('hi'))).toBe(false)
+    expect(lines.filter(line => line.includes('message from')))
+      .toEqual([
+        'agent-runtime: > backend message from human in chat chat-9',
+        'agent-runtime: > backend message from agent in chat chat-9',
+      ])
+    expect(lines.some(line => line.includes('hi') || line.includes('echo'))).toBe(false)
   })
 
   it('closes the chat socket on stop', async () => {

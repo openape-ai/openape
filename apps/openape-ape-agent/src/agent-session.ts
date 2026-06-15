@@ -10,6 +10,23 @@ export interface TroopChatFrame {
   payload: Record<string, unknown>
 }
 
+/**
+ * A troop chat message in the chat.openape.ai-style shape the agent loop
+ * consumes — the input `runLoop` runs on. Produced by {@link AgentSession.toMessage}
+ * from a {@link TroopChatFrame}.
+ */
+export interface TroopMessage {
+  id: string
+  roomId: string
+  threadId: string
+  senderEmail: string
+  senderAct: 'human' | 'agent'
+  body: string
+  replyTo: string | null
+  createdAt: number
+  editedAt: number | null
+}
+
 export class AgentSession {
   constructor(
     readonly email: string,
@@ -60,5 +77,32 @@ export class AgentSession {
     if (frame.type !== 'message' || !frame.payload)
       return null
     return { chatId: frame.chat_id ?? '', payload: frame.payload }
+  }
+
+  /**
+   * Translate an accepted {@link TroopChatFrame} into the {@link TroopMessage}
+   * the agent loop runs on. Ports the bridge's `translateTroopPayload`: troop's
+   * payload carries `role` (human|agent) but no sender email, so the email is
+   * synthesized from role (agent → this session's own email, human → the owner)
+   * — the bridge skips its own echoes via `senderEmail === selfEmail`, so this
+   * mapping must match. `threadId` is the synthetic `'main'` because troop has
+   * no threads. This is the canonical home for the payload→message rule once the
+   * nest drives the connection: the runLoop-dispatch increment feeds this
+   * message straight into the loop with no second copy of the translation.
+   */
+  toMessage(frame: TroopChatFrame): TroopMessage {
+    const { chatId, payload } = frame
+    const role = payload.role === 'agent' ? 'agent' : 'human'
+    return {
+      id: String(payload.id ?? ''),
+      roomId: chatId || String(payload.chatId ?? ''),
+      threadId: 'main',
+      senderEmail: role === 'agent' ? this.email : this.ownerEmail,
+      senderAct: role,
+      body: typeof payload.body === 'string' ? payload.body : '',
+      replyTo: typeof payload.replyTo === 'string' ? payload.replyTo : null,
+      createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Math.floor(Date.now() / 1000),
+      editedAt: typeof payload.editedAt === 'number' ? payload.editedAt : null,
+    }
   }
 }

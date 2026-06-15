@@ -93,3 +93,52 @@ describe('AgentSession.parseChatFrame', () => {
     expect(session.parseChatFrame(undefined)).toBeNull()
   })
 })
+
+describe('AgentSession.toMessage', () => {
+  const session = new AgentSession(
+    'agent@example.com',
+    'owner@example.com',
+    {} as BridgeConfig,
+  )
+
+  it('maps a human payload to the owner email and synthetic main thread', () => {
+    expect(session.toMessage({
+      chatId: 'chat-1',
+      payload: { id: 'm1', body: 'hello', createdAt: 1700000000 },
+    })).toEqual({
+      id: 'm1',
+      roomId: 'chat-1',
+      threadId: 'main',
+      senderEmail: 'owner@example.com',
+      senderAct: 'human',
+      body: 'hello',
+      replyTo: null,
+      createdAt: 1700000000,
+      editedAt: null,
+    })
+  })
+
+  it('maps an agent payload to this session\'s own email (matches the echo-skip rule)', () => {
+    const msg = session.toMessage({
+      chatId: 'chat-2',
+      payload: { id: 'm2', role: 'agent', body: 'echo', createdAt: 1700000001 },
+    })
+    expect(msg.senderAct).toBe('agent')
+    expect(msg.senderEmail).toBe('agent@example.com')
+  })
+
+  it('falls back to the payload chatId for the room and carries replyTo', () => {
+    const msg = session.toMessage({
+      chatId: '',
+      payload: { id: 'm3', chatId: 'chat-3', body: 'reply', replyTo: 'm1', createdAt: 1700000002 },
+    })
+    expect(msg.roomId).toBe('chat-3')
+    expect(msg.replyTo).toBe('m1')
+  })
+
+  it('defaults id and body to empty strings when absent', () => {
+    const msg = session.toMessage({ chatId: 'chat-4', payload: { createdAt: 1700000003 } })
+    expect(msg.id).toBe('')
+    expect(msg.body).toBe('')
+  })
+})
