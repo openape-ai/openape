@@ -58,7 +58,7 @@ const sessionHost = INPROCESS
   ? new SessionHost({
       log,
       createSession: entry =>
-        createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env), log),
+        createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env, log), log),
     })
   : undefined
 const supervisor: AgentSupervisor = sessionHost ?? new Pm2Supervisor({ apesBin: APES_BIN, log })

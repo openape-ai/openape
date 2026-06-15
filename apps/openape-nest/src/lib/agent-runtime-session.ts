@@ -1,7 +1,7 @@
 import type { BridgeConfig, TroopMessage } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
-import { AgentSession, readAgentIdentity, TroopChatApi } from '@openape/ape-agent'
+import { AgentSession, readAgentIdentity, ThreadSession, TroopChatApi } from '@openape/ape-agent'
 import { ensureFreshIdpAuth } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import { resolveBridgeConfig } from './bridge-config'
@@ -78,10 +78,14 @@ export interface AgentRuntimeContext {
    * plus a hung-backend watchdog, and surfaces its own errors. There is
    * therefore no reply text to return and no reply for the seam to post;
    * {@link chatPoster} stays the refusal-only path. Optional and only consulted
-   * for accepted messages inside the bearer-gated socket block;
-   * {@link resolveAgentRuntimeContext} leaves it unset, so the production path
-   * logs the accepted message but runs no turn until the `ThreadSession`
-   * dispatcher is wired (next increment). Tests inject a spy.
+   * for accepted messages inside the bearer-gated socket block.
+   * {@link resolveAgentRuntimeContext} now wires the production dispatcher: a
+   * per-`${roomId}:${threadId}` keyed `ThreadSession` (the same canonical
+   * session the per-agent bridge runs) is created on demand and the message is
+   * enqueued onto it. The in-process turn runs **text-only** (no tools) until M3
+   * lands the `sudo -u <agent>` tool-drop, since the runtime runs as the nest's
+   * root and enabling the bridge's tools here would execute them as root — a
+   * privilege regression. Tests inject a spy.
    */
   dispatchTurn?: (message: TroopMessage) => void
 }
@@ -116,23 +120,80 @@ function redactSocketToken(url: string): string {
  * {@link TroopChatApi}, bound to the resolved troop endpoint and the same lazy
  * `bearer` — no second copy of troop's POST shape. Constructing it is cheap
  * (endpoint + bearer only); the first network call happens when the seam posts a
- * refusal (or, once {@link AgentRuntimeContext.runTurn} lands, a reply), so
- * resolving the context still touches no network.
+ * refusal (replies stream from the {@link AgentRuntimeContext.dispatchTurn}
+ * `ThreadSession`, not here), so resolving the context still touches no network.
+ *
+ * The {@link AgentRuntimeContext.dispatchTurn} drives one
+ * per-`${roomId}:${threadId}` keyed {@link ThreadSession} (the same canonical
+ * session the per-agent bridge runs via `getOrCreateThread`), created on demand
+ * and sharing the agent's `chat` backend plus a single {@link RuntimeConfig}
+ * resolved from the nest env (`LITELLM_*` + the agent's model), exactly as the
+ * bridge's own `runtimeConfig()`. The turn runs **text-only** (no tools) until
+ * M3 lands the `sudo -u <agent>` tool-drop — see the field doc. The `log` sink
+ * is the nest's logger, forwarded so per-thread diagnostics land in the daemon
+ * log.
  */
 export function resolveAgentRuntimeContext(
   entry: AgentEntry,
   env: NodeJS.ProcessEnv,
+  log: (line: string) => void = () => {},
 ): AgentRuntimeContext {
   const bridgeConfig = resolveBridgeConfig(entry, env)
   const bearer = async (): Promise<string> =>
     `Bearer ${(await ensureFreshIdpAuth(undefined, entry.home)).access_token}`
   const chat = new TroopChatApi(bridgeConfig.endpoint, bearer)
+
+  // The LiteLLM proxy + model the per-thread runtime drives, resolved from the
+  // nest env exactly as the per-agent bridge's `runtimeConfig()`
+  // (`LITELLM_BASE_URL` / `LITELLM_API_KEY`|`LITELLM_MASTER_KEY` + the agent's
+  // model). Built once and shared across this agent's threads.
+  const apiBase = (env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
+  const apiKey = env.LITELLM_API_KEY ?? env.LITELLM_MASTER_KEY ?? ''
+  const runtimeConfig = { apiBase, apiKey, model: bridgeConfig.model }
+
+  // One ThreadSession per `${roomId}:${threadId}`, mirroring the bridge's
+  // `getOrCreateThread`. Each owns its per-thread history, streaming, and
+  // watchdog, and streams its reply straight back to troop via `chat` — so the
+  // dispatcher returns nothing and the refusal-only `chatPoster` is untouched.
+  const threads = new Map<string, ThreadSession>()
+
   return {
     ownerEmail: readAgentIdentity(entry.home).ownerEmail,
     bridgeConfig,
     bearer,
     chatPoster: async (roomId, text, opts) => {
       await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
+    },
+    dispatchTurn: (message) => {
+      // Without an API key runLoop can't reach the model at all — fail loudly
+      // per turn rather than silently swallowing it. (The bridge fails fast at
+      // boot on the same missing key; the nest keeps reconcile alive and logs
+      // here so one misconfigured agent never strands the others.)
+      if (!apiKey) {
+        log(`agent-runtime: ! ${entry.name} cannot dispatch — LITELLM_API_KEY/LITELLM_MASTER_KEY unset`)
+        return
+      }
+      const key = `${message.roomId}:${message.threadId}`
+      let thread = threads.get(key)
+      if (!thread) {
+        thread = new ThreadSession({
+          roomId: message.roomId,
+          threadId: message.threadId,
+          chat,
+          runtimeConfig,
+          // Text-only until M3: the runtime runs as the nest's root and the
+          // `sudo -u <agent>` tool-drop isn't built yet, so enabling the
+          // bridge's tools here would execute them as root. Ship text-only
+          // (no tools, raw system prompt) so WS→parse→dispatch→runLoop→reply is
+          // functional and safe; M3 restores tools behind the sudo-drop.
+          resolveConfig: () => ({ systemPrompt: bridgeConfig.systemPrompt, tools: [] }),
+          selfEmail: entry.email,
+          maxSteps: bridgeConfig.maxSteps,
+          log,
+        })
+        threads.set(key, thread)
+      }
+      thread.enqueue(message.body, message.id)
     },
   }
 }
