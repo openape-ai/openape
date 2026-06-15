@@ -10,8 +10,9 @@ import { parseRecipe, parseRepoRef } from './agent-recipe'
 
 // Recipe agents drive everything through the built-in toolset — the
 // repo's tools/ scripts are invoked via bash; http/file/time round it
-// out. Owners can narrow later in the troop UI.
-export const RECIPE_AGENT_TOOLS = ['bash', 'http', 'file', 'time'] as const
+// out. Owners can narrow later in the troop UI. Values must match
+// server/tool-catalog.json exactly because task creation validates names.
+export const RECIPE_AGENT_TOOLS = ['bash', 'http.get', 'http.post', 'file.read', 'file.write', 'time.now'] as const
 
 export interface DeploySchedule {
   taskId: string
