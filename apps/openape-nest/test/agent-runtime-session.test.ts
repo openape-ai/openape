@@ -323,7 +323,7 @@ describe('resolveAgentRuntimeContext', () => {
     return { name, uid: 1000, home: homeDir, email: `${name}@example.test`, registeredAt: 0 }
   }
 
-  function writeIdentity(homeDir: string, identity: Record<string, string>) {
+  function writeIdentity(homeDir: string, identity: Record<string, string | number>) {
     const dir = join(homeDir, '.config', 'apes')
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'auth.json'), JSON.stringify(identity))
@@ -372,5 +372,25 @@ describe('resolveAgentRuntimeContext', () => {
   it('throws when the agent home has no identity file', () => {
     expect(() => resolveAgentRuntimeContext(entryWithHome('ghost', home), { APE_CHAT_BRIDGE_MODEL: 'm' }))
       .toThrow(/identity not found/)
+  })
+
+  it('resolves a lazy bearer that reads a fresh IdP token from the agent home', async () => {
+    // A far-future expiry means ensureFreshIdpAuth returns the cached token
+    // as-is — no refresh grant, no network — so the test exercises the
+    // home-targeted read in isolation.
+    writeIdentity(home, {
+      email: 'backend@id.openape.ai',
+      idp: 'https://id.openape.ai',
+      owner_email: 'patrick@hofmann.eco',
+      access_token: 'idp-token-abc',
+      expires_at: 9_999_999_999,
+    })
+
+    const ctx = resolveAgentRuntimeContext(entryWithHome('backend', home), {
+      APE_CHAT_BRIDGE_MODEL: 'claude-haiku-4-5',
+    })
+
+    expect(ctx.bearer).toBeDefined()
+    expect(await ctx.bearer!()).toBe('Bearer idp-token-abc')
   })
 })

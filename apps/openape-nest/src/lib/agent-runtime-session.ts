@@ -2,6 +2,7 @@ import type { BridgeConfig } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity } from '@openape/ape-agent'
+import { ensureFreshIdpAuth } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import { resolveBridgeConfig } from './bridge-config'
 
@@ -33,13 +34,15 @@ export interface AgentRuntimeContext {
   ownerEmail: string
   bridgeConfig: BridgeConfig
   /**
-   * Resolves this agent's troop bearer (`Bearer <jwt>`). Optional: when present,
-   * the factory derives the agent's chat-socket URL at start time — the last
-   * step before the WS-open increment actually connects. Left unset by
-   * {@link resolveAgentRuntimeContext} for now: the production bearer must come
-   * from the agent's *own* home via `@openape/cli-auth`'s `ensureFreshIdpAuth`
-   * (which also refreshes the 1h-expiring agent token), and home-injecting that
-   * published helper is a separate, owner-gated step. Tests inject a stub.
+   * Resolves this agent's troop bearer (`Bearer <jwt>`). When present, the
+   * factory derives the agent's chat-socket URL at start time and connects.
+   * {@link resolveAgentRuntimeContext} now wires the production bearer: a fresh
+   * IdP token read from the agent's *own* home via `@openape/cli-auth`'s
+   * `ensureFreshIdpAuth` (which also refreshes the 1h-expiring agent token from
+   * the on-disk signing key). Mirrors the per-agent bridge's bearer exactly
+   * (`bridge.ts`: `Bearer ${(await ensureFreshIdpAuth()).access_token}`). The
+   * call is lazy — only made when the session actually starts — so resolving a
+   * context never touches the network. Tests inject a stub.
    */
   bearer?: () => Promise<string>
   /**
@@ -83,9 +86,13 @@ function redactSocketToken(url: string): string {
  * of the auth.json parsing/fallback rules. The bridge config is resolved from the
  * nest env with the per-agent registry override (see {@link resolveBridgeConfig}).
  *
- * Pure resolver: it reads files but mutates nothing and is not wired into
- * index.ts yet — it completes the context the {@link createAgentRuntimeSession}
- * factory needs before the WS-opening increment.
+ * The {@link AgentRuntimeContext.bearer} resolver refreshes the agent's troop
+ * token from that same home via `ensureFreshIdpAuth(undefined, entry.home)` —
+ * the `authHome` argument points the published helper at the agent's own
+ * `auth.json` so the one daemon mints every hosted agent's bearer without env
+ * juggling. The call is lazy (only fired when the factory opens the socket), so
+ * resolving the context itself reads only the identity file and never the
+ * network.
  */
 export function resolveAgentRuntimeContext(
   entry: AgentEntry,
@@ -94,6 +101,7 @@ export function resolveAgentRuntimeContext(
   return {
     ownerEmail: readAgentIdentity(entry.home).ownerEmail,
     bridgeConfig: resolveBridgeConfig(entry, env),
+    bearer: async () => `Bearer ${(await ensureFreshIdpAuth(undefined, entry.home)).access_token}`,
   }
 }
 
