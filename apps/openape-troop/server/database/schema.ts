@@ -17,6 +17,11 @@ export const agents = sqliteTable('agents', {
   agentName: text('agent_name').notNull(),
   hostId: text('host_id'),
   hostname: text('hostname'),
+  // The nest this agent belongs to (the bound device's host_id, recorded at
+  // spawn from the spawning nest's WS identity). Authoritative for grouping
+  // agents under their nest — `hostId`/`hostname` are the agent's own runtime
+  // host (e.g. a container name) and are just a detail.
+  nestHostId: text('nest_host_id'),
   pubkeySsh: text('pubkey_ssh'),
   // Agent X25519 encryption public key (base64url DER), reported on
   // sync (M2b writes it on the host). troop seals capability secrets

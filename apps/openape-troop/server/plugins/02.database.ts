@@ -69,6 +69,11 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN recipe_ref TEXT`)
     }
     catch { /* column exists */ }
+    // The nest an agent belongs to (recorded at spawn from the spawning nest).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN nest_host_id TEXT`)
+    }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
       agent_email TEXT NOT NULL,
       name TEXT NOT NULL,

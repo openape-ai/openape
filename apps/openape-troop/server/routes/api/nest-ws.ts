@@ -245,6 +245,8 @@ export default defineWebSocketHandler({
               agentName: parsed.agentName,
               hostId: null,
               hostname: null,
+              // The nest this agent was spawned on — authoritative for grouping.
+              nestHostId: ctx.hostId ?? null,
               pubkeySsh: null,
               tools: ALL_TOOL_NAMES,
               firstSeenAt: null,
