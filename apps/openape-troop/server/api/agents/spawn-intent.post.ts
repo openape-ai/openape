@@ -30,6 +30,9 @@ const bodySchema = z.object({
   bridge_key: z.string().optional(),
   bridge_base_url: z.string().url().optional(),
   bridge_model: z.string().optional(),
+  // Reasoning/thinking depth for gpt-5.x — lets the PM-orchestrator tier
+  // compute by task difficulty (quick-win=low, research=high) on one model.
+  bridge_reasoning_effort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   // Free-text persona/behaviour the owner typed. Without a recipe it
   // is the agent's system prompt; with a recipe it is the additive
   // user_addendum on top of the recipe intent.
@@ -111,6 +114,7 @@ export default defineEventHandler(async (event) => {
       key: parsed.data.bridge_key,
       base_url: parsed.data.bridge_base_url,
       model: parsed.data.bridge_model,
+      reasoning_effort: parsed.data.bridge_reasoning_effort,
     },
   })
   if (!ok) {

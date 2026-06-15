@@ -29,6 +29,8 @@ export interface AgentEntry {
     baseUrl?: string
     apiKey?: string
     model?: string
+    /** Reasoning/thinking depth (gpt-5.x) — lets the PM tier compute by difficulty. */
+    reasoningEffort?: string
   }
   /** 'user' (default) → troop-chat bridge; 'service' → SP task-queue worker. */
   kind?: 'user' | 'service'
