@@ -49,6 +49,20 @@ export interface AgentRuntimeContext {
    * {@link resolveAgentRuntimeContext} leaves `bearer` unset) never connects.
    */
   chatSocketFactory?: ChatSocketFactory
+  /**
+   * Posts a chat message back to troop — a prompt-injection refusal now, agent
+   * replies once the runLoop dispatch lands. Mirrors the per-agent bridge's
+   * `this.chat.postMessage(roomId, refusalText(...), { replyTo, threadId })`
+   * (`bridge.ts`). Optional and only consulted inside the bearer-gated socket
+   * block, so production — where {@link resolveAgentRuntimeContext} leaves
+   * `bearer` unset — never posts. Tests inject a spy. The real HTTP poster
+   * (`TroopChatApi`) gets wired in when the production bearer lands.
+   */
+  chatPoster?: (
+    roomId: string,
+    text: string,
+    opts: { replyTo: string, threadId: string },
+  ) => Promise<void>
 }
 
 /**
@@ -146,16 +160,31 @@ export function createAgentRuntimeSession(
           // dispatch). Dispatch into the LLM loop lands in a later increment;
           // for now an accepted message's room + sender are logged (no body,
           // no token).
-          const frame = session?.parseChatFrame(data)
-          if (!frame || !session)
+          // Capture the retained session so the async screen callback below
+          // keeps a stable handle even if a concurrent stop() clears the field.
+          const active = session
+          const frame = active?.parseChatFrame(data)
+          if (!frame || !active)
             return
-          const message = session.toMessage(frame)
-          if (session.isOwnEcho(message) || !session.shouldDispatch(message))
+          const message = active.toMessage(frame)
+          if (active.isOwnEcho(message) || !active.shouldDispatch(message))
             return
-          void session.screenInjection(message)
-            .then((decision) => {
+          void active.screenInjection(message)
+            .then(async (decision) => {
               if (decision.blocked) {
                 log(`agent-runtime: ! ${entry.name} BLOCKED prompt-injection in chat ${message.roomId} (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
+                // Post the canonical refusal back, mirroring the bridge's
+                // choke-point (`bridge.ts` posts refusalText on a block). The
+                // reason is appended for the owner's audit trail; the body is
+                // never echoed. A failed post is logged, not thrown — same as
+                // the bridge.
+                if (ctx.chatPoster) {
+                  await ctx.chatPoster(message.roomId, active.refusalText(decision.reason), {
+                    replyTo: message.id,
+                    threadId: message.threadId,
+                  }).catch(err =>
+                    log(`agent-runtime: ! ${entry.name} failed to post refusal: ${err instanceof Error ? err.message : String(err)}`))
+                }
                 return
               }
               log(`agent-runtime: > ${entry.name} message from ${message.senderAct} in chat ${message.roomId}`)
