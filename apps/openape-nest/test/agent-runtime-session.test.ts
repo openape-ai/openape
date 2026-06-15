@@ -486,4 +486,52 @@ describe('resolveAgentRuntimeContext', () => {
     expect(ctx.bearer).toBeDefined()
     expect(await ctx.bearer!()).toBe('Bearer idp-token-abc')
   })
+
+  it('wires a chatPoster that POSTs to the agent troop chat endpoint with the home bearer', async () => {
+    writeIdentity(home, {
+      email: 'backend@id.openape.ai',
+      idp: 'https://id.openape.ai',
+      owner_email: 'patrick@hofmann.eco',
+      access_token: 'idp-token-abc',
+      expires_at: 9_999_999_999,
+    })
+
+    const ctx = resolveAgentRuntimeContext(entryWithHome('backend', home), {
+      APE_CHAT_BRIDGE_MODEL: 'claude-haiku-4-5',
+      OPENAPE_TROOP_URL: 'https://troop.test',
+    })
+
+    expect(ctx.chatPoster).toBeDefined()
+
+    // TroopChatApi posts via ofetch; stub global fetch to capture the request
+    // without a live troop. ofetch resolves the body, so a JSON 200 is enough.
+    const calls: Array<{ url: string, method: string, auth: string | null, body: unknown }> = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      calls.push({
+        url: String(input),
+        method: init?.method ?? 'GET',
+        auth: headers.get('authorization'),
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body,
+      })
+      return new Response(JSON.stringify({ id: 'm-posted', body: 'denied', createdAt: 0 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof globalThis.fetch
+
+    try {
+      await ctx.chatPoster!('chat-1', 'refused: injection', { replyTo: 'm-1', threadId: 'main' })
+    }
+    finally {
+      globalThis.fetch = realFetch
+    }
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('https://troop.test/api/agents/me/chat/messages')
+    expect(calls[0]!.method).toBe('POST')
+    expect(calls[0]!.auth).toBe('Bearer idp-token-abc')
+    expect(calls[0]!.body).toMatchObject({ body: 'refused: injection', reply_to: 'm-1' })
+  })
 })
