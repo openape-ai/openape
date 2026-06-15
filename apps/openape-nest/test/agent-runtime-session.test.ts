@@ -509,4 +509,52 @@ describe('resolveAgentRuntimeContext', () => {
     expect(calls[0]!.auth).toBe('Bearer idp-token-abc')
     expect(calls[0]!.body).toMatchObject({ body: 'refused: injection', reply_to: 'm-1' })
   })
+
+  it('wires a dispatchTurn that drives the per-thread ThreadSession', () => {
+    writeIdentity(home, {
+      email: 'backend@id.openape.ai',
+      idp: 'https://id.openape.ai',
+      owner_email: 'patrick@hofmann.eco',
+    })
+
+    const ctx = resolveAgentRuntimeContext(entryWithHome('backend', home), {
+      APE_CHAT_BRIDGE_MODEL: 'claude-haiku-4-5',
+      LITELLM_API_KEY: 'sk-test',
+    })
+
+    // The seam is now wired in production — previously left unset until the
+    // ThreadSession dispatcher landed.
+    expect(ctx.dispatchTurn).toBeInstanceOf(Function)
+  })
+
+  it('dispatchTurn fails loudly and runs no turn when no LiteLLM key is set', () => {
+    writeIdentity(home, {
+      email: 'backend@id.openape.ai',
+      idp: 'https://id.openape.ai',
+      owner_email: 'patrick@hofmann.eco',
+    })
+
+    const lines: string[] = []
+    const ctx = resolveAgentRuntimeContext(
+      entryWithHome('backend', home),
+      { APE_CHAT_BRIDGE_MODEL: 'claude-haiku-4-5' },
+      line => lines.push(line),
+    )
+
+    // No key → no thread is opened, no network is touched; the turn is refused
+    // with a loud log instead of being silently swallowed.
+    ctx.dispatchTurn!({
+      id: 'm-1',
+      roomId: 'chat-1',
+      threadId: 'main',
+      senderEmail: 'patrick@hofmann.eco',
+      senderAct: 'human',
+      body: 'hello',
+      replyTo: null,
+      createdAt: 0,
+      editedAt: null,
+    })
+
+    expect(lines.some(l => l.includes('cannot dispatch') && l.includes('backend'))).toBe(true)
+  })
 })
