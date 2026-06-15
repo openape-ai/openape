@@ -105,4 +105,17 @@ export class AgentSession {
       editedAt: typeof payload.editedAt === 'number' ? payload.editedAt : null,
     }
   }
+
+  /**
+   * Whether a translated {@link TroopMessage} is this agent's own echo. troop
+   * fans every chat message back to the socket that sent it, so the agent sees
+   * its own replies; feeding those into the loop would be an infinite feedback
+   * cycle. Ports the bridge's `handleInbound` guard (`senderEmail === selfEmail`)
+   * — the canonical home for the self-echo rule once the nest drives the
+   * connection: the runLoop-dispatch increment skips own echoes before it runs
+   * the loop, with no second copy of the comparison.
+   */
+  isOwnEcho(message: TroopMessage): boolean {
+    return message.senderEmail === this.email
+  }
 }
