@@ -142,3 +142,27 @@ describe('AgentSession.toMessage', () => {
     expect(msg.body).toBe('')
   })
 })
+
+describe('AgentSession.isOwnEcho', () => {
+  const session = new AgentSession(
+    'agent@example.com',
+    'owner@example.com',
+    {} as BridgeConfig,
+  )
+
+  it('flags a message the agent translated from its own agent-role payload', () => {
+    const echo = session.toMessage({
+      chatId: 'chat-1',
+      payload: { id: 'm1', role: 'agent', body: 'self', createdAt: 1700000000 },
+    })
+    expect(session.isOwnEcho(echo)).toBe(true)
+  })
+
+  it('does not flag a human (owner) message', () => {
+    const inbound = session.toMessage({
+      chatId: 'chat-1',
+      payload: { id: 'm2', body: 'hi', createdAt: 1700000001 },
+    })
+    expect(session.isOwnEcho(inbound)).toBe(false)
+  })
+})
