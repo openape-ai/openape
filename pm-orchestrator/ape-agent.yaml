@@ -80,6 +80,6 @@ tools:
   - http.post
   - file.read
   - tasks.list
-  - tasks.update
+  - tasks.create
   - agent.spawn
   - agent.destroy
