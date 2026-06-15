@@ -252,3 +252,21 @@ describe('AgentSession.screenInjection', () => {
     expect(fromOther.threshold).toBeLessThan(fromOwner.threshold)
   })
 })
+
+describe('AgentSession.refusalText', () => {
+  const session = new AgentSession(
+    'agent@example.com',
+    'owner@example.com',
+    {} as BridgeConfig,
+  )
+
+  it('returns the bare refusal when no reason is given', () => {
+    expect(session.refusalText(undefined))
+      .toBe('I won\'t process this message — it looks like a prompt-injection attempt.')
+  })
+
+  it('appends the matched reason so the owner sees why it was blocked', () => {
+    expect(session.refusalText('instruction-override'))
+      .toBe('I won\'t process this message — it looks like a prompt-injection attempt.\n\n(matched: instruction-override)')
+  })
+})
