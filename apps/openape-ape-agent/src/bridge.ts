@@ -47,12 +47,17 @@ import type { RuntimeConfig } from '@openape/apes'
 import { startSecretsWatcher } from '@openape/apes'
 import type { BridgeConfig } from './bridge-config'
 import { readConfig } from './bridge-config'
+import type { ChatBackend } from './troop-chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { composeSystemPrompt } from './skills'
 import { ThreadSession } from './thread-session'
 import { AgentSession } from './agent-session'
+import type { Message } from './channel'
+import { createTelegramTransport } from './telegram-api'
+import { TelegramChatApi } from './telegram-chat-api'
+import { TelegramChannel } from './telegram-channel'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
 
@@ -100,18 +105,6 @@ const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 const ALLOWLIST_POLL_INTERVAL_MS = 30_000
-
-interface Message {
-  id: string
-  roomId: string
-  threadId: string
-  senderEmail: string
-  senderAct: 'human' | 'agent'
-  body: string
-  replyTo: string | null
-  createdAt: number
-  editedAt: number | null
-}
 
 async function getIdentity(): Promise<{ email: string }> {
   const idp = await ensureFreshIdpAuth()
@@ -190,6 +183,30 @@ class Bridge {
     return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
   }
 
+  /**
+   * Start the per-agent chat adapters configured via sealed secrets (today:
+   * Telegram). Each runs its own long-lived inbound loop concurrently with
+   * the troop WebSocket and feeds messages through the same handleInbound
+   * choke-point, but with its own backend so replies go back to that channel.
+   * Fire-and-forget: a channel crash is logged, never takes the bridge down.
+   */
+  startExtraChannels(): void {
+    const tg = this.cfg.telegram
+    if (!tg) return
+    const call = createTelegramTransport(tg.botToken)
+    const backend = new TelegramChatApi(call)
+    const channel = new TelegramChannel({
+      call,
+      ownerUserId: tg.ownerUserId,
+      ownerEmail: this.ownerEmail,
+      backend,
+      log,
+    })
+    void channel.start((msg, b) => this.handleInbound(msg, b)).catch((err) => {
+      log(`telegram channel crashed: ${err instanceof Error ? err.message : String(err)}`)
+    })
+  }
+
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {
     const contacts = await this.chat.listContacts()
     const ownerLower = this.ownerEmail.toLowerCase()
@@ -255,7 +272,13 @@ class Bridge {
     }
   }
 
-  async handleInbound(msg: Message): Promise<void> {
+  /**
+   * Handle one inbound message from any channel. `backend` is the channel's
+   * own outbound surface (troop or telegram) — refusals and the agent's reply
+   * go back out through it, so the agent communicates on the same channel it
+   * was reached on.
+   */
+  async handleInbound(msg: Message, backend: ChatBackend): Promise<void> {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
@@ -282,7 +305,7 @@ class Bridge {
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
-        await this.chat.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
+        await backend.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
           replyTo: msg.id,
           threadId: msg.threadId,
         })
@@ -294,18 +317,18 @@ class Bridge {
       return
     }
 
-    const session = this.getOrCreateThread(msg.roomId, msg.threadId)
+    const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
   }
 
-  private getOrCreateThread(roomId: string, threadId: string): ThreadSession {
+  private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
     const key = `${roomId}:${threadId}`
     let s = this.threads.get(key)
     if (s) return s
     s = new ThreadSession({
       roomId,
       threadId,
-      chat: this.chat,
+      chat: backend,
       runtimeConfig: this.runtimeConfig(),
       // Resolve tools + systemPrompt on every turn from agent.json
       // (latest sync from troop). Owner edits in the troop UI thus
@@ -366,7 +389,7 @@ class Bridge {
         // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
         // Translate to the bridge's internal Message shape.
         const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
-        void this.handleInbound(msg)
+        void this.handleInbound(msg, this.chat)
       })
 
       ws.on('close', () => {
@@ -414,6 +437,9 @@ async function main(): Promise<void> {
   )
 
   const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail, session)
+  // Telegram (and future adapters) run their own inbound loop alongside the
+  // troop WebSocket reconnect loop below.
+  bridge.startExtraChannels()
   let attempt = 0
   while (true) {
     try {

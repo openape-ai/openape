@@ -14,6 +14,17 @@ const DEFAULT_SYSTEM_PROMPT
 const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
 export type ReasoningEffort = typeof REASONING_EFFORTS[number]
 
+/**
+ * Telegram chat-adapter config. Present only when the owner has bound a bot
+ * token to this agent (delivered as a sealed secret → bridge env). Its mere
+ * presence activates the Telegram channel — no separate toggle.
+ */
+export interface TelegramConfig {
+  botToken: string
+  /** The one Telegram user id allowed to drive the bot. */
+  ownerUserId: number
+}
+
 export interface BridgeConfig {
   endpoint: string
   apesBin: string
@@ -27,6 +38,27 @@ export interface BridgeConfig {
   tools: string[]
   maxSteps: number
   roomFilter?: string
+  /** Optional Telegram adapter — set when TELEGRAM_BOT_TOKEN is in the env. */
+  telegram?: TelegramConfig
+}
+
+/**
+ * Read the optional Telegram adapter config. Activation is by secret-presence:
+ * `TELEGRAM_BOT_TOKEN` present → adapter on. We hard-fail if the owner lock
+ * (`TELEGRAM_OWNER_USER_ID`) is missing or non-numeric so an open, unlocked bot
+ * can never start by accident.
+ */
+function readTelegramConfig(env: NodeJS.ProcessEnv): TelegramConfig | undefined {
+  const botToken = env.TELEGRAM_BOT_TOKEN
+  if (!botToken) return undefined
+  const ownerUserId = Number.parseInt(env.TELEGRAM_OWNER_USER_ID ?? '', 10)
+  if (!Number.isInteger(ownerUserId)) {
+    throw new TypeError(
+      'TELEGRAM_BOT_TOKEN is set but TELEGRAM_OWNER_USER_ID is missing or not a number. '
+      + 'The Telegram adapter must be locked to exactly one Telegram user id.',
+    )
+  }
+  return { botToken, ownerUserId }
 }
 
 /**
@@ -70,5 +102,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
     roomFilter: env.APE_CHAT_BRIDGE_ROOM,
+    telegram: readTelegramConfig(env),
   }
 }
