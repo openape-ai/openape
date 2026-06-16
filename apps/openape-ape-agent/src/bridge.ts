@@ -44,14 +44,14 @@ import { createHeuristicDetector, decide } from '@openape/prompt-injection-detec
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
-import { startSecretsWatcher } from '@openape/apes'
+import { addReadRoot, startSecretsWatcher } from '@openape/apes'
 import type { BridgeConfig } from './bridge-config'
 import { readConfig } from './bridge-config'
 import type { ChatBackend } from './troop-chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
-import { composeSystemPrompt } from './skills'
+import { composeSystemPrompt, defaultSkillsDir } from './skills'
 import { ThreadSession } from './thread-session'
 import { AgentSession } from './agent-session'
 import type { Message } from './channel'
@@ -441,6 +441,11 @@ async function main(): Promise<void> {
   }
 
   const cfg = readConfig()
+
+  // The system prompt advertises bundled skills' SKILL.md by absolute path and
+  // tells the agent to load them with file.read — which is jailed to $HOME.
+  // Whitelist the bundled skills dir as a read-only root so those loads work.
+  addReadRoot(defaultSkillsDir())
 
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
