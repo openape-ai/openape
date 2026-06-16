@@ -34,9 +34,9 @@
 //   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
 //   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import type { Detector } from '@openape/prompt-injection-detector'
@@ -44,17 +44,57 @@ import { createHeuristicDetector, decide } from '@openape/prompt-injection-detec
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
-import { startSecretsWatcher } from '@openape/apes'
+import { addReadRoot, startSecretsWatcher } from '@openape/apes'
 import type { BridgeConfig } from './bridge-config'
 import { readConfig } from './bridge-config'
+import type { ChatBackend } from './troop-chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
-import { composeSystemPrompt } from './skills'
+import { composeSystemPrompt, defaultSkillsDir } from './skills'
 import { ThreadSession } from './thread-session'
 import { AgentSession } from './agent-session'
+import type { Message } from './channel'
+import { createTelegramTransport } from './telegram-api'
+import { TelegramChatApi } from './telegram-chat-api'
+import { TelegramChannel } from './telegram-channel'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+const TELEGRAM_OWNER_PIN_PATH = join(homedir(), '.openape', 'agent', 'telegram-owner.json')
+const MEMORY_PATH = join(homedir(), '.openape', 'agent', 'MEMORY.md')
+
+/**
+ * Seed an empty MEMORY.md so the agent's cross-conversation memory works from
+ * the first turn. The default persona tells the agent to read this file at the
+ * start of every turn and append to it — but until the agent writes it once,
+ * the read fails with ENOENT. Creating it empty makes the read return ''
+ * cleanly and gives the agent a file to append to. Never clobbers an existing
+ * memory.
+ */
+function ensureMemoryFile(): void {
+  if (existsSync(MEMORY_PATH)) return
+  try {
+    mkdirSync(dirname(MEMORY_PATH), { recursive: true })
+    writeFileSync(MEMORY_PATH, '', { flag: 'wx' })
+    log('seeded empty MEMORY.md')
+  }
+  catch { /* already exists (race) or unwritable — the agent's first write will create it */ }
+}
+
+/** Read the trust-on-first-use Telegram owner pin, if one was learned before. */
+function readTelegramOwnerPin(): number | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(TELEGRAM_OWNER_PIN_PATH, 'utf8')) as { ownerUserId?: unknown }
+    return typeof parsed.ownerUserId === 'number' ? parsed.ownerUserId : undefined
+  }
+  catch { return undefined }
+}
+
+/** Persist the learned Telegram owner pin so a restart keeps the lock. */
+function writeTelegramOwnerPin(id: number): void {
+  try { writeFileSync(TELEGRAM_OWNER_PIN_PATH, JSON.stringify({ ownerUserId: id })) }
+  catch (err) { log(`failed to persist telegram owner pin: ${err instanceof Error ? err.message : String(err)}`) }
+}
 
 /**
  * Resolve the agent's system prompt at the moment we're about to send a
@@ -100,18 +140,6 @@ const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 const ALLOWLIST_POLL_INTERVAL_MS = 30_000
-
-interface Message {
-  id: string
-  roomId: string
-  threadId: string
-  senderEmail: string
-  senderAct: 'human' | 'agent'
-  body: string
-  replyTo: string | null
-  createdAt: number
-  editedAt: number | null
-}
 
 async function getIdentity(): Promise<{ email: string }> {
   const idp = await ensureFreshIdpAuth()
@@ -190,6 +218,34 @@ class Bridge {
     return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
   }
 
+  /**
+   * Start the per-agent chat adapters configured via sealed secrets (today:
+   * Telegram). Each runs its own long-lived inbound loop concurrently with
+   * the troop WebSocket and feeds messages through the same handleInbound
+   * choke-point, but with its own backend so replies go back to that channel.
+   * Fire-and-forget: a channel crash is logged, never takes the bridge down.
+   */
+  startExtraChannels(): void {
+    const tg = this.cfg.telegram
+    if (!tg) return
+    const call = createTelegramTransport(tg.botToken)
+    const backend = new TelegramChatApi(call)
+    const channel = new TelegramChannel({
+      call,
+      ownerUserId: tg.ownerUserId,
+      // Persist the trust-on-first-use owner pin next to agent.json so a bridge
+      // restart keeps the lock instead of re-learning (and re-opening the window).
+      loadOwnerPin: readTelegramOwnerPin,
+      saveOwnerPin: writeTelegramOwnerPin,
+      ownerEmail: this.ownerEmail,
+      backend,
+      log,
+    })
+    void channel.start((msg, b) => this.handleInbound(msg, b)).catch((err) => {
+      log(`telegram channel crashed: ${err instanceof Error ? err.message : String(err)}`)
+    })
+  }
+
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {
     const contacts = await this.chat.listContacts()
     const ownerLower = this.ownerEmail.toLowerCase()
@@ -255,7 +311,13 @@ class Bridge {
     }
   }
 
-  async handleInbound(msg: Message): Promise<void> {
+  /**
+   * Handle one inbound message from any channel. `backend` is the channel's
+   * own outbound surface (troop or telegram) — refusals and the agent's reply
+   * go back out through it, so the agent communicates on the same channel it
+   * was reached on.
+   */
+  async handleInbound(msg: Message, backend: ChatBackend): Promise<void> {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
@@ -282,7 +344,7 @@ class Bridge {
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
-        await this.chat.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
+        await backend.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
           replyTo: msg.id,
           threadId: msg.threadId,
         })
@@ -294,18 +356,18 @@ class Bridge {
       return
     }
 
-    const session = this.getOrCreateThread(msg.roomId, msg.threadId)
+    const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
   }
 
-  private getOrCreateThread(roomId: string, threadId: string): ThreadSession {
+  private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
     const key = `${roomId}:${threadId}`
     let s = this.threads.get(key)
     if (s) return s
     s = new ThreadSession({
       roomId,
       threadId,
-      chat: this.chat,
+      chat: backend,
       runtimeConfig: this.runtimeConfig(),
       // Resolve tools + systemPrompt on every turn from agent.json
       // (latest sync from troop). Owner edits in the troop UI thus
@@ -366,7 +428,7 @@ class Bridge {
         // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
         // Translate to the bridge's internal Message shape.
         const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
-        void this.handleInbound(msg)
+        void this.handleInbound(msg, this.chat)
       })
 
       ws.on('close', () => {
@@ -384,18 +446,28 @@ class Bridge {
 }
 
 async function main(): Promise<void> {
-  const cfg = readConfig()
-
   // Materialize sealed secrets (secrets.d/*.blob) into this process's env
   // before the agent loop starts, then watch for rotate/revoke. Without
   // this the agent's bash tools never see delivered secrets like
   // FORGEJO_TOKEN — the blobs survive a nest recreate but stay sealed.
+  // Runs BEFORE readConfig so secret-delivered config (e.g. the Telegram
+  // bot token) is in env when the config is read.
   try {
     startSecretsWatcher({ log: m => log(m) })
   }
   catch (err) {
     log(`secrets watcher failed to start: ${err instanceof Error ? err.message : String(err)}`)
   }
+
+  const cfg = readConfig()
+
+  // The system prompt advertises bundled skills' SKILL.md by absolute path and
+  // tells the agent to load them with file.read — which is jailed to $HOME.
+  // Whitelist the bundled skills dir as a read-only root so those loads work.
+  addReadRoot(defaultSkillsDir())
+
+  // Make the agent's cross-conversation memory usable from turn one.
+  ensureMemoryFile()
 
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
@@ -414,6 +486,9 @@ async function main(): Promise<void> {
   )
 
   const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail, session)
+  // Telegram (and future adapters) run their own inbound loop alongside the
+  // troop WebSocket reconnect loop below.
+  bridge.startExtraChannels()
   let attempt = 0
   while (true) {
     try {
