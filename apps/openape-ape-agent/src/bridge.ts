@@ -34,7 +34,7 @@
 //   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
 //   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -60,6 +60,22 @@ import { TelegramChatApi } from './telegram-chat-api'
 import { TelegramChannel } from './telegram-channel'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+const TELEGRAM_OWNER_PIN_PATH = join(homedir(), '.openape', 'agent', 'telegram-owner.json')
+
+/** Read the trust-on-first-use Telegram owner pin, if one was learned before. */
+function readTelegramOwnerPin(): number | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(TELEGRAM_OWNER_PIN_PATH, 'utf8')) as { ownerUserId?: unknown }
+    return typeof parsed.ownerUserId === 'number' ? parsed.ownerUserId : undefined
+  }
+  catch { return undefined }
+}
+
+/** Persist the learned Telegram owner pin so a restart keeps the lock. */
+function writeTelegramOwnerPin(id: number): void {
+  try { writeFileSync(TELEGRAM_OWNER_PIN_PATH, JSON.stringify({ ownerUserId: id })) }
+  catch (err) { log(`failed to persist telegram owner pin: ${err instanceof Error ? err.message : String(err)}`) }
+}
 
 /**
  * Resolve the agent's system prompt at the moment we're about to send a
@@ -198,6 +214,10 @@ class Bridge {
     const channel = new TelegramChannel({
       call,
       ownerUserId: tg.ownerUserId,
+      // Persist the trust-on-first-use owner pin next to agent.json so a bridge
+      // restart keeps the lock instead of re-learning (and re-opening the window).
+      loadOwnerPin: readTelegramOwnerPin,
+      saveOwnerPin: writeTelegramOwnerPin,
       ownerEmail: this.ownerEmail,
       backend,
       log,

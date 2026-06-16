@@ -21,8 +21,13 @@ export type ReasoningEffort = typeof REASONING_EFFORTS[number]
  */
 export interface TelegramConfig {
   botToken: string
-  /** The one Telegram user id allowed to drive the bot. */
-  ownerUserId: number
+  /**
+   * The one Telegram user id allowed to drive the bot. Optional: when unset,
+   * the channel pins the first user who messages it as the owner (trust on
+   * first use) and persists that — so the owner only has to supply the token.
+   * Set it explicitly to hard-lock without the first-contact step.
+   */
+  ownerUserId?: number
 }
 
 export interface BridgeConfig {
@@ -44,19 +49,19 @@ export interface BridgeConfig {
 
 /**
  * Read the optional Telegram adapter config. Activation is by secret-presence:
- * `TELEGRAM_BOT_TOKEN` present → adapter on. We hard-fail if the owner lock
- * (`TELEGRAM_OWNER_USER_ID`) is missing or non-numeric so an open, unlocked bot
- * can never start by accident.
+ * `TELEGRAM_BOT_TOKEN` present → adapter on. The owner lock
+ * (`TELEGRAM_OWNER_USER_ID`) is optional — absent means trust-on-first-use
+ * (the channel pins the first messager). A *present but non-numeric* value is
+ * a misconfiguration we surface rather than silently fall back to TOFU.
  */
 function readTelegramConfig(env: NodeJS.ProcessEnv): TelegramConfig | undefined {
   const botToken = env.TELEGRAM_BOT_TOKEN
   if (!botToken) return undefined
-  const ownerUserId = Number.parseInt(env.TELEGRAM_OWNER_USER_ID ?? '', 10)
+  const raw = env.TELEGRAM_OWNER_USER_ID
+  if (raw === undefined || raw === '') return { botToken }
+  const ownerUserId = Number.parseInt(raw, 10)
   if (!Number.isInteger(ownerUserId)) {
-    throw new TypeError(
-      'TELEGRAM_BOT_TOKEN is set but TELEGRAM_OWNER_USER_ID is missing or not a number. '
-      + 'The Telegram adapter must be locked to exactly one Telegram user id.',
-    )
+    throw new TypeError(`TELEGRAM_OWNER_USER_ID is set but not a number: ${JSON.stringify(raw)}`)
   }
   return { botToken, ownerUserId }
 }
