@@ -8,13 +8,18 @@ describe('readConfig — Telegram adapter activation', () => {
     expect(readConfig({ ...base }).telegram).toBeUndefined()
   })
 
-  it('activates the adapter when both bot token and owner id are set', () => {
+  it('hard-locks the owner when an explicit numeric id is given', () => {
     const cfg = readConfig({ ...base, TELEGRAM_BOT_TOKEN: 'secret:123', TELEGRAM_OWNER_USER_ID: '111' })
     expect(cfg.telegram).toEqual({ botToken: 'secret:123', ownerUserId: 111 })
   })
 
-  it('hard-fails when a bot token is set without a numeric owner lock', () => {
-    expect(() => readConfig({ ...base, TELEGRAM_BOT_TOKEN: 'secret:123' })).toThrow(/TELEGRAM_OWNER_USER_ID/)
+  it('activates with token alone — owner is learned on first contact (TOFU)', () => {
+    const cfg = readConfig({ ...base, TELEGRAM_BOT_TOKEN: 'secret:123' })
+    expect(cfg.telegram).toEqual({ botToken: 'secret:123' })
+    expect(cfg.telegram?.ownerUserId).toBeUndefined()
+  })
+
+  it('surfaces a present-but-non-numeric owner id rather than silently falling back to TOFU', () => {
     expect(() => readConfig({ ...base, TELEGRAM_BOT_TOKEN: 'secret:123', TELEGRAM_OWNER_USER_ID: 'nope' })).toThrow(/TELEGRAM_OWNER_USER_ID/)
   })
 })

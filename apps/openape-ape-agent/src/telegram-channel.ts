@@ -36,8 +36,15 @@ interface TgUpdate {
 
 export interface TelegramChannelDeps {
   call: TelegramTransport
-  /** Only this Telegram user may drive the bot — everyone else is refused. */
-  ownerUserId: number
+  /**
+   * The Telegram user id allowed to drive the bot. When undefined, the channel
+   * trusts the first user who messages it (TOFU) and pins them via saveOwnerPin.
+   */
+  ownerUserId?: number
+  /** Load a previously-pinned owner id (e.g. from disk) so a restart keeps the lock. */
+  loadOwnerPin?: () => number | undefined
+  /** Persist a freshly-pinned owner id. */
+  saveOwnerPin?: (id: number) => void
   /** The agent's owner email — stamped on inbound so the injection gate treats it as the owner. */
   ownerEmail: string
   backend: ChatBackend
@@ -53,8 +60,13 @@ export class TelegramChannel implements Channel {
   private offset = 0
   // Chats we've already told "not authorized" — one hint per chat, not per message.
   private warned = new Set<number>()
+  // The locked owner: explicit id, else a previously-pinned one, else undefined
+  // until the first message pins it (TOFU).
+  private owner: number | undefined
 
-  constructor(private deps: TelegramChannelDeps) {}
+  constructor(private deps: TelegramChannelDeps) {
+    this.owner = deps.ownerUserId ?? deps.loadOwnerPin?.()
+  }
 
   async start(onInbound: InboundHandler): Promise<void> {
     await this.skipBacklog()
@@ -102,8 +114,17 @@ export class TelegramChannel implements Channel {
   private async dispatch(u: TgUpdate, onInbound: InboundHandler): Promise<void> {
     const m = u.message
     if (!m || typeof m.text !== 'string' || m.text.length === 0) return
+    const from = m.from?.id
+    if (from === undefined) return
 
-    if (m.from?.id !== this.deps.ownerUserId) {
+    if (this.owner === undefined) {
+      // Trust on first use: the first user to message a freshly-bound bot is
+      // its owner (in practice the person who just created it). Pin + persist.
+      this.owner = from
+      this.deps.saveOwnerPin?.(from)
+      this.deps.log(`telegram: owner pinned to user ${from} on first contact`)
+    }
+    else if (from !== this.owner) {
       await this.refuseStranger(m)
       return
     }
