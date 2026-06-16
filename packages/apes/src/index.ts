@@ -49,7 +49,7 @@ export { CliError, CliExit } from './errors'
 // Agent-runtime: callable in-process from the chat-bridge so it doesn't
 // need to spawn `apes agents serve --rpc` per turn. Same loop the
 // stdio-RPC server runs internally — see commands/agents/serve.ts.
-export { runLoop, RpcSessionMap, taskTools, TOOLS, runApeShell } from '@openape/agent-runtime'
+export { runLoop, RpcSessionMap, taskTools, TOOLS, runApeShell, addReadRoot } from '@openape/agent-runtime'
 export type {
   ChatMessage,
   RunOptions,

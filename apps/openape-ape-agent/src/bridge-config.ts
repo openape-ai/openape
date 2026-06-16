@@ -14,6 +14,22 @@ const DEFAULT_SYSTEM_PROMPT
 const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
 export type ReasoningEffort = typeof REASONING_EFFORTS[number]
 
+/**
+ * Telegram chat-adapter config. Present only when the owner has bound a bot
+ * token to this agent (delivered as a sealed secret → bridge env). Its mere
+ * presence activates the Telegram channel — no separate toggle.
+ */
+export interface TelegramConfig {
+  botToken: string
+  /**
+   * The one Telegram user id allowed to drive the bot. Optional: when unset,
+   * the channel pins the first user who messages it as the owner (trust on
+   * first use) and persists that — so the owner only has to supply the token.
+   * Set it explicitly to hard-lock without the first-contact step.
+   */
+  ownerUserId?: number
+}
+
 export interface BridgeConfig {
   endpoint: string
   apesBin: string
@@ -27,6 +43,27 @@ export interface BridgeConfig {
   tools: string[]
   maxSteps: number
   roomFilter?: string
+  /** Optional Telegram adapter — set when TELEGRAM_BOT_TOKEN is in the env. */
+  telegram?: TelegramConfig
+}
+
+/**
+ * Read the optional Telegram adapter config. Activation is by secret-presence:
+ * `TELEGRAM_BOT_TOKEN` present → adapter on. The owner lock
+ * (`TELEGRAM_OWNER_USER_ID`) is optional — absent means trust-on-first-use
+ * (the channel pins the first messager). A *present but non-numeric* value is
+ * a misconfiguration we surface rather than silently fall back to TOFU.
+ */
+function readTelegramConfig(env: NodeJS.ProcessEnv): TelegramConfig | undefined {
+  const botToken = env.TELEGRAM_BOT_TOKEN
+  if (!botToken) return undefined
+  const raw = env.TELEGRAM_OWNER_USER_ID
+  if (raw === undefined || raw === '') return { botToken }
+  const ownerUserId = Number.parseInt(raw, 10)
+  if (!Number.isInteger(ownerUserId)) {
+    throw new TypeError(`TELEGRAM_OWNER_USER_ID is set but not a number: ${JSON.stringify(raw)}`)
+  }
+  return { botToken, ownerUserId }
 }
 
 /**
@@ -70,5 +107,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     tools,
     maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
     roomFilter: env.APE_CHAT_BRIDGE_ROOM,
+    telegram: readTelegramConfig(env),
   }
 }
