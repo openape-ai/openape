@@ -22,6 +22,8 @@ import { tasksTools } from './tasks'
 import { timeTools } from './time'
 import { verifyTools } from './verify'
 
+export { addReadRoot } from './file'
+
 export interface ToolDefinition {
   name: string
   description: string
