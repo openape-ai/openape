@@ -427,18 +427,20 @@ class Bridge {
 }
 
 async function main(): Promise<void> {
-  const cfg = readConfig()
-
   // Materialize sealed secrets (secrets.d/*.blob) into this process's env
   // before the agent loop starts, then watch for rotate/revoke. Without
   // this the agent's bash tools never see delivered secrets like
   // FORGEJO_TOKEN — the blobs survive a nest recreate but stay sealed.
+  // Runs BEFORE readConfig so secret-delivered config (e.g. the Telegram
+  // bot token) is in env when the config is read.
   try {
     startSecretsWatcher({ log: m => log(m) })
   }
   catch (err) {
     log(`secrets watcher failed to start: ${err instanceof Error ? err.message : String(err)}`)
   }
+
+  const cfg = readConfig()
 
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
