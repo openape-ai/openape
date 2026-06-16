@@ -5,10 +5,30 @@ import type { ToolDefinition } from './index'
 
 const MAX_BYTES = 1024 * 1024
 
-// All file ops are jailed inside the agent's $HOME. Path traversal
-// (`..`) is blocked by resolving the requested path against the home
-// dir and asserting the resolved path is still inside it.
-function jailPath(input: unknown): string {
+// Extra absolute roots that file.READ may reach beyond $HOME — e.g. the
+// bundled default-skills dir whose SKILL.md files the system prompt tells the
+// agent to load via file.read. Read-only: file.write/file.edit stay jailed to
+// $HOME. Registered once at process start (in-process, so no env forwarding).
+const extraReadRoots = new Set<string>()
+
+/**
+ * Allow file.read to read under an additional absolute root (read-only —
+ * writes stay jailed to $HOME). Idempotent. The bridge registers the bundled
+ * default-skills dir here so the advertised `<location>` paths are readable.
+ */
+export function addReadRoot(absPath: string): void {
+  if (typeof absPath === 'string' && absPath.startsWith('/')) extraReadRoots.add(normalize(absPath))
+}
+
+function isUnder(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}/`)
+}
+
+// File ops are jailed inside the agent's $HOME. Path traversal (`..`) is
+// blocked by resolving against the home dir and asserting containment.
+// `allowReadRoots` additionally permits the registered read-only roots — passed
+// only by file.read, never by write/edit.
+function jailPath(input: unknown, opts: { allowReadRoots?: boolean } = {}): string {
   if (typeof input !== 'string' || input === '') {
     throw new Error('path must be a non-empty string')
   }
@@ -19,16 +39,19 @@ function jailPath(input: unknown): string {
     : input.startsWith('/')
       ? normalize(input)
       : resolve(home, input)
-  if (candidate !== home && !candidate.startsWith(`${home}/`)) {
-    throw new Error(`path "${input}" resolves outside the agent's home`)
+  if (isUnder(candidate, home)) return candidate
+  if (opts.allowReadRoots) {
+    for (const root of extraReadRoots) {
+      if (isUnder(candidate, root)) return candidate
+    }
   }
-  return candidate
+  throw new Error(`path "${input}" resolves outside the agent's home`)
 }
 
 export const fileTools: ToolDefinition[] = [
   {
     name: 'file.read',
-    description: 'Read a UTF-8 file from the agent\'s home directory ($HOME). Capped at 1MB. Path traversal blocked.',
+    description: 'Read a UTF-8 file from the agent\'s home directory ($HOME) or a bundled skill directory (e.g. a skill\'s SKILL.md). Capped at 1MB. Path traversal blocked.',
     parameters: {
       type: 'object',
       properties: {
@@ -38,7 +61,7 @@ export const fileTools: ToolDefinition[] = [
     },
     execute: async (args: unknown) => {
       const a = args as { path: string }
-      const p = jailPath(a.path)
+      const p = jailPath(a.path, { allowReadRoots: true })
       const content = readFileSync(p, 'utf8')
       if (Buffer.byteLength(content, 'utf8') > MAX_BYTES) {
         return { path: p, truncated: true, content: content.slice(0, MAX_BYTES) }
