@@ -34,9 +34,9 @@
 //   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
 //   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import type { Detector } from '@openape/prompt-injection-detector'
@@ -61,6 +61,25 @@ import { TelegramChannel } from './telegram-channel'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
 const TELEGRAM_OWNER_PIN_PATH = join(homedir(), '.openape', 'agent', 'telegram-owner.json')
+const MEMORY_PATH = join(homedir(), '.openape', 'agent', 'MEMORY.md')
+
+/**
+ * Seed an empty MEMORY.md so the agent's cross-conversation memory works from
+ * the first turn. The default persona tells the agent to read this file at the
+ * start of every turn and append to it — but until the agent writes it once,
+ * the read fails with ENOENT. Creating it empty makes the read return ''
+ * cleanly and gives the agent a file to append to. Never clobbers an existing
+ * memory.
+ */
+function ensureMemoryFile(): void {
+  if (existsSync(MEMORY_PATH)) return
+  try {
+    mkdirSync(dirname(MEMORY_PATH), { recursive: true })
+    writeFileSync(MEMORY_PATH, '', { flag: 'wx' })
+    log('seeded empty MEMORY.md')
+  }
+  catch { /* already exists (race) or unwritable — the agent's first write will create it */ }
+}
 
 /** Read the trust-on-first-use Telegram owner pin, if one was learned before. */
 function readTelegramOwnerPin(): number | undefined {
@@ -446,6 +465,9 @@ async function main(): Promise<void> {
   // tells the agent to load them with file.read — which is jailed to $HOME.
   // Whitelist the bundled skills dir as a read-only root so those loads work.
   addReadRoot(defaultSkillsDir())
+
+  // Make the agent's cross-conversation memory usable from turn one.
+  ensureMemoryFile()
 
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
