@@ -29,7 +29,11 @@ _MASTER = os.environ.get("LITELLM_MASTER_KEY", "")
 _AUD = "llms.openape.ai"
 _ISS = "llms.openape.ai"
 
-_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"]
+_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "LocalCore-Instant", "LocalCore-Thinking"]
+# Accounts whose upstream serves a different model set than the codex default.
+_ACCOUNT_MODELS = {
+    "headwai": ["LocalCore-Instant", "LocalCore-Thinking"],
+}
 _DEFAULT_ACCOUNT = "lindeverlag"
 
 
@@ -62,9 +66,10 @@ def _verify_hs256(token: str) -> dict:
 
 
 def models_for_account(account: str) -> list:
+    base = _ACCOUNT_MODELS.get(account, _MODELS)
     if account == _DEFAULT_ACCOUNT:
-        return list(_MODELS)
-    return [f"{account}/{m}" for m in _MODELS]
+        return list(base)
+    return [f"{account}/{m}" for m in base]
 
 
 def resolve_models(account: str, accounts) -> list:
@@ -113,6 +118,8 @@ if __name__ == "__main__":
     # Self-check (pure-function policy). Run: python3 ddisa_auth.py
     assert models_for_account("lindeverlag") == _MODELS
     assert models_for_account("delta-mind") == [f"delta-mind/{m}" for m in _MODELS]
+    assert models_for_account("headwai") == ["headwai/LocalCore-Instant", "headwai/LocalCore-Thinking"]
+    assert resolve_models("headwai", ["headwai"]) == ["headwai/LocalCore-Instant", "headwai/LocalCore-Thinking"]
     # granted account -> allowed
     assert resolve_models("lindeverlag", ["lindeverlag"]) == _MODELS
     assert resolve_models("delta-mind", ["lindeverlag", "delta-mind"]) == [f"delta-mind/{m}" for m in _MODELS]
@@ -127,3 +134,25 @@ if __name__ == "__main__":
         except ValueError:
             pass
     print("ddisa_auth.py: all policy checks passed")
+
+
+# --- Reasoning-strip pre-call hook -------------------------------------------
+# litellm routes a request carrying BOTH `tools` and `reasoning_effort` to the
+# provider's /v1/responses endpoint; codex-proxy only implements
+# /v1/chat/completions -> 404 "not found". codex-proxy ignores reasoning anyway,
+# so strip reasoning_effort/reasoning here (before litellm picks the endpoint)
+# to keep every request on /chat/completions. Guarded so the standalone policy
+# self-test (no litellm installed) still imports.
+try:
+    from litellm.integrations.custom_logger import CustomLogger as _CL
+
+    class _ReasoningStrip(_CL):
+        async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+            if isinstance(data, dict):
+                data.pop("reasoning_effort", None)
+                data.pop("reasoning", None)
+            return data
+
+    proxy_handler_instance = _ReasoningStrip()
+except Exception:
+    proxy_handler_instance = None
