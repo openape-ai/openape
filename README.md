@@ -94,6 +94,44 @@ Not org personas, but shipped in this catalog for direct deploy:
 | [service-agent](service-agent/) | Drains a service provider's A2A task queue (`/api/agent/tasks/next`) every minute. |
 | [bluesky-summary](bluesky-summary/) | Twice-daily Bluesky timeline digest. |
 
+## Understanding catalog.json
+
+The `catalog.json` file is the source of truth for all persona definitions:
+
+```json
+{
+  "version": "v0.2.0",
+  "repo": "github.com/openape-ai/agent-catalog",
+  "categories": [...],
+  "personas": [...]
+}
+```
+
+**Key fields:**
+- `version` — Catalog version (ORG pins to this)
+- `categories` — 7 functional groups (leadership, engineering, etc.)
+- `personas` — 29 persona definitions with `key`, `title`, `role`, `category`, `icon`, `summary`, `coding`, `cadence`, `recipeRef`
+
+See [`docs/PERSONAS.md`](docs/PERSONAS.md) for complete documentation.
+
+## ORG Composition
+
+An ORG is composed by spawning agents from this catalog. Each member has:
+- A **persona** (from catalog)
+- A **role** (`ceo`, `teamlead`, `specialist`, `sanierer`)
+- An **email** (DDISA identity)
+- A **reportsTo** relationship (optional)
+
+**Example: OpenApe Werkstatt** (6 members)
+| Agent | Persona | Role | Reports To |
+|-------|---------|------|------------|
+| ceo | CEO | ceo | — |
+| pm | Product Manager | teamlead | — |
+| cfo | Finance Controller | sanierer | — |
+| backend | Backend Engineer | specialist | pm |
+| qa | QA Engineer | specialist | pm |
+| scribe | Technical Writer | specialist | pm |
+
 ## Go live
 1. Push this directory to `github.com/openape-ai/agent-catalog`.
 2. Tag the release: `git tag v0.2.0 && git push --tags`.

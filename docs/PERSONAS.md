@@ -131,3 +131,96 @@ To regenerate persona recipes:
 1. Edit `_build/personas.mjs`
 2. Run `node _build/generate.mjs`
 3. Validate: `apps/openape-troop` → `pnpm tsx scripts/validate-catalog.ts`
+
+## Understanding catalog.json
+
+The `catalog.json` file is the source of truth for all persona definitions. It contains:
+
+### Structure
+
+```json
+{
+  "version": "v0.2.0",
+  "repo": "github.com/openape-ai/agent-catalog",
+  "categories": [...],
+  "personas": [...]
+}
+```
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Catalog version (e.g., `v0.2.0`) — ORG pins to this version |
+| `repo` | string | Repository reference for the catalog |
+| `categories` | array | Groups personas by function (7 categories) |
+| `personas` | array | All 29 persona definitions |
+
+### Persona Object Fields
+
+Each persona in the `personas` array has:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | string | Unique identifier (e.g., `backend-engineer`) |
+| `title` | string | Human-readable name (e.g., `Backend Engineer`) |
+| `role` | string | ORG structural role: `ceo`, `teamlead`, `specialist`, `sanierer` |
+| `category` | string | Category key from `categories` array |
+| `icon` | string | Lucide icon class (e.g., `i-lucide-server`) |
+| `summary` | string | One-line description of the persona's purpose |
+| `coding` | boolean | Whether the persona can perform coding tasks |
+| `cadence` | string | Cron schedule for autonomous polling (e.g., `*/15 * * * *`) |
+| `recipeRef` | string | Pinned recipe reference (e.g., `github.com/openape-ai/agent-catalog/backend-engineer@v0.2.0`) |
+
+### Categories
+
+The catalog has 7 categories:
+
+| Key | Label | Personas |
+|-----|-------|----------|
+| `leadership` | Leadership & Coordination | 5 |
+| `engineering` | Engineering | 13 |
+| `design-content` | Design & Content | 3 |
+| `data-research` | Data & Research | 2 |
+| `growth-sales` | Growth & Sales | 2 |
+| `operations` | Operations & Support | 3 |
+| `finance-legal` | Finance & Legal | 2 |
+
+## ORG Composition
+
+An ORG (Organization) in OpenApe is composed by spawning agents from the persona catalog. Each spawned agent becomes a team member with:
+
+- A **persona** (from the catalog)
+- A **role** (structural position in the org chart)
+- An **email** (DDISA identity)
+- A **status** (active or retired)
+- A **reportsTo** relationship (optional, for team leads)
+
+### Example: OpenApe Werkstatt Composition
+
+The current OpenApe Werkstatt org (id: `38f8e8e9-eec5-440c-b716-6c0f8224270c`) has 6 active members:
+
+| Agent | Persona | Role | Reports To |
+|-------|---------|------|------------|
+| ceo | CEO | ceo | — |
+| pm | Product Manager | teamlead | — |
+| cfo | Finance Controller | sanierer | — |
+| backend | Backend Engineer | specialist | pm |
+| qa | QA Engineer | specialist | pm |
+| scribe | Technical Writer | specialist | pm |
+
+### Composing Your ORG
+
+To compose a company:
+
+1. **Start with leadership**: Spawn a CEO first to turn your vision into objectives.
+2. **Add team leads**: Add PM, CTO, or Engineering Manager to decompose objectives.
+3. **Fill capability gaps**: Add specialists based on what work needs to be done.
+4. **Assign tasks in the UI**: Agents autonomously pick up work from their assigned tasks.
+
+### Role Hierarchy
+
+- `ceo` — Strategic head, no reportsTo
+- `teamlead` — Decomposes objectives, routes work to specialists
+- `specialist` — Executes specific tasks, typically reports to a teamlead
+- `sanierer` — Finance controller with direct Owner access (bypasses normal hierarchy)
