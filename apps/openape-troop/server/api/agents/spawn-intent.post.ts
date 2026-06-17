@@ -23,6 +23,9 @@ const bodySchema = z.object({
   // Optional: if the owner has multiple Macs connected, pick one.
   // Omitted = first connected nest.
   host_id: z.string().optional(),
+  // Runtime that executes the agent: 'bridge' (default) or 'openclaw'
+  // (foreign one-shot runtime). Carried to the nest's `apes agents spawn --type`.
+  runtime_type: z.enum(['bridge', 'openclaw']).optional(),
   bridge_key: z.string().optional(),
   bridge_base_url: z.string().url().optional(),
   bridge_model: z.string().optional(),
@@ -58,6 +61,7 @@ export default defineEventHandler(async (event) => {
   const r = await dispatchSpawnIntent(owner, {
     name: parsed.data.name,
     hostId: parsed.data.host_id,
+    runtimeType: parsed.data.runtime_type,
     systemPrompt: parsed.data.system_prompt,
     bridge: {
       key: parsed.data.bridge_key,

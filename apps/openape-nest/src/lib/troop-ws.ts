@@ -58,6 +58,7 @@ interface SpawnIntentFrame {
   type: 'spawn-intent'
   intent_id: string
   name: string
+  runtime_type?: string
   bridge?: { key?: string, base_url?: string, model?: string, reasoning_effort?: string }
   soul?: string
   skills?: Array<{ name: string, description: string, body: string }>
@@ -318,6 +319,7 @@ export class TroopWs {
   private async handleSpawnIntent(frame: SpawnIntentFrame): Promise<void> {
     this.opts.log(`troop-ws: spawn-intent ${frame.name} (intent ${frame.intent_id})`)
     const args = ['agents', 'spawn', frame.name]
+    if (frame.runtime_type) args.push('--type', frame.runtime_type)
     if (frame.bridge?.key) args.push('--bridge-key', frame.bridge.key)
     if (frame.bridge?.base_url) args.push('--bridge-base-url', frame.bridge.base_url)
     if (frame.bridge?.model) args.push('--bridge-model', frame.bridge.model)
