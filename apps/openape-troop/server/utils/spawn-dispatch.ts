@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { materializeRecipe } from './agent-recipe'
 import { listNestPeersForOwner } from './nest-registry'
-import { buildDeployPlan, fetchRecipeManifest } from './recipe-deploy'
+import { buildDeployPlan, fetchRecipeManifest, RECIPE_AGENT_TOOLS } from './recipe-deploy'
 import { stashRecipeDeploy } from './recipe-deploys'
 import { createSpawnIntent } from './spawn-intents'
 
@@ -77,6 +77,7 @@ export async function dispatchSpawnIntent(owner: string, opts: SpawnDispatchOpti
     plan = {
       agentName: opts.name,
       systemPrompt: opts.systemPrompt,
+      tools: [...RECIPE_AGENT_TOOLS],
       schedules: [],
       requiredCapabilities: [],
     }

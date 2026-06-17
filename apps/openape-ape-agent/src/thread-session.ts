@@ -41,6 +41,14 @@ export interface ThreadSessionDeps {
   /** LiteLLM proxy + model — the bridge resolves these from its env. */
   runtimeConfig: RuntimeConfig
   /**
+   * Resolve the runtimeConfig fresh at the start of every turn. The gateway
+   * bearer is a short-lived (1h) DDISA-exchanged token; a long-lived thread
+   * that froze it at construction would present an expired token and get a
+   * 401. When provided, this is awaited per turn so the token stays fresh;
+   * falls back to the static `runtimeConfig` when absent (tests).
+   */
+  refreshRuntimeConfig?: () => Promise<RuntimeConfig>
+  /**
    * Resolve systemPrompt + tools at the start of every turn rather
    * than freezing them at construction. Lets owner edits in the
    * troop UI (which sync to `~/.openape/agent/agent.json` via
@@ -141,6 +149,12 @@ export class ThreadSession {
     // this very turn — without dropping the message history.
     const { systemPrompt, tools } = this.deps.resolveConfig()
 
+    // Resolve the runtimeConfig (gateway bearer) fresh per turn — the token
+    // is short-lived, so a frozen one on a long-lived thread expires (401).
+    const runtimeConfig = this.deps.refreshRuntimeConfig
+      ? await this.deps.refreshRuntimeConfig()
+      : this.deps.runtimeConfig
+
     // Backfill history from the chat server on the first turn after
     // this ThreadSession was created. Without this the agent only
     // remembers messages received via WS since the bridge process
@@ -168,7 +182,7 @@ export class ThreadSession {
 
     try {
       const result = await runLoop({
-        config: this.deps.runtimeConfig,
+        config: runtimeConfig,
         systemPrompt,
         userMessage: body,
         tools: taskTools(tools),
