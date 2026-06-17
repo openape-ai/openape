@@ -119,13 +119,14 @@ export class TroopApi {
     return this.request('/api/agents')
   }
 
-  spawnAgent(input: { name: string, hostId?: string, systemPrompt?: string }): Promise<IntentResult> {
+  spawnAgent(input: { name: string, hostId?: string, systemPrompt?: string, runtimeType?: 'bridge' | 'openclaw' }): Promise<IntentResult> {
     return this.request('/api/agents/spawn-intent', {
       method: 'POST',
       body: JSON.stringify({
         name: input.name,
         ...(input.hostId ? { host_id: input.hostId } : {}),
         ...(input.systemPrompt ? { system_prompt: input.systemPrompt } : {}),
+        ...(input.runtimeType ? { runtime_type: input.runtimeType } : {}),
       }),
     })
   }

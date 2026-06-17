@@ -13,7 +13,7 @@ import {
 } from '../../lib/agent-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import { getHostPlatform } from '../../lib/host-platform'
-import { upsertNestAgent } from '../../lib/nest-registry'
+import { isRuntimeType, upsertNestAgent } from '../../lib/nest-registry'
 
 function readUidOrNull(name: string): number | null {
   try {
@@ -75,6 +75,10 @@ export const spawnAgentCommand = defineCommand({
       type: 'string',
       description: 'For --kind service: idle poll interval in ms (default 2000).',
     },
+    'type': {
+      type: 'string',
+      description: 'Runtime type: "bridge" (default, our @openape/ape-agent loop, pm2-supervised) or "openclaw" (foreign one-shot runtime the nest exec\'s per message). Orthogonal to --kind.',
+    },
   },
   async run({ args }) {
     const name = args.name as string
@@ -92,6 +96,9 @@ export const spawnAgentCommand = defineCommand({
     if (isService && !servesUrl)
       throw new CliError('--kind service requires --serves <SP base URL> (e.g. https://zaz.delta-mind.at).')
     const pollMs = typeof args['poll-interval'] === 'string' ? Number.parseInt(args['poll-interval'], 10) : undefined
+    const runtimeType = typeof args.type === 'string' ? args.type : undefined
+    if (runtimeType != null && !isRuntimeType(runtimeType))
+      throw new CliError(`Invalid --type "${runtimeType}". Must be "bridge" or "openclaw".`)
 
     const auth = loadAuth()
     if (!auth) {
@@ -201,6 +208,7 @@ export const spawnAgentCommand = defineCommand({
         email: registration.email,
         registeredAt: Math.floor(Date.now() / 1000),
         kind: isService ? 'service' : undefined,
+        runtimeType,
         service: isService && servesUrl
           ? { spBaseUrl: servesUrl, pollIntervalMs: pollMs != null && Number.isFinite(pollMs) && pollMs > 0 ? pollMs : undefined }
           : undefined,

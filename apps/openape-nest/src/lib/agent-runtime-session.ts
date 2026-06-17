@@ -4,7 +4,31 @@ import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity, ThreadSession, TroopChatApi } from '@openape/ape-agent'
 import { ensureFreshIdpAuth } from '@openape/cli-auth'
 import WebSocket from 'ws'
+import type { OpenclawAgent, OpenclawRuntime } from './openclaw-adapter'
 import { resolveBridgeConfig } from './bridge-config'
+import { invokeOpenclaw, prepareOpenclawHome } from './openclaw-adapter'
+
+/** Inject the openclaw exec for tests; defaults to the real one-shot invoker. */
+export interface OpenclawTurnDeps {
+  invoke: (agent: OpenclawAgent, rt: OpenclawRuntime, message: string, sessionKey: string) => Promise<string>
+}
+
+/**
+ * Run one openclaw turn for an accepted chat message and post its reply.
+ * Exported so the integration (invoke → post) is unit-tested without a live
+ * openclaw or troop: inject `invoke`, spy on `post`.
+ */
+export async function runOpenclawTurn(
+  agent: OpenclawAgent,
+  rt: OpenclawRuntime,
+  message: Pick<TroopMessage, 'body' | 'roomId' | 'threadId' | 'id'>,
+  post: (roomId: string, text: string, opts: { replyTo: string, threadId: string }) => Promise<void>,
+  deps: OpenclawTurnDeps = { invoke: invokeOpenclaw },
+): Promise<void> {
+  const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
+  if (reply)
+    await post(message.roomId, reply, { replyTo: message.id, threadId: message.threadId })
+}
 
 /**
  * Minimal view of the troop chat WebSocket the runtime session drives — just the
@@ -156,6 +180,41 @@ export function resolveAgentRuntimeContext(
   // watchdog, and streams its reply straight back to troop via `chat` — so the
   // dispatcher returns nothing and the refusal-only `chatPoster` is untouched.
   const threads = new Map<string, ThreadSession>()
+
+  // openclaw (foreign one-shot runtime): instead of a per-thread ThreadSession,
+  // each accepted message exec's `openclaw agent --local` and we post its reply.
+  // openclaw has no daemon — the nest drives one turn per message. The agent's
+  // CLIs (apes/ape-tasks/ape-troop) are its tools and read its auth.json, so
+  // actions land under the DDISA identity. Runs as the nest user with
+  // HOME=<agent home> for now (reads the agent's auth.json) — the `sudo -u
+  // <agent>` drop is the SAME pending isolation work as the bridge's text-only
+  // limitation below; until it lands, openclaw shares that constraint.
+  if (entry.runtimeType === 'openclaw') {
+    const oclAgent = { name: entry.name, email: entry.email, home: entry.home }
+    const oclRt = { apiBase, apiKey, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
+    let prepared = false
+    return {
+      ownerEmail: readAgentIdentity(entry.home).ownerEmail,
+      bridgeConfig,
+      bearer,
+      chatPoster: async (roomId, text, opts) => {
+        await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
+      },
+      dispatchTurn: (message) => {
+        void (async () => {
+          try {
+            if (!prepared) { prepareOpenclawHome(oclAgent, oclRt); prepared = true }
+            await runOpenclawTurn(oclAgent, oclRt, message, async (roomId, text, opts) => {
+              await chat.postMessage(roomId, text, opts)
+            })
+          }
+          catch (err) {
+            log(`agent-runtime: ! ${entry.name} openclaw turn failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
+          }
+        })()
+      },
+    }
+  }
 
   return {
     ownerEmail: readAgentIdentity(entry.home).ownerEmail,
