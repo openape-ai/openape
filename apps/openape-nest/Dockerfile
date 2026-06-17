@@ -128,6 +128,15 @@ RUN npm install -g pm2
 # agent user resolves it.
 RUN npm install -g @openape/ape-tasks
 
+# ape-troop: openclaw (and bridge) agents read their company/org via the
+# `ape-troop` CLI as a tool. Installed globally so every agent user resolves it.
+RUN npm install -g @openape/ape-troop
+
+# openclaw: the foreign one-shot runtime the nest exec's for agents spawned with
+# `--type openclaw` (lib/openclaw-adapter.ts runs `openclaw agent --local`).
+# Pinned to the version the adapter's config schema was verified against.
+RUN npm install -g openclaw@2026.6.8
+
 # Symlink the binaries onto PATH so the nest's subprocess calls
 # (`apes run --as ...`, `openape-nest`, `ape-agent`) resolve without
 # further plumbing.
