@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
+import { ensureFreshIdpAuth, getAuthorizedBearer, NotLoggedInError } from '@openape/cli-auth'
 import type { Detector } from '@openape/prompt-injection-detector'
 import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
@@ -174,6 +174,11 @@ class Bridge {
   // backend later. The bridge is the choke-point for every chat message
   // before it reaches the agent runtime, so this is the right place.
   private injectionDetector: Detector = createHeuristicDetector()
+  // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
+  // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
+  // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
+  // chat threads pick up the refreshed token — drop master_key + cron-DDISA later.
+  private llmKey: string = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
 
   constructor(
     private cfg: BridgeConfig,
@@ -202,6 +207,35 @@ class Bridge {
       bearer: this.bearer,
     })
     this.cron.start()
+    // Swap the static gateway key for this agent's own DDISA token (Option E).
+    // Cached + auto-refreshed by cli-auth; fall back to the current key on any
+    // error so a flaky exchange never takes the agent offline.
+    void this.refreshLlmGatewayKey()
+    setInterval(() => void this.refreshLlmGatewayKey(), 40 * 60 * 1000)
+  }
+
+  private async refreshLlmGatewayKey(): Promise<void> {
+    const base = process.env.LITELLM_BASE_URL ?? ''
+    if (!base.includes('llms.openape.ai')) return
+    try {
+      const u = new URL(base)
+      const bearer = await getAuthorizedBearer({ endpoint: u.origin, aud: u.host })
+      this.llmKey = bearer.replace(/^Bearer\s+/i, '')
+    }
+    catch (err) {
+      log(`llm gateway token exchange failed (keeping current key): ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /**
+   * Re-exchange the gateway token (if stale) and return a fresh runtimeConfig.
+   * Thread sessions call this per turn so a long-lived thread never presents an
+   * expired DDISA token. getAuthorizedBearer is cheap when the cached SP-token
+   * is still valid and re-mints only when it's within the expiry skew.
+   */
+  private async freshRuntimeConfig(): Promise<RuntimeConfig> {
+    await this.refreshLlmGatewayKey()
+    return this.runtimeConfig()
   }
 
   /**
@@ -211,7 +245,7 @@ class Bridge {
    */
   private runtimeConfig(): RuntimeConfig {
     const apiBase = (process.env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
-    const apiKey = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
+    const apiKey = this.llmKey
     if (!apiKey) {
       throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
     }
@@ -369,6 +403,9 @@ class Bridge {
       threadId,
       chat: backend,
       runtimeConfig: this.runtimeConfig(),
+      // Re-resolve the gateway token per turn (short-lived DDISA token would
+      // otherwise expire on a long-lived thread -> 401).
+      refreshRuntimeConfig: () => this.freshRuntimeConfig(),
       // Resolve tools + systemPrompt on every turn from agent.json
       // (latest sync from troop). Owner edits in the troop UI thus
       // take effect on the very next message in an existing thread —

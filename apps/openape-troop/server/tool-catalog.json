@@ -57,7 +57,7 @@
     },
     {
       "name": "bash",
-      "description": "Run a shell command on the agent host via ape-shell. Every command goes through the DDISA grant cycle — auto-approved by a matching YOLO scope or owner push notification. Runs as the agent's macOS user; file/network access is limited to what that user can see. Returns stdout, stderr, exit code.",
+      "description": "Run a shell command on the agent host via ape-shell. Every command goes through the DDISA grant cycle \u2014 auto-approved by a matching YOLO scope or owner push notification. Runs as the agent's macOS user; file/network access is limited to what that user can see. Returns stdout, stderr, exit code.",
       "inputs": "{ cmd: string, timeout_ms?: number }",
       "risk": "high"
     },
@@ -87,7 +87,7 @@
     },
     {
       "name": "forge.pr.merge",
-      "description": "Merge a PR or arm merge-when-green (auto). Never bypasses required checks — branch protection is the server-side gate. Gated.",
+      "description": "Merge a PR or arm merge-when-green (auto). Never bypasses required checks \u2014 branch protection is the server-side gate. Gated.",
       "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string, auto?: boolean, squash?: boolean, delete_branch?: boolean }",
       "risk": "high"
     },
@@ -99,7 +99,7 @@
     },
     {
       "name": "forge.issue.get",
-      "description": "Fetch an issue (GitHub) or work-item (Azure) — title, body, labels. Gated (read).",
+      "description": "Fetch an issue (GitHub) or work-item (Azure) \u2014 title, body, labels. Gated (read).",
       "inputs": "{ forge?: 'github'|'azure', remote?: string, ref: string }",
       "risk": "low"
     },
@@ -114,6 +114,18 @@
       "description": "Destroy a worker agent on the nest (full teardown). The PM tears down ephemeral workers after collecting their result. Requires the troop:destroy-agent scope. Gated.",
       "inputs": "{ name: string }",
       "risk": "high"
+    },
+    {
+      "name": "troop.company.read",
+      "description": "Read your troop company (objectives | reports | members | cost-snapshots | overview). Authenticated as the agent; read-only.",
+      "inputs": "{ resource: string, org_id: string }",
+      "risk": "low"
+    },
+    {
+      "name": "troop.objective.upsert",
+      "description": "Create or update a company objective on troop.openape.ai (authenticated as the agent).",
+      "inputs": "{ org_id: string, objective_id?: string, title?: string, description?: string, status?: string, target_date?: number }",
+      "risk": "medium"
     }
   ]
 }
