@@ -16,6 +16,8 @@ export interface SpawnDispatchOptions {
   name: string
   /** Pick a specific connected nest; omitted = first. */
   hostId?: string
+  /** Runtime that executes the agent: 'bridge' (default) or 'openclaw'. */
+  runtimeType?: 'bridge' | 'openclaw'
   bridge?: {
     key?: string
     baseUrl?: string
@@ -91,6 +93,7 @@ export async function dispatchSpawnIntent(owner: string, opts: SpawnDispatchOpti
     type: 'spawn-intent',
     intent_id: intentId,
     name: opts.name,
+    ...(opts.runtimeType ? { runtime_type: opts.runtimeType } : {}),
     bridge: {
       key: opts.bridge?.key,
       base_url: opts.bridge?.baseUrl,
