@@ -14,6 +14,83 @@ The agent-catalog is a curated collection of agent recipes, each representing a 
 
 The catalog lives in the codebase at `apps/openape-org/server/utils/persona-catalog.ts` and is auto-generated from the upstream agent-catalog repository.
 
+## The catalog.json File Structure
+
+The upstream `catalog.json` file (from `github.com/openape-ai/agent-catalog`) defines the complete catalog schema:
+
+```json
+{
+  "version": "v0.2.0",
+  "repo": "github.com/openape-ai/agent-catalog",
+  "categories": [...],
+  "personas": [...]
+}
+```
+
+### Top-Level Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | string | Catalog version (e.g., `v0.2.0`) |
+| `repo` | string | Source repository URL |
+| `categories` | array | List of category definitions |
+| `personas` | array | List of 29 persona definitions |
+
+### Category Structure
+
+Each category in the `categories` array:
+
+```json
+{
+  "key": "leadership",
+  "label": "Leadership & Coordination"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | string | Lowercase kebab-case identifier |
+| `label` | string | Human-readable category name |
+
+There are 7 categories:
+- `leadership` — Leadership & Coordination
+- `engineering` — Engineering
+- `design-content` — Design & Content
+- `data-research` — Data & Research
+- `growth-sales` — Growth & Sales
+- `operations` — Operations & Support
+- `finance-legal` — Finance & Legal
+
+### Persona Structure
+
+Each persona in the `personas` array:
+
+```json
+{
+  "key": "ceo",
+  "title": "Chief Executive (CEO)",
+  "role": "ceo",
+  "category": "leadership",
+  "icon": "i-lucide-crown",
+  "summary": "Turns the Owner's vision into objectives...",
+  "coding": false,
+  "cadence": "0 8 * * 1",
+  "recipeRef": "github.com/openape-ai/agent-catalog/ceo@v0.2.0"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | string | Kebab-case identifier (also the recipe subdir) |
+| `title` | string | Human-readable persona title |
+| `role` | string | ORG structural role: `ceo`, `teamlead`, `specialist`, `sanierer`, `other` |
+| `category` | string | References a category `key` |
+| `icon` | string | Lucide icon class |
+| `summary` | string | One-line description |
+| `coding` | boolean | Whether the persona works with code/Forgejo |
+| `cadence` | string | Cron schedule for agent activation |
+| `recipeRef` | string | Pinned recipe reference with version |
+
 ## The 29 Personas
 
 ### Leadership & Coordination
