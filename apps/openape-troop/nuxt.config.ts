@@ -28,7 +28,6 @@ export default defineNuxtConfig({
       { code: 'en', name: 'English', file: 'en.json' },
       { code: 'de', name: 'Deutsch', file: 'de.json' },
     ],
-    lazy: true,
     detectBrowserLanguage: {
       useCookie: true,
       cookieKey: 'troop-locale',
@@ -36,7 +35,6 @@ export default defineNuxtConfig({
       redirectOn: 'root',
       alwaysRedirect: false,
     },
-    bundle: { optimizeTranslationDirective: false },
     // Messages contain literal `@` (e.g. "you@example.com", "repo@ref")
     // which vue-i18n's default compiler reads as linked-message markers
     // and rejects with "Invalid linked format". Strict=false + no

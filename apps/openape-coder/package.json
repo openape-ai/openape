@@ -23,7 +23,7 @@
     "@nuxt/ui": "4.7.1",
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "^0.44.7",
-    "nuxt": "^4.4.6",
+    "nuxt": "^4.4.8",
     "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
