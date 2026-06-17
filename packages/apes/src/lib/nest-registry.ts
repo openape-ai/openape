@@ -19,6 +19,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+/** Runtimes an agent can run under. 'bridge' = our @openape/ape-agent loop. */
+export type RuntimeType = 'bridge' | 'openclaw'
+
+/** Type-guard for a `--type` CLI value — the single source of allowed runtimes. */
+export function isRuntimeType(value: unknown): value is RuntimeType {
+  return value === 'bridge' || value === 'openclaw'
+}
+
 export interface AgentEntry {
   name: string
   uid: number
@@ -34,6 +42,13 @@ export interface AgentEntry {
   }
   /** 'user' (default) → troop-chat bridge; 'service' → SP task-queue worker. */
   kind?: 'user' | 'service'
+  /**
+   * Which runtime executes this agent. Absent/'bridge' (default) → our
+   * @openape/ape-agent bridge (pm2-supervised daemon). 'openclaw' → a foreign
+   * one-shot runtime the nest exec's per message. Mirrors the nest-side
+   * `AgentEntry.runtimeType`. Orthogonal to `kind`.
+   */
+  runtimeType?: RuntimeType
   /** Required for kind='service': the SP backend this agent serves. */
   service?: {
     spBaseUrl: string
