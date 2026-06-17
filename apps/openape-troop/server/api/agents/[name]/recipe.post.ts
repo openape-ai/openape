@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../../../database/drizzle'
-import { agents } from '../../../database/schema'
+import { agents, tasks } from '../../../database/schema'
 import { materializeRecipe } from '../../../utils/agent-recipe'
 import { requireOwner } from '../../../utils/auth'
 import { broadcastToOwner } from '../../../utils/nest-registry'
-import { buildDeployPlan, fetchRecipeManifest, RECIPE_AGENT_TOOLS } from '../../../utils/recipe-deploy'
+import { buildDeployPlan, fetchRecipeManifest } from '../../../utils/recipe-deploy'
 
 // POST /api/agents/:name/recipe — set / update the recipe on an EXISTING
 // agent (INT-4). Re-fetches <repo>@<ref>'s ape-agent.yaml, re-validates
@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     // reads to check out tools/ at the pinned ref. Without it, re-pointing
     // updated the prompt/toolset but left the agent stuck on the old recipe
     // checkout (e.g. a stale tools/serve.mjs), defeating the endpoint.
-    .set({ systemPrompt: plan.systemPrompt, tools: [...RECIPE_AGENT_TOOLS], recipeRef: body.data.repo_ref })
+    .set({ systemPrompt: plan.systemPrompt, tools: plan.tools, recipeRef: body.data.repo_ref })
     .where(and(eq(agents.ownerEmail, owner.toLowerCase()), eq(agents.agentName, name)))
     .returning()
 
@@ -61,6 +61,38 @@ export default defineEventHandler(async (event) => {
   }
 
   const agent = result[0]!
+
+  // Sync the recipe's schedules into the tasks table (recipe-managed rows use
+  // taskId `recipe-*`). Without this the recipe's `schedules:` never reach the
+  // agent — `apes agents sync` pulls tasks from here, not from the recipe.
+  const now = Math.floor(Date.now() / 1000)
+  const wantIds = new Set(plan.schedules.map(s => s.taskId))
+  for (const s of plan.schedules) {
+    await db.insert(tasks).values({
+      agentEmail: agent.email,
+      taskId: s.taskId,
+      name: s.name.slice(0, 100),
+      cron: s.cron,
+      userPrompt: s.userPrompt,
+      command: s.command ?? null,
+      tools: s.tools,
+      maxSteps: 10,
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoUpdate({
+      target: [tasks.agentEmail, tasks.taskId],
+      set: { name: s.name.slice(0, 100), cron: s.cron, userPrompt: s.userPrompt, command: s.command ?? null, tools: s.tools, updatedAt: now },
+    })
+  }
+  // Drop recipe-managed tasks that the new recipe no longer declares.
+  const existing = await db.select({ taskId: tasks.taskId }).from(tasks).where(eq(tasks.agentEmail, agent.email))
+  for (const row of existing) {
+    if (row.taskId.startsWith('recipe-') && !wantIds.has(row.taskId)) {
+      await db.delete(tasks).where(and(eq(tasks.agentEmail, agent.email), eq(tasks.taskId, row.taskId)))
+    }
+  }
+
   // Re-sync the named agent on any connected nest (same path as the
   // PATCH endpoint) so the new intent lands on disk within ~1s.
   broadcastToOwner(agent.ownerEmail, { type: 'config-update', agent_email: agent.email })

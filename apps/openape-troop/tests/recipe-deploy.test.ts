@@ -52,6 +52,8 @@ describe('buildDeployPlan', () => {
     })
     // schedule without description gets a sensible default user prompt
     expect(plan.schedules[1]!.userPrompt).toMatch(/Run your configured task/)
+    // agent-level tools default when the recipe declares none
+    expect(plan.tools).toEqual([...RECIPE_AGENT_TOOLS])
   })
 
   it('gives scheduled tasks the recipe-declared tools when present (orchestrator pattern)', () => {
@@ -79,6 +81,8 @@ tools:
 
     // declared tools flow onto the scheduled task — NOT the bash-centric default
     expect(plan.schedules[0]!.tools).toEqual(['tasks.list', 'agent.spawn', 'agent.destroy'])
+    // ...and onto the agent-level toolset (chat-thread tools)
+    expect(plan.tools).toEqual(['tasks.list', 'agent.spawn', 'agent.destroy'])
   })
 
   it('excludes optional capabilities from requiredCapabilities (multi-forge recipe)', () => {

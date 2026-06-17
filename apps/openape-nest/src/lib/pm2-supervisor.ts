@@ -138,6 +138,11 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
   // kinds — it's a sandbox-level flag, not chat/service-specific.
   if (process.env.OPENAPE_BYPASS_APE_SHELL === '1')
     pairs.push(['OPENAPE_BYPASS_APE_SHELL', '1'])
+  // Timezone for the in-bridge cron runner — it matches schedules against the
+  // local wall-clock, and the container runs UTC. Default to Europe/Vienna so a
+  // recipe `0 8 * * *` standup fires at 08:00 local (DST-aware); override via
+  // the nest's TZ env.
+  pairs.push(['TZ', process.env.TZ || 'Europe/Vienna'])
   // A bind-mounted dev recipe dir, forwarded so the in-bridge cron runner
   // (resolveRecipeDir) runs `command` tasks against the operator's local
   // recipe instead of the synced ~/recipe — iterate on tools/ without a
