@@ -24,6 +24,13 @@ For Azure DevOps use `--param forge=azure --secret AZ_PAT=xxx`.
   classifying the diff, the risk assessor + reviewer gate, and arming
   `--auto` (merge-when-green). Branch protection is the server-side CI gate.
 
+## Safety
+
+The agent **opens pull requests only**. It never merges PRs and never pushes
+directly to protected branches. All merges go through the server-side branch
+protection gate (CI + reviewer approval). The agent has no `merge` capability
+and cannot bypass protected branch rules.
+
 ## Per-repo config: `.openape/coding.json`
 
 Policy lives in the **target repo**, not in this recipe or the library:
