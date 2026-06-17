@@ -43,6 +43,12 @@ export interface DeployPlan {
    * manually-spawned agents.
    */
   recipeRef?: string
+  /**
+   * Agent-level toolset (drives chat-thread tools via agent.json). The recipe's
+   * declared `tools:` when non-empty, else the bash-centric default. Same set
+   * the scheduled cycles use.
+   */
+  tools: string[]
   schedules: DeploySchedule[]
   requiredCapabilities: string[]
 }
@@ -96,6 +102,7 @@ export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, op
     systemPrompt: mat.intent,
     ...(opts.userAddendum ? { userAddendum: opts.userAddendum } : {}),
     ...(opts.recipeRef ? { recipeRef: opts.recipeRef } : {}),
+    tools: taskTools,
     schedules,
     requiredCapabilities: recipe.capabilities.filter(c => !c.optional).map(c => c.env),
   }
