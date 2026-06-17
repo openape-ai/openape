@@ -51,7 +51,7 @@
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/ui": "^4.7.1",
     "@types/node": "^22.19.13",
-    "nuxt": "^4.4.6",
+    "nuxt": "^4.4.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.7",
