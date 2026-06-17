@@ -31,7 +31,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@openape/core": "workspace:*"
+    "@openape/core": "workspace:*",
+    "@openape/cli-auth": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
