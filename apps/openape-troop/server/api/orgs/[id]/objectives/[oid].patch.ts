@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../../../../database/drizzle'
 import { objectives } from '../../../../database/schema'
-import { requireOwnedOrg } from '../../../../utils/orgs'
+import { requireOrgReadAccess } from '../../../../utils/orgs'
 
 const Body = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -12,7 +12,7 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const { org } = await requireOwnedOrg(event)
+  const { org } = await requireOrgReadAccess(event)
   const oid = getRouterParam(event, 'oid')
   if (!oid) throw createError({ statusCode: 400, statusMessage: 'objective id required' })
 

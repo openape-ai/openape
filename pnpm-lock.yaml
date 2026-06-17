@@ -740,6 +740,9 @@ importers:
 
   packages/agent-runtime:
     dependencies:
+      '@openape/cli-auth':
+        specifier: workspace:*
+        version: link:../cli-auth
       '@openape/core':
         specifier: workspace:*
         version: link:../core

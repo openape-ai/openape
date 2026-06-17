@@ -1,10 +1,10 @@
 import { desc, eq } from 'drizzle-orm'
 import { useDb } from '../../../../database/drizzle'
 import { reports } from '../../../../database/schema'
-import { requireOwnedOrg } from '../../../../utils/orgs'
+import { requireOrgReadAccess } from '../../../../utils/orgs'
 
 export default defineEventHandler(async (event) => {
-  const { org } = await requireOwnedOrg(event)
+  const { org } = await requireOrgReadAccess(event)
   const db = useDb()
   // Reverse-chronological — newest report first. Cap at 100 for now;
   // pagination can come later if a single org accumulates thousands.

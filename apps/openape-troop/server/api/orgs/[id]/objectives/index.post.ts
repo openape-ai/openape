@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { useDb } from '../../../../database/drizzle'
 import { objectives } from '../../../../database/schema'
-import { requireOwner } from '../../../../utils/auth'
-import { newId, requireOwnedOrg } from '../../../../utils/orgs'
+import { newId, requireOrgReadAccess } from '../../../../utils/orgs'
 
 const Body = z.object({
   title: z.string().min(1).max(200),
@@ -13,10 +12,9 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const { org } = await requireOwnedOrg(event)
-  // CEO will write here later via human-impersonating-as-CEO Bearer
-  // tokens; for now Owner is the only writer.
-  const owner = await requireOwner(event)
+  // Owner, or a member agent acting for the owner (e.g. the CEO setting
+  // objectives). `caller` is the actual author (agent email or owner).
+  const { org, caller } = await requireOrgReadAccess(event)
 
   const body = await readBody(event)
   const parsed = Body.safeParse(body)
@@ -33,7 +31,7 @@ export default defineEventHandler(async (event) => {
     status: parsed.data.status,
     targetDate: parsed.data.target_date ?? null,
     parentId: parsed.data.parent_id ?? null,
-    createdByEmail: owner,
+    createdByEmail: caller,
     createdAt: now,
     updatedAt: now,
   })

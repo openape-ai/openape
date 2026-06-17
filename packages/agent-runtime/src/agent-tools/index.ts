@@ -20,6 +20,7 @@ import { mailTools } from './mail'
 import { spawnTools } from './spawn'
 import { tasksTools } from './tasks'
 import { timeTools } from './time'
+import { troopTools } from './troop'
 import { verifyTools } from './verify'
 
 export { addReadRoot } from './file'
@@ -44,6 +45,7 @@ const ALL_TOOLS: ToolDefinition[] = [
   ...verifyTools,
   ...forgeTools,
   ...spawnTools,
+  ...troopTools,
 ]
 
 export const TOOLS: Record<string, ToolDefinition> = Object.fromEntries(
