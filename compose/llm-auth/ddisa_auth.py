@@ -82,9 +82,7 @@ def resolve_models(account: str, accounts) -> list:
     shared default; these expire within the token TTL.
     ponytail: grace branch + master_key net go once every agent re-exchanged."""
     if accounts is None:
-        if account != _DEFAULT_ACCOUNT:
-            raise ValueError(f"legacy token may use only {_DEFAULT_ACCOUNT}, not {account}")
-        return models_for_account(_DEFAULT_ACCOUNT)
+        raise ValueError("token missing accounts claim (legacy) - re-exchange required")
     if account in accounts or "*" in accounts:
         return models_for_account(account)
     raise ValueError(f"no grant for account {account}")
@@ -95,9 +93,6 @@ async def user_api_key_auth(request, api_key: str):
     from litellm.proxy._types import UserAPIKeyAuth
 
     token = (api_key or "").replace("Bearer ", "").strip()
-    if _MASTER and hmac.compare_digest(token, _MASTER):
-        return UserAPIKeyAuth(api_key=token)  # admin / master
-
     claims = _verify_hs256(token)  # raises on any failure -> 401
     account = (request.headers.get("x-openape-account") or _DEFAULT_ACCOUNT).lower()
     accounts = claims.get("accounts")
