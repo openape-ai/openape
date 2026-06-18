@@ -21,12 +21,9 @@ export default defineEventHandler(async (event) => {
   const section = query.section ? String(query.section) : undefined
   const days = Math.min(Math.max(Number(query.days) || 7, 1), 90)
 
-  // If requesting by requester, use paginated list
-  if (requester) {
-    return await grantStore.listGrants({ limit, cursor, status, requester })
-  }
-
-  // Try Bearer token first, then fall back to session cookie
+  // Authenticate FIRST — every list path requires it. (Historically the
+  // `?requester=` branch short-circuited above this and leaked any user's
+  // grants without auth.) Bearer token first, then session cookie.
   let email: string | undefined
   const bearerPayload = await tryBearerAuth(event)
   if (bearerPayload) {
@@ -45,7 +42,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  // Collect emails of owned/approved users
+  // The set of requesters this caller may see: itself + users it owns/approves.
   const ownedUsers = await userStore.findByOwner(email)
   const approvedUsers = await userStore.findByApprover(email)
   const requesters = [
@@ -53,6 +50,15 @@ export default defineEventHandler(async (event) => {
     ...ownedUsers.map(u => u.email),
     ...approvedUsers.map(u => u.email),
   ]
+
+  // Explicit `?requester=` filter: only allowed for a requester the caller may
+  // see — otherwise 403 (no cross-user enumeration).
+  if (requester) {
+    if (!requesters.includes(requester)) {
+      throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
+    }
+    return await grantStore.listGrants({ limit, cursor, status, requester })
+  }
 
   // Default paginated case: delegate to DB-level query with IN clause
   if (!section) {
