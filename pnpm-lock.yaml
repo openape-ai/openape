@@ -446,7 +446,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-istanbul@4.1.7)(happy-dom@18.0.1)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
 
-  apps/openape-org:
+  apps/openape-troop:
     dependencies:
       '@iconify-json/lucide':
         specifier: ^1.2.90
@@ -475,58 +475,6 @@ importers:
       nuxt:
         specifier: ^4.4.8
         version: 4.4.8(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.0))(@libsql/client@0.17.3)(@parcel/watcher@2.5.6)(@rollup/plugin-babel@6.1.0(@babel/core@7.29.0)(rollup@4.60.4))(@types/node@22.19.19)(@vue/compiler-sfc@3.5.34)(aws4fetch@1.0.20)(better-sqlite3@12.10.0)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.17.3)(better-sqlite3@12.10.0)(drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14)))(drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14))(eslint@9.39.4(jiti@2.7.0))(ioredis@5.10.1)(lightningcss@1.32.0)(magicast@0.5.3)(optionator@0.9.4)(rolldown@1.0.2)(rollup-plugin-visualizer@7.0.1(rolldown@1.0.2)(rollup@4.60.4))(rollup@4.60.4)(terser@5.47.1)(tsx@4.22.2)(typescript@5.9.3)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))(yaml@2.9.0)
-      tailwindcss:
-        specifier: ^4.2.1
-        version: 4.3.0
-      zod:
-        specifier: ^4.3.6
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^22.19.13
-        version: 22.19.19
-      '@vitest/coverage-istanbul':
-        specifier: ^4.1.7
-        version: 4.1.7(vitest@4.1.7)
-      h3:
-        specifier: 'catalog:'
-        version: 1.15.11
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.7
-        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(@vitest/coverage-istanbul@4.1.7)(happy-dom@18.0.1)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))
-
-  apps/openape-troop:
-    dependencies:
-      '@iconify-json/lucide':
-        specifier: ^1.2.90
-        version: 1.2.108
-      '@libsql/client':
-        specifier: ^0.17.3
-        version: 0.17.3
-      '@nuxt/ui':
-        specifier: 4.7.1
-        version: 4.7.1(1e6a1e9f4d9cd25ea167dbaac4907f2f)
-      '@nuxtjs/i18n':
-        specifier: ^10.4.0
-        version: 10.4.0(@vue/compiler-dom@3.5.38)(aws4fetch@1.0.20)(db0@0.3.4(@libsql/client@0.17.3)(better-sqlite3@12.10.0)(drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14)))(eslint@9.39.4(jiti@2.7.0))(ioredis@5.10.1)(magicast@0.5.3)(rollup@4.60.4)(typescript@5.9.3)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))(vue@3.5.38(typescript@5.9.3))
-      '@openape/auth':
-        specifier: workspace:*
-        version: link:../../packages/auth
-      '@openape/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@openape/nuxt-auth-sp':
-        specifier: workspace:*
-        version: link:../../modules/nuxt-auth-sp
-      drizzle-orm:
-        specifier: '>=0.45.2'
-        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14)
-      nuxt:
-        specifier: ^4.4.8
-        version: 4.4.8(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.0))(@libsql/client@0.17.3)(@parcel/watcher@2.5.6)(@rollup/plugin-babel@6.1.0(@babel/core@7.29.0)(rollup@4.60.4))(@types/node@22.19.19)(@vue/compiler-sfc@3.5.38)(aws4fetch@1.0.20)(better-sqlite3@12.10.0)(cac@6.7.14)(db0@0.3.4(@libsql/client@0.17.3)(better-sqlite3@12.10.0)(drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14)))(drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.10.0)(bun-types@1.3.14))(eslint@9.39.4(jiti@2.7.0))(ioredis@5.10.1)(lightningcss@1.32.0)(magicast@0.5.3)(optionator@0.9.4)(rolldown@1.0.2)(rollup-plugin-visualizer@7.0.1(rolldown@1.0.2)(rollup@4.60.4))(rollup@4.60.4)(terser@5.47.1)(tsx@4.22.2)(typescript@5.9.3)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.2)(yaml@2.9.0))(yaml@2.9.0)
       tailwindcss:
         specifier: ^4.2.1
         version: 4.3.0
