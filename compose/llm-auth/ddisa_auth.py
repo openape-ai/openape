@@ -1,11 +1,11 @@
 """LiteLLM custom_auth hook for the llms.openape.ai gateway.
 
-Accepts two kinds of bearer credential:
-  1. The LiteLLM master_key  -> admin/full access (the migration safety net; the
-     16 live agents keep using this until they're switched to DDISA tokens).
-  2. A DDISA-exchanged HS256 token (aud=iss=llms.openape.ai, typ=cli) minted by
-     the exchange front-end from an agent's IdP token. Validated here against the
-     SAME shared SESSION_SECRET (no DB, no JWKS) -> per-agent identity (sub).
+Accepts ONLY a DDISA-exchanged HS256 token (aud=iss=llms.openape.ai, typ=cli)
+minted by the exchange front-end from an agent's IdP token. Validated here
+against the SAME shared SESSION_SECRET (no DB, no JWKS) -> per-agent identity
+(sub). The gateway is DDISA-only: the LiteLLM master_key is NOT accepted for
+inference (the migration admin-net was removed); litellm still requires a
+master_key set for its own admin surface, but it grants no access here.
 
 HS256 is verified with the stdlib only (hmac/hashlib) so there is no third-party
 JWT dependency to rely on inside the stock LiteLLM image.
@@ -25,7 +25,6 @@ import os
 import time
 
 _SECRET = os.environ["SESSION_SECRET"].encode("utf-8")
-_MASTER = os.environ.get("LITELLM_MASTER_KEY", "")
 _AUD = "llms.openape.ai"
 _ISS = "llms.openape.ai"
 
@@ -74,13 +73,10 @@ def models_for_account(account: str) -> list:
 
 def resolve_models(account: str, accounts) -> list:
     """Authorize `account` against the token's owner-granted `accounts` claim
-    (M4) and return the model allowlist. `accounts` is the list the exchange
-    stamped from the agent's DDISA standing grants; '*' = any account.
-
-    `accounts is None` = a legacy token minted before grant-enrichment was
-    deployed (still in the agent's ~1h token cache). Grace: allow only the
-    shared default; these expire within the token TTL.
-    ponytail: grace branch + master_key net go once every agent re-exchanged."""
+    and return the model allowlist. `accounts` is the list the exchange stamped
+    from the agent's DDISA standing grants; '*' = any account. A token without
+    the claim (`accounts is None`) is rejected — the grace window for legacy
+    pre-enrichment tokens was removed once every agent re-exchanged."""
     if accounts is None:
         raise ValueError("token missing accounts claim (legacy) - re-exchange required")
     if account in accounts or "*" in accounts:
@@ -120,9 +116,8 @@ if __name__ == "__main__":
     assert resolve_models("delta-mind", ["lindeverlag", "delta-mind"]) == [f"delta-mind/{m}" for m in _MODELS]
     # wildcard grant -> any account
     assert resolve_models("delta-mind", ["*"]) == [f"delta-mind/{m}" for m in _MODELS]
-    # legacy token (no accounts claim) -> default only
-    assert resolve_models("lindeverlag", None) == _MODELS
-    for account, accounts in [("delta-mind", ["lindeverlag"]), ("delta-mind", []), ("lindeverlag", []), ("delta-mind", None)]:
+    # no accounts claim (legacy token) -> rejected (grace window removed)
+    for account, accounts in [("delta-mind", ["lindeverlag"]), ("delta-mind", []), ("lindeverlag", []), ("delta-mind", None), ("lindeverlag", None)]:
         try:
             resolve_models(account, accounts)
             raise SystemExit(f"FAIL: {account} allowed with {accounts}")
