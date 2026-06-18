@@ -38,13 +38,19 @@ async function waitForServer(url: string, timeoutMs = 30_000) {
 async function waitForGrantId(
   baseUrl: string,
   requester: string,
+  token: string,
   timeoutMs = 60_000,
   onPoll?: () => void,
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     onPoll?.()
-    const response = await fetch(`${baseUrl}/api/grants?requester=${encodeURIComponent(requester)}`)
+    // The agent lists its OWN pending grants — GET /api/grants?requester= now
+    // requires auth (the requester filter is only allowed for self / users the
+    // caller owns or approves).
+    const response = await fetch(`${baseUrl}/api/grants?requester=${encodeURIComponent(requester)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
     if (response.ok) {
       const body = await response.json() as { data?: Array<{ id: string }> }
       const grantId = body.data?.[0]?.id
@@ -243,7 +249,7 @@ describe('free-idp + shapes end-to-end', () => {
       apesExitCode = code
     })
 
-    const grantId = await waitForGrantId(baseUrl, AGENT_EMAIL, 60_000, () => {
+    const grantId = await waitForGrantId(baseUrl, AGENT_EMAIL, agentToken, 60_000, () => {
       if (apesExited) {
         throw new Error([
           `apes exited before creating a grant (code: ${apesExitCode})`,
