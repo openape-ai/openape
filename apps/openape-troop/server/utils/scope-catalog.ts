@@ -1,7 +1,7 @@
 // troop's scope catalog per openape-ai/protocol sp-data-access.md §3.
 //
 // Published at /.well-known/openape.json#scopes so any Receiver SP
-// (e.g. org.openape.ai) can discover what they can request a
+// can discover what they can request a
 // delegation for. Each entry is {id, description, grants[]} —
 // `description` is rendered verbatim on the IdP consent screen the
 // Owner sees, so write it plainly.
