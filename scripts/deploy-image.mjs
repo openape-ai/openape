@@ -3,7 +3,7 @@
 // it to registry.openape.ai, and chatty pulls + restarts the container — with
 // an /api/health gate and tag rollback. No build on chatty.
 //
-//   pnpm run deploy:image <target...>     # free-idp | troop | chat | org
+//   pnpm run deploy:image <target...>     # free-idp | troop | chat
 //   pnpm run deploy:image --all
 //
 // Flow per target: turbo build (.output, warm cache) → COPY-only amd64 image
@@ -29,7 +29,8 @@ const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
-  'org': { filter: '@openape/org', dir: 'apps/openape-org', image: 'openape-org', port: 3020, compose: 'org', unit: 'openape-org', domain: 'org.openape.ai', envVar: 'ORG_TAG' },
+  // org.openape.ai retired — merged into troop (troop.openape.ai/companies, B0).
+  // Removed as a deploy target so `deploy:image --all` / `compose up` can't reanimate it.
 }
 
 function sh(cmd, args, opts = {}) {
