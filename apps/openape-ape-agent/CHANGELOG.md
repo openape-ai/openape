@@ -1,5 +1,15 @@
 # @openape/ape-agent
 
+## 2.11.0
+
+### Minor Changes
+
+- Service-agent and cron paths now exchange the agent's own DDISA token for an
+  `llms.openape.ai` gateway (per task / per fire), instead of riding the boot
+  master key. Non-gateway bases (loopback codex-proxy) keep using the static
+  `LITELLM_API_KEY`; a failed exchange falls back to it so a flaky token mint
+  never takes the agent offline.
+
 ## 2.10.0
 
 ### Minor Changes
