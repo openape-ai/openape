@@ -168,6 +168,13 @@ export interface CronRunnerDeps {
    * cron runner shares it with chat threads.
    */
   runtimeConfig: RuntimeConfig
+  /**
+   * Re-mint the LLM key just before a task fires. When the gateway is
+   * llms.openape.ai this returns the agent's own DDISA token (so cron no
+   * longer rides the boot master key); unset → the static runtimeConfig key
+   * is used as-is (loopback proxy / tests).
+   */
+  refreshApiKey?: () => Promise<string>
   chat: ChatBackend
   /** Owner email — where DMs go. Resolved from the contacts list at fire time. */
   ownerEmail: string
@@ -372,8 +379,9 @@ export class CronRunner {
       return
     }
     try {
+      const apiKey = this.deps.refreshApiKey ? await this.deps.refreshApiKey() : this.deps.runtimeConfig.apiKey
       const result = await runLoop({
-        config: this.deps.runtimeConfig,
+        config: { ...this.deps.runtimeConfig, apiKey },
         systemPrompt,
         userMessage: spec.userPrompt,
         tools: taskTools(spec.tools),
