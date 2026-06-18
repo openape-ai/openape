@@ -1,5 +1,14 @@
 # @openape/apes
 
+## 1.31.3
+
+### Patch Changes
+
+- Updated dependencies [12d7dd6]
+  - @openape/cli-auth@0.5.2
+  - @openape/agent-runtime@0.2.3
+  - @openape/shapes@0.7.1
+
 ## 1.31.0
 
 ### Minor Changes
