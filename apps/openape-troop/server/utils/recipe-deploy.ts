@@ -8,10 +8,14 @@ import { parseRecipe, parseRepoRef } from './agent-recipe'
 // unit-tested; the endpoint wires it to spawn-intent + the DB. See
 // plans.openape.ai 01KRTAE8 (M3).
 
-// Recipe agents drive everything through the built-in toolset — the
-// repo's tools/ scripts are invoked via bash; http/file/time round it
-// out. Owners can narrow later in the troop UI.
-export const RECIPE_AGENT_TOOLS = ['bash', 'http', 'file', 'time'] as const
+// Default toolset for recipe agents that DON'T declare their own `tools:`
+// — they drive everything through the built-in toolset: the repo's tools/
+// scripts are invoked via bash; http/file/time round it out. A recipe that
+// DOES declare `tools:` (e.g. an orchestrator that calls agent.spawn /
+// tasks.list directly) gets exactly that set on its scheduled tasks. Owners
+// can narrow later in the troop UI. Values must match server/tool-catalog.json
+// exactly because task creation validates names.
+export const RECIPE_AGENT_TOOLS = ['bash', 'http.get', 'http.post', 'file.read', 'file.write', 'time.now'] as const
 
 export interface DeploySchedule {
   taskId: string
@@ -39,6 +43,12 @@ export interface DeployPlan {
    * manually-spawned agents.
    */
   recipeRef?: string
+  /**
+   * Agent-level toolset (drives chat-thread tools via agent.json). The recipe's
+   * declared `tools:` when non-empty, else the bash-centric default. Same set
+   * the scheduled cycles use.
+   */
+  tools: string[]
   schedules: DeploySchedule[]
   requiredCapabilities: string[]
 }
@@ -74,19 +84,25 @@ export interface DeployPlanOptions {
 }
 
 export function buildDeployPlan(recipe: AgentRecipe, mat: MaterializedRecipe, opts: DeployPlanOptions = {}): DeployPlan {
+  // A recipe that declares its own `tools:` (e.g. the PM-orchestrator, which
+  // calls agent.spawn / tasks.list directly) drives its scheduled cycles with
+  // exactly that set. Recipes that declare none fall back to the bash-centric
+  // default so the repo's tools/ scripts still work.
+  const taskTools = mat.tools.length > 0 ? [...mat.tools] : [...RECIPE_AGENT_TOOLS]
   const schedules: DeploySchedule[] = mat.schedules.map((s, i) => ({
     taskId: `recipe-${i}`,
     name: s.description ?? s.command ?? `${recipe.name} #${i + 1}`,
     cron: s.cron,
     userPrompt: s.description ?? 'Run your configured task as described in your instructions.',
     ...(s.command ? { command: s.command } : {}),
-    tools: [...RECIPE_AGENT_TOOLS],
+    tools: taskTools,
   }))
   return {
     agentName: opts.agentName ? agentNameFromRecipe(opts.agentName) : agentNameFromRecipe(recipe.name),
     systemPrompt: mat.intent,
     ...(opts.userAddendum ? { userAddendum: opts.userAddendum } : {}),
     ...(opts.recipeRef ? { recipeRef: opts.recipeRef } : {}),
+    tools: taskTools,
     schedules,
     requiredCapabilities: recipe.capabilities.filter(c => !c.optional).map(c => c.env),
   }

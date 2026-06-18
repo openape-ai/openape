@@ -57,6 +57,6 @@ export default defineEventHandler(async (event) => {
     agent_id: user.email,
     email: user.email,
     name: user.name,
-    expires_in: 3600,
+    expires_in: 28800,
   }
 })

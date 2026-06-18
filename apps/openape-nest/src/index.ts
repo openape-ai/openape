@@ -24,8 +24,9 @@ import { readFileSync, watch } from 'node:fs'
 import process from 'node:process'
 import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
-import type { AgentSupervisor } from './lib/session-host'
 import { SessionHost } from './lib/session-host'
+import { createAgentRuntimeSession, resolveAgentRuntimeContext } from './lib/agent-runtime-session'
+import { sessionHostAgents } from './lib/runtime-routing'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
@@ -42,16 +43,40 @@ function log(line: string): void {
 
 // Flag flips supervision from per-agent pm2 daemons to one in-process
 // SessionHost (single-process-nest, 26 processes → 1). Off = unchanged.
+//
+// On the in-process path the host now builds the real agent runtime
+// ({@link createAgentRuntimeSession}) instead of the no-op placeholder: each
+// hosted agent gets an `@openape/ape-agent` AgentSession, resolved from its own
+// home + the nest env via {@link resolveAgentRuntimeContext}. That resolver
+// leaves `bearer` unset, so the session constructs and logs `describe()` but
+// opens no troop WS and runs no LLM loop yet — the connecting bearer is the next
+// (owner-gated) seam. So this wiring stays behaviourally inert until that lands,
+// and the whole path is gated behind OPENAPE_NEST_INPROCESS=1 (default off →
+// pm2 path untouched).
 const INPROCESS = process.env.OPENAPE_NEST_INPROCESS === '1'
-const sessionHost = INPROCESS ? new SessionHost({ log }) : undefined
-const supervisor: AgentSupervisor = sessionHost ?? new Pm2Supervisor({ apesBin: APES_BIN, log })
-if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (M2 scaffold)')
+// The SessionHost always exists now: even on the proven pm2 path it hosts the
+// non-daemon runtimes (openclaw) in-process, which have no pm2 child to
+// supervise. With INPROCESS=1 it owns ALL agents (single-process nest); else it
+// owns only the openclaw agents and the Pm2Supervisor keeps the bridge fleet.
+const sessionHost = new SessionHost({
+  log,
+  createSession: entry =>
+    createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env, log), log),
+})
+const pm2Supervisor = INPROCESS ? undefined : new Pm2Supervisor({ apesBin: APES_BIN, log })
+if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (all agents)')
+else log('nest: pm2 fleet + in-process SessionHost for openclaw agents')
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
 
 async function reconcile(): Promise<void> {
   try {
-    await supervisor.reconcile(listAgents())
+    const agents = listAgents()
+    // pm2 owns the bridge fleet (reconcile skips non-bridge runtimes internally).
+    if (pm2Supervisor) await pm2Supervisor.reconcile(agents)
+    // SessionHost owns all agents in-process when INPROCESS, else only the
+    // non-daemon (openclaw) ones — the bridge agents stay on pm2.
+    await sessionHost.reconcile(sessionHostAgents(agents, INPROCESS))
     log('nest: supervisor reconciled with registry')
   }
   catch (err) {
@@ -67,12 +92,9 @@ troopWs.start()
 // every live session once (SessionHost.tickAll). Non-breaking until the real
 // runtime loop lands: placeholder sessions have no `tick`, so tickAll is a
 // no-op. unref'd so it never keeps the process alive on its own.
-let tickTimer: NodeJS.Timeout | undefined
-if (sessionHost) {
-  tickTimer = setInterval(() => { void sessionHost.tickAll() }, TICK_INTERVAL_MS)
-  tickTimer.unref()
-  log(`nest: central scheduler tick every ${TICK_INTERVAL_MS}ms (in-process)`)
-}
+const tickTimer: NodeJS.Timeout = setInterval(() => { void sessionHost.tickAll() }, TICK_INTERVAL_MS)
+tickTimer.unref()
+log(`nest: central scheduler tick every ${TICK_INTERVAL_MS}ms`)
 
 // Watch the registry file for changes. fs.watch fires once per
 // "something happened" — debounce with a small timer because some
@@ -116,8 +138,8 @@ async function shutdown(signal: string): Promise<void> {
   troopSync.stop()
   troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
-  if (tickTimer) clearInterval(tickTimer)
-  if (sessionHost) await sessionHost.stopAll()
+  clearInterval(tickTimer)
+  await sessionHost.stopAll()
   process.exit(0)
 }
 

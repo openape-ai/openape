@@ -20,7 +20,6 @@ export default defineNuxtConfig({
       { code: 'en', name: 'English', file: 'en.json' },
       { code: 'de', name: 'Deutsch', file: 'de.json' },
     ],
-    lazy: true,
     detectBrowserLanguage: {
       useCookie: true,
       cookieKey: 'org-locale',
@@ -28,7 +27,6 @@ export default defineNuxtConfig({
       redirectOn: 'root',
       alwaysRedirect: false,
     },
-    bundle: { optimizeTranslationDirective: false },
     compilation: { strictMessage: false, escapeHtml: false },
   },
 

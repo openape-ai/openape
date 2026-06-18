@@ -1,11 +1,7 @@
-import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { materializeRecipe } from '../../utils/agent-recipe'
+import { parseAgentEmail } from '../../utils/agent-email'
 import { requireOwnerWithScope } from '../../utils/auth'
-import { listNestPeersForOwner } from '../../utils/nest-registry'
-import { buildDeployPlan, fetchRecipeManifest } from '../../utils/recipe-deploy'
-import { stashRecipeDeploy } from '../../utils/recipe-deploys'
-import { createSpawnIntent } from '../../utils/spawn-intents'
+import { dispatchSpawnIntent } from '../../utils/spawn-dispatch'
 
 // POST /api/agents/spawn-intent — owner-side request to spawn a new
 // agent on one of their connected Macs. Returns immediately with
@@ -27,9 +23,15 @@ const bodySchema = z.object({
   // Optional: if the owner has multiple Macs connected, pick one.
   // Omitted = first connected nest.
   host_id: z.string().optional(),
+  // Runtime that executes the agent: 'bridge' (default) or 'openclaw'
+  // (foreign one-shot runtime). Carried to the nest's `apes agents spawn --type`.
+  runtime_type: z.enum(['bridge', 'openclaw']).optional(),
   bridge_key: z.string().optional(),
   bridge_base_url: z.string().url().optional(),
   bridge_model: z.string().optional(),
+  // Reasoning/thinking depth for gpt-5.x — lets the PM-orchestrator tier
+  // compute by task difficulty (quick-win=low, research=high) on one model.
+  bridge_reasoning_effort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   // Free-text persona/behaviour the owner typed. Without a recipe it
   // is the agent's system prompt; with a recipe it is the additive
   // user_addendum on top of the recipe intent.
@@ -45,84 +47,37 @@ export default defineEventHandler(async (event) => {
   // Scope-gate: first-party (session / aud=apes-cli Bearer) auto-passes.
   // Delegated callers (Receiver SPs) need `troop:spawn-agent` in their
   // CLI token, minted at /api/cli/exchange per sp-data-access.md.
-  const { owner } = await requireOwnerWithScope(event, 'troop:spawn-agent')
+  const { owner: caller } = await requireOwnerWithScope(event, 'troop:spawn-agent')
+  // An agent dispatching workers (act=agent — e.g. the PM-orchestrator) carries
+  // its OWN email as the caller, but nests + stashed deploys are keyed under the
+  // HUMAN owner. Normalize so an agent's spawn targets its owner's nest; a human
+  // caller's email isn't an agent email so parseAgentEmail returns null (no-op).
+  const owner = parseAgentEmail(caller)?.ownerEmail ?? caller
   const parsed = bodySchema.safeParse(await readBody(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message ?? 'invalid body' })
   }
 
-  const peers = listNestPeersForOwner(owner)
-  if (peers.length === 0) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'no connected nest — make sure the nest daemon is running on the host where you want this agent. The legacy `apes nest spawn` CLI path still works as a fallback.',
-    })
-  }
-  const target = parsed.data.host_id
-    ? peers.find(p => p.hostId === parsed.data.host_id)
-    : peers[0]
-  if (!target) {
-    throw createError({ statusCode: 404, statusMessage: `no nest found for host_id ${parsed.data.host_id}` })
-  }
-
-  // Resolve an optional recipe overlay before we publish the intent so
-  // a bad repo_ref / manifest fails fast (before the grant prompt).
-  let requiredCapabilities: string[] = []
-  let schedules: Array<{ task_id: string, cron: string, name: string }> = []
-  let recipeRef: string | undefined
-  let plan: ReturnType<typeof buildDeployPlan> | null = null
-
-  if (parsed.data.recipe) {
-    const manifest = await fetchRecipeManifest(parsed.data.recipe.repo_ref, async (url) => {
-      const r = await fetch(url)
-      return { ok: r.ok, status: r.status, text: await r.text() }
-    })
-    if (!manifest.ok) throw createError({ statusCode: 400, statusMessage: manifest.reason })
-    const mat = materializeRecipe(manifest.recipe, parsed.data.recipe.params)
-    if (!mat.ok) throw createError({ statusCode: 400, statusMessage: mat.reason })
-    plan = buildDeployPlan(manifest.recipe, mat.value, {
-      agentName: parsed.data.name,
-      userAddendum: parsed.data.system_prompt,
-    })
-    requiredCapabilities = plan.requiredCapabilities
-    schedules = plan.schedules.map(s => ({ task_id: s.taskId, cron: s.cron, name: s.name }))
-    recipeRef = manifest.ref
-  }
-  else if (parsed.data.system_prompt) {
-    // No recipe — still apply the owner's system prompt server-side so
-    // the dialog never has to do a follow-up PATCH.
-    plan = {
-      agentName: parsed.data.name,
-      systemPrompt: parsed.data.system_prompt,
-      schedules: [],
-      requiredCapabilities: [],
-    }
-  }
-
-  const intentId = randomUUID()
-  createSpawnIntent(intentId)
-  if (plan) stashRecipeDeploy(intentId, owner.toLowerCase(), plan)
-
-  const ok = target.send({
-    type: 'spawn-intent',
-    intent_id: intentId,
+  const r = await dispatchSpawnIntent(owner, {
     name: parsed.data.name,
+    hostId: parsed.data.host_id,
+    runtimeType: parsed.data.runtime_type,
+    systemPrompt: parsed.data.system_prompt,
     bridge: {
       key: parsed.data.bridge_key,
-      base_url: parsed.data.bridge_base_url,
+      baseUrl: parsed.data.bridge_base_url,
       model: parsed.data.bridge_model,
+      reasoningEffort: parsed.data.bridge_reasoning_effort,
     },
+    recipe: parsed.data.recipe ? { repoRef: parsed.data.recipe.repo_ref, params: parsed.data.recipe.params } : undefined,
   })
-  if (!ok) {
-    throw createError({ statusCode: 503, statusMessage: 'nest dropped before intent was delivered — retry in a few seconds' })
-  }
 
   return {
-    intent_id: intentId,
-    host_id: target.hostId,
-    hostname: target.hostname,
-    ...(recipeRef ? { ref: recipeRef } : {}),
-    required_capabilities: requiredCapabilities,
-    schedules,
+    intent_id: r.intentId,
+    host_id: r.hostId,
+    hostname: r.hostname,
+    ...(r.ref ? { ref: r.ref } : {}),
+    required_capabilities: r.requiredCapabilities,
+    schedules: r.schedules,
   }
 })

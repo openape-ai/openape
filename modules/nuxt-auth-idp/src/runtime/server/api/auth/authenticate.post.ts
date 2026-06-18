@@ -78,6 +78,6 @@ export default defineEventHandler(async (event) => {
     email: user.email,
     name: user.name,
     act,
-    expires_in: 3600,
+    expires_in: 28800,
   }
 })

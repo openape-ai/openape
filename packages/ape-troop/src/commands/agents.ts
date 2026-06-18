@@ -43,15 +43,20 @@ const spawnCommand = defineCommand({
     'name': { type: 'positional', required: true, description: 'Agent short name, /^[a-z][a-z0-9-]{0,23}$/' },
     'host-id': { type: 'string', description: 'Target device host_id (default: first connected nest)' },
     'system-prompt': { type: 'string', description: 'Persona / behaviour rules for the agent' },
+    'type': { type: 'string', description: 'Runtime type: "bridge" (default) or "openclaw"' },
     'wait': { type: 'boolean', description: 'Poll until the spawn completes or fails' },
     'json': { type: 'boolean', description: 'Output as JSON' },
   },
   async run({ args }) {
+    const runtimeType = args.type ? String(args.type) : undefined
+    if (runtimeType != null && runtimeType !== 'bridge' && runtimeType !== 'openclaw')
+      throw new CliError(`Invalid --type "${runtimeType}". Must be "bridge" or "openclaw".`)
     const api = new TroopApi()
     const intent = await api.spawnAgent({
       name: String(args.name),
       hostId: args['host-id'] ? String(args['host-id']) : undefined,
       systemPrompt: args['system-prompt'] ? String(args['system-prompt']) : undefined,
+      runtimeType: runtimeType as 'bridge' | 'openclaw' | undefined,
     })
 
     if (!args.wait) {

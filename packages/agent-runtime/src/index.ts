@@ -1,6 +1,6 @@
 export { runLoop, RpcSessionMap } from './agent-runtime.js'
 export type { ChatMessage, RunOptions, RunResult, RuntimeConfig, RunStreamHandlers, TraceEntry } from './agent-runtime.js'
-export { taskTools, TOOLS } from './agent-tools/index.js'
+export { addReadRoot, taskTools, TOOLS } from './agent-tools/index.js'
 export type { ToolDefinition } from './agent-tools/index.js'
 export { runApeShell } from './agent-tools/ape-shell-exec.js'
 export type { ApeShellResult } from './agent-tools/ape-shell-exec.js'

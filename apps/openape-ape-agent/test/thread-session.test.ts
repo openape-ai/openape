@@ -84,3 +84,39 @@ describe('ThreadSession — no-activity watchdog', () => {
     expect(ended).toBeTruthy()
   })
 })
+
+describe('ThreadSession — per-turn token refresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    runLoopMock.mockReset()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('resolves a fresh runtimeConfig per turn so a long-lived thread never sends a stale token', async () => {
+    runLoopMock.mockImplementation(async ({ handlers }: any) => {
+      handlers.onTextDelta('ok')
+      return { status: 'ok', finalMessage: 'ok' }
+    })
+    const { deps } = makeDeps()
+    let n = 0
+    // Static config is the stale token a frozen thread would reuse; the
+    // resolver hands out a fresh token each turn.
+    deps.runtimeConfig = { apiBase: 'http://x/v1', apiKey: 'stale', model: 'm' } as any
+    ;(deps as any).refreshRuntimeConfig = async () => ({ apiBase: 'http://x/v1', apiKey: `fresh-${++n}`, model: 'm' })
+    const session = new ThreadSession(deps as any)
+
+    session.enqueue('one', 'm1')
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(1000)
+    session.enqueue('two', 'm2')
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    const keys = runLoopMock.mock.calls.map(c => c[0].config.apiKey)
+    expect(keys).not.toContain('stale')
+    expect(keys).toContain('fresh-1')
+    expect(keys).toContain('fresh-2')
+  })
+})

@@ -43,7 +43,7 @@ export const tasksTools: ToolDefinition[] = [
   },
   {
     name: 'tasks.create',
-    description: 'Create a new ape-task on the owner\'s task list at tasks.openape.ai.',
+    description: 'Create a new ape-task at tasks.openape.ai. Pass `team` (the team id) to file it on a shared team board, and `assignee` (an email) to delegate it to a teammate.',
     parameters: {
       type: 'object',
       properties: {
@@ -51,15 +51,21 @@ export const tasksTools: ToolDefinition[] = [
         notes: { type: 'string' },
         priority: { type: 'string', enum: ['low', 'med', 'high'] },
         due_at: { type: 'string', description: 'ISO date or +Nh/+Nd shorthand.' },
+        team: { type: 'string', description: 'Team id to file the task on (required when you belong to a team).' },
+        assignee: { type: 'string', description: 'Email of the teammate to assign the task to.' },
+        dedup_key: { type: 'string', description: 'Stable id for the source (e.g. a mail Message-ID). If an open task with this key already exists, no duplicate is created — pass it for recurring triage so the same item is not filed twice.' },
       },
       required: ['title'],
     },
     execute: async (args: unknown) => {
-      const a = args as { title: string, notes?: string, priority?: string, due_at?: string }
+      const a = args as { title: string, notes?: string, priority?: string, due_at?: string, team?: string, assignee?: string, dedup_key?: string }
       const argv = ['new', '--title', a.title, '--json']
       if (a.notes) argv.push('--notes', a.notes)
       if (a.priority) argv.push('--priority', a.priority)
       if (a.due_at) argv.push('--due', a.due_at)
+      if (a.team) argv.push('--team', a.team)
+      if (a.assignee) argv.push('--assignee', a.assignee)
+      if (a.dedup_key) argv.push('--dedup-key', a.dedup_key)
       const out = ape(argv)
       try { return JSON.parse(out) }
       catch { return { raw: out } }
