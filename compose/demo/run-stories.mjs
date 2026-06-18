@@ -14,8 +14,6 @@ import coderStories from './stories/coder.mjs'
 import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
 import troopStories from './stories/troop.mjs'
-// NB: the org guide is captured by compose/agent/org-ceo.mjs instead — its
-// final story spawns a real CEO agent, which needs a bound nest.
 
 const OUT = '/demo/out'
 mkdirSync(OUT, { recursive: true })

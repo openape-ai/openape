@@ -4,7 +4,7 @@ import { TROOP_SCOPES } from '../../utils/scope-catalog'
 // Overrides the @openape/nuxt-auth-sp module's default openape.json
 // handler so we can inject troop's scope catalog (spec
 // sp-data-access.md §3) without forking the module. Receiver SPs
-// like org.openape.ai read this to discover what they may request
+// read this to discover what they may request
 // in a delegation grant.
 export default defineEventHandler((event) => {
   const origin = getRequestURL(event).origin
