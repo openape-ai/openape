@@ -16,7 +16,7 @@ Konkret nicht/teilweise in VC:
 Eine versionierte, reproduzierbare Gateway-Definition + Deploy-Script, sodass der Gateway aus dem Repo neu aufgesetzt/aktualisiert werden kann (analog `scripts/deploy-image.mjs` für die Web-Apps).
 
 ## Milestones
-- **M1 — Ist-Stand ins Repo holen:** prod `docker-compose.yml` + `litellm-config.yaml` (+ `llm-route/`, `llm-auth/`) als kanonische Quelle nach `compose/gateway/` (neues Verzeichnis, klar getrennt vom lokal-dev `compose/docker-compose.yml`). `.env.example` mit den Variablennamen (ohne Werte). Live↔Repo einmal exakt abgleichen (diff = 0).
+- **M1 — Ist-Stand ins Repo holen:** ✅ DONE (PR #791, 2026-06-18). Prod `docker-compose.yml` + `litellm-config.yaml` + `llm-auth/` + `llm-route/` nach `compose/gateway/` gezogen, diff=0 gegen chatty per md5 verifiziert (alle 8 Dateien). `.env.example` (nur Variablennamen) + `README.md` (Stack-Übersicht + M2–M4-Todos) ergänzt. Keine Secrets (alles `${VAR}`/`os.environ`-Refs; `.env`, `codex/`, `codex-dm/` ausgeschlossen). `compose/` ist kein pnpm-Workspace-Glob → keine Build-Auswirkung.
 - **M2 — Deploy-Script:** `scripts/deploy-gateway.mjs` (oder `pnpm run deploy:gateway`) — rsync/scp `compose/gateway/*` → chatty `/home/openape/prod-llms/`, dann `docker compose up -d`, Health-Gate (`/health/readiness` 200 + ein DDISA-Completion-Smoke), Rollback auf vorherige Config bei Fehler. Secrets bleiben auf chatty (`.env` nicht überschreiben).
 - **M3 — Drift-Guard:** CI- oder Pre-Deploy-Check, der Repo-`compose/gateway/` gegen live chatty difft und bei Abweichung warnt (verhindert erneutes Auseinanderlaufen).
 - **M4 — `_MODELS`-Entkopplung + lindeverlag stilllegen** (gefaltet aus #3, **Patrick-Entscheid 2026-06-18: stilllegen**):
