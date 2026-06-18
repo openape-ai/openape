@@ -1,0 +1,13 @@
+{
+  "name": "openape-llm-auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DDISA token-exchange front-end for the llms.openape.ai LLM gateway",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "jose": "^5.9.6"
+  }
+}
