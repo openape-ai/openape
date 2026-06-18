@@ -84,4 +84,12 @@ describe('pollOnce', () => {
     await pollOnce(deps)
     expect(runLoopImpl).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ model: 'gpt-5.4' }) }))
   })
+
+  it('runs with the freshly exchanged gateway key when refreshApiKey is set', async () => {
+    const runLoopImpl = vi.fn(async () => ({ status: 'ok' as const, finalMessage: 'x', stepCount: 1, trace: [] }))
+    const { deps } = makeDeps({ task: task({ systemPrompt: 's', userMessage: 'u' }), runLoopImpl })
+    deps.refreshApiKey = async () => 'ddisa-token-fresh'
+    await pollOnce(deps)
+    expect(runLoopImpl).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ apiKey: 'ddisa-token-fresh' }) }))
+  })
 })
