@@ -19,12 +19,16 @@ Eine versionierte, reproduzierbare Gateway-Definition + Deploy-Script, sodass de
 - **M1 — Ist-Stand ins Repo holen:** prod `docker-compose.yml` + `litellm-config.yaml` (+ `llm-route/`, `llm-auth/`) als kanonische Quelle nach `compose/gateway/` (neues Verzeichnis, klar getrennt vom lokal-dev `compose/docker-compose.yml`). `.env.example` mit den Variablennamen (ohne Werte). Live↔Repo einmal exakt abgleichen (diff = 0).
 - **M2 — Deploy-Script:** `scripts/deploy-gateway.mjs` (oder `pnpm run deploy:gateway`) — rsync/scp `compose/gateway/*` → chatty `/home/openape/prod-llms/`, dann `docker compose up -d`, Health-Gate (`/health/readiness` 200 + ein DDISA-Completion-Smoke), Rollback auf vorherige Config bei Fehler. Secrets bleiben auf chatty (`.env` nicht überschreiben).
 - **M3 — Drift-Guard:** CI- oder Pre-Deploy-Check, der Repo-`compose/gateway/` gegen live chatty difft und bei Abweichung warnt (verhindert erneutes Auseinanderlaufen).
-- **M4 (gefaltet aus „#3 _MODELS-Kopplung"):** `ddisa_auth.py` `_MODELS` entkoppeln — `delta-mind`/`lindeverlag` eigene `_ACCOUNT_MODELS`-Einträge (ihre echten Codex-Modelle gpt-5.x) geben, dann `_MODELS` = nur `LocalCore-Instant/Thinking` (Default/headwai). Self-Check (`__main__`) entsprechend anpassen. **Verhaltens-erhaltend verifizieren** (delta-mind/lindeverlag-Allowlist unverändert), da sonst Codex-Accounts brechen.
+- **M4 — `_MODELS`-Entkopplung + lindeverlag stilllegen** (gefaltet aus #3, **Patrick-Entscheid 2026-06-18: stilllegen**):
+  - `delta-mind` bekommt einen eigenen `_ACCOUNT_MODELS`-Eintrag (echte Codex-Modelle gpt-5.x), dann `_MODELS` = nur `LocalCore-Instant/Thinking`.
+  - **lindeverlag stilllegen:** `_DEFAULT_ACCOUNT` von `"lindeverlag"` → neutraler Name (z.B. `"default"`/`"headwai"`) — load-bearing Default-Label, daher mit ALLEN Referenzen ändern (`ddisa_auth.py`, llm-route `DEFAULT_ACCOUNT`-env, Edge-Regex falls nötig). Tote `lindeverlag/gpt-5.x`-Einträge aus `litellm-config.yaml` raus; `llms-codex-proxy`-Container (lindeverlag-Upstream) abbauen, falls ungenutzt.
+  - Self-Check (`__main__`) anpassen. **Verhaltens-erhaltend verifizieren**: Default-Pfad (`/v1`→LocalCore) + delta-mind unverändert; lindeverlag-Pfad entfällt bewusst (Account gestoppt). Completion-Beweis je verbleibendem Account.
+  - Reaktivierung (falls lindeverlag-Codex je zurückkommt) = additiver neuer Account, kein Default-Label → sauberer Zustand.
 
 ## Akzeptanz
 - `compose/gateway/` enthält die EXAKTE Prod-Config (diff gegen chatty = 0).
 - `pnpm run deploy:gateway` kann den Gateway aus dem Repo aktualisieren + bei Health-Fail zurückrollen, ohne Secrets anzufassen.
-- M4: `python3 ddisa_auth.py` Self-Check grün; live delta-mind/lindeverlag + Default unverändert (Completion-Beweis je Account).
+- M4: `python3 ddisa_auth.py` Self-Check grün; Default-Pfad + delta-mind unverändert (Completion-Beweis); lindeverlag bewusst entfernt (Default-Label umbenannt).
 
 ## Risiko/Hinweise
 - Secrets NIEMALS ins Repo (`.env` bleibt chatty-only; nur `.env.example`).
