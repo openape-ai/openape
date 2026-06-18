@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { ensureFreshIdpAuth, getAuthorizedBearer, NotLoggedInError } from '@openape/cli-auth'
+import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
 import type { Detector } from '@openape/prompt-injection-detector'
 import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
@@ -50,6 +50,7 @@ import { readConfig } from './bridge-config'
 import type { ChatBackend } from './troop-chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
+import { resolveLlmGatewayKey } from './llm-gateway-key'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
 import { composeSystemPrompt, defaultSkillsDir } from './skills'
 import { ThreadSession } from './thread-session'
@@ -200,6 +201,10 @@ class Bridge {
     // DMs through the existing chat WebSocket connection.
     this.cron = new CronRunner({
       runtimeConfig: this.runtimeConfig(),
+      // Cron fires off-thread, so it can't ride freshRuntimeConfig() like chat
+      // turns do — give it the same DDISA exchange directly so cron stops
+      // leaning on the boot master key (Todo 1).
+      refreshApiKey: () => resolveLlmGatewayKey(process.env.LITELLM_BASE_URL ?? '', this.llmKey, log),
       chat: this.chat,
       ownerEmail: this.ownerEmail,
       log,
@@ -216,15 +221,7 @@ class Bridge {
 
   private async refreshLlmGatewayKey(): Promise<void> {
     const base = process.env.LITELLM_BASE_URL ?? ''
-    if (!base.includes('llms.openape.ai')) return
-    try {
-      const u = new URL(base)
-      const bearer = await getAuthorizedBearer({ endpoint: u.origin, aud: u.host })
-      this.llmKey = bearer.replace(/^Bearer\s+/i, '')
-    }
-    catch (err) {
-      log(`llm gateway token exchange failed (keeping current key): ${err instanceof Error ? err.message : String(err)}`)
-    }
+    this.llmKey = await resolveLlmGatewayKey(base, this.llmKey, log)
   }
 
   /**
