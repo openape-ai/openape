@@ -20,7 +20,7 @@ The CEO Telegram flow gives the Owner a mobile entry point into an OpenApe Org. 
    The bridge posts the text as a chat message to the Owner's org CEO agent. The forwarded context includes the org identity and the Owner identity so the CEO can ground the reply in the correct organization.
 
 3. **The CEO refreshes org context.**
-   The CEO treats every turn as stateless. Before answering it reads the live org source of truth: org vision, members, objectives, reports and recent cost snapshots from `org.openape.ai`.
+   The CEO treats every turn as stateless. Before answering it reads the live company source of truth: vision, members, objectives, reports and recent cost snapshots from `troop.openape.ai`.
 
 4. **The CEO classifies the request.**
    - If the Owner asks for status, priorities, budget or a proposal, the CEO answers directly with the current facts and a recommended next step.

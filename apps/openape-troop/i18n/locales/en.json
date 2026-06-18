@@ -345,7 +345,7 @@
           "hint": "Twice-daily digest of your Bluesky home timeline. Param: topic."
         },
         "ceo": {
-          "hint": "CEO for an org.openape.ai organization — reads vision/members/objectives/costs live. Params: org_id, org_name."
+          "hint": "CEO for a company — reads vision/members/objectives/costs live. Params: org_id, org_name."
         }
       }
     },
