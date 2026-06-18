@@ -34,25 +34,67 @@
 //   APE_CHAT_BRIDGE_SYSTEM_PROMPT fallback system prompt when agent.json is missing
 //   APE_CHAT_BRIDGE_ROOM          restrict to one room id
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
+import { ensureFreshIdpAuth, getAuthorizedBearer, NotLoggedInError } from '@openape/cli-auth'
 import type { Detector } from '@openape/prompt-injection-detector'
 import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
-import { startSecretsWatcher } from '@openape/apes'
+import { addReadRoot, startSecretsWatcher } from '@openape/apes'
+import type { BridgeConfig } from './bridge-config'
+import { readConfig } from './bridge-config'
+import type { ChatBackend } from './troop-chat-api'
 import { TroopChatApi } from './troop-chat-api'
 import { CronRunner } from './cron-runner'
 import { readAgentIdentity, readAllowlist, shouldAutoAccept } from './identity'
-import { composeSystemPrompt } from './skills'
+import { composeSystemPrompt, defaultSkillsDir } from './skills'
 import { ThreadSession } from './thread-session'
 import { AgentSession } from './agent-session'
+import type { Message } from './channel'
+import { createTelegramTransport } from './telegram-api'
+import { TelegramChatApi } from './telegram-chat-api'
+import { TelegramChannel } from './telegram-channel'
 
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
+const TELEGRAM_OWNER_PIN_PATH = join(homedir(), '.openape', 'agent', 'telegram-owner.json')
+const MEMORY_PATH = join(homedir(), '.openape', 'agent', 'MEMORY.md')
+
+/**
+ * Seed an empty MEMORY.md so the agent's cross-conversation memory works from
+ * the first turn. The default persona tells the agent to read this file at the
+ * start of every turn and append to it — but until the agent writes it once,
+ * the read fails with ENOENT. Creating it empty makes the read return ''
+ * cleanly and gives the agent a file to append to. Never clobbers an existing
+ * memory.
+ */
+function ensureMemoryFile(): void {
+  if (existsSync(MEMORY_PATH)) return
+  try {
+    mkdirSync(dirname(MEMORY_PATH), { recursive: true })
+    writeFileSync(MEMORY_PATH, '', { flag: 'wx' })
+    log('seeded empty MEMORY.md')
+  }
+  catch { /* already exists (race) or unwritable — the agent's first write will create it */ }
+}
+
+/** Read the trust-on-first-use Telegram owner pin, if one was learned before. */
+function readTelegramOwnerPin(): number | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(TELEGRAM_OWNER_PIN_PATH, 'utf8')) as { ownerUserId?: unknown }
+    return typeof parsed.ownerUserId === 'number' ? parsed.ownerUserId : undefined
+  }
+  catch { return undefined }
+}
+
+/** Persist the learned Telegram owner pin so a restart keeps the lock. */
+function writeTelegramOwnerPin(id: number): void {
+  try { writeFileSync(TELEGRAM_OWNER_PIN_PATH, JSON.stringify({ ownerUserId: id })) }
+  catch (err) { log(`failed to persist telegram owner pin: ${err instanceof Error ? err.message : String(err)}`) }
+}
 
 /**
  * Resolve the agent's system prompt at the moment we're about to send a
@@ -94,70 +136,10 @@ function resolveTools(envFallback: string[]): string[] {
   return envFallback
 }
 
-const DEFAULT_ENDPOINT = 'https://troop.openape.ai'
-const DEFAULT_APES_BIN = 'apes'
-const DEFAULT_MAX_STEPS = 10
-const DEFAULT_SYSTEM_PROMPT
-  = 'You are a helpful assistant in a 1:1 chat. Be concise and friendly. '
-    + 'When asked for facts, say "I don\'t know" rather than guess.'
-
 const PING_INTERVAL_MS = 30_000
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 const ALLOWLIST_POLL_INTERVAL_MS = 30_000
-
-interface Message {
-  id: string
-  roomId: string
-  threadId: string
-  senderEmail: string
-  senderAct: 'human' | 'agent'
-  body: string
-  replyTo: string | null
-  createdAt: number
-  editedAt: number | null
-}
-
-export interface BridgeConfig {
-  endpoint: string
-  apesBin: string
-  model: string
-  systemPrompt: string
-  tools: string[]
-  maxSteps: number
-  roomFilter?: string
-}
-
-function readConfig(): BridgeConfig {
-  const toolsRaw = process.env.APE_CHAT_BRIDGE_TOOLS ?? ''
-  const tools = toolsRaw.split(',').map(s => s.trim()).filter(Boolean)
-  const maxStepsRaw = process.env.APE_CHAT_BRIDGE_MAX_STEPS
-  const maxSteps = maxStepsRaw ? Number.parseInt(maxStepsRaw, 10) : DEFAULT_MAX_STEPS
-
-  // Model is required — there's no safe built-in default. A wrong
-  // default silently routes to a model the user's LiteLLM proxy
-  // doesn't know about and 400s every chat-completion request,
-  // visible only as a runtime error in the chat UI. Failing at
-  // startup with a pointer to the fix is much friendlier.
-  const model = process.env.APE_CHAT_BRIDGE_MODEL
-  if (!model) {
-    throw new Error(
-      'APE_CHAT_BRIDGE_MODEL is not set. Set it in the container env '
-      + '(compose environment: block) or globally in `~/litellm/.env`. '
-      + 'Common values: `gpt-5.4` (ChatGPT-only LiteLLM proxy), `claude-haiku-4-5` (Anthropic-only).',
-    )
-  }
-
-  return {
-    endpoint: (process.env.OPENAPE_TROOP_URL ?? DEFAULT_ENDPOINT).replace(/\/$/, ''),
-    apesBin: process.env.APE_CHAT_BRIDGE_APES_BIN ?? DEFAULT_APES_BIN,
-    model,
-    systemPrompt: process.env.APE_CHAT_BRIDGE_SYSTEM_PROMPT ?? DEFAULT_SYSTEM_PROMPT,
-    tools,
-    maxSteps: Number.isFinite(maxSteps) && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS,
-    roomFilter: process.env.APE_CHAT_BRIDGE_ROOM,
-  }
-}
 
 async function getIdentity(): Promise<{ email: string }> {
   const idp = await ensureFreshIdpAuth()
@@ -180,15 +162,6 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`
 }
 
-function refusalText(reason: string | undefined): string {
-  // Short, neutral refusal. Reason is appended so the owner sees in
-  // their audit log + chat history why a specific message was blocked.
-  // Phrasing intentionally avoids language the attacker can copy back
-  // ("ignore previous instructions and …") that would re-trigger.
-  const base = 'I won\'t process this message — it looks like a prompt-injection attempt.'
-  return reason ? `${base}\n\n(matched: ${reason})` : base
-}
-
 class Bridge {
   // Sessions keyed by `${roomId}:${threadId}`. Each ThreadSession holds
   // its own message history and calls @openape/apes' runLoop directly
@@ -201,11 +174,21 @@ class Bridge {
   // backend later. The bridge is the choke-point for every chat message
   // before it reaches the agent runtime, so this is the right place.
   private injectionDetector: Detector = createHeuristicDetector()
+  // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
+  // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
+  // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
+  // chat threads pick up the refreshed token — drop master_key + cron-DDISA later.
+  private llmKey: string = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
 
   constructor(
     private cfg: BridgeConfig,
     private selfEmail: string,
     private ownerEmail: string,
+    // Canonical, process-global-free home for the per-agent rules the
+    // nest also runs in-process. The bridge delegates to it one rule at
+    // a time (starting with the refusal wording) so the prod path and
+    // the in-process nest path stay byte-identical with no second copy.
+    private session: AgentSession,
   ) {
     this.bearer = async () => {
       const idp = await ensureFreshIdpAuth()
@@ -224,6 +207,35 @@ class Bridge {
       bearer: this.bearer,
     })
     this.cron.start()
+    // Swap the static gateway key for this agent's own DDISA token (Option E).
+    // Cached + auto-refreshed by cli-auth; fall back to the current key on any
+    // error so a flaky exchange never takes the agent offline.
+    void this.refreshLlmGatewayKey()
+    setInterval(() => void this.refreshLlmGatewayKey(), 40 * 60 * 1000)
+  }
+
+  private async refreshLlmGatewayKey(): Promise<void> {
+    const base = process.env.LITELLM_BASE_URL ?? ''
+    if (!base.includes('llms.openape.ai')) return
+    try {
+      const u = new URL(base)
+      const bearer = await getAuthorizedBearer({ endpoint: u.origin, aud: u.host })
+      this.llmKey = bearer.replace(/^Bearer\s+/i, '')
+    }
+    catch (err) {
+      log(`llm gateway token exchange failed (keeping current key): ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /**
+   * Re-exchange the gateway token (if stale) and return a fresh runtimeConfig.
+   * Thread sessions call this per turn so a long-lived thread never presents an
+   * expired DDISA token. getAuthorizedBearer is cheap when the cached SP-token
+   * is still valid and re-mints only when it's within the expiry skew.
+   */
+  private async freshRuntimeConfig(): Promise<RuntimeConfig> {
+    await this.refreshLlmGatewayKey()
+    return this.runtimeConfig()
   }
 
   /**
@@ -233,11 +245,39 @@ class Bridge {
    */
   private runtimeConfig(): RuntimeConfig {
     const apiBase = (process.env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
-    const apiKey = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
+    const apiKey = this.llmKey
     if (!apiKey) {
       throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
     }
-    return { apiBase, apiKey, model: this.cfg.model }
+    return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
+  }
+
+  /**
+   * Start the per-agent chat adapters configured via sealed secrets (today:
+   * Telegram). Each runs its own long-lived inbound loop concurrently with
+   * the troop WebSocket and feeds messages through the same handleInbound
+   * choke-point, but with its own backend so replies go back to that channel.
+   * Fire-and-forget: a channel crash is logged, never takes the bridge down.
+   */
+  startExtraChannels(): void {
+    const tg = this.cfg.telegram
+    if (!tg) return
+    const call = createTelegramTransport(tg.botToken)
+    const backend = new TelegramChatApi(call)
+    const channel = new TelegramChannel({
+      call,
+      ownerUserId: tg.ownerUserId,
+      // Persist the trust-on-first-use owner pin next to agent.json so a bridge
+      // restart keeps the lock instead of re-learning (and re-opening the window).
+      loadOwnerPin: readTelegramOwnerPin,
+      saveOwnerPin: writeTelegramOwnerPin,
+      ownerEmail: this.ownerEmail,
+      backend,
+      log,
+    })
+    void channel.start((msg, b) => this.handleInbound(msg, b)).catch((err) => {
+      log(`telegram channel crashed: ${err instanceof Error ? err.message : String(err)}`)
+    })
   }
 
   async sendInitialOwnerRequestIfNeeded(): Promise<void> {
@@ -305,7 +345,13 @@ class Bridge {
     }
   }
 
-  async handleInbound(msg: Message): Promise<void> {
+  /**
+   * Handle one inbound message from any channel. `backend` is the channel's
+   * own outbound surface (troop or telegram) — refusals and the agent's reply
+   * go back out through it, so the agent communicates on the same channel it
+   * was reached on.
+   */
+  async handleInbound(msg: Message, backend: ChatBackend): Promise<void> {
     if (msg.senderEmail === this.selfEmail) return
     if (!msg.body.trim()) return
     if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
@@ -332,7 +378,7 @@ class Bridge {
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
-        await this.chat.postMessage(msg.roomId, refusalText(decision.reason), {
+        await backend.postMessage(msg.roomId, this.session.refusalText(decision.reason), {
           replyTo: msg.id,
           threadId: msg.threadId,
         })
@@ -344,19 +390,22 @@ class Bridge {
       return
     }
 
-    const session = this.getOrCreateThread(msg.roomId, msg.threadId)
+    const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
   }
 
-  private getOrCreateThread(roomId: string, threadId: string): ThreadSession {
+  private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
     const key = `${roomId}:${threadId}`
     let s = this.threads.get(key)
     if (s) return s
     s = new ThreadSession({
       roomId,
       threadId,
-      chat: this.chat,
+      chat: backend,
       runtimeConfig: this.runtimeConfig(),
+      // Re-resolve the gateway token per turn (short-lived DDISA token would
+      // otherwise expire on a long-lived thread -> 401).
+      refreshRuntimeConfig: () => this.freshRuntimeConfig(),
       // Resolve tools + systemPrompt on every turn from agent.json
       // (latest sync from troop). Owner edits in the troop UI thus
       // take effect on the very next message in an existing thread —
@@ -416,7 +465,7 @@ class Bridge {
         // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
         // Translate to the bridge's internal Message shape.
         const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
-        void this.handleInbound(msg)
+        void this.handleInbound(msg, this.chat)
       })
 
       ws.on('close', () => {
@@ -434,18 +483,28 @@ class Bridge {
 }
 
 async function main(): Promise<void> {
-  const cfg = readConfig()
-
   // Materialize sealed secrets (secrets.d/*.blob) into this process's env
   // before the agent loop starts, then watch for rotate/revoke. Without
   // this the agent's bash tools never see delivered secrets like
   // FORGEJO_TOKEN — the blobs survive a nest recreate but stay sealed.
+  // Runs BEFORE readConfig so secret-delivered config (e.g. the Telegram
+  // bot token) is in env when the config is read.
   try {
     startSecretsWatcher({ log: m => log(m) })
   }
   catch (err) {
     log(`secrets watcher failed to start: ${err instanceof Error ? err.message : String(err)}`)
   }
+
+  const cfg = readConfig()
+
+  // The system prompt advertises bundled skills' SKILL.md by absolute path and
+  // tells the agent to load them with file.read — which is jailed to $HOME.
+  // Whitelist the bundled skills dir as a read-only root so those loads work.
+  addReadRoot(defaultSkillsDir())
+
+  // Make the agent's cross-conversation memory usable from turn one.
+  ensureMemoryFile()
 
   const idpId = await getIdentity()
   const onDisk = readAgentIdentity()
@@ -463,7 +522,10 @@ async function main(): Promise<void> {
     + `max_steps=${cfg.maxSteps} room=${cfg.roomFilter ?? '*'}`,
   )
 
-  const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail)
+  const bridge = new Bridge(cfg, onDisk.email, onDisk.ownerEmail, session)
+  // Telegram (and future adapters) run their own inbound loop alongside the
+  // troop WebSocket reconnect loop below.
+  bridge.startExtraChannels()
   let attempt = 0
   while (true) {
     try {

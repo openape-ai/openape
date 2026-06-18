@@ -13,7 +13,7 @@ import {
 } from '../../lib/agent-bootstrap'
 import { generateKeyPairInMemory } from '../../lib/keygen'
 import { getHostPlatform } from '../../lib/host-platform'
-import { upsertNestAgent } from '../../lib/nest-registry'
+import { isRuntimeType, upsertNestAgent } from '../../lib/nest-registry'
 
 function readUidOrNull(name: string): number | null {
   try {
@@ -59,6 +59,10 @@ export const spawnAgentCommand = defineCommand({
       type: 'string',
       description: 'Model the bridge sends in chat-completion requests (default: claude-haiku-4-5). Override when fronting a proxy that doesn\'t route the default — e.g. ChatGPT-only proxy needs `gpt-5.4`.',
     },
+    'bridge-reasoning-effort': {
+      type: 'string',
+      description: 'Reasoning/thinking depth for gpt-5.x (minimal|low|medium|high). Tier compute by task difficulty on the same model — quick-win=low, research=high.',
+    },
     'kind': {
       type: 'string',
       description: 'Agent kind: "user" (default, connects to troop-chat) or "service" (polls an SP backend\'s task queue and runs each task through the LLM). With "service", --serves is required.',
@@ -70,6 +74,10 @@ export const spawnAgentCommand = defineCommand({
     'poll-interval': {
       type: 'string',
       description: 'For --kind service: idle poll interval in ms (default 2000).',
+    },
+    'type': {
+      type: 'string',
+      description: 'Runtime type: "bridge" (default, our @openape/ape-agent loop, pm2-supervised) or "openclaw" (foreign one-shot runtime the nest exec\'s per message). Orthogonal to --kind.',
     },
   },
   async run({ args }) {
@@ -88,6 +96,9 @@ export const spawnAgentCommand = defineCommand({
     if (isService && !servesUrl)
       throw new CliError('--kind service requires --serves <SP base URL> (e.g. https://zaz.delta-mind.at).')
     const pollMs = typeof args['poll-interval'] === 'string' ? Number.parseInt(args['poll-interval'], 10) : undefined
+    const runtimeType = typeof args.type === 'string' ? args.type : undefined
+    if (runtimeType != null && !isRuntimeType(runtimeType))
+      throw new CliError(`Invalid --type "${runtimeType}". Must be "bridge" or "openclaw".`)
 
     const auth = loadAuth()
     if (!auth) {
@@ -197,6 +208,7 @@ export const spawnAgentCommand = defineCommand({
         email: registration.email,
         registeredAt: Math.floor(Date.now() / 1000),
         kind: isService ? 'service' : undefined,
+        runtimeType,
         service: isService && servesUrl
           ? { spBaseUrl: servesUrl, pollIntervalMs: pollMs != null && Number.isFinite(pollMs) && pollMs > 0 ? pollMs : undefined }
           : undefined,
@@ -207,6 +219,7 @@ export const spawnAgentCommand = defineCommand({
               baseUrl: typeof args['bridge-base-url'] === 'string' ? args['bridge-base-url'] : undefined,
               apiKey: typeof args['bridge-key'] === 'string' ? args['bridge-key'] : undefined,
               model: typeof args['bridge-model'] === 'string' ? args['bridge-model'] : undefined,
+              reasoningEffort: typeof args['bridge-reasoning-effort'] === 'string' ? args['bridge-reasoning-effort'] : undefined,
             }
           : undefined,
       })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { materializeRecipe, parseRecipe } from '../server/utils/agent-recipe'
+import toolCatalog from '../server/tool-catalog.json'
 import { buildDeployPlan, fetchRecipeManifest, RECIPE_AGENT_TOOLS } from '../server/utils/recipe-deploy'
 
 const MANIFEST = `
@@ -26,6 +27,12 @@ function recipe() {
 }
 
 describe('buildDeployPlan', () => {
+  it('uses only known catalog tool names for recipe agents', () => {
+    const knownTools = new Set(toolCatalog.tools.map(t => t.name))
+    expect(RECIPE_AGENT_TOOLS.length).toBeGreaterThan(0)
+    expect(RECIPE_AGENT_TOOLS.every(tool => knownTools.has(tool))).toBe(true)
+  })
+
   it('maps a materialized recipe to system prompt + schedules + caps', () => {
     const rec = recipe()
     const mat = materializeRecipe(rec, { topic: 'AI agents' })
@@ -45,6 +52,37 @@ describe('buildDeployPlan', () => {
     })
     // schedule without description gets a sensible default user prompt
     expect(plan.schedules[1]!.userPrompt).toMatch(/Run your configured task/)
+    // agent-level tools default when the recipe declares none
+    expect(plan.tools).toEqual([...RECIPE_AGENT_TOOLS])
+  })
+
+  it('gives scheduled tasks the recipe-declared tools when present (orchestrator pattern)', () => {
+    const manifest = `
+name: pm
+kind: agent
+intent: Orchestrate {{org}}.
+params:
+  - name: org
+    type: string
+    required: true
+schedules:
+  - cron: "*/10 * * * *"
+    description: triage + dispatch
+tools:
+  - tasks.list
+  - agent.spawn
+  - agent.destroy
+`
+    const r = parseRecipe(manifest)
+    if (!r.ok) throw new Error(r.reason)
+    const mat = materializeRecipe(r.value, { org: 'Werkstatt' })
+    if (!mat.ok) throw new Error(mat.reason)
+    const plan = buildDeployPlan(r.value, mat.value)
+
+    // declared tools flow onto the scheduled task — NOT the bash-centric default
+    expect(plan.schedules[0]!.tools).toEqual(['tasks.list', 'agent.spawn', 'agent.destroy'])
+    // ...and onto the agent-level toolset (chat-thread tools)
+    expect(plan.tools).toEqual(['tasks.list', 'agent.spawn', 'agent.destroy'])
   })
 
   it('excludes optional capabilities from requiredCapabilities (multi-forge recipe)', () => {

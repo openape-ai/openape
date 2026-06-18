@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
       status: nests.status,
       createdAt: nests.createdAt,
       lastSeenAt: nests.lastSeenAt,
+      lastIp: nests.lastIp,
     })
     .from(nests)
     .where(and(eq(nests.ownerEmail, owner.toLowerCase())))
@@ -33,5 +34,6 @@ export default defineEventHandler(async (event) => {
     status: r.status,
     created_at: r.createdAt,
     last_seen_at: r.lastSeenAt,
+    last_ip: r.lastIp,
   }))
 })

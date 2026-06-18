@@ -38,6 +38,27 @@ describe('ensureFreshIdpAuth', () => {
     expect(result.access_token).toBe('still-good')
   })
 
+  it('reads the cached auth from an explicit authHome (per-agent home)', async () => {
+    const agentHome = mkdtempSync(join(tmpdir(), 'cli-auth-refresh-agent-'))
+    try {
+      saveIdpAuth({
+        idp: 'https://id.openape.ai',
+        access_token: 'agent-good',
+        refresh_token: 'rt',
+        email: 'agent@x',
+        expires_at: 5000,
+      }, agentHome)
+
+      const result = await ensureFreshIdpAuth(1000, agentHome)
+      expect(result.access_token).toBe('agent-good')
+      // The env home has no auth.json → without authHome it would throw.
+      await expect(ensureFreshIdpAuth(1000)).rejects.toThrow(NotLoggedInError)
+    }
+    finally {
+      rmSync(agentHome, { recursive: true, force: true })
+    }
+  })
+
   it('throws NotLoggedInError when token expired and no refresh_token AND no key_path', async () => {
     saveIdpAuth({
       idp: 'https://id.openape.ai',

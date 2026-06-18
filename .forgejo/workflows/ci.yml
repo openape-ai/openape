@@ -33,6 +33,13 @@ jobs:
         # e2e needs a running stack (dedicated job); docs prerenders OG images
         # (fragile, own deploy) — both excluded from per-PR CI.
         run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
+      - name: Clean stale build output
+        # Forgejo runners reuse their workspace between runs. A previous nuxt
+        # build leaves apps/<app>/.output/server/node_modules with a recursive
+        # vue→@vue/server-renderer→vue symlink cycle; the next nitro build
+        # scandir's it and dies with ELOOP. Removing stale .output/.nuxt before
+        # the build makes each run start clean (a fresh checkout builds fine).
+        run: rm -rf apps/*/.output apps/*/.nuxt examples/*/.output examples/*/.nuxt
       - name: Build (affected)
         # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which would
         # race a concurrent nuxi prepare from the typecheck/test wave.

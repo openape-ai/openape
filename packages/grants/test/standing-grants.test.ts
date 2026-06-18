@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { InMemoryGrantStore } from '../src/stores.js'
 import { canonicalizeCliPermission } from '../src/cli-permissions.js'
 import {
+  buildCoverageDetailFromStandingGrant,
   evaluateStandingGrants,
   isStandingGrantRequest,
 
@@ -312,5 +313,95 @@ describe('evaluateStandingGrants', () => {
       )
       expect(match).toBeNull()
     })
+  })
+
+  it('matches wildcard target_host stored as *', async () => {
+    const store = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        target_host: '*',
+        resource_chain_template: [{ resource: 'repo' }],
+      }),
+    ])
+    const match = await evaluateStandingGrants(makeIncomingGrantRequest(), store)
+    expect(match).not.toBeNull()
+  })
+
+  it('skips expired standing grants and matches a later valid candidate', async () => {
+    const now = Math.floor(Date.now() / 1000)
+    const store = await withStandingGrants([
+      {
+        ...makeStandingGrant({
+          owner: 'patrick@',
+          delegate: 'claude@example.com',
+          resource_chain_template: [{ resource: 'repo' }],
+        }),
+        id: 'expired',
+        expires_at: now - 1,
+      },
+      {
+        ...makeStandingGrant({
+          owner: 'patrick@',
+          delegate: 'claude@example.com',
+          resource_chain_template: [{ resource: 'repo', selector: { owner: 'patrick' } }],
+        }),
+        id: 'valid',
+      },
+    ])
+    const match = await evaluateStandingGrants(makeIncomingGrantRequest(), store)
+    expect(match?.standing_grant_id).toBe('valid')
+  })
+
+  it('requires every incoming CLI detail to be covered', async () => {
+    const store = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'git',
+        action: 'exec',
+        resource_chain_template: [{ resource: 'repo', selector: { owner: 'patrick' } }],
+      }),
+    ])
+    const primaryDetail = makeIncomingGrantRequest().authorization_details[0]!
+    const secondDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'kubectl',
+      operation_id: 'kubectl.get',
+      resource_chain: [{ resource: 'cluster', selector: { name: 'prod' } }],
+      action: 'read',
+      permission: '',
+      display: 'kubectl get pods',
+      risk: 'low' as const,
+    }
+    secondDetail.permission = canonicalizeCliPermission(secondDetail)
+    const match = await evaluateStandingGrants(
+      makeIncomingGrantRequest({
+        authorization_details: [primaryDetail, secondDetail],
+      }),
+      store,
+    )
+    expect(match).toBeNull()
+  })
+})
+
+describe('buildCoverageDetailFromStandingGrant', () => {
+  it('falls back to incoming cli/action/risk and canonicalizes permission', () => {
+    const incoming = makeIncomingGrantRequest().authorization_details[0]!
+    const detail = buildCoverageDetailFromStandingGrant({
+      type: 'standing',
+      owner: 'patrick@',
+      delegate: 'claude@example.com',
+      audience: 'shapes',
+      resource_chain_template: [{ resource: 'repo', selector: { owner: 'patrick' } }],
+      grant_type: 'always',
+      reason: 'standing reason',
+    }, incoming)
+
+    expect(detail.cli_id).toBe(incoming.cli_id)
+    expect(detail.action).toBe(incoming.action)
+    expect(detail.risk).toBe('critical')
+    expect(detail.display).toBe('standing reason')
+    expect(detail.permission).toBe(canonicalizeCliPermission(detail))
   })
 })

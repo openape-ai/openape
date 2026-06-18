@@ -66,6 +66,16 @@ interface AuthCtx {
   hostId?: string
 }
 const authByPeerId = new Map<string, AuthCtx>()
+// Client IP captured at WS upgrade, keyed by peer id, surfaced on `hello`.
+const ipByPeerId = new Map<string, string>()
+
+/** Best-effort client IP from the upgrade request (x-forwarded-for behind the edge). */
+function clientIpOf(peer: { request?: { headers?: { get?: (k: string) => string | null } } }): string | null {
+  const h = peer.request?.headers
+  const xff = h?.get?.('x-forwarded-for')
+  if (xff) return xff.split(',')[0]!.trim()
+  return h?.get?.('x-real-ip') ?? null
+}
 
 async function authenticateUpgrade(token: string): Promise<AuthCtx> {
   // Device-token path first: a troop-issued HS256 token verifies cheaply
@@ -151,6 +161,8 @@ export default defineWebSocketHandler({
       }
       const ctx = await authenticateUpgrade(token)
       authByPeerId.set(peer.id, ctx)
+      const ip = clientIpOf(peer)
+      if (ip) ipByPeerId.set(peer.id, ip)
       // Tell the nest we accepted the auth — it doesn't strictly need
       // this, but the round-trip confirms the WS plumbing is alive
       // before it sends the hello frame.
@@ -186,6 +198,14 @@ export default defineWebSocketHandler({
           catch { return false }
         },
       })
+      // Persist the live connection address (+ freshen last_seen_at) so the
+      // Nests UI shows where each device is connecting from.
+      const ip = ipByPeerId.get(peer.id)
+      void useDb()
+        .update(nests)
+        .set({ lastSeenAt: Math.floor(Date.now() / 1000), ...(ip ? { lastIp: ip } : {}) })
+        .where(and(eq(nests.ownerEmail, ctx.ownerEmail), eq(nests.hostId, hostId)))
+        .catch(() => {})
       peer.send(JSON.stringify({ type: 'ack' }))
       return
     }
@@ -225,6 +245,8 @@ export default defineWebSocketHandler({
               agentName: parsed.agentName,
               hostId: null,
               hostname: null,
+              // The nest this agent was spawned on — authoritative for grouping.
+              nestHostId: ctx.hostId ?? null,
               pubkeySsh: null,
               tools: ALL_TOOL_NAMES,
               firstSeenAt: null,
@@ -300,6 +322,7 @@ export default defineWebSocketHandler({
 
   close(peer) {
     authByPeerId.delete(peer.id)
+    ipByPeerId.delete(peer.id)
     unregisterNestPeerById(peer.id)
   },
 })

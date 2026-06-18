@@ -31,6 +31,8 @@ export interface AgentEntry {
     baseUrl?: string
     apiKey?: string
     model?: string
+    /** Reasoning/thinking depth (gpt-5.x) — PM tiers compute by difficulty. */
+    reasoningEffort?: string
   }
   /**
    * Agent kind. 'user' (default, also when absent → backward-compatible)
@@ -39,6 +41,14 @@ export interface AgentEntry {
    * per kind (`ape-agent` vs `ape-agent-service`).
    */
   kind?: 'user' | 'service'
+  /**
+   * Which runtime executes this agent. Absent/'bridge' (default) → our own
+   * @openape/ape-agent bridge, supervised as a long-lived pm2 daemon. 'openclaw'
+   * → a foreign one-shot runtime the nest exec's per message (no pm2 daemon);
+   * the supervisor skips it and the chat router invokes it instead.
+   * Orthogonal to `kind` (a 'bridge' runtime can be 'user' or 'service').
+   */
+  runtimeType?: 'bridge' | 'openclaw'
   /** Required for kind='service': the SP backend this agent serves. */
   service?: {
     /** Base URL of the SP (where GetNextTask/ResolveTask live). */

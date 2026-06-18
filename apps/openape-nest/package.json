@@ -24,6 +24,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@openape/ape-agent": "workspace:*",
     "@openape/cli-auth": "workspace:*",
     "@openape/core": "workspace:*",
     "ofetch": "^1.4.1",
