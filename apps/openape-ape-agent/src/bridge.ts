@@ -38,8 +38,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { ensureFreshIdpAuth, getAuthorizedBearer, NotLoggedInError } from '@openape/cli-auth'
-import type { Detector, AuditStore, DetectorOptions } from '@openape/prompt-injection-detector'
+import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
+import type { Detector, AuditStore, DecisionResult, InjectionConfig } from '@openape/prompt-injection-detector'
 import { createDetector, decide, createAuditStore, readInjectionConfig } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
@@ -176,8 +176,7 @@ class Bridge {
   // chat message before it reaches the agent runtime.
   private injectionDetector: Detector
   private auditStore: AuditStore
-  private ownerEmail: string
-  private injectionConfig: { threshold: number; ownerThreshold: number }
+  private injectionConfig: InjectionConfig
   // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
   // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
   // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
@@ -388,7 +387,7 @@ class Bridge {
 
     // Log to audit store (all detections, not just blocked ones)
     void this.auditStore.log({
-      messageText: msg.body.length > 500 ? msg.body.slice(0, 497) + '...' : msg.body,
+      messageText: msg.body.length > 500 ? `${msg.body.slice(0, 497)}...` : msg.body,
       sender: detectionInput.sender,
       result: {
         score: decision.score,
@@ -413,13 +412,29 @@ class Bridge {
       }
       // Notify owner about blocked message
       void this.notifyOwnerAboutBlockedMessage(msg, decision).catch(err =>
-        log(`owner notification failed: ${err instanceof Error ? err.message : String(err)}`)
+        log(`owner notification failed: ${err instanceof Error ? err.message : String(err)}`),
       )
       return
     }
 
     const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
+  }
+
+  // DM the owner when a message was blocked as suspected prompt-injection, so
+  // a silent block doesn't hide a real attack (or a false positive worth
+  // tuning). Resolves the owner's room the same way the cron runner does;
+  // skips quietly if the owner has no connected room.
+  private async notifyOwnerAboutBlockedMessage(msg: Message, decision: DecisionResult): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const ownerLower = this.ownerEmail.toLowerCase()
+    const room = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower && c.connected && c.roomId)
+    if (!room?.roomId) return
+    const preview = msg.body.length > 200 ? `${msg.body.slice(0, 197)}...` : msg.body
+    await this.chat.postMessage(
+      room.roomId,
+      `⚠️ Blocked a suspected prompt-injection message (score ${decision.score.toFixed(2)}, threshold ${decision.threshold.toFixed(2)}, sender ${msg.senderEmail}).\nPreview: ${preview}`,
+    )
   }
 
   private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
