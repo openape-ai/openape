@@ -37,12 +37,6 @@ const SSH_HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
 // `service: null` = static deploy (docs): symlink swap only, no restart,
 // so there is nothing to roll back to.
 const TARGETS = {
-  org: {
-    script: 'deploy-org.sh',
-    base: '/home/openape/projects/openape-org',
-    service: 'openape-org.service',
-    paths: ['apps/openape-org/**', 'modules/nuxt-auth-sp/**', 'packages/auth/**', 'packages/core/**', 'scripts/deploy-org.sh', 'pnpm-lock.yaml'],
-  },
   troop: {
     script: 'deploy-troop.sh',
     base: '/home/openape/projects/openape-troop',
