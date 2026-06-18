@@ -16,7 +16,7 @@
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/unstorage-s3-driver": "workspace:*",
     "aws4fetch": "^1.0.20",
-    "nuxt": "^4.4.6",
+    "nuxt": "^4.4.8",
     "tailwindcss": "^4.0.0"
   },
   "devDependencies": {

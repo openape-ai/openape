@@ -33,20 +33,26 @@ export type SessionFactory = (entry: AgentEntry) => HostedSession
 /**
  * A read-only snapshot of what the host wants versus what it actually runs.
  * `stranded` is `desired \ hosted` — agents the registry asks for whose
- * `start()` has not (yet) succeeded. The cutover health surface and the M2
- * acceptance check ("all 13 agents live") read this; all three lists are
- * sorted so the snapshot is deterministic.
+ * `start()` has not (yet) succeeded. `errored` is the subset of `hosted` whose
+ * most recent `tick()` threw and has not since recovered: an agent that is live
+ * (WS connected) but failing its scheduled work, which present/absent alone
+ * cannot tell from a healthy one. The cutover health surface and the M2
+ * acceptance check ("all 13 agents live") read this; all lists are sorted so the
+ * snapshot is deterministic.
  */
 export interface SessionHostStatus {
   desired: string[]
   hosted: string[]
   stranded: string[]
+  errored: string[]
 }
 
 /** A live session together with the registry entry it was started from. */
 interface LiveSession {
   session: HostedSession
   entry: AgentEntry
+  /** Whether this session's most recent `tick()` threw (cleared on success). */
+  tickFailed: boolean
 }
 
 /**
@@ -114,6 +120,15 @@ export class SessionHost implements AgentSupervisor {
   private reconciling = false
   /** Latest desired set requested while a reconcile was already running. */
   private pendingDesired: AgentEntry[] | undefined
+  /**
+   * The stranded set last announced by {@link tickAll}, as a stable sorted key.
+   * The tick retries stranded agents every cadence, but an agent whose start
+   * keeps failing would otherwise re-log the same line on every tick (every
+   * 60s). Logging only when the set changes keeps the signal — you see when an
+   * agent strands or recovers — without the steady-state spam. `undefined` once
+   * nothing is stranded, so a later strand of the same agent logs again.
+   */
+  private lastStrandedKey: string | undefined
 
   constructor(private readonly deps: { log: (line: string) => void, createSession?: SessionFactory }) {
     this.createSession = deps.createSession ?? createPlaceholderSession
@@ -122,7 +137,7 @@ export class SessionHost implements AgentSupervisor {
   private async startSession(entry: AgentEntry): Promise<void> {
     const session = this.createSession(entry)
     await session.start()
-    this.sessions.set(entry.name, { session, entry })
+    this.sessions.set(entry.name, { session, entry, tickFailed: false })
   }
 
   /**
@@ -240,16 +255,36 @@ export class SessionHost implements AgentSupervisor {
     // reconcile can never double-start the same agent. With placeholder
     // sessions `start()` never fails, so every desired agent is already live
     // and this is a no-op.
-    if ([...this.desired.values()].some(entry => !this.sessions.has(entry.name)))
+    const stranded = [...this.desired.values()].filter(entry => !this.sessions.has(entry.name))
+    if (stranded.length) {
+      // Make a stuck rollout visible: without this the retry below is silent, so
+      // an agent whose start keeps failing would never surface in the nest log.
+      // This is what the cutover health check ("all agents live") watches for.
+      // Log only when the stranded set changes — the retry runs every tick, but
+      // re-logging the same names every cadence would bury the nest log.
+      const names = stranded.map(e => e.name)
+      const key = [...names].sort().join(',')
+      if (key !== this.lastStrandedKey) {
+        this.deps.log(`session-host: ${stranded.length} agent(s) stranded, retrying: ${names.join(', ')}`)
+        this.lastStrandedKey = key
+      }
       await this.reconcile([...this.desired.values()])
+    }
+    else {
+      // Nothing stranded: clear the key so a fresh strand later logs again.
+      this.lastStrandedKey = undefined
+    }
 
-    for (const { session } of this.sessions.values()) {
+    for (const live of this.sessions.values()) {
+      const { session } = live
       if (!session.tick)
         continue
       try {
         await session.tick()
+        live.tickFailed = false
       }
       catch (err) {
+        live.tickFailed = true
         this.deps.log(`session-host: ! ${session.name} tick failed: ${errText(err)}`)
       }
     }
@@ -280,14 +315,20 @@ export class SessionHost implements AgentSupervisor {
   /**
    * A read-only snapshot of desired vs. live agents. `stranded` lists desired
    * agents that are not live — an agent whose `start()` failed and is waiting
-   * for the next tick/reconcile retry. Pure observation: it mutates nothing and
-   * is what a nest health surface (and the cutover check that all agents are
-   * live) reads to tell a healthy host from one with stuck starts.
+   * for the next tick/reconcile retry. `errored` lists hosted agents whose most
+   * recent tick threw — live but failing their scheduled work. Pure observation:
+   * it mutates nothing and is what a nest health surface (and the cutover check
+   * that all agents are live) reads to tell a healthy host from one with stuck
+   * starts or silently failing ticks.
    */
   status(): SessionHostStatus {
     const desired = [...this.desired.keys()].sort()
     const hosted = [...this.sessions.keys()].sort()
     const stranded = desired.filter(name => !this.sessions.has(name))
-    return { desired, hosted, stranded }
+    const errored = [...this.sessions.values()]
+      .filter(live => live.tickFailed)
+      .map(live => live.entry.name)
+      .sort()
+    return { desired, hosted, stranded, errored }
   }
 }

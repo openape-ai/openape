@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
       agentName: agents.agentName,
       hostId: agents.hostId,
       hostname: agents.hostname,
+      nestHostId: agents.nestHostId,
       pubkeySsh: agents.pubkeySsh,
       firstSeenAt: agents.firstSeenAt,
       lastSeenAt: agents.lastSeenAt,

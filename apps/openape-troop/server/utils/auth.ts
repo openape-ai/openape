@@ -129,6 +129,38 @@ export async function resolveOwnerContext(event: H3Event): Promise<{
 }
 
 /**
+ * Resolve the raw caller identity (sub + act) from any transport —
+ * session, troop CLI token, or IdP Bearer — WITHOUT collapsing an agent
+ * to its sub-as-owner. Callers that need the human owner behind an agent
+ * derive it themselves (e.g. via parseAgentEmail). Used by read-access
+ * checks that accept an agent acting for its owner.
+ */
+export async function resolveCallerIdentity(event: H3Event): Promise<{ sub: string, act: 'human' | 'agent' }> {
+  const session = await getSpSession(event)
+  const sessionEmail = (session.data as { claims?: DDISAClaims })?.claims?.sub
+  if (sessionEmail) return { sub: sessionEmail, act: 'human' }
+
+  const auth = getHeader(event, 'Authorization')
+  if (auth?.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice(7).trim()
+    const cli = await verifyCliToken(token)
+    if (cli) return { sub: cli.sub, act: cli.act === 'agent' ? 'agent' : 'human' }
+
+    const idpUrl = useRuntimeConfig().public.idpUrl as string
+    try {
+      const result = await verifyJWT(token, getJwks(), { issuer: idpUrl })
+      const claims = result.payload as DDISAClaims
+      const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
+      if (auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
+        return { sub: claims.sub, act: claims.act === 'agent' ? 'agent' : 'human' }
+      }
+    }
+    catch { /* fall through to 401 */ }
+  }
+  problem(401, 'Authentication required')
+}
+
+/**
  * Owner-auth + scope enforcement. For routes that a Receiver SP may
  * call on the Owner's behalf via delegation. First-party paths
  * (session, apes-cli Bearer) auto-pass any scope check because their

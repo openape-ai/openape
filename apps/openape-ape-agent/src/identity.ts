@@ -27,8 +27,8 @@ interface AllowlistFile {
   emails: string[]
 }
 
-function authPath(): string {
-  return join(homedir(), '.config', 'apes', 'auth.json')
+function authPath(home: string): string {
+  return join(home, '.config', 'apes', 'auth.json')
 }
 
 function allowlistPath(): string {
@@ -44,9 +44,14 @@ function allowlistPath(): string {
  * (compose `environment:` block) so an old auth.json that pre-dates
  * Phase A doesn't strand the bridge in a crash loop. If both are
  * missing we throw — the bridge requires it for the contact handshake.
+ *
+ * `home` defaults to the running process's home, which is the bin path's
+ * behaviour (each per-agent bridge ran as its own OS user). The nest's
+ * in-process SessionHost passes the registry entry's `home` so one daemon
+ * can read each hosted agent's identity from that agent's own home.
  */
-export function readAgentIdentity(): AgentIdentity {
-  const path = authPath()
+export function readAgentIdentity(home = homedir()): AgentIdentity {
+  const path = authPath(home)
   if (!existsSync(path)) {
     throw new Error(`agent identity not found at ${path}`)
   }

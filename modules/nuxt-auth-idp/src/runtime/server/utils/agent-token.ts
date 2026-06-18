@@ -43,7 +43,11 @@ export async function issueAuthToken(
     .setSubject(payload.sub)
     .setAudience(payload.aud ?? DEFAULT_CLI_AUDIENCE)
     .setIssuedAt()
-    .setExpirationTime('1h')
+    // 8h, not 1h: agents (and the human CLI) re-mint this token via
+    // challenge-response when it expires; at 1h, many agents sharing one
+    // owner's egress IP produced hourly auth bursts. 8h cuts that 8x while
+    // staying short enough for a local CLI/agent credential.
+    .setExpirationTime('8h')
 
   return await jwt.sign(privateKey)
 }

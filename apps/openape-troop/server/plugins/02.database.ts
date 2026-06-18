@@ -69,6 +69,11 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN recipe_ref TEXT`)
     }
     catch { /* column exists */ }
+    // The nest an agent belongs to (recorded at spawn from the spawning nest).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN nest_host_id TEXT`)
+    }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
       agent_email TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -194,6 +199,84 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE nests ADD COLUMN device_secret_hash TEXT`)
     }
     catch { /* column already exists */ }
+    // last_ip: captured from the WS upgrade on `hello` (added after nests).
+    try {
+      await db.run(sql`ALTER TABLE nests ADD COLUMN last_ip TEXT`)
+    }
+    catch { /* column already exists */ }
+
+    // ── Org / company layer (B0 merge). Additive tables only — owner-session
+    // surface, no overlap with the machine tables above. ──
+    await db.run(sql`CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      name TEXT NOT NULL,
+      vision_md TEXT NOT NULL DEFAULT '',
+      budget_monthly_eur INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_org_owner ON organizations(owner_email)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS org_members (
+      org_id TEXT NOT NULL,
+      agent_email TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      persona TEXT,
+      reports_to_email TEXT,
+      status TEXT NOT NULL DEFAULT 'invited',
+      spawned_at INTEGER,
+      retired_at INTEGER,
+      created_at INTEGER NOT NULL,
+      spawn_intent_id TEXT,
+      spawn_status TEXT,
+      spawn_error TEXT,
+      spawn_troop_bearer TEXT,
+      spawn_troop_bearer_expires_at INTEGER,
+      spawn_grant_id TEXT,
+      PRIMARY KEY (org_id, agent_email)
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_org_members_org ON org_members(org_id)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_org_members_role ON org_members(org_id, role)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS objectives (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'planned',
+      target_date INTEGER,
+      parent_id TEXT,
+      created_by_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_objectives_org ON objectives(org_id)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_objectives_status ON objectives(org_id, status)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body_md TEXT NOT NULL,
+      generated_by_email TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reports_org ON reports(org_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cost_snapshots (
+      org_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      tokens_in INTEGER NOT NULL DEFAULT 0,
+      tokens_out INTEGER NOT NULL DEFAULT 0,
+      inference_cost_cents INTEGER NOT NULL DEFAULT 0,
+      infra_cost_cents INTEGER NOT NULL DEFAULT 0,
+      output_artifacts_count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, day)
+    )`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)
