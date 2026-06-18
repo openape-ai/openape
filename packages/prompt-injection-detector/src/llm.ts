@@ -75,7 +75,7 @@ Common injection patterns:
     }
 
     const parsed: LLMResponse = JSON.parse(content)
-    
+
     // Validate the response
     if (typeof parsed.score !== 'number' || parsed.score < 0 || parsed.score > 1) {
       throw new Error('Invalid score in LLM response')
@@ -91,7 +91,7 @@ Common injection patterns:
     // Log the error but don't throw - fall back to heuristic
     const errorMsg = err instanceof Error ? err.message : String(err)
     console.error(`[prompt-injection-detector] LLM backend failed: ${errorMsg}. Falling back to heuristic.`)
-    
+
     // Fall back to heuristic
     return classifyHeuristic(input)
   }

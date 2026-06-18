@@ -7,8 +7,8 @@
 // - Easy grep/analysis
 // - No database dependency
 
-import * as fs from 'fs/promises'
-import * as path from 'path'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 import type { DetectionResult, SenderContext } from './types.js'
 
 export interface AuditEntry {
@@ -45,7 +45,7 @@ export function createAuditStore(agentEmail: string): AuditStore {
       await fs.mkdir(auditDir, { recursive: true })
 
       // Append as JSONL
-      const line = JSON.stringify(fullEntry) + '\n'
+      const line = `${JSON.stringify(fullEntry)}\n`
       await fs.appendFile(auditFile, line, 'utf-8')
     },
 
@@ -57,7 +57,7 @@ export function createAuditStore(agentEmail: string): AuditStore {
         // Return most recent first
         return entries.slice(-limit).reverse()
       }
-      catch (err) {
+      catch {
         // File doesn't exist yet or read error
         return []
       }
@@ -84,11 +84,11 @@ export function createAuditStore(agentEmail: string): AuditStore {
 
 export interface AuditStore {
   /** Log a detection event. */
-  log(entry: Omit<AuditEntry, 'timestamp'>): Promise<void>
+  log: (entry: Omit<AuditEntry, 'timestamp'>) => Promise<void>
   /** Get recent audit entries (most recent first). */
-  getRecent(limit?: number): Promise<AuditEntry[]>
+  getRecent: (limit?: number) => Promise<AuditEntry[]>
   /** Get only blocked entries. */
-  getBlocked(limit?: number): Promise<AuditEntry[]>
+  getBlocked: (limit?: number) => Promise<AuditEntry[]>
   /** Clear the audit log. */
-  clear(): Promise<void>
+  clear: () => Promise<void>
 }
