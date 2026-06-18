@@ -39,8 +39,8 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
-import type { Detector } from '@openape/prompt-injection-detector'
-import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
+import type { Detector, AuditStore, DecisionResult, InjectionConfig } from '@openape/prompt-injection-detector'
+import { createDetector, decide, createAuditStore, readInjectionConfig } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
@@ -171,10 +171,12 @@ class Bridge {
   private chat: TroopChatApi
   private bearer: () => Promise<string>
   private cron: CronRunner | undefined
-  // Prompt-injection gate (#277). Pure heuristic by default — pluggable
-  // backend later. The bridge is the choke-point for every chat message
-  // before it reaches the agent runtime, so this is the right place.
-  private injectionDetector: Detector = createHeuristicDetector()
+  // Prompt-injection gate (#463). LLM/heuristic backend selectable via
+  // APE_AGENT_INJECTION_BACKEND. The bridge is the choke-point for every
+  // chat message before it reaches the agent runtime.
+  private injectionDetector: Detector
+  private auditStore: AuditStore
+  private injectionConfig: InjectionConfig
   // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
   // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
   // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
@@ -217,6 +219,12 @@ class Bridge {
     // error so a flaky exchange never takes the agent offline.
     void this.refreshLlmGatewayKey()
     setInterval(() => void this.refreshLlmGatewayKey(), 40 * 60 * 1000)
+    // Initialize prompt-injection detector (#463). Uses LLM backend if configured,
+    // otherwise falls back to heuristic. Audit store logs all detections.
+    this.injectionDetector = createDetector()
+    this.auditStore = createAuditStore(this.selfEmail)
+    // Read per-agent config for thresholds
+    this.injectionConfig = readInjectionConfig()
   }
 
   private async refreshLlmGatewayKey(): Promise<void> {
@@ -359,19 +367,37 @@ class Bridge {
 
     log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] in: ${truncate(msg.body, 80)}`)
 
-    // Prompt-injection check (#277). The bridge is the choke-point
+    // Prompt-injection check (#463). The bridge is the choke-point
     // before pi sees inbound text — by the time the message hits the
     // agent runtime, refusing it is harder (it's already in history)
     // and inconsistent (model may or may not comply with refusal).
     // Owners get a higher threshold so legitimate "run shell, do X"
     // instructions from the actual owner aren't refused.
-    const decision = await decide(this.injectionDetector, {
+    const detectionInput = {
       text: msg.body,
       sender: {
         email: msg.senderEmail,
         isOwner: msg.senderEmail === this.ownerEmail,
       },
+    }
+    const decision = await decide(this.injectionDetector, detectionInput, {
+      threshold: this.injectionConfig.threshold,
+      ownerThreshold: this.injectionConfig.ownerThreshold,
     })
+
+    // Log to audit store (all detections, not just blocked ones)
+    void this.auditStore.log({
+      messageText: msg.body.length > 500 ? `${msg.body.slice(0, 497)}...` : msg.body,
+      sender: detectionInput.sender,
+      result: {
+        score: decision.score,
+        reason: decision.reason,
+        backend: decision.backend,
+      },
+      blocked: decision.blocked,
+      threshold: decision.threshold,
+    }).catch(err => log(`audit log failed: ${err instanceof Error ? err.message : String(err)}`))
+
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
@@ -384,11 +410,31 @@ class Bridge {
         const m = err instanceof Error ? err.message : String(err)
         log(`[${msg.roomId}] failed to post refusal: ${m}`)
       }
+      // Notify owner about blocked message
+      void this.notifyOwnerAboutBlockedMessage(msg, decision).catch(err =>
+        log(`owner notification failed: ${err instanceof Error ? err.message : String(err)}`),
+      )
       return
     }
 
     const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
+  }
+
+  // DM the owner when a message was blocked as suspected prompt-injection, so
+  // a silent block doesn't hide a real attack (or a false positive worth
+  // tuning). Resolves the owner's room the same way the cron runner does;
+  // skips quietly if the owner has no connected room.
+  private async notifyOwnerAboutBlockedMessage(msg: Message, decision: DecisionResult): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const ownerLower = this.ownerEmail.toLowerCase()
+    const room = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower && c.connected && c.roomId)
+    if (!room?.roomId) return
+    const preview = msg.body.length > 200 ? `${msg.body.slice(0, 197)}...` : msg.body
+    await this.chat.postMessage(
+      room.roomId,
+      `⚠️ Blocked a suspected prompt-injection message (score ${decision.score.toFixed(2)}, threshold ${decision.threshold.toFixed(2)}, sender ${msg.senderEmail}).\nPreview: ${preview}`,
+    )
   }
 
   private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
