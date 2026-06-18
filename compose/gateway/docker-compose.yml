@@ -1,0 +1,74 @@
+services:
+  codex-proxy:
+    image: openape-llm:codex
+    container_name: llms-codex-proxy
+    hostname: codex-proxy
+    init: true
+    restart: unless-stopped
+    volumes:
+      - /home/openape/prod-llms/codex:/var/lib/openape/codex
+    environment:
+      CODEX_PROXY_HOST: 0.0.0.0
+      CODEX_PROXY_PORT: "4000"
+      CODEX_CREDENTIAL_PATH: /var/lib/openape/codex/auth.json
+      CODEX_ORIGINATOR: codex_cli_rs
+    networks: [llms]
+  codex-proxy-dm:
+    image: openape-llm:codex
+    container_name: llms-codex-proxy-dm
+    hostname: codex-proxy-dm
+    init: true
+    restart: unless-stopped
+    volumes:
+      - /home/openape/prod-llms/codex-dm:/var/lib/openape/codex
+    environment:
+      CODEX_PROXY_HOST: 0.0.0.0
+      CODEX_PROXY_PORT: "4000"
+      CODEX_CREDENTIAL_PATH: /var/lib/openape/codex/auth.json
+      CODEX_ORIGINATOR: codex_cli_rs
+    networks: [llms]
+  llm-auth:
+    image: openape-llm-auth:latest
+    container_name: llms-auth
+    hostname: llm-auth
+    ports:
+      - "3015:4010"
+    restart: unless-stopped
+    environment:
+      SESSION_SECRET: ${LLMS_SESSION_SECRET}
+      SP_AUD: llms.openape.ai
+      IDP_URL: https://id.openape.ai
+    networks: [llms]
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: llms-litellm
+    restart: unless-stopped
+    depends_on: [codex-proxy]
+    ports:
+      - "3012:4000"
+    volumes:
+      - /home/openape/prod-llms/litellm-config.yaml:/app/config.yaml:ro
+      - /home/openape/prod-llms/llm-auth/ddisa_auth.py:/app/ddisa_auth.py:ro
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?}
+      HEADWAI_API_KEY: ${HEADWAI_API_KEY}
+      SESSION_SECRET: ${LLMS_SESSION_SECRET}
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks: [llms]
+  # M3 path-selector shim: handles only /<owner>/<account>/v1/... (the edge
+  # routes plain /v1 straight to litellm). Strips the prefix, namespaces the
+  # body model per account, forwards owner/account headers for the policy.
+  llm-route:
+    image: openape-llm-route:latest
+    container_name: llms-route
+    hostname: llm-route
+    restart: unless-stopped
+    depends_on: [litellm]
+    ports:
+      - "3016:4020"
+    environment:
+      LITELLM_URL: http://litellm:4000
+      DEFAULT_ACCOUNT: lindeverlag
+    networks: [llms]
+networks:
+  llms: {}
