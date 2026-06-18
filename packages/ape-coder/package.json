@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-coder",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "turbo": {
     "tags": [
       "publishable"
