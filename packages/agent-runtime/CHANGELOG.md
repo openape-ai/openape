@@ -1,5 +1,12 @@
 # @openape/agent-runtime
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [12d7dd6]
+  - @openape/cli-auth@0.5.2
+
 ## 0.2.2
 
 ### Patch Changes
