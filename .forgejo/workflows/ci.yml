@@ -33,18 +33,19 @@ jobs:
         # e2e needs a running stack (dedicated job); docs prerenders OG images
         # (fragile, own deploy) — both excluded from per-PR CI.
         run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
-      - name: Clean stale build output
-        # Forgejo runners reuse their workspace between runs. A previous nuxt
-        # build leaves apps/<app>/.output/server/node_modules with a recursive
-        # vue→@vue/server-renderer→vue symlink cycle; the next nitro build
-        # scandir's it and dies with ELOOP. Removing stale .output/.nuxt before
-        # the build makes each run start clean (a fresh checkout builds fine).
-        run: rm -rf apps/*/.output apps/*/.nuxt examples/*/.output examples/*/.nuxt
-      - name: Build (affected)
-        # Separate wave: nuxt build regenerates .nuxt/tsconfig.json, which would
-        # race a concurrent nuxi prepare from the typecheck/test wave.
-        # --concurrency=1 stays as a safety net for the rare PR that actually
-        # touches several Nuxt apps at once (the 4-core runner thrashes and
-        # SIGHUPs a build worker — exit 129 — when many build in parallel); with
-        # --affected that case is now rare, so the cap costs almost nothing.
-        run: pnpm turbo run build --affected --filter='!openape-e2e' --filter='!docs' --concurrency=1
+      - name: Build libs (affected)
+        # Build ONLY the publishable libraries (packages + modules) — the things
+        # other workspaces consume. Deployable apps (Nuxt) are intentionally NOT
+        # built here:
+        #   1. their full Nitro `.output` production build is a deploy-time
+        #      concern — `pnpm run deploy:image` builds them, smoke-tests
+        #      `/api/health`, health-gates the cutover and auto-rolls-back, so an
+        #      app build break is caught before prod regardless;
+        #   2. their code is already validated by the lint/typecheck/test wave;
+        #   3. building the apps' Nitro output on the runner is what triggered the
+        #      pnpm + Nitro `.output/server/node_modules` ELOOP symlink cycle
+        #      (vue↔@vue/server-renderer; nuxt#30539 / #12012) — a known issue with
+        #      no reliable pnpm-config fix — which forced admin-merges.
+        # Scoping to libs makes CI deterministic and mirrors the pre-push hook's
+        # build stage. (`docs` was already excluded for the same spirit.)
+        run: pnpm turbo run build --affected --filter='./packages/*' --filter='./modules/*' --concurrency=1
