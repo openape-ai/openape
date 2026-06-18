@@ -190,42 +190,6 @@ services:
       timeout: 3s
       retries: 30
 
-  org:
-    build:
-      context: ..
-      dockerfile: compose/Nuxt.Dockerfile
-      args:
-        APP_FILTER: "@openape/org"
-        APP_DIR: openape-org
-        PORT: "3020"
-    image: openape-org:local
-    depends_on:
-      proxy:
-        condition: service_healthy
-    dns:
-      - 172.30.0.53
-    volumes:
-      - caddy-data:/caddy-data:ro
-    environment:
-      NUXT_OPENAPE_SP_CLIENT_ID: org.openape.test
-      NUXT_OPENAPE_SP_SP_NAME: OpenApe Org
-      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
-      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
-      NUXT_PUBLIC_IDP_URL: https://id.openape.test
-      # Without this the org server defaults to PROD troop.openape.ai for the
-      # cross-SP exchange + spawn-intent (the redirect/code spawn calls it).
-      NUXT_TROOP_API_BASE: https://troop.openape.test
-      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
-      NITRO_PORT: "3020"
-      HOST: 0.0.0.0
-    networks:
-      - openape-test
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
   coder:
     build:
       context: ..

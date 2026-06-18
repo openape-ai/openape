@@ -103,7 +103,7 @@ describe('parseNestDeviceToken (troop WS accept path)', () => {
   })
 
   it('returns null when delegate is not a nest provenance', () => {
-    expect(parseNestDeviceToken(deviceClaims({ delegate: 'org.openape.ai' }))).toBeNull()
+    expect(parseNestDeviceToken(deviceClaims({ delegate: 'app.example' }))).toBeNull()
   })
 
   it('returns null for an empty host_id', () => {

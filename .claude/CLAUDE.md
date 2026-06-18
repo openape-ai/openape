@@ -35,9 +35,8 @@ modules/          # Publishable Nuxt modules
 
 apps/             # Deployable applications (private, not published)
   openape-free-idp/   # Free DDISA IdP → self-hosted (chatty)
-  openape-troop/      # Troop control plane → self-hosted (chatty)
+  openape-troop/      # Troop control plane (incl. company/org view) → self-hosted (chatty)
   openape-chat/       # Chat app → self-hosted (chatty)
-  openape-org/        # Org management → self-hosted (chatty)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -103,7 +102,6 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `free-idp` | 3003 | openape-free-idp       |
 | `troop`    | 3010 | openape-troop          |
 | `chat`     | 3007 | openape-chat           |
-| `org`      | 3020 | openape-org            |
 
 **Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Das alte rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) bleibt für `docs` (statisches Site-Deploy) und als Legacy-Pfad erhalten.
 
