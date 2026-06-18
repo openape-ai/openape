@@ -27,7 +27,7 @@ const APPS = [
   { name: 'idp', dir: 'apps/openape-free-idp/', filter: 'openape-free-idp', image: 'openape-free-idp', port: 3003, uuid: 't13z5yj6xw87cy7bwz00y93x' },
   { name: 'troop', dir: 'apps/openape-troop/', filter: '@openape/troop', image: 'openape-troop', port: 3010, uuid: 'hke1tnc7xxy2pc8uf8ch6bud' },
   { name: 'chat', dir: 'apps/openape-chat/', filter: '@openape/chat', image: 'openape-chat', port: 3007, uuid: 'zmgz7sm50unh49bzclgjbfmh' },
-  { name: 'org', dir: 'apps/openape-org/', filter: '@openape/org', image: 'openape-org', port: 3020, uuid: 'sf7j3jqd5u8wavamqqtx5g4z' },
+  // org retired (merged into troop, B0) — no preview target.
 ]
 
 // A change here affects every app's preview image (shared workspace deps and
