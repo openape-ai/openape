@@ -1,5 +1,12 @@
 # @openape/server
 
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies [2b3814b]
+  - @openape/auth@0.12.0
+
 ## 0.3.15
 
 ### Patch Changes

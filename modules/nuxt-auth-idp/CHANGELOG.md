@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.30.0
+
+### Minor Changes
+
+- 2b3814b: Account-recovery v2 (#462): adaptive cooldown (7d active / 72h dormant / vacation
+  mode up to 14d), out-of-band warning broadcast (push fan-out + all linked email
+  addresses, one-tap tokenized cancel without a session), persistent recovery
+  history (`listAllForEmail` on RecoveryStore, new EmailHistoryStore). Fixes the
+  v1 gap where recovery API routes (options/verify/cancel) were never registered;
+  auth rate limit cap is now configurable via `OPENAPE_RATE_LIMIT_MAX_AUTH`.
+
+### Patch Changes
+
+- Security: `GET /api/grants?requester=` now requires authentication and only
+  allows filtering by a requester the caller may see (self, or users it owns/
+  approves) — previously the requester branch short-circuited before the auth
+  check and could enumerate any user's grants unauthenticated.
+- Updated dependencies [2b3814b]
+  - @openape/auth@0.12.0
+
 ## 0.29.3
 
 ### Patch Changes
