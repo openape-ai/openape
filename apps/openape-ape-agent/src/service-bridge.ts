@@ -12,8 +12,12 @@
 //
 // Env knobs:
 //   OPENAPE_SP_BASE_URL    the SP this agent serves (GetNextTask/ResolveTask) — REQUIRED
-//   LITELLM_BASE_URL       the Nest LLM endpoint (default http://127.0.0.1:4001/v1)
-//   LITELLM_API_KEY        LLM key (or LITELLM_MASTER_KEY) — REQUIRED
+//   LITELLM_BASE_URL       the LLM endpoint. A llms.openape.ai gateway makes
+//                          the agent exchange its own DDISA token per task;
+//                          any other base uses LITELLM_API_KEY as-is.
+//   LITELLM_API_KEY        LLM key (or LITELLM_MASTER_KEY) — REQUIRED. Used
+//                          directly for non-gateway bases, and as the fallback
+//                          if a gateway token exchange fails.
 //   APE_SERVICE_MODEL      model, e.g. gpt-5.5 — REQUIRED
 //   APE_SERVICE_POLL_MS    idle poll interval (default 2000)
 //   APE_SERVICE_MAX_STEPS  runLoop max tool rounds (default 10)
@@ -25,6 +29,7 @@ import { runLoop, taskTools } from '@openape/apes'
 import { ensureFreshIdpAuth } from '@openape/cli-auth'
 import type { Artifact, Part, Task, TaskState } from '@openape/sp-tasks'
 import { readAgentIdentity } from './identity'
+import { resolveLlmGatewayKey } from './llm-gateway-key'
 
 export interface WorkerDeps {
   /** Base URL of the SP backend (no trailing slash). */
@@ -34,6 +39,12 @@ export interface WorkerDeps {
   fetchImpl: typeof fetch
   runLoopImpl: typeof runLoop
   config: RuntimeConfig
+  /**
+   * Re-mint the LLM key just before a task runs. When the gateway is
+   * llms.openape.ai this returns the agent's own DDISA token; unset → the
+   * static `config.apiKey` is used as-is (loopback proxy / tests).
+   */
+  refreshApiKey?: () => Promise<string>
   maxSteps: number
   log: (line: string) => void
 }
@@ -100,8 +111,10 @@ export async function pollOnce(deps: WorkerDeps): Promise<'task' | 'idle'> {
   let artifact: Artifact
   try {
     const spec = parseTaskSpec(task)
+    const apiKey = deps.refreshApiKey ? await deps.refreshApiKey() : deps.config.apiKey
+    const config = { ...deps.config, apiKey, ...(spec.model ? { model: spec.model } : {}) }
     const result = await deps.runLoopImpl({
-      config: spec.model ? { ...deps.config, model: spec.model } : deps.config,
+      config,
       userMessage: spec.userMessage,
       systemPrompt: spec.systemPrompt,
       tools: taskTools(spec.tools ?? []),
@@ -172,6 +185,7 @@ export async function runService(): Promise<void> {
     fetchImpl: fetch,
     runLoopImpl: runLoop,
     config: { apiBase: cfg.apiBase, apiKey: cfg.apiKey, model: cfg.model },
+    refreshApiKey: () => resolveLlmGatewayKey(cfg.apiBase, cfg.apiKey, log),
     maxSteps: cfg.maxSteps,
     log,
   }
