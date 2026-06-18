@@ -20,6 +20,7 @@
     "release:local": "node scripts/release-local.mjs",
     "deploy": "node scripts/deploy.mjs",
     "deploy:image": "node scripts/deploy-image.mjs",
+    "deploy:gateway": "node scripts/deploy-gateway.mjs",
     "gateway:drift": "node scripts/gateway-drift.mjs",
     "sync:openclaw": "bash scripts/sync-openclaw-skills.sh",
     "seed:shapes": "tsx scripts/seed-shapes.ts",
