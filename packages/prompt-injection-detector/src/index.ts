@@ -9,3 +9,10 @@ export {
   type DetectorOptions,
   type SenderContext,
 } from './types.js'
+export {
+  createAuditStore,
+  type AuditStore,
+  type AuditEntry,
+} from './audit.js'
+export { readInjectionConfig, type InjectionConfig } from './config.js'
+export { createLLMDetector, createDetector } from './llm.js'
