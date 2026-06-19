@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getPersona } from '~/server/utils/persona-catalog'
 
 // One node in the company hierarchy chart (B0 merge — preserves the org-chart
 // hierarchy from the former openape-org app). Active agents are clickable into
@@ -26,6 +27,7 @@ const isLg = computed(() => (props.size ?? 'lg') === 'lg')
 const isActive = computed(() => props.member.status === 'active')
 const statusColor = computed(() => props.member.status === 'active' ? 'success' : props.member.status === 'invited' ? 'warning' : 'neutral')
 const chatHref = computed(() => `/agents/${props.member.agentName}`)
+const persona = computed(() => getPersona(props.member.persona))
 </script>
 
 <template>
@@ -33,6 +35,11 @@ const chatHref = computed(() => `/agents/${props.member.agentName}`)
     class="rounded-lg border text-center relative"
     :class="[colorClass, isLg ? 'px-4 py-3 min-w-[180px]' : 'px-3 py-2', { 'border-dashed': !isActive }]"
   >
+    <!-- Persona icon and title -->
+    <div v-if="persona" class="flex items-center justify-center gap-1 mb-1">
+      <UIcon :name="persona.icon" class="size-4" />
+      <span class="text-xs font-semibold">{{ persona.title }}</span>
+    </div>
     <div class="uppercase tracking-wide font-semibold" :class="isLg ? 'text-xs' : 'text-[10px] opacity-70'">
       {{ roleLabel }}
     </div>
