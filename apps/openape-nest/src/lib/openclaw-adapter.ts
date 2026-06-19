@@ -17,7 +17,7 @@
 // schema drifts and the flat write breaks.
 
 import { execFile } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chownSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -34,6 +34,9 @@ export interface OpenclawAgent {
   name: string
   email: string
   home: string
+  /** Agent OS uid — when set, prepareOpenclawHome chowns the .openclaw tree to
+   * it so a `sudo -u <agent>` exec can read its config + write state. */
+  uid?: number
 }
 
 export interface OpenclawRuntime {
@@ -123,6 +126,23 @@ export function prepareOpenclawHome(agent: OpenclawAgent, rt: OpenclawRuntime): 
   writeFileSync(configPath, `${JSON.stringify(buildOpenclawConfig(agent, rt), null, 2)}\n`, { mode: 0o600 })
   for (const [file, body] of Object.entries(buildWorkspaceFiles(agent, rt)))
     writeFileSync(join(workspace, file), body, { mode: 0o644 })
+  // The nest (root) wrote these; a `sudo -u <agent>` openclaw can't read the
+  // mode-600 config (the gateway token) or write session state until they're
+  // the agent's. Best-effort: the local/dev path runs openclaw as the nest user
+  // (no sudo), where `uid` may not be a real OS user.
+  if (agent.uid !== undefined) {
+    try { chownTree(join(agent.home, '.openclaw'), agent.uid, agent.uid) }
+    catch { /* no such OS user (local/dev) — openclaw runs as the nest user */ }
+  }
+}
+
+/** Recursively chown a path (file or dir tree) to uid:gid. */
+function chownTree(path: string, uid: number, gid: number): void {
+  chownSync(path, uid, gid)
+  let entries: string[]
+  try { entries = readdirSync(path) }
+  catch { return } // a file, not a directory
+  for (const entry of entries) chownTree(join(path, entry), uid, gid)
 }
 
 /** Build the `openclaw agent` invocation for one turn (pure — testable). */
@@ -206,4 +226,29 @@ export async function invokeOpenclaw(
     timeout: deps.timeoutMs ?? 600_000,
   })
   return parseReply(stdout)
+}
+
+/**
+ * A `runAs` that drops the openclaw exec to the agent's OS user via passwordless
+ * `sudo -u` (the container image grants this for nest-managed users, same as the
+ * bridge's pm2 path). sudo strips the environment, so the per-agent env
+ * (HOME / OPENCLAW_CONFIG_PATH / OPENCLAW_STATE_DIR) is re-applied inside the
+ * sudo'd command via `env KEY=VAL …`. openclaw's CLI tool-calls then also run as
+ * that user — the isolation the bridge shares.
+ */
+/** Pure `sudo` argv builder (testable): `-n -u <name> -- env KEY=VAL … <bin> <args>`. */
+export function sudoArgv(agentName: string, args: string[], env: Record<string, string>, bin = 'openclaw'): string[] {
+  const envPairs = Object.entries(env).map(([k, v]) => `${k}=${v}`)
+  return ['-n', '-u', agentName, '--', 'env', ...envPairs, bin, ...args]
+}
+
+export function sudoRunAs(agentName: string, bin = 'openclaw'): NonNullable<OpenclawInvokeDeps['runAs']> {
+  return async (args, env) => {
+    const { stdout } = await execFileAsync('sudo', sudoArgv(agentName, args, env, bin), {
+      env: process.env,
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 600_000,
+    })
+    return { stdout }
+  }
 }
