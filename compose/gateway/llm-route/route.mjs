@@ -16,7 +16,7 @@ import process from 'node:process'
 
 const PORT = Number(process.env.PORT || 4020)
 const UPSTREAM = new URL(process.env.LITELLM_URL || 'http://litellm:4000')
-const DEFAULT_ACCOUNT = process.env.DEFAULT_ACCOUNT || 'lindeverlag'
+const DEFAULT_ACCOUNT = process.env.DEFAULT_ACCOUNT || 'default'
 const MAX_BODY = 5_000_000
 
 // /<owner>/<account>/v1/<rest> — owner must look like an email so we never
