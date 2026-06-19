@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getPersona } from '~/server/utils/persona-catalog'
 
 // One node in the company hierarchy chart (B0 merge — preserves the org-chart
 // hierarchy from the former openape-org app). Active agents are clickable into
@@ -26,6 +27,7 @@ const isLg = computed(() => (props.size ?? 'lg') === 'lg')
 const isActive = computed(() => props.member.status === 'active')
 const statusColor = computed(() => props.member.status === 'active' ? 'success' : props.member.status === 'invited' ? 'warning' : 'neutral')
 const chatHref = computed(() => `/agents/${props.member.agentName}`)
+const persona = computed(() => getPersona(props.member.persona))
 </script>
 
 <template>
@@ -36,7 +38,11 @@ const chatHref = computed(() => `/agents/${props.member.agentName}`)
     <div class="uppercase tracking-wide font-semibold" :class="isLg ? 'text-xs' : 'text-[10px] opacity-70'">
       {{ roleLabel }}
     </div>
-    <div class="font-mono break-all" :class="isLg ? 'text-sm mt-1' : 'text-xs mt-0.5'">
+    <div v-if="persona" class="flex items-center justify-center gap-1" :class="isLg ? 'mt-1' : 'mt-0.5'">
+      <UIcon :name="persona.icon" :class="isLg ? 'size-4' : 'size-3'" />
+      <span :class="isLg ? 'text-sm' : 'text-xs'">{{ persona.title }}</span>
+    </div>
+    <div v-else class="font-mono break-all" :class="isLg ? 'text-sm mt-1' : 'text-xs mt-0.5'">
       {{ member.agentName }}
     </div>
     <UBadge :color="statusColor" variant="subtle" size="xs" :class="isLg ? 'mt-2' : 'mt-1.5'">
