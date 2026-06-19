@@ -100,9 +100,13 @@ execFileSync('bash', ['-c',
   `tar -cf - -C '${LOCAL_DIR}' ${FILES.map(f => `'${f}'`).join(' ')} | ssh -o BatchMode=yes ${USER}@${HOST} 'tar -xf - -C ${REMOTE_DIR}'`,
 ], { stdio: 'inherit' })
 
-// 4. Bring the stack up.
-console.log('deploy-gateway: docker compose up -d…')
-ssh(`set -euo pipefail; cd ${REMOTE_DIR} && docker compose up -d`, { stdio: 'inherit' })
+// 4. Bring the stack up. --force-recreate so a changed *mounted* config file
+// (litellm-config.yaml / ddisa_auth.py) is actually reloaded — plain `up -d`
+// only recreates on a service-definition change, so a pure config edit would
+// silently keep running the old config. --remove-orphans drops services that
+// were removed from the compose file (e.g. a retired account's proxy).
+console.log('deploy-gateway: docker compose up -d --force-recreate --remove-orphans…')
+ssh(`set -euo pipefail; cd ${REMOTE_DIR} && docker compose up -d --force-recreate --remove-orphans`, { stdio: 'inherit' })
 
 // 5. Health-gate on litellm readiness.
 function healthy() {
@@ -128,7 +132,7 @@ console.error('\ndeploy-gateway: ❌ unhealthy after deploy — rolling back to 
 ssh(`set -euo pipefail
 cd ${REMOTE_DIR}
 for f in ${FILES.join(' ')}; do cp -a ".iac-backups/${ts}/$f" "$f"; done
-docker compose up -d`, { stdio: 'inherit' })
+docker compose up -d --force-recreate --remove-orphans`, { stdio: 'inherit' })
 const recovered = ssh(`curl -s -o /dev/null -w '%{http_code}' --max-time 5 ${READINESS} || true`).trim()
 console.error(`deploy-gateway: rolled back (post-rollback readiness ${recovered}). Investigate before retrying.`)
 process.exit(1)
