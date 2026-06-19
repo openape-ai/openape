@@ -1,18 +1,6 @@
 services:
-  codex-proxy:
-    image: openape-llm:codex
-    container_name: llms-codex-proxy
-    hostname: codex-proxy
-    init: true
-    restart: unless-stopped
-    volumes:
-      - /home/openape/prod-llms/codex:/var/lib/openape/codex
-    environment:
-      CODEX_PROXY_HOST: 0.0.0.0
-      CODEX_PROXY_PORT: "4000"
-      CODEX_CREDENTIAL_PATH: /var/lib/openape/codex/auth.json
-      CODEX_ORIGINATOR: codex_cli_rs
-    networks: [llms]
+  # delta-mind codex upstream. (lindeverlag's codex-proxy was retired with the
+  # lindeverlag account — M4.)
   codex-proxy-dm:
     image: openape-llm:codex
     container_name: llms-codex-proxy-dm
@@ -43,7 +31,7 @@ services:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: llms-litellm
     restart: unless-stopped
-    depends_on: [codex-proxy]
+    depends_on: [codex-proxy-dm]
     ports:
       - "3012:4000"
     volumes:
@@ -68,7 +56,7 @@ services:
       - "3016:4020"
     environment:
       LITELLM_URL: http://litellm:4000
-      DEFAULT_ACCOUNT: lindeverlag
+      DEFAULT_ACCOUNT: default
     networks: [llms]
 networks:
   llms: {}
