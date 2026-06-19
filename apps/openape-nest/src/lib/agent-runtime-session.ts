@@ -14,21 +14,40 @@ export interface OpenclawTurnDeps {
   invoke: (agent: OpenclawAgent, rt: OpenclawRuntime, message: string, sessionKey: string) => Promise<string>
 }
 
+/** The chat surface a turn drives: a streaming placeholder, then a patch. */
+export interface OpenclawChat {
+  postMessage: (roomId: string, body: string, opts: { replyTo?: string, threadId?: string, streaming?: boolean }) => Promise<{ id: string }>
+  patchMessage: (id: string, opts: { body?: string, streaming?: boolean }) => Promise<void>
+}
+
 /**
- * Run one openclaw turn for an accepted chat message and post its reply.
- * Exported so the integration (invoke → post) is unit-tested without a live
- * openclaw or troop: inject `invoke`, spy on `post`.
+ * Run one openclaw turn for an accepted chat message. openclaw is one-shot (no
+ * token stream), so post an empty `streaming: true` placeholder first — the chat
+ * renders that as the agent "typing…" — run the exec, then patch the finished
+ * reply in (`streaming: false`). Without the placeholder the human sees nothing
+ * until the whole reply lands. Exported so the flow is unit-tested without a
+ * live openclaw or troop: inject `invoke`, spy on `chat`.
  */
 export async function runOpenclawTurn(
   agent: OpenclawAgent,
   rt: OpenclawRuntime,
   message: Pick<TroopMessage, 'body' | 'roomId' | 'threadId' | 'id'>,
-  post: (roomId: string, text: string, opts: { replyTo: string, threadId: string }) => Promise<void>,
+  chat: OpenclawChat,
   deps: OpenclawTurnDeps = { invoke: invokeOpenclaw },
 ): Promise<void> {
-  const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
-  if (reply)
-    await post(message.roomId, reply, { replyTo: message.id, threadId: message.threadId })
+  const placeholder = await chat.postMessage(message.roomId, '', {
+    replyTo: message.id,
+    threadId: message.threadId,
+    streaming: true,
+  })
+  try {
+    const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
+    await chat.patchMessage(placeholder.id, { body: reply, streaming: false })
+  }
+  catch (err) {
+    await chat.patchMessage(placeholder.id, { body: '⚠️ openclaw turn failed', streaming: false }).catch(() => {})
+    throw err
+  }
 }
 
 /** Injectable seam for {@link resolveOpenclawGatewayKey} (real exchange in prod). */
@@ -249,9 +268,7 @@ export function resolveAgentRuntimeContext(
             const key = await resolveOpenclawGatewayKey(apiBase, apiKey, entry.home, log)
             const turnRt = { apiBase, apiKey: key, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
             prepareOpenclawHome(oclAgent, turnRt)
-            await runOpenclawTurn(oclAgent, turnRt, message, async (roomId, text, opts) => {
-              await chat.postMessage(roomId, text, opts)
-            })
+            await runOpenclawTurn(oclAgent, turnRt, message, chat)
           }
           catch (err) {
             log(`agent-runtime: ! ${entry.name} openclaw turn failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
