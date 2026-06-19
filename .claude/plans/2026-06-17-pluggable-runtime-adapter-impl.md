@@ -20,11 +20,9 @@
 - ⚠️ **Only-live (cannot test without a real model/nest):** tool-calling (CLI-as-tool), multi-turn continuity, gateway-with-real-DDISA-token, on-nest spawn — all fall to the deferred live E2E.
 
 ### Remaining (outward / deferred — needs explicit go)
-- **Commit + PR** (spans apes/ape-troop/troop/nest; main is protected → branch+PR+CI).
-- **Publish** `@openape/apes` + `@openape/ape-troop` (nest uses npm apes) + **rebuild nest image** + **deploy troop**.
-- **Live E2E on a real nest**: spawn `--type openclaw`, real troop chat, real gateway; confirm a CLI tool call lands under the DDISA identity (the echo can't trigger tool calls).
-- **DDISA-per-agent token to the gateway** (MVP uses the shared LITELLM key, same as the in-process bridge) + **`sudo -u <agent>` tool-drop** (shared pending isolation work with the bridge).
-- **Task 2** bridge→adapter refactor (cleanup).
+- ✅ **DDISA-per-agent token to the gateway DONE (PR #808, 2026-06-19).** The MVP shared-LITELLM-key approach broke once the gateway went DDISA-only (master key → 401) + M4 (default path = LocalCore, gpt-5.x → 400). `resolveOpenclawGatewayKey` now mints the agent's own DDISA token per turn (`ensureFreshIdpAuth(home)` + `exchangeForSpToken`, home-scoped) and rewrites the openclaw config per one-shot turn; `GATEWAY_MODELS` → `LocalCore-*`.
+- ✅ **Live E2E on a real nest DONE (2026-06-19).** Blue-green nest rebuild (`IMAGE=openape-nest:openclaw compose/nest-prod.run.sh`, 16 bridges reconnected, `-prev` kept). Spawned `openclaw-test --type openclaw` (own DDISA identity) → `session-host: now hosting 1 agent`. Proof: the agent'"'"'s **zero-grant** DDISA token → default `/v1` → 200 `LocalCore-Instant` (`'"'"'Hello there, how are you?'"'"'`) = M4 ungating; full `openclaw agent --local` turn → gateway (DDISA, LocalCore-Thinking) → reply `OPENCLAW-RUNTIME-OK`. Gotcha hit: the nest enroll-auth was stale → key-based reauth (`apes login --key`, config.toml identity) — see [[reference_nest_auth_reauth]].
+- **Still deferred:** CLI-tool-call under the DDISA identity (the `apes run --as` path is escapes-grant-gated — separate from the chat exec); `sudo -u <agent>` tool-drop (shared with the bridge); **bless the new nest image as `:latest`** (currently running `:openclaw`, `-prev` is the rollback); Task 2 bridge→adapter refactor (cleanup).
 
 ---
 
