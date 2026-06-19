@@ -1,6 +1,7 @@
 model_list:
-  # Default group -> headwai/LocalCore-Instant. Flipped off delta-mind codex (ChatGPT sub rate-limited); named delta-mind/* + lindeverlag/* groups still hit codex.
-  # Real headwai names on the default path (honest naming; gpt-5.x above are transition aliases)
+  # Default path (/v1) serves the self-hosted headwai LocalCore models. The named
+  # delta-mind/* group still hits codex (ChatGPT sub) via the M3 path. lindeverlag
+  # is retired — its codex group + upstream were removed.
   - model_name: LocalCore-Instant
     litellm_params: { model: openai/LocalCore-Instant, api_base: https://iurio-prod.my-ki.at/api/v1, api_key: os.environ/HEADWAI_API_KEY }
   - model_name: LocalCore-Thinking
@@ -14,15 +15,6 @@ model_list:
     litellm_params: { model: openai/gpt-5.4-mini, api_base: http://codex-proxy-dm:4000/v1, api_key: codex-proxy-no-auth }
   - model_name: delta-mind/gpt-5.3-codex
     litellm_params: { model: openai/gpt-5.3-codex, api_base: http://codex-proxy-dm:4000/v1, api_key: codex-proxy-no-auth }
-  # Named account: lindeverlag (currently stopped; revives when the account is back)
-  - model_name: lindeverlag/gpt-5.5
-    litellm_params: { model: openai/gpt-5.5, api_base: http://codex-proxy:4000/v1, api_key: codex-proxy-no-auth }
-  - model_name: lindeverlag/gpt-5.4
-    litellm_params: { model: openai/gpt-5.4, api_base: http://codex-proxy:4000/v1, api_key: codex-proxy-no-auth }
-  - model_name: lindeverlag/gpt-5.4-mini
-    litellm_params: { model: openai/gpt-5.4-mini, api_base: http://codex-proxy:4000/v1, api_key: codex-proxy-no-auth }
-  - model_name: lindeverlag/gpt-5.3-codex
-    litellm_params: { model: openai/gpt-5.3-codex, api_base: http://codex-proxy:4000/v1, api_key: codex-proxy-no-auth }
   # Named account: headwai (M3 path /<owner>/headwai/v1) - self-hosted vLLM via iurio Open WebUI (api-key, not codex)
   - model_name: headwai/LocalCore-Instant
     litellm_params: { model: openai/LocalCore-Instant, api_base: https://iurio-prod.my-ki.at/api/v1, api_key: os.environ/HEADWAI_API_KEY }
