@@ -2,7 +2,8 @@ import type { BridgeConfig, TroopMessage } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity, ThreadSession, TroopChatApi } from '@openape/ape-agent'
-import { ensureFreshIdpAuth } from '@openape/cli-auth'
+import type { IdpAuth, SpToken } from '@openape/cli-auth'
+import { ensureFreshIdpAuth, exchangeForSpToken } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import type { OpenclawAgent, OpenclawRuntime } from './openclaw-adapter'
 import { resolveBridgeConfig } from './bridge-config'
@@ -28,6 +29,47 @@ export async function runOpenclawTurn(
   const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
   if (reply)
     await post(message.roomId, reply, { replyTo: message.id, threadId: message.threadId })
+}
+
+/** Injectable seam for {@link resolveOpenclawGatewayKey} (real exchange in prod). */
+export interface GatewayKeyDeps {
+  ensureIdp: (home: string) => Promise<IdpAuth>
+  exchange: (idp: IdpAuth, req: { endpoint: string, aud: string }) => Promise<SpToken>
+}
+const realGatewayKeyDeps: GatewayKeyDeps = {
+  ensureIdp: home => ensureFreshIdpAuth(undefined, home),
+  exchange: (idp, req) => exchangeForSpToken(idp, req),
+}
+
+/**
+ * Mint this agent's gateway key for one openclaw turn. For the DDISA gateway
+ * (`llms.openape.ai`) the static env key is NOT accepted (the gateway is
+ * DDISA-only) — so exchange the agent's own IdP token (read from *its* home via
+ * `authHome`, so the one daemon mints per agent) for a short-lived gateway
+ * token. This mirrors the per-agent bridge's `resolveLlmGatewayKey`; openclaw is
+ * one-shot, so we mint per turn. For any other base (e.g. a local codex-proxy)
+ * the static `fallback` stands. Any exchange error returns `fallback` so a flaky
+ * mint never strands the agent.
+ */
+export async function resolveOpenclawGatewayKey(
+  apiBase: string,
+  fallback: string,
+  home: string,
+  log: (line: string) => void,
+  deps: GatewayKeyDeps = realGatewayKeyDeps,
+): Promise<string> {
+  if (!apiBase.includes('llms.openape.ai'))
+    return fallback
+  try {
+    const u = new URL(apiBase)
+    const idp = await deps.ensureIdp(home)
+    const sp = await deps.exchange(idp, { endpoint: u.origin, aud: u.host })
+    return sp.access_token
+  }
+  catch (err) {
+    log(`openclaw gateway token exchange failed (keeping env key): ${err instanceof Error ? err.message : String(err)}`)
+    return fallback
+  }
 }
 
 /**
@@ -191,8 +233,6 @@ export function resolveAgentRuntimeContext(
   // limitation below; until it lands, openclaw shares that constraint.
   if (entry.runtimeType === 'openclaw') {
     const oclAgent = { name: entry.name, email: entry.email, home: entry.home }
-    const oclRt = { apiBase, apiKey, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
-    let prepared = false
     return {
       ownerEmail: readAgentIdentity(entry.home).ownerEmail,
       bridgeConfig,
@@ -203,8 +243,13 @@ export function resolveAgentRuntimeContext(
       dispatchTurn: (message) => {
         void (async () => {
           try {
-            if (!prepared) { prepareOpenclawHome(oclAgent, oclRt); prepared = true }
-            await runOpenclawTurn(oclAgent, oclRt, message, async (roomId, text, opts) => {
+            // Mint a fresh per-agent DDISA gateway token each turn (the gateway
+            // is DDISA-only — the static env key 401s), then (re)write the
+            // openclaw config with it before the one-shot exec.
+            const key = await resolveOpenclawGatewayKey(apiBase, apiKey, entry.home, log)
+            const turnRt = { apiBase, apiKey: key, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
+            prepareOpenclawHome(oclAgent, turnRt)
+            await runOpenclawTurn(oclAgent, turnRt, message, async (roomId, text, opts) => {
               await chat.postMessage(roomId, text, opts)
             })
           }
