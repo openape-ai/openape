@@ -28,12 +28,19 @@ _SECRET = os.environ["SESSION_SECRET"].encode("utf-8")
 _AUD = "llms.openape.ai"
 _ISS = "llms.openape.ai"
 
-_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "LocalCore-Instant", "LocalCore-Thinking"]
-# Accounts whose upstream serves a different model set than the codex default.
+# The default account's model set = the self-hosted headwai LocalCore models,
+# the only unprefixed model_names litellm serves on the plain /v1 path.
+_MODELS = ["LocalCore-Instant", "LocalCore-Thinking"]
+# Accounts whose upstream serves a different model set than the default.
 _ACCOUNT_MODELS = {
     "headwai": ["LocalCore-Instant", "LocalCore-Thinking"],
+    "delta-mind": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"],
 }
-_DEFAULT_ACCOUNT = "lindeverlag"
+# The default account (plain /v1, no x-openape-account header). Ungated — any
+# authenticated DDISA token gets it; named accounts above still need a grant.
+# (Was "lindeverlag", now retired: it is no longer the default label and its
+# codex upstream is removed from the gateway.)
+_DEFAULT_ACCOUNT = "default"
 
 
 def _b64url_decode(seg: str) -> bytes:
@@ -79,6 +86,10 @@ def resolve_models(account: str, accounts) -> list:
     pre-enrichment tokens was removed once every agent re-exchanged."""
     if accounts is None:
         raise ValueError("token missing accounts claim (legacy) - re-exchange required")
+    # The default account is the baseline every authenticated agent gets — no
+    # per-account grant needed. Named accounts still require an explicit grant.
+    if account == _DEFAULT_ACCOUNT:
+        return models_for_account(account)
     if account in accounts or "*" in accounts:
         return models_for_account(account)
     raise ValueError(f"no grant for account {account}")
@@ -107,20 +118,30 @@ async def user_api_key_auth(request, api_key: str):
 
 if __name__ == "__main__":
     # Self-check (pure-function policy). Run: python3 ddisa_auth.py
-    assert models_for_account("lindeverlag") == _MODELS
-    assert models_for_account("delta-mind") == [f"delta-mind/{m}" for m in _MODELS]
+    _CODEX = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"]
+    # default account -> unprefixed LocalCore, ungated for any non-legacy token
+    assert models_for_account("default") == ["LocalCore-Instant", "LocalCore-Thinking"]
+    assert resolve_models("default", []) == ["LocalCore-Instant", "LocalCore-Thinking"]
+    assert resolve_models("default", ["headwai"]) == ["LocalCore-Instant", "LocalCore-Thinking"]
+    # named accounts -> prefixed, require an explicit grant
+    assert models_for_account("delta-mind") == [f"delta-mind/{m}" for m in _CODEX]
     assert models_for_account("headwai") == ["headwai/LocalCore-Instant", "headwai/LocalCore-Thinking"]
     assert resolve_models("headwai", ["headwai"]) == ["headwai/LocalCore-Instant", "headwai/LocalCore-Thinking"]
-    # granted account -> allowed
-    assert resolve_models("lindeverlag", ["lindeverlag"]) == _MODELS
-    assert resolve_models("delta-mind", ["lindeverlag", "delta-mind"]) == [f"delta-mind/{m}" for m in _MODELS]
-    # wildcard grant -> any account
-    assert resolve_models("delta-mind", ["*"]) == [f"delta-mind/{m}" for m in _MODELS]
-    # no accounts claim (legacy token) -> rejected (grace window removed)
-    for account, accounts in [("delta-mind", ["lindeverlag"]), ("delta-mind", []), ("lindeverlag", []), ("delta-mind", None), ("lindeverlag", None)]:
+    assert resolve_models("delta-mind", ["delta-mind"]) == [f"delta-mind/{m}" for m in _CODEX]
+    # wildcard grant -> any named account
+    assert resolve_models("delta-mind", ["*"]) == [f"delta-mind/{m}" for m in _CODEX]
+    # named account without a grant -> denied
+    for account, accounts in [("delta-mind", ["headwai"]), ("delta-mind", []), ("headwai", [])]:
         try:
             resolve_models(account, accounts)
             raise SystemExit(f"FAIL: {account} allowed with {accounts}")
+        except ValueError:
+            pass
+    # legacy token (no accounts claim) -> rejected even for the default account
+    for account in ("default", "delta-mind", "headwai"):
+        try:
+            resolve_models(account, None)
+            raise SystemExit(f"FAIL: {account} allowed with None accounts")
         except ValueError:
             pass
     print("ddisa_auth.py: all policy checks passed")
