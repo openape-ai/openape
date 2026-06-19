@@ -7,7 +7,7 @@ import { ensureFreshIdpAuth, exchangeForSpToken } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import type { OpenclawAgent, OpenclawRuntime } from './openclaw-adapter'
 import { resolveBridgeConfig } from './bridge-config'
-import { invokeOpenclaw, prepareOpenclawHome } from './openclaw-adapter'
+import { invokeOpenclaw, prepareOpenclawHome, sudoRunAs } from './openclaw-adapter'
 
 /** Inject the openclaw exec for tests; defaults to the real one-shot invoker. */
 export interface OpenclawTurnDeps {
@@ -251,7 +251,11 @@ export function resolveAgentRuntimeContext(
   // <agent>` drop is the SAME pending isolation work as the bridge's text-only
   // limitation below; until it lands, openclaw shares that constraint.
   if (entry.runtimeType === 'openclaw') {
-    const oclAgent = { name: entry.name, email: entry.email, home: entry.home }
+    const oclAgent = { name: entry.name, email: entry.email, home: entry.home, uid: entry.uid }
+    // In the container sandbox (OPENAPE_BYPASS_APE_SHELL=1, same flag the bridge
+    // reads) drop the exec — and its CLI tool-calls — to the agent's OS user via
+    // passwordless `sudo -u`. On the host/dev path openclaw runs as the nest user.
+    const runAs = process.env.OPENAPE_BYPASS_APE_SHELL === '1' ? sudoRunAs(entry.name) : undefined
     return {
       ownerEmail: readAgentIdentity(entry.home).ownerEmail,
       bridgeConfig,
@@ -268,7 +272,9 @@ export function resolveAgentRuntimeContext(
             const key = await resolveOpenclawGatewayKey(apiBase, apiKey, entry.home, log)
             const turnRt = { apiBase, apiKey: key, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
             prepareOpenclawHome(oclAgent, turnRt)
-            await runOpenclawTurn(oclAgent, turnRt, message, chat)
+            await runOpenclawTurn(oclAgent, turnRt, message, chat, {
+              invoke: (a, r, m, sk) => invokeOpenclaw(a, r, m, sk, runAs ? { runAs } : undefined),
+            })
           }
           catch (err) {
             log(`agent-runtime: ! ${entry.name} openclaw turn failed: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
