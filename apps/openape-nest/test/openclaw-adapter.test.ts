@@ -13,7 +13,7 @@ import {
 } from '../src/lib/openclaw-adapter'
 
 const agent = { name: 'test-ceo', email: 'test-ceo-mac+p+h+eco@id.openape.ai', home: '/home/test-ceo' }
-const rt = { apiBase: 'https://llms.openape.ai/v1', apiKey: 'sk-key', model: 'gpt-5.5', systemPrompt: 'You are the CEO.' }
+const rt = { apiBase: 'https://llms.openape.ai/v1', apiKey: 'sk-key', model: 'LocalCore-Thinking', systemPrompt: 'You are the CEO.' }
 
 describe('buildOpenclawConfig', () => {
   it('points the openape provider at the gateway and selects openape/<model>', () => {
@@ -21,8 +21,8 @@ describe('buildOpenclawConfig', () => {
     expect(cfg.models.providers.openape.baseUrl).toBe('https://llms.openape.ai/v1')
     expect(cfg.models.providers.openape.apiKey).toBe('sk-key')
     // openclaw schema: provider.models are {id, api} objects, not bare strings.
-    expect(cfg.models.providers.openape.models[0]).toEqual({ id: 'gpt-5.5', name: 'gpt-5.5', api: 'openai-completions' })
-    expect(cfg.agents.list[0].model).toBe('openape/gpt-5.5')
+    expect(cfg.models.providers.openape.models[0]).toEqual({ id: 'LocalCore-Instant', name: 'LocalCore-Instant', api: 'openai-completions' })
+    expect(cfg.agents.list[0].model).toBe('openape/LocalCore-Thinking')
     expect(cfg.agents.list[0].tools.allow).toContain('exec')
     // reasoningDefault off — avoids the gateway tools+reasoning→/responses 404.
     expect(cfg.agents.defaults.reasoningDefault).toBe('off')
@@ -47,7 +47,7 @@ describe('buildInvocation', () => {
     expect(args).toContain('--json')
     expect(args).toEqual(expect.arrayContaining(['--message', 'hello']))
     expect(args).toEqual(expect.arrayContaining(['--session-key', 'agent:test-ceo:room1:thread1']))
-    expect(args).toEqual(expect.arrayContaining(['--model', 'openape/gpt-5.5']))
+    expect(args).toEqual(expect.arrayContaining(['--model', 'openape/LocalCore-Thinking']))
     expect(env.OPENCLAW_CONFIG_PATH).toBe(openclawPaths(agent.home).configPath)
     expect(env.HOME).toBe('/home/test-ceo')
   })

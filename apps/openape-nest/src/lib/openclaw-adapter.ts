@@ -24,8 +24,8 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 
-/** Models the gateway exposes — mirrors the litellm default group. */
-const GATEWAY_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex']
+/** Models the gateway's default path serves (the unprefixed litellm deployments). */
+const GATEWAY_MODELS = ['LocalCore-Instant', 'LocalCore-Thinking']
 const PROVIDER = 'openape'
 // The gateway speaks the OpenAI chat-completions dialect (codex-proxy → litellm).
 const PROVIDER_API = 'openai-completions'
