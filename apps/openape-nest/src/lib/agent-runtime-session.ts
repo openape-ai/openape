@@ -230,10 +230,10 @@ export function resolveAgentRuntimeContext(
 
   // The LiteLLM proxy + model the per-thread runtime drives, resolved from the
   // nest env exactly as the per-agent bridge's `runtimeConfig()`
-  // (`LITELLM_BASE_URL` / `LITELLM_API_KEY`|`LITELLM_MASTER_KEY` + the agent's
-  // model). Built once and shared across this agent's threads.
+  // (`LITELLM_BASE_URL` / `LITELLM_API_KEY` + the agent's model). Built once and
+  // shared across this agent's threads.
   const apiBase = (env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
-  const apiKey = env.LITELLM_API_KEY ?? env.LITELLM_MASTER_KEY ?? ''
+  const apiKey = env.LITELLM_API_KEY ?? ''
   const runtimeConfig = { apiBase, apiKey, model: bridgeConfig.model }
 
   // One ThreadSession per `${roomId}:${threadId}`, mirroring the bridge's
@@ -297,7 +297,7 @@ export function resolveAgentRuntimeContext(
       // boot on the same missing key; the nest keeps reconcile alive and logs
       // here so one misconfigured agent never strands the others.)
       if (!apiKey) {
-        log(`agent-runtime: ! ${entry.name} cannot dispatch — LITELLM_API_KEY/LITELLM_MASTER_KEY unset`)
+        log(`agent-runtime: ! ${entry.name} cannot dispatch — LITELLM_API_KEY unset`)
         return
       }
       const key = `${message.roomId}:${message.threadId}`
