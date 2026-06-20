@@ -14,7 +14,7 @@ const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
 
 interface Org { id: string, name: string, visionMd: string, budgetMonthlyEur: number }
-interface Member { orgId: string, agentEmail: string, agentName: string, role: string, persona: string | null, reportsToEmail: string | null, status: string }
+interface Member { orgId: string, agentEmail: string, agentName: string, role: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null, status: string }
 interface Persona { key: string, title: string, role: string }
 
 const org = ref<Org | null>(null)
