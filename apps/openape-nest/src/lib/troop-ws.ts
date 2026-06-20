@@ -34,6 +34,8 @@ import { hostname } from 'node:os'
 import WebSocket from 'ws'
 import { mintNestToken,  readDeviceCreds } from './nest-device'
 import type { NestDeviceCreds } from './nest-device'
+import { setNestPaused } from './nest-state'
+import { setAgentPaused } from './registry'
 import { agentNameFromEmail, planSecretRevoke, planSecretWrite } from './secret-relay'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
@@ -94,9 +96,16 @@ interface SecretRevokeFrame {
   env: string
 }
 
+interface SetPauseFrame {
+  type: 'set-pause'
+  /** Agent short name. Omitted → pause/resume the whole nest. */
+  name?: string
+  paused: boolean
+}
+
 type InboundFrame
   = | SpawnIntentFrame | DestroyIntentFrame | ConfigUpdateFrame | ReloadBridgeFrame
-    | SecretUpdateFrame | SecretRevokeFrame | { type: string }
+    | SecretUpdateFrame | SecretRevokeFrame | SetPauseFrame | { type: string }
 
 export interface TroopWsOptions {
   /** Default: `wss://troop.openape.ai`. Override via env `OPENAPE_TROOP_WS_URL`. */
@@ -272,6 +281,10 @@ export class TroopWs {
     }
     if (frame.type === 'secret-revoke') {
       await this.handleSecretRevoke(frame as SecretRevokeFrame)
+      return
+    }
+    if (frame.type === 'set-pause') {
+      this.handleSetPause(frame as SetPauseFrame)
     }
     // Unknown frame types: ignore. Forward-compat for future troop
     // versions that send frames an older nest doesn't recognize.
@@ -314,6 +327,23 @@ export class TroopWs {
     }
     this.opts.log(`troop-ws: secret-revoke ${name}/${frame.env}`)
     await this.runAsAgent(name, ['sh', '-c', plan.script], `secret-revoke ${name}/${frame.env}`)
+  }
+
+  private handleSetPause(frame: SetPauseFrame): void {
+    // Pause is an in-process registry write — the session-host's dispatch + tick
+    // guards re-read it live, so no respawn. Name present → one agent; absent →
+    // the whole nest (kill-switch).
+    const verb = frame.paused ? 'pause' : 'resume'
+    if (frame.name) {
+      const ok = setAgentPaused(frame.name, frame.paused)
+      this.opts.log(ok
+        ? `troop-ws: ${verb} agent ${frame.name}`
+        : `troop-ws: ${verb} agent ${frame.name} — unknown agent, ignored`)
+    }
+    else {
+      setNestPaused(frame.paused)
+      this.opts.log(`troop-ws: ${verb} nest (all agents)`)
+    }
   }
 
   private async handleSpawnIntent(frame: SpawnIntentFrame): Promise<void> {
