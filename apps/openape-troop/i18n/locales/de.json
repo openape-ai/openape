@@ -250,6 +250,14 @@
         "pollFailed": "Polling fehlgeschlagen",
         "startFailed": "Zerstörung konnte nicht gestartet werden"
       }
+    },
+    "pause": {
+      "badge": "Pausiert",
+      "badgeTitle": "Dieser Agent führt keine LLM-Turns aus, bis er fortgesetzt wird",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "pauseTitle": "Agent pausieren — bleibt verbunden, führt aber keine LLM-Turns aus",
+      "resumeTitle": "Agent fortsetzen"
     }
   },
   "chat": {
