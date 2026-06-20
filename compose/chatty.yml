@@ -1,24 +1,45 @@
-# Prod compose for the four Nuxt apps on chatty — tested images from
-# registry.openape.ai, packaged by compose/preview-package.Dockerfile and
-# deployed by scripts/deploy-image.mjs (which also syncs this file to
+# Prod compose for the Nuxt apps on chatty — tested images from GHCR (or
+# configurable REGISTRY), built locally with buildx multi-arch and deployed
+# by scripts/deploy-image.mjs (which also syncs this file to
 # /home/openape/prod/docker-compose.yml).
 #
 # Design notes:
-# - Each app mounts its existing /home/openape/projects/<app>/shared at the
-#   IDENTICAL path and reuses the systemd-era shared/.env via env_file — the
-#   absolute file:-SQLite URLs keep working and no secret is copied anywhere.
+# - troop (pilot): uses .env.troop for secrets (gitignored on chatty), no
+#   mounted volumes — stateless with remote Turso.
+# - idp/chat: still use mounted volumes from shared/.env (systemd-era approach).
 # - HOST is overridden to 0.0.0.0 (some .envs pin 127.0.0.1, which would bind
 #   loopback INSIDE the container); `environment` wins over `env_file`.
 # - Ports publish on 127.0.0.1:<port> — exactly where nginx already proxies,
 #   so the nginx config is untouched by the systemd→container cutover.
 # - user: 999:988 (openape) so DB/WAL files stay openape-owned and the dormant
 #   systemd fallback could still take over.
-# - Image tags are pinned via /home/openape/prod/.env (<APP>_TAG, managed by
-#   the deployer; <APP>_TAG_PREV is the rollback pin).
+# - Image tags/digests are pinned via /home/openape/prod/.env (<APP>_TAG,
+#   managed by the deployer; <APP>_TAG_PREV is the rollback pin).
+# - REGISTRY env var (default: ghcr.io/openape-ai) controls the registry.
 
 name: openape-prod
 
 services:
+  # Pilot: openape-troop — new tested-image deploy pattern
+  openape-troop:
+    image: ${REGISTRY:-ghcr.io/openape-ai}/openape-troop:${TROOP_TAG:-latest}
+    container_name: openape-troop
+    restart: unless-stopped
+    user: "999:988"
+    env_file: .env.troop
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:3010:3010"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Legacy: openape-free-idp — still using mounted volumes (systemd-era)
   idp:
     image: registry.openape.ai/openape-free-idp:${IDP_TAG:-unset}
     restart: unless-stopped
@@ -39,26 +60,7 @@ services:
       retries: 6
       start_period: 10s
 
-  troop:
-    image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
-    restart: unless-stopped
-    user: "999:988"
-    env_file: /home/openape/projects/openape-troop/shared/.env
-    environment:
-      HOST: 0.0.0.0
-      NITRO_HOST: 0.0.0.0
-    volumes:
-      - /home/openape/projects/openape-troop/shared:/home/openape/projects/openape-troop/shared
-    ports:
-      - "127.0.0.1:3010:3010"
-      - "10.0.1.1:3010:3010"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-
+  # Legacy: openape-chat — still using mounted volumes (systemd-era)
   chat:
     image: registry.openape.ai/openape-chat:${CHAT_TAG:-unset}
     restart: unless-stopped
