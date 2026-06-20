@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { PERSONA_CATEGORIES, PERSONAS } from '#shared/persona-catalog'
 
 // Agent-Catalog documentation page: lists the personas from the catalog — the
-// single source of truth for company personas — served via /api/personas so the
-// client page never imports the server util.
-const { data } = await useFetch('/api/personas')
-const PERSONA_CATEGORIES = computed(() => data.value?.categories ?? [])
-const PERSONAS = computed(() => data.value?.personas ?? [])
-
+// single source of truth for company personas. The catalog lives in shared/, so
+// this static page imports it directly and prerenders.
 useSeoMeta({
   title: 'Agent Catalog — Troop',
   description: 'All personas available to compose your company. Generated from the agent-catalog source.',
