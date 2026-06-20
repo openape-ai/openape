@@ -38,6 +38,11 @@ export const TROOP_SCOPES: TroopScope[] = [
     grants: ['POST /api/agents/destroy-intent'],
   },
   {
+    id: 'troop:pause-agent',
+    description: 'Pause and resume agents (and whole nests) on this troop on the user\'s behalf. A paused agent stays enrolled but runs no LLM turns — reversible any time.',
+    grants: ['POST /api/agents/:name/pause', 'POST /api/agents/:name/resume', 'POST /api/nests/:host_id/pause', 'POST /api/nests/:host_id/resume'],
+  },
+  {
     id: 'troop:read-agents',
     description: 'Read the user\'s agent list, agent details, and live nest-status on this troop.',
     grants: ['GET /api/agents', 'GET /api/agents/:name', 'GET /api/nest/hosts'],
