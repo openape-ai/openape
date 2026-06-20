@@ -14,6 +14,7 @@ export default defineEventHandler(() => {
       icon: p.icon,
       summary: p.summary,
       coding: p.coding,
+      recipeRef: p.recipeRef,
     })),
   }
 })
