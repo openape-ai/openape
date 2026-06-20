@@ -1,7 +1,9 @@
 # Prod compose for the four Nuxt apps on chatty — tested images from
-# registry.openape.ai, packaged by compose/preview-package.Dockerfile and
+# GHCR (ghcr.io/openape-ai) by default, packaged by app-specific Dockerfiles and
 # deployed by scripts/deploy-image.mjs (which also syncs this file to
 # /home/openape/prod/docker-compose.yml).
+#
+# Registry can be overridden via REGISTRY env var (e.g., for self-hosted registry).
 #
 # Design notes:
 # - Each app mounts its existing /home/openape/projects/<app>/shared at the
