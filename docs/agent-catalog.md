@@ -55,12 +55,12 @@ Personas are grouped into 7 categories:
 | Mobile Engineer | `mobile-engineer` | specialist | smartphone | Yes | Implements mobile/cross-platform app features and verifies builds. |
 | Code Reviewer | `code-reviewer` | specialist | git-pull-request-arrow | Yes | Reviews open PRs for correctness, style and risk — approves or requests changes. |
 | Release Manager | `release-manager` | specialist | rocket | Yes | Owns the merge gate and release notes; coordinates safe rollouts (Owner approves prod). |
-| Technical Writer | `technical-writer` | specialist | book-open | Yes | Writes and updates docs from the code and shipped changes — keeps docs from drifting. |
 
 ### Design & Content
 
 | Persona | Key | Role | Icon | Coding | Summary |
 |---------|-----|------|------|--------|---------|
+| Technical Writer | `technical-writer` | specialist | book-open | Yes | Writes and updates docs from the code and shipped changes — keeps docs from drifting. |
 | UX Designer | `ux-designer` | specialist | palette | No | Specifies flows, interaction and copy so frontend engineers can build without guessing. |
 | Content Marketer | `content-marketer` | specialist | pen-tool | No | Produces blog, social and announcement copy from real shipped work. |
 
