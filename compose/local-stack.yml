@@ -47,7 +47,6 @@ services:
           - id.openape.test
           - troop.openape.test
           - chat.openape.test
-          - org.openape.test
           - coder.openape.test
     ports:
       - "127.0.0.1:443:443"
@@ -240,8 +239,6 @@ services:
       troop:
         condition: service_healthy
       chat:
-        condition: service_healthy
-      org:
         condition: service_healthy
     dns:
       - 172.30.0.53
