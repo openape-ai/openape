@@ -6,7 +6,7 @@ import { computed } from 'vue'
 // in parallel; Teamleads sit under the CEO with their Specialists; unassigned
 // specialists and other roles are surfaced so nobody disappears.
 
-interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, reportsToEmail: string | null }
+interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null }
 
 const props = defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string> }>()
 defineEmits<{ spawn: [member: Member] }>()
