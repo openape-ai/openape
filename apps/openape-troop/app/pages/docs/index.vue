@@ -21,6 +21,10 @@ useSeoMeta({
       drift from the real product.
     </p>
 
+    <NuxtLink to="/docs/agent-catalog" class="mt-6 inline-flex items-center text-sm text-primary-400 hover:text-primary-300">
+      View Agent Catalog →
+    </NuxtLink>
+
     <section v-for="cat in docsGuide.categories" :key="cat.title" class="mt-12">
       <h2 class="text-xl font-semibold text-white">
         {{ cat.title }}
