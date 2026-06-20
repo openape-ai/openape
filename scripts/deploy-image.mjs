@@ -1,26 +1,29 @@
 #!/usr/bin/env node
 // Tested-image prod deploy: the Mac builds + smoke-tests an app image, pushes
-// it to registry.openape.ai, and chatty pulls + restarts the container — with
-// an /api/health gate and tag rollback. No build on chatty.
+// it to REGISTRY (default ghcr.io/openape-ai), and chatty pulls + restarts
+// the container — with an /api/health gate and tag rollback. No build on chatty.
 //
 //   pnpm run deploy:image <target...>     # free-idp | troop | chat
 //   pnpm run deploy:image --all
 //
-// Flow per target: turbo build (.output, warm cache) → COPY-only amd64 image
-// (compose/preview-package.Dockerfile, same artifact format as PR previews,
-// tag prod-<shortsha>) → local smoke run (/api/health with dummy env) → push
-// → sync compose/chatty.yml to chatty → pin tag in /home/openape/prod/.env
-// (keeping <APP>_TAG_PREV for rollback) → compose pull + up → external
-// health gate → on failure: revert the pin + up again, exit 1.
+// Flow per target: turbo build (.output, warm cache) → multi-arch buildx
+// (apps/<app>/Dockerfile, arm64+amd64, tag <registry>/<app>:prod-<shortsha>)
+// → local smoke run (/api/health with dummy env) → push → sync compose/chatty.yml
+// to chatty → pin tag in /home/openape/prod/.env (keeping <APP>_TAG_PREV for
+// rollback) → compose pull + up → external health gate → on failure: revert
+// the pin + up again, exit 1.
 //
 // One-time cutover guard: refuses to deploy while the app's systemd unit is
 // still active (port conflict) — stop + disable it first, it stays as the
 // dormant fallback.
+//
+// REGISTRY env var controls the registry (default: ghcr.io/openape-ai).
+// Set REGISTRY=registry.openape.ai for the legacy registry.
 
 import { execFileSync } from 'node:child_process'
 import process from 'node:process'
 
-const REGISTRY = 'registry.openape.ai'
+const REGISTRY = process.env.REGISTRY || 'ghcr.io/openape-ai'
 const HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
 const USER = process.env.CHATTY_USER || 'openape'
 const PROD_DIR = '/home/openape/prod'
@@ -106,12 +109,10 @@ async function deploy(name) {
 
   console.log(`→ build ${t.filter}`)
   sh('pnpm', ['turbo', 'run', 'build', `--filter=${t.filter}`])
-  console.log('→ package (amd64, COPY-only)')
-  sh('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
-  console.log('→ smoke test')
+  console.log('→ buildx multi-arch (arm64+amd64) → push')
+  sh('docker', ['buildx', 'build', '--platform', 'linux/arm64,linux/amd64', '-f', `${t.dir}/Dockerfile`, '-t', tag, '--push', '.'])
+  console.log('→ smoke test (amd64)')
   await smokeTest(tag, t.port)
-  console.log('→ push')
-  sh('docker', ['push', tag])
 
   console.log('→ chatty: sync compose, pin tag, pull + up')
   sh('scp', ['-q', 'compose/chatty.yml', `${USER}@${HOST}:${PROD_DIR}/docker-compose.yml`])
