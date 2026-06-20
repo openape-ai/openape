@@ -46,7 +46,7 @@ Each persona has a **role** that determines its position in the org chart:
 | [Engineering Manager](../engineering-manager/) | `teamlead` | 0 */3 * * * | Decomposes engineering objectives into stories and routes them to engineers. |
 | [Project / Delivery Manager](../project-manager/) | `teamlead` | 0 */6 * * * | Keeps timelines, dependencies and risks visible; chases blockers across teams. |
 
-### Engineering (13 personas)
+### Engineering (12 personas)
 
 | Persona | Role | Schedule | Summary |
 |---|---|---|---|
@@ -179,7 +179,7 @@ The catalog has 7 categories:
 | Key | Label | Personas |
 |-----|-------|----------|
 | `leadership` | Leadership & Coordination | 5 |
-| `engineering` | Engineering | 13 |
+| `engineering` | Engineering | 12 |
 | `design-content` | Design & Content | 3 |
 | `data-research` | Data & Research | 2 |
 | `growth-sales` | Growth & Sales | 2 |
