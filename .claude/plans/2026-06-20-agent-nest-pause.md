@@ -176,7 +176,13 @@ vollständiger E2E-Beweis.
   `ape-troop nests pause|resume`. Tests: 118 nest + 192 troop (inkl.
   `pause-dispatch.test.ts`, 5 Fälle) + 5 ape-troop grün. Live-Relay-Beweis (CLI →
   Nest-Log → idle) → M3-E2E gegen den laufenden Nest.
-- [ ] M3: offen
+- [x] `[2026-06-20]` M3: **implementiert** (Branch `feat/agent-nest-pause-m3`).
+  Troop `agents.paused`-Spalte (additive ALTER-TABLE-Migration) als UI-Mirror,
+  geschrieben von den per-Agent-Endpoints; Agent-Detail-Header: ⏸-Badge +
+  Pause/Resume-Button (i18n de+en); Nest-Detail: Fleet-Pause/Resume-Button (Toast).
+  192 troop-Tests + lint + typecheck grün. **Visueller Live-Screenshot ist
+  owner-passkey-gated → nicht autonom capturebar**; Beweis: CI-grün + PR-Preview
+  (Patrick loggt sich dort selbst ein) + Render des neuen Headers.
 
 ## Surprises & Discoveries
 
