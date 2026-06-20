@@ -7,6 +7,7 @@ import { ensureFreshIdpAuth, exchangeForSpToken } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import type { OpenclawAgent, OpenclawRuntime } from './openclaw-adapter'
 import { resolveBridgeConfig } from './bridge-config'
+import { isAgentPaused } from './nest-state'
 import { invokeOpenclaw, prepareOpenclawHome, sudoRunAs } from './openclaw-adapter'
 
 /** Inject the openclaw exec for tests; defaults to the real one-shot invoker. */
@@ -264,6 +265,10 @@ export function resolveAgentRuntimeContext(
         await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
       },
       dispatchTurn: (message) => {
+        if (isAgentPaused(entry.name)) {
+          log(`agent-runtime: ⏸ ${entry.name} paused, dropping turn (no tokens)`)
+          return
+        }
         void (async () => {
           try {
             // Mint a fresh per-agent DDISA gateway token each turn (the gateway
@@ -292,6 +297,10 @@ export function resolveAgentRuntimeContext(
       await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
     },
     dispatchTurn: (message) => {
+      if (isAgentPaused(entry.name)) {
+        log(`agent-runtime: ⏸ ${entry.name} paused, dropping turn (no tokens)`)
+        return
+      }
       // Without an API key runLoop can't reach the model at all — fail loudly
       // per turn rather than silently swallowing it. (The bridge fails fast at
       // boot on the same missing key; the nest keeps reconcile alive and logs
