@@ -57,4 +57,18 @@ export default antfu({
     'e18e/prefer-array-fill': 'off',
     'test/prefer-lowercase-title': 'off',
   },
+}).append({
+  // Client code must not import server-only modules. Nuxt splits app/ and
+  // server/ into separate tsconfigs, so an app→server import otherwise only
+  // surfaces at CI typecheck with a cryptic TS2307. Catch it here at lint time.
+  // Isomorphic data belongs in shared/ (importable via #shared from both sides).
+  files: ['apps/*/app/**/*.{ts,tsx,vue,js,mjs}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [{
+        group: ['**/server/**', '#server/**', '~/server/**', '~~/server/**'],
+        message: 'Client code must not import from server/. Move shared data to the app\'s shared/ folder (import via #shared), or fetch it through a server/api route.',
+      }],
+    }],
+  },
 })

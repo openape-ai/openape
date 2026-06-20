@@ -1,4 +1,4 @@
-import { PERSONA_CATEGORIES, PERSONAS } from '../utils/persona-catalog'
+import { PERSONA_CATEGORIES, PERSONAS } from '#shared/persona-catalog'
 
 // Public catalog of company personas the Owner can pick from when adding a
 // member. Mirrors the agent-catalog recipes; spawn-member deploys the matching
