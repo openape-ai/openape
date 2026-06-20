@@ -111,7 +111,7 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
     const candidates: Record<string, string | undefined> = {
       OPENAPE_SP_BASE_URL: agent.service?.spBaseUrl,
       LITELLM_BASE_URL: br.baseUrl ?? process.env.LITELLM_BASE_URL,
-      LITELLM_API_KEY: br.apiKey ?? process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY,
+      LITELLM_API_KEY: br.apiKey ?? process.env.LITELLM_API_KEY,
       APE_SERVICE_MODEL: br.model ?? process.env.APE_SERVICE_MODEL ?? process.env.APE_CHAT_BRIDGE_MODEL,
       APE_SERVICE_POLL_MS: agent.service?.pollIntervalMs != null ? String(agent.service.pollIntervalMs) : undefined,
     }

@@ -177,11 +177,12 @@ class Bridge {
   private injectionDetector: Detector
   private auditStore: AuditStore
   private injectionConfig: InjectionConfig
-  // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
-  // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
-  // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
-  // chat threads pick up the refreshed token — drop master_key + cron-DDISA later.
-  private llmKey: string = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
+  // LLM gateway key. For the prod gateway (llms.openape.ai) this static boot key
+  // is replaced per turn by this agent's own DDISA-exchanged token
+  // (refreshLlmGatewayKey), so it only matters for the local codex-proxy
+  // loopback. (The legacy `LITELLM_MASTER_KEY` rollout fallback was dropped — the
+  // gateway is DDISA-only and the env always sets `LITELLM_API_KEY`.)
+  private llmKey: string = process.env.LITELLM_API_KEY ?? ''
 
   constructor(
     private cfg: BridgeConfig,
@@ -252,7 +253,7 @@ class Bridge {
     const apiBase = (process.env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
     const apiKey = this.llmKey
     if (!apiKey) {
-      throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
+      throw new Error('LITELLM_API_KEY must be set in the bridge env.')
     }
     return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
   }
