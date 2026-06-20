@@ -56,6 +56,14 @@ export interface AgentEntry {
     /** Idle poll interval in ms (default 2000). */
     pollIntervalMs?: number
   }
+  /**
+   * Paused agents stay enrolled + WS-connected but run no LLM turns (zero
+   * tokens): the dispatch + tick guards re-read this flag live, so resume is
+   * instant — no respawn, no re-auth. Absent → running (backward-compatible).
+   */
+  paused?: boolean
+  /** When `paused` was last set true (epoch ms) — purely informational. */
+  pausedAt?: number
 }
 
 interface RegistryFile {
@@ -83,7 +91,7 @@ function resolveRegistryPath(): string {
   return join(homedir(), 'agents.json')
 }
 export const REGISTRY_PATH = resolveRegistryPath()
-const REGISTRY_DIR = REGISTRY_PATH.replace(/\/agents\.json$/, '')
+export const REGISTRY_DIR = REGISTRY_PATH.replace(/\/agents\.json$/, '')
 
 function emptyRegistry(): RegistryFile {
   return { version: 1, agents: [] }
@@ -126,6 +134,13 @@ export function upsertAgent(entry: AgentEntry): void {
   if (existing >= 0) reg.agents[existing] = entry
   else reg.agents.push(entry)
   writeRegistry(reg)
+}
+
+export function setAgentPaused(name: string, paused: boolean): boolean {
+  const entry = findAgent(name)
+  if (!entry) return false
+  upsertAgent({ ...entry, paused, ...(paused ? { pausedAt: Date.now() } : {}) })
+  return true
 }
 
 export function removeAgent(name: string): boolean {
