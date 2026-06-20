@@ -14,8 +14,8 @@ describe('nest/hatch bundle (BYO Docker path)', () => {
     generatedAt: '2026-06-03T00:00:00.000Z',
   })
 
-  it('sets OPENAPE_BRIDGE_TARGET=troop in the openape-nest service env', () => {
-    expect(yaml).toContain('OPENAPE_BRIDGE_TARGET: troop')
+  it('does not set the removed OPENAPE_BRIDGE_TARGET var', () => {
+    expect(yaml).not.toContain('OPENAPE_BRIDGE_TARGET')
   })
 
   it('includes the troop URL', () => {
@@ -66,8 +66,8 @@ describe('pod/hatch bundle (cloud-provisioned Docker path)', () => {
     hatchToken: 'nest-hatch-pod-test',
   })
 
-  it('sets OPENAPE_BRIDGE_TARGET=troop in the openape-nest service env', () => {
-    expect(yaml).toContain('OPENAPE_BRIDGE_TARGET: troop')
+  it('does not set the removed OPENAPE_BRIDGE_TARGET var', () => {
+    expect(yaml).not.toContain('OPENAPE_BRIDGE_TARGET')
   })
 
   it('includes the troop URL', () => {
@@ -98,15 +98,6 @@ describe('pod/hatch bundle (cloud-provisioned Docker path)', () => {
 })
 
 describe('pod/hatch env file', () => {
-  it('does not embed OPENAPE_BRIDGE_TARGET (it belongs in compose environment block, not .env)', () => {
-    // The bridge reads OPENAPE_BRIDGE_TARGET from the container environment,
-    // not from the .env file. If it were in .env it could be accidentally
-    // overridden. The compose environment: block takes precedence anyway, but
-    // this confirms the split is intentional.
-    const env = buildPodEnvFile({ APE_CHAT_BRIDGE_MODEL: 'gpt-5' })
-    expect(env).not.toContain('OPENAPE_BRIDGE_TARGET')
-  })
-
   it('includes model key from secrets', () => {
     const env = buildPodEnvFile({ APE_CHAT_BRIDGE_MODEL: 'gpt-5.4' })
     expect(env).toContain('APE_CHAT_BRIDGE_MODEL=gpt-5.4')
