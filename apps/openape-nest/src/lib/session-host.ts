@@ -1,4 +1,6 @@
 import type { AgentEntry } from './registry'
+import { readNestState } from './nest-state'
+import { listAgents } from './registry'
 
 /**
  * Common contract for the nest's agent supervisor, so `index.ts` can swap
@@ -129,6 +131,9 @@ export class SessionHost implements AgentSupervisor {
    * nothing is stranded, so a later strand of the same agent logs again.
    */
   private lastStrandedKey: string | undefined
+
+  /** Last logged pause picture (`nest` or sorted agent names), to log only on change. */
+  private lastPausedKey: string | undefined
 
   constructor(private readonly deps: { log: (line: string) => void, createSession?: SessionFactory }) {
     this.createSession = deps.createSession ?? createPlaceholderSession
@@ -275,9 +280,26 @@ export class SessionHost implements AgentSupervisor {
       this.lastStrandedKey = undefined
     }
 
+    // Pause skips turn execution but NOT the reconcile above: a paused agent
+    // stays live + WS-connected so resume is instant. Read live each tick so a
+    // pause/resume takes effect without a respawn. (Inbound-message turns funnel
+    // through dispatchTurn, which guards on the same flag — this covers the
+    // autonomous tick path + the nest-wide switch.)
+    const nestPaused = readNestState().paused
+    const pausedNames = new Set(this.sessions.size ? listAgents().filter(a => a.paused).map(a => a.name) : [])
+    const pausedKey = nestPaused ? 'nest' : (pausedNames.size ? [...pausedNames].sort().join(',') : undefined)
+    if (pausedKey !== this.lastPausedKey) {
+      if (nestPaused) this.deps.log('session-host: ⏸ nest paused — skipping all turns')
+      else if (pausedNames.size) this.deps.log(`session-host: ⏸ paused, skipping turns: ${[...pausedNames].sort().join(', ')}`)
+      else this.deps.log('session-host: ▶ resumed — turns running')
+      this.lastPausedKey = pausedKey
+    }
+
     for (const live of this.sessions.values()) {
       const { session } = live
       if (!session.tick)
+        continue
+      if (nestPaused || pausedNames.has(session.name))
         continue
       try {
         await session.tick()
