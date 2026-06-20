@@ -81,15 +81,7 @@ export async function resolveLoginInputs(
     }
   }
 
-  // 3. IdP
-  // APES_IDP is the canonical env var. GRAPES_IDP is a deprecated alias
-  // kept for users with older shell profiles; APES_IDP wins on conflict.
-  if (process.env.APES_IDP && process.env.GRAPES_IDP) {
-    consola.warn(
-      'Both APES_IDP and GRAPES_IDP are set — using APES_IDP. '
-      + 'GRAPES_IDP is deprecated and will be removed in a future release.',
-    )
-  }
+  // 3. IdP — APES_IDP is the canonical env var.
   let idp: string | undefined
   let idpSource: 'flag' | 'env' | 'config' | 'ddisa' | undefined
   if (flags.idp) {
@@ -99,14 +91,6 @@ export async function resolveLoginInputs(
   else if (process.env.APES_IDP) {
     idp = process.env.APES_IDP
     idpSource = 'env'
-  }
-  else if (process.env.GRAPES_IDP) {
-    idp = process.env.GRAPES_IDP
-    idpSource = 'env'
-    consola.warn(
-      'GRAPES_IDP is deprecated, use APES_IDP instead. '
-      + 'GRAPES_IDP support will be removed in a future release.',
-    )
   }
   else if (config.defaults?.idp) {
     idp = config.defaults.idp
