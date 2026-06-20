@@ -132,11 +132,41 @@ const destroyCommand = defineCommand({
   },
 })
 
+const pauseCommand = defineCommand({
+  meta: { name: 'pause', description: 'Pause an agent — stays enrolled but runs no LLM turns (zero tokens)' },
+  args: {
+    'name': { type: 'positional', required: true, description: 'Agent short name' },
+    'host-id': { type: 'string', description: 'Target device host_id (default: first connected nest)' },
+    'json': { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setAgentPaused({ name: String(args.name), hostId: args['host-id'] ? String(args['host-id']) : undefined, paused: true })
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Paused ${args.name} on ${r.hostname}`)
+  },
+})
+
+const resumeCommand = defineCommand({
+  meta: { name: 'resume', description: 'Resume a paused agent (instant — no respawn)' },
+  args: {
+    'name': { type: 'positional', required: true, description: 'Agent short name' },
+    'host-id': { type: 'string', description: 'Target device host_id (default: first connected nest)' },
+    'json': { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setAgentPaused({ name: String(args.name), hostId: args['host-id'] ? String(args['host-id']) : undefined, paused: false })
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Resumed ${args.name} on ${r.hostname}`)
+  },
+})
+
 export const agentsCommand = defineCommand({
-  meta: { name: 'agents', description: 'Manage agents on this troop (list, spawn, destroy)' },
+  meta: { name: 'agents', description: 'Manage agents on this troop (list, spawn, pause, resume, destroy)' },
   subCommands: {
     list: listCommand,
     spawn: spawnCommand,
+    pause: pauseCommand,
+    resume: resumeCommand,
     destroy: destroyCommand,
   },
 })

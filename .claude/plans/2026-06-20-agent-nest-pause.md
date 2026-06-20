@@ -166,7 +166,16 @@ vollständiger E2E-Beweis.
   bleibt connected). 118 Tests grün, inkl. `pause.test.ts` (Prädikat + dispatch-drop
   beweist Turn wird vor LLM verworfen). Live-Stack-Beweis (0 LLM-Calls) → in M3-E2E
   gefaltet, sobald CLI/UI das Togglen treiben.
-- [ ] M2: offen
+- [x] `[2026-06-20]` M2: **implementiert** (Branch `feat/agent-nest-pause-m2`).
+  Ein WS-Frame `set-pause { name?, paused }` (name=Agent, ohne=Nest-weit) im
+  Nest-Handler (`troop-ws.ts handleSetPause` → `setAgentPaused`/`setNestPaused`,
+  in-process, kein Respawn). Troop: `pause-dispatch.ts dispatchPause` (Peer-Wahl
+  wie spawn) + 4 Endpoints (`/api/agents/:name/pause|resume`,
+  `/api/nests/:host_id/pause|resume`, Scope `troop:pause-agent`). CLI:
+  `TroopApi.setAgentPaused/setNestPaused` + `ape-troop agents pause|resume` +
+  `ape-troop nests pause|resume`. Tests: 118 nest + 192 troop (inkl.
+  `pause-dispatch.test.ts`, 5 Fälle) + 5 ape-troop grün. Live-Relay-Beweis (CLI →
+  Nest-Log → idle) → M3-E2E gegen den laufenden Nest.
 - [ ] M3: offen
 
 ## Surprises & Discoveries

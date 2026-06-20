@@ -50,6 +50,14 @@ export interface IntentResult {
   hostname: string
 }
 
+export interface PauseResult {
+  ok: boolean
+  paused: boolean
+  host_id: string
+  hostname: string
+  name?: string
+}
+
 export interface SpawnPoll {
   pending: boolean
   ok?: boolean
@@ -144,5 +152,18 @@ export class TroopApi {
 
   pollDestroy(intentId: string): Promise<DestroyPoll> {
     return this.request(`/api/agents/destroy-intent/${encodeURIComponent(intentId)}`)
+  }
+
+  setAgentPaused(input: { name: string, hostId?: string, paused: boolean }): Promise<PauseResult> {
+    const verb = input.paused ? 'pause' : 'resume'
+    return this.request(`/api/agents/${encodeURIComponent(input.name)}/${verb}`, {
+      method: 'POST',
+      body: JSON.stringify(input.hostId ? { host_id: input.hostId } : {}),
+    })
+  }
+
+  setNestPaused(hostId: string, paused: boolean): Promise<PauseResult> {
+    const verb = paused ? 'pause' : 'resume'
+    return this.request(`/api/nests/${encodeURIComponent(hostId)}/${verb}`, { method: 'POST' })
   }
 }
