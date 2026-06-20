@@ -297,7 +297,6 @@ services:
       OPENAPE_NEST_HOST_ID: ${OPENAPE_NEST_HOST_ID:-}
       OPENAPE_NEST_DEVICE_SECRET: ${OPENAPE_NEST_DEVICE_SECRET:-}
       OPENAPE_TROOP_WS_URL: wss://troop.openape.test
-      OPENAPE_BRIDGE_TARGET: troop
       # The var the agent bridge actually reads for its troop endpoint
       # (ape-agent bridge.ts readConfig). Without it the bridge defaults to
       # the PRODUCTION https://troop.openape.ai and its local-IdP-issued token

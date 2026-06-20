@@ -76,11 +76,6 @@ services:
       # `apes run --as <agent>`, and the agent-tool runApeShell helper
       # to exec via /bin/bash instead of the gated ape-shell.
       OPENAPE_BYPASS_APE_SHELL: "1"
-      # Chat backend the per-agent bridges connect to. Default 'chat'
-      # (chat.openape.ai) for back-compat with operators who haven't
-      # migrated; flip via compose/.env to 'troop' to point bridges at
-      # troop.openape.ai's native chat. See compose/CUTOVER-CHAT-TO-TROOP.md.
-      OPENAPE_BRIDGE_TARGET: ${OPENAPE_BRIDGE_TARGET:-chat}
       APE_CHAT_ENDPOINT: ${APE_CHAT_ENDPOINT:-https://chat.openape.ai}
 
 volumes:
