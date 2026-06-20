@@ -15,7 +15,7 @@
 //   LITELLM_BASE_URL       the LLM endpoint. A llms.openape.ai gateway makes
 //                          the agent exchange its own DDISA token per task;
 //                          any other base uses LITELLM_API_KEY as-is.
-//   LITELLM_API_KEY        LLM key (or LITELLM_MASTER_KEY) — REQUIRED. Used
+//   LITELLM_API_KEY        LLM key — REQUIRED. Used
 //                          directly for non-gateway bases, and as the fallback
 //                          if a gateway token exchange fails.
 //   APE_SERVICE_MODEL      model, e.g. gpt-5.5 — REQUIRED
@@ -149,9 +149,9 @@ function readServiceConfig(): ServiceConfig {
   const spBaseUrl = process.env.OPENAPE_SP_BASE_URL?.replace(/\/$/, '')
   if (!spBaseUrl)
     throw new Error('OPENAPE_SP_BASE_URL is not set — the SP backend this service-agent serves.')
-  const apiKey = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY
+  const apiKey = process.env.LITELLM_API_KEY
   if (!apiKey)
-    throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set.')
+    throw new Error('LITELLM_API_KEY must be set.')
   const model = process.env.APE_SERVICE_MODEL
   if (!model)
     throw new Error('APE_SERVICE_MODEL is not set (e.g. gpt-5.5).')
