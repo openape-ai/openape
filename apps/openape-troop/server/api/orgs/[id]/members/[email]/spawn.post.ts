@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../../../../database/drizzle'
 import { orgMembers } from '../../../../../database/schema'
 import { requireOwnedOrg } from '../../../../../utils/orgs'
-import { getPersona } from '../../../../../utils/persona-catalog'
+import { getPersona } from '#shared/persona-catalog'
 import { dispatchSpawnIntent } from '../../../../../utils/spawn-dispatch'
 
 // POST /api/orgs/:id/members/:email/spawn
