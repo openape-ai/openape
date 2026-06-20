@@ -1,4 +1,7 @@
+import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { useDb } from '../../../database/drizzle'
+import { agents } from '../../../database/schema'
 import { parseAgentEmail } from '../../../utils/agent-email'
 import { requireOwnerWithScope } from '../../../utils/auth'
 import { dispatchPause } from '../../../utils/pause-dispatch'
@@ -19,5 +22,6 @@ export default defineEventHandler(async (event) => {
   const parsed = bodySchema.safeParse(await readBody(event).catch(() => ({})))
   const hostId = parsed.success ? parsed.data.host_id : undefined
   const r = dispatchPause(owner, { name, hostId, paused: false })
+  await useDb().update(agents).set({ paused: false }).where(and(eq(agents.ownerEmail, owner.toLowerCase()), eq(agents.agentName, name)))
   return { ok: true, name, paused: false, host_id: r.hostId, hostname: r.hostname }
 })
