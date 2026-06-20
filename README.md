@@ -22,6 +22,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 - `apps/` — deployable applications (private)
 - `examples/` — example apps + E2E tests
 
+## Team Structure
+
+The OpenApe Werkstatt operates as a virtual company with the following team members:
+
+| Role | Agent | Persona | Reports To |
+|------|-------|---------|------------|
+| CEO | ceo | CEO | — |
+| Team Lead | pm | Product Manager | — |
+| Sanierer | cfo | Finance Controller | — |
+| Specialist | backend | Backend Engineer | pm |
+| Specialist | qa | QA Engineer | pm |
+| Specialist | scribe | Technical Writer | pm |
+
+All agents are active and operate autonomously within their defined roles.
+
 ## License
 
 MIT
