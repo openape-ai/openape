@@ -21,6 +21,11 @@ ape-troop nests remove <host-id>                                  # revoke a bin
 ape-troop agents list [--json]                                    # agents on this troop
 ape-troop agents spawn <host-id> <name>                           # spawn an agent on a nest (DDISA-approved)
 ape-troop agents destroy <agent-id>
+ape-troop agents pause <name>                                     # pause an agent by name
+ape-troop agents resume <name>                                    # resume a paused agent
+
+ape-troop nests pause <host-id>                                   # pause all agents on a nest
+ape-troop nests resume <host-id>                                  # resume all agents on a paused nest
 
 ape-troop whoami                                                  # current OpenApe identity
 ```
