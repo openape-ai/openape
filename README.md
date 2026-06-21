@@ -11,9 +11,25 @@ pnpm install
 pnpm dev
 ```
 
+## Team Structure
+
+The OpenApe Werkstatt operates with the following active personas:
+
+| Role | Persona | Email |
+|------|---------|-------|
+| CEO | ceo | ceo-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+| Product Manager | product-manager | pm-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+| Finance Controller | finance-controller | cfo-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+| Backend Engineer | backend-engineer | backend-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+| QA Engineer | qa-engineer | qa-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+| Technical Writer | technical-writer | scribe-cb6bf26a+patrick+hofmann_eco@id.openape.ai |
+
 ## Documentation
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Development guidelines
+- [Agent Catalog](https://git.openape.ai) — Full list of 29 available personas
+- Troop API — Company data at [troop.openape.ai](https://troop.openape.ai)
+- Task Management — [tasks.openape.ai](https://tasks.openape.ai)
 
 ## Project Structure
 
