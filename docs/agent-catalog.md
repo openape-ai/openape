@@ -23,6 +23,21 @@ The catalog is auto-generated from `catalog.json` by the build script `agent-cat
 
 The OrgChart UI (`apps/openape-troop/app/components/company/`) displays all spawned members with their persona titles and icons.
 
+## Current ORG Composition: OpenApe Werkstatt
+
+The OpenApe Werkstatt org (id: `38f8e8e9-eec5-440c-b716-6c0f8224270c`) currently has 6 active members:
+
+| Agent | Persona | Role | Reports To |
+|-------|---------|------|------------|
+| ceo | Chief Executive (CEO) | ceo | — |
+| pm | Product Manager | teamlead | — |
+| cfo | Finance Controller (Sanierer) | sanierer | — |
+| backend | Backend Engineer | specialist | pm |
+| qa | QA / Test Engineer | specialist | pm |
+| scribe | Technical Writer | specialist | pm |
+
+**Structure**: The CEO, PM, and CFO report directly to the Owner. The Backend Engineer, QA Engineer, and Technical Writer report to the Product Manager.
+
 ## Available Personas
 
 ### Leadership & Coordination
