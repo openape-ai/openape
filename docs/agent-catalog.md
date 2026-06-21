@@ -4,7 +4,7 @@ The agent catalog is the source of truth for all personas available in OpenApe. 
 
 ## What is the Agent Catalog?
 
-The agent catalog defines 29 personas, each mapping to a pinned recipe from [github.com/openape-ai/agent-catalog](https://github.com/openape-ai/agent-catalog). When the Owner spawns an agent from the org chart, the system:
+The agent catalog defines 30 personas, each mapping to a pinned recipe from [github.com/openape-ai/agent-catalog](https://github.com/openape-ai/agent-catalog). When the Owner spawns an agent from the org chart, the system:
 
 1. Looks up the persona by its key
 2. Deploys the corresponding recipe at the pinned version
