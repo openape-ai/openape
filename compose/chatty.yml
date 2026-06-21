@@ -23,7 +23,7 @@ name: openape-prod
 
 services:
   idp:
-    image: registry.openape.ai/openape-free-idp:${IDP_TAG:-unset}
+    image: ${REGISTRY:-ghcr.io/openape-ai}/openape-free-idp:${IDP_TAG:-unset}
     restart: unless-stopped
     user: "999:988"
     env_file: /home/openape/projects/openape-free-idp/shared/.env
@@ -43,7 +43,7 @@ services:
       start_period: 10s
 
   troop:
-    image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
+    image: ${REGISTRY:-ghcr.io/openape-ai}/openape-troop:${TROOP_TAG:-unset}
     restart: unless-stopped
     user: "999:988"
     env_file: /home/openape/projects/openape-troop/shared/.env
@@ -63,7 +63,7 @@ services:
       start_period: 10s
 
   chat:
-    image: registry.openape.ai/openape-chat:${CHAT_TAG:-unset}
+    image: ${REGISTRY:-ghcr.io/openape-ai}/openape-chat:${CHAT_TAG:-unset}
     restart: unless-stopped
     user: "999:988"
     env_file: /home/openape/projects/openape-chat/shared/.env
