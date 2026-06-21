@@ -12,7 +12,7 @@ The Agent Catalog defines the 29 personas you can spawn as team members. Each pe
 - Specifies whether the persona works with code (Forgejo)
 - Includes recipe parameters that are substituted at spawn time (`{{org_id}}`, `{{org_name}}`)
 
-The catalog is auto-generated from `catalog.json` by the build script `agent-catalog/_build/generate.mjs`. The generated file `apps/openape-troop/server/utils/persona-catalog.ts` is the runtime source of truth.
+The catalog is auto-generated from `catalog.json` by the build script `agent-catalog/_build/generate.mjs`. The generated file `apps/openape-troop/shared/persona-catalog.ts` is the runtime source of truth.
 
 ## How to Assemble a Company via ORG
 
@@ -96,7 +96,7 @@ All personas reference pinned recipes from `github.com/openape-ai/agent-catalog`
 ## Source Files
 
 - **Source of truth**: `catalog.json` (in the agent-catalog repo)
-- **Generated**: `apps/openape-troop/server/utils/persona-catalog.ts`
+- **Generated**: `apps/openape-troop/shared/persona-catalog.ts`
 - **Build script**: `agent-catalog/_build/generate.mjs`
 
 Do not edit `persona-catalog.ts` by hand. Changes to the catalog must come from updating `catalog.json` and regenerating.
