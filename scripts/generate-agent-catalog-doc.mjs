@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, '..');
 
 // Path to the persona catalog source
-const personaCatalogPath = join(repoRoot, 'apps/openape-troop/server/utils/persona-catalog.ts');
+const personaCatalogPath = join(repoRoot, 'apps/openape-troop/shared/persona-catalog.ts');
 const docsOutputPath = join(repoRoot, 'apps/docs/content/2.ecosystem/9.agent-catalog.md');
 
 // Read the persona catalog
