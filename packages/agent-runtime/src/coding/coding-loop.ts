@@ -19,7 +19,7 @@ import type { RunOptions, RunResult, RuntimeConfig } from '../agent-runtime'
 import { runLoop } from '../agent-runtime'
 import { runApeShell } from '../agent-tools/ape-shell-exec'
 import { buildCreateCommand, worktreePathFor } from '../agent-tools/git-worktree'
-import { buildPrCreate, buildPrMerge  } from './forge'
+import { buildPrCreate, buildPrMerge, buildPrList } from './forge'
 import type { Forge } from './forge'
 import type { IssueRef, BranchNaming  } from './issue-task'
 import { buildBranchName, buildTaskPrompt } from './issue-task'
@@ -168,12 +168,42 @@ export async function runCodingTask(input: CodingTaskInput, deps: CodingTaskDeps
   if (pushRes.exit_code !== 0) {
     return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `push failed: ${(pushRes.stderr || pushRes.stdout).slice(0, 300)}` }
   }
-  const prCmd = buildPrCreate({ forge: input.forge, title: prTitle(input.issue), body: prBody(input.issue), head: branch })
-  const prRes = await shell(`cd '${worktree}' && ${prCmd}`)
-  if (prRes.exit_code !== 0) {
-    return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `pr create failed: ${(prRes.stderr || prRes.stdout).slice(0, 300)}` }
+  // 5a. Check for existing PR before creating a new one
+  const prListCmd = buildPrList(input.forge, 'open')
+  const prListRes = await shell(`cd '${worktree}' && ${prListCmd}`)
+  let existingPrRef: string | undefined
+  if (prListRes.exit_code === 0 && prListRes.stdout.trim()) {
+    try {
+      const prs = JSON.parse(prListRes.stdout)
+      // Look for an existing PR with the same issue number in the title or body
+      const issueNum = String(input.issue.number).replace(/\D/g, '')
+      const existingPr = prs.find((pr: any) => {
+        const title = pr.title || ''
+        const body = pr.body || ''
+        return title.includes(`(#${issueNum})`) || title.includes(`#${issueNum}`) || body.includes(`#${issueNum}`)
+      })
+      if (existingPr) {
+        existingPrRef = String(existingPr.number)
+        log(`[coding] found existing PR #${existingPrRef} for issue #${input.issue.number}, reusing it`)
+      }
+    } catch (e) {
+      log(`[coding] failed to parse PR list: ${e}`)
+      // Continue to create a new PR if we can't parse the list
+    }
   }
-  const prRef = (prRes.stdout.match(/\/pull\/(\d+)|!(\d+)|\bpr\/(\d+)/i)?.slice(1).find(Boolean)) ?? branch
+
+  // Create PR only if no existing PR was found
+  let prRef: string
+  if (existingPrRef) {
+    prRef = existingPrRef
+  } else {
+    const prCmd = buildPrCreate({ forge: input.forge, title: prTitle(input.issue), body: prBody(input.issue), head: branch })
+    const prRes = await shell(`cd '${worktree}' && ${prCmd}`)
+    if (prRes.exit_code !== 0) {
+      return { branch, worktree, runStatus: 'ok', changedFiles, decision, outcome: 'run-failed', prRef: branch, reason: `pr create failed: ${(prRes.stderr || prRes.stdout).slice(0, 300)}` }
+    }
+    prRef = (prRes.stdout.match(/\/pull\/(\d+)|!(\d+)|\bpr\/(\d+)/i)?.slice(1).find(Boolean)) ?? branch
+  }
 
   // 6. Merge gate. Human/risk → stop. Code → reviewer. Chore → arm.
   if (decision.needsHuman) {
