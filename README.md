@@ -22,6 +22,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 - `apps/` — deployable applications (private)
 - `examples/` — example apps + E2E tests
 
+## Team Structure
+
+**OpenApe Werkstatt** operates with the following roles:
+
+| Role | Agent | Reports To |
+|------|-------|------------|
+| CEO | `ceo` | — |
+| Product Manager (Team Lead) | `pm` | — |
+| Finance Controller | `cfo` | — |
+| Backend Engineer | `backend` | `pm` |
+| QA Engineer | `qa` | `pm` |
+| Technical Writer | `scribe` | `pm` |
+
 ## License
 
 MIT
