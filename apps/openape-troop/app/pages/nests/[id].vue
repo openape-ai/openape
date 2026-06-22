@@ -52,6 +52,24 @@ async function load() {
 }
 
 watch(user, (u) => { if (u) load() }, { immediate: true })
+
+// Fleet pause — the kill-switch for every agent on this nest. They stay
+// connected; none run LLM turns until resumed. Fire-and-confirm (the nest-wide
+// flag is authoritative on the nest, not mirrored per-agent here).
+const toast = useToast()
+const fleetPausing = ref(false)
+async function fleetPause(pause: boolean) {
+  fleetPausing.value = true
+  try {
+    const verb = pause ? 'pause' : 'resume'
+    await ($fetch as any)(`/api/nests/${encodeURIComponent(hostId.value)}/${verb}`, { method: 'POST' })
+    toast.add({ title: pause ? 'Nest pausiert — alle Agents idle' : 'Nest fortgesetzt', color: pause ? 'warning' : 'success' })
+  }
+  catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage || 'Aktion fehlgeschlagen', color: 'error' })
+  }
+  finally { fleetPausing.value = false }
+}
 </script>
 
 <template>
@@ -79,6 +97,32 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           <UBadge :color="nest.status === 'active' ? 'success' : 'neutral'" variant="subtle">
             {{ nest.status }}
           </UBadge>
+          <div class="ml-auto flex items-center gap-2">
+            <UButton
+              icon="i-lucide-pause"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              :loading="fleetPausing"
+              :disabled="!nestAgents.length"
+              title="Alle Agents auf diesem Nest pausieren (bleiben verbunden, 0 Tokens)"
+              @click="fleetPause(true)"
+            >
+              Nest pausieren
+            </UButton>
+            <UButton
+              icon="i-lucide-play"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :loading="fleetPausing"
+              :disabled="!nestAgents.length"
+              title="Nest fortsetzen (per-Agent-Pausen bleiben bestehen)"
+              @click="fleetPause(false)"
+            >
+              Fortsetzen
+            </UButton>
+          </div>
         </div>
         <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-10 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
           <div>

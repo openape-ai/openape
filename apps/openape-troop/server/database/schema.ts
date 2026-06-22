@@ -48,6 +48,11 @@ export const agents = sqliteTable('agents', {
   // The `<repo>@<ref>` this agent was deployed from; the agent checks
   // out its tools/ from it. Null for manually-spawned agents.
   recipeRef: text('recipe_ref'),
+  // Owner-set pause: a paused agent stays enrolled but runs no LLM turns on the
+  // nest (zero tokens). Authoritative state lives in the nest registry; this
+  // mirror is written by the pause/resume endpoints (which originate the action)
+  // so the UI can show a badge without round-tripping the nest.
+  paused: integer('paused', { mode: 'boolean' }).notNull().default(false),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
