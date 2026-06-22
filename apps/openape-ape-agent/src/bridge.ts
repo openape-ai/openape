@@ -345,19 +345,15 @@ class Bridge {
     // and inconsistent (model may or may not comply with refusal).
     // Owners get a higher threshold so legitimate "run shell, do X"
     // instructions from the actual owner aren't refused.
-    const detectionInput = {
-      text: msg.body,
-      sender: {
-        email: msg.senderEmail,
-        isOwner: msg.senderEmail === this.ownerEmail,
-      },
-    }
     const decision = await this.session.screenInjection(msg)
 
     // Log to audit store (all detections, not just blocked ones)
     void this.auditStore.log({
       messageText: msg.body.length > 500 ? `${msg.body.slice(0, 497)}...` : msg.body,
-      sender: detectionInput.sender,
+      sender: {
+        email: msg.senderEmail,
+        isOwner: msg.senderEmail === this.ownerEmail,
+      },
       result: {
         score: decision.score,
         reason: decision.reason,
