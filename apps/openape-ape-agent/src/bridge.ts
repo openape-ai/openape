@@ -450,8 +450,7 @@ class Bridge {
 
   async pumpOnce(): Promise<void> {
     const bearer = await this.bearer()
-    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}/_ws/chat?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(this.session.chatSocketUrl(bearer))
     return new Promise<void>((resolve, reject) => {
       let pingTimer: NodeJS.Timeout | undefined
       let allowlistTimer: NodeJS.Timeout | undefined
