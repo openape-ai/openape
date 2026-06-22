@@ -328,30 +328,6 @@ class Bridge {
   }
 
   /**
-   * Translate troop's chat-frame payload shape into the
-   * chat.openape.ai-style Message the rest of this bridge expects.
-   * Troop's payload uses `role` (human|agent) + `chatId` + no
-   * senderEmail; the bridge's handleInbound checks
-   * `senderEmail === selfEmail` to skip its own echoes, so we
-   * synthesize the email from role (agent → self, human → owner).
-   * threadId is the synthetic 'main' because troop has no threads.
-   */
-  private translateTroopPayload(chatId: string, payload: Record<string, unknown>): Message {
-    const role = payload.role === 'agent' ? 'agent' : 'human'
-    return {
-      id: String(payload.id ?? ''),
-      roomId: chatId || String(payload.chatId ?? ''),
-      threadId: 'main',
-      senderEmail: role === 'agent' ? this.selfEmail : this.ownerEmail,
-      senderAct: role,
-      body: typeof payload.body === 'string' ? payload.body : '',
-      replyTo: typeof payload.replyTo === 'string' ? payload.replyTo : null,
-      createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Math.floor(Date.now() / 1000),
-      editedAt: typeof payload.editedAt === 'number' ? payload.editedAt : null,
-    }
-  }
-
-  /**
    * Handle one inbound message from any channel. `backend` is the channel's
    * own outbound surface (troop or telegram) — refusals and the agent's reply
    * go back out through it, so the agent communicates on the same channel it
@@ -498,17 +474,11 @@ class Bridge {
       })
 
       ws.on('message', (data: WebSocket.RawData) => {
-        const text = typeof data === 'string'
-          ? data
-          : Buffer.isBuffer(data) ? data.toString('utf8') : ''
-        if (!text) return
-        let frame: { type?: string, room_id?: string, chat_id?: string, payload?: Record<string, unknown> }
-        try { frame = JSON.parse(text) as typeof frame }
-        catch { return }
-        if (frame.type !== 'message' || !frame.payload) return
+        const frame = this.session.parseChatFrame(data)
+        if (!frame) return
         // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
         // Translate to the bridge's internal Message shape.
-        const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
+        const msg: Message = this.session.toMessage(frame)
         void this.handleInbound(msg, this.chat)
       })
 
