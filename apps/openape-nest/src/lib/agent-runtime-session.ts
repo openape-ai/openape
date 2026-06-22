@@ -247,10 +247,11 @@ export function resolveAgentRuntimeContext(
   // each accepted message exec's `openclaw agent --local` and we post its reply.
   // openclaw has no daemon — the nest drives one turn per message. The agent's
   // CLIs (apes/ape-tasks/ape-troop) are its tools and read its auth.json, so
-  // actions land under the DDISA identity. Runs as the nest user with
-  // HOME=<agent home> for now (reads the agent's auth.json) — the `sudo -u
-  // <agent>` drop is the SAME pending isolation work as the bridge's text-only
-  // limitation below; until it lands, openclaw shares that constraint.
+  // actions land under the DDISA identity. In the container the exec drops to
+  // the agent's OS user via `sudo -u` (see runAs below); on the host/dev path
+  // it runs as the nest user with HOME=<agent home>. Unlike the native
+  // ThreadSession path below — still text-only because its tool-drop isn't
+  // built yet — openclaw's tool isolation is in place.
   if (entry.runtimeType === 'openclaw') {
     const oclAgent = { name: entry.name, email: entry.email, home: entry.home, uid: entry.uid }
     // In the container sandbox (OPENAPE_BYPASS_APE_SHELL=1, same flag the bridge
