@@ -74,6 +74,11 @@ export default defineNitroPlugin(async () => {
       await db.run(sql`ALTER TABLE agents ADD COLUMN nest_host_id TEXT`)
     }
     catch { /* column exists */ }
+    // Owner-set pause mirror (enforcement lives on the nest; this drives the UI badge).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0`)
+    }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
       agent_email TEXT NOT NULL,
       name TEXT NOT NULL,
