@@ -39,8 +39,8 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
-import type { Detector, AuditStore, DecisionResult, InjectionConfig } from '@openape/prompt-injection-detector'
-import { createDetector, decide, createAuditStore, readInjectionConfig } from '@openape/prompt-injection-detector'
+import type { AuditStore, DecisionResult } from '@openape/prompt-injection-detector'
+import { createAuditStore } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
@@ -174,9 +174,7 @@ class Bridge {
   // Prompt-injection gate (#463). LLM/heuristic backend selectable via
   // APE_AGENT_INJECTION_BACKEND. The bridge is the choke-point for every
   // chat message before it reaches the agent runtime.
-  private injectionDetector: Detector
   private auditStore: AuditStore
-  private injectionConfig: InjectionConfig
   // LLM gateway key. For the prod gateway (llms.openape.ai) this static boot key
   // is replaced per turn by this agent's own DDISA-exchanged token
   // (refreshLlmGatewayKey), so it only matters for the local codex-proxy
@@ -220,12 +218,10 @@ class Bridge {
     // error so a flaky exchange never takes the agent offline.
     void this.refreshLlmGatewayKey()
     setInterval(() => void this.refreshLlmGatewayKey(), 40 * 60 * 1000)
-    // Initialize prompt-injection detector (#463). Uses LLM backend if configured,
-    // otherwise falls back to heuristic. Audit store logs all detections.
-    this.injectionDetector = createDetector()
+    // Audit store logs all prompt-injection detections (#463). The detector
+    // and per-agent thresholds live in the canonical AgentSession now —
+    // handleInbound delegates the decision to this.session.screenInjection.
     this.auditStore = createAuditStore(this.selfEmail)
-    // Read per-agent config for thresholds
-    this.injectionConfig = readInjectionConfig()
   }
 
   private async refreshLlmGatewayKey(): Promise<void> {
@@ -356,10 +352,7 @@ class Bridge {
         isOwner: msg.senderEmail === this.ownerEmail,
       },
     }
-    const decision = await decide(this.injectionDetector, detectionInput, {
-      threshold: this.injectionConfig.threshold,
-      ownerThreshold: this.injectionConfig.ownerThreshold,
-    })
+    const decision = await this.session.screenInjection(msg)
 
     // Log to audit store (all detections, not just blocked ones)
     void this.auditStore.log({
