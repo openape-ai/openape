@@ -250,6 +250,14 @@
         "pollFailed": "Poll failed",
         "startFailed": "Failed to start destroy"
       }
+    },
+    "pause": {
+      "badge": "Paused",
+      "badgeTitle": "This agent runs no LLM turns until resumed",
+      "pause": "Pause",
+      "resume": "Resume",
+      "pauseTitle": "Pause this agent — it stays connected but runs no LLM turns",
+      "resumeTitle": "Resume this agent"
     }
   },
   "chat": {
