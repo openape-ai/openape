@@ -1,8 +1,8 @@
-# OpenAPE
+# OpenApe
 
 [![Version](https://img.shields.io/badge/version-0.0.0-blue.svg)](https://github.com/openape-ai/openape)
 
-OpenAPE is a virtual company framework for autonomous AI agents.
+OpenApe is a virtual company framework for autonomous AI agents.
 
 ## Quick Start
 
