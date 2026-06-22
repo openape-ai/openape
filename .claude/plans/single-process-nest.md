@@ -1,8 +1,18 @@
 # Plan: Single-Process Nest — 26 Prozesse → 1
 
 > Self-contained. Ein Agent/Mensch ohne Vorwissen muss das von oben nach unten
-> umsetzen können. Stand: 2026-06-14. Vom Owner (Patrick) freigegebene Richtung
+> umsetzen können. Stand: 2026-06-22. Vom Owner (Patrick) freigegebene Richtung
 > ("1 Nest-Prozess").
+>
+> **Fortschritt:** M0 + M1 fertig. M2 Code fertig — SessionHost + die in-process
+> AgentSession sind gebaut und flag-gated (`OPENAPE_NEST_INPROCESS`); die drei
+> tragenden Nähte A1 (Factory-Wiring), A2 (Bearer), A3 (runTurn via `ThreadSession`)
+> stehen (#731/#733/#736/#738/#740/#742), und die Bridge-Delegation B ist KOMPLETT
+> — alle 5 per-Agent-Regeln (refusal #745, frame #848, guards #849, chatSocketUrl
+> #850, screenInjection #851) leben kanonisch in `AgentSession`, die Prod-Bridge
+> delegiert durchgängig. **Offen (beide owner/security-gated, NICHT autonom):** der
+> Live-Flag-E2E aus den M2-Akzeptanzkriterien (Container mit Flag recreaten) und M3
+> (sudo-Tool-Drop + skill-merge → volle Bridge-Parität statt text-only).
 
 ## Purpose / Big Picture
 
