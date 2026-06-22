@@ -334,9 +334,8 @@ class Bridge {
    * was reached on.
    */
   async handleInbound(msg: Message, backend: ChatBackend): Promise<void> {
-    if (msg.senderEmail === this.selfEmail) return
-    if (!msg.body.trim()) return
-    if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
+    if (this.session.isOwnEcho(msg)) return
+    if (!this.session.shouldDispatch(msg)) return
     if (!msg.threadId) {
       log(`[${msg.roomId}] dropping message ${msg.id} without threadId — server too old?`)
       return
