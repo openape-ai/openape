@@ -1,6 +1,6 @@
-import type { DecisionResult, Detector } from '@openape/prompt-injection-detector'
+import type { DecisionResult, Detector, InjectionConfig } from '@openape/prompt-injection-detector'
 import type { BridgeConfig } from './bridge-config'
-import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
+import { createDetector, decide, readInjectionConfig } from '@openape/prompt-injection-detector'
 
 /**
  * A decoded inbound troop chat frame worth acting on: the chat it belongs to
@@ -31,11 +31,13 @@ export interface TroopMessage {
 
 export class AgentSession {
   /**
-   * Lazily-created prompt-injection detector, shared across this session's
-   * messages. Matches the per-agent bridge, which holds one
-   * `createHeuristicDetector()` for its lifetime.
+   * Lazily-created prompt-injection detector + threshold config, shared across
+   * this session's messages. Matches the per-agent bridge, which builds one
+   * `createDetector()` (LLM backend if configured, else heuristic) and reads
+   * `readInjectionConfig()` once for its lifetime.
    */
   private injectionDetector: Detector | undefined
+  private injectionConfig: InjectionConfig | undefined
 
   constructor(
     readonly email: string,
@@ -160,13 +162,17 @@ export class AgentSession {
    * messages with no second copy of the detector setup or the sender mapping.
    */
   async screenInjection(message: TroopMessage): Promise<DecisionResult> {
-    this.injectionDetector ??= createHeuristicDetector()
+    this.injectionDetector ??= createDetector()
+    this.injectionConfig ??= readInjectionConfig()
     return decide(this.injectionDetector, {
       text: message.body,
       sender: {
         email: message.senderEmail,
         isOwner: message.senderEmail === this.ownerEmail,
       },
+    }, {
+      threshold: this.injectionConfig.threshold,
+      ownerThreshold: this.injectionConfig.ownerThreshold,
     })
   }
 
