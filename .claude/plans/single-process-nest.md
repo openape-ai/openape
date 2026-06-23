@@ -10,9 +10,34 @@
 > stehen (#731/#733/#736/#738/#740/#742), und die Bridge-Delegation B ist KOMPLETT
 > — alle 5 per-Agent-Regeln (refusal #745, frame #848, guards #849, chatSocketUrl
 > #850, screenInjection #851) leben kanonisch in `AgentSession`, die Prod-Bridge
-> delegiert durchgängig. **Offen (beide owner/security-gated, NICHT autonom):** der
-> Live-Flag-E2E aus den M2-Akzeptanzkriterien (Container mit Flag recreaten) und M3
-> (sudo-Tool-Drop + skill-merge → volle Bridge-Parität statt text-only).
+> delegiert durchgängig. **M3 sudo-Tool-Drop: für den OPENCLAW-Runtime-Pfad bereits
+> GEBAUT + auf main** (#769/#808/#815, 2026-06-19 — `openclaw-adapter.ts`
+> `sudoRunAs` = echtes `sudo -n -u <agent>`, gated `OPENAPE_BYPASS_APE_SHELL=1`).
+> **Offen (NICHT autonom):** (1) der Live-Flag-E2E aus den M2-Akzeptanzkriterien
+> (Container mit Flag recreaten, owner-driven — die `openclaw-test`-Session-Zyklen
+> sind Patrick); (2) sudo-Tool-Drop + skill-merge für den **nativen
+> `ThreadSession`-Pfad**: `apps/openape-nest/src/lib/agent-runtime-session.ts:326`
+> übergibt der ThreadSession-`resolveConfig` noch `tools: []` (text-only),
+> security-gated. Verwechslungs-Hinweis (Engine-Lauf 2026-06-23): das ist NICHT
+> `apps/openape-ape-agent/src/thread-session.ts:188` (`tools: taskTools(tools)`) —
+> letzteres ist die ThreadSession-Klasse, die konsumiert, was `resolveConfig().tools`
+> liefert; der Nest liefert dort `[]`.
+>
+> **Engine-Läufe (rolling re-verify, zuletzt 2026-06-23T~07:18Z):** Über viele
+> Läufe (2026-06-22 23:17Z → 2026-06-23 07:18Z) unverändertes Bild. Lauf 07:18Z:
+> Health GREEN (1 root Nest-Node + per-User PM2/ape-agent, kein crash-loop),
+> LIVE-Funktionssignal frisch beim backend-Agent (`task recipe-0 fired` 07:14/07:16/
+> 07:18Z → `task DM posted` 07:15/07:16Z, error-log aktiv; LLM :4000-Probe =
+> bekannter Red-Herring). Hinweis: das `-out`-Log ist leer, das echte Signal steht
+> im `*-error*.log`.
+> `forgejo/main` `a716f008` (#867), 0 offene PRs. A1-A3 +
+> Bridge-Delegation B gemergt und am Code verankert (index.ts Flag+Factory,
+> `agent-runtime-session.ts` `ensureFreshIdpAuth(undefined, entry.home)` + per-Thread
+> `ThreadSession`; `agent-runtime-session.ts:326` `tools: []` = nativer Tool-Drop
+> offen, security-gated).
+> Autonomer Critical-Path ABGESCHLOSSEN; beide Restposten (Live-Flag-E2E
+> owner-driven, nativer sudo-Tool-Drop security-gated) → idle ist die ehrliche
+> Antwort. Kein Make-Work, kein spekulativer Increment gegen den flag-off-Pfad.
 
 ## Purpose / Big Picture
 
@@ -68,7 +93,12 @@
     „DURABLE NEST IMAGE"). Recreate-Rezept dort, ist bewiesen sauber (Volumes
     `compose_openape-homes` + `compose_openape-nest-data` persistieren alles).
   - Health: `docker exec openape-nest sh -c 'ps aux | grep -c "[a]pe-agent"'`
-    (heute 13); LLM `curl http://openape-llm:4000/v1/models` → 200.
+    (heute 13). **LLM-Probe `openape-llm:4000` ist tot/veraltet** — der Container
+    existiert nicht mehr, Agents nutzen `LITELLM_BASE_URL=https://llms.openape.ai/v1`
+    mit **per-Agent**-Keys (Root-Env-Key gibt 401, der lokale codex-proxy auf :4000
+    gibt 502 — beides Red Herrings). Echtes Funktions-Signal stattdessen: Agent-Logs
+    feuern `task recipe-0` + `task DM posted (… chars)`, z.B.
+    `docker exec openape-nest sh -c 'tail -n 8 /var/lib/openape/homes/backend/.pm2/logs/*-error*.log'`.
 
 ## Architektur: Vorher → Nachher
 
@@ -243,6 +273,8 @@ Memory) als letzte Instanz.
   - **[2026-06-22 Engine-Lauf 3] Autonomer kritischer Pfad ERSCHÖPFT — kein neuer Schritt, Nest weiter sauber gestoppt:** Health: lokaler `openape-nest`-Container **Exited (0)** seit ~28 Min — derselbe saubere SIGTERM wie Lauf 2 (`nest: SIGTERM — stopping` → `session-host: stopped all 1 session(s)`, `restart=unless-stopped` → bleibt nach explizitem Stop unten, `oom=false`); KEIN Crash. Bewusst NICHT restartet/recreatet (Container-Recreate = M4-gated, unklar wer/warum gestoppt → STOPPEN-Disziplin; LLM-Endpoint im Brief weiter stale, Nest spricht `llms.openape.ai/v1`). **Verifiziert via `git log main`:** A1 (#731), A2 (#733), A3 (#736/#738/#740/#742) und B alle 5 Regeln (#745/#848/#849/#850/#851) sind in main → **es gibt keinen autonomen kritischen-Pfad-Schritt mehr** (Live-Flag-E2E + M3 beide owner/security-gated). Daher bewusst **kein** neuer M2-Inkrement (Over-Production-Vermeidung). **PR-Triage:** identische 7 offene PRs wie Lauf 2, **keine neue seit Lauf 2**, nichts Sauberes zu mergen (#843 war der eine saubere Merge, schon in Lauf 2 erledigt). File-Listen erneut geprüft: **#835/#838/#847/#839** hand-editieren die GENERIERTE `docs/agent-catalog.md` (#838/#839 auch den Generator) = Drift, korrekter Fix ist Regenerieren = EINE Owner-Konsolidierung; **#847 vs #839** Dubletten (beide pause-docs); **#833** sauberes 13-Zeilen-README-Blurb aber Dubletten-Risiko (Team/Persona); **#828/#842** überholter Docker-Pilot (durch `deploy-image.mjs`/`compose/chatty.yml` abgelöst) = Owner-Decision. **Agents:** kein neuer Task (echter Backlog = Owner-Decisions: Docs-Konsolidierung + Live-Flag-E2E + M3, kein Make-Work). **Netto: Engine ist korrekt idle — wartet auf Patrick.**
   - **[2026-06-22 Engine-Lauf 2] Nest lokal SIGTERM-gestoppt (kein Crash) + #843 gemerged:** Health: lokaler `openape-nest`-Container **Exited (0)** seit ~9 Min — sauberer SIGTERM (`nest: SIGTERM — stopping` → `session-host: stopped all 1 session(s)`), KEIN Crash; `openape-llm`-Container existiert lokal nicht (Endpoint im Brief stale, vgl. Lauf 1 — Nest spricht `llms.openape.ai/v1`). Bewusst NICHT restartet/recreatet (Container-Recreate = M4-gated; unklar wer/warum gestoppt → STOPPEN-Disziplin, in-process-A1-Arbeit braucht den Container nicht). **Kein neuer M2-Inkrement** — A1–A3 + B komplett, kritischer Pfad an der Owner-Grenze (Live-Flag-E2E + M3 owner/security-gated), Over-Production vermeiden. **PR-Triage statt Blanket-Hold:** Datei-Listen aller 8 offenen PRs geprüft → **#843** (werkstatt-scribe, `docs/how-to-contribute.md`, 198 Zeilen) ist der EINE saubere Merge: einzelnes neues File, kein Touch der GENERIERTEN `docs/agent-catalog.md`, keine Cross-PR-Dublette, kein Dup von `CONTRIBUTING.md` (git-Workflow vs. Persona-Onboarding), nicht protokoll-relevant (`docs/`≠`apps/docs`), CI+e2e+preview **grün**, Inhalt akkurat (echte `apes`/`ape-tasks`-Commands) → **squash-merged + delete_branch (HTTP 200)**. Übrige offen gelassen (wie Lauf 1): **#828**/#842 = überholter Docker-Pilot (Owner-Decision); **#835/#838/#839/#847** fassen die generierte `agent-catalog.md` an bzw. modifizieren den Generator (#838/#839) = Konsolidierung ist EINE Owner-Decision, kein Merge-Spam; **#833** README-Team-Abschnitt (Dublette-Risiko). **Agents:** kein neuer Task (echter Backlog = Owner-Decisions, kein Make-Work).
   - **[2026-06-22 Engine-Lauf 4] #833 gemerged (jetzt sauber) + spezifischer Faktencheck-Fund in #839 + actionable Triage statt Blanket-Hold:** Health: lokaler `openape-nest`-Container **Exited (0)** seit ~56 Min — derselbe saubere SIGTERM wie Lauf 2/3 (`nest: SIGTERM — stopping` → `session-host: stopped all 1 session(s)`), KEIN Crash; `openape-llm` lokal absent (Endpoint im Brief stale). Bewusst NICHT restartet (clean stop, evtl. Patrick prept Live-Flag-E2E = owner-gated → STOPPEN-Disziplin). **Kein neuer M2-Inkrement** — A1–A3 + B komplett, kritischer Pfad an der Owner-Grenze. **PR-Triage (7 offen, alle CI grün):** **#833 GEMERGED** (squash+delete, HTTP 200) — die Dubletten-PRs #834/#837, die Lauf 2/3 zum Hold führten, sind inzwischen GESCHLOSSEN → #833 ist die EINZIGE verbleibende README-Team-PR, sauberes 13-Zeilen-Blurb (6 Rollen ceo/pm/cfo/backend/qa/scribe), kein Cross-PR-Dup mehr → sauberer Merge. **Faktencheck-Fund #839** (pause-Guide): green CI, aber **falsche Code-Beispiele** — importiert `@openape/openape-nest` (Package heißt `@openape/nest`) und stellt `setAgentPaused` als Public-API dar, obwohl es eine **interne, nicht-exportierte** `registry.ts:139`-Funktion ist (Nest ist private app, keine importierbare Lib); `agents.json`-Pfade korrekt. → präziser Korrektur-Kommentar, NICHT gemergt (frühere Läufe sahen nur „editiert generierte Datei", nicht den Faktenfehler). **Cluster #835/#838/#847** (alle editieren hand-gepflegte `docs/agent-catalog.md`, #838/#839 tragen Generator-Pfad-Fix `server/utils`→`shared`, der **bereits in main** ist — `node scripts/generate-agent-catalog-doc.mjs` läuft clean ohne Diff; ihre Base ist pre-merge main vom 21.6.) → Konsolidierungs-/Stale-Kommentare. **#828** (50-File-Monster, mergeable=false, überholter Docker-Pilot) + **#842** (per-App-Dockerfile, Titel/Diff-Mismatch, durch COPY-only image-deploy abgelöst) → Close-/Klärungs-Kommentare. Alle 6 Kommentare HTTP 201. **Discovery vs. generierte Datei:** `docs/agent-catalog.md` ist NICHT generiert (beschreibt nur den Catalog); der Generator schreibt nach `apps/docs/content/2.ecosystem/9.agent-catalog.md` — die 4 Cluster-PRs hand-editieren die interne Doc und konfligieren mit-einander. **Agents:** kein neuer Task (Backlog = Owner-Decisions). **Netto: Backlog von 7 auf 6 reduziert + jede offene PR hat jetzt einen konkreten Next-Action-Kommentar; Engine wartet auf Patrick (Live-Flag-E2E + M3 + Docs-Konsolidierung).**
+  - **[2026-06-22 Engine-Lauf 5] Nest wieder LIVE (16 ape-agent) + A+B evidenz-bestätigt — kein neuer PR (kritischer Pfad an Owner-Grenze):** Health: lokaler `openape-nest`-Container **UP**, `ps aux | grep -c "[a]pe-agent"` = **16** live (pm2/flag-off-Default = erwartetes Prod-Verhalten) — Zustandswechsel ggü. Lauf 2–4 (dort `Exited(0)` nach sauberem SIGTERM); jemand (vermutl. Patrick) hat den Container recreatet/gestartet. **0 offene werkstatt-PRs** (nichts zu reviewen). **Evidenz-Check statt Header-Vertrauen:** alle 5 B-Delegations-PRs in `forgejo/main` verifiziert (`#745` feb2d7f0, `#848` 39c41750, `#849` dcdbc0fc, `#850` 8577f373, `#851` c4af74c9). Native `ThreadSession`-Tool-Pfad weiterhin offen + **security-gated**: `apps/openape-nest/src/lib/agent-runtime-session.ts:325` = `tools: []` (text-only) — NICHT angefasst (in-process echte Tools ohne sudo-Drop = root-Ausführung). Live-Flag-E2E = owner-driven. **Kein Inkrement** (Disziplin: keine Make-Work, kein spekulativer Guard) — vierter Lauf in Folge an derselben sauberen Owner-Grenze.
+  - **[2026-06-23 Engine-Lauf 6] Health GREEN + Live-Signal frisch + Datei-Verwechslungs-Falle dokumentiert — kein neuer PR:** Health: `openape-nest` **UP** (1 root Nest-Node + per-User PM2/ape-agent), LIVE-Funktionssignal frisch beim backend-Agent (`task recipe-0 fired` 07:14/07:16/07:18Z → `task DM posted` 07:15/07:16Z im `*-error*.log`; das `-out`-Log ist leer, LLM :4000 = Red-Herring). `forgejo/main` `a716f008` (#867), **0 offene PRs**. **Beinahe-Fehler korrigiert (Wert des Laufs):** zwei gleichnamige Tool-Felder verwechselt — der nativen Tool-Drop sitzt in `apps/openape-nest/src/lib/agent-runtime-session.ts:326` (`resolveConfig() → tools: []`, text-only, security-gated), NICHT in `apps/openape-ape-agent/src/thread-session.ts:188` (`tools: taskTools(tools)`, die ThreadSession-Klasse, die `resolveConfig().tools` nur konsumiert). Header-Verwechslungs-Hinweis ergänzt, damit der nächste Lauf nicht denselben Schluss zieht „Tools schon verdrahtet". **Kein Inkrement** — kritischer Pfad weiter an der Owner/Security-Grenze (Live-Flag-E2E + nativer sudo-Tool-Drop), idle bleibt die ehrliche Antwort.
 - [ ] M3 Tool-Isolation — offen
 - [ ] M4 Cutover + pm2 weg — offen
 
