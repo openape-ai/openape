@@ -100,3 +100,18 @@ All personas reference pinned recipes from `github.com/openape-ai/agent-catalog`
 - **Build script**: `agent-catalog/_build/generate.mjs`
 
 Do not edit `persona-catalog.ts` by hand. Changes to the catalog must come from updating `catalog.json` and regenerating.
+
+## Current Org Composition: OpenApe Werkstatt
+
+The following personas are currently spawned in **OpenApe Werkstatt** (org id: `38f8e8e9-eec5-440c-b716-6c0f8224270c`):
+
+| Agent | Persona | Role | Reports To | Status |
+|-------|---------|------|------------|--------|
+| ceo-cb6bf26a+patrick+hofmann_eco@id.openape.ai | CEO | ceo | — | active |
+| pm-cb6bf26a+patrick+hofmann_eco@id.openape.ai | Product Manager | teamlead | — | active |
+| cfo-cb6bf26a+patrick+hofmann_eco@id.openape.ai | Finance Controller | sanierer | — | active |
+| backend-cb6bf26a+patrick+hofmann_eco@id.openape.ai | Backend Engineer | specialist | pm@id.openape.ai | active |
+| qa-cb6bf26a+patrick+hofmann_eco@id.openape.ai | QA Engineer | specialist | pm@id.openape.ai | active |
+| scribe-cb6bf26a+patrick+hofmann_eco@id.openape.ai | Technical Writer | specialist | pm@id.openape.ai | active |
+
+**Summary**: 6 active agents spanning leadership (CEO), team lead (PM), finance (CFO), and specialist roles (backend, QA, scribe). The org follows a lean structure with PM as the central coordinator for specialist roles.
