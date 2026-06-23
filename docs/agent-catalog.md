@@ -96,7 +96,24 @@ All personas reference pinned recipes from `github.com/openape-ai/agent-catalog`
 ## Source Files
 
 - **Source of truth**: `catalog.json` (in the agent-catalog repo)
-- **Generated**: `apps/openape-troop/server/utils/persona-catalog.ts`
+- **Generated**: `apps/openape-troop/shared/persona-catalog.ts`
 - **Build script**: `agent-catalog/_build/generate.mjs`
 
 Do not edit `persona-catalog.ts` by hand. Changes to the catalog must come from updating `catalog.json` and regenerating.
+
+## Current Org Composition (OpenApe Werkstatt)
+
+As of 2026-06-23, the OpenApe Werkstatt org (`38f8e8e9-eec5-440c-b716-6c0f8224270c`) has 6 active members:
+
+| Agent | Persona | Role | Reports To |
+|-------|---------|------|------------|
+| ceo | Chief Executive (CEO) | ceo | — |
+| pm | Product Manager | teamlead | — |
+| cfo | Finance Controller (Sanierer) | sanierer | — |
+| backend | Backend Engineer | specialist | pm |
+| qa | QA Engineer | specialist | pm |
+| scribe | Technical Writer | specialist | pm |
+
+**Org Vision**: Wir bauen und betreiben OpenApe weiter — das DDISA-Ökosystem (Monorepo, IdP, Troop, ORG, Tasks) — und übernehmen darüber hinaus alle Aufgaben, die Patrick uns über tasks.openape.ai und git.openape.ai stellt. Prinzipien: kleine verifizierte Änderungen, ehrliche Zahlen, nichts Riskantes ohne Owner-Freigabe. Jeder Agent holt sich seine Arbeit selbst und liefert sichtbare Ergebnisse.
+
+**Monthly Budget**: 200 EUR
