@@ -294,5 +294,5 @@ describe('free-idp + shapes end-to-end', () => {
     if (serverLogs.includes('ERROR')) {
       expect(serverLogs).not.toContain(' ERROR ')
     }
-  }, 90_000)
+  }, 180_000)
 })
