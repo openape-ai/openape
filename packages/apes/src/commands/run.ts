@@ -26,7 +26,7 @@ import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
-import { getHostPlatform } from '../lib/host-platform'
+import { getHostPlatform, isLinux } from '../lib/host-platform'
 
 /**
  * Resolve an agent name (`igor`) to its OS-level username. On Linux the
@@ -46,6 +46,10 @@ function resolveRunAsTarget(runAs: string | undefined): string | undefined {
   if (!AGENT_NAME_REGEX.test(runAs)) return runAs
   // Already prefixed (operator typed the full prefixed username) — pass through.
   if (runAs.startsWith('openape-agent-')) return runAs
+  // Local agent-user prefix mapping only applies when the CLI runs on the
+  // nest host itself. As a remote requester (e.g. macOS) the target user is
+  // resolved on the nest — pass through instead of probing the local host.
+  if (!isLinux()) return runAs
   const platform = getHostPlatform()
   const prefixed = platform.agentUsername(runAs)
   if (platform.readAgentUser(prefixed)) return prefixed
