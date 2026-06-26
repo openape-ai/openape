@@ -78,3 +78,23 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  testrun:
+    image: registry.openape.ai/openape-testrun:${TESTRUN_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-testrun/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-testrun/shared:/home/openape/projects/openape-testrun/shared
+    ports:
+      - "127.0.0.1:3006:3006"
+      - "10.0.1.1:3006:3006"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
