@@ -1,5 +1,11 @@
 # @openape/proxy
 
+## 0.4.7
+
+### Patch Changes
+
+- 01f5a87: Drop the unused `idx` accumulator field in `matchSecret` and simplify the loop to `for...of`. No behavior change.
+
 ## 0.4.6
 
 ### Patch Changes
