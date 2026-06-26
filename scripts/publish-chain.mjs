@@ -37,7 +37,6 @@ const PACKAGES = [
   { name: '@openape/proof-cli', dir: 'packages/proof-cli' },
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/server', dir: 'packages/server' },
-  { name: '@openape/browser', dir: 'packages/browser' },
   { name: '@openape/vue-components', dir: 'packages/vue-components' },
   { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/agent-runtime', dir: 'packages/agent-runtime' },
