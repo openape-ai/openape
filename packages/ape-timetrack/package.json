@@ -1,0 +1,55 @@
+{
+  "name": "@openape/ape-timetrack",
+  "version": "0.1.5",
+  "description": "CLI for timetrack.openape.ai — time tracking by company and project for humans and AI agents",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ape-timetrack": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/timetrack.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/openape-ai/timetrack#readme",
+  "bugs": {
+    "url": "https://github.com/openape-ai/timetrack/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6",
+    "jose": "^5.9.6",
+    "ofetch": "^1.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "tasks",
+    "todo",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}
