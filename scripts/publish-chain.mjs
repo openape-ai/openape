@@ -54,6 +54,10 @@ const PACKAGES = [
   { name: '@openape/nest', dir: 'apps/openape-nest' },
   { name: '@openape/ape-troop', dir: 'packages/ape-troop' },
   { name: '@openape/ape-testruns', dir: 'packages/ape-testruns' },
+  { name: '@openape/ape-tasks', dir: 'packages/ape-tasks' },
+  { name: '@openape/ape-pr', dir: 'packages/ape-pr' },
+  { name: '@openape/ape-plans', dir: 'packages/ape-plans' },
+  { name: '@openape/ape-timetrack', dir: 'packages/ape-timetrack' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')
