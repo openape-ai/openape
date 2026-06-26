@@ -34,6 +34,7 @@ const PACKAGES = [
   { name: '@openape/grants', dir: 'packages/grants' },
   { name: '@openape/auth', dir: 'packages/auth' },
   { name: '@openape/cli-auth', dir: 'packages/cli-auth' },
+  { name: '@openape/proof-cli', dir: 'packages/proof-cli' },
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/server', dir: 'packages/server' },
   { name: '@openape/browser', dir: 'packages/browser' },
