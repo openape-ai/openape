@@ -1,0 +1,54 @@
+{
+  "name": "@openape/ape-plans",
+  "version": "1.0.1",
+  "description": "CLI for plans.openape.ai — cross-device plan management for humans and AI agents",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ape-plans": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/plans.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/openape-ai/plans#readme",
+  "bugs": {
+    "url": "https://github.com/openape-ai/plans/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6",
+    "jose": "^5.9.6",
+    "ofetch": "^1.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "plans",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}
