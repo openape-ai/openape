@@ -4,7 +4,7 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 import { runs } from '../database/schema'
 import { createProblemError } from './problem'
-import type { Caller } from './require-auth'
+import type { Caller } from '@openape/nuxt-auth-sp'
 
 export type RunRow = typeof runs.$inferSelect
 

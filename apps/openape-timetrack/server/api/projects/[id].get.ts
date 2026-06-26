@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { projectMembers, projects } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { createProblemError } from '../../utils/problem'
 import { resolveProjectContext } from '../../utils/rbac'
 

@@ -3,7 +3,6 @@ import { defineEventHandler, getRouterParam, setResponseHeader } from 'h3'
 import { useDb } from '../../../../database/drizzle'
 import { assets } from '../../../../database/schema'
 import { createProblemError } from '../../../../utils/problem'
-import { requireCaller } from '../../../../utils/require-auth'
 import { loadPrById } from '../../../../utils/pr-access'
 
 /**

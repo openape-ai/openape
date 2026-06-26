@@ -3,7 +3,6 @@ import { defineEventHandler, getRouterParam, readBody, setResponseStatus } from 
 import { ulid } from 'ulid'
 import { useDb } from '../../../database/drizzle'
 import { plans, teamMembers } from '../../../database/schema'
-import { requireCaller } from '../../../utils/require-auth'
 import { createProblemError } from '../../../utils/problem'
 
 type PlanStatus = 'draft' | 'active' | 'done' | 'archived'

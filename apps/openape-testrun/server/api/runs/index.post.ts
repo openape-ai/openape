@@ -3,7 +3,6 @@ import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
 import { runs } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { publicRunUrl } from '../../utils/run-access'
 import { aggregateStatus, referencedShots, validateManifest } from '../../utils/run-shape'
 

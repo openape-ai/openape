@@ -2,7 +2,6 @@ import { desc, isNull } from 'drizzle-orm'
 import { defineEventHandler, getQuery } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { prs } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 
 /**
  * GET /api/prs — list PRs for review, newest first (auth required).
