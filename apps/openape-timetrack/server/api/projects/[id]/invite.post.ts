@@ -3,7 +3,6 @@ import { defineEventHandler, getRequestURL, getRouterParam, readBody, setRespons
 import { ulid } from 'ulid'
 import { useDb } from '../../../database/drizzle'
 import { projectInvites, projects } from '../../../database/schema'
-import { requireCaller } from '../../../utils/require-auth'
 import { createProblemError } from '../../../utils/problem'
 import { parseDuration, signInviteToken } from '../../../utils/invite-jwt'
 import { resolveProjectContext } from '../../../utils/rbac'

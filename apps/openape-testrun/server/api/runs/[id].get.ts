@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { assets } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { loadOwnRun, publicRunUrl } from '../../utils/run-access'
 
 /**

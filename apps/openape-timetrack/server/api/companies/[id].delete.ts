@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, setResponseStatus } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { companies } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { createProblemError } from '../../utils/problem'
 import { resolveCompanyRole } from '../../utils/rbac'
 
