@@ -3,7 +3,6 @@ import { defineEventHandler, getRouterParam, readBody, setResponseStatus } from 
 import { ulid } from 'ulid'
 import { useDb } from '../../../database/drizzle'
 import { tasks, teamMembers, teams } from '../../../database/schema'
-import { requireCaller } from '../../../utils/require-auth'
 import { createProblemError } from '../../../utils/problem'
 import { laneById, resolveLanes } from '../../../utils/lanes'
 import {

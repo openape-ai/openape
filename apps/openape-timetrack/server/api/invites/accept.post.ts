@@ -7,7 +7,6 @@ import {
   projectInvites,
   projectMembers,
 } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { createProblemError } from '../../utils/problem'
 import { verifyInviteToken } from '../../utils/invite-jwt'
 

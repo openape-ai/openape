@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { createError, getHeader, getMethod, useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
-import { verifyTestrunCliToken } from './cli-token'
+import { verifyCliToken } from './cli-token'
 
 export interface Caller {
   email: string
@@ -14,6 +14,8 @@ export interface Caller {
  * Scope enforcement chokepoint (sp-data-access.md §5.3). Only delegated
  * tokens carry `scope`; first-party callers pass through unchanged. Method
  * → required scope: GET/HEAD → `<prefix>:read`, mutating → `<prefix>:write`.
+ * `<prefix>` is derived from the granted scopes themselves (e.g.
+ * `tasks:read` → `tasks`), so this util needs no per-app configuration.
  */
 function enforceScope(event: H3Event, caller: Caller): Caller {
   if (!caller.scope) return caller
@@ -75,7 +77,7 @@ export async function requireCaller(event: H3Event): Promise<Caller> {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim()
     if (token) {
-      const cli = await verifyTestrunCliToken(token)
+      const cli = await verifyCliToken(token)
       if (cli) return enforceScope(event, { email: cli.email, act: cli.act, scope: cli.scope })
       const verified = await verifyAgentToken(token)
       if (verified) return verified

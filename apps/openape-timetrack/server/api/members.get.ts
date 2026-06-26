@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { defineEventHandler, getQuery } from 'h3'
 import { useDb } from '../database/drizzle'
 import { companyMembers, projectMembers } from '../database/schema'
-import { requireCaller } from '../utils/require-auth'
 import { createProblemError } from '../utils/problem'
 import { resolveCompanyRole, resolveProjectContext } from '../utils/rbac'
 

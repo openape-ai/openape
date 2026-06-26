@@ -3,7 +3,6 @@ import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
 import { prs } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { reviewUrl } from '../../utils/pr-access'
 import { diffStats, validatePrManifest } from '../../utils/pr-shape'
 

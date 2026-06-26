@@ -4,7 +4,6 @@ import { ulid } from 'ulid'
 import { useDb } from '../../../../database/drizzle'
 import { assets } from '../../../../database/schema'
 import { createProblemError } from '../../../../utils/problem'
-import { requireCaller } from '../../../../utils/require-auth'
 import { loadOwnRun } from '../../../../utils/run-access'
 import { referencedShots } from '../../../../utils/run-shape'
 

@@ -2,7 +2,6 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { tasks, teamMembers, teams } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { createProblemError } from '../../utils/problem'
 import { laneById, laneForStatus, resolveLanes } from '../../utils/lanes'
 import {

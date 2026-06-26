@@ -2,6 +2,11 @@ import crypto from 'node:crypto'
 import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addComponentsDir, useLogger } from '@nuxt/kit'
 import { defu } from 'defu'
 
+// Public type surface — `requireCaller` is auto-imported into SP apps' server
+// context; its `Caller` shape is re-exported here so app code can annotate
+// against it via `import type { Caller } from '@openape/nuxt-auth-sp'`.
+export type { Caller } from './runtime/server/utils/require-auth'
+
 export interface ManifestConfig {
   service?: {
     name?: string
@@ -149,6 +154,8 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/callback', handler: resolve('./runtime/server/api/callback.get') })
       addServerHandler({ route: '/api/logout', method: 'post', handler: resolve('./runtime/server/api/logout.post') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
+      addServerHandler({ route: '/api/cli/me', handler: resolve('./runtime/server/api/cli/me.get') })
+      addServerHandler({ route: '/api/cli/exchange', method: 'post', handler: resolve('./runtime/server/api/cli/exchange.post') })
       addServerHandler({ route: '/.well-known/oauth-client-metadata', handler: resolve('./runtime/server/routes/well-known/oauth-client-metadata.get') })
       addServerHandler({ route: '/.well-known/auth.md', handler: resolve('./runtime/server/routes/well-known/auth.md.get') })
       addServerHandler({ route: '/.well-known/openape.json', handler: resolve('./runtime/server/routes/well-known/openape.json.get') })
