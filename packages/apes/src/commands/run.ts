@@ -26,7 +26,7 @@ import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
-import { getHostPlatform } from '../lib/host-platform'
+import { getHostPlatform, isLinux } from '../lib/host-platform'
 
 /**
  * Resolve an agent name (`igor`) to its OS-level username. On Linux the
@@ -46,6 +46,12 @@ function resolveRunAsTarget(runAs: string | undefined): string | undefined {
   if (!AGENT_NAME_REGEX.test(runAs)) return runAs
   // Already prefixed (operator typed the full prefixed username) — pass through.
   if (runAs.startsWith('openape-agent-')) return runAs
+  // The agent-name → prefixed OS-username mapping only matters where managed
+  // agent users exist, i.e. Linux nests. On other hosts (e.g. a dev's macOS)
+  // there are no such users, so pass the name through unchanged instead of
+  // tripping the Linux-only host-platform guard — `apes run --as root -- …`
+  // is plain escapes/grant flow that works fine off-Linux.
+  if (!isLinux()) return runAs
   const platform = getHostPlatform()
   const prefixed = platform.agentUsername(runAs)
   if (platform.readAgentUser(prefixed)) return prefixed
