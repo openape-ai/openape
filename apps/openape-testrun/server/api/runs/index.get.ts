@@ -2,7 +2,6 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 import { defineEventHandler, getQuery } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { runs } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { publicRunUrl } from '../../utils/run-access'
 
 /**

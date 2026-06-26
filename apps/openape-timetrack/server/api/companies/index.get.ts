@@ -2,7 +2,6 @@ import { inArray, isNull } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { companies } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { listVisibleCompanyIds, loadCallerRoleMaps } from '../../utils/rbac'
 
 /**

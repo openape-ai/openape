@@ -2,7 +2,6 @@ import { eq, isNull } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { companies, projects } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { loadCallerRoleMaps } from '../../utils/rbac'
 import { canLogToProject } from '../../utils/visibility'
 

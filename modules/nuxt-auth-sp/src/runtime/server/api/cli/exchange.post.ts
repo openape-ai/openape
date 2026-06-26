@@ -1,9 +1,10 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import { createError, defineEventHandler, setResponseStatus } from 'h3'
-import { signTestrunCliToken } from '../../utils/cli-token'
-
-// Auto-imported from @openape/nuxt-auth-sp via addServerImportsDir:
-//   resolveIssuerForToken, assertSafeIdpUrl, getSpConfig
+import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3'
+import { useRuntimeConfig } from 'nitropack/runtime'
+import { signCliToken } from '../../utils/cli-token'
+import { resolveIssuerForToken } from '../../utils/ddisa-issuer'
+import { assertSafeIdpUrl } from '../../utils/ssrf-guard'
+import { getSpConfig } from '../../utils/sp-config'
 
 interface ExchangeBody {
   subject_token?: string
@@ -14,13 +15,16 @@ interface ExchangeBody {
  * POST /api/cli/exchange — RFC 8693-style token exchange.
  *
  * Extends the standard DDISA CLI flow (which only accepts `aud='apes-cli'`)
- * with a delegation path: tokens with `aud=testrun.openape.ai` or carrying a
+ * with a delegation path: tokens with `aud=<this SP's clientId>` or carrying a
  * `grant_id` claim are treated as Receiver delegation tokens
  * (sp-data-access.md §5.1) and validated for scope against the SP manifest.
  *
  * Body: `{ subject_token: <jwt>, scopes?: string[] }`
  *
  * Response (201): `{ access_token, token_type: "Bearer", expires_at, aud, scopes? }`
+ *
+ * Shipped by @openape/nuxt-auth-sp so every SP app gets the identical,
+ * single-source-of-truth token exchange instead of a per-app copy.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<ExchangeBody>(event)
@@ -40,7 +44,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // SSRF guard: reject non-https or private/loopback DDISA-resolved issuers
-  // before fetching their JWKS (inherited from @openape/nuxt-auth-sp 0.11).
+  // before fetching their JWKS.
   try {
     await assertSafeIdpUrl(resolved.issuer)
   }
@@ -54,7 +58,7 @@ export default defineEventHandler(async (event) => {
 
   // Verify the token against the DDISA-resolved issuer's JWKS.
   // We do NOT set audience here so that both aud='apes-cli' (first-party) and
-  // aud='testrun.openape.ai' (delegation) pass jose's validation. We check aud
+  // aud='<clientId>' (delegation) pass jose's validation. We check aud
   // manually below.
   const jwks = createRemoteJWKSet(new URL(resolved.jwksUri), { timeoutDuration: 5000 })
   let claims: Record<string, unknown>
@@ -115,10 +119,10 @@ export default defineEventHandler(async (event) => {
     }
     const config = useRuntimeConfig(event)
     // manifest.scopes is the array form (per sp-scope-catalog.json) — the
-    // catalog is the set of entry `id`s. Cast via unknown to read the runtime
-    // shape independent of the module's ManifestConfig typing.
+    // catalog is the set of entry `id`s.
     const rawScopes = ((config.openapeSp as unknown as { manifest?: { scopes?: Array<{ id: string }> } } | undefined)
-      ?.manifest?.scopes)
+      ?.manifest
+      ?.scopes)
     const catalog = Array.isArray(rawScopes) ? rawScopes.map(s => s.id) : []
     const notInCatalog = requested.filter(s => !catalog.includes(s))
     if (notInCatalog.length > 0) {
@@ -133,12 +137,10 @@ export default defineEventHandler(async (event) => {
     grantedScope = requested
   }
 
-  // signTestrunCliToken is the local variant of signCliToken that additionally
-  // supports scope for delegation tokens. It reads secret + clientId from
-  // openapeSp.sessionSecret / openapeSp.clientId (same source as the shared
-  // signCliToken from @openape/nuxt-auth-sp, so first-party tokens are
-  // verified identically by verifyTasksCliToken).
-  const { token, expiresAt } = await signTestrunCliToken({
+  // signCliToken mints an HS256 SP token from openapeSp.sessionSecret/clientId.
+  // Delegation tokens (scope present) get a short TTL; first-party tokens are
+  // byte-identical to the pre-scope token and verify identically.
+  const { token, expiresAt } = await signCliToken({
     email: sub,
     act,
     ...(grantedScope ? { scope: grantedScope } : {}),

@@ -2,7 +2,6 @@ import { desc, eq } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { comments, reviews } from '../../database/schema'
-import { requireCaller } from '../../utils/require-auth'
 import { loadPrById } from '../../utils/pr-access'
 import { renderMarkdownWithAssets } from '../../utils/markdown'
 
