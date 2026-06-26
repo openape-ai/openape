@@ -1,0 +1,56 @@
+{
+  "name": "@openape/ape-pr",
+  "version": "0.1.1",
+  "description": "CLI for pr.openape.ai — upload a pull request, review it on a beautiful diff, pull the verdict back",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ape-pr": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape-pr.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/openape-ai/openape-pr#readme",
+  "bugs": {
+    "url": "https://github.com/openape-ai/openape-pr/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6",
+    "jose": "^5.9.6",
+    "ofetch": "^1.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "testing",
+    "e2e",
+    "test-report",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}

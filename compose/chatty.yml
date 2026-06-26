@@ -78,3 +78,103 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  testrun:
+    image: registry.openape.ai/openape-testrun:${TESTRUN_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-testrun/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-testrun/shared:/home/openape/projects/openape-testrun/shared
+    ports:
+      - "127.0.0.1:3006:3006"
+      - "10.0.1.1:3006:3006"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  tasks:
+    image: registry.openape.ai/openape-tasks:${TASKS_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-tasks/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-tasks/shared:/home/openape/projects/openape-tasks/shared
+    ports:
+      - "127.0.0.1:3005:3005"
+      - "10.0.1.1:3005:3005"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  pr:
+    image: registry.openape.ai/openape-pr:${PR_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-pr/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-pr/shared:/home/openape/projects/openape-pr/shared
+    ports:
+      - "127.0.0.1:3014:3014"
+      - "10.0.1.1:3014:3014"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3014/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  plans:
+    image: registry.openape.ai/openape-plans:${PLANS_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-plans/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-plans/shared:/home/openape/projects/openape-plans/shared
+    ports:
+      - "127.0.0.1:3004:3004"
+      - "10.0.1.1:3004:3004"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  timetrack:
+    image: registry.openape.ai/openape-timetrack:${TIMETRACK_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-timetrack/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-timetrack/shared:/home/openape/projects/openape-timetrack/shared
+    ports:
+      - "127.0.0.1:3011:3011"
+      - "10.0.1.1:3011:3011"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3011/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s

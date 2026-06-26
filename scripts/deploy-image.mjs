@@ -29,6 +29,11 @@ const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
+  'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
+  'tasks': { filter: '@openape-tasks/app', dir: 'apps/openape-tasks', image: 'openape-tasks', port: 3005, compose: 'tasks', unit: 'openape-tasks', domain: 'tasks.openape.ai', envVar: 'TASKS_TAG' },
+  'pr': { filter: '@openape-pr/app', dir: 'apps/openape-pr', image: 'openape-pr', port: 3014, compose: 'pr', unit: 'openape-pr', domain: 'pr.openape.ai', envVar: 'PR_TAG' },
+  'plans': { filter: '@openape-plans/app', dir: 'apps/openape-plans', image: 'openape-plans', port: 3004, compose: 'plans', unit: 'openape-plans', domain: 'plans.openape.ai', envVar: 'PLANS_TAG' },
+  'timetrack': { filter: '@openape-timetrack/app', dir: 'apps/openape-timetrack', image: 'openape-timetrack', port: 3011, compose: 'timetrack', unit: 'openape-timetrack', domain: 'timetrack.openape.ai', envVar: 'TIMETRACK_TAG' },
 }
 
 function sh(cmd, args, opts = {}) {
