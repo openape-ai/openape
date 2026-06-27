@@ -20,23 +20,33 @@ packages/         # Publishable libraries
   grants/         # @openape/grants — grant issuance, revocation
   proxy/          # @openape/proxy — agent HTTP gateway
   s3-driver/      # @openape/unstorage-s3-driver — S3 storage driver
-  browser/        # @openape/browser — Playwright wrapper
   apes/           # @openape/apes — CLI toolkit
   cli-auth/       # @openape/cli-auth — shared CLI auth lib
+  proof-cli/      # @openape/proof-cli — shared CLI core for the proof-link apps
   server/         # @openape/server — shared server utilities
   prompt-injection-detector/  # @openape/prompt-injection-detector
-  idp-test-suite/ # @openape/idp-test-suite — integration test helpers
   vue-components/ # @openape/vue-components — shared Vue components
   ape-troop/      # @openape/ape-troop — owner CLI for troop.openape.ai (nests + agents)
+  ape-tasks/      # @openape/ape-tasks — CLI for tasks.openape.ai
+  ape-testruns/   # @openape/ape-testruns — CLI for testrun.openape.ai
+  ape-pr/         # @openape/ape-pr — CLI for pr.openape.ai
+  ape-plans/      # @openape/ape-plans — CLI for plans.openape.ai
+  ape-timetrack/  # @openape/ape-timetrack — CLI for timetrack.openape.ai
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
-  nuxt-auth-sp/   # @openape/nuxt-auth-sp — SP Nuxt module
+  nuxt-auth-sp/   # @openape/nuxt-auth-sp — SP Nuxt module (incl. shared DDISA-SP
+                  #   CLI auth: requireCaller + /api/cli/me + /api/cli/exchange)
 
 apps/             # Deployable applications (private, not published)
   openape-free-idp/   # Free DDISA IdP → self-hosted (chatty)
   openape-troop/      # Troop control plane (incl. company/org view) → self-hosted (chatty)
   openape-chat/       # Chat app → self-hosted (chatty)
+  openape-tasks/      # tasks.openape.ai — shared task lists (app + CLI) → self-hosted (chatty)
+  openape-testrun/    # testrun.openape.ai — test-run proof links → self-hosted (chatty)
+  openape-pr/         # pr.openape.ai — PR review surface → self-hosted (chatty)
+  openape-plans/      # plans.openape.ai — living plans → self-hosted (chatty)
+  openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -88,20 +98,25 @@ Uses Changesets with a single root `.changeset/config.json`. **Publishing is loc
 
 ## Deploy Flow
 
-**Prod = tested images** (seit 2026-06-10): die vier Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`).
+**Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
-pnpm run deploy:image <target...>   # free-idp | troop | chat | org
+pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack
 pnpm run deploy:image --all
 ```
 
 Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-Image (`compose/preview-package.Dockerfile`, identisches Artefakt-Format wie die PR-Previews, Tag `prod-<sha>`) → lokaler Smoke-Test (`/api/health`) → push → chatty pullt + `compose up` → externes Health-Gate → bei Fehler automatischer Rollback auf `<APP>_TAG_PREV`. Kein Build auf chatty. Die Container mounten das bestehende `/home/openape/projects/<app>/shared` (gleicher Pfad, gleiche `.env`), nginx-Ports unverändert (`127.0.0.1:<port>`).
 
-| Target     | Port | Image                  |
-|------------|------|------------------------|
-| `free-idp` | 3003 | openape-free-idp       |
-| `troop`    | 3010 | openape-troop          |
-| `chat`     | 3007 | openape-chat           |
+| Target       | Port | Image                  |
+|--------------|------|------------------------|
+| `free-idp`   | 3003 | openape-free-idp       |
+| `troop`      | 3010 | openape-troop          |
+| `chat`       | 3007 | openape-chat           |
+| `tasks`      | 3005 | openape-tasks          |
+| `plans`      | 3004 | openape-plans          |
+| `testrun`    | 3006 | openape-testrun        |
+| `timetrack`  | 3011 | openape-timetrack      |
+| `pr`         | 3014 | openape-pr             |
 
 **Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Das alte rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) bleibt für `docs` (statisches Site-Deploy) und als Legacy-Pfad erhalten.
 
