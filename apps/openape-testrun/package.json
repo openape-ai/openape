@@ -8,6 +8,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare"
   },
@@ -26,6 +27,7 @@
     "ulid": "^2.3.0"
   },
   "devDependencies": {
+    "@nuxt/test-utils": "^4.0.3",
     "typescript": "^5.9.0",
     "vitest": "^3.0.0"
   }
