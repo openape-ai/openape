@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "packages/*": {
+      "entry": ["src/index.ts!", "src/handlers.ts!", "src/cli.ts!", "bin/*.{ts,mjs,js}!"],
+      "project": "src/**/*.ts"
+    },
+    "modules/*": {
+      "entry": ["src/module.ts!"],
+      "project": "src/**/*.ts"
+    },
+    "apps/*": {
+      "project": "**/*.{ts,vue}"
+    }
+  }
+}
