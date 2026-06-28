@@ -1,48 +1,48 @@
 # Guides from E2E (CLI + Browser, parity-checked)
 
 The idea: every capability is exercisable two ways — via the **CLI** and in the
-**Browser** — and a single E2E run emits a readable how-to that shows both side
-by side. Because the guide is generated from a passing run (real CLI output,
-real screenshots), it can't drift from the product.
+**Browser** — and one run emits a readable how-to that shows both side by side.
+Because the guide is generated from the real app (real CLI output, real
+screenshots), it can't drift from the product.
+
+## Run it
+
+```
+pnpm --filter @openape-testrun/app guide
+```
+
+→ writes `apps/openape-testrun/.guide/proof-link.html`, a single self-contained
+file (screenshots inlined). Open it in a browser; each browser step has a
+desktop / tablet / mobile toggle.
 
 ## Pieces
 
 - **Scenario spec** — `apps/openape-testrun/e2e/scenarios/proof-link.ts`: the
   ordered steps with their doc-prose captions and the equivalent CLI command,
-  written once. (Captions are product copy — present tense, reader-facing.)
-- **Capture** — `apps/openape-testrun/e2e/proof-link-guide.e2e.test.ts`: boots
-  the app, uploads the scenario's run, drives the public `/r/<slug>` page and
-  screenshots it at three viewports (desktop/tablet/mobile), then emits
-  `.guide/proof-link.json`. The screenshot assertions fail the run if the page
-  doesn't render — so a broken UI can't produce a green guide.
-- **Generator** — `scripts/build-guide.mjs`: turns the JSON into a single
-  self-contained HTML file (CLI command + output beside the browser screenshot
-  with a viewport toggle, screenshots inlined as data URIs). Run with
-  `pnpm --filter @openape-testrun/app guide`. **Verified** — produces the
-  CLI-beside-Browser layout with the 3-viewport toggle.
+  written once. Captions are product copy (present tense, reader-facing).
+- **Capture** — `apps/openape-testrun/scripts/capture-guide.ts`: boots the app
+  in **dev mode** on a dedicated port, uploads the scenario's run, then drives
+  the public `/r/<slug>` page with Playwright and screenshots it at three
+  viewports — emitting the guide JSON.
+- **Generator** — `scripts/build-guide.mjs`: turns the JSON into the
+  self-contained HTML (CLI command+output beside the browser screenshot;
+  CLI-only steps render full-width).
 
 ## Parity, for free
 
-Both tracks read the same scenario spec, so a step that exists in one and not
-the other is a visible gap. Extend `steps[]` with `browserPath` to add a browser
-shot; omit it for CLI-only steps.
+Both the CLI commands and the browser shots come from the same scenario spec, so
+a step that exists in one track and not the other is a visible gap. Add
+`browserPath` to a step for a browser shot; omit it for CLI-only steps.
 
-## Status / blocker (2026-06-27)
+## Why dev mode (not the test/prod build)
 
-The **generator is done and verified**; the **live capture is blocked in both
-environments** by Nitro app-build issues, so a green CI-captured guide is not yet
-landed:
+The capture uses `nuxt dev`, which loads libsql from `node_modules`. The Nitro
+**production** build (what `@nuxt/test-utils` `setup({server:true})` and the
+deploy image produce) bundles a libsql native binding that breaks in the test
+build (`databaseOpen` "not enough arguments") and trips the runner's Nitro
+`.output` ELOOP symlink cycle (nuxt#30539) — so dev mode is the reliable path
+for capturing locally. See the SP-app-e2e-harness memory.
 
-- **Local** — `@nuxt/test-utils` `setup({server:true})` does a production Nitro
-  build whose bundled libsql native binding is broken (`databaseOpen` "not enough
-  arguments"); DB endpoints 500. See the SP-app-e2e-harness memory.
-- **CI runner** — `.forgejo/workflows/ci.yml` deliberately does **not** build the
-  Nuxt apps on the runner (the Nitro `.output/server/node_modules` ELOOP symlink
-  cycle, nuxt#30539). The capture's `setup({server:true})` would trigger exactly
-  that app build → same class of failure.
-
-**Recommended path:** capture against a **dev-mode** server (`nuxt dev` uses the
-`node_modules` libsql, not the broken Nitro bundle) driven by a standalone
-script + Playwright (browsers are cached under `~/Library/Caches/ms-playwright`).
-That sidesteps both blockers and is locally runnable. The capture E2E here stays
-as the realized design for whenever the Nitro app-build path is fixed.
+Note: a stale dev server holding the port surfaces as a hung `POST /api/runs`
+("reading 'set'") — the capture script uses a dedicated port + `NUXT_IGNORE_LOCK`
+and kills its own process group to avoid that.

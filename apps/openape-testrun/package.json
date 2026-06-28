@@ -11,7 +11,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare",
-    "guide": "node ../../scripts/build-guide.mjs .guide/proof-link.json .guide/proof-link.html"
+    "guide": "tsx scripts/capture-guide.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.90",
