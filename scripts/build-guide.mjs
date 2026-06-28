@@ -35,15 +35,18 @@ function shotTabs(browser, key) {
 }
 
 function stepCard(step, i) {
+  const hasBrowser = VIEWPORTS.some(v => step.browser?.[v])
   const cli = step.cli
     ? `<div class="col"><div class="lbl">CLI</div><pre class="sh"><span class="prompt">$</span> ${esc(step.cli.command)}\n<span class="out">${esc(step.cli.output)}</span></pre></div>`
     : ''
-  const browser = `<div class="col"><div class="lbl">Browser</div>${shotTabs(step.browser, step.key)}</div>`
+  const browser = hasBrowser
+    ? `<div class="col"><div class="lbl">Browser</div>${shotTabs(step.browser, step.key)}</div>`
+    : ''
   return `<section class="step">
     <div class="num">${i + 1}</div>
     <div class="body">
       <p class="cap">${esc(step.caption)}</p>
-      <div class="cols">${cli}${browser}</div>
+      <div class="cols${hasBrowser ? '' : ' solo'}">${cli}${browser}</div>
     </div>
   </section>`
 }
@@ -64,6 +67,7 @@ const html = `<!doctype html>
   .body { flex:1; min-width:0; }
   .cap { margin:2px 0 16px; font-size:16px; }
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .cols.solo { grid-template-columns:1fr; }
   @media (max-width:720px) { .cols { grid-template-columns:1fr; } }
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
   pre.sh { background:var(--sh); color:#d6deeb; border-radius:8px; padding:12px 14px; overflow-x:auto; font:13px/1.5 'SF Mono',Menlo,monospace; margin:0; white-space:pre-wrap; }
