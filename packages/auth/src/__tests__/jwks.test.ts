@@ -8,11 +8,11 @@ describe('generateJWKS', () => {
     const jwks = await generateJWKS(keyStore)
 
     expect(jwks.keys).toHaveLength(1)
-    expect(jwks.keys[0].kid).toBe('key-1')
-    expect(jwks.keys[0].kty).toBe('OKP')
-    expect(jwks.keys[0].crv).toBe('Ed25519')
+    expect(jwks.keys[0]!.kid).toBe('key-1')
+    expect(jwks.keys[0]!.kty).toBe('OKP')
+    expect(jwks.keys[0]!.crv).toBe('Ed25519')
     // Public key should not contain private key material
-    expect(jwks.keys[0].d).toBeUndefined()
+    expect(jwks.keys[0]!.d).toBeUndefined()
   })
 })
 
@@ -27,6 +27,6 @@ describe('serveJWKS', () => {
 
     const body = await response.json() as { keys: { kid: string }[] }
     expect(body.keys).toHaveLength(1)
-    expect(body.keys[0].kid).toBe('key-1')
+    expect(body.keys[0]!.kid).toBe('key-1')
   })
 })

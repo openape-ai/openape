@@ -33,7 +33,7 @@ export async function verifyAgentAuth(
     return null
   }
 
-  const token = match[1]
+  const token = match[1]! // capture group 1 is present whenever the regex matches
 
   try {
     const jwks = createRemoteJWKS(`${idpUrl}/.well-known/jwks.json`)

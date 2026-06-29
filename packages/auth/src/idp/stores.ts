@@ -395,7 +395,9 @@ export class InMemoryKeyStore implements KeyStore {
 
   async getSigningKey(): Promise<KeyEntry> {
     await this.ensureKeys()
-    return this.keys[0]
+    const key = this.keys[0]
+    if (!key) throw new Error('InMemoryKeyStore: no signing key available')
+    return key
   }
 
   async getAllPublicKeys(): Promise<KeyEntry[]> {
