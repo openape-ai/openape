@@ -38,25 +38,25 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@nuxt/kit": "^4.4.6",
+    "@nuxt/kit": "^4.4.8",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "defu": "^6.1.7",
-    "jose": "^5.9.0"
+    "jose": "^5.10.0"
   },
   "peerDependencies": {
     "nuxt": "^4.0.0"
   },
   "devDependencies": {
     "@nuxt/module-builder": "^1.0.2",
-    "@nuxt/ui": "^4.7.1",
-    "@types/node": "^22.19.13",
+    "@nuxt/ui": "^4.9.0",
+    "@types/node": "^22.20.0",
     "nuxt": "^4.4.8",
-    "tailwindcss": "^4.2.1",
+    "tailwindcss": "^4.3.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.7",
-    "vue": "^3.5.30",
-    "vue-tsc": "^3.3.1"
+    "vitest": "^4.1.9",
+    "vue": "^3.5.39",
+    "vue-tsc": "^3.3.5"
   },
   "engines": {
     "node": ">=22"

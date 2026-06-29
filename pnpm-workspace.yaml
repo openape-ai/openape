@@ -1,28 +1,30 @@
 packages:
-  - 'packages/*'
-  - 'modules/*'
-  - 'apps/*'
-  - 'examples/*'
+  - packages/*
+  - modules/*
+  - apps/*
+  - examples/*
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-r5fr-rjxr-66jc
+    - GHSA-gv7w-rqvm-qjhr
+    - GHSA-fx2h-pf6j-xcff
 
 catalog:
-  typescript: ^5.9.3
-  tsup: ^8.5.1
-  vitest: ^4.1.7
-  eslint: ^10.4.0
-  '@antfu/eslint-config': ^7.6.1
-  '@types/node': ^22.19.13
-  '@changesets/cli': ^2.30.0
-  nuxt: ^4.4.6
+  '@antfu/eslint-config': ^7.7.3
+  '@changesets/cli': ^2.31.0
   '@nuxt/kit': ^3.21.1
   '@nuxt/module-builder': ^1.0.2
-  vue: ^3.5.30
+  '@types/node': ^22.20.0
+  eslint: ^10.4.0
   h3: ^1.15.5
-  jose: ^5.9.0
+  jose: ^5.10.0
+  nuxt: ^4.4.6
+  tsup: ^8.5.1
+  typescript: ^5.9.3
+  vitest: ^4.1.9
+  vue: ^3.5.39
 
-# pnpm 10 reads these from pnpm-workspace.yaml; in package.json's `pnpm` field
-# they are silently ignored (the security overrides + audit ignores below were
-# dead until migrated here). eslint is held at v9 on purpose (eslint 10 breaks
-# vue-eslint-parser); the rest are GHSA-driven minimum-version floors.
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - better-sqlite3
@@ -32,18 +34,14 @@ onlyBuiltDependencies:
   - vue-demi
 
 overrides:
-  # Pin h3 to v1 across the workspace. nitropack + every package wants h3 ^1.x;
-  # nothing hard-requires v2. An h3 2.0-rc only entered the tree because
-  # @nuxtjs/mcp-toolkit's loose peer (>=1.15.11) let pnpm pick the highest
-  # available — a resolution accident that flipped setHeader's type contract
-  # and made the hoisting non-deterministic. This pins the whole tree to one
-  # stable h3.
-  h3: ^1.15.11
-  eslint: ^9.35.0
+  '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
   defu: '>=6.1.5'
   devalue: '>=5.8.1'
   drizzle-orm: '>=0.45.2'
+  eslint: ^9.35.0
+  fast-uri: '>=3.1.2'
   flatted: '>=3.4.2'
+  h3: ^1.15.11
   hono: '>=4.12.21'
   lodash: ^4.17.21
   node-forge: '>=1.4.0'
@@ -53,12 +51,4 @@ overrides:
   shell-quote: '>=1.8.4'
   simple-git: '>=3.36.0'
   socket.io-parser: '>=4.2.6'
-  fast-uri: '>=3.1.2'
-  '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
   ws: '>=8.21.0'
-
-auditConfig:
-  ignoreGhsas:
-    - GHSA-r5fr-rjxr-66jc
-    - GHSA-gv7w-rqvm-qjhr
-    - GHSA-fx2h-pf6j-xcff
