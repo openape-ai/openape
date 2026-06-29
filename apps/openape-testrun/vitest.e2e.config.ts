@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config'
 
 // E2E track: boots the real Nuxt app (in-memory libsql) and drives it over
-// HTTP via @nuxt/test-utils. Slow (one production build per run) so it lives in
+// HTTP against a dev server it boots. Slow, so it lives in
 // its own config + `test:e2e` script, separate from the fast unit suite.
 export default defineConfig({
   test: {

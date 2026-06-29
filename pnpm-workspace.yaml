@@ -32,6 +32,13 @@ onlyBuiltDependencies:
   - vue-demi
 
 overrides:
+  # Pin h3 to v1 across the workspace. nitropack + every package wants h3 ^1.x;
+  # nothing hard-requires v2. An h3 2.0-rc only entered the tree because
+  # @nuxtjs/mcp-toolkit's loose peer (>=1.15.11) let pnpm pick the highest
+  # available — a resolution accident that flipped setHeader's type contract
+  # and made the hoisting non-deterministic. This pins the whole tree to one
+  # stable h3.
+  h3: ^1.15.11
   eslint: ^9.35.0
   defu: '>=6.1.5'
   devalue: '>=5.8.1'
