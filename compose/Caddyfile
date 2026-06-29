@@ -85,3 +85,11 @@ pr.openape.test {
 		header_up X-Forwarded-Host {host}
 	}
 }
+
+docs.openape.test {
+	tls internal
+	reverse_proxy docs:3015 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
