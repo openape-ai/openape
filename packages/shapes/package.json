@@ -37,12 +37,10 @@
     "shell-quote": "^1.9.0"
   },
   "devDependencies": {
-    "@openape/server": "workspace:*",
     "@types/node": "catalog:",
     "@types/shell-quote": "^1.7.5",
     "@vitest/coverage-istanbul": "^4.1.9",
     "h3": "^1.15.11",
-    "jose": "^5.10.0",
     "tsup": "catalog:",
     "typescript": "^5.9.3",
     "vitest": "catalog:"
