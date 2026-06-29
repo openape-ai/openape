@@ -273,7 +273,7 @@ export async function resolveFromGrant(
   if (!argv || argv.length === 0)
     throw new Error('Grant request is missing command argv')
 
-  const executable = argv[0]
+  const executable = argv[0]! // argv.length === 0 throws above
   const adapter = await loadOrInstallAdapter(executable)
   if (!adapter)
     throw new Error(`No shapes adapter found for ${executable}`)

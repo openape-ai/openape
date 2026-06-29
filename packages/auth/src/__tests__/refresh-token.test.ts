@@ -149,7 +149,7 @@ describe('refresh token store', () => {
     const page2 = await store.listFamilies({ limit: 1, cursor: page1.pagination.cursor! })
     expect(page2.data).toHaveLength(1)
     expect(page2.pagination.has_more).toBe(true)
-    expect(page2.data[0].familyId).not.toBe(page1.data[0].familyId)
+    expect(page2.data[0]!.familyId).not.toBe(page1.data[0]!.familyId)
 
     const page3 = await store.listFamilies({ limit: 1, cursor: page2.pagination.cursor! })
     expect(page3.data).toHaveLength(1)
