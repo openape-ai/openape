@@ -47,8 +47,8 @@ describe('inMemoryUserStore', () => {
     await store.create(makeUser({ email: 'new@example.com', createdAt: 2000 }))
     const result = await store.list()
     expect(result.data).toHaveLength(2)
-    expect(result.data[0].email).toBe('new@example.com')
-    expect(result.data[1].email).toBe('old@example.com')
+    expect(result.data[0]!.email).toBe('new@example.com')
+    expect(result.data[1]!.email).toBe('old@example.com')
     expect(result.pagination.has_more).toBe(false)
   })
 
@@ -60,14 +60,14 @@ describe('inMemoryUserStore', () => {
 
     const page1 = await store.list({ limit: 2 })
     expect(page1.data).toHaveLength(2)
-    expect(page1.data[0].email).toBe('c@example.com')
-    expect(page1.data[1].email).toBe('b@example.com')
+    expect(page1.data[0]!.email).toBe('c@example.com')
+    expect(page1.data[1]!.email).toBe('b@example.com')
     expect(page1.pagination.has_more).toBe(true)
     expect(page1.pagination.cursor).toBe('b@example.com')
 
     const page2 = await store.list({ limit: 2, cursor: page1.pagination.cursor! })
     expect(page2.data).toHaveLength(1)
-    expect(page2.data[0].email).toBe('a@example.com')
+    expect(page2.data[0]!.email).toBe('a@example.com')
     expect(page2.pagination.has_more).toBe(false)
   })
 
@@ -79,7 +79,7 @@ describe('inMemoryUserStore', () => {
 
     const result = await store.list({ search: 'bob' })
     expect(result.data).toHaveLength(1)
-    expect(result.data[0].email).toBe('bob@example.com')
+    expect(result.data[0]!.email).toBe('bob@example.com')
   })
 
   it('updates a user', async () => {
