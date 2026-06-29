@@ -19,3 +19,5 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: E2E (self-contained idp+sp, fresh, no prod)
         run: pnpm turbo run test --filter=openape-e2e
+      - name: E2E proof-link round-trip (testrun, dev-mode boot)
+        run: pnpm turbo run test:e2e --filter=@openape-testrun/app
