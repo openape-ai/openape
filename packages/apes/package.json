@@ -31,30 +31,30 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@lydell/node-pty": "1.2.0-beta.12",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@openape/agent-runtime": "workspace:*",
     "@openape/cli-auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
-    "@openape/agent-runtime": "workspace:*",
-    "@openape/shapes": "workspace:*",
     "@openape/proxy": "workspace:*",
+    "@openape/shapes": "workspace:*",
     "citty": "^0.2.2",
     "consola": "^3.4.2",
     "giget": "^2.0.0",
-    "@lydell/node-pty": "1.2.0-beta.12",
-    "shell-quote": "^1.8.4",
-    "zod": "^4.3.6"
+    "shell-quote": "^1.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@openape/server": "workspace:*",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.9.4",
     "@types/shell-quote": "^1.7.5",
-    "@vitest/coverage-istanbul": "^4.1.7",
-    "h3": "^1.15.0",
-    "jose": "^5.9.0",
+    "@vitest/coverage-istanbul": "^4.1.9",
+    "h3": "^1.15.11",
+    "jose": "^5.10.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.8.2",
-    "vitest": "^4.1.7"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   },
   "license": "MIT",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>",
