@@ -28,7 +28,6 @@
     "ulid": "^2.3.0"
   },
   "devDependencies": {
-    "@nuxt/test-utils": "^4.0.3",
     "typescript": "^5.9.0",
     "vitest": "^3.0.0"
   }
