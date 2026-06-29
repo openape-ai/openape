@@ -48,7 +48,6 @@
   "devDependencies": {
     "@types/node": "^22.20.0",
     "@vitest/coverage-istanbul": "^4.1.9",
-    "h3": "^1.15.11",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
