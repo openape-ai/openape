@@ -18,3 +18,40 @@ catalog:
   vue: ^3.5.30
   h3: ^1.15.5
   jose: ^5.9.0
+
+# pnpm 10 reads these from pnpm-workspace.yaml; in package.json's `pnpm` field
+# they are silently ignored (the security overrides + audit ignores below were
+# dead until migrated here). eslint is held at v9 on purpose (eslint 10 breaks
+# vue-eslint-parser); the rest are GHSA-driven minimum-version floors.
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - better-sqlite3
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - vue-demi
+
+overrides:
+  eslint: ^9.35.0
+  defu: '>=6.1.5'
+  devalue: '>=5.8.1'
+  drizzle-orm: '>=0.45.2'
+  flatted: '>=3.4.2'
+  hono: '>=4.12.21'
+  lodash: ^4.17.21
+  node-forge: '>=1.4.0'
+  path-to-regexp: '>=8.4.0'
+  picomatch: '>=4.0.4'
+  serialize-javascript: '>=7.0.3'
+  shell-quote: '>=1.8.4'
+  simple-git: '>=3.36.0'
+  socket.io-parser: '>=4.2.6'
+  fast-uri: '>=3.1.2'
+  '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
+  ws: '>=8.21.0'
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-r5fr-rjxr-66jc
+    - GHSA-gv7w-rqvm-qjhr
+    - GHSA-fx2h-pf6j-xcff
