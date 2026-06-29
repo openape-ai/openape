@@ -211,7 +211,7 @@ export function createMultiAgentProxy(
       }
       else if (config.agents.length === 1) {
         // Non-mandatory auth, single agent: use the only agent config
-        agentConf = config.agents[0]
+        agentConf = config.agents[0]! // length === 1 checked above
       }
       else {
         return new Response('Unauthorized: JWT required for multi-agent proxy', { status: 401 })

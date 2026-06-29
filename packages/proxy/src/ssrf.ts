@@ -11,8 +11,10 @@ const PRIVATE_RANGES_V4 = [
 ]
 
 function ipv4ToNumber(ip: string): number {
-  const parts = ip.split('.').map(Number)
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0
+  const [a, b, c, d] = ip.split('.').map(Number)
+  if (a === undefined || b === undefined || c === undefined || d === undefined)
+    throw new Error(`Invalid IPv4 address: ${ip}`)
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0
 }
 
 function isPrivateIPv4(ip: string): boolean {
@@ -40,7 +42,7 @@ function isPrivateIPv6(ip: string): boolean {
 
   // IPv4-mapped ::ffff:x.x.x.x
   const v4mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-  if (v4mapped) return isPrivateIPv4(v4mapped[1])
+  if (v4mapped?.[1]) return isPrivateIPv4(v4mapped[1])
 
   return false
 }
