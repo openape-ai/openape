@@ -48,6 +48,11 @@ services:
           - troop.openape.test
           - chat.openape.test
           - coder.openape.test
+          - tasks.openape.test
+          - plans.openape.test
+          - testrun.openape.test
+          - timetrack.openape.test
+          - pr.openape.test
     ports:
       - "127.0.0.1:443:443"
     healthcheck:
@@ -185,6 +190,174 @@ services:
       - openape-test
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Remaining DDISA SP apps — same shape as troop/chat (Nuxt build, SP module
+  # config, local-CA trust). Each defaults to an ephemeral in-container LibSQL
+  # file DB (migrations run on boot), like prod's per-app shared DB.
+  tasks:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-tasks/app"
+        APP_DIR: openape-tasks
+        PORT: "3005"
+    image: openape-tasks:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: tasks.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Tasks
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3005"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  plans:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-plans/app"
+        APP_DIR: openape-plans
+        PORT: "3004"
+    image: openape-plans:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: plans.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Plans
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3004"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  testrun:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-testrun/app"
+        APP_DIR: openape-testrun
+        PORT: "3006"
+    image: openape-testrun:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: testrun.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Testrun
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3006"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  timetrack:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-timetrack/app"
+        APP_DIR: openape-timetrack
+        PORT: "3011"
+    image: openape-timetrack:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: timetrack.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe Timetrack
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3011"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3011/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  pr:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-pr/app"
+        APP_DIR: openape-pr
+        PORT: "3014"
+    image: openape-pr:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: pr.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe PR
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3014"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3014/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 30
