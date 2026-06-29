@@ -17,6 +17,19 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   content: {
+    // Drop the better-sqlite3 native dep so docs builds/runs in the shared
+    // Nuxt container like every other app. Two @nuxt/content databases:
+    //  - runtime server DB → libsql (prebuilt binding, pinned by the Dockerfile)
+    //  - build-time local DB → Node's built-in node:sqlite (no native build),
+    //    otherwise it defaults to better-sqlite3 which the container's
+    //    `pnpm install --ignore-scripts` never compiles.
+    experimental: {
+      nativeSqlite: true,
+    },
+    database: {
+      type: 'libsql',
+      url: 'file:./.data/content/contents.db',
+    },
     build: {
       markdown: {
         toc: {
