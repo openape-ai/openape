@@ -18,28 +18,28 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.90",
-    "@libsql/client": "^0.17.3",
-    "@nuxt/ui": "^4.7.1",
+    "@iconify-json/lucide": "^1.2.114",
+    "@libsql/client": "^0.17.4",
+    "@nuxt/ui": "^4.9.0",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/vue-components": "workspace:*",
-    "@sentry/nuxt": "^10.47.0",
-    "@vite-pwa/nuxt": "^1.0.4",
-    "drizzle-orm": "^0.44.7",
+    "@sentry/nuxt": "^10.62.0",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.8",
-    "resend": "^6.12.3",
-    "tailwindcss": "^4.0.0",
+    "resend": "^6.16.0",
+    "tailwindcss": "^4.3.1",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.20.0",
     "@types/web-push": "^3.6.4",
-    "h3": "catalog:",
-    "typescript": "^5.7.0",
-    "vitest": "^4.1.7",
-    "vue-tsc": "^3.3.1"
+    "h3": "^1.15.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9",
+    "vue-tsc": "^3.3.5"
   },
   "engines": {
     "node": ">=22"
