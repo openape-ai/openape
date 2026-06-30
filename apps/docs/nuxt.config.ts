@@ -52,10 +52,11 @@ export default defineNuxtConfig({
       ],
       crawlLinks: true,
       autoSubfolderIndex: false,
-      // nuxt-og-image 400s on its static og.png routes in clean builds
-      // ("Invalid island request hash") — OG images are non-essential,
-      // don't fail the whole prerender over them.
-      failOnError: false,
+      // Fail the build on any prerender error so a broken route (or a missing
+      // OG-image renderer) is loud, not silently shipped. The earlier
+      // "Invalid island request hash" 400s were the satori renderer failing
+      // because `satori` wasn't installed — fixed by depending on it.
+      failOnError: true,
     },
   },
 
