@@ -1,0 +1,24 @@
+{
+  "stories": [
+    {
+      "app": "openape-testrun",
+      "category": "Getting started",
+      "id": "share-a-test-run",
+      "title": "Share a test run as a proof link",
+      "intro": "Testrun turns a CI report into a public proof link. An agent (or `ape-testruns upload report.json`) pushes the run; you get a `/r/<slug>` URL that renders status, tests and steps — no login to open it.",
+      "order": 13,
+      "steps": [
+        {
+          "title": "The run lands as a report",
+          "caption": "Testrun's start page. Reports arrive over the API — your pipeline runs `ape-testruns upload report.json` and gets a shareable link back.",
+          "shot": "share-a-test-run/01-landing.png"
+        },
+        {
+          "title": "Open the proof link",
+          "caption": "Anyone with the link sees the rendered report — overall status, every test and its steps. Public by design, so you can paste it into a PR or a chat without making the reader log in.",
+          "shot": "share-a-test-run/02-proof.png"
+        }
+      ]
+    }
+  ]
+}
