@@ -13,6 +13,7 @@ import chatStories from './stories/chat.mjs'
 import coderStories from './stories/coder.mjs'
 import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
+import prStories from './stories/pr.mjs'
 import testrunStories from './stories/testrun.mjs'
 import troopStories from './stories/troop.mjs'
 
@@ -49,10 +50,11 @@ const ctx = {
   CHAT: 'https://chat.openape.test',
   CODER: 'https://coder.openape.test',
   TESTRUN: 'https://testrun.openape.test',
+  PR: 'https://pr.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, coderStories, testrunStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, coderStories, testrunStories, prStories])
   await run(ctx)
 
 const failures = kit.finish('demo')
