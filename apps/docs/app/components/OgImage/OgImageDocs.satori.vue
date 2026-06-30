@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-const props = withDefaults(defineProps<{ title?: string, description?: string, headline?: string }>(), {
-  title: 'title',
-  description: 'description',
+// `title`/`description` are reserved by nuxt-og-image (OG meta + cache key) and
+// never reach the component as props, so the page passes pageTitle/pageDescription.
+const props = withDefaults(defineProps<{ pageTitle?: string, pageDescription?: string, headline?: string }>(), {
+  pageTitle: '',
+  pageDescription: '',
 })
 
-const title = computed(() => (props.title || '').slice(0, 60))
-const description = computed(() => (props.description || '').slice(0, 200))
+const title = computed(() => (props.pageTitle || '').slice(0, 60))
+const description = computed(() => (props.pageDescription || '').slice(0, 200))
 </script>
 
 <template>
