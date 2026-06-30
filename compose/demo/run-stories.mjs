@@ -46,7 +46,6 @@ const ctx = {
   IDP: 'https://id.openape.test',
   TROOP: 'https://troop.openape.test',
   CHAT: 'https://chat.openape.test',
-  ORG: 'https://org.openape.test',
   CODER: 'https://coder.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
