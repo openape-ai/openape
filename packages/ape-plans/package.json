@@ -7,6 +7,12 @@
   "bin": {
     "ape-plans": "./dist/cli.mjs"
   },
+  "exports": {
+    "./templates": {
+      "types": "./dist/templates.d.ts",
+      "import": "./dist/templates.mjs"
+    }
+  },
   "files": [
     "dist",
     "README.md"
