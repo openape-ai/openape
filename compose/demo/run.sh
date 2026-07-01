@@ -71,4 +71,7 @@ echo "→ Running the stories…"
 echo "→ Distributing docs to each app…"
 node compose/distribute-docs.mjs
 
-echo "✓ Screenshots in docs/local-stack/screenshots/ — each app serves its own flows at https://<app>.openape.test/docs"
+echo "→ Aggregating the app guides into docs.openape.ai…"
+node apps/docs/scripts/aggregate-guides.mjs
+
+echo "✓ Screenshots in docs/local-stack/screenshots/ — each app serves its own flows at https://<app>.openape.test/docs, all aggregated at https://docs.openape.ai/apps"
