@@ -23,12 +23,28 @@
 // dormant fallback.
 
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 
 const REGISTRY = 'registry.openape.ai'
 const HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
 const USER = process.env.CHATTY_USER || 'openape'
 const PROD_DIR = '/home/openape/prod'
+
+// Registry auth for `docker push` from ANY session. The default
+// ~/.docker/config.json uses the osxkeychain credential helper, which is only
+// unlocked inside an interactive GUI (Aqua) login — a detached/headless deploy
+// hits "keychain cannot be accessed … no user interaction". An isolated static
+// config (chmod 600) carries the registry.openape.ai auth inline; only the push
+// runs with DOCKER_CONFIG pointed at it, so `docker buildx` etc. keep the
+// default config (its cli-plugins live under ~/.docker/cli-plugins). Set up
+// once with scripts/setup-registry-auth.sh; absent → default (keychain).
+const ISOLATED_DOCKER_CONFIG = join(homedir(), '.config', 'openape', 'docker')
+const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
+  ? { ...process.env, DOCKER_CONFIG: ISOLATED_DOCKER_CONFIG }
+  : process.env
 
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
@@ -46,8 +62,8 @@ function sh(cmd, args, opts = {}) {
 }
 // Quiet variant for the concurrent bake phase — interleaved inherited stdio
 // from parallel docker builds is unreadable, so capture instead.
-function shQuiet(cmd, args) {
-  return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+function shQuiet(cmd, args, opts = {}) {
+  return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts })
 }
 function out(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8' }).trim()
@@ -115,7 +131,7 @@ async function bake(name, sha) {
   const tag = tagFor(t, sha)
   shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
   await smokeTest(tag, t.port)
-  shQuiet('docker', ['push', tag])
+  shQuiet('docker', ['push', tag], { env: PUSH_ENV })
   console.log(`  ✓ baked ${name} (${tag})`)
 }
 
