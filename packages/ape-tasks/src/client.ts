@@ -22,10 +22,8 @@ export const tasksClient = createProofClient<TasksState>({
 })
 
 export const {
-  configPath,
   resolveEndpoint,
   loadConfig,
   saveConfig,
-  apiCall: _apiCall,
   _request,
 } = tasksClient

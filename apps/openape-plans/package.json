@@ -16,8 +16,6 @@
     "@libsql/client": "^0.14.0",
     "@nuxt/ui": "^4.9.0",
     "@openape/ape-plans": "workspace:*",
-    "@openape/core": "workspace:*",
-    "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "jose": "^5.10.0",
