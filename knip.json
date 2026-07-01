@@ -31,6 +31,7 @@
     "drizzle-kit",
     "workbox-.*",
     "vue",
+    "h3",
     "nitropack",
     "nitropack/runtime",
     "unstorage",
@@ -41,6 +42,7 @@
   ],
   "workspaces": {
     "packages/*": {
+      "entry": ["test/**/*.{test,spec}.ts!", "tests/**/*.{test,spec}.ts!"],
       "project": "src/**/*.ts"
     },
     "packages/protocol-conformance": {
