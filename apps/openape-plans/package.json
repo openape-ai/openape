@@ -8,6 +8,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
+    "test": "vitest run --passWithNoTests",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
@@ -21,10 +22,12 @@
     "jose": "^5.10.0",
     "marked": "^18.0.5",
     "nuxt": "^4.4.8",
+    "sanitize-html": "^2.14.0",
     "tailwindcss": "^4.3.1",
     "ulid": "^2.4.0"
   },
   "devDependencies": {
+    "@types/sanitize-html": "^2.13.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.6"
   }
