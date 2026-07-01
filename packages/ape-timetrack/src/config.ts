@@ -25,9 +25,6 @@ import { _resolveEndpoint, loadConfig, saveConfig } from './client.ts'
 import type { TimerackState } from './client.ts'
 import { ApiError } from '@openape/cli-auth'
 
-export { configPath } from './client.ts'
-export { ApiError }
-
 const DEFAULT_ENDPOINT = process.env.APE_TIMETRACK_ENDPOINT ?? 'https://timetrack.openape.ai'
 
 /**
@@ -38,12 +35,6 @@ const DEFAULT_ENDPOINT = process.env.APE_TIMETRACK_ENDPOINT ?? 'https://timetrac
 export function resolveEndpoint(override?: unknown): string {
   if (typeof override === 'string' && override.length > 0) return override.replace(/\/$/, '')
   return DEFAULT_ENDPOINT.replace(/\/$/, '')
-}
-
-export { DEFAULT_ENDPOINT }
-
-export function createApiError(status: number, title: string, detail?: string): ApiError {
-  return new ApiError(status, title, detail)
 }
 
 function currentState(): TimerackState {

@@ -89,14 +89,7 @@ export function isLinux(): boolean {
   return process.platform === 'linux'
 }
 
-let testOverride: HostPlatform | null = null
-
 export function getHostPlatform(): HostPlatform {
-  if (testOverride) return testOverride
   if (isLinux()) return linuxHostPlatform
   throw new Error(`unsupported host platform: ${process.platform} — OpenApe nests are Linux-only`)
-}
-
-export function __setHostPlatformForTesting(impl: HostPlatform | null): void {
-  testOverride = impl
 }

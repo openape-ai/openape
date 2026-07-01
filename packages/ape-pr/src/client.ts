@@ -19,10 +19,6 @@ export const prClient = createProofClient<PrState>({
 })
 
 export const {
-  configPath,
   resolveEndpoint,
-  loadConfig,
-  saveConfig,
-  apiCall: _apiCall,
   _request,
 } = prClient

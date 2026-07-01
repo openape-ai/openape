@@ -36,7 +36,6 @@
     "satori": "^0.26.0",
     "tailwindcss": "^4.3.1",
     "ufo": "^1.6.4",
-    "unist-util-visit": "^5.1.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

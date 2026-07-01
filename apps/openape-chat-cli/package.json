@@ -35,7 +35,6 @@
     "@openape/cli-auth": "workspace:*",
     "citty": "^0.2.2",
     "jose": "catalog:",
-    "ofetch": "^1.5.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {

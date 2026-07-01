@@ -27,8 +27,7 @@ export interface Project {
   updatedAt: number
 }
 
-export const STORY_STATUSES = ['draft', 'consistent', 'approved', 'red', 'green', 'documented'] as const
-export type StoryStatus = (typeof STORY_STATUSES)[number]
+export type StoryStatus = 'draft' | 'consistent' | 'approved' | 'red' | 'green' | 'documented'
 
 export interface Story {
   id: string

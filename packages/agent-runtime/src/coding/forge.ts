@@ -25,14 +25,14 @@ export function shq(s: string): string {
   return `'${String(s).replace(/'/g, '\'\\\'\'')}'`
 }
 
-export function assertBranch(v: unknown): string {
+function assertBranch(v: unknown): string {
   if (typeof v !== 'string' || !BRANCH_RE.test(v)) {
     throw new Error('branch must match ^[A-Za-z0-9._/-]{1,200}$')
   }
   return v
 }
 
-export function assertId(v: unknown): string {
+function assertId(v: unknown): string {
   if (typeof v !== 'string' && typeof v !== 'number') throw new Error('id required')
   const s = String(v)
   if (!ID_RE.test(s)) throw new Error('id must be a number')
@@ -144,7 +144,7 @@ export function listForges(): string[] {
   return [...registry.keys()]
 }
 
-export function getForge(id: string): ForgeAdapter {
+function getForge(id: string): ForgeAdapter {
   const a = registry.get(id)
   if (!a) {
     throw new Error(`unknown forge '${id}'. Registered: ${listForges().join(', ')}. Add one with registerForge().`)
@@ -183,5 +183,3 @@ export function buildPrStatus(forge: Forge, ref: string | number): string {
 export function buildIssueGet(forge: Forge, ref: string | number, repo?: string): string {
   return getForge(forge).issueGet(ref, repo)
 }
-
-export const _internal = { shq, assertBranch, assertId, githubAdapter, azureAdapter, registry }
