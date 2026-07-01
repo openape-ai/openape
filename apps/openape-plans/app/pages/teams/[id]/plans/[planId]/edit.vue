@@ -25,14 +25,39 @@ const status = ref<Plan['status']>('draft')
 const tab = ref<'write' | 'preview'>('write')
 const rendered = computed(() => renderMarkdown(bodyMd.value))
 
+interface Template { name: string, description: string, body: string }
+const templates = ref<Template[]>([])
+const templateItems = computed(() =>
+  templates.value.map(t => ({ label: `${t.name} — ${t.description}`, value: t.name })),
+)
+
+function insertTemplate(name: string) {
+  const tpl = templates.value.find(t => t.name === name)
+  if (!tpl) return
+  bodyMd.value = bodyMd.value.trim()
+    ? `${bodyMd.value.replace(/\n*$/, '')}\n\n${tpl.body}`
+    : tpl.body
+  tab.value = 'write'
+}
+
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
     await navigateTo('/login')
     return
   }
-  await load()
+  await Promise.all([load(), loadTemplates()])
 })
+
+async function loadTemplates() {
+  try {
+    templates.value = await ($fetch as any)('/api/templates') as Template[]
+  }
+  catch (err) {
+    // Non-fatal: the dropdown just stays hidden if templates can't load.
+    console.error('Failed to load templates', err)
+  }
+}
 
 async function load() {
   loading.value = true
@@ -130,6 +155,16 @@ async function onSave() {
             >
               Preview
             </UButton>
+            <USelect
+              v-if="templateItems.length"
+              :items="templateItems"
+              value-key="value"
+              placeholder="Insert template…"
+              size="xs"
+              class="ml-auto w-56"
+              :model-value="undefined"
+              @update:model-value="insertTemplate"
+            />
           </div>
 
           <UTextarea
