@@ -4,7 +4,7 @@ import type { CodexCredential } from './codex-credential'
 // uses. Lets agents list what they can target via `GET /v1/models`.
 // Shape + fallback ported from NousResearch/hermes-agent `codex_models.py`.
 
-export const CODEX_MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=1.0.0'
+const CODEX_MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=1.0.0'
 
 // Known-good current models, served when the live endpoint is unreachable or
 // empty so discovery never hands back an empty list. gpt-5.5 is current.

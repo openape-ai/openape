@@ -28,7 +28,7 @@ export interface GenericCallLogEntry {
  * Default audit log location. Lives under `~/.config/apes/` for consistency
  * with the rest of apes' client state (`config.toml`, `auth.json`, …).
  */
-export function defaultGenericLogPath(): string {
+function defaultGenericLogPath(): string {
   return join(homedir(), '.config', 'apes', 'generic-calls.log')
 }
 

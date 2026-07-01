@@ -32,7 +32,6 @@ export const timerackClient = createProofClient<TimerackState>({
 })
 
 export const {
-  configPath,
   resolveEndpoint: _resolveEndpoint,
   loadConfig,
   saveConfig,
