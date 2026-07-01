@@ -48,3 +48,32 @@ describe('renderMarkdown sanitization', () => {
     expect(out).toContain('<code>code</code>')
   })
 })
+
+// Rich HTML authoring (M3): component containers with an allowlisted set of
+// class names survive; anything off-list is stripped.
+describe('renderMarkdown component classes', () => {
+  it('keeps allowed component tags and classes', () => {
+    const out = renderMarkdown('<div class="callout callout-warn">heads up</div>')
+    expect(out).toContain('<div')
+    expect(out).toContain('class="callout callout-warn"')
+    expect(out).toContain('heads up')
+  })
+
+  it('keeps a badge span with an allowlisted class', () => {
+    const out = renderMarkdown('<span class="badge badge-success">done</span>')
+    expect(out).toContain('class="badge badge-success"')
+  })
+
+  it('strips off-allowlist classes but keeps the element', () => {
+    const out = renderMarkdown('<div class="evil hacker">x</div>')
+    expect(out).toContain('<div')
+    expect(out).not.toContain('evil')
+    expect(out).not.toContain('hacker')
+  })
+
+  it('does not let component tags smuggle event handlers', () => {
+    const out = renderMarkdown('<div class="card" onclick="alert(1)">x</div>')
+    expect(out).not.toContain('onclick')
+    expect(out).not.toContain('alert(1)')
+  })
+})

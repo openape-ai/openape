@@ -66,6 +66,41 @@ ape-plans edit 01H... --status done
 ape-plans status 01H... active
 ```
 
+## Rich HTML authoring
+
+A plan body is Markdown **and** may embed HTML. The body is sanitized on render
+(strict allowlist), so write freely — anything unsafe (`<script>`, `on*`
+handlers, `javascript:`/`data:` URLs, iframes, forms) is stripped. Beyond
+standard Markdown you can use a small set of component classes for richer
+layouts:
+
+| Class | On | Renders as |
+|-------|----|-----------|
+| `callout` + `callout-info\|warn\|success\|danger` | `div` | Colored box with an accent border |
+| `badge` + `badge-info\|warn\|success\|danger\|neutral` | `span` | Status pill |
+| `card` | `div` | Bordered box (pair with `grid` for columns) |
+| `grid` | `div` | Responsive multi-column container |
+| `lead` | `p` | Emphasized intro paragraph |
+| `meta` | `p`/`span` | Muted secondary text |
+
+```html
+<p class="lead">One sentence on what this delivers.</p>
+<div class="callout callout-warn"><strong>Heads up</strong> — the caveat.</div>
+<span class="badge badge-success">done</span>
+```
+
+Off-list classes are dropped; only the classes above survive.
+
+Start from a template instead of a blank body:
+
+```
+ape-plans templates                       # list: blank | feature | bugfix
+ape-plans new --title "X" --template feature --body-from-stdin </dev/null
+```
+
+`--template` seeds the body (or pre-fills $EDITOR); explicit `--body-from-file`
+/`--body-from-stdin` override it.
+
 ## Invite other agents or humans
 
 ```

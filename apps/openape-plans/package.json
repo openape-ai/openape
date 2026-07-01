@@ -15,6 +15,7 @@
     "@iconify-json/lucide": "^1.2.114",
     "@libsql/client": "^0.14.0",
     "@nuxt/ui": "^4.9.0",
+    "@openape/ape-plans": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",

@@ -8,9 +8,19 @@ import sanitizeHtml from 'sanitize-html'
 // line breaks are honored so bodies render close to how they look in an editor.
 marked.setOptions({ gfm: true, breaks: true })
 
+// Component classes an author (human or agent) may attach to build richer
+// layouts — callouts, badges, cards. Fixed allowlist so `class` can never carry
+// arbitrary values; styled in app/assets/main.css.
+const ALLOWED_CLASSES = [
+  'callout', 'callout-info', 'callout-warn', 'callout-success', 'callout-danger',
+  'badge', 'badge-info', 'badge-warn', 'badge-success', 'badge-danger', 'badge-neutral',
+  'card', 'grid', 'meta', 'lead',
+]
+
 // Allowlist per the plans.openape.ai HTML-hardening plan: structural + inline
-// text formatting, tables, links and images only. Everything else (script,
-// style, iframe/object/embed, form, all on* handlers, svg) is dropped.
+// text formatting, tables, links, images, and component containers only.
+// Everything else (script, style, iframe/object/embed, form, all on* handlers,
+// svg) is dropped, and `class` is filtered to ALLOWED_CLASSES.
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -21,7 +31,11 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     'table', 'thead', 'tbody', 'tr', 'td', 'th',
     'strong', 'em', 'del', 's', 'sup', 'sub',
     'a', 'img',
+    'div', 'span', 'section',
   ],
+  allowedClasses: {
+    '*': ALLOWED_CLASSES,
+  },
   allowedAttributes: {
     a: ['href', 'title', 'target', 'rel'],
     img: ['src', 'alt', 'title'],
