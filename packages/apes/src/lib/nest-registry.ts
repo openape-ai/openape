@@ -93,7 +93,7 @@ export function readNestRegistry(): RegistryFile {
   }
 }
 
-export function writeNestRegistry(reg: RegistryFile): void {
+function writeNestRegistry(reg: RegistryFile): void {
   const path = resolveRegistryPath()
   const dir = path.replace(/\/agents\.json$/, '')
   try { mkdirSync(dir, { recursive: true }) }

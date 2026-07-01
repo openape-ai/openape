@@ -48,7 +48,6 @@
   "devDependencies": {
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/ui": "^4.9.0",
-    "@openape/server": "workspace:*",
     "@types/node": "^22.20.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",

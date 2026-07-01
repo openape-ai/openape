@@ -2,14 +2,7 @@
  * Testrun API wrappers around the shared @openape/cli-auth HTTP machinery
  * (auth, retry, error mapping) — see src/client.ts.
  */
-import { ApiError } from '@openape/cli-auth'
 import { _request } from './client.ts'
-
-export { ApiError }
-
-export function createApiError(status: number, title: string, detail?: string): ApiError {
-  return new ApiError(status, title, detail)
-}
 
 export async function apiCall<T = unknown>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',

@@ -22,10 +22,8 @@ export const plansClient = createProofClient<PlansState>({
 })
 
 export const {
-  configPath,
   resolveEndpoint,
   loadConfig,
   saveConfig,
-  apiCall: _apiCall,
   _request,
 } = plansClient
