@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { apiCall, createApiError } from '../api.ts'
 import { resolveTeamId } from '../config.ts'
 import { printJson, printLine } from '../output.ts'
+import { getTemplate, PLAN_TEMPLATES } from '../templates/index.ts'
 
 type PlanStatus = 'draft' | 'active' | 'done' | 'archived'
 const VALID_STATUS: readonly PlanStatus[] = ['draft', 'active', 'done', 'archived']
@@ -141,6 +142,7 @@ export const newCommand = defineCommand({
     status: { type: 'string', description: 'draft|active|done|archived (default draft).' },
     'body-from-stdin': { type: 'boolean', description: 'Read body from stdin.' },
     'body-from-file': { type: 'string', description: 'Read body from a file.' },
+    template: { type: 'string', description: `Start from a template (${PLAN_TEMPLATES.map(t => t.name).join('|')}). See \`ape-plans templates\`.` },
     json: { type: 'boolean', description: 'JSON output.' },
     'id-only': { type: 'boolean', description: 'Print only the new plan id (one line, nothing else).' },
     endpoint: { type: 'string', description: 'Override plans endpoint.' },
@@ -151,7 +153,18 @@ export const newCommand = defineCommand({
       throw createApiError(400, `Invalid status "${args.status}"`, `Valid: ${VALID_STATUS.join(', ')}.`)
     }
 
-    let bodyMd = ''
+    let templateBody = ''
+    if (args.template) {
+      const tpl = getTemplate(args.template)
+      if (!tpl) {
+        throw createApiError(400, `Unknown template "${args.template}"`, `Available: ${PLAN_TEMPLATES.map(t => t.name).join(', ')}.`)
+      }
+      templateBody = tpl.body
+    }
+
+    // Precedence: explicit body (file/stdin) > --template > $EDITOR seeded with
+    // the template (or a title stub).
+    let bodyMd = templateBody
     if (args['body-from-file']) {
       bodyMd = readFileSync(args['body-from-file'], 'utf-8')
     }
@@ -159,7 +172,7 @@ export const newCommand = defineCommand({
       bodyMd = await readStdin()
     }
     else if (process.stdin.isTTY) {
-      bodyMd = editInEditor('', `# ${args.title}\n\n`)
+      bodyMd = editInEditor('', templateBody || `# ${args.title}\n\n`)
     }
 
     const teamId = resolveTeamId(args.team, args.endpoint)
@@ -215,8 +228,12 @@ export const editCommand = defineCommand({
 
     // Gather incoming body content once (stdin / file / editor).
     let incoming: string | undefined
-    if (args['body-from-file']) incoming = readFileSync(args['body-from-file'], 'utf-8')
-    else if (args['body-from-stdin']) incoming = await readStdin()
+    if (args['body-from-file']) {
+      incoming = readFileSync(args['body-from-file'], 'utf-8')
+    }
+    else if (args['body-from-stdin']) {
+      incoming = await readStdin()
+    }
     else if (process.stdin.isTTY && !args['append-body'] && !args['prepend-body'] && !args['replace-section']) {
       // Only open $EDITOR when there's no patch-mode — otherwise an empty editor clobbers the mode.
       incoming = editInEditor(current.body_md, `# ${current.title}\n\n`)
@@ -310,6 +327,35 @@ export const rmCommand = defineCommand({
 })
 
 /**
+ * List the starter templates available to `new --template`.
+ *
+ * EXAMPLES
+ *   $ ape-plans templates
+ *   blank    Empty scaffold — a title and a hint.
+ *   feature  Feature plan — goal, approach, milestones, acceptance.
+ *   bugfix   Bugfix — repro, root cause, fix, proof.
+ *
+ *   $ ape-plans templates --json
+ *   [{"name":"blank","description":"…","body":"…"}]
+ */
+export const templatesCommand = defineCommand({
+  meta: {
+    name: 'templates',
+    description: 'List starter templates for `new --template`.',
+  },
+  args: {
+    json: { type: 'boolean', description: 'JSON output (includes body).' },
+  },
+  run({ args }) {
+    if (args.json) { printJson(PLAN_TEMPLATES); return }
+    const width = Math.max(...PLAN_TEMPLATES.map(t => t.name.length))
+    for (const t of PLAN_TEMPLATES) {
+      printLine(`${t.name.padEnd(width)}  ${t.description}`)
+    }
+  },
+})
+
+/**
  * Replace the content under a Markdown heading until the next heading at the
  * same or shallower depth. The heading line itself is preserved; everything
  * between it and the next boundary is swapped for `replacement`. Matches the
@@ -360,6 +406,7 @@ function editInEditor(initial: string, placeholder: string): string {
     return contents === placeholder ? '' : contents
   }
   finally {
-    try { rmSync(tmpDir, { recursive: true, force: true }) } catch { /* best effort */ }
+    try { rmSync(tmpDir, { recursive: true, force: true }) }
+    catch { /* best effort */ }
   }
 }

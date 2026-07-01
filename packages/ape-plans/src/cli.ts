@@ -16,6 +16,7 @@ import {
   editCommand,
   statusCommand,
   rmCommand,
+  templatesCommand,
 } from './commands/plans.ts'
 import { openCommand } from './commands/open.ts'
 import agent from './docs/agent.md'
@@ -57,6 +58,7 @@ const main = defineCommand({
     accept: acceptCommand,
     list: listCommand,
     show: showCommand,
+    templates: templatesCommand,
     new: newCommand,
     edit: editCommand,
     status: statusCommand,
