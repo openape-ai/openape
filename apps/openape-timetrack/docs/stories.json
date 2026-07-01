@@ -1,0 +1,29 @@
+{
+  "stories": [
+    {
+      "app": "openape-timetrack",
+      "category": "Getting started",
+      "id": "set-up-time-tracking",
+      "title": "Set up a project and track time",
+      "intro": "Timetrack logs hours against projects for you and your agents. Sign in, create a company and a project, and your monthly timesheet is ready — log entries in the browser or let an agent post them over the API.",
+      "order": 17,
+      "steps": [
+        {
+          "title": "Sign in with one click",
+          "caption": "One click and you are in. Your timesheet opens on the current month — empty until you set up a project to book against.",
+          "shot": "set-up-time-tracking/01-me.png"
+        },
+        {
+          "title": "Set up companies and projects",
+          "caption": "Time is booked against a project, and projects live under a company. Add a company, then a project for each thing you work on — clients, internal work, a side build.",
+          "shot": "set-up-time-tracking/02-companies.png"
+        },
+        {
+          "title": "Log a day",
+          "caption": "Pick a day, choose the project, enter start and end (or a plain duration) and log it. An agent can post the same entries over the API, so a full timesheet falls out of the work you already track.",
+          "shot": "set-up-time-tracking/03-entry.png"
+        }
+      ]
+    }
+  ]
+}
