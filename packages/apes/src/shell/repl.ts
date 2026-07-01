@@ -1,15 +1,7 @@
 import { createInterface  } from 'node:readline'
 import type { Interface as ReadlineInterface } from 'node:readline'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import consola from 'consola'
 import { checkMultiLineStatus } from './multi-line.js'
-
-/**
- * Where the REPL persists its input history across sessions. Lives alongside
- * the existing apes config so we don't add a new top-level dotfile.
- */
-const HISTORY_FILE = join(homedir(), '.config', 'apes', 'shell-history')
 
 /**
  * Primary and continuation prompts. PS1 shows when the REPL is ready for a
@@ -239,5 +231,3 @@ export class ShellRepl {
     this.buffer = ''
   }
 }
-
-export { HISTORY_FILE }

@@ -29,8 +29,6 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "@openape/grants": "workspace:*",
-    "jose": "^5.10.0",
     "node-forge": "^1.4.0",
     "smol-toml": "^1.7.0"
   },

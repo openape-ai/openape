@@ -20,7 +20,7 @@ export interface ChatState extends SpClientState {
   defaultThreadByRoom?: Record<string, string>
 }
 
-export const chatClient = createSpClient<ChatState>({
+const chatClient = createSpClient<ChatState>({
   defaultEndpoint: 'https://chat.openape.ai',
   envVar: 'APE_CHAT_ENDPOINT',
   configFile: 'auth-chat.json',
@@ -30,4 +30,4 @@ export const chatClient = createSpClient<ChatState>({
 // Convenience re-exports so importers can destructure from this module
 // if they prefer; the shim files (api.ts / config.ts / output.ts) do
 // the actual re-exporting that keeps existing command imports working.
-export const { configPath, resolveEndpoint, loadConfig, saveConfig, apiCall, _request } = chatClient
+export const { resolveEndpoint, loadConfig, saveConfig, _request } = chatClient

@@ -62,10 +62,6 @@ export function isInstalled(id: string, local: boolean): boolean {
   return existsSync(adapterPath(id, local))
 }
 
-export function getInstalledPath(id: string, local: boolean): string {
-  return adapterPath(id, local)
-}
-
 export function removeAdapter(id: string, local: boolean): boolean {
   const path = adapterPath(id, local)
   if (!existsSync(path))
@@ -74,7 +70,7 @@ export function removeAdapter(id: string, local: boolean): boolean {
   return true
 }
 
-export interface ConflictingAdapter {
+interface ConflictingAdapter {
   file: string
   path: string
   adapterId: string

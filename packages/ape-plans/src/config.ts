@@ -18,11 +18,7 @@ import { resolveEndpoint, loadConfig, saveConfig } from './client.ts'
 import type { PlansState } from './client.ts'
 import { ApiError } from '@openape/cli-auth'
 
-export { resolveEndpoint, configPath } from './client.ts'
-
-export function createApiError(status: number, title: string, detail?: string): ApiError {
-  return new ApiError(status, title, detail)
-}
+export { resolveEndpoint } from './client.ts'
 
 /** Per-endpoint active team, set via `teams use <id>`. */
 export function getActiveTeamId(endpointOverride?: unknown): string | undefined {

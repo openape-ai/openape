@@ -6,7 +6,7 @@ import { listAgents } from './registry'
  * Common contract for the nest's agent supervisor, so `index.ts` can swap
  * implementations behind a flag without caring which one runs.
  */
-export interface AgentSupervisor {
+interface AgentSupervisor {
   reconcile: (desired: AgentEntry[]) => Promise<void>
 }
 

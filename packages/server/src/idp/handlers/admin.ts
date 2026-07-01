@@ -11,7 +11,7 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b))
 }
 
-export function requireManagementToken(event: H3Event, config: IdPConfig): void {
+function requireManagementToken(event: H3Event, config: IdPConfig): void {
   if (!config.managementToken) {
     throw createProblemError({ status: 501, title: 'Management token not configured' })
   }

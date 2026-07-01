@@ -105,7 +105,7 @@ export interface StoryFile {
  */
 const STATUSES: readonly StoryStatus[] = ['draft', 'consistent', 'approved', 'red', 'green', 'documented']
 
-export function parseStoryFile(text: string): StoryFile {
+function parseStoryFile(text: string): StoryFile {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
   if (!match) {
     throw new CliError('Malformed story file: missing `---` frontmatter block.')
@@ -129,21 +129,6 @@ export function parseStoryFile(text: string): StoryFile {
     testReferences: toStringList(front.testReferences),
     status: status as StoryStatus,
   }
-}
-
-/** Serializes a {@link StoryFile} back to frontmatter+body text for writing into the repo. */
-export function serializeStoryFile(file: StoryFile): string {
-  const lines = ['---']
-  if (file.id !== null) lines.push(`id: ${file.id}`)
-  if (file.rev !== null) lines.push(`rev: ${file.rev}`)
-  lines.push(`title: ${quote(file.title)}`)
-  lines.push(`storySentence: ${quote(file.storySentence)}`)
-  lines.push(`status: ${file.status}`)
-  lines.push(`repos: ${serializeList(file.repos)}`)
-  lines.push(`links: ${serializeList(file.links)}`)
-  lines.push(`testReferences: ${serializeList(file.testReferences)}`)
-  lines.push('---', '', file.acceptanceCriteria, '')
-  return lines.join('\n')
 }
 
 /**
@@ -185,14 +170,6 @@ function toStringList(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String)
   if (value === null || value === undefined || value === '') return []
   return [String(value)]
-}
-
-function quote(value: string): string {
-  return JSON.stringify(value)
-}
-
-function serializeList(items: string[]): string {
-  return `[${items.map(quote).join(', ')}]`
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +214,7 @@ function syncable(s: SyncableStory): SyncableStory {
 }
 
 /** What the sync wants to do for a single story after diffing both sides against `rev`. */
-export type SyncAction = 'unchanged' | 'push' | 'pull' | 'create-remote' | 'create-local' | 'conflict'
+type SyncAction = 'unchanged' | 'push' | 'pull' | 'create-remote' | 'create-local' | 'conflict'
 
 export interface StoryDiff {
   /** Stable story id, or a repo-local placeholder for a brand-new local story. */

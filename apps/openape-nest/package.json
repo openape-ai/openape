@@ -26,7 +26,6 @@
   "dependencies": {
     "@openape/ape-agent": "workspace:*",
     "@openape/cli-auth": "workspace:*",
-    "@openape/core": "workspace:*",
     "ofetch": "^1.5.1",
     "ws": "^8.21.0"
   },

@@ -19,10 +19,6 @@ export const testrunClient = createProofClient<TestrunState>({
 })
 
 export const {
-  configPath,
   resolveEndpoint,
-  loadConfig,
-  saveConfig,
-  apiCall: _apiCall,
   _request,
 } = testrunClient
