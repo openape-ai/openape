@@ -2,7 +2,7 @@ import { TLSSocket, createSecureContext, connect as tlsConnect } from 'node:tls'
 import type { Socket } from 'node:net'
 import type { LeafCertCache } from './ca-store.js'
 
-export interface MitmRequest {
+interface MitmRequest {
   method: string
   host: string
   path: string
@@ -10,7 +10,7 @@ export interface MitmRequest {
   body: Buffer | null
 }
 
-export type MitmDecision =
+type MitmDecision =
   | { type: 'short-circuit', status: number, body: string }
   | { type: 'forward', mutatedHeaders: Map<string, string> }
 

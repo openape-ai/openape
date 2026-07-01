@@ -1,15 +1,79 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": [
+    "compose/**",
+    "scripts/**",
+    "examples/agent-recipes/**"
+  ],
+  "ignoreWorkspaces": [
+    "examples/*"
+  ],
+  "ignoreBinaries": [
+    "o365-cli",
+    "ape-tasks",
+    "apes",
+    "systemctl",
+    "getent",
+    "which",
+    "ssh-keygen"
+  ],
+  "ignoreDependencies": [
+    "@iconify-json/.*",
+    "@types/.*",
+    "vue-tsc",
+    "@vue/language-core",
+    "@antfu/eslint-config",
+    "tailwindcss",
+    "@nuxt/ui",
+    "@nuxtjs/mdc",
+    "@changesets/changelog-github",
+    "playwright-core",
+    "drizzle-kit",
+    "workbox-.*",
+    "vue",
+    "h3",
+    "nitropack",
+    "nitropack/runtime",
+    "unstorage",
+    "vite"
+  ],
+  "ignoreUnresolved": [
+    "#imports"
+  ],
   "workspaces": {
     "packages/*": {
-      "entry": ["src/index.ts!", "src/handlers.ts!", "src/cli.ts!", "bin/*.{ts,mjs,js}!"],
+      "entry": ["test/**/*.{test,spec}.ts!", "tests/**/*.{test,spec}.ts!"],
       "project": "src/**/*.ts"
     },
+    "packages/protocol-conformance": {
+      "entry": [
+        "test/**/*.test.ts"
+      ],
+      "project": "test/**/*.ts"
+    },
     "modules/*": {
-      "entry": ["src/module.ts!"],
+      "entry": [
+        "src/module.ts!",
+        "src/runtime/**/*.{ts,vue}!"
+      ],
+      "project": "src/**/*.{ts,vue}"
+    },
+    "apps/openape-nest": {
+      "project": "src/**/*.ts"
+    },
+    "apps/openape-ape-agent": {
       "project": "src/**/*.ts"
     },
     "apps/*": {
+      "entry": [
+        "*.config.ts",
+        "app/**/*.{ts,vue}",
+        "server/**/*.ts",
+        "shared/**/*.ts",
+        "scripts/**/*.{ts,mjs}",
+        "sw.ts",
+        "tests/**/*.{test,spec}.ts"
+      ],
       "project": "**/*.{ts,vue}"
     }
   }

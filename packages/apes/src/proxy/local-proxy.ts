@@ -21,7 +21,7 @@ export interface EphemeralProxy {
  * symlinks the package into `node_modules/@openape/proxy`) and after a
  * regular `npm install -g @openape/apes` global install.
  */
-export function findProxyBin(): string {
+function findProxyBin(): string {
   const pkgPath = require.resolve('@openape/proxy/package.json')
   const pkg = require('@openape/proxy/package.json') as { bin?: Record<string, string> }
   const binRel = pkg.bin?.['openape-proxy']
