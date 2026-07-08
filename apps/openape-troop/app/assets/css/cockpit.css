@@ -1,0 +1,340 @@
+/* Cockpit styles — fully scoped under .cockpit-root so nothing bleeds into troop/@nuxt-ui. */
+* { box-sizing: border-box; }
+.cockpit-root {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  overflow: hidden;
+}
+
+.cockpit-root {
+  --bg: #0b0b0f;
+  --surface: #16161d;
+  --surface-2: #1e1e28;
+  --border: #2a2a36;
+  --text: #ececf1;
+  --muted: #9a9aab;
+  --accent: #6d5efc;
+  --accent-user: #2b2570;
+  --radius: 18px;
+  color-scheme: dark;
+}
+.cockpit-root * { box-sizing: border-box; }
+/* Shrinks above the on-screen keyboard via --kb-inset (set from visualViewport). */
+.cockpit-root .chat {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
+  height: calc(100dvh - var(--kb-inset, 0px));
+  transition: height 0.15s ease-out;
+  position: relative;
+  max-width: 820px;
+  margin: 0 auto;
+}
+/* Header */
+.cockpit-root .chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.cockpit-root .avatar {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 12px;
+  flex: 0 0 auto;
+  box-shadow: 0 2px 8px #0006;
+}
+.cockpit-root .company-picker { position: relative; display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+.cockpit-root .company-select {
+  appearance: none; -webkit-appearance: none;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: transparent; border: none;
+  color: var(--text); font: inherit; font-weight: 600; font-size: 16px;
+  padding: 4px 22px 4px 2px; border-radius: 8px;
+}
+.cockpit-root .company-select:active { background: var(--surface-2); }
+.cockpit-root .company-select option { color: #000; }
+.cockpit-root .company-picker::after {
+  content: "\25BE";
+  position: absolute; right: 6px;
+  color: var(--muted); pointer-events: none; font-size: 12px;
+}
+.cockpit-root .chat-header .title { font-weight: 600; font-size: 16px; }
+.cockpit-root .chat-header .ghost {
+  margin-left: auto;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.cockpit-root .chat-header .ghost:active { background: var(--surface-2); }
+/* Message scroll area */
+.cockpit-root .messages {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 12px;
+}
+.cockpit-root .messages-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 14px 8px;
+  min-height: 100%;
+  justify-content: flex-end;
+}
+.cockpit-root .empty {
+  color: var(--muted);
+  text-align: center;
+  margin: auto 0;
+  font-size: 15px;
+}
+/* Bubbles — content-visibility keeps long histories cheap to render. */
+.cockpit-root .bubble {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+  max-width: 86%;
+  padding: 11px 15px;
+  border-radius: var(--radius);
+  line-height: 1.5;
+  font-size: 15.5px;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  animation: pop 0.16s ease-out;
+}
+@keyframes pop {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.cockpit-root .bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 68%, #000 25%));
+  border-bottom-right-radius: 6px;
+}
+.cockpit-root .bubble.assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 6px;
+}
+.cockpit-root .plain { white-space: pre-wrap; }
+/* Typing indicator */
+.cockpit-root .typing { display: inline-flex; gap: 4px; padding: 2px 0; }
+.cockpit-root .typing i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.2s infinite ease-in-out;
+}
+.cockpit-root .typing i:nth-child(2) { animation-delay: 0.2s; }
+.cockpit-root .typing i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+/* Markdown */
+.cockpit-root .md > :first-child { margin-top: 0; }
+.cockpit-root .md > :last-child { margin-bottom: 0; }
+.cockpit-root .md p { margin: 0 0 10px; }
+.cockpit-root .md h1, .cockpit-root .md h2, .cockpit-root .md h3 { margin: 14px 0 8px; line-height: 1.3; }
+.cockpit-root .md h1 { font-size: 1.3em; }
+.cockpit-root .md h2 { font-size: 1.18em; }
+.cockpit-root .md h3 { font-size: 1.05em; }
+.cockpit-root .md ul, .cockpit-root .md ol { margin: 0 0 10px; padding-left: 22px; }
+.cockpit-root .md li { margin: 3px 0; }
+.cockpit-root .md a { color: #9db4ff; }
+.cockpit-root .md blockquote {
+  margin: 10px 0;
+  padding: 4px 14px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+.cockpit-root .md code:not(.hljs) {
+  background: var(--surface-2);
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+/* Code blocks */
+.cockpit-root .code-block {
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d1117;
+}
+.cockpit-root .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.cockpit-root .code-lang { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cockpit-root .copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 7px;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.cockpit-root .copy-btn:active { background: var(--surface); color: var(--text); }
+.cockpit-root .code-block pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
+.cockpit-root .code-block code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.55; }
+/* Scroll-to-bottom pill */
+.cockpit-root .scroll-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  box-shadow: 0 6px 20px #0008;
+  z-index: 6;
+}
+.cockpit-root .pill-enter-active, .cockpit-root .pill-leave-active { transition: opacity 0.18s, transform 0.18s; }
+.cockpit-root .pill-enter-from, .cockpit-root .pill-leave-to { opacity: 0; transform: translate(-50%, 8px); }
+/* Composer */
+.cockpit-root .composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  border-top: 1px solid var(--border);
+}
+.cockpit-root .composer-input {
+  flex: 1;
+  resize: none;
+  max-height: 160px;
+  padding: 11px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* >=16px stops iOS auto-zoom on focus */
+  line-height: 1.4;
+  outline: none;
+}
+.cockpit-root .composer-input:focus { border-color: var(--accent); }
+.cockpit-root .icon-btn {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: none;
+  font-size: 19px;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s, opacity 0.1s;
+}
+.cockpit-root .icon-btn:active { transform: scale(0.92); }
+.cockpit-root .icon-btn.send { background: var(--accent); }
+.cockpit-root .icon-btn.send:disabled { opacity: 0.4; }
+.cockpit-root .icon-btn.stop { background: #e5484d; }
+/* Live "thinking" updates (service-agent progress) */
+.cockpit-root .thoughts {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 14.5px;
+}
+.cockpit-root .think-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 auto;
+  animation: think-pulse 1s infinite ease-in-out;
+}
+.cockpit-root .thought { animation: think-fade 0.25s ease-out; }
+@keyframes think-pulse { 0%, 100% { opacity: 0.35; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.2); } }
+@keyframes think-fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+/* Owner + logout in the header */
+.cockpit-root .owner {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cockpit-root .chat-header .ghost { flex: 0 0 auto; }
+.cockpit-root .chat-header .ghost.logout { margin-left: 6px; padding: 6px 10px; font-size: 15px; }
+/* when there are messages, "Neu" sits before the owner; keep owner pushed right */
+.cockpit-root .chat-header .ghost:not(.logout) + .owner { margin-left: 10px; }
+/* Login start page */
+.cockpit-root .login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 16px);
+}
+.cockpit-root .login-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+.cockpit-root .login-mark {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(150deg, #7b6bff, #4a37c9);
+  display: grid; place-items: center;
+  font-size: 26px; color: #fff;
+}
+.cockpit-root .login-card h1 { margin: 6px 0 0; font-size: 22px; }
+.cockpit-root .login-sub { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.cockpit-root .login-form { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 8px; }
+.cockpit-root .login-input {
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px; /* no iOS zoom */
+  outline: none;
+}
+.cockpit-root .login-input:focus { border-color: var(--accent); }
+.cockpit-root .login-btn {
+  width: 100%;
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+.cockpit-root .login-btn:disabled { opacity: 0.5; }
+.cockpit-root .login-foot { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; letter-spacing: 0.03em; }
+.cockpit-root .boot { min-height: 100dvh; background: var(--bg); }
