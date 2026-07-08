@@ -1,12 +1,5 @@
-import { createError  } from 'h3'
 import type { H3Event } from 'h3'
-
-function allowlist(): string[] {
-  return String(process.env.NUXT_AGENT_SERVICE_EMAIL ?? '')
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean)
-}
+import { createError } from 'h3'
 
 // The logged-in owner (troop session or CLI/agent bearer via requireCaller). In dev
 // without a session, COCKPIT_DEV_OWNER lets us exercise the flow without the
@@ -21,12 +14,10 @@ export async function cockpitOwner(event: H3Event): Promise<string> {
   throw createError({ statusCode: 401, statusMessage: 'login required' })
 }
 
-// The bound service-agent (CEO brain) — DDISA-verified caller, restricted to the allowlist.
+// The serving agent (CEO brain): any DDISA-verified identity. No allowlist — the
+// queue is owner-bound, so a caller only ever claims/resolves its OWN owner's tasks.
+// That scoping (not an allowlist) is the multi-user security boundary.
 export async function requireCockpitAgent(event: H3Event): Promise<string> {
   const caller = await requireCaller(event)
-  const email = caller.email.toLowerCase()
-  const allow = allowlist()
-  if (allow.length === 0 || !allow.includes(email))
-    throw createError({ statusCode: 403, statusMessage: 'not an allowed service agent' })
   return caller.email
 }

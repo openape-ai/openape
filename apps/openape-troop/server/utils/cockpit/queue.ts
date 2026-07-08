@@ -83,9 +83,9 @@ export function addProgress(id: string, text: string): boolean {
 }
 
 /** Apply a ResolveTask: terminal state sets the answer; `working` adds a progress note. */
-export function resolve(id: string, state: TaskState, text: string): boolean {
+export function resolve(id: string, state: TaskState, text: string, owner: string): boolean {
   const task = tasks.get(id)
-  if (!task) return false
+  if (!task || task.owner !== owner) return false
   if (state === 'completed' || state === 'failed') {
     task.state = state
     task.answer = text
