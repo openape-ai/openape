@@ -3,9 +3,9 @@ import { requireCockpitAgent } from '../../../../utils/cockpit/auth'
 
 let mseq = 0
 export default defineEventHandler(async (event) => {
-  await requireCockpitAgent(event)
-  markAgentPoll()
-  const task = claimNext()
+  const agent = await requireCockpitAgent(event)
+  markAgentPoll(agent)
+  const task = claimNext(agent)
   if (!task) return { task: null }
   mseq += 1
   const contextId = `cockpit:${task.company}`

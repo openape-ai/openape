@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       try {
-        const brainLive = agentRecentlyActive()
+        const brainLive = agentRecentlyActive(owner)
         if (brainLive) emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
         const claimDeadline = Date.now() + (brainLive ? 20000 : CLAIM_TIMEOUT_MS)
         // eslint-disable-next-line no-unmodified-loop-condition -- clientGone is flipped by the req 'close' handler

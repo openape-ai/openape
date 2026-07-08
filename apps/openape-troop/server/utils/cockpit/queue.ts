@@ -21,7 +21,7 @@ export interface QueueTask {
 
 const tasks = new Map<string, QueueTask>()
 const pending: string[] = []
-let lastAgentPollAt = 0
+const agentPolls = new Map<string, number>() // owner → last poll ts
 
 let seq = 0
 function makeId(): string {
@@ -46,10 +46,14 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
   return { id: task.id }
 }
 
-export function claimNext(): QueueTask | null {
-  while (pending.length) {
-    const task = tasks.get(pending.shift()!)
-    if (task && !task.claimed && task.state === 'submitted') {
+// Owner-bound: an agent only ever claims tasks whose owner matches its own
+// DDISA identity — the per-user security + routing boundary (multi-user ready).
+export function claimNext(owner: string): QueueTask | null {
+  for (let i = 0; i < pending.length; i++) {
+    const task = tasks.get(pending[i]!)
+    if (!task) { pending.splice(i, 1); i--; continue }
+    if (task.owner === owner && !task.claimed && task.state === 'submitted') {
+      pending.splice(i, 1)
       task.claimed = true
       task.state = 'working'
       return task
@@ -99,12 +103,13 @@ export function abort(id: string): void {
 
 // Presence: the tasks endpoints call this on every authed poll, so /api/chat
 // knows a live brain is listening and can wait for it instead of mocking early.
-export function markAgentPoll(): void {
-  lastAgentPollAt = Date.now()
+export function markAgentPoll(owner: string): void {
+  agentPolls.set(owner, Date.now())
 }
 
-export function agentRecentlyActive(withinMs = 20000): boolean {
-  return lastAgentPollAt > 0 && Date.now() - lastAgentPollAt < withinMs
+export function agentRecentlyActive(owner: string, withinMs = 20000): boolean {
+  const t = agentPolls.get(owner)
+  return t !== undefined && Date.now() - t < withinMs
 }
 
 export function cleanup(id: string): void {
