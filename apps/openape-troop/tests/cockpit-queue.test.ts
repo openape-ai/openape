@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentRecentlyActive, claimNext, enqueue, getTask, markAgentPoll, resolve } from '../server/utils/cockpit/queue'
+import { agentStatus, claimNext, enqueue, getTask, markAgentPoll, resolve } from '../server/utils/cockpit/queue'
 
 describe('cockpit queue — owner-bound', () => {
   it('an agent only ever claims its own owner\'s tasks', () => {
@@ -19,16 +19,24 @@ describe('cockpit queue — owner-bound', () => {
     expect(getTask(t.id)?.answer).toBe('ok')
   })
 
-  it('brain presence is tracked per owner', () => {
-    markAgentPoll('alice@x')
-    expect(agentRecentlyActive('alice@x', 1000)).toBe(true)
-    expect(agentRecentlyActive('bob@x', 1000)).toBe(false)
+  it('never polled => offline', () => {
+    expect(agentStatus('nobody@x').mode).toBe('offline')
   })
-  it('a poll outside the window reads as disconnected (drives mock fallback)', () => {
-    markAgentPoll('carol@x')
-    // withinMs 0 => even a just-now poll is already outside the window
-    expect(agentRecentlyActive('carol@x', 0)).toBe(false)
-    // never polled => never connected
-    expect(agentRecentlyActive('nobody@x')).toBe(false)
+  it('a short promised next-poll => actively bursting', () => {
+    markAgentPoll('burst@x', 5000)
+    expect(agentStatus('burst@x').mode).toBe('active')
+  })
+  it('a long promised next-poll => idle with a countdown', () => {
+    markAgentPoll('rip@x', 60000)
+    const s = agentStatus('rip@x')
+    expect(s.mode).toBe('idle')
+    expect(s.nextPollInSec).toBeGreaterThan(50)
+    expect(s.nextPollInSec).toBeLessThanOrEqual(60)
+  })
+  it('an open claimed task => working (overrides idle)', () => {
+    enqueue('cx', 'sp', 'q', 'work@x')
+    markAgentPoll('work@x', 60000) // would be idle…
+    claimNext('work@x') // …but now a task is in flight
+    expect(agentStatus('work@x').mode).toBe('working')
   })
 })

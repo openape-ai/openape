@@ -2,16 +2,20 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
 import { objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
-import { abort, agentRecentlyActive, cleanup, enqueue, getTask, isClaimed } from '../../utils/cockpit/queue'
-import { streamMock, tokenize } from '../../utils/cockpit/mock-brain'
+import { abort, agentStatus, cleanup, enqueue, getTask, isClaimed } from '../../utils/cockpit/queue'
 
-const CLAIM_GRACE_MS = 3500      // wait this long for a claim when NO brain is connected, then mock
-const CLAIM_LIVE_MAX_MS = 150000 // while a brain IS connected, wait up to this long for it to claim (never mock over a live CEO); covers the inter-burst gap
+const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
+const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
 const MAX_STREAM_MS = 120000
+const WAIT_TEXT = '💤 CEO im Ruhemodus'
+const OFFLINE_TEXT = 'Dein CEO ist gerade offline — sobald der reaktive Loop läuft, beantwortet er deine Frage.'
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-interface Org { name: string; visionMd: string; budgetMonthlyEur: number }
-interface Objective { title: string; status: string }
+// Split into word-sized tokens, keeping trailing whitespace/newlines intact.
+const tokenize = (text: string): string[] => text.match(/\S+\s*|\s+/g) ?? [text]
+
+interface Org { name: string, visionMd: string, budgetMonthlyEur: number }
+interface Objective { title: string, status: string }
 
 function buildSystemPrompt(org: Org, objs: Objective[], owner: string): string {
   let p = `Du bist die CEO der Firma „${org.name}". Antworte als diese CEO: knapp, konkret, auf Deutsch. Erfinde keine ausgeführten Aktionen. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an.`
@@ -23,7 +27,7 @@ function buildSystemPrompt(org: Org, objs: Objective[], owner: string): string {
 
 export default defineEventHandler(async (event) => {
   const owner = await cockpitOwner(event)
-  const body = await readBody<{ company?: string; messages?: { role: string; content: string }[] }>(event)
+  const body = await readBody<{ company?: string, messages?: { role: string, content: string }[] }>(event)
   const company = body?.company ?? ''
   const db = useDb()
   const [org] = await db.select().from(organizations).where(and(eq(organizations.id, company), eq(organizations.ownerEmail, owner)))
@@ -36,7 +40,7 @@ export default defineEventHandler(async (event) => {
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache, no-transform',
-    connection: 'keep-alive',
+    'connection': 'keep-alive',
   })
 
   let clientGone = false
@@ -50,19 +54,29 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       try {
-        if (agentRecentlyActive(owner)) emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
-        // Wait for the brain to claim the task. If one is connected we keep
-        // waiting as long as it stays connected — never mock over a live CEO.
-        // With no brain (or once it goes stale) we give up after a short grace
-        // window and stream the mock instead.
-        const waitStart = Date.now()
-        // eslint-disable-next-line no-unmodified-loop-condition -- clientGone is flipped by the req 'close' handler
-        while (!isClaimed(task.id) && !clientGone) {
-          const live = agentRecentlyActive(owner)
-          const waited = Date.now() - waitStart
-          if (!live && waited > CLAIM_GRACE_MS) break // nobody home -> mock
-          if (waited > CLAIM_LIVE_MAX_MS) break // safety cap
-          await delay(60)
+        // Wait for the owner's CEO brain to claim the task. We never fake an
+        // answer: if a brain is present we wait for it (showing "übernimmt" when
+        // it's awake, a live "Ruhemodus" countdown when it's sleeping); only if
+        // no brain is reachable do we return an honest offline notice.
+        const first = agentStatus(owner)
+        if (first.mode !== 'offline') {
+          if (first.mode === 'idle' && first.nextPollInSec != null)
+            emit({ k: 'wait', text: WAIT_TEXT, sec: first.nextPollInSec })
+          else
+            emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
+
+          const waitStart = Date.now()
+          let nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
+          // eslint-disable-next-line no-unmodified-loop-condition -- clientGone is flipped by the req 'close' handler
+          while (!isClaimed(task.id) && !clientGone) {
+            const st = agentStatus(owner)
+            if (st.mode === 'offline' || Date.now() - waitStart > HARD_WAIT_MS) break
+            if (st.mode === 'idle' && st.nextPollInSec != null && Date.now() >= nextEmit) {
+              emit({ k: 'wait', text: WAIT_TEXT, sec: st.nextPollInSec })
+              nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
+            }
+            await delay(200)
+          }
         }
 
         if (isClaimed(task.id)) {
@@ -85,7 +99,7 @@ export default defineEventHandler(async (event) => {
           }
         }
         else if (!clientGone) {
-          await streamMock(body?.messages ?? [], emit, () => clientGone)
+          emit({ k: 'offline', text: OFFLINE_TEXT })
         }
         if (!clientGone) {
           try { controller.enqueue(encoder.encode('data: [DONE]\n\n')) }
