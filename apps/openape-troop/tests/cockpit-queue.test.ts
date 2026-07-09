@@ -24,4 +24,11 @@ describe('cockpit queue — owner-bound', () => {
     expect(agentRecentlyActive('alice@x', 1000)).toBe(true)
     expect(agentRecentlyActive('bob@x', 1000)).toBe(false)
   })
+  it('a poll outside the window reads as disconnected (drives mock fallback)', () => {
+    markAgentPoll('carol@x')
+    // withinMs 0 => even a just-now poll is already outside the window
+    expect(agentRecentlyActive('carol@x', 0)).toBe(false)
+    // never polled => never connected
+    expect(agentRecentlyActive('nobody@x')).toBe(false)
+  })
 })

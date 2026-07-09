@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
 const showServices = ref(false)
+const { connected, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
 useKeyboardInset()
+onMounted(startPresence)
 
 function onCompanyChange(e: Event): void {
   void selectCompany((e.target as HTMLSelectElement).value)
 }
 function onSend(text: string): void {
   void send(text)
+  void refreshPresence()
   void nextTick(() => scrollToBottom(false))
 }
 watch(messages, () => { void nextTick(autoStick) }, { deep: true })
@@ -23,6 +26,11 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
     <div class="chat" :style="{ '--accent': currentCompany?.accent ?? '#6d5efc' }">
       <header class="chat-header">
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
+        <span
+          class="conn-dot"
+          :class="connected ? 'on' : 'off'"
+          :title="connected ? 'CEO verbunden — Antworten live' : 'CEO offline — Demo-Antworten'"
+        >{{ connected ? 'CEO live' : 'Demo' }}</span>
         <div class="company-picker">
           <select
             class="company-select"
