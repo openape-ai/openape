@@ -7,7 +7,7 @@ import { computed } from 'vue'
 // specialists and other roles are surfaced so nobody disappears.
 
 interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null }
-export interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean }
+export interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
 
 const props = withDefaults(defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string>, localAgents?: LocalAgent[] }>(), { localAgents: () => [] })
 defineEmits<{ spawn: [member: Member], addLocal: [], deleteLocal: [a: LocalAgent], toggleLocal: [a: LocalAgent] }>()
@@ -23,6 +23,27 @@ const unassignedSpecialists = computed(() =>
   active.value.filter(m => m.role === 'specialist' && (!m.reportsToEmail || !teamleads.value.some(tl => tl.agentEmail === m.reportsToEmail))),
 )
 const others = computed(() => active.value.filter(m => !['ceo', 'sanierer', 'teamlead', 'specialist'].includes(m.role)))
+
+const localById = computed(() => Object.fromEntries(props.localAgents.map(a => [a.id, a])))
+const memberByEmail = computed(() => Object.fromEntries(props.members.map(m => [m.agentEmail, m])))
+function supervisorLabel(a: LocalAgent): string | null {
+  if (!a.reportsTo) return null
+  const m = memberByEmail.value[a.reportsTo]
+  if (m) return m.personaTitle ?? m.agentName
+  return localById.value[a.reportsTo]?.label ?? null
+}
+// Order local roles parent-first with a depth so local->local reporting indents.
+const localTree = computed(() => {
+  const depthOf = (a: LocalAgent, seen = new Set<string>()): number => {
+    if (!a.reportsTo || seen.has(a.id)) return 0
+    const parent = localById.value[a.reportsTo]
+    if (!parent) return 0
+    seen.add(a.id)
+    return 1 + depthOf(parent, seen)
+  }
+  return Array.from(props.localAgents, a => ({ a, depth: depthOf(a) }))
+    .sort((x, y) => x.depth - y.depth || x.a.label.localeCompare(y.a.label))
+})
 
 const roleLabel = { ceo: 'CEO', sanierer: 'Controlling', teamlead: 'Team-Lead', specialist: 'Specialist', other: 'Mitglied' } as const
 const roleLabelOf = (role: string): string => (roleLabel as Record<string, string>)[role] ?? role
@@ -162,18 +183,24 @@ function roleColor(role: string): string {
       <p class="text-center text-[11px] text-zinc-600">
         Läuft nicht auf einem Gerät — der CEO delegiert Aufgaben mit passendem Werkzeug an sie (read-only, unter deiner Identität).
       </p>
-      <div v-if="props.localAgents.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div v-if="props.localAgents.length" class="space-y-2 max-w-2xl mx-auto">
         <div
-          v-for="a in props.localAgents"
+          v-for="{ a, depth } in localTree"
           :key="a.id"
           class="rounded-lg border px-3 py-2 text-left"
           :class="a.enabled ? 'border-violet-500/40 bg-violet-500/10' : 'border-zinc-700 bg-zinc-900/40 opacity-70'"
+          :style="{ marginLeft: `${depth * 24}px` }"
         >
           <div class="flex items-center justify-between gap-2">
-            <span class="text-sm font-medium truncate">{{ a.label }}</span>
+            <span class="text-sm font-medium truncate">
+              <span v-if="depth" class="text-zinc-600">↳ </span>{{ a.label }}
+            </span>
             <UBadge color="neutral" variant="subtle" size="xs">
               lokal · {{ a.role }}
             </UBadge>
+          </div>
+          <div v-if="supervisorLabel(a)" class="text-[11px] text-zinc-500 mt-0.5">
+            berichtet an {{ supervisorLabel(a) }}
           </div>
           <p v-if="a.duties" class="text-xs text-zinc-400 mt-1 line-clamp-2">
             {{ a.duties }}
