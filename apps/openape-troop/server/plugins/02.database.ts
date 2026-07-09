@@ -22,6 +22,19 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_services_owner ON cockpit_services(owner_email)`)
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_agents (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'specialist',
+      label TEXT NOT NULL DEFAULT '',
+      duties TEXT NOT NULL DEFAULT '',
+      tools TEXT NOT NULL DEFAULT '[]',
+      reports_to TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_agents_org ON cockpit_agents(owner_email, org_id)`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS agents (
       email TEXT PRIMARY KEY,
