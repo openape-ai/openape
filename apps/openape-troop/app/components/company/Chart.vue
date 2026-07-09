@@ -7,9 +7,10 @@ import { computed } from 'vue'
 // specialists and other roles are surfaced so nobody disappears.
 
 interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null }
+export interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean }
 
-const props = defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string> }>()
-defineEmits<{ spawn: [member: Member] }>()
+const props = withDefaults(defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string>, localAgents?: LocalAgent[] }>(), { localAgents: () => [] })
+defineEmits<{ spawn: [member: Member], addLocal: [], deleteLocal: [a: LocalAgent], toggleLocal: [a: LocalAgent] }>()
 
 const active = computed(() => props.members.filter(m => m.status !== 'retired'))
 const ceo = computed(() => active.value.find(m => m.role === 'ceo') ?? null)
@@ -149,5 +150,49 @@ function roleColor(role: string): string {
         </div>
       </div>
     </template>
+
+    <!-- Local (nest-less) roles: run by the reactive loop under the Owner's identity -->
+    <div class="space-y-2 border-t border-zinc-800/70 pt-5">
+      <div class="flex items-center justify-center gap-2">
+        <span class="text-xs text-zinc-500">Lokale Rollen · kein Nest</span>
+        <UButton size="xs" variant="soft" color="primary" icon="i-lucide-plus" @click="$emit('addLocal')">
+          Lokale Rolle
+        </UButton>
+      </div>
+      <p class="text-center text-[11px] text-zinc-600">
+        Läuft nicht auf einem Gerät — der CEO delegiert Aufgaben mit passendem Werkzeug an sie (read-only, unter deiner Identität).
+      </p>
+      <div v-if="props.localAgents.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div
+          v-for="a in props.localAgents"
+          :key="a.id"
+          class="rounded-lg border px-3 py-2 text-left"
+          :class="a.enabled ? 'border-violet-500/40 bg-violet-500/10' : 'border-zinc-700 bg-zinc-900/40 opacity-70'"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-medium truncate">{{ a.label }}</span>
+            <UBadge color="neutral" variant="subtle" size="xs">
+              lokal · {{ a.role }}
+            </UBadge>
+          </div>
+          <p v-if="a.duties" class="text-xs text-zinc-400 mt-1 line-clamp-2">
+            {{ a.duties }}
+          </p>
+          <div class="flex flex-wrap gap-1 mt-2">
+            <UBadge v-for="t in a.tools" :key="t" color="primary" variant="subtle" size="xs">
+              {{ t }}
+            </UBadge>
+            <span v-if="!a.tools.length" class="text-[10px] text-zinc-500">keine Werkzeuge</span>
+          </div>
+          <div class="flex justify-end gap-1 mt-2">
+            <UButton size="xs" variant="ghost" color="neutral" :icon="a.enabled ? 'i-lucide-pause' : 'i-lucide-play'" @click="$emit('toggleLocal', a)" />
+            <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="$emit('deleteLocal', a)" />
+          </div>
+        </div>
+      </div>
+      <p v-else class="text-center text-xs text-zinc-600">
+        Noch keine lokalen Rollen.
+      </p>
+    </div>
   </div>
 </template>
