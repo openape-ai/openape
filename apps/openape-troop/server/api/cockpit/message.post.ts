@@ -5,7 +5,8 @@ import { cockpitOwner } from '../../utils/cockpit/auth'
 import { abort, agentRecentlyActive, cleanup, enqueue, getTask, isClaimed } from '../../utils/cockpit/queue'
 import { streamMock, tokenize } from '../../utils/cockpit/mock-brain'
 
-const CLAIM_TIMEOUT_MS = 3500
+const CLAIM_GRACE_MS = 3500      // wait this long for a claim when NO brain is connected, then mock
+const CLAIM_LIVE_MAX_MS = 90000  // while a brain IS connected, wait up to this long for it to claim (never mock over a live CEO)
 const MAX_STREAM_MS = 120000
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -49,11 +50,20 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       try {
-        const brainLive = agentRecentlyActive(owner)
-        if (brainLive) emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
-        const claimDeadline = Date.now() + (brainLive ? 20000 : CLAIM_TIMEOUT_MS)
+        if (agentRecentlyActive(owner)) emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
+        // Wait for the brain to claim the task. If one is connected we keep
+        // waiting as long as it stays connected — never mock over a live CEO.
+        // With no brain (or once it goes stale) we give up after a short grace
+        // window and stream the mock instead.
+        const waitStart = Date.now()
         // eslint-disable-next-line no-unmodified-loop-condition -- clientGone is flipped by the req 'close' handler
-        while (!isClaimed(task.id) && Date.now() < claimDeadline && !clientGone) await delay(60)
+        while (!isClaimed(task.id) && !clientGone) {
+          const live = agentRecentlyActive(owner)
+          const waited = Date.now() - waitStart
+          if (!live && waited > CLAIM_GRACE_MS) break // nobody home -> mock
+          if (waited > CLAIM_LIVE_MAX_MS) break // safety cap
+          await delay(60)
+        }
 
         if (isClaimed(task.id)) {
           emit({ k: 'think', text: '🧠 CEO denkt …' })
