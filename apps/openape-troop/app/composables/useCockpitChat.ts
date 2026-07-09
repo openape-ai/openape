@@ -69,9 +69,13 @@ export function useCockpitChat() {
         if (done) break
         for (const payload of parse(decoder.decode(value, { stream: true }))) {
           if (payload === '[DONE]') continue
-          const ev = JSON.parse(payload) as { k?: string; t?: string; text?: string }
-          if (ev.k === 'think' && ev.text) assistant.thoughts!.push(ev.text)
-          else if (ev.k === 'tok' && ev.t) assistant.content += ev.t
+          const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number }
+          if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined }
+          else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
+          else if (ev.k === 'wait' && ev.text) {
+            assistant.waiting = ev.sec != null ? `${ev.text} · Antwort in ~${ev.sec}s` : ev.text
+          }
+          else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
         }
       }
     }
