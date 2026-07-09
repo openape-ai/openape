@@ -1,68 +1,38 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-// Company hierarchy chart (B0 merge — preserves the org-chart hierarchy from the
-// former openape-org app). Owner is the root; CEO + Sanierer report to the Owner
-// in parallel; Teamleads sit under the CEO with their Specialists; unassigned
-// specialists and other roles are surfaced so nobody disappears.
+// The company's org chart = its employees (the whole hierarchy), Owner at the
+// root. Provider-agnostic: how an employee runs (Claude session, later a nest)
+// is the provider's concern, not shown here.
+export interface Employee { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
 
-interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null }
-export interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
+const props = defineProps<{ employees: Employee[], ownerEmail: string }>()
+defineEmits<{ add: [], edit: [e: Employee], delete: [e: Employee], toggle: [e: Employee] }>()
 
-const props = withDefaults(defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string>, localAgents?: LocalAgent[] }>(), { localAgents: () => [] })
-defineEmits<{ spawn: [member: Member], addLocal: [], deleteLocal: [a: LocalAgent], toggleLocal: [a: LocalAgent] }>()
-
-const active = computed(() => props.members.filter(m => m.status !== 'retired'))
-const ceo = computed(() => active.value.find(m => m.role === 'ceo') ?? null)
-const sanierer = computed(() => active.value.find(m => m.role === 'sanierer') ?? null)
-const teamleads = computed(() => active.value.filter(m => m.role === 'teamlead'))
-function specialistsOf(email: string) {
-  return active.value.filter(m => m.role === 'specialist' && m.reportsToEmail === email)
+const roleLabel: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+const byId = computed(() => Object.fromEntries(props.employees.map(e => [e.id, e])))
+function supervisorLabel(e: Employee): string | null {
+  return e.reportsTo ? byId.value[e.reportsTo]?.label ?? null : null
 }
-const unassignedSpecialists = computed(() =>
-  active.value.filter(m => m.role === 'specialist' && (!m.reportsToEmail || !teamleads.value.some(tl => tl.agentEmail === m.reportsToEmail))),
-)
-const others = computed(() => active.value.filter(m => !['ceo', 'sanierer', 'teamlead', 'specialist'].includes(m.role)))
-
-const localById = computed(() => Object.fromEntries(props.localAgents.map(a => [a.id, a])))
-const memberByEmail = computed(() => Object.fromEntries(props.members.map(m => [m.agentEmail, m])))
-function supervisorLabel(a: LocalAgent): string | null {
-  if (!a.reportsTo) return null
-  const m = memberByEmail.value[a.reportsTo]
-  if (m) return m.personaTitle ?? m.agentName
-  return localById.value[a.reportsTo]?.label ?? null
-}
-// Order local roles parent-first with a depth so local->local reporting indents.
-const localTree = computed(() => {
-  const depthOf = (a: LocalAgent, seen = new Set<string>()): number => {
-    if (!a.reportsTo || seen.has(a.id)) return 0
-    const parent = localById.value[a.reportsTo]
-    if (!parent) return 0
-    seen.add(a.id)
+// Parent-first ordering with a depth (roots = reportsTo null / unknown), so the
+// tree indents CEO → teamleads → specialists.
+const tree = computed(() => {
+  const depthOf = (e: Employee, seen = new Set<string>()): number => {
+    const parent = e.reportsTo ? byId.value[e.reportsTo] : undefined
+    if (!parent || seen.has(e.id)) return 0
+    seen.add(e.id)
     return 1 + depthOf(parent, seen)
   }
-  return Array.from(props.localAgents, a => ({ a, depth: depthOf(a) }))
-    .sort((x, y) => x.depth - y.depth || x.a.label.localeCompare(y.a.label))
+  return Array.from(props.employees, e => ({ e, depth: depthOf(e) }))
+    .sort((a, b) => a.depth - b.depth || (a.e.role === 'ceo' ? -1 : 0) - (b.e.role === 'ceo' ? -1 : 0) || a.e.label.localeCompare(b.e.label))
 })
-
-const roleLabel = { ceo: 'CEO', sanierer: 'Controlling', teamlead: 'Team-Lead', specialist: 'Specialist', other: 'Mitglied' } as const
-const roleLabelOf = (role: string): string => (roleLabel as Record<string, string>)[role] ?? role
-function roleColor(role: string): string {
-  switch (role) {
-    case 'ceo': return 'bg-amber-500/15 text-amber-200 border-amber-500/40'
-    case 'sanierer': return 'bg-red-500/15 text-red-200 border-red-500/40'
-    case 'teamlead': return 'bg-blue-500/15 text-blue-200 border-blue-500/40'
-    case 'specialist': return 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
-    default: return 'bg-zinc-500/15 text-zinc-200 border-zinc-500/40'
-  }
-}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Owner — root of the chart -->
+  <div class="space-y-4">
+    <!-- Owner — root -->
     <div class="flex justify-center">
-      <div class="rounded-lg border border-amber-600/40 bg-amber-500/5 px-4 py-3 text-center min-w-[180px]">
+      <div class="rounded-lg border border-amber-600/40 bg-amber-500/5 px-4 py-3 text-center min-w-[200px]">
         <div class="text-xs uppercase tracking-wide text-amber-400 font-semibold">
           Owner
         </div>
@@ -72,154 +42,54 @@ function roleColor(role: string): string {
       </div>
     </div>
 
-    <div v-if="!active.length" class="rounded-lg border border-dashed border-zinc-700 p-8 text-center text-zinc-400">
-      <div class="text-4xl mb-2">
-        👔
-      </div>
-      <p class="text-sm">
-        Noch keine Mitglieder. Über „Mitglied“ einen CEO anlegen.
-      </p>
+    <div class="flex items-center justify-center gap-2">
+      <span class="text-xs text-zinc-500">Mitarbeiter</span>
+      <UButton size="xs" variant="soft" color="primary" icon="i-lucide-user-plus" @click="$emit('add')">
+        Mitarbeiter
+      </UButton>
     </div>
 
-    <template v-else>
-      <!-- CEO + Sanierer — parallel under the Owner -->
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <CompanyChartNode
-          v-if="ceo"
-          :member="ceo"
-          :role-label="roleLabel.ceo"
-          :color-class="roleColor('ceo')"
-          size="lg"
-          primary
-          :spawning-text="spawning[ceo.agentEmail]"
-          @spawn="$emit('spawn', $event)"
-        />
-        <CompanyChartNode
-          v-if="sanierer"
-          :member="sanierer"
-          :role-label="roleLabel.sanierer"
-          :color-class="roleColor('sanierer')"
-          size="lg"
-          :spawning-text="spawning[sanierer.agentEmail]"
-          @spawn="$emit('spawn', $event)"
-        />
-      </div>
-
-      <!-- Teamleads under CEO, with their specialists -->
-      <div v-if="teamleads.length" class="space-y-4">
-        <div v-for="tl in teamleads" :key="tl.agentEmail" class="space-y-3">
-          <div class="flex justify-center">
-            <CompanyChartNode
-              :member="tl"
-              :role-label="roleLabel.teamlead"
-              :color-class="roleColor('teamlead')"
-              size="lg"
-              :spawning-text="spawning[tl.agentEmail]"
-              @spawn="$emit('spawn', $event)"
-            />
-          </div>
-          <div v-if="specialistsOf(tl.agentEmail).length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <CompanyChartNode
-              v-for="sp in specialistsOf(tl.agentEmail)"
-              :key="sp.agentEmail"
-              :member="sp"
-              :role-label="roleLabel.specialist"
-              :color-class="roleColor('specialist')"
-              size="sm"
-              :spawning-text="spawning[sp.agentEmail]"
-              @spawn="$emit('spawn', $event)"
-            />
-          </div>
+    <div v-if="employees.length" class="space-y-2 max-w-2xl mx-auto">
+      <div
+        v-for="{ e, depth } in tree"
+        :key="e.id"
+        class="rounded-lg border px-3 py-2 text-left"
+        :class="[
+          e.role === 'ceo' ? 'border-amber-500/50 bg-amber-500/10' : e.enabled ? 'border-violet-500/40 bg-violet-500/10' : 'border-zinc-700 bg-zinc-900/40 opacity-70',
+        ]"
+        :style="{ marginLeft: `${depth * 24}px` }"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-sm font-medium truncate flex items-center gap-1.5">
+            <UIcon v-if="e.role === 'ceo'" name="i-lucide-crown" class="size-4 text-amber-400" />
+            <span v-else-if="depth" class="text-zinc-600">↳</span>
+            {{ e.label }}
+          </span>
+          <UBadge :color="e.role === 'ceo' ? 'warning' : 'neutral'" variant="subtle" size="xs">
+            {{ roleLabel[e.role] ?? e.role }}
+          </UBadge>
+        </div>
+        <div v-if="supervisorLabel(e)" class="text-[11px] text-zinc-500 mt-0.5">
+          berichtet an {{ supervisorLabel(e) }}
+        </div>
+        <p v-if="e.duties" class="text-xs text-zinc-400 mt-1 line-clamp-2">
+          {{ e.duties }}
+        </p>
+        <div class="flex flex-wrap gap-1 mt-2">
+          <UBadge v-for="t in e.tools" :key="t" color="primary" variant="subtle" size="xs">
+            {{ t }}
+          </UBadge>
+          <span v-if="!e.tools.length" class="text-[10px] text-zinc-500">keine Werkzeuge</span>
+        </div>
+        <div class="flex justify-end gap-1 mt-2">
+          <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-pencil" @click="$emit('edit', e)" />
+          <UButton size="xs" variant="ghost" color="neutral" :icon="e.enabled ? 'i-lucide-pause' : 'i-lucide-play'" @click="$emit('toggle', e)" />
+          <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="$emit('delete', e)" />
         </div>
       </div>
-
-      <!-- Specialists without a teamlead -->
-      <div v-if="unassignedSpecialists.length" class="space-y-2">
-        <div class="text-xs text-zinc-500 text-center">
-          Ohne Team-Lead
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <CompanyChartNode
-            v-for="sp in unassignedSpecialists"
-            :key="sp.agentEmail"
-            :member="sp"
-            :role-label="roleLabel.specialist"
-            :color-class="roleColor('specialist')"
-            size="sm"
-            :spawning-text="spawning[sp.agentEmail]"
-            @spawn="$emit('spawn', $event)"
-          />
-        </div>
-      </div>
-
-      <!-- Other roles -->
-      <div v-if="others.length" class="space-y-2">
-        <div class="text-xs text-zinc-500 text-center">
-          Weitere
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <CompanyChartNode
-            v-for="m in others"
-            :key="m.agentEmail"
-            :member="m"
-            :role-label="roleLabelOf(m.role)"
-            :color-class="roleColor(m.role)"
-            size="sm"
-            :spawning-text="spawning[m.agentEmail]"
-            @spawn="$emit('spawn', $event)"
-          />
-        </div>
-      </div>
-    </template>
-
-    <!-- Local (nest-less) roles: run by the reactive loop under the Owner's identity -->
-    <div class="space-y-2 border-t border-zinc-800/70 pt-5">
-      <div class="flex items-center justify-center gap-2">
-        <span class="text-xs text-zinc-500">Lokale Rollen · kein Nest</span>
-        <UButton size="xs" variant="soft" color="primary" icon="i-lucide-plus" @click="$emit('addLocal')">
-          Lokale Rolle
-        </UButton>
-      </div>
-      <p class="text-center text-[11px] text-zinc-600">
-        Läuft nicht auf einem Gerät — der CEO delegiert Aufgaben mit passendem Werkzeug an sie (read-only, unter deiner Identität).
-      </p>
-      <div v-if="props.localAgents.length" class="space-y-2 max-w-2xl mx-auto">
-        <div
-          v-for="{ a, depth } in localTree"
-          :key="a.id"
-          class="rounded-lg border px-3 py-2 text-left"
-          :class="a.enabled ? 'border-violet-500/40 bg-violet-500/10' : 'border-zinc-700 bg-zinc-900/40 opacity-70'"
-          :style="{ marginLeft: `${depth * 24}px` }"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-sm font-medium truncate">
-              <span v-if="depth" class="text-zinc-600">↳ </span>{{ a.label }}
-            </span>
-            <UBadge color="neutral" variant="subtle" size="xs">
-              lokal · {{ a.role }}
-            </UBadge>
-          </div>
-          <div v-if="supervisorLabel(a)" class="text-[11px] text-zinc-500 mt-0.5">
-            berichtet an {{ supervisorLabel(a) }}
-          </div>
-          <p v-if="a.duties" class="text-xs text-zinc-400 mt-1 line-clamp-2">
-            {{ a.duties }}
-          </p>
-          <div class="flex flex-wrap gap-1 mt-2">
-            <UBadge v-for="t in a.tools" :key="t" color="primary" variant="subtle" size="xs">
-              {{ t }}
-            </UBadge>
-            <span v-if="!a.tools.length" class="text-[10px] text-zinc-500">keine Werkzeuge</span>
-          </div>
-          <div class="flex justify-end gap-1 mt-2">
-            <UButton size="xs" variant="ghost" color="neutral" :icon="a.enabled ? 'i-lucide-pause' : 'i-lucide-play'" @click="$emit('toggleLocal', a)" />
-            <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash-2" @click="$emit('deleteLocal', a)" />
-          </div>
-        </div>
-      </div>
-      <p v-else class="text-center text-xs text-zinc-600">
-        Noch keine lokalen Rollen.
-      </p>
     </div>
+    <p v-else class="text-center text-sm text-zinc-500">
+      Noch keine Mitarbeiter — leg den CEO und sein Team an.
+    </p>
   </div>
 </template>
