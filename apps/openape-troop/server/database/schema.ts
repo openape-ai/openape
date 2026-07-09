@@ -418,3 +418,15 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   lastRunAt: integer('last_run_at'),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
+
+// cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
+// The chat no longer depends on the live SSE connection: user messages and CEO
+// answers are stored here, so leaving and returning shows everything in between.
+export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
