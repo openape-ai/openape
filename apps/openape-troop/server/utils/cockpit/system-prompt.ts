@@ -9,10 +9,10 @@ export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner
   if (team.length) {
     p += `\n\nDein Team — du kannst an diese Rollen delegieren, wenn eine Aufgabe ihr Werkzeug braucht:`
     for (const m of team) {
-      const tools = m.tools.length ? ` Werkzeuge: ${m.tools.join(', ')}.` : ' (keine Werkzeuge)'
+      const tools = m.tools.length ? ` Darf Kommandos ausführen (Muster): ${m.tools.join(', ')}.` : ' (keine Werkzeuge)'
       p += `\n- ${m.label} (${m.role}): ${m.duties || 'keine Beschreibung'}.${tools}`
     }
-    p += `\n\nBraucht eine Aufgabe ein Werkzeug, das ein Team-Mitglied hat, DELEGIERE an dieses Mitglied: spawne es als Subagent, lass es sein Werkzeug read-only ausführen und antworte geerdet in dessen Ergebnis. Erfinde NIE Werkzeug-Ergebnisse. Passt kein Mitglied/Werkzeug, sag das ehrlich. Nach außen wirkende Aktionen (senden/löschen/verschieben) macht der Owner selbst — du schlägst nur vor (human-in-the-loop).`
+    p += `\n\nBraucht eine Aufgabe ein Werkzeug, das ein Team-Mitglied hat, DELEGIERE an dieses Mitglied: spawne es als Subagent, lass es NUR Kommandos ausführen, die einem seiner Werkzeug-Muster entsprechen (z. B. Muster 'o365-cli *' erlaubt 'o365-cli mail list …'), read-only, und antworte geerdet in dessen Ergebnis. Erfinde NIE Werkzeug-Ergebnisse. Passt kein Mitglied/Werkzeug, sag das ehrlich. Nach außen wirkende Aktionen (senden/löschen/verschieben) macht der Owner selbst — du schlägst nur vor (human-in-the-loop).`
   }
   else {
     p += ` Erfinde keine ausgeführten Aktionen — du hast aktuell kein handlungsfähiges Team.`
