@@ -26,7 +26,7 @@ const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?
 async function loadMembers() { members.value = await ($fetch as any)(`/api/orgs/${orgId.value}/members`) }
 
 // Nest-less agents: the CEO's local delegation team (cockpit_agents).
-interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean }
+interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
 const localAgents = ref<LocalAgent[]>([])
 async function loadLocal() { localAgents.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
 async function load() {
@@ -66,9 +66,15 @@ const ROLE_TEMPLATES: RoleTemplate[] = [
   { key: 'docs', label: 'Dokument-Leser', name: 'Dokument-Leser', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
 ]
 const templateItems = ROLE_TEMPLATES.map(t => ({ label: t.label, value: t.key }))
+const roleLabelShort: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitglied' }
+const supervisorItems = computed(() => [
+  { label: '— Owner (kein Vorgesetzter)', value: '' },
+  ...members.value.filter(m => m.status !== 'retired').map(m => ({ label: `${m.agentName} · ${roleLabelShort[m.role] ?? m.role}`, value: m.agentEmail })),
+  ...localAgents.value.map(a => ({ label: `${a.label} · lokal`, value: a.id })),
+])
 const showAdd = ref(false)
 const templateKey = ref('')
-const roleForm = reactive({ name: '', tools: '', duties: '' })
+const roleForm = reactive({ name: '', tools: '', duties: '', reportsTo: '' })
 const adding = ref(false)
 const addError = ref('')
 function applyTemplate(key: string) {
@@ -79,6 +85,7 @@ function openAdd() {
   addError.value = ''
   templateKey.value = ''
   roleForm.name = ''; roleForm.tools = ''; roleForm.duties = ''
+  roleForm.reportsTo = members.value.find(m => m.role === 'ceo')?.agentEmail ?? ''
   showAdd.value = true
 }
 watch(templateKey, applyTemplate)
@@ -92,6 +99,7 @@ async function submitAdd() {
       role: 'specialist',
       duties: roleForm.duties.trim(),
       tools: roleForm.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
+      reportsTo: roleForm.reportsTo || null,
     } })
     showAdd.value = false
     await loadLocal()
@@ -229,6 +237,9 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           </UFormField>
           <UFormField label="Name">
             <UInput v-model="roleForm.name" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Vorgesetzter" description="Wem berichtet diese Rolle? Bildet die Hierarchie.">
+            <USelect v-model="roleForm.reportsTo" :items="supervisorItems" placeholder="Vorgesetzten wählen" class="w-full" />
           </UFormField>
           <UFormField label="Werkzeuge" description="Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *">
             <UTextarea v-model="roleForm.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
