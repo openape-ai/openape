@@ -41,8 +41,16 @@ export default defineEventHandler(async (event) => {
 
   return new ReadableStream({
     async start(controller) {
+      const KEEPALIVE_MS = 12000
+      let lastByteAt = Date.now()
       const emit = (obj: unknown) => {
-        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)) }
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)); lastByteAt = Date.now() }
+        catch { /* stream closed */ }
+      }
+      // SSE comment — keeps the connection alive through the proxy during quiet
+      // stretches (a long, progress-less CEO answer). The client parser ignores it.
+      const keepAlive = () => {
+        try { controller.enqueue(encoder.encode(':ka\n\n')); lastByteAt = Date.now() }
         catch { /* stream closed */ }
       }
       try {
@@ -67,6 +75,7 @@ export default defineEventHandler(async (event) => {
               emit({ k: 'wait', text: WAIT_TEXT, sec: st.nextPollInSec })
               nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
             }
+            if (Date.now() - lastByteAt >= KEEPALIVE_MS) keepAlive()
             await delay(200)
           }
         }
@@ -99,6 +108,7 @@ export default defineEventHandler(async (event) => {
               }
             }
             if (Date.now() > streamDeadline) break
+            if (Date.now() - lastByteAt >= KEEPALIVE_MS) keepAlive()
             await delay(40)
           }
           // Never leave the bubble empty: if we timed out before a terminal state,
