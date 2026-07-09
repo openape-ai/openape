@@ -403,3 +403,18 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
+
+// cockpit_schedules — server-side schedule so the provider loop discovers WHEN
+// to act (e.g. a daily morning report). The loop polls GET /api/cockpit/due each
+// tick; troop is the source of truth for what's due, not a session cron.
+export const cockpitSchedules = sqliteTable('cockpit_schedules', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  kind: text('kind').notNull(),
+  atHour: integer('at_hour'), // daily: local (Europe/Vienna) hour 0–23
+  everyMinutes: integer('every_minutes'), // periodic alternative
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  lastRunAt: integer('last_run_at'),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
