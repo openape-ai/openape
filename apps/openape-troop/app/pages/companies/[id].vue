@@ -55,50 +55,52 @@ const TABS = [
   { key: 'kosten', label: 'Kosten', icon: 'i-lucide-wallet' },
 ] as const
 
-// ── Add member ──
+// ── Add to the team (unified) ──
+// One interface, two backings: a Nest agent from the persona catalog (spawns a
+// real ape-agent on a device) OR a local role (tools + duties the CEO delegates
+// to, run by the reactive loop under the Owner's identity — no device).
 const showAdd = ref(false)
+const addMode = ref<'nest' | 'local'>('nest')
 const addForm = reactive({ agentName: '', personaKey: '', agentEmail: '' })
+const localForm = reactive({ label: '', role: 'specialist', tools: '', duties: '' })
 const adding = ref(false)
 const addError = ref('')
 async function ensurePersonas() { if (!personas.value.length) personas.value = (await ($fetch as any)('/api/personas')).personas }
-async function openAdd() { addError.value = ''; addForm.agentName = ''; addForm.personaKey = ''; addForm.agentEmail = ''; await ensurePersonas(); showAdd.value = true }
 const personaItems = computed(() => personas.value.map(p => ({ label: `${p.title} · ${roleLabel[p.role] ?? p.role}`, value: p.key })))
-async function addMember() {
-  if (!addForm.agentName.trim() || !addForm.personaKey) { addError.value = 'Name und Persona wählen.'; return }
+async function openAdd(mode: 'nest' | 'local' = 'nest') {
+  addError.value = ''
+  addMode.value = mode
+  addForm.agentName = ''; addForm.personaKey = ''; addForm.agentEmail = ''
+  localForm.label = ''; localForm.role = 'specialist'; localForm.tools = ''; localForm.duties = ''
+  if (mode === 'nest') await ensurePersonas()
+  showAdd.value = true
+}
+async function submitAdd() {
   adding.value = true
   addError.value = ''
   try {
-    await ($fetch as any)(`/api/orgs/${orgId.value}/members`, { method: 'POST', body: { agent_name: addForm.agentName.trim(), persona: addForm.personaKey, agent_email: addForm.agentEmail.trim() || undefined } })
-    showAdd.value = false
-    await loadMembers()
+    if (addMode.value === 'nest') {
+      if (!addForm.agentName.trim() || !addForm.personaKey) { addError.value = 'Name und Persona wählen.'; return }
+      await ($fetch as any)(`/api/orgs/${orgId.value}/members`, { method: 'POST', body: { agent_name: addForm.agentName.trim(), persona: addForm.personaKey, agent_email: addForm.agentEmail.trim() || undefined } })
+      showAdd.value = false
+      await loadMembers()
+    }
+    else {
+      if (!localForm.label.trim()) { addError.value = 'Bezeichnung angeben.'; return }
+      await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
+        label: localForm.label.trim(),
+        role: localForm.role.trim() || 'specialist',
+        duties: localForm.duties.trim(),
+        tools: localForm.tools.split(',').map((t: string) => t.trim()).filter(Boolean),
+      } })
+      showAdd.value = false
+      await loadLocal()
+    }
   }
   catch (err: any) { addError.value = err?.data?.statusMessage || 'Hinzufügen fehlgeschlagen.' }
   finally { adding.value = false }
 }
 
-// ── Local (nest-less) roles ──
-const showAddLocal = ref(false)
-const localForm = reactive({ label: '', role: 'specialist', tools: '', duties: '' })
-const addingLocal = ref(false)
-const localError = ref('')
-function openAddLocal() { localError.value = ''; localForm.label = ''; localForm.role = 'specialist'; localForm.tools = ''; localForm.duties = ''; showAddLocal.value = true }
-async function addLocal() {
-  if (!localForm.label.trim()) { localError.value = 'Bezeichnung angeben.'; return }
-  addingLocal.value = true
-  localError.value = ''
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
-      label: localForm.label.trim(),
-      role: localForm.role.trim() || 'specialist',
-      duties: localForm.duties.trim(),
-      tools: localForm.tools.split(',').map((t: string) => t.trim()).filter(Boolean),
-    } })
-    showAddLocal.value = false
-    await loadLocal()
-  }
-  catch (err: any) { localError.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }
-  finally { addingLocal.value = false }
-}
 async function deleteLocal(a: { id: string }) {
   await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${a.id}`, { method: 'DELETE' })
   await loadLocal()
@@ -180,8 +182,8 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-pencil" @click="openEdit">
               Bearbeiten
             </UButton>
-            <UButton color="neutral" variant="outline" size="sm" icon="i-lucide-user-plus" @click="openAdd">
-              Mitglied
+            <UButton color="neutral" variant="outline" size="sm" icon="i-lucide-user-plus" @click="openAdd()">
+              Hinzufügen
             </UButton>
           </div>
           <h2 class="text-3xl font-bold tracking-tight">
@@ -204,7 +206,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </div>
 
         <section v-if="tab === 'firma'" class="mb-10">
-          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAddLocal" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
+          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAdd('local')" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
         </section>
 
         <CompanyObjectives v-if="tab === 'ziele'" :org-id="orgId" />
@@ -213,63 +215,79 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
       </template>
     </main>
 
-    <!-- Add member modal -->
-    <UModal v-model:open="showAdd" :ui="{ content: 'sm:max-w-md' }">
+    <!-- Add to the team — unified (Nest agent vs local role) -->
+    <UModal v-model:open="showAdd" :ui="{ content: 'sm:max-w-lg' }">
       <template #content>
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Mitglied hinzufügen
+              Zum Team hinzufügen
             </h3>
             <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showAdd = false" />
           </div>
-          <UFormField label="Name" description="Kurzer Slug, z. B. dm-ceo.">
-            <UInput v-model="addForm.agentName" placeholder="dm-ceo" class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
-          <UFormField label="Persona" description="Bestimmt Rolle + Recipe beim Spawnen.">
-            <USelect v-model="addForm.personaKey" :items="personaItems" placeholder="Persona wählen" class="w-full" />
-          </UFormField>
-          <UFormField label="Agent-E-Mail (optional)" description="Leer lassen, um erst zu planen und später zu spawnen.">
-            <UInput v-model="addForm.agentEmail" placeholder="agent+name+domain@id.openape.ai" class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
+
+          <!-- Mode switch: what kind of member? -->
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="rounded-lg border px-3 py-2 text-left transition-colors"
+              :class="addMode === 'nest' ? 'border-primary-500 bg-primary-500/10' : 'border-zinc-700 hover:border-zinc-600'"
+              @click="openAdd('nest')"
+            >
+              <div class="flex items-center gap-2 text-sm font-medium">
+                <UIcon name="i-lucide-server" class="size-4" /> Katalog-Agent
+              </div>
+              <div class="text-[11px] text-zinc-400 mt-1">
+                Autonom, läuft auf einem Nest (Gerät), eigene Identität, auf Schedule.
+              </div>
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border px-3 py-2 text-left transition-colors"
+              :class="addMode === 'local' ? 'border-violet-500 bg-violet-500/10' : 'border-zinc-700 hover:border-zinc-600'"
+              @click="openAdd('local')"
+            >
+              <div class="flex items-center gap-2 text-sm font-medium">
+                <UIcon name="i-lucide-wrench" class="size-4" /> Lokale Rolle
+              </div>
+              <div class="text-[11px] text-zinc-400 mt-1">
+                Kein Gerät — der CEO delegiert Werkzeug-Aufgaben daran (read-only, deine Identität).
+              </div>
+            </button>
+          </div>
+
+          <!-- Nest agent fields -->
+          <template v-if="addMode === 'nest'">
+            <UFormField label="Name" description="Kurzer Slug, z. B. dm-ceo.">
+              <UInput v-model="addForm.agentName" placeholder="dm-ceo" class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Persona" description="Bestimmt Rolle + Recipe beim Spawnen.">
+              <USelect v-model="addForm.personaKey" :items="personaItems" placeholder="Persona wählen" class="w-full" />
+            </UFormField>
+            <UFormField label="Agent-E-Mail (optional)" description="Leer lassen, um erst zu planen und später zu spawnen.">
+              <UInput v-model="addForm.agentEmail" placeholder="agent+name+domain@id.openape.ai" class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+          </template>
+
+          <!-- Local role fields -->
+          <template v-else>
+            <UFormField label="Bezeichnung" description="z. B. Mail-Beauftragter.">
+              <UInput v-model="localForm.label" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Werkzeuge" description="Komma-getrennt, z. B. o365-cli, pdftotext.">
+              <UInput v-model="localForm.tools" placeholder="o365-cli" class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Aufgabe" description="Was tut diese Rolle? Read-only — der CEO delegiert danach.">
+              <UTextarea v-model="localForm.duties" :rows="3" placeholder="Liest die ungelesenen Mails read-only und meldet die handlungsrelevanten." class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+          </template>
+
           <UAlert v-if="addError" color="error" variant="subtle" :title="addError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showAdd = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="adding" @click="addMember">
-              Hinzufügen
-            </UButton>
-          </div>
-        </div>
-      </template>
-    </UModal>
-
-    <!-- Add local role modal -->
-    <UModal v-model:open="showAddLocal" :ui="{ content: 'sm:max-w-md' }">
-      <template #content>
-        <div class="p-5 sm:p-6 space-y-4">
-          <div class="flex items-start justify-between">
-            <h3 class="text-lg font-semibold">
-              Lokale Rolle hinzufügen
-            </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showAddLocal = false" />
-          </div>
-          <UFormField label="Bezeichnung" description="z. B. Mail-Beauftragter.">
-            <UInput v-model="localForm.label" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
-          <UFormField label="Werkzeuge" description="Komma-getrennt, z. B. o365-cli.">
-            <UInput v-model="localForm.tools" placeholder="o365-cli" class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
-          <UFormField label="Aufgabe" description="Was tut diese Rolle? Read-only — der CEO delegiert danach.">
-            <UTextarea v-model="localForm.duties" :rows="3" placeholder="Liest die ungelesenen Mails read-only und meldet die handlungsrelevanten." class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
-          <UAlert v-if="localError" color="error" variant="subtle" :title="localError" />
-          <div class="flex justify-end gap-2 pt-2">
-            <UButton color="neutral" variant="ghost" @click="showAddLocal = false">
-              Abbrechen
-            </UButton>
-            <UButton color="primary" :loading="addingLocal" @click="addLocal">
+            <UButton color="primary" :loading="adding" @click="submitAdd">
               Hinzufügen
             </UButton>
           </div>
