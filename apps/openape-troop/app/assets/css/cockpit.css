@@ -338,3 +338,40 @@
 .cockpit-root .login-btn:disabled { opacity: 0.5; }
 .cockpit-root .login-foot { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; letter-spacing: 0.03em; }
 .cockpit-root .boot { min-height: 100dvh; background: var(--bg); }
+
+/* Services drawer */
+.cockpit-root .services-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(3px);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.cockpit-root .services-panel {
+  width: 100%; max-width: 520px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px 18px 0 0;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 18px);
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: 80dvh; overflow-y: auto;
+}
+.cockpit-root .services-head { display: flex; align-items: center; justify-content: space-between; }
+.cockpit-root .services-title { font-weight: 600; font-size: 17px; }
+.cockpit-root .services-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.cockpit-root .services-note code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+.cockpit-root .services-list { display: flex; flex-direction: column; gap: 8px; }
+.cockpit-root .service {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
+}
+.cockpit-root .service.home { opacity: 0.85; }
+.cockpit-root .service-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.cockpit-root .service-label { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cockpit-root .muted { color: var(--muted); }
+.cockpit-root .small { font-size: 12px; }
+.cockpit-root .service .remove { flex: 0 0 auto; color: var(--muted); }
+.cockpit-root .services-add { display: flex; gap: 8px; }
+.cockpit-root .services-input {
+  flex: 1; min-width: 0; padding: 11px 13px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; outline: none;
+}
+.cockpit-root .services-input:focus { border-color: var(--accent); }
+.cockpit-root .services-error { margin: 0; color: #e5484d; font-size: 13px; }

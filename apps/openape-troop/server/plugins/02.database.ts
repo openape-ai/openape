@@ -12,6 +12,17 @@ export default defineNitroPlugin(async () => {
   try {
     const db = useDb()
 
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_services (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      tasks_path TEXT NOT NULL DEFAULT '/api/agent/tasks',
+      label TEXT NOT NULL DEFAULT '',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_services_owner ON cockpit_services(owner_email)`)
+
     await db.run(sql`CREATE TABLE IF NOT EXISTS agents (
       email TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
