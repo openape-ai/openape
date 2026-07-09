@@ -6,7 +6,7 @@ import { abort, agentRecentlyActive, cleanup, enqueue, getTask, isClaimed } from
 import { streamMock, tokenize } from '../../utils/cockpit/mock-brain'
 
 const CLAIM_GRACE_MS = 3500      // wait this long for a claim when NO brain is connected, then mock
-const CLAIM_LIVE_MAX_MS = 90000  // while a brain IS connected, wait up to this long for it to claim (never mock over a live CEO)
+const CLAIM_LIVE_MAX_MS = 150000 // while a brain IS connected, wait up to this long for it to claim (never mock over a live CEO); covers the inter-burst gap
 const MAX_STREAM_MS = 120000
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 

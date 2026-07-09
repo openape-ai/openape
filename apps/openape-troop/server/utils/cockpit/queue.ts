@@ -105,8 +105,9 @@ export function abort(id: string): void {
 // poll, so /api/chat and /api/status know a live brain is connected and can
 // wait for it instead of mocking. The window spans a full reactive burst cycle
 // (poll cockpit -> poll each service -> maybe serve one task -> sleep), so the
-// signal holds even while the brain is busy on another service's queue.
-const PRESENCE_WINDOW_MS = 90000
+// signal holds even while the brain is busy on another service's queue OR
+// paused in the short gap between reactive bursts (~60s wake + re-invoke).
+const PRESENCE_WINDOW_MS = 150000
 
 export function markAgentPoll(owner: string): void {
   agentPolls.set(owner, Date.now())
