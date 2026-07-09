@@ -10,10 +10,10 @@ export function useCockpitServices() {
     try { services.value = await $fetch<CockpitService[]>('/api/cockpit/services') }
     catch { error.value = 'Konnte Services nicht laden.' }
   }
-  async function add(baseUrl: string): Promise<void> {
+  async function add(baseUrl: string, label?: string): Promise<void> {
     error.value = ''
     try {
-      const s = await $fetch<CockpitService>('/api/cockpit/services', { method: 'POST', body: { baseUrl } })
+      const s = await $fetch<CockpitService>('/api/cockpit/services', { method: 'POST', body: { baseUrl, label } })
       services.value.push(s)
     }
     catch (e) {
