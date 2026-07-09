@@ -385,3 +385,21 @@ export const cockpitServices = sqliteTable('cockpit_services', {
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_services_owner').on(table.ownerEmail)])
+
+// cockpit_agents — the CEO's local delegation team: the online form of an
+// `~/ape-companies/<ORG>/.ape-agent/**/AGENT.md`. Owner-scoped, per org. Each
+// row is a leaf the reactive CEO can delegate a tool-requiring task to (spawned
+// locally under the owner's identity). `duties` is the free-text persona/brief,
+// `tools` the tool names it may run (e.g. ["o365-cli"]).
+export const cockpitAgents = sqliteTable('cockpit_agents', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  role: text('role').notNull().default('specialist'),
+  label: text('label').notNull().default(''),
+  duties: text('duties').notNull().default(''),
+  tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  reportsTo: text('reports_to'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
