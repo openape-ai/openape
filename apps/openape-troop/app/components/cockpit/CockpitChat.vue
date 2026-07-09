@@ -4,6 +4,7 @@ import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
 const showServices = ref(false)
+const showTeam = ref(false)
 const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
@@ -45,12 +46,16 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
         <button v-if="messages.length" class="ghost" type="button" @click="clear">
           Neu
         </button>
+        <button v-if="currentCompany" class="ghost" type="button" aria-label="Team" title="Team" @click="showTeam = true">
+          👥
+        </button>
         <button class="ghost" type="button" aria-label="Services" title="Services" @click="showServices = true">
           ⚙
         </button>
       </header>
 
       <CockpitServices v-if="showServices" @close="showServices = false" />
+      <CockpitTeam v-if="showTeam && currentCompany" :org-id="currentCompany.id" :company-name="currentCompany.name" @close="showTeam = false" />
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">

@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
-import { objectives, organizations } from '../../database/schema'
+import { cockpitAgents, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
+import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
 import { abort, agentStatus, cleanup, enqueue, getTask, isClaimed } from '../../utils/cockpit/queue'
 
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
@@ -14,17 +15,6 @@ const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 // Split into word-sized tokens, keeping trailing whitespace/newlines intact.
 const tokenize = (text: string): string[] => text.match(/\S+\s*|\s+/g) ?? [text]
 
-interface Org { name: string, visionMd: string, budgetMonthlyEur: number }
-interface Objective { title: string, status: string }
-
-function buildSystemPrompt(org: Org, objs: Objective[], owner: string): string {
-  let p = `Du bist die CEO der Firma „${org.name}". Antworte als diese CEO: knapp, konkret, auf Deutsch. Erfinde keine ausgeführten Aktionen. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an.`
-  if (org.visionMd) p += `\n\nVision/Kontext (aus dem Control-Plane):\n${org.visionMd}`
-  if (objs.length) p += `\n\nAktuelle Ziele:\n${objs.map(o => `- ${o.title} (${o.status})`).join('\n')}`
-  if (org.budgetMonthlyEur) p += `\n\nMonatsbudget: ${org.budgetMonthlyEur} €.`
-  return p
-}
-
 export default defineEventHandler(async (event) => {
   const owner = await cockpitOwner(event)
   const body = await readBody<{ company?: string, messages?: { role: string, content: string }[] }>(event)
@@ -33,9 +23,11 @@ export default defineEventHandler(async (event) => {
   const [org] = await db.select().from(organizations).where(and(eq(organizations.id, company), eq(organizations.ownerEmail, owner)))
   if (!org) throw createError({ statusCode: 404, statusMessage: 'unknown company' })
   const objs = await db.select().from(objectives).where(eq(objectives.orgId, company))
+  const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
+  const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
 
   const userMessage = [...(body?.messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
-  const task = enqueue(company, buildSystemPrompt(org, objs, owner), userMessage, owner)
+  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), userMessage, owner)
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
