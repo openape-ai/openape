@@ -3,7 +3,6 @@ import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
-const showServices = ref(false)
 const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
@@ -48,12 +47,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
         <button v-if="messages.length" class="ghost" type="button" @click="clear">
           Neu
         </button>
-        <button class="ghost" type="button" aria-label="Services" title="Services" @click="showServices = true">
-          ⚙
-        </button>
       </header>
-
-      <CockpitServices v-if="showServices" @close="showServices = false" />
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">
