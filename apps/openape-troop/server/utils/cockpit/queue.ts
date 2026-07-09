@@ -101,13 +101,18 @@ export function abort(id: string): void {
   if (task && !isTerminal(id)) task.state = 'failed'
 }
 
-// Presence: the tasks endpoints call this on every authed poll, so /api/chat
-// knows a live brain is listening and can wait for it instead of mocking early.
+// Presence: the tasks endpoints AND the heartbeat call this on every authed
+// poll, so /api/chat and /api/status know a live brain is connected and can
+// wait for it instead of mocking. The window spans a full reactive burst cycle
+// (poll cockpit -> poll each service -> maybe serve one task -> sleep), so the
+// signal holds even while the brain is busy on another service's queue.
+const PRESENCE_WINDOW_MS = 90000
+
 export function markAgentPoll(owner: string): void {
   agentPolls.set(owner, Date.now())
 }
 
-export function agentRecentlyActive(owner: string, withinMs = 20000): boolean {
+export function agentRecentlyActive(owner: string, withinMs = PRESENCE_WINDOW_MS): boolean {
   const t = agentPolls.get(owner)
   return t !== undefined && Date.now() - t < withinMs
 }

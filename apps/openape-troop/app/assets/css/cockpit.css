@@ -375,3 +375,18 @@
 }
 .cockpit-root .services-input:focus { border-color: var(--accent); }
 .cockpit-root .services-error { margin: 0; color: #e5484d; font-size: 13px; }
+
+/* Connection indicator — real CEO vs mock */
+.cockpit-root .conn-dot {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.cockpit-root .conn-dot::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+}
+.cockpit-root .conn-dot.on { color: #2ecc71; border-color: color-mix(in srgb, #2ecc71 40%, transparent); }
+.cockpit-root .conn-dot.on::before { box-shadow: 0 0 6px #2ecc71; animation: conn-pulse 2s ease-in-out infinite; }
+.cockpit-root .conn-dot.off { color: var(--muted); }
+@keyframes conn-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
