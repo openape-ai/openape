@@ -7,7 +7,7 @@ import { abort, agentStatus, cleanup, enqueue, getTask, isClaimed } from '../../
 
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
-const MAX_STREAM_MS = 120000
+const MAX_STREAM_MS = 240000
 const WAIT_TEXT = '💤 CEO im Ruhemodus'
 const OFFLINE_TEXT = 'Dein CEO ist gerade offline — sobald der reaktive Loop läuft, beantwortet er deine Frage.'
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -74,6 +74,7 @@ export default defineEventHandler(async (event) => {
         if (isClaimed(task.id)) {
           emit({ k: 'think', text: '🧠 CEO denkt …' })
           let pi = 0
+          let answered = false
           const streamDeadline = Date.now() + MAX_STREAM_MS
           for (;;) {
             if (clientGone) break
@@ -81,14 +82,28 @@ export default defineEventHandler(async (event) => {
             if (t) {
               while (pi < t.progress.length) emit({ k: 'think', text: t.progress[pi++] })
               if (t.state === 'completed') {
-                for (const tok of tokenize(t.answer)) { if (clientGone) break; emit({ k: 'tok', t: tok }); await delay(18) }
+                const ans = (t.answer ?? '').trim()
+                if (ans) {
+                  for (const tok of tokenize(ans)) { if (clientGone) break; emit({ k: 'tok', t: tok }); await delay(18) }
+                }
+                else {
+                  emit({ k: 'tok', t: '_(Der CEO hat keine Antwort formuliert — frag bitte nochmal.)_' })
+                }
+                answered = true
                 break
               }
-              if (t.state === 'failed') { emit({ k: 'tok', t: t.answer || '_(Agent-Fehler.)_' }); break }
+              if (t.state === 'failed') {
+                emit({ k: 'tok', t: (t.answer ?? '').trim() || '_(Der CEO konnte die Aufgabe nicht abschließen.)_' })
+                answered = true
+                break
+              }
             }
             if (Date.now() > streamDeadline) break
             await delay(40)
           }
+          // Never leave the bubble empty: if we timed out before a terminal state,
+          // say so instead of streaming nothing (the task keeps running server-side).
+          if (!answered && !clientGone) emit({ k: 'tok', t: '⏳ Dein CEO braucht dafür länger als gewöhnlich — er arbeitet weiter, frag gleich nochmal nach.' })
         }
         else if (!clientGone) {
           emit({ k: 'offline', text: OFFLINE_TEXT })
