@@ -15,16 +15,13 @@ await fetchUser()
 
 interface Org { id: string, name: string, visionMd: string, budgetMonthlyEur: number }
 interface Member { orgId: string, agentEmail: string, agentName: string, role: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null, status: string }
-interface Persona { key: string, title: string, role: string }
 
 const org = ref<Org | null>(null)
 const members = ref<Member[]>([])
-const personas = ref<Persona[]>([])
 const loading = ref(true)
 const error = ref('')
 
 const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?? '')
-const roleLabel: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitglied' }
 
 async function loadMembers() { members.value = await ($fetch as any)(`/api/orgs/${orgId.value}/members`) }
 
@@ -55,49 +52,51 @@ const TABS = [
   { key: 'kosten', label: 'Kosten', icon: 'i-lucide-wallet' },
 ] as const
 
-// ── Add to the team (unified) ──
-// One interface, two backings: a Nest agent from the persona catalog (spawns a
-// real ape-agent on a device) OR a local role (tools + duties the CEO delegates
-// to, run by the reactive loop under the Owner's identity — no device).
+// ── Add a role (unified) ──
+// One form: an optional template pre-fills Name/Werkzeuge/Beschreibung, then you
+// edit freely. Creates a local role (cockpit_agents) the CEO delegates to.
+// „Werkzeuge" = wildcard command patterns (e.g. `o365-cli *`) — Stage 1 toward
+// real scoped command grants (free-idp AllowedCommands/ScopedCommandWizard).
+interface RoleTemplate { key: string, label: string, name: string, tools: string, duties: string }
+const ROLE_TEMPLATES: RoleTemplate[] = [
+  { key: '', label: 'Keine Vorlage (leer)', name: '', tools: '', duties: '' },
+  { key: 'mail-m365', label: 'Mail-Beauftragter · Microsoft 365', name: 'Mail-Beauftragter', tools: 'o365-cli *', duties: 'Liest die Inbox read-only, meldet die handlungsrelevanten Mails und öffnet Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht/markiert NIE.' },
+  { key: 'mail-gmail', label: 'Mail-Beauftragter · Gmail', name: 'Mail-Beauftragter', tools: 'gmail-cli *', duties: 'Liest die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
+  { key: 'calendar', label: 'Kalender-Beauftragter', name: 'Kalender-Beauftragter', tools: 'o365-cli *', duties: 'Prüft anstehende Termine read-only und meldet Konflikte / Vorbereitungsbedarf.' },
+  { key: 'docs', label: 'Dokument-Leser', name: 'Dokument-Leser', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
+]
+const templateItems = ROLE_TEMPLATES.map(t => ({ label: t.label, value: t.key }))
 const showAdd = ref(false)
-const addMode = ref<'nest' | 'local'>('nest')
-const addForm = reactive({ agentName: '', personaKey: '', agentEmail: '' })
-const localForm = reactive({ label: '', role: 'specialist', tools: '', duties: '' })
+const templateKey = ref('')
+const roleForm = reactive({ name: '', tools: '', duties: '' })
 const adding = ref(false)
 const addError = ref('')
-async function ensurePersonas() { if (!personas.value.length) personas.value = (await ($fetch as any)('/api/personas')).personas }
-const personaItems = computed(() => personas.value.map(p => ({ label: `${p.title} · ${roleLabel[p.role] ?? p.role}`, value: p.key })))
-async function openAdd(mode: 'nest' | 'local' = 'nest') {
+function applyTemplate(key: string) {
+  const t = ROLE_TEMPLATES.find(x => x.key === key) ?? ROLE_TEMPLATES[0]!
+  roleForm.name = t.name; roleForm.tools = t.tools; roleForm.duties = t.duties
+}
+function openAdd() {
   addError.value = ''
-  addMode.value = mode
-  addForm.agentName = ''; addForm.personaKey = ''; addForm.agentEmail = ''
-  localForm.label = ''; localForm.role = 'specialist'; localForm.tools = ''; localForm.duties = ''
-  if (mode === 'nest') await ensurePersonas()
+  templateKey.value = ''
+  roleForm.name = ''; roleForm.tools = ''; roleForm.duties = ''
   showAdd.value = true
 }
+watch(templateKey, applyTemplate)
 async function submitAdd() {
+  if (!roleForm.name.trim()) { addError.value = 'Name angeben.'; return }
   adding.value = true
   addError.value = ''
   try {
-    if (addMode.value === 'nest') {
-      if (!addForm.agentName.trim() || !addForm.personaKey) { addError.value = 'Name und Persona wählen.'; return }
-      await ($fetch as any)(`/api/orgs/${orgId.value}/members`, { method: 'POST', body: { agent_name: addForm.agentName.trim(), persona: addForm.personaKey, agent_email: addForm.agentEmail.trim() || undefined } })
-      showAdd.value = false
-      await loadMembers()
-    }
-    else {
-      if (!localForm.label.trim()) { addError.value = 'Bezeichnung angeben.'; return }
-      await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
-        label: localForm.label.trim(),
-        role: localForm.role.trim() || 'specialist',
-        duties: localForm.duties.trim(),
-        tools: localForm.tools.split(',').map((t: string) => t.trim()).filter(Boolean),
-      } })
-      showAdd.value = false
-      await loadLocal()
-    }
+    await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
+      label: roleForm.name.trim(),
+      role: 'specialist',
+      duties: roleForm.duties.trim(),
+      tools: roleForm.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
+    } })
+    showAdd.value = false
+    await loadLocal()
   }
-  catch (err: any) { addError.value = err?.data?.statusMessage || 'Hinzufügen fehlgeschlagen.' }
+  catch (err: any) { addError.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }
   finally { adding.value = false }
 }
 
@@ -206,7 +205,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </div>
 
         <section v-if="tab === 'firma'" class="mb-10">
-          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAdd('local')" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
+          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAdd()" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
         </section>
 
         <CompanyObjectives v-if="tab === 'ziele'" :org-id="orgId" />
@@ -215,73 +214,28 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
       </template>
     </main>
 
-    <!-- Add to the team — unified (Nest agent vs local role) -->
+    <!-- Add a role — one form, optional template -->
     <UModal v-model:open="showAdd" :ui="{ content: 'sm:max-w-lg' }">
       <template #content>
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Zum Team hinzufügen
+              Rolle hinzufügen
             </h3>
             <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showAdd = false" />
           </div>
-
-          <!-- Mode switch: what kind of member? -->
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              class="rounded-lg border px-3 py-2 text-left transition-colors"
-              :class="addMode === 'nest' ? 'border-primary-500 bg-primary-500/10' : 'border-zinc-700 hover:border-zinc-600'"
-              @click="openAdd('nest')"
-            >
-              <div class="flex items-center gap-2 text-sm font-medium">
-                <UIcon name="i-lucide-server" class="size-4" /> Katalog-Agent
-              </div>
-              <div class="text-[11px] text-zinc-400 mt-1">
-                Autonom, läuft auf einem Nest (Gerät), eigene Identität, auf Schedule.
-              </div>
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border px-3 py-2 text-left transition-colors"
-              :class="addMode === 'local' ? 'border-violet-500 bg-violet-500/10' : 'border-zinc-700 hover:border-zinc-600'"
-              @click="openAdd('local')"
-            >
-              <div class="flex items-center gap-2 text-sm font-medium">
-                <UIcon name="i-lucide-wrench" class="size-4" /> Lokale Rolle
-              </div>
-              <div class="text-[11px] text-zinc-400 mt-1">
-                Kein Gerät — der CEO delegiert Werkzeug-Aufgaben daran (read-only, deine Identität).
-              </div>
-            </button>
-          </div>
-
-          <!-- Nest agent fields -->
-          <template v-if="addMode === 'nest'">
-            <UFormField label="Name" description="Kurzer Slug, z. B. dm-ceo.">
-              <UInput v-model="addForm.agentName" placeholder="dm-ceo" class="w-full" :ui="{ base: 'w-full' }" />
-            </UFormField>
-            <UFormField label="Persona" description="Bestimmt Rolle + Recipe beim Spawnen.">
-              <USelect v-model="addForm.personaKey" :items="personaItems" placeholder="Persona wählen" class="w-full" />
-            </UFormField>
-            <UFormField label="Agent-E-Mail (optional)" description="Leer lassen, um erst zu planen und später zu spawnen.">
-              <UInput v-model="addForm.agentEmail" placeholder="agent+name+domain@id.openape.ai" class="w-full" :ui="{ base: 'w-full' }" />
-            </UFormField>
-          </template>
-
-          <!-- Local role fields -->
-          <template v-else>
-            <UFormField label="Bezeichnung" description="z. B. Mail-Beauftragter.">
-              <UInput v-model="localForm.label" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
-            </UFormField>
-            <UFormField label="Werkzeuge" description="Komma-getrennt, z. B. o365-cli, pdftotext.">
-              <UInput v-model="localForm.tools" placeholder="o365-cli" class="w-full" :ui="{ base: 'w-full' }" />
-            </UFormField>
-            <UFormField label="Aufgabe" description="Was tut diese Rolle? Read-only — der CEO delegiert danach.">
-              <UTextarea v-model="localForm.duties" :rows="3" placeholder="Liest die ungelesenen Mails read-only und meldet die handlungsrelevanten." class="w-full" :ui="{ base: 'w-full' }" />
-            </UFormField>
-          </template>
-
+          <UFormField label="Vorlage" description="Optional — füllt Name, Werkzeuge und Beschreibung vor. Danach frei editierbar.">
+            <USelect v-model="templateKey" :items="templateItems" placeholder="Keine Vorlage" class="w-full" />
+          </UFormField>
+          <UFormField label="Name">
+            <UInput v-model="roleForm.name" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Werkzeuge" description="Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *">
+            <UTextarea v-model="roleForm.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Beschreibung" description="Was tut die Rolle? Read-only — der CEO delegiert danach.">
+            <UTextarea v-model="roleForm.duties" :rows="3" placeholder="Liest die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
           <UAlert v-if="addError" color="error" variant="subtle" :title="addError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showAdd = false">
