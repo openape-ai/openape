@@ -386,7 +386,17 @@
 .cockpit-root .conn-dot::before {
   content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor;
 }
-.cockpit-root .conn-dot.on { color: #2ecc71; border-color: color-mix(in srgb, #2ecc71 40%, transparent); }
-.cockpit-root .conn-dot.on::before { box-shadow: 0 0 6px #2ecc71; animation: conn-pulse 2s ease-in-out infinite; }
-.cockpit-root .conn-dot.off { color: var(--muted); }
+.cockpit-root .conn-dot.m-active { color: #2ecc71; border-color: color-mix(in srgb, #2ecc71 40%, transparent); }
+.cockpit-root .conn-dot.m-active::before { box-shadow: 0 0 6px #2ecc71; animation: conn-pulse 2s ease-in-out infinite; }
+.cockpit-root .conn-dot.m-working { color: #f5a623; border-color: color-mix(in srgb, #f5a623 40%, transparent); }
+.cockpit-root .conn-dot.m-working::before { box-shadow: 0 0 6px #f5a623; animation: conn-pulse 1.2s ease-in-out infinite; }
+.cockpit-root .conn-dot.m-idle { color: #6d9eff; border-color: color-mix(in srgb, #6d9eff 40%, transparent); }
+.cockpit-root .conn-dot.m-offline { color: var(--muted); }
 @keyframes conn-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* in-chat waiting + honest system notice */
+.cockpit-root .waiting { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.cockpit-root .sys-notice {
+  color: var(--muted); font-size: 14px; line-height: 1.5; font-style: italic;
+  padding: 10px 12px; border: 1px dashed var(--border); border-radius: 12px; background: var(--bg);
+}

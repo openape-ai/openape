@@ -4,7 +4,7 @@ import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
 const showServices = ref(false)
-const { connected, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
+const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
 useKeyboardInset()
@@ -26,11 +26,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
     <div class="chat" :style="{ '--accent': currentCompany?.accent ?? '#6d5efc' }">
       <header class="chat-header">
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
-        <span
-          class="conn-dot"
-          :class="connected ? 'on' : 'off'"
-          :title="connected ? 'CEO verbunden — Antworten live' : 'CEO offline — Demo-Antworten'"
-        >{{ connected ? 'CEO live' : 'Demo' }}</span>
+        <span class="conn-dot" :class="`m-${mode}`" :title="presenceTitle">{{ presenceLabel }}</span>
         <div class="company-picker">
           <select
             class="company-select"

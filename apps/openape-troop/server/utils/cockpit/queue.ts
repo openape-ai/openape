@@ -21,7 +21,7 @@ export interface QueueTask {
 
 const tasks = new Map<string, QueueTask>()
 const pending: string[] = []
-const agentPolls = new Map<string, number>() // owner → last poll ts
+const agentPolls = new Map<string, AgentBeat>() // owner → last check-in
 
 let seq = 0
 function makeId(): string {
@@ -101,21 +101,49 @@ export function abort(id: string): void {
   if (task && !isTerminal(id)) task.state = 'failed'
 }
 
-// Presence: the tasks endpoints AND the heartbeat call this on every authed
-// poll, so /api/chat and /api/status know a live brain is connected and can
-// wait for it instead of mocking. The window spans a full reactive burst cycle
-// (poll cockpit -> poll each service -> maybe serve one task -> sleep), so the
-// signal holds even while the brain is busy on another service's queue OR
-// paused in the short gap between reactive bursts (~60s wake + re-invoke).
-const PRESENCE_WINDOW_MS = 150000
+// Presence model. Each authed poll/heartbeat is a check-in that carries the
+// agent's OWN promise of when it will next check in (nextPollInMs): a few
+// seconds while it bursts, its wake delay (~60s) once it goes to sleep between
+// bursts. From that single number the cockpit derives the real agent state
+// without guessing — no mock over a live-but-sleeping brain.
+export type AgentMode = 'offline' | 'idle' | 'active' | 'working'
+interface AgentBeat { at: number, nextPollInMs: number }
 
-export function markAgentPoll(owner: string): void {
-  agentPolls.set(owner, Date.now())
+const ACTIVE_MAX_MS = 20000 // a promised next poll this soon == actively bursting
+const OFFLINE_GRACE_MS = 20000 // slack past the promised next poll before "offline"
+const DEFAULT_NEXT_POLL_MS = 12000 // a bare poll with no promise: assume it's bursting
+
+export function markAgentPoll(owner: string, nextPollInMs?: number): void {
+  const prev = agentPolls.get(owner)
+  agentPolls.set(owner, {
+    at: Date.now(),
+    nextPollInMs: nextPollInMs ?? prev?.nextPollInMs ?? DEFAULT_NEXT_POLL_MS,
+  })
 }
 
-export function agentRecentlyActive(owner: string, withinMs = PRESENCE_WINDOW_MS): boolean {
-  const t = agentPolls.get(owner)
-  return t !== undefined && Date.now() - t < withinMs
+function ownerHasOpenTask(owner: string): boolean {
+  for (const t of tasks.values()) {
+    if (t.owner === owner && t.claimed && t.state === 'working') return true
+  }
+  return false
+}
+
+export interface AgentStatus { mode: AgentMode, nextPollInSec: number | null }
+
+export function agentStatus(owner: string): AgentStatus {
+  const b = agentPolls.get(owner)
+  if (!b) return { mode: 'offline', nextPollInSec: null }
+  const now = Date.now()
+  const nextPollAt = b.at + b.nextPollInMs
+  if (now > nextPollAt + OFFLINE_GRACE_MS) return { mode: 'offline', nextPollInSec: null }
+  if (ownerHasOpenTask(owner)) return { mode: 'working', nextPollInSec: null }
+  if (b.nextPollInMs <= ACTIVE_MAX_MS) return { mode: 'active', nextPollInSec: null }
+  return { mode: 'idle', nextPollInSec: Math.max(0, Math.ceil((nextPollAt - now) / 1000)) }
+}
+
+// A brain is "present" (not offline) — kept for callers that only need the binary.
+export function agentRecentlyActive(owner: string): boolean {
+  return agentStatus(owner).mode !== 'offline'
 }
 
 export function cleanup(id: string): void {
