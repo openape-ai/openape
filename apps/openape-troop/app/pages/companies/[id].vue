@@ -27,12 +27,17 @@ const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?
 const roleLabel: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitglied' }
 
 async function loadMembers() { members.value = await ($fetch as any)(`/api/orgs/${orgId.value}/members`) }
+
+// Nest-less agents: the CEO's local delegation team (cockpit_agents).
+interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean }
+const localAgents = ref<LocalAgent[]>([])
+async function loadLocal() { localAgents.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
 async function load() {
   loading.value = true
   error.value = ''
   try {
     org.value = await ($fetch as any)(`/api/orgs/${orgId.value}`)
-    await loadMembers()
+    await Promise.all([loadMembers(), loadLocal()])
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
@@ -69,6 +74,38 @@ async function addMember() {
   }
   catch (err: any) { addError.value = err?.data?.statusMessage || 'Hinzufügen fehlgeschlagen.' }
   finally { adding.value = false }
+}
+
+// ── Local (nest-less) roles ──
+const showAddLocal = ref(false)
+const localForm = reactive({ label: '', role: 'specialist', tools: '', duties: '' })
+const addingLocal = ref(false)
+const localError = ref('')
+function openAddLocal() { localError.value = ''; localForm.label = ''; localForm.role = 'specialist'; localForm.tools = ''; localForm.duties = ''; showAddLocal.value = true }
+async function addLocal() {
+  if (!localForm.label.trim()) { localError.value = 'Bezeichnung angeben.'; return }
+  addingLocal.value = true
+  localError.value = ''
+  try {
+    await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
+      label: localForm.label.trim(),
+      role: localForm.role.trim() || 'specialist',
+      duties: localForm.duties.trim(),
+      tools: localForm.tools.split(',').map((t: string) => t.trim()).filter(Boolean),
+    } })
+    showAddLocal.value = false
+    await loadLocal()
+  }
+  catch (err: any) { localError.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }
+  finally { addingLocal.value = false }
+}
+async function deleteLocal(a: { id: string }) {
+  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${a.id}`, { method: 'DELETE' })
+  await loadLocal()
+}
+async function toggleLocal(a: { id: string, enabled: boolean }) {
+  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${a.id}`, { method: 'PATCH', body: { enabled: !a.enabled } })
+  await loadLocal()
 }
 
 // ── Spawn ──
@@ -167,7 +204,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </div>
 
         <section v-if="tab === 'firma'" class="mb-10">
-          <CompanyChart :members="members" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" />
+          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAddLocal" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
         </section>
 
         <CompanyObjectives v-if="tab === 'ziele'" :org-id="orgId" />
@@ -201,6 +238,38 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               Abbrechen
             </UButton>
             <UButton color="primary" :loading="adding" @click="addMember">
+              Hinzufügen
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Add local role modal -->
+    <UModal v-model:open="showAddLocal" :ui="{ content: 'sm:max-w-md' }">
+      <template #content>
+        <div class="p-5 sm:p-6 space-y-4">
+          <div class="flex items-start justify-between">
+            <h3 class="text-lg font-semibold">
+              Lokale Rolle hinzufügen
+            </h3>
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showAddLocal = false" />
+          </div>
+          <UFormField label="Bezeichnung" description="z. B. Mail-Beauftragter.">
+            <UInput v-model="localForm.label" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Werkzeuge" description="Komma-getrennt, z. B. o365-cli.">
+            <UInput v-model="localForm.tools" placeholder="o365-cli" class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Aufgabe" description="Was tut diese Rolle? Read-only — der CEO delegiert danach.">
+            <UTextarea v-model="localForm.duties" :rows="3" placeholder="Liest die ungelesenen Mails read-only und meldet die handlungsrelevanten." class="w-full" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UAlert v-if="localError" color="error" variant="subtle" :title="localError" />
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton color="neutral" variant="ghost" @click="showAddLocal = false">
+              Abbrechen
+            </UButton>
+            <UButton color="primary" :loading="addingLocal" @click="addLocal">
               Hinzufügen
             </UButton>
           </div>
