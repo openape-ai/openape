@@ -371,3 +371,17 @@ export type Report = typeof reports.$inferSelect
 export type NewReport = typeof reports.$inferInsert
 export type CostSnapshot = typeof costSnapshots.$inferSelect
 export type NewCostSnapshot = typeof costSnapshots.$inferInsert
+
+// cockpit_services — external sp-tasks services the owner's reactive loop co-tends
+// (in addition to troop's own cockpit queue). Owner-scoped; the loop reads this
+// list and polls each. troop only stores the list — the owner's own identity
+// (allowlisted at each service) is what grants access.
+export const cockpitServices = sqliteTable('cockpit_services', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  baseUrl: text('base_url').notNull(),
+  tasksPath: text('tasks_path').notNull().default('/api/agent/tasks'),
+  label: text('label').notNull().default(''),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_services_owner').on(table.ownerEmail)])
