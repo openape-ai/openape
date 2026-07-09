@@ -3,13 +3,14 @@ import { useDb } from '../../database/drizzle'
 import { cockpitAgents, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
-import { abort, agentStatus, cleanup, enqueue, getTask, isClaimed } from '../../utils/cockpit/queue'
+import { saveChatMessage } from '../../utils/cockpit/chat-store'
+import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
 
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
 const MAX_STREAM_MS = 240000
 const WAIT_TEXT = '💤 CEO im Ruhemodus'
-const OFFLINE_TEXT = 'Dein CEO ist gerade offline — sobald der reaktive Loop läuft, beantwortet er deine Frage.'
+const OFFLINE_TEXT = '💤 Deine Nachricht ist aufgenommen — der CEO beantwortet sie, sobald er wieder da ist. Beim nächsten Öffnen ist die Antwort da.'
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // Split into word-sized tokens, keeping trailing whitespace/newlines intact.
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event) => {
   const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
 
   const userMessage = [...(body?.messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
+  if (userMessage.trim()) await saveChatMessage(company, owner, 'user', userMessage)
   const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), userMessage, owner)
 
   setResponseHeaders(event, {
@@ -36,7 +38,9 @@ export default defineEventHandler(async (event) => {
   })
 
   let clientGone = false
-  event.node.req.on('close', () => { clientGone = true; abort(task.id) })
+  // Client leaving must NOT kill the task — the CEO still answers and the answer
+  // is persisted; the browser reloads it later. Just stop streaming.
+  event.node.req.on('close', () => { clientGone = true })
   const encoder = new TextEncoder()
 
   return new ReadableStream({
@@ -124,7 +128,7 @@ export default defineEventHandler(async (event) => {
         }
       }
       finally {
-        cleanup(task.id)
+        if (isTerminal(task.id)) cleanup(task.id)
         try { controller.close() }
         catch { /* closed */ }
       }
