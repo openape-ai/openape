@@ -17,6 +17,7 @@ export interface QueueTask {
   state: TaskState
   progress: string[] // intermediate "thinking" artifacts
   answer: string // terminal artifact text
+  createdAt: number
 }
 
 const tasks = new Map<string, QueueTask>()
@@ -29,7 +30,17 @@ function makeId(): string {
   return `t${Date.now()}-${seq}`
 }
 
+const TASK_TTL_MS = 30 * 60_000
+function gcStaleTasks(): void {
+  const now = Date.now()
+  for (const [id, t] of tasks) {
+    const terminal = t.state === 'completed' || t.state === 'failed'
+    if (terminal || now - t.createdAt > TASK_TTL_MS) tasks.delete(id)
+  }
+}
+
 export function enqueue(company: string, systemPrompt: string, userMessage: string, owner = ''): { id: string } {
+  gcStaleTasks()
   const task: QueueTask = {
     id: makeId(),
     company,
@@ -40,6 +51,7 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
     state: 'submitted',
     progress: [],
     answer: '',
+    createdAt: Date.now(),
   }
   tasks.set(task.id, task)
   pending.push(task.id)
