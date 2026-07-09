@@ -2,39 +2,42 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
-// Company detail — the hierarchy chart + business tabs for one company.
-// (B0 merge: this is the former org.openape.ai org-detail view, now in troop.)
-// The CEO is the Owner's front door; the structure is preserved.
+// Company detail — its employees (the whole hierarchy) + business tabs. troop
+// defines the workforce; a provider (Claude session today, a nest later) runs it.
 const route = useRoute()
 const orgId = computed(() => String(route.params.id))
-
 useSeoMeta({ title: () => 'Firma' })
 
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
 
 interface Org { id: string, name: string, visionMd: string, budgetMonthlyEur: number }
-interface Member { orgId: string, agentEmail: string, agentName: string, role: string, persona: string | null, personaTitle?: string | null, personaIcon?: string | null, reportsToEmail: string | null, status: string }
+interface Employee { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
 
 const org = ref<Org | null>(null)
-const members = ref<Member[]>([])
+const employees = ref<Employee[]>([])
 const loading = ref(true)
 const error = ref('')
-
 const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?? '')
 
-async function loadMembers() { members.value = await ($fetch as any)(`/api/orgs/${orgId.value}/members`) }
+async function loadEmployees() { employees.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
 
-// Nest-less agents: the CEO's local delegation team (cockpit_agents).
-interface LocalAgent { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
-const localAgents = ref<LocalAgent[]>([])
-async function loadLocal() { localAgents.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
+// Provider status — the agentic provider running this company (today: the Claude
+// session loop). Reuses the cockpit presence (active/idle/working/offline).
+const providerMode = ref<'active' | 'idle' | 'working' | 'offline'>('offline')
+const providerLabel = computed(() => ({ active: 'Aktiv', idle: 'Ruhend', working: 'Arbeitet', offline: 'Offline' }[providerMode.value]))
+const providerColor = computed(() => ({ active: 'success', idle: 'info', working: 'warning', offline: 'neutral' } as const)[providerMode.value])
+async function loadProvider() {
+  try { providerMode.value = (await ($fetch as any)('/api/cockpit/status')).mode }
+  catch { providerMode.value = 'offline' }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
     org.value = await ($fetch as any)(`/api/orgs/${orgId.value}`)
-    await Promise.all([loadMembers(), loadLocal()])
+    await Promise.all([loadEmployees(), loadProvider()])
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
@@ -43,7 +46,6 @@ async function load() {
   finally { loading.value = false }
 }
 
-// ── Tabs ──
 const tab = ref<'firma' | 'ziele' | 'reports' | 'kosten'>('firma')
 const TABS = [
   { key: 'firma', label: 'Firma', icon: 'i-lucide-building-2' },
@@ -52,105 +54,89 @@ const TABS = [
   { key: 'kosten', label: 'Kosten', icon: 'i-lucide-wallet' },
 ] as const
 
-// ── Add a role (unified) ──
-// One form: an optional template pre-fills Name/Werkzeuge/Beschreibung, then you
-// edit freely. Creates a local role (cockpit_agents) the CEO delegates to.
-// „Werkzeuge" = wildcard command patterns (e.g. `o365-cli *`) — Stage 1 toward
-// real scoped command grants (free-idp AllowedCommands/ScopedCommandWizard).
-interface RoleTemplate { key: string, label: string, name: string, tools: string, duties: string }
+// ── Employee form (add + edit) ──
+// An optional template pre-fills Name/Rolle/Werkzeuge/Beschreibung, then edit
+// freely. „Werkzeuge" = wildcard command patterns (e.g. `o365-cli *`).
+interface RoleTemplate { key: string, label: string, name: string, role: string, tools: string, duties: string }
 const ROLE_TEMPLATES: RoleTemplate[] = [
-  { key: '', label: 'Keine Vorlage (leer)', name: '', tools: '', duties: '' },
-  { key: 'mail-m365', label: 'Mail-Beauftragter · Microsoft 365', name: 'Mail-Beauftragter', tools: 'o365-cli *', duties: 'Liest die Inbox read-only, meldet die handlungsrelevanten Mails und öffnet Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht/markiert NIE.' },
-  { key: 'mail-gmail', label: 'Mail-Beauftragter · Gmail', name: 'Mail-Beauftragter', tools: 'gmail-cli *', duties: 'Liest die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
-  { key: 'calendar', label: 'Kalender-Beauftragter', name: 'Kalender-Beauftragter', tools: 'o365-cli *', duties: 'Prüft anstehende Termine read-only und meldet Konflikte / Vorbereitungsbedarf.' },
-  { key: 'docs', label: 'Dokument-Leser', name: 'Dokument-Leser', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
+  { key: '', label: 'Keine Vorlage (leer)', name: '', role: 'specialist', tools: '', duties: '' },
+  { key: 'ceo', label: 'CEO', name: 'CEO', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
+  { key: 'pm', label: 'Projektmanager', name: 'Projektmanager', role: 'teamlead', tools: 'ape-tasks *', duties: 'Pflegt Backlog/Aufgaben, plant, hält Termine/Blocker sichtbar.' },
+  { key: 'mail-m365', label: 'Mail-Assistent · Microsoft 365', name: 'Mail-Assistent', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Triagiert die Inbox read-only, meldet die handlungsrelevanten Mails und liest Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht NIE.' },
+  { key: 'mail-gmail', label: 'Mail-Assistent · Gmail', name: 'Mail-Assistent', role: 'specialist', tools: 'gmail-cli *', duties: 'Triagiert die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
+  { key: 'buchhaltung', label: 'Buchhaltung', name: 'Buchhaltung', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Sichtet Belege/Eingangsrechnungen read-only, bereitet Ablage nach Bill-To-Regeln vor. Bucht/zahlt nichts selbst — legt Vorschläge vor.' },
+  { key: 'social', label: 'Social Media', name: 'Social Media', role: 'specialist', tools: '', duties: 'Entwirft LinkedIn/X-Posts (blog-first) aus delta-mind.at-Inhalten. Postet nichts selbst — legt Entwürfe vor.' },
+  { key: 'docs', label: 'Dokument-Leser', name: 'Dokument-Leser', role: 'specialist', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
 ]
 const templateItems = ROLE_TEMPLATES.map(t => ({ label: t.label, value: t.key }))
-const roleLabelShort: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitglied' }
+const roleItems = [
+  { label: 'CEO', value: 'ceo' },
+  { label: 'Team-Lead', value: 'teamlead' },
+  { label: 'Specialist', value: 'specialist' },
+]
+const roleLabelShort: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+const editingId = ref<string | null>(null)
 const supervisorItems = computed(() => [
   { label: '— Owner (kein Vorgesetzter)', value: '' },
-  ...members.value.filter(m => m.status !== 'retired').map(m => ({ label: `${m.agentName} · ${roleLabelShort[m.role] ?? m.role}`, value: m.agentEmail })),
-  ...localAgents.value.map(a => ({ label: `${a.label} · lokal`, value: a.id })),
+  ...employees.value.filter(e => e.id !== editingId.value).map(e => ({ label: `${e.label} · ${roleLabelShort[e.role] ?? e.role}`, value: e.id })),
 ])
-const showAdd = ref(false)
+const showForm = ref(false)
 const templateKey = ref('')
-const roleForm = reactive({ name: '', tools: '', duties: '', reportsTo: '' })
-const adding = ref(false)
-const addError = ref('')
-function applyTemplate(key: string) {
+const form = reactive({ name: '', role: 'specialist', tools: '', duties: '', reportsTo: '' })
+const saving = ref(false)
+const formError = ref('')
+watch(templateKey, (key) => {
   const t = ROLE_TEMPLATES.find(x => x.key === key) ?? ROLE_TEMPLATES[0]!
-  roleForm.name = t.name; roleForm.tools = t.tools; roleForm.duties = t.duties
-}
+  form.name = t.name; form.role = t.role; form.tools = t.tools; form.duties = t.duties
+})
 function openAdd() {
-  addError.value = ''
-  templateKey.value = ''
-  roleForm.name = ''; roleForm.tools = ''; roleForm.duties = ''
-  roleForm.reportsTo = members.value.find(m => m.role === 'ceo')?.agentEmail ?? ''
-  showAdd.value = true
+  formError.value = ''; editingId.value = null; templateKey.value = ''
+  form.name = ''; form.role = 'specialist'; form.tools = ''; form.duties = ''
+  form.reportsTo = employees.value.find(e => e.role === 'ceo')?.id ?? ''
+  showForm.value = true
 }
-watch(templateKey, applyTemplate)
-async function submitAdd() {
-  if (!roleForm.name.trim()) { addError.value = 'Name angeben.'; return }
-  adding.value = true
-  addError.value = ''
+function openEdit(e: Employee) {
+  formError.value = ''; editingId.value = e.id; templateKey.value = ''
+  form.name = e.label; form.role = e.role; form.tools = e.tools.join('\n'); form.duties = e.duties
+  form.reportsTo = e.reportsTo ?? ''
+  showForm.value = true
+}
+async function submitForm() {
+  if (!form.name.trim()) { formError.value = 'Name angeben.'; return }
+  saving.value = true
+  formError.value = ''
+  const body = {
+    label: form.name.trim(),
+    role: form.role,
+    duties: form.duties.trim(),
+    tools: form.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
+    reportsTo: form.reportsTo || null,
+  }
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body: {
-      label: roleForm.name.trim(),
-      role: 'specialist',
-      duties: roleForm.duties.trim(),
-      tools: roleForm.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
-      reportsTo: roleForm.reportsTo || null,
-    } })
-    showAdd.value = false
-    await loadLocal()
+    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${editingId.value}`, { method: 'PATCH', body })
+    else await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body })
+    showForm.value = false
+    await loadEmployees()
   }
-  catch (err: any) { addError.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }
-  finally { adding.value = false }
+  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
+  finally { saving.value = false }
 }
-
-async function deleteLocal(a: { id: string }) {
-  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${a.id}`, { method: 'DELETE' })
-  await loadLocal()
+async function deleteEmployee(e: { id: string }) {
+  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'DELETE' })
+  await loadEmployees()
 }
-async function toggleLocal(a: { id: string, enabled: boolean }) {
-  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${a.id}`, { method: 'PATCH', body: { enabled: !a.enabled } })
-  await loadLocal()
-}
-
-// ── Spawn ──
-const spawning = reactive<Record<string, string>>({})
-async function spawnMember(m: { agentEmail: string, persona: string | null }) {
-  if (!m.persona) return
-  spawning[m.agentEmail] = 'startet …'
-  try {
-    await ($fetch as any)(`/api/orgs/${orgId.value}/members/${encodeURIComponent(m.agentEmail)}/spawn`, { method: 'POST' })
-    spawning[m.agentEmail] = 'wartet auf Freigabe …'
-    await pollSpawn(m.agentEmail)
-  }
-  catch (err: any) {
-    spawning[m.agentEmail] = err?.data?.statusMessage || 'Spawn fehlgeschlagen'
-    setTimeout(() => { delete spawning[m.agentEmail] }, 4000)
-  }
-}
-async function pollSpawn(email: string) {
-  for (let i = 0; i < 90; i++) {
-    await new Promise(r => setTimeout(r, 2000))
-    const res = await ($fetch as any)(`/api/orgs/${orgId.value}/members/${encodeURIComponent(email)}/spawn-status`)
-    if (res.status === 'active') { delete spawning[email]; await loadMembers(); return }
-    if (res.status === 'failed') { spawning[email] = res.error || 'Spawn fehlgeschlagen'; setTimeout(() => { delete spawning[email] }, 5000); return }
-  }
-  delete spawning[email]
+async function toggleEmployee(e: { id: string, enabled: boolean }) {
+  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'PATCH', body: { enabled: !e.enabled } })
+  await loadEmployees()
 }
 
 // ── Edit org ──
 const showEdit = ref(false)
 const editForm = reactive({ name: '', vision: '', budget: 0 })
 const savingEdit = ref(false)
-function openEdit() {
+function openEditOrg() {
   if (!org.value) return
-  editForm.name = org.value.name
-  editForm.vision = org.value.visionMd
-  editForm.budget = org.value.budgetMonthlyEur
+  editForm.name = org.value.name; editForm.vision = org.value.visionMd; editForm.budget = org.value.budgetMonthlyEur
   showEdit.value = true
 }
 async function saveOrg() {
@@ -169,11 +155,9 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
     <header class="border-b border-zinc-800/80 px-4 sm:px-8 py-4 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        <UButton to="/companies" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
-          Firmen
-        </UButton>
-      </div>
+      <UButton to="/companies" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
+        Firmen
+      </UButton>
       <ViewToggle active="companies" />
     </header>
 
@@ -185,12 +169,12 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
       <template v-else-if="org">
         <div class="mb-6">
-          <div class="flex items-center justify-end gap-2 mb-3">
-            <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-pencil" @click="openEdit">
-              Bearbeiten
-            </UButton>
-            <UButton color="neutral" variant="outline" size="sm" icon="i-lucide-user-plus" @click="openAdd()">
-              Hinzufügen
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <UBadge :color="providerColor" variant="subtle" size="sm" :ui="{ base: 'gap-1.5' }">
+              <UIcon name="i-lucide-cpu" class="size-3.5" /> Claude Session · {{ providerLabel }}
+            </UBadge>
+            <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-pencil" @click="openEditOrg">
+              Firma bearbeiten
             </UButton>
           </div>
           <h2 class="text-3xl font-bold tracking-tight">
@@ -213,7 +197,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </div>
 
         <section v-if="tab === 'firma'" class="mb-10">
-          <CompanyChart :members="members" :local-agents="localAgents" :owner-email="ownerEmail" :spawning="spawning" @spawn="spawnMember" @add-local="openAdd()" @delete-local="deleteLocal" @toggle-local="toggleLocal" />
+          <CompanyChart :employees="employees" :owner-email="ownerEmail" @add="openAdd" @edit="openEdit" @delete="deleteEmployee" @toggle="toggleEmployee" />
         </section>
 
         <CompanyObjectives v-if="tab === 'ziele'" :org-id="orgId" />
@@ -222,38 +206,43 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
       </template>
     </main>
 
-    <!-- Add a role — one form, optional template -->
-    <UModal v-model:open="showAdd" :ui="{ content: 'sm:max-w-lg' }">
+    <!-- Employee form (add + edit) -->
+    <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-lg' }">
       <template #content>
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Rolle hinzufügen
+              {{ editingId ? 'Mitarbeiter bearbeiten' : 'Mitarbeiter hinzufügen' }}
             </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showAdd = false" />
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
           </div>
-          <UFormField label="Vorlage" description="Optional — füllt Name, Werkzeuge und Beschreibung vor. Danach frei editierbar.">
+          <UFormField v-if="!editingId" label="Vorlage" description="Optional — füllt die Felder vor. Danach frei editierbar.">
             <USelect v-model="templateKey" :items="templateItems" placeholder="Keine Vorlage" class="w-full" />
           </UFormField>
-          <UFormField label="Name">
-            <UInput v-model="roleForm.name" placeholder="Mail-Beauftragter" class="w-full" :ui="{ base: 'w-full' }" />
-          </UFormField>
-          <UFormField label="Vorgesetzter" description="Wem berichtet diese Rolle? Bildet die Hierarchie.">
-            <USelect v-model="roleForm.reportsTo" :items="supervisorItems" placeholder="Vorgesetzten wählen" class="w-full" />
+          <div class="grid grid-cols-2 gap-3">
+            <UFormField label="Name">
+              <UInput v-model="form.name" placeholder="Mail-Assistent" class="w-full" :ui="{ base: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Rolle">
+              <USelect v-model="form.role" :items="roleItems" class="w-full" />
+            </UFormField>
+          </div>
+          <UFormField label="Vorgesetzter" description="Wem berichtet dieser Mitarbeiter? Bildet die Hierarchie.">
+            <USelect v-model="form.reportsTo" :items="supervisorItems" placeholder="Vorgesetzten wählen" class="w-full" />
           </UFormField>
           <UFormField label="Werkzeuge" description="Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *">
-            <UTextarea v-model="roleForm.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
+            <UTextarea v-model="form.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UFormField label="Beschreibung" description="Was tut die Rolle? Read-only — der CEO delegiert danach.">
-            <UTextarea v-model="roleForm.duties" :rows="3" placeholder="Liest die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
+            <UTextarea v-model="form.duties" :rows="3" placeholder="Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UAlert v-if="addError" color="error" variant="subtle" :title="addError" />
+          <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
-            <UButton color="neutral" variant="ghost" @click="showAdd = false">
+            <UButton color="neutral" variant="ghost" @click="showForm = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="adding" @click="submitAdd">
-              Hinzufügen
+            <UButton color="primary" :loading="saving" @click="submitForm">
+              {{ editingId ? 'Speichern' : 'Hinzufügen' }}
             </UButton>
           </div>
         </div>
