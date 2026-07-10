@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildOrgTree } from '../server/utils/cockpit/tree'
 
-function r(id: string, label: string, role: string, reportsTo: string | null) {
-  return { id, label, role, reportsTo, duties: '', tools: [] as string[], enabled: true }
+function r(id: string, label: string, role: string, reportsTo: string | null, extra: Partial<{ procedure: string, vars: Record<string, unknown> }> = {}) {
+  return { id, label, role, reportsTo, duties: '', tools: [] as string[], enabled: true, procedure: '', vars: {}, ...extra }
 }
 
 describe('buildOrgTree', () => {
@@ -25,5 +25,28 @@ describe('buildOrgTree', () => {
   it('is cycle-safe (a→b→a does not loop)', () => {
     const roots = buildOrgTree([r('a', 'A', 'specialist', 'b'), r('b', 'B', 'specialist', 'a')])
     expect(roots.length).toBeGreaterThanOrEqual(1)
+  })
+  it('carries the procedure through untouched', () => {
+    const roots = buildOrgTree([r('dev', 'Programmierer', 'specialist', null, { procedure: '## Schritt 1\nworktree anlegen' })])
+    expect(roots[0]!.procedure).toBe('## Schritt 1\nworktree anlegen')
+  })
+  it('merges org vars into every node, employee wins', () => {
+    const roots = buildOrgTree(
+      [
+        r('ceo', 'CEO', 'ceo', null),
+        r('dev', 'Programmierer', 'specialist', 'ceo', { vars: { boardUser: 254, project: 999 } }),
+      ],
+      { project: 125, lanes: { sprint: 2617 } },
+    )
+    expect(roots[0]!.vars).toEqual({ project: 125, lanes: { sprint: 2617 } })
+    expect(roots[0]!.children[0]!.vars).toEqual({ project: 999, lanes: { sprint: 2617 }, boardUser: 254 })
+  })
+  it('a node without vars still gets the org vars, never undefined', () => {
+    const roots = buildOrgTree([r('ceo', 'CEO', 'ceo', null)], { project: 125 })
+    expect(roots[0]!.vars).toEqual({ project: 125 })
+  })
+  it('no org vars and no employee vars yields an empty object', () => {
+    const roots = buildOrgTree([r('ceo', 'CEO', 'ceo', null)])
+    expect(roots[0]!.vars).toEqual({})
   })
 })

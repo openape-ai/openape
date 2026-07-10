@@ -1,5 +1,8 @@
 <script setup lang="ts">
-export interface Employee { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
+// The canonical employee shape, shared with the company page's editor. The card
+// only renders label/tools/duties; `procedure` and `vars` travel through it to
+// the edit form, so they live here instead of in a second copy of this type.
+export interface Employee { id: string, role: string, label: string, duties: string, procedure: string, vars: Record<string, unknown>, tools: string[], enabled: boolean, reportsTo: string | null }
 export interface TreeNode { e: Employee, children: TreeNode[] }
 
 defineProps<{ node: TreeNode }>()
