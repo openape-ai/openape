@@ -330,13 +330,21 @@ auf `duties` zurück und ist wieder read-and-report.
 
 - [x] `[2026-07-10 09:30]` Plan erstellt und freigegeben. Issue #930, Branch `feat/issue-930-cockpit-procedures`.
 - [x] `[2026-07-10 11:03]` Milestone 0: Baseline grün — 213 Tests, Baum ohne `procedure`/`vars`.
-- [x] `[2026-07-10 11:35]` Milestone 1: **Code fertig, Server-Akzeptanz bewiesen, UI-Screenshot blockiert.**
-      Commits `900c8ded` (Schema/Tree/API) + `a7221ec2` (UI). 222 Tests grün (+9), lint/typecheck clean.
-      Bewiesen gegen den laufenden Dev-Server mit frischer DB (also auch der `CREATE TABLE`-Pfad):
-      Programmierer mit `procedure: "TESTMARKER-42…"` und `vars: {boardUser:254, project:999}` angelegt;
-      Firma trägt `{project:125, workspace:427, lanes:{sprint:2617}}`. Der Tree liefert am Dev-Knoten
-      `{boardUser:254, project:999, workspace:427, lanes:{sprint:2617}}` — Firma vererbt, Rolle gewinnt,
-      `boardUser` bleibt lokal (CEO hat ihn nicht). **OFFEN: der Screenshot** — siehe Discoveries.
+- [x] `[2026-07-10 11:35]` Milestone 1: **komplett, inkl. UI-Verifikation.** PR #931.
+      Commits `900c8ded` (Schema/Tree/API), `a7221ec2` (UI), `d25ff3dc` (Modal-Scroll + Dev-Owner),
+      dazu der gemergte h3-Fix `6187407f` (#932/PR #933). 222 Tests grün (+9), lint/typecheck clean;
+      die Commits laufen jetzt **ohne** `SKIP_HOOKS` durch.
+      - Server, gegen frische DB (also auch der `CREATE TABLE`-Pfad): Firma `{project:125, workspace:427,
+        lanes:{sprint:2617}}`, Rolle `{boardUser:254, project:999}` → Tree-Knoten
+        `{boardUser:254, project:999, workspace:427, lanes:{sprint:2617}}`. Firma vererbt, Rolle gewinnt,
+        `boardUser` bleibt lokal (der CEO hat ihn nicht).
+      - UI, per Playwright mit echter versiegelter Session-Cookie: das Organigramm zeigt im `title`-Tooltip
+        die **Kurzfassung**, nicht die Prozedur. Kaputtes `vars`-JSON → Button `disabled`,
+        `cursor:not-allowed`, sichtbare Parser-Meldung — und ein **erzwungener Klick setzt kein PATCH ab**.
+      - Der Screenshot hat einen echten Fehler gefunden: das Modal war höher als ein Laptop-Viewport,
+        Warnung und Speichern-Button lagen unter der Falz. Gefixt (`max-h-[85dvh]` + `overflow-y-auto`).
+- [ ] `[ ]` **Nächste Session:** Milestone 2 (Injection-Profiler). Voraussetzung: PR #933 (h3) gemergt,
+      sonst trägt #931 den Merge-Commit mit.
 - [ ] `[ ]` Milestone 2: Injection-Profiler
 - [ ] `[ ]` Milestone 3: Loop liest troop, erster echter PR
 - [ ] `[ ]` Milestone 4: lokale Datei gelöscht
