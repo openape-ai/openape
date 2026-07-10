@@ -7,7 +7,7 @@
       "publishable"
     ]
   },
-  "description": "OpenApe Identity Provider Nuxt module — adds user auth, OAuth, admin, and agent management",
+  "description": "OpenApe Identity Provider Nuxt module \u2014 adds user auth, OAuth, admin, and agent management",
   "author": "Delta Mind GmbH",
   "license": "MIT",
   "exports": {
@@ -43,6 +43,7 @@
     "jose": "^5.10.0"
   },
   "peerDependencies": {
+    "h3": "^1.15.11",
     "nuxt": "^4.0.0"
   },
   "devDependencies": {
@@ -51,6 +52,7 @@
     "@types/node": "^22.20.0",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",
+    "h3": "^1.15.11",
     "happy-dom": "^18.0.1",
     "nuxt": "^4.4.8",
     "tailwindcss": "^4.3.1",
