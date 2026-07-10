@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // agents — one row per registered agent.
 //
@@ -283,6 +283,9 @@ export const organizations = sqliteTable('organizations', {
   name: text('name').notNull(),
   visionMd: text('vision_md').notNull().default(''),
   budgetMonthlyEur: integer('budget_monthly_eur').notNull().default(0),
+  // Company-wide facts every employee shares (board id, lanes, tags). A role's
+  // own `vars` are merged over these.
+  vars: text('vars', { mode: 'json' }).notNull().$type<Record<string, unknown>>().default({}),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [
@@ -397,7 +400,20 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   orgId: text('org_id').notNull(),
   role: text('role').notNull().default('specialist'),
   label: text('label').notNull().default(''),
+  // Short summary — what the org chart card shows. The full work instruction
+  // is `procedure`; keeping both means the CEO's grounding stays readable.
   duties: text('duties').notNull().default(''),
+  // The role's work instruction, verbatim. Owner-only writable: this is the
+  // program a subagent executes, not data it reads. Empty = the loop falls
+  // back to read-and-report on `duties`.
+  procedure: text('procedure').notNull().default(''),
+  // The role's own facts (e.g. its board user id). Merged over the org's vars
+  // in buildOrgTree; the role wins on conflict.
+  vars: text('vars', { mode: 'json' }).notNull().$type<Record<string, unknown>>().default({}),
+  // Prompt-injection score of the last `procedure` write. Surfaced, never
+  // enforced — the owner may override behaviour (see the plan's trust boundary).
+  injectionScore: real('injection_score').notNull().default(0),
+  injectionReason: text('injection_reason').notNull().default(''),
   tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
   reportsTo: text('reports_to'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
