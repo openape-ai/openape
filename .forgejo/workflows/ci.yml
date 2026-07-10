@@ -29,27 +29,36 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build libs (all, serial — deterministic .d.ts before the checks)
-        # Build EVERY publishable library (packages + modules) BEFORE the checks,
-        # not --affected. Two reasons this order + scope matter:
-        #   1. Race fix (#934): if `typecheck`'s internal `^build` writes a
-        #      dependency's `.d.ts` while a consumer's tsc is already running, the
-        #      consumer can lose the fs-flush race and fail with a spurious
-        #      TS7016 "no declaration file for @openape/apes" (tsup emits dts in a
-        #      separate pass). Building all libs to completion in a SEPARATE turbo
-        #      process first means every consumed `.d.ts` is on disk and stable
-        #      before any tsc starts. `--concurrency=1` also removes the same race
-        #      *between* libs (a lib's dts pass reading a sibling's fresh dts).
-        #   2. Not --affected: a leaf/app-only change leaves apes "unaffected", so
-        #      an affected-scoped lib build would skip it — the exact trigger. All
-        #      libs cold is ~20s; cheap next to the app builds we still skip.
-        # Deployable apps (Nuxt) are intentionally NOT built here:
-        #   - their full Nitro `.output` production build is a deploy-time concern
+      - name: Build consumed workspaces (serial — deterministic .d.ts before the checks)
+        # Build every workspace whose `build` output a check can consume, BEFORE
+        # the checks, serially, and NOT --affected. Why each of those matters:
+        #   1. Race fix (#934): `typecheck`/`test`'s internal `^build` emits a
+        #      dependency's `.d.ts` (tsup does dts in a separate pass) while a
+        #      consumer's tsc/tsup is already running → the consumer loses the
+        #      fs-flush race and fails with a spurious TS7016
+        #      "no declaration file for @openape/apes". Building everything a check
+        #      consumes to completion in a SEPARATE turbo process first makes every
+        #      such `^build` a cache HIT during the checks — nothing builds fresh,
+        #      so nothing races. `--concurrency=1` removes the same race *between*
+        #      these builds (a build's dts pass reading a sibling's fresh dts).
+        #   2. Scope = packages + modules + the non-Nuxt (tsup) apps. The tsup apps
+        #      (ape-agent, ape-chat, nest) ARE pulled as `^build` deps by affected
+        #      checks (e.g. nest#test → ape-agent#build → reads @openape/apes dts):
+        #      libs-only (#935) left ape-agent#build executing fresh in the checks,
+        #      which is exactly what re-surfaced the race on #937. Verified: with
+        #      these three added, ape-agent#build is a cache hit during the checks.
+        #   3. Not --affected: an app-only change leaves a lib (e.g. apes)
+        #      "unaffected", so an affected-scoped pre-build would skip it — the
+        #      original trigger. Building all of these cold is ~20-30s; cheap next
+        #      to the Nuxt app builds we still skip.
+        # Deployable Nuxt apps are intentionally NOT built here (and are never
+        # `^build` deps — nothing consumes them):
+        #   - their full Nitro `.output` build is a deploy-time concern
         #     (`pnpm run deploy:image` builds + health-gates + auto-rolls-back);
-        #   - building the apps' Nitro output on the runner triggered the pnpm +
-        #     Nitro `.output/server/node_modules` ELOOP symlink cycle
+        #   - building their Nitro output on the runner triggers the pnpm + Nitro
+        #     `.output/server/node_modules` ELOOP symlink cycle
         #     (vue↔@vue/server-renderer; nuxt#30539 / #12012) — no reliable fix.
-        run: pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=1
+        run: pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --filter='@openape/ape-agent' --filter='@openape/ape-chat' --filter='@openape/nest' --concurrency=1
       - name: Lint · Typecheck · Test (affected)
         # e2e needs a running stack (dedicated job); docs prerenders OG images
         # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
