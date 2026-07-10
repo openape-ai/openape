@@ -125,7 +125,19 @@ export async function resolveOwnerContext(event: H3Event): Promise<{
     }
     catch { /* fall through to 401 */ }
   }
+  const dev = devOwner()
+  if (dev) return { owner: dev, scopes: null, delegate: null }
   problem(401, 'Authentication required')
+}
+
+/**
+ * Dev-only owner, mirroring `cockpitOwner()` in `cockpit/auth.ts`. The IdP login
+ * cannot redirect back to localhost, so without this the company page cannot be
+ * opened locally at all. `import.meta.dev` is compiled away in the prod build.
+ */
+function devOwner(): string | undefined {
+  if (import.meta.dev && process.env.COCKPIT_DEV_OWNER) return process.env.COCKPIT_DEV_OWNER
+  return undefined
 }
 
 /**
@@ -157,6 +169,8 @@ export async function resolveCallerIdentity(event: H3Event): Promise<{ sub: stri
     }
     catch { /* fall through to 401 */ }
   }
+  const dev = devOwner()
+  if (dev) return { sub: dev, act: 'human' }
   problem(401, 'Authentication required')
 }
 
