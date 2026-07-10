@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../../../../database/drizzle'
 import { cockpitAgents } from '../../../../../database/schema'
 import { requireOwnedOrg } from '../../../../../utils/cockpit/org-access'
+import { scoreProcedure } from '../../../../../utils/cockpit/procedure-score'
 import { assertVars } from '../../../../../utils/cockpit/vars'
 
 // Edit a delegation leaf. Any subset of role/label/duties/procedure/vars/tools/
@@ -18,7 +19,13 @@ export default defineEventHandler(async (event) => {
   if (typeof body?.role === 'string') patch.role = body.role.trim() || 'specialist'
   if (typeof body?.label === 'string') patch.label = body.label.trim()
   if (typeof body?.duties === 'string') patch.duties = body.duties.trim()
-  if (typeof body?.procedure === 'string') patch.procedure = body.procedure.trim()
+  if (typeof body?.procedure === 'string') {
+    patch.procedure = body.procedure.trim()
+    // Re-score on every procedure write so the badge tracks the current text.
+    const { score, reason } = scoreProcedure(patch.procedure as string, owner)
+    patch.injectionScore = score
+    patch.injectionReason = reason
+  }
   if ('vars' in (body ?? {})) patch.vars = assertVars(body.vars)
   if (Array.isArray(body?.tools)) patch.tools = body.tools.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim())
   if ('reportsTo' in (body ?? {})) patch.reportsTo = body.reportsTo ?? null
