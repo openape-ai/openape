@@ -29,23 +29,30 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Build libs (all, serial — deterministic .d.ts before the checks)
+        # Build EVERY publishable library (packages + modules) BEFORE the checks,
+        # not --affected. Two reasons this order + scope matter:
+        #   1. Race fix (#934): if `typecheck`'s internal `^build` writes a
+        #      dependency's `.d.ts` while a consumer's tsc is already running, the
+        #      consumer can lose the fs-flush race and fail with a spurious
+        #      TS7016 "no declaration file for @openape/apes" (tsup emits dts in a
+        #      separate pass). Building all libs to completion in a SEPARATE turbo
+        #      process first means every consumed `.d.ts` is on disk and stable
+        #      before any tsc starts. `--concurrency=1` also removes the same race
+        #      *between* libs (a lib's dts pass reading a sibling's fresh dts).
+        #   2. Not --affected: a leaf/app-only change leaves apes "unaffected", so
+        #      an affected-scoped lib build would skip it — the exact trigger. All
+        #      libs cold is ~20s; cheap next to the app builds we still skip.
+        # Deployable apps (Nuxt) are intentionally NOT built here:
+        #   - their full Nitro `.output` production build is a deploy-time concern
+        #     (`pnpm run deploy:image` builds + health-gates + auto-rolls-back);
+        #   - building the apps' Nitro output on the runner triggered the pnpm +
+        #     Nitro `.output/server/node_modules` ELOOP symlink cycle
+        #     (vue↔@vue/server-renderer; nuxt#30539 / #12012) — no reliable fix.
+        run: pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=1
       - name: Lint · Typecheck · Test (affected)
         # e2e needs a running stack (dedicated job); docs prerenders OG images
-        # (fragile, own deploy) — both excluded from per-PR CI.
+        # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
+        # built above, so every `^build` here is a cache hit — no fresh dts writes
+        # race the typechecks.
         run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
-      - name: Build libs (affected)
-        # Build ONLY the publishable libraries (packages + modules) — the things
-        # other workspaces consume. Deployable apps (Nuxt) are intentionally NOT
-        # built here:
-        #   1. their full Nitro `.output` production build is a deploy-time
-        #      concern — `pnpm run deploy:image` builds them, smoke-tests
-        #      `/api/health`, health-gates the cutover and auto-rolls-back, so an
-        #      app build break is caught before prod regardless;
-        #   2. their code is already validated by the lint/typecheck/test wave;
-        #   3. building the apps' Nitro output on the runner is what triggered the
-        #      pnpm + Nitro `.output/server/node_modules` ELOOP symlink cycle
-        #      (vue↔@vue/server-renderer; nuxt#30539 / #12012) — a known issue with
-        #      no reliable pnpm-config fix — which forced admin-merges.
-        # Scoping to libs makes CI deterministic and mirrors the pre-push hook's
-        # build stage. (`docs` was already excluded for the same spirit.)
-        run: pnpm turbo run build --affected --filter='./packages/*' --filter='./modules/*' --concurrency=1
