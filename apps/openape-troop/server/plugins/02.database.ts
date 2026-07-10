@@ -29,12 +29,26 @@ export default defineNitroPlugin(async () => {
       role TEXT NOT NULL DEFAULT 'specialist',
       label TEXT NOT NULL DEFAULT '',
       duties TEXT NOT NULL DEFAULT '',
+      procedure TEXT NOT NULL DEFAULT '',
+      vars TEXT NOT NULL DEFAULT '{}',
+      injection_score REAL NOT NULL DEFAULT 0,
+      injection_reason TEXT NOT NULL DEFAULT '',
       tools TEXT NOT NULL DEFAULT '[]',
       reports_to TEXT,
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_agents_org ON cockpit_agents(owner_email, org_id)`)
+    // Cockpit procedures (#930): the role's work instruction + its own facts
+    // live in troop, not in a file on the operator's disk.
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN procedure TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN vars TEXT NOT NULL DEFAULT '{}'`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_score REAL NOT NULL DEFAULT 0`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_reason TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_schedules (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
@@ -263,10 +277,14 @@ export default defineNitroPlugin(async () => {
       name TEXT NOT NULL,
       vision_md TEXT NOT NULL DEFAULT '',
       budget_monthly_eur INTEGER NOT NULL DEFAULT 0,
+      vars TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_org_owner ON organizations(owner_email)`)
+    // Cockpit procedures (#930): company-wide facts shared by every employee.
+    try { await db.run(sql`ALTER TABLE organizations ADD COLUMN vars TEXT NOT NULL DEFAULT '{}'`) }
+    catch { /* column exists */ }
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS org_members (
       org_id TEXT NOT NULL,
