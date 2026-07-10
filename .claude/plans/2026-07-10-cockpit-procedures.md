@@ -343,13 +343,49 @@ auf `duties` zurück und ist wieder read-and-report.
         `cursor:not-allowed`, sichtbare Parser-Meldung — und ein **erzwungener Klick setzt kein PATCH ab**.
       - Der Screenshot hat einen echten Fehler gefunden: das Modal war höher als ein Laptop-Viewport,
         Warnung und Speichern-Button lagen unter der Falz. Gefixt (`max-h-[85dvh]` + `overflow-y-auto`).
-- [ ] `[ ]` **Nächste Session:** Milestone 2 (Injection-Profiler). Voraussetzung: PR #933 (h3) gemergt,
-      sonst trägt #931 den Merge-Commit mit.
-- [ ] `[ ]` Milestone 2: Injection-Profiler
-- [ ] `[ ]` Milestone 3: Loop liest troop, erster echter PR
+- [x] `[2026-07-10 12:30]` **#931 nach main gemergt** (Merge-Commit `946263f3`). Enthält M1 + den
+      h3-Fix `6187407f`. Issues #930, #932 geschlossen; PR #933 geschlossen (sein Diff ist über #931 in
+      main). **Abweichung von „#933 zuerst":** #933 trifft eigenständig ein intermittierendes
+      turbo-`--affected`-Race (siehe Discoveries) und wäre nur per Glücks-Rerun grün geworden — das wäre
+      „fighting flaky CI". #931 war deterministisch grün und enthält den Fix, also war es das Vehikel.
+- [x] `[2026-07-11]` **Milestone 2: Injection-Profiler — fertig + verifiziert.** Issue #936, Branch
+      `feat/issue-936-injection-profiler`. Vorher: CI-Race-Fix #935 gemergt (CI jetzt deterministisch).
+      - Server: `scoreProcedure()` (testbarer Helper) läuft in `agents.post.ts` + `agents/[id].patch.ts`
+        bei jedem `procedure`-Write; `injectionScore`/`injectionReason` werden persistiert. **Kein Gate**
+        (`isOwner:true`). 3 neue Tests, beide Richtungen.
+      - UI: **Live**-Badge am Arbeitsanweisungs-Feld (grün <0.3, gelb <0.7, rot ≥0.7, reason im Tooltip).
+      - Verifiziert: API — echte Prozedur → score 0, Injection → 1.0 (`instruction-override,
+        sensitive-path`). Screenshots (Playwright, echte Session): grünes 0.00-Badge + rotes
+        1.00-Badge, Speichern **nicht** disabled (kein Gate). 225 troop-Tests + 12 Detector-Tests grün.
+      - **Realitäts-Fund:** die Heuristik ist englisch-musterbasiert — eine *deutsche* Injection scort 0
+        (dokumentierte Recall-Grenze; paraphrasiert/mehrsprachig = späterer LLM-Backend-Job). Tests
+        nutzen daher englische Injection, damit sie echtes Verhalten messen.
+      - **Bewusst NACH M3 verschoben (Plan-Schritt 4):** „recursive-node.md meldet laut bei Score >0.7".
+        Der Skill liest `procedure`/`score` noch gar nicht (das ist M3) — die Reaktion jetzt einzubauen
+        wäre toter Code. Gehört dorthin, wo die Prozedur real zum Subagent fließt.
+      - **Nebenfund (aus #932 entstanden):** der browser-seitige Import brauchte einen browser-safen
+        Subpath — der Barrel-Export von `@openape/prompt-injection-detector` zieht `fs` (audit/config).
+        Neu: Export `./heuristic` (nur die reine `classifyHeuristic`). Und das Dev-Session-Cookie-Seal
+        musste von h3-v2- auf h3-v1-Format (`createdAt: Date.now()`, sonst „Session expired") — Folge
+        des eigenen h3-Fixes #932.
+- [ ] `[ ]` Milestone 3: Loop liest troop, erster echter PR (nächste Session)
 - [ ] `[ ]` Milestone 4: lokale Datei gelöscht
 
 ## Surprises & Discoveries
+
+- **[2026-07-10] Der h3-Fix triggert ein vorbestehendes, intermittierendes CI-Race (nicht mein Code).**
+  `#933` (die zwei Zeilen h3-Deklaration) war eigenständig zweimal CI-rot (Runs 2074, 2083), obwohl der
+  *identische* Baum als Teil von `#931` grün war (Run 2080). Forensik: `@openape/apes` baut mit tsup +
+  `dts: true` — tsup schreibt `dist/index.js` zuerst und die `.d.ts` in einem **separaten async Pass**.
+  Unter `turbo run --affected` mit **kaltem Cache** startet `@openape/ape-agent:typecheck` (`tsc --noEmit`)
+  manchmal, bevor die `.d.ts` da ist → `TS7016: Could not find a declaration file for '@openape/apes'`.
+  Obwohl ape-agent `@openape/apes: workspace:*` deklariert und `typecheck` `dependsOn: ['^build']` hat.
+  Es ist ein **Race**, kein Defekt: rot in CI (2×) + einem frischen Worktree, aber grün bei warmem Cache
+  (121/121), reinem `build --affected` kalt (37/37) und isoliert (`--filter=@openape/ape-agent`, 12/12).
+  Meine zwei-Zeilen-Änderung hat es nur ausgelöst, indem sie den `--affected`-Satz um ape-agent+apes
+  erweiterte. **Als eigener Task geflaggt.** Deploys sind unbetroffen (`pnpm turbo build` voll ordnet korrekt).
+  Lehre für M2: wenn CI ohne erkennbaren Grund rot ist und der Diff nur Konfig/Deps berührt, erst prüfen,
+  ob derselbe Baum als Superset grün war — dann ist es dieses Race, kein neuer Fehler.
 
 - **[2026-07-10] BLOCKER für die UI-Verifikation: der troop-Dev-Server ist auf `main` kaputt.**
   `modules/nuxt-auth-sp` deklariert `h3` nicht in seiner `package.json` und zieht es als
