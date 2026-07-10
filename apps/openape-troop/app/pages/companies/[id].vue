@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Employee } from '~/components/company/OrgNode.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
@@ -11,8 +12,7 @@ useSeoMeta({ title: () => 'Firma' })
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
 
-interface Org { id: string, name: string, visionMd: string, budgetMonthlyEur: number }
-interface Employee { id: string, role: string, label: string, duties: string, tools: string[], enabled: boolean, reportsTo: string | null }
+interface Org { id: string, name: string, visionMd: string, budgetMonthlyEur: number, vars: Record<string, unknown> }
 
 const org = ref<Org | null>(null)
 const employees = ref<Employee[]>([])
@@ -57,9 +57,10 @@ const TABS = [
 // ── Employee form (add + edit) ──
 // An optional template pre-fills Name/Rolle/Werkzeuge/Beschreibung, then edit
 // freely. „Werkzeuge" = wildcard command patterns (e.g. `o365-cli *`).
-interface RoleTemplate { key: string, label: string, name: string, role: string, tools: string, duties: string }
+interface RoleTemplate { key: string, label: string, name: string, role: string, tools: string, duties: string, procedure?: string }
 const ROLE_TEMPLATES: RoleTemplate[] = [
   { key: '', label: 'Keine Vorlage (leer)', name: '', role: 'specialist', tools: '', duties: '' },
+  { key: 'programmierer', label: 'Programmierer', name: 'Programmierer', role: 'specialist', tools: '*', duties: 'Implementiert Sprint-Todos in einem Worktree, verifiziert lokal und pusht einen PR. Merged nie selbst.', procedure: '' },
   { key: 'ceo', label: 'CEO', name: 'CEO', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
   { key: 'pm', label: 'Projektmanager', name: 'Projektmanager', role: 'teamlead', tools: 'ape-tasks *', duties: 'Pflegt Backlog/Aufgaben, plant, hält Termine/Blocker sichtbar.' },
   { key: 'mail-m365', label: 'Mail-Assistent · Microsoft 365', name: 'Mail-Assistent', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Triagiert die Inbox read-only, meldet die handlungsrelevanten Mails und liest Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht NIE.' },
@@ -82,33 +83,55 @@ const supervisorItems = computed(() => [
 ])
 const showForm = ref(false)
 const templateKey = ref('')
-const form = reactive({ name: '', role: 'specialist', tools: '', duties: '', reportsTo: '' })
+const form = reactive({ name: '', role: 'specialist', tools: '', duties: '', procedure: '', varsText: '{}', reportsTo: '' })
 const saving = ref(false)
 const formError = ref('')
+
+// `vars` is hand-written JSON. Broken JSON must block the save with a visible
+// message — never fall back to {} and silently drop the operator's facts.
+function parseVarsText(text: string): { vars: Record<string, unknown> } | { error: string } {
+  const trimmed = text.trim()
+  if (!trimmed) return { vars: {} }
+  let parsed: unknown
+  try { parsed = JSON.parse(trimmed) }
+  catch (err) { return { error: `Kein gültiges JSON: ${(err as Error).message}` } }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: 'vars muss ein JSON-Objekt sein, kein Array oder Wert.' }
+  return { vars: parsed as Record<string, unknown> }
+}
+const varsError = computed(() => {
+  const result = parseVarsText(form.varsText)
+  return 'error' in result ? result.error : ''
+})
+
 watch(templateKey, (key) => {
   const t = ROLE_TEMPLATES.find(x => x.key === key) ?? ROLE_TEMPLATES[0]!
-  form.name = t.name; form.role = t.role; form.tools = t.tools; form.duties = t.duties
+  form.name = t.name; form.role = t.role; form.tools = t.tools; form.duties = t.duties; form.procedure = t.procedure ?? ''
 })
 function openAdd() {
   formError.value = ''; editingId.value = null; templateKey.value = ''
-  form.name = ''; form.role = 'specialist'; form.tools = ''; form.duties = ''
+  form.name = ''; form.role = 'specialist'; form.tools = ''; form.duties = ''; form.procedure = ''; form.varsText = '{}'
   form.reportsTo = employees.value.find(e => e.role === 'ceo')?.id ?? ''
   showForm.value = true
 }
 function openEdit(e: Employee) {
   formError.value = ''; editingId.value = e.id; templateKey.value = ''
   form.name = e.label; form.role = e.role; form.tools = e.tools.join('\n'); form.duties = e.duties
+  form.procedure = e.procedure; form.varsText = JSON.stringify(e.vars ?? {}, null, 2)
   form.reportsTo = e.reportsTo ?? ''
   showForm.value = true
 }
 async function submitForm() {
   if (!form.name.trim()) { formError.value = 'Name angeben.'; return }
+  const parsedVars = parseVarsText(form.varsText)
+  if ('error' in parsedVars) { formError.value = parsedVars.error; return }
   saving.value = true
   formError.value = ''
   const body = {
     label: form.name.trim(),
     role: form.role,
     duties: form.duties.trim(),
+    procedure: form.procedure.trim(),
+    vars: parsedVars.vars,
     tools: form.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
     reportsTo: form.reportsTo || null,
   }
@@ -132,20 +155,31 @@ async function toggleEmployee(e: { id: string, enabled: boolean }) {
 
 // ── Edit org ──
 const showEdit = ref(false)
-const editForm = reactive({ name: '', vision: '', budget: 0 })
+const editForm = reactive({ name: '', vision: '', budget: 0, varsText: '{}' })
 const savingEdit = ref(false)
+const editVarsError = computed(() => {
+  const result = parseVarsText(editForm.varsText)
+  return 'error' in result ? result.error : ''
+})
+const saveOrgError = ref('')
 function openEditOrg() {
   if (!org.value) return
   editForm.name = org.value.name; editForm.vision = org.value.visionMd; editForm.budget = org.value.budgetMonthlyEur
+  editForm.varsText = JSON.stringify(org.value.vars ?? {}, null, 2)
+  saveOrgError.value = ''
   showEdit.value = true
 }
 async function saveOrg() {
+  const parsedVars = parseVarsText(editForm.varsText)
+  if ('error' in parsedVars) { saveOrgError.value = parsedVars.error; return }
   savingEdit.value = true
+  saveOrgError.value = ''
   try {
-    await ($fetch as any)(`/api/orgs/${orgId.value}`, { method: 'PATCH', body: { name: editForm.name.trim(), vision_md: editForm.vision.trim(), budget_monthly_eur: editForm.budget } })
+    await ($fetch as any)(`/api/orgs/${orgId.value}`, { method: 'PATCH', body: { name: editForm.name.trim(), vision_md: editForm.vision.trim(), budget_monthly_eur: editForm.budget, vars: parsedVars.vars } })
     showEdit.value = false
     await load()
   }
+  catch (err: any) { saveOrgError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
   finally { savingEdit.value = false }
 }
 
@@ -207,7 +241,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     </main>
 
     <!-- Employee form (add + edit) -->
-    <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-lg' }">
+    <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-2xl' }">
       <template #content>
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
@@ -233,15 +267,22 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           <UFormField label="Werkzeuge" description="Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *">
             <UTextarea v-model="form.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Beschreibung" description="Was tut die Rolle? Read-only — der CEO delegiert danach.">
-            <UTextarea v-model="form.duties" :rows="3" placeholder="Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField label="Kurzfassung" description="Erscheint im Organigramm. Ein Satz — wofür ist die Rolle da?">
+            <UTextarea v-model="form.duties" :rows="2" placeholder="Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
+          <UFormField label="Arbeitsanweisung" description="Der Agent bekommt genau diesen Text. Leer lassen, wenn die Rolle nur berichten soll.">
+            <UTextarea v-model="form.procedure" :rows="12" placeholder="## 1. Aufgabe holen&#10;…" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UFormField label="Kenndaten (vars)" description="JSON. Die eigenen Fakten der Rolle — die Firmen-Fakten kommen automatisch dazu.">
+            <UTextarea v-model="form.varsText" :rows="4" placeholder="{ &quot;boardUser&quot;: 254 }" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UAlert v-if="varsError" color="warning" variant="subtle" :title="varsError" />
           <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showForm = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="saving" @click="submitForm">
+            <UButton color="primary" :loading="saving" :disabled="!!varsError" @click="submitForm">
               {{ editingId ? 'Speichern' : 'Hinzufügen' }}
             </UButton>
           </div>
@@ -268,11 +309,16 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           <UFormField label="Monatsbudget (EUR)">
             <UInput v-model.number="editForm.budget" type="number" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
+          <UFormField label="Firmen-Kenndaten (vars)" description="JSON. Jeder Mitarbeiter erbt diese Fakten — eigene Kenndaten überschreiben sie.">
+            <UTextarea v-model="editForm.varsText" :rows="5" placeholder="{ &quot;project&quot;: 125 }" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+          </UFormField>
+          <UAlert v-if="editVarsError" color="warning" variant="subtle" :title="editVarsError" />
+          <UAlert v-if="saveOrgError" color="error" variant="subtle" :title="saveOrgError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showEdit = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="savingEdit" @click="saveOrg">
+            <UButton color="primary" :loading="savingEdit" :disabled="!!editVarsError" @click="saveOrg">
               Speichern
             </UButton>
           </div>
