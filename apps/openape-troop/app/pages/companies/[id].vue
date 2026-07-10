@@ -241,9 +241,11 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     </main>
 
     <!-- Employee form (add + edit) -->
-    <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-2xl' }">
+    <!-- The procedure textarea makes this form taller than a laptop viewport;
+         without the cap the save button and the vars error scroll off-screen. -->
+    <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-2xl max-h-[85dvh]' }">
       <template #content>
-        <div class="p-5 sm:p-6 space-y-4">
+        <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
               {{ editingId ? 'Mitarbeiter bearbeiten' : 'Mitarbeiter hinzufügen' }}
