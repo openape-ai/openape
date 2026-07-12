@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Employee } from '~/components/company/OrgNode.vue'
+import { classifyHeuristic } from '@openape/prompt-injection-detector/heuristic'
 import { computed, reactive, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
@@ -101,6 +102,17 @@ function parseVarsText(text: string): { vars: Record<string, unknown> } | { erro
 const varsError = computed(() => {
   const result = parseVarsText(form.varsText)
   return 'error' in result ? result.error : ''
+})
+
+// Live prompt-injection score of the procedure text — same pure function the
+// server persists on save, so the badge always matches the stored score.
+// A visible signal, never a gate (the owner may author flagged instructions).
+const procedureRisk = computed(() => {
+  const text = form.procedure.trim()
+  if (!text) return null
+  const { score, reason } = classifyHeuristic({ text, sender: { email: ownerEmail.value, isOwner: true } })
+  const level = score >= 0.7 ? 'error' : score >= 0.3 ? 'warning' : 'success'
+  return { score, reason: reason ?? '', level: level as 'error' | 'warning' | 'success' }
 })
 
 watch(templateKey, (key) => {
@@ -273,6 +285,17 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             <UTextarea v-model="form.duties" :rows="2" placeholder="Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UFormField label="Arbeitsanweisung" description="Der Agent bekommt genau diesen Text. Leer lassen, wenn die Rolle nur berichten soll.">
+            <template #hint>
+              <UBadge
+                v-if="procedureRisk"
+                :color="procedureRisk.level"
+                variant="subtle"
+                size="sm"
+                :title="procedureRisk.reason || 'keine Injection-Muster erkannt'"
+              >
+                Injection-Score {{ procedureRisk.score.toFixed(2) }}{{ procedureRisk.reason ? ` · ${procedureRisk.reason}` : '' }}
+              </UBadge>
+            </template>
             <UTextarea v-model="form.procedure" :rows="12" placeholder="## 1. Aufgabe holen&#10;…" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UFormField label="Kenndaten (vars)" description="JSON. Die eigenen Fakten der Rolle — die Firmen-Fakten kommen automatisch dazu.">

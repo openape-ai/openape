@@ -21,3 +21,8 @@ jobs:
         run: pnpm turbo run test --filter=openape-e2e
       - name: E2E proof-link round-trip (testrun, dev-mode boot)
         run: pnpm turbo run test:e2e --filter=@openape-testrun/app
+      - name: E2E free-idp admin/login flows (nuxt-dev boot)
+        # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
+        # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
+        # so the per-PR `ci` job stays deterministic under load.
+        run: pnpm turbo run test:e2e --filter=openape-free-idp
