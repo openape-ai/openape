@@ -21,6 +21,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./heuristic": {
+      "import": "./dist/heuristic.js",
+      "types": "./dist/heuristic.d.ts"
     }
   },
   "files": [
