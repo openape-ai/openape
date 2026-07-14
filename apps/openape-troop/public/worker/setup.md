@@ -15,12 +15,16 @@ The worker authenticates to troop with the user's OpenApe identity. Check:
 `apes whoami`. If it fails, tell the user to run `apes login <their-email>` first, then continue.
 (If `apes` isn't installed, point them to the OpenApe CLI install; then stop.)
 
-## 2. Already installed?
+## 2. Already installed? (check BOTH — running vs merely stopped)
 
-`launchctl list | grep at.openape.worker` (macOS). Non-empty → the headless worker is
-**already running**. Tell the user that + show status
-(`curl -s https://zaz.delta-mind.at/api/agent/health` if they use zaz, and
-`tail -3 ~/.config/openape-worker/worker.log`), then stop. Do **not** start a second one.
+- **Running:** `launchctl list | grep at.openape.worker` non-empty → already running. Show
+  status (`tail -3 ~/.config/openape-worker/worker.log`), then stop. Don't start a second one.
+- **Installed but stopped:** the plist file `~/Library/LaunchAgents/at.openape.worker.plist`
+  exists (even though it's not in `launchctl list`) → the worker is already set up, just not
+  loaded. **Just start it — do NOT re-fetch files or ask for a token:**
+  `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/at.openape.worker.plist`, verify it
+  appears in `launchctl list`, then stop.
+- **Fresh** (neither) → continue to step 3.
 
 ## 3. Ask the user: how should it run?
 
@@ -44,7 +48,7 @@ Then loop (self-paced, until the session ends). Let `CA=~/.config/openape-worker
 
 ## 4b. Permanent (headless launchd)
 
-1. **Token:** run `claude setup-token`, have the user paste it, write it `chmod 600` to `~/.config/openape-worker/token` (a long-lived headless Claude token — the launchd `claude -p` needs it).
+1. **Token:** if `~/.config/openape-worker/token` already exists and is non-empty, **skip this step** (reuse it). Otherwise run `claude setup-token`, have the user paste it, write it `chmod 600` to `~/.config/openape-worker/token` (a long-lived headless Claude token — the launchd `claude -p` needs it).
 2. **Files:**
    ```
    mkdir -p ~/.config/openape-worker && cd ~/.config/openape-worker
