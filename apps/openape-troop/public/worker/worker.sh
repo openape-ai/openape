@@ -11,7 +11,10 @@ CA="$DIR/cockpit-agent.sh"
 MODEL="${OPENAPE_WORKER_MODEL:-claude-sonnet-5}"
 export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$DIR/token")"
 
-log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
+# Logs go to stderr, not stdout: generate() runs inside $(...) command substitution,
+# so any stdout there would leak into the captured answer (a KILLED log line once got
+# saved as the CEO's chat message). launchd routes stderr to the same worker.log.
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
 
 # Appended to the cockpit systemPrompt: keep chat answers CEO-conversational,
 # enable delegation for real tool work, and enforce a hard read-only trust boundary.
