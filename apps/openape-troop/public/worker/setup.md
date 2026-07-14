@@ -52,7 +52,7 @@ Then loop (self-paced, until the session ends). Let `CA=~/.config/openape-worker
 2. **Files:**
    ```
    mkdir -p ~/.config/openape-worker && cd ~/.config/openape-worker
-   for f in worker.sh parse.py clean.py cockpit-agent.sh; do curl -fsS "https://troop.openape.ai/worker/$f" -o "$f"; done
+   for f in worker.sh parse.py clean.py progress.py cockpit-agent.sh; do curl -fsS "https://troop.openape.ai/worker/$f" -o "$f"; done
    chmod +x worker.sh cockpit-agent.sh
    ```
 3. **launchd plist:** fetch `at.openape.worker.plist.template`, replace `__HOME__` with `$HOME`, write to `~/Library/LaunchAgents/at.openape.worker.plist`.
