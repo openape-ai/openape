@@ -27,9 +27,16 @@ export default defineEventHandler(async (event) => {
   const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
   const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
 
-  const userMessage = [...(body?.messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
-  if (userMessage.trim()) await saveChatMessage(company, owner, 'user', userMessage)
-  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), userMessage, owner)
+  const history = body?.messages ?? []
+  const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
+  if (latestUser.trim()) await saveChatMessage(company, owner, 'user', latestUser)
+  // Give the CEO the recent conversation (last 20 turns) so follow-ups like
+  // "bitte ablegen - ja" resolve against what was said before — not just the last line.
+  const recent = history.slice(-20)
+  const prompt = recent.length > 1
+    ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als CEO, ohne Namenspräfix.`
+    : latestUser
+  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), prompt, owner)
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
