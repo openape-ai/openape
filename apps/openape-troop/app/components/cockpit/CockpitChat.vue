@@ -14,6 +14,23 @@ const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scrol
 useKeyboardInset()
 onMounted(startPresence)
 
+// WhatsApp-style day separator before the first message of each day.
+function dayLabel(ms: number): string {
+  const d = new Date(ms)
+  const start = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((start(new Date()) - start(d)) / 86_400_000)
+  if (diff === 0) return 'Heute'
+  if (diff === 1) return 'Gestern'
+  return d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+function daySep(i: number): string {
+  const ms = messages.value[i]?.createdAt
+  if (!ms) return ''
+  const prev = messages.value[i - 1]?.createdAt
+  if (prev && new Date(prev).toDateString() === new Date(ms).toDateString()) return ''
+  return dayLabel(ms)
+}
+
 function onCompanyChange(e: Event): void {
   void selectCompany((e.target as HTMLSelectElement).value)
 }
@@ -69,7 +86,12 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           <p v-else-if="!messages.length" class="empty">
             Frag {{ currentCompany?.name }} etwas – die Antwort streamt live herein.
           </p>
-          <CockpitBubble v-for="m in messages" :key="m.id" :message="m" />
+          <template v-for="(m, i) in messages" :key="m.id">
+            <div v-if="daySep(i)" class="date-sep">
+              <span>{{ daySep(i) }}</span>
+            </div>
+            <CockpitBubble :message="m" />
+          </template>
         </div>
       </div>
 
