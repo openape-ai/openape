@@ -8,6 +8,12 @@ const html = computed(() => props.message.role === 'assistant' ? renderMarkdown(
 const showWaiting = computed(() => props.message.streaming && !props.message.content && !!props.message.waiting)
 const showThoughts = computed(() => props.message.streaming && !props.message.content && !props.message.waiting && (props.message.thoughts?.length ?? 0) > 0)
 const latestThought = computed(() => props.message.thoughts?.at(-1) ?? '')
+// Timestamp shows once a message has settled (has content) — not on the live typing placeholder.
+const timeLabel = computed(() => {
+  const ms = props.message.createdAt
+  if (!ms || (props.message.streaming && !props.message.content)) return ''
+  return new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+})
 
 function onCopyClick(e: MouseEvent): void {
   const btn = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null
@@ -43,5 +49,6 @@ function onCopyClick(e: MouseEvent): void {
     <div v-else class="plain">
       {{ message.content }}
     </div>
+    <time v-if="timeLabel" class="time">{{ timeLabel }}</time>
   </div>
 </template>
