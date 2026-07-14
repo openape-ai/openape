@@ -90,8 +90,12 @@ export default defineNuxtConfig({
   runtimeConfig: {
     tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-troop.db',
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
+    vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',
+      // Web-Push public key (safe to ship). Private key lives in env only.
+      vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || 'BD23IE3i1Arxaby2HtxR6VyI2LAYRQF62x5TlwDdlB4kT3V7gTQK0G5ZWsrJOiUs9rPJcBmIvP3fWv6uG-96WDA',
     },
   },
 })
