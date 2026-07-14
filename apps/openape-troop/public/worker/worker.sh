@@ -11,7 +11,10 @@ CA="$DIR/cockpit-agent.sh"
 MODEL="${OPENAPE_WORKER_MODEL:-claude-sonnet-5}"
 export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$DIR/token")"
 
-log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*"; }
+# Logs go to stderr, not stdout: generate() runs inside $(...) command substitution,
+# so any stdout there would leak into the captured answer (a KILLED log line once got
+# saved as the CEO's chat message). launchd routes stderr to the same worker.log.
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
 
 # Appended to the cockpit systemPrompt: keep chat answers CEO-conversational,
 # enable delegation for real tool work, and enforce a hard read-only trust boundary.
@@ -36,32 +39,46 @@ VERBOTEN bleibt: Mail senden/weiterleiten/loeschen/verschieben, posten/veroeffen
 loeschen, force-push, ausserhalb der Buchhaltungs-Ordner schreiben, oder irgendetwas
 nach-aussen-Wirkendes/Zerstoererisches. Im Zweifel: beschreiben und Patrick bestaetigen lassen.'
 
-# Hard cap on one generation. A hung / rate-limited claude -p otherwise blocks the
-# whole loop forever (seen 2026-07-14: a 9-min network stall left the CEO offline).
-GEN_TIMEOUT="${OPENAPE_WORKER_GEN_TIMEOUT:-220}"
+# A task may run as long as it keeps making progress (an hour is fine). We kill only
+# on a genuine STALL — no new stream output for STALL_SECS (a hung/rate-limited call
+# produces nothing). MAX_SECS is just a runaway backstop. Both env-overridable.
+STALL_SECS="${OPENAPE_WORKER_STALL_SECS:-150}"
+MAX_SECS="${OPENAPE_WORKER_MAX_SECS:-3600}"
 
 # generate <scratchdir> <allowedTools> <extraFlags> <id> <label> — answer via headless
-# claude -p. Killed if it exceeds GEN_TIMEOUT (never wedge on one stuck call), and it
-# posts an interim progress ping every ~10s so the UI shows it's alive + how long.
+# claude -p in stream-json. Posts real interim progress (what it's doing) whenever the
+# stream advances; killed only when the stream goes silent for STALL_SECS, not on a clock.
 generate() {
-  local S="$1" allow="$2" extra="$3" id="$4" label="$5" pid waited=0
-  : > "$S/out.txt"
+  local S="$1" allow="$2" extra="$3" id="$4" label="$5" pid last=0 silent=0 total=0 size
+  : > "$S/out.jsonl"
   claude -p "$(cat "$S/user.txt")" \
       --append-system-prompt "$(cat "$S/sys.txt")" \
       --model "$MODEL" --allowedTools "$allow" $extra \
-      --strict-mcp-config --mcp-config '{"mcpServers":{}}' < /dev/null > "$S/out.txt" 2>/dev/null &
+      --output-format stream-json --verbose \
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}' < /dev/null > "$S/out.jsonl" 2>/dev/null &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
-    if [ "$waited" -ge "$GEN_TIMEOUT" ]; then
+    sleep 5; total=$((total + 5))
+    size=$(($(wc -c < "$S/out.jsonl" 2>/dev/null || echo 0)))
+    if [ "$size" -gt "$last" ]; then
+      last=$size; silent=0
+      [ -n "$id" ] && bash "$CA" progress "$id" "$(python3 "$DIR/progress.py" < "$S/out.jsonl") · ${total}s" >/dev/null 2>&1 || true
+    else
+      silent=$((silent + 5))
+      if [ "$silent" -ge "$STALL_SECS" ]; then
+        pkill -9 -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null
+        log "[$label] task ${id:0:8} -> KILLED (stalled ${silent}s, no output)"
+        break
+      fi
+    fi
+    if [ "$total" -ge "$MAX_SECS" ]; then
       pkill -9 -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null
-      log "[$label] task ${id:0:8} -> KILLED (>${GEN_TIMEOUT}s)"
+      log "[$label] task ${id:0:8} -> KILLED (max ${MAX_SECS}s)"
       break
     fi
-    sleep 5; waited=$((waited + 5))
-    [ -n "$id" ] && [ $((waited % 10)) -eq 0 ] && bash "$CA" progress "$id" "🧠 CEO arbeitet … ${waited}s" >/dev/null 2>&1 || true
   done
   wait "$pid" 2>/dev/null
-  python3 "$DIR/clean.py" < "$S/out.txt"
+  python3 "$DIR/clean.py" < "$S/out.jsonl"
 }
 
 # How many times to attempt one task before giving up. A transient stall (network /
@@ -142,7 +159,7 @@ services_loop() {
   done
 }
 
-log "openape-worker start (model=$MODEL, cockpit ‖ services, delegation on, gen-timeout=${GEN_TIMEOUT}s)"
+log "openape-worker start (model=$MODEL, cockpit ‖ services, delegation on, stall=${STALL_SECS}s, max=${MAX_SECS}s)"
 rm -rf "$DIR/scratch"; mkdir -p "$DIR/scratch"
 heartbeat_loop & HPID=$!
 cockpit_loop & CPID=$!
