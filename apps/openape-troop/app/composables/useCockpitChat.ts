@@ -27,7 +27,7 @@ export function useCockpitChat() {
   async function loadFromServer(companyId: string): Promise<void> {
     try {
       const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId } })
-      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content }))
+      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt }))
     }
     catch { /* not logged in / none yet */ }
   }
@@ -85,8 +85,8 @@ export function useCockpitChat() {
     if (!content || isStreaming.value || !currentCompanyId.value) return
     const companyId = currentCompanyId.value
     const sinceMs = Date.now() - 1000
-    messages.value.push({ id: makeId(), role: 'user', content })
-    messages.value.push({ id: makeId(), role: 'assistant', content: '', streaming: true, thoughts: [] })
+    messages.value.push({ id: makeId(), role: 'user', content, createdAt: Date.now() })
+    messages.value.push({ id: makeId(), role: 'assistant', content: '', createdAt: Date.now(), streaming: true, thoughts: [] })
     const assistant = messages.value.at(-1)!
 
     isStreaming.value = true
