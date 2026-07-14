@@ -64,17 +64,29 @@ generate() {
   python3 "$DIR/clean.py" < "$S/out.txt"
 }
 
+# How many times to attempt one task before giving up. A transient stall (network /
+# rate-limit) self-heals on retry instead of silently dropping the message.
+GEN_RETRIES="${OPENAPE_WORKER_GEN_RETRIES:-2}"
+
 # answer <scratchdir> <id> <label> <progress> <allowedTools> <extraFlags>.
 answer() {
-  local S="$1" id="$2" label="$3" ans
+  local S="$1" id="$2" label="$3" ans try=1
   [ "$4" = "1" ] && bash "$CA" progress "$id" "🧠 CEO denkt …" >/dev/null 2>&1 || true
-  ans=$(generate "$S" "$5" "$6" "$id" "$label")
+  while :; do
+    ans=$(generate "$S" "$5" "$6" "$id" "$label")
+    [ -n "$ans" ] && break
+    [ "$try" -ge "$GEN_RETRIES" ] && break
+    try=$((try + 1))
+    log "[$label] task ${id:0:8} -> empty, retry $try/$GEN_RETRIES"
+    bash "$CA" progress "$id" "⏳ kurzer Aussetzer — neuer Versuch ($try) …" >/dev/null 2>&1 || true
+    sleep 5
+  done
   if [ -n "$ans" ]; then
     printf '%s' "$ans" | bash "$CA" resolve "$id" completed >/dev/null 2>&1
-    log "[$label] task ${id:0:8} -> resolved (${#ans} chars)"
+    log "[$label] task ${id:0:8} -> resolved (${#ans} chars, try $try)"
   else
-    printf '%s' "worker: empty answer" | bash "$CA" resolve "$id" failed >/dev/null 2>&1
-    log "[$label] task ${id:0:8} -> FAILED (empty)"
+    printf '%s' "⚠️ Der CEO konnte gerade nicht antworten (Netzwerk/Rate-Limit). Bitte die Frage nochmal senden." | bash "$CA" resolve "$id" failed >/dev/null 2>&1
+    log "[$label] task ${id:0:8} -> FAILED after $GEN_RETRIES tries"
   fi
 }
 
