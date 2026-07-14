@@ -148,7 +148,7 @@
 }
 .cockpit-root .bubble.user .time { color: rgba(255, 255, 255, 0.72); opacity: 1; }
 /* Day separator between messages of different days. */
-.cockpit-root .date-sep { align-self: center; margin: 2px 0; }
+.cockpit-root .date-sep { align-self: center; margin: 18px 0 4px; }
 .cockpit-root .date-sep span {
   display: inline-block;
   padding: 3px 12px;
