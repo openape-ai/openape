@@ -1,6 +1,6 @@
 {
-  "name": "Cockpit",
-  "short_name": "Cockpit",
+  "name": "Troop-Chat",
+  "short_name": "Troop-Chat",
   "description": "Reaktiver Chat mit den CEOs deiner Firmen.",
   "start_url": "/chat",
   "scope": "/chat",
