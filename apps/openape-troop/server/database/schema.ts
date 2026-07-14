@@ -446,3 +446,14 @@ export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
   content: text('content').notNull(),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
+
+// push_subscriptions — Web-Push endpoints for the owner's browsers/PWA installs.
+// One row per browser subscription (endpoint is the natural key). Used to notify
+// the owner when a CEO posts a cockpit-chat message while the tab is not focused.
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_push_subs_owner').on(table.ownerEmail)])
