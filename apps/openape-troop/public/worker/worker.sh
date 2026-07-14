@@ -13,6 +13,7 @@ CA="$DIR/cockpit-agent.sh"
 BACKEND="${OPENAPE_WORKER_BACKEND:-claude}"
 MODEL="${OPENAPE_WORKER_MODEL:-claude-sonnet-5}"       # claude backend
 CODEX_MODEL="${OPENAPE_WORKER_CODEX_MODEL:-}"          # codex backend (empty = codex default)
+CODEX_EFFORT="${OPENAPE_WORKER_CODEX_EFFORT:-low}"    # reasoning effort — low keeps chat snappy
 # claude auth = long-lived headless token; codex auth = ~/.codex/auth.json (nothing to do here).
 [ -f "$DIR/token" ] && export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$DIR/token")"
 
@@ -98,7 +99,10 @@ generate_codex() {
 
 --- Aufgabe ---
 $(cat "$S/user.txt")"
-  local args=(exec "$prompt" --json -o "$S/final.txt" --skip-git-repo-check -C "$HOME")
+  # --disable collaboration_modes: keep it a single fast CEO, not a multi-agent
+  # investigation (it once spawned 13 "collab" sub-agents for a yes/no chat question).
+  local args=(exec "$prompt" --json -o "$S/final.txt" --skip-git-repo-check -C "$HOME"
+              --disable collaboration_modes -c "model_reasoning_effort=$CODEX_EFFORT")
   if [ "$priv" = "1" ]; then args+=(--dangerously-bypass-approvals-and-sandbox); else args+=(-s read-only); fi
   [ -n "$CODEX_MODEL" ] && args+=(--model "$CODEX_MODEL")
   codex "${args[@]}" < /dev/null > "$S/out.jsonl" 2>/dev/null &
