@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
 import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
 
@@ -20,6 +20,7 @@ const props = defineProps({
 const emit = defineEmits(['error'])
 const { user, loading, fetchUser, login } = useOpenApeAuth()
 const email = ref('')
+const emailInput = ref(null)
 const error = ref('')
 const submitting = ref(false)
 const route = useRoute()
@@ -27,11 +28,16 @@ onMounted(async () => {
   await fetchUser()
   if (user.value) {
     navigateTo(props.postLoginRedirect)
+    return
   }
   if (typeof route.query.error === 'string' && route.query.error) {
     const code = route.query.error
     error.value = DEFAULT_OAUTH_ERROR_MESSAGES[code] ?? `Login failed: ${code}.`
   }
+  // The form is behind a v-if="loading" gate that only clears after fetchUser;
+  // wait for the re-render so the input exists before focusing it.
+  await nextTick()
+  emailInput.value?.focus()
 })
 async function handleSubmit() {
   error.value = ''
@@ -77,6 +83,7 @@ async function handleSubmit() {
       </slot>
 
       <input
+        ref="emailInput"
         v-model="email"
         type="email"
         class="openape-auth-input"
