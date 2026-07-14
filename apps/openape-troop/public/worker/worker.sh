@@ -36,21 +36,39 @@ VERBOTEN bleibt: Mail senden/weiterleiten/loeschen/verschieben, posten/veroeffen
 loeschen, force-push, ausserhalb der Buchhaltungs-Ordner schreiben, oder irgendetwas
 nach-aussen-Wirkendes/Zerstoererisches. Im Zweifel: beschreiben und Patrick bestaetigen lassen.'
 
-# generate <scratchdir> <allowedTools> <extraFlags> — answer via headless claude -p.
+# Hard cap on one generation. A hung / rate-limited claude -p otherwise blocks the
+# whole loop forever (seen 2026-07-14: a 9-min network stall left the CEO offline).
+GEN_TIMEOUT="${OPENAPE_WORKER_GEN_TIMEOUT:-220}"
+
+# generate <scratchdir> <allowedTools> <extraFlags> <id> <label> — answer via headless
+# claude -p. Killed if it exceeds GEN_TIMEOUT (never wedge on one stuck call), and it
+# posts an interim progress ping every ~10s so the UI shows it's alive + how long.
 generate() {
-  local S="$1" allow="$2" extra="$3" ans
-  ans=$(claude -p "$(cat "$S/user.txt")" \
+  local S="$1" allow="$2" extra="$3" id="$4" label="$5" pid waited=0
+  : > "$S/out.txt"
+  claude -p "$(cat "$S/user.txt")" \
       --append-system-prompt "$(cat "$S/sys.txt")" \
       --model "$MODEL" --allowedTools "$allow" $extra \
-      --strict-mcp-config --mcp-config '{"mcpServers":{}}' < /dev/null 2>/dev/null || true)
-  printf '%s' "$ans" | python3 "$DIR/clean.py"
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}' < /dev/null > "$S/out.txt" 2>/dev/null &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$GEN_TIMEOUT" ]; then
+      pkill -9 -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null
+      log "[$label] task ${id:0:8} -> KILLED (>${GEN_TIMEOUT}s)"
+      break
+    fi
+    sleep 5; waited=$((waited + 5))
+    [ -n "$id" ] && [ $((waited % 10)) -eq 0 ] && bash "$CA" progress "$id" "🧠 CEO arbeitet … ${waited}s" >/dev/null 2>&1 || true
+  done
+  wait "$pid" 2>/dev/null
+  python3 "$DIR/clean.py" < "$S/out.txt"
 }
 
 # answer <scratchdir> <id> <label> <progress> <allowedTools> <extraFlags>.
 answer() {
   local S="$1" id="$2" label="$3" ans
   [ "$4" = "1" ] && bash "$CA" progress "$id" "🧠 CEO denkt …" >/dev/null 2>&1 || true
-  ans=$(generate "$S" "$5" "$6")
+  ans=$(generate "$S" "$5" "$6" "$id" "$label")
   if [ -n "$ans" ]; then
     printf '%s' "$ans" | bash "$CA" resolve "$id" completed >/dev/null 2>&1
     log "[$label] task ${id:0:8} -> resolved (${#ans} chars)"
@@ -60,12 +78,18 @@ answer() {
   fi
 }
 
-# Cockpit loop: own scratch, heartbeats, sequential; CEO can delegate (Task+Bash).
+# Heartbeat loop: independent of cockpit/services so a long (or timing-out) generation
+# can never drop presence — the CEO stays "live" while it works.
+heartbeat_loop() {
+  unset SVC_URL SVC_TASKS
+  while true; do bash "$CA" heartbeat 20000 >/dev/null 2>&1 || true; sleep 15; done
+}
+
+# Cockpit loop: own scratch, sequential; CEO can delegate (Task+Bash).
 cockpit_loop() {
-  local S="$DIR/scratch/cockpit" last_hb=-999 worked task id
+  local S="$DIR/scratch/cockpit" worked task id
   mkdir -p "$S"; unset SVC_URL SVC_TASKS
   while true; do
-    if [ $((SECONDS - last_hb)) -ge 15 ]; then bash "$CA" heartbeat 20000 >/dev/null 2>&1 || true; last_hb=$SECONDS; fi
     worked=0
     while true; do
       task=$(bash "$CA" next 2>/dev/null || true)
@@ -106,11 +130,12 @@ services_loop() {
   done
 }
 
-log "openape-worker start (model=$MODEL, cockpit ‖ services, delegation on)"
+log "openape-worker start (model=$MODEL, cockpit ‖ services, delegation on, gen-timeout=${GEN_TIMEOUT}s)"
 rm -rf "$DIR/scratch"; mkdir -p "$DIR/scratch"
+heartbeat_loop & HPID=$!
 cockpit_loop & CPID=$!
 services_loop & SPID=$!
-while kill -0 "$CPID" 2>/dev/null && kill -0 "$SPID" 2>/dev/null; do sleep 5; done
+while kill -0 "$HPID" 2>/dev/null && kill -0 "$CPID" 2>/dev/null && kill -0 "$SPID" 2>/dev/null; do sleep 5; done
 log "a loop exited — restarting worker"
-kill "$CPID" "$SPID" 2>/dev/null || true
+kill "$HPID" "$CPID" "$SPID" 2>/dev/null || true
 exit 1
