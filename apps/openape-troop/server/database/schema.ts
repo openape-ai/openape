@@ -441,6 +441,26 @@ export const memory = sqliteTable('memory', {
 export type Memory = typeof memory.$inferSelect
 export type NewMemory = typeof memory.$inferInsert
 
+// cockpit_skills — reusable, named procedures (≈ Claude Skills) an agent follows
+// inline when a task matches its `description`. Assigned to agents via `assignedTo`
+// (a JSON list of cockpit_agent ids and/or the literal 'ceo'). Distinct from
+// `cockpitAgents.procedure` (which is role-bound) and from the machine-agent
+// `agent_skills` table (a different layer). Org-scoped.
+export const cockpitSkills = sqliteTable('cockpit_skills', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  name: text('name').notNull().default(''),
+  description: text('description').notNull().default(''),
+  prompt: text('prompt').notNull().default(''),
+  assignedTo: text('assigned_to', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_cockpit_skills_org').on(table.orgId)])
+
+export type Skill = typeof cockpitSkills.$inferSelect
+export type NewSkill = typeof cockpitSkills.$inferInsert
+
 // cockpit_schedules — server-side schedule so the provider loop discovers WHEN
 // to act (e.g. a daily morning report). The loop polls GET /api/cockpit/due each
 // tick; troop is the source of truth for what's due, not a session cron.
