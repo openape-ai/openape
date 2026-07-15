@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
-import { cockpitAgents, objectives, organizations } from '../../database/schema'
+import { cockpitAgents, cockpitSkills, memory, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
@@ -25,11 +25,27 @@ export default defineEventHandler(async (event) => {
   if (!org) throw createError({ statusCode: 404, statusMessage: 'unknown company' })
   const objs = await db.select().from(objectives).where(eq(objectives.orgId, company))
   const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
-  const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
+  const team = teamRows.filter(t => t.enabled).map(t => ({ id: t.id, role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
+  // The org's memory: company-scoped facts every employee shares, plus role/
+  // agent-scoped docs the CEO surfaces (and hands to the matching leaf) when a
+  // topic calls for them. The leaf fetches by id under the same owner identity.
+  const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.ownerEmail, owner)))
+  const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode, scope: m.scope, targetId: m.targetId }))
+  // The org's skills: reusable procedures assigned to agents. Surfaced as index
+  // lines; the assigned agent fetches the prompt and follows it (M2).
+  const skillRows = await db.select().from(cockpitSkills).where(and(eq(cockpitSkills.orgId, company), eq(cockpitSkills.ownerEmail, owner)))
+  const skills = skillRows.map(s => ({ id: s.id, name: s.name, description: s.description, assignedTo: s.assignedTo }))
 
-  const userMessage = [...(body?.messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
-  if (userMessage.trim()) await saveChatMessage(company, owner, 'user', userMessage)
-  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), userMessage, owner)
+  const history = body?.messages ?? []
+  const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
+  if (latestUser.trim()) await saveChatMessage(company, owner, 'user', latestUser)
+  // Give the CEO the recent conversation (last 20 turns) so follow-ups like
+  // "bitte ablegen - ja" resolve against what was said before — not just the last line.
+  const recent = history.slice(-20)
+  const prompt = recent.length > 1
+    ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als CEO, ohne Namenspräfix.`
+    : latestUser
+  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team, mem, skills), prompt, owner)
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
@@ -58,6 +74,9 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       try {
+        // Hand the browser the task id first thing, so if the stream drops it can
+        // re-attach to this task's live progress (GET tasks/<id>/progress).
+        emit({ k: 'id', id: task.id })
         // Wait for the owner's CEO brain to claim the task. We never fake an
         // answer: if a brain is present we wait for it (showing "übernimmt" when
         // it's awake, a live "Ruhemodus" countdown when it's sleeping); only if

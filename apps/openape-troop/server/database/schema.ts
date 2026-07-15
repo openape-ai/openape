@@ -420,6 +420,47 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
 
+// memory — nachschlagbare Fakten/Referenz für die Agents einer Firma (≈ CLAUDE.md/
+// Memory). `scope`: 'company' (jede Rolle) | 'role' (nur diese Rolle) | 'agent'
+// (nur dieser cockpit_agent). `targetId` = Rollen-String bzw. cockpit_agent-id;
+// leer bei 'company'. `mode`: 'inline' klein → direkt in den Prompt; 'reference'
+// groß → nur als Index-Zeile, der Agent holt den Body bei Bedarf per Fetch.
+export const memory = sqliteTable('memory', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  scope: text('scope').notNull().default('company'),
+  targetId: text('target_id').notNull().default(''),
+  title: text('title').notNull().default(''),
+  body: text('body').notNull().default(''),
+  mode: text('mode').notNull().default('inline'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_memory_org_scope').on(table.orgId, table.scope)])
+
+export type Memory = typeof memory.$inferSelect
+export type NewMemory = typeof memory.$inferInsert
+
+// cockpit_skills — reusable, named procedures (≈ Claude Skills) an agent follows
+// inline when a task matches its `description`. Assigned to agents via `assignedTo`
+// (a JSON list of cockpit_agent ids and/or the literal 'ceo'). Distinct from
+// `cockpitAgents.procedure` (which is role-bound) and from the machine-agent
+// `agent_skills` table (a different layer). Org-scoped.
+export const cockpitSkills = sqliteTable('cockpit_skills', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  name: text('name').notNull().default(''),
+  description: text('description').notNull().default(''),
+  prompt: text('prompt').notNull().default(''),
+  assignedTo: text('assigned_to', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_cockpit_skills_org').on(table.orgId)])
+
+export type Skill = typeof cockpitSkills.$inferSelect
+export type NewSkill = typeof cockpitSkills.$inferInsert
+
 // cockpit_schedules — server-side schedule so the provider loop discovers WHEN
 // to act (e.g. a daily morning report). The loop polls GET /api/cockpit/due each
 // tick; troop is the source of truth for what's due, not a session cron.
@@ -446,3 +487,14 @@ export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
   content: text('content').notNull(),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
+
+// push_subscriptions — Web-Push endpoints for the owner's browsers/PWA installs.
+// One row per browser subscription (endpoint is the natural key). Used to notify
+// the owner when a CEO posts a cockpit-chat message while the tab is not focused.
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_push_subs_owner').on(table.ownerEmail)])
