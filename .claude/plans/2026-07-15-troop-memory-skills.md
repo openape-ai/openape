@@ -152,6 +152,20 @@ die Design-Leitplanke UND die Stakeholder-freundliche Nomenklatur.
       reference-Index-Zeile, `message.post.ts` lädt company-scoped Memory. Unit-Tests grün (inline body +
       reference index-line), lint+typecheck grün, Migrations-SQL gegen SQLite validiert (Insert/Index ok).
       **Offen:** Live-Chat-E2E (BANANE42) braucht troop-Deploy — nach Freigabe (Deploy killt Cockpit-Queue).
+- [x] `[2026-07-15 11:15]` **Milestone 2** (Referenz + Fetch): Endpoint `agent/memory/[id].get.ts`
+      (owner-bound), `cockpit-agent.sh memory <id>`-Subcommand + MEMORY-Hinweis in worker.sh COCKPIT_DIRECTIVE.
+      buildSystemPrompt-Index-Zeile war schon in M1 mit drin.
+- [x] `[2026-07-15 11:15]` **Milestone 3** (Scoping): message.post lädt alle org-Memories (company+role+agent),
+      buildSystemPrompt taggt role/agent-Docs mit Ziel (`(Rolle: buchhaltung)`). Delegierte Blätter fetchen per
+      selber owner-Auth über den M2-Endpoint — keine Extra-Verdrahtung nötig. Cross-owner-Guard = ownerEmail (404).
+      **ponytail:** cross-org-same-owner nicht erzwungen (Fetch hat keinen org-Kontext, ist eigene Owner-Daten).
+- [x] `[2026-07-15 11:15]` **Milestone 4** (UI + CRUD): API `orgs/[orgId]/memory` GET/POST + `…/[id]` PATCH/DELETE
+      (owner-gated), Auto-Mode-Default `memory-mode.ts` (~1500 Zeichen, override möglich). UI: `company/Memory.vue`
+      Panel + „Memory"-Tab in `companies/[id].vue`.
+- [x] `[2026-07-15 11:15]` **Verifiziert:** lint+typecheck+build grün, 228 Tests grün, **Live-Dev-Server-Smoke**
+      gegen Wegwerf-DB: POST company(inline)+role(1600 Zeichen→auto reference), PATCH, DELETE, Fetch-Route 401-wired,
+      Org-Guard 404 — alles beobachtet per curl. Offen bleibt: authentifizierter UI-Screenshot + BANANE42-Chat-E2E
+      (beide brauchen Login/Brain → nach Deploy, wenn Patrick nicht live im Chat ist).
 
 ## Surprises & Discoveries
 

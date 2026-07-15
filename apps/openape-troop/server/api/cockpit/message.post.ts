@@ -26,9 +26,11 @@ export default defineEventHandler(async (event) => {
   const objs = await db.select().from(objectives).where(eq(objectives.orgId, company))
   const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
   const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
-  // Company-scoped memory: facts every employee shares, injected into the CEO prompt.
-  const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.scope, 'company')))
-  const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode }))
+  // The org's memory: company-scoped facts every employee shares, plus role/
+  // agent-scoped docs the CEO surfaces (and hands to the matching leaf) when a
+  // topic calls for them. The leaf fetches by id under the same owner identity.
+  const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.ownerEmail, owner)))
+  const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode, scope: m.scope, targetId: m.targetId }))
 
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
