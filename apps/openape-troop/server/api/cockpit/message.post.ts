@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
-import { cockpitAgents, objectives, organizations } from '../../database/schema'
+import { cockpitAgents, memory, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
@@ -26,6 +26,9 @@ export default defineEventHandler(async (event) => {
   const objs = await db.select().from(objectives).where(eq(objectives.orgId, company))
   const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
   const team = teamRows.filter(t => t.enabled).map(t => ({ role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
+  // Company-scoped memory: facts every employee shares, injected into the CEO prompt.
+  const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.scope, 'company')))
+  const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode }))
 
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
@@ -36,7 +39,7 @@ export default defineEventHandler(async (event) => {
   const prompt = recent.length > 1
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als CEO, ohne Namenspräfix.`
     : latestUser
-  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team), prompt, owner)
+  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team, mem), prompt, owner)
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',

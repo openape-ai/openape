@@ -420,6 +420,27 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
 
+// memory — nachschlagbare Fakten/Referenz für die Agents einer Firma (≈ CLAUDE.md/
+// Memory). `scope`: 'company' (jede Rolle) | 'role' (nur diese Rolle) | 'agent'
+// (nur dieser cockpit_agent). `targetId` = Rollen-String bzw. cockpit_agent-id;
+// leer bei 'company'. `mode`: 'inline' klein → direkt in den Prompt; 'reference'
+// groß → nur als Index-Zeile, der Agent holt den Body bei Bedarf per Fetch.
+export const memory = sqliteTable('memory', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  scope: text('scope').notNull().default('company'),
+  targetId: text('target_id').notNull().default(''),
+  title: text('title').notNull().default(''),
+  body: text('body').notNull().default(''),
+  mode: text('mode').notNull().default('inline'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_memory_org_scope').on(table.orgId, table.scope)])
+
+export type Memory = typeof memory.$inferSelect
+export type NewMemory = typeof memory.$inferInsert
+
 // cockpit_schedules — server-side schedule so the provider loop discovers WHEN
 // to act (e.g. a daily morning report). The loop polls GET /api/cockpit/due each
 // tick; troop is the source of truth for what's due, not a session cron.
