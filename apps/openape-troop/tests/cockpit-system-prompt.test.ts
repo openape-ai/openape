@@ -36,4 +36,10 @@ describe('buildSystemPrompt — memory', () => {
     expect(p).toContain('cockpit-agent.sh memory <id>')
     expect(p).not.toContain('ein sehr langes Dokument')
   })
+  it('tags role-scoped memory with its target so the CEO knows when it applies', () => {
+    const p = buildSystemPrompt(org, [], 'patrick@x', [], [
+      { id: 'm3', title: 'Lohnverrechnung', body: 'x', mode: 'reference', scope: 'role', targetId: 'buchhaltung' },
+    ])
+    expect(p).toContain('Lohnverrechnung (Rolle: buchhaltung) [m3]')
+  })
 })

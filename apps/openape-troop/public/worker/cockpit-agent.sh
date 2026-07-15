@@ -11,6 +11,7 @@
 #   cockpit-agent.sh services                       # list registered services (from troop)
 #   cockpit-agent.sh heartbeat [nextPollInMs]       # check-in; arg = when you'll next poll (default 12s)
 #   cockpit-agent.sh next                           # lease next task on the target
+#   cockpit-agent.sh memory <id>                     # fetch a reference Memory doc (prints body)
 #   cockpit-agent.sh progress <id> "🧠 …"           # working update
 #   cockpit-agent.sh resolve  <id> completed <<<'…' # resolve (stdin = answer)
 # Dev: CEO_SP_URL=http://localhost:3010
@@ -53,7 +54,11 @@ for s in json.load(sys.stdin):
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s}' "${1:-12000}")" ;;
   next)      call POST "$TP/next" ;;
+  memory)    # always troop; prints the doc body for the CEO to read
+    ID="${1:?usage: cockpit-agent.sh memory <id>}"
+    SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
+      call GET "/api/cockpit/agent/memory/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("body",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
   resolve)   ID="$1"; STATE="$2"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)")" ;;
-  *) echo "usage: cockpit-agent.sh services|heartbeat|next|progress <id> <text>|resolve <id> <completed|failed>" >&2; exit 2 ;;
+  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|progress <id> <text>|resolve <id> <completed|failed>" >&2; exit 2 ;;
 esac
