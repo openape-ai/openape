@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildOrgTree } from '../server/utils/cockpit/tree'
 
-function r(id: string, label: string, role: string, reportsTo: string | null, extra: Partial<{ procedure: string, vars: Record<string, unknown> }> = {}) {
-  return { id, label, role, reportsTo, duties: '', tools: [] as string[], enabled: true, procedure: '', vars: {}, ...extra }
+function r(id: string, label: string, role: string, reportsTo: string | null, extra: Partial<{ procedure: string, vars: Record<string, unknown>, injectionScore: number, injectionReason: string }> = {}) {
+  return { id, label, role, reportsTo, duties: '', tools: [] as string[], enabled: true, procedure: '', vars: {}, injectionScore: 0, injectionReason: '', ...extra }
 }
 
 describe('buildOrgTree', () => {
@@ -29,6 +29,11 @@ describe('buildOrgTree', () => {
   it('carries the procedure through untouched', () => {
     const roots = buildOrgTree([r('dev', 'Programmierer', 'specialist', null, { procedure: '## Schritt 1\nworktree anlegen' })])
     expect(roots[0]!.procedure).toBe('## Schritt 1\nworktree anlegen')
+  })
+  it('carries the injection score + reason through so the loop guard can read it', () => {
+    const roots = buildOrgTree([r('dev', 'Programmierer', 'specialist', null, { injectionScore: 0.85, injectionReason: 'override-attempt' })])
+    expect(roots[0]!.injectionScore).toBe(0.85)
+    expect(roots[0]!.injectionReason).toBe('override-attempt')
   })
   it('merges org vars into every node, employee wins', () => {
     const roots = buildOrgTree(
