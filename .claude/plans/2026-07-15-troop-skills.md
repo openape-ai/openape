@@ -153,7 +153,18 @@ live im Chat ist.** Git/PR-Flow: Forgejo (origin), Branch `--no-verify` pushen, 
 
 ## Progress
 
-- [ ] `[2026-07-15]` Plan erstellt nach Brainstorming (4 Design-Fragen mit Patrick geklärt). Freigabe erteilt.
+- [x] `[2026-07-15]` Plan erstellt nach Brainstorming (4 Design-Fragen mit Patrick geklärt). Freigabe erteilt (PR #958 gemerged).
+- [x] `[2026-07-15]` **M1** (Tabelle + Surfacing): `cockpitSkills` (schema + idempotente Migration), `buildSystemPrompt`
+      Param `skills[]` + `SkillRef`, Surfacing als Index-Block getaggt nach Ziel (`(für: dich/<Label>)`); `TeamMember`
+      um `id` erweitert (für Label-Auflösung); `message.post` lädt org-Skills + reicht durch. 3 Unit-Tests grün.
+- [x] `[2026-07-15]` **M2** (Fetch + Worker): `agent/skill/[id].get.ts` (owner-bound Klon), `cockpit-agent.sh skill <id>`,
+      SKILLS-Hinweis in worker.sh COCKPIT_DIRECTIVE.
+- [x] `[2026-07-15]` **M3** (CRUD + UI): owner-gated `orgs/[orgId]/skills` GET/POST + `…/[id]` PATCH/DELETE mit
+      `assignedTo`-Validierung (`skill-assign.ts`: nur 'ceo' oder org-eigene Agent-ids); `company/Skills.vue` +
+      „Skills"-Tab. UI reicht `:agents="employees"` durch (CEO fix + Nicht-CEO-Agents als Checkboxen).
+- [x] `[2026-07-15]` **Verifiziert:** lint+typecheck+build grün, 231 Tests grün, **Live-Dev-Smoke** gegen Wegwerf-DB:
+      POST CEO/Agent-Zuordnung, bogus-Agent→400, PATCH-Reassign, Fetch-Route 401-wired, DELETE, Org-Guard 404.
+      Offen: E2E nach Deploy (HALLO-SKILL-42) + Worker-Asset-Sync + Live-Worker-Neustart.
 
 ## Offene Fragen
 
