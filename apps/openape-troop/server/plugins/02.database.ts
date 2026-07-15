@@ -63,6 +63,19 @@ export default defineNitroPlugin(async () => {
       updated_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_memory_org_scope ON memory(org_id, scope)`)
+    // cockpit_skills — reusable named procedures assigned to agents (Skills feature).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_skills (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      prompt TEXT NOT NULL DEFAULT '',
+      assigned_to TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_skills_org ON cockpit_skills(org_id)`)
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_schedules (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
