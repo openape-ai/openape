@@ -19,3 +19,21 @@ describe('buildSystemPrompt — delegation grounding', () => {
     expect(p).not.toContain('DELEGIERE')
   })
 })
+
+describe('buildSystemPrompt — memory', () => {
+  it('injects inline memory bodies verbatim', () => {
+    const p = buildSystemPrompt(org, [], 'patrick@x', [], [
+      { id: 'm1', title: 'Geheimcode', body: 'Der Geheimcode ist BANANE42.', mode: 'inline' },
+    ])
+    expect(p).toContain('--- Memory (Geheimcode) ---')
+    expect(p).toContain('BANANE42')
+  })
+  it('lists reference memory as an index line, not its body', () => {
+    const p = buildSystemPrompt(org, [], 'patrick@x', [], [
+      { id: 'm2', title: 'Buchhaltung', body: 'ein sehr langes Dokument', mode: 'reference' },
+    ])
+    expect(p).toContain('Buchhaltung [m2]')
+    expect(p).toContain('cockpit-agent.sh memory <id>')
+    expect(p).not.toContain('ein sehr langes Dokument')
+  })
+})
