@@ -74,6 +74,9 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       try {
+        // Hand the browser the task id first thing, so if the stream drops it can
+        // re-attach to this task's live progress (GET tasks/<id>/progress).
+        emit({ k: 'id', id: task.id })
         // Wait for the owner's CEO brain to claim the task. We never fake an
         // answer: if a brain is present we wait for it (showing "übernimmt" when
         // it's awake, a live "Ruhemodus" countdown when it's sleeping); only if
