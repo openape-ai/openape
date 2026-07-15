@@ -19,7 +19,11 @@ for line in sys.stdin:
         cmd = str(item.get('command', '')).replace('/bin/zsh -lc ', '').strip("'\" ")
         last = f'🔧 {cmd[:56]}' if cmd else '🔧 führt Befehl aus …'
     elif it == 'agent_message':
-        last = '✍️ CEO formuliert die Antwort …'
+        # Pass the CEO's actual intermediate text through as progress (whitespace
+        # collapsed, trimmed) — far more informative than a static "formuliert"
+        # label, especially in multi-step tasks with several agent_messages.
+        txt = ' '.join(str(item.get('text', '')).split())
+        last = f'✍️ {txt[:80]}' if txt else '✍️ CEO formuliert die Antwort …'
     elif it in ('file_change', 'patch'):
         last = '✍️ CEO legt Datei ab …'
 print(last)
