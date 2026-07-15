@@ -32,11 +32,13 @@
     "marked": "^18.0.5",
     "nuxt": "^4.4.8",
     "tailwindcss": "^4.3.1",
+    "web-push": "^3.6.7",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-istanbul": "^4.1.9",
     "h3": "^1.15.11",
     "typescript": "^5.9.3",

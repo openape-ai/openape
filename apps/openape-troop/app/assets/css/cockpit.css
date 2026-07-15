@@ -135,6 +135,29 @@
   border-bottom-left-radius: 6px;
 }
 .cockpit-root .plain { white-space: pre-wrap; }
+/* Message time — small, right-aligned inside the bubble (WhatsApp-style). */
+.cockpit-root .bubble .time {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-root .bubble.user .time { color: rgba(255, 255, 255, 0.72); opacity: 1; }
+/* Day separator between messages of different days. */
+.cockpit-root .date-sep { align-self: center; margin: 18px 0 4px; }
+.cockpit-root .date-sep span {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
 /* Typing indicator */
 .cockpit-root .typing { display: inline-flex; gap: 4px; padding: 2px 0; }
 .cockpit-root .typing i {
