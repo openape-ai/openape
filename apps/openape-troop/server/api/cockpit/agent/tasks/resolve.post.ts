@@ -12,6 +12,8 @@ export default defineEventHandler(async (event) => {
   const text = (body?.artifact?.parts ?? []).find(p => p.kind === 'text')?.text ?? ''
   const task = getTask(id)
   resolve(id, state, text, agent)
-  if (state === 'completed' && task && task.owner === agent && text.trim()) await saveChatMessage(task.company, task.owner, 'assistant', text)
+  // Persist the assistant turn for both outcomes: a completed answer, or a failed
+  // task's honest notice — so a failure leaves a visible message instead of silence.
+  if ((state === 'completed' || state === 'failed') && task && task.owner === agent && text.trim()) await saveChatMessage(task.company, task.owner, 'assistant', text)
   return { ok: true }
 })

@@ -47,10 +47,12 @@ async function load() {
   finally { loading.value = false }
 }
 
-const tab = ref<'firma' | 'ziele' | 'reports' | 'kosten'>('firma')
+const tab = ref<'firma' | 'ziele' | 'memory' | 'skills' | 'reports' | 'kosten'>('firma')
 const TABS = [
   { key: 'firma', label: 'Firma', icon: 'i-lucide-building-2' },
   { key: 'ziele', label: 'Ziele', icon: 'i-lucide-target' },
+  { key: 'memory', label: 'Memory', icon: 'i-lucide-brain' },
+  { key: 'skills', label: 'Skills', icon: 'i-lucide-wand-2' },
   { key: 'reports', label: 'Reports', icon: 'i-lucide-file-text' },
   { key: 'kosten', label: 'Kosten', icon: 'i-lucide-wallet' },
 ] as const
@@ -247,6 +249,8 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </section>
 
         <CompanyObjectives v-if="tab === 'ziele'" :org-id="orgId" />
+        <CompanyMemory v-if="tab === 'memory'" :org-id="orgId" />
+        <CompanySkills v-if="tab === 'skills'" :org-id="orgId" :agents="employees" />
         <CompanyReports v-if="tab === 'reports'" :org-id="orgId" />
         <CompanyCosts v-if="tab === 'kosten'" :org-id="orgId" :budget-eur="org.budgetMonthlyEur" />
       </template>

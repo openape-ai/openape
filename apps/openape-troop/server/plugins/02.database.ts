@@ -49,6 +49,33 @@ export default defineNitroPlugin(async () => {
     catch { /* column exists */ }
     try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_reason TEXT NOT NULL DEFAULT ''`) }
     catch { /* column exists */ }
+    // memory — company/role/agent-scoped facts the CEO reads (Memory feature).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS memory (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'company',
+      target_id TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      mode TEXT NOT NULL DEFAULT 'inline',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_memory_org_scope ON memory(org_id, scope)`)
+    // cockpit_skills — reusable named procedures assigned to agents (Skills feature).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_skills (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      prompt TEXT NOT NULL DEFAULT '',
+      assigned_to TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_skills_org ON cockpit_skills(org_id)`)
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_schedules (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
@@ -70,6 +97,15 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_chat_owner_org ON cockpit_chat_messages(owner_email, org_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_owner ON push_subscriptions(owner_email)`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS agents (
       email TEXT PRIMARY KEY,
