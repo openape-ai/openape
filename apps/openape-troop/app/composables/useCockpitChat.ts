@@ -80,6 +80,29 @@ export function useCockpitChat() {
     return null
   }
 
+  // After a dropped stream, re-attach to the still-running task: resume its live
+  // progress and pick up the answer when it completes. Returns when the task is
+  // terminal, gone from memory (404 → caller polls the persisted answer), or the
+  // window elapses. Same in-memory task the SSE stream was reading — no answer lost.
+  async function reattachProgress(taskId: string, assistant: ChatMessage): Promise<void> {
+    const deadline = Date.now() + POLL_MAX_MS
+    // eslint-disable-next-line no-unmodified-loop-condition -- pollAbort is flipped by stop()/selectCompany
+    while (Date.now() < deadline && !pollAbort) {
+      let t: { state: string, progress: string[], answer: string }
+      // ($fetch as any): a dynamic route URL blows the typed-route inference (the
+      // app's convention for these — see Memory.vue/companies/[id].vue).
+      try { t = await ($fetch as any)(`/api/cockpit/tasks/${taskId}/progress`) }
+      catch { return } // 404 (task gone) or transient → caller falls back to messages poll
+      assistant.thoughts = [...t.progress]
+      assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — verbinde neu …'
+      if (t.state === 'completed' || t.state === 'failed') {
+        if (t.answer.trim()) { assistant.content = t.answer; assistant.system = undefined; assistant.waiting = undefined }
+        return
+      }
+      await sleep(POLL_EVERY_MS)
+    }
+  }
+
   async function send(text: string): Promise<void> {
     const content = text.trim()
     if (!content || isStreaming.value || !currentCompanyId.value) return
@@ -92,6 +115,7 @@ export function useCockpitChat() {
     isStreaming.value = true
     controller = new AbortController()
     pollAbort = false
+    let taskId = ''
     try {
       // Live overlay via SSE (best effort).
       try {
@@ -113,8 +137,9 @@ export function useCockpitChat() {
           if (done) break
           for (const payload of parse(decoder.decode(value, { stream: true }))) {
             if (payload === '[DONE]') continue
-            const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number }
-            if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
+            const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number, id?: string }
+            if (ev.k === 'id' && ev.id) { taskId = ev.id }
+            else if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
             else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
             else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? `${ev.text} · Antwort in ~${ev.sec}s` : ev.text }
             else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
@@ -126,13 +151,18 @@ export function useCockpitChat() {
         // else: the connection dropped — the answer is persisted; we poll below.
       }
 
-      // No real answer streamed (dropped / offline / asleep) → fetch the persisted one.
+      // No real answer streamed (dropped / offline / asleep). First try to re-attach
+      // to the live task (restores progress + the answer while it still runs); only
+      // if it's gone from memory fall back to the persisted-answer poll.
       if (!assistant.content.trim() && !pollAbort) {
-        if (!assistant.system) assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — hole die Antwort …'
-        const ans = await pollForAnswer(companyId, sinceMs)
-        if (ans) { assistant.content = ans; assistant.system = undefined; assistant.waiting = undefined }
-        else if (!assistant.system) {
-          assistant.system = 'Die Antwort kommt, sobald der CEO fertig ist — beim nächsten Öffnen ist sie da.'
+        if (!assistant.system) assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — verbinde neu …'
+        if (taskId) await reattachProgress(taskId, assistant)
+        if (!assistant.content.trim() && !pollAbort) {
+          const ans = await pollForAnswer(companyId, sinceMs)
+          if (ans) { assistant.content = ans; assistant.system = undefined; assistant.waiting = undefined }
+          else if (!assistant.system) {
+            assistant.system = 'Die Antwort kommt, sobald der CEO fertig ist — beim nächsten Öffnen ist sie da.'
+          }
         }
       }
     }
