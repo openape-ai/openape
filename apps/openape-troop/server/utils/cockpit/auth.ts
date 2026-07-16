@@ -14,7 +14,7 @@ export async function cockpitOwner(event: H3Event): Promise<string> {
   throw createError({ statusCode: 401, statusMessage: 'login required' })
 }
 
-// The serving agent (CEO brain): any DDISA-verified identity. No allowlist — the
+// The serving agent (Operator brain): any DDISA-verified identity. No allowlist — the
 // queue is owner-bound, so a caller only ever claims/resolves its OWN owner's tasks.
 // That scoping (not an allowlist) is the multi-user security boundary.
 export async function requireCockpitAgent(event: H3Event): Promise<string> {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 
-// Memory panel: owner-authored facts the CEO reads. company-scope reaches every
+// Memory panel: owner-authored facts the Operator reads. company-scope reaches every
 // employee; role/agent-scope is surfaced when a topic matches. Small docs ride
 // inline in the prompt, big ones become reference docs fetched on demand.
 const props = defineProps<{ orgId: string }>()
@@ -81,7 +81,7 @@ watch(() => props.orgId, load, { immediate: true })
   <div>
     <div class="flex justify-between items-center mb-6">
       <p class="text-sm text-zinc-500">
-        Fakten, die deine Firma kennt — der CEO liest sie beim Antworten.
+        Fakten, die deine Firma kennt — der Operator liest sie beim Antworten.
       </p>
       <UButton color="primary" icon="i-lucide-plus" @click="openAdd">
         Memory
@@ -138,7 +138,7 @@ watch(() => props.orgId, load, { immediate: true })
               <UInput v-model="form.targetId" placeholder="buchhaltung" class="w-full" :ui="{ base: 'w-full' }" />
             </UFormField>
           </div>
-          <UFormField label="Titel" description="Kurz — der CEO sieht ihn, um zu entscheiden, ob das Memory passt.">
+          <UFormField label="Titel" description="Kurz — der Operator sieht ihn, um zu entscheiden, ob das Memory passt.">
             <UInput v-model="form.title" placeholder="Datenablage-Struktur" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UFormField label="Inhalt">

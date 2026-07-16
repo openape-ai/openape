@@ -5,9 +5,9 @@ import 'highlight.js/styles/github-dark.css'
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
 const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 // Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
-// setup, so the user can bring their CEO online (headless or in-session) without typing.
+// setup, so the user can bring their Operator online (headless or in-session) without typing.
 const workerDeepLink = `claude-cli://open?q=${encodeURIComponent(
-  'Set up the OpenApe worker on this machine: fetch https://troop.openape.ai/worker/setup.md and follow it. It asks whether to run in this session or install permanently, then makes my CEO live.',
+  'Set up the OpenApe worker on this machine: fetch https://troop.openape.ai/worker/setup.md and follow it. It asks whether to run in this session or install permanently, then makes my Operator live.',
 )}`
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
@@ -55,9 +55,9 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           v-if="mode === 'offline'"
           class="ceo-start"
           :href="workerDeepLink"
-          title="Öffnet Claude Code und richtet den CEO-Worker ein — dann einmal Enter drücken"
+          title="Öffnet Claude Code und richtet den Operator-Worker ein — dann einmal Enter drücken"
           style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);text-decoration:none;white-space:nowrap"
-        >▸ CEO starten</a>
+        >▸ Operator starten</a>
         <div class="company-picker">
           <select
             class="company-select"

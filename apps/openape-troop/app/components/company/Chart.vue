@@ -57,7 +57,7 @@ const roots = computed<TreeNode[]>(() => {
       </ul>
     </div>
     <p v-else class="text-center text-sm text-zinc-500">
-      Noch keine Mitarbeiter — leg den CEO und sein Team an.
+      Noch keine Mitarbeiter — leg den Operator und sein Team an.
     </p>
   </div>
 </template>

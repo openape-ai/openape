@@ -97,7 +97,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           Noch keine Firma
         </h3>
         <p class="text-sm text-zinc-400 max-w-md mx-auto">
-          Legen Sie Ihre erste Firma an — der CEO richtet sich nach ihrer Vision.
+          Legen Sie Ihre erste Firma an — der Operator richtet sich nach ihrer Vision.
         </p>
         <UButton color="primary" icon="i-lucide-plus" @click="showCreate = true">
           Firma anlegen
@@ -156,7 +156,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           <UFormField label="Name">
             <UInput v-model="createForm.name" placeholder="Firmenname" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Vision" description="Der CEO liest das bei jeder Interaktion.">
+          <UFormField label="Vision" description="Der Operator liest das bei jeder Interaktion.">
             <UTextarea v-model="createForm.vision" :rows="4" placeholder="Was soll die Firma erreichen?" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
           <div class="flex justify-end gap-2 pt-2">

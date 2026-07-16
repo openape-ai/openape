@@ -11,7 +11,7 @@ const Body = z.object({
 })
 
 // At v1 the Owner can hand-author reports (e.g. notes to self). When
-// CEO/Sanierer Recipes land (M1+), they POST here with their own
+// Operator/Sanierer Recipes land (M1+), they POST here with their own
 // Bearer agent JWT and `generated_by_email` is set from that token's
 // `sub`. For now we use the resolved Owner email as the author.
 export default defineEventHandler(async (event) => {
