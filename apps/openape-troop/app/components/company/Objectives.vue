@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 
-// Objectives board (B0 merge). Owner authors what the company works on; the CEO
+// Objectives board (B0 merge). Owner authors what the company works on; the Operator
 // reads + drives against it. Flat list grouped by status — no nesting yet.
 const props = defineProps<{ orgId: string }>()
 

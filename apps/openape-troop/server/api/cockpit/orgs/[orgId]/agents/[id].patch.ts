@@ -8,7 +8,7 @@ import { assertVars } from '../../../../../utils/cockpit/vars'
 // Edit a delegation leaf. Any subset of role/label/duties/procedure/vars/tools/
 // reportsTo/enabled. `procedure` is the instruction a subagent executes, not data
 // it reads — the boundary is org ownership, so anyone holding the owner's DDISA
-// identity (today: the CEO loop) can write it. Narrowing that to a grant is the
+// identity (today: the Operator loop) can write it. Narrowing that to a grant is the
 // next step; until then the injection score makes the write visible.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)

@@ -6,15 +6,15 @@ function r(id: string, label: string, role: string, reportsTo: string | null, ex
 }
 
 describe('buildOrgTree', () => {
-  it('nests reports under their supervisor, CEO at the root', () => {
+  it('nests reports under their supervisor, Operator at the root', () => {
     const roots = buildOrgTree([
-      r('ceo', 'CEO', 'ceo', null),
+      r('ceo', 'Operator', 'ceo', null),
       r('sm', 'Scrum Manager', 'teamlead', 'ceo'),
       r('dev', 'Programmierer', 'specialist', 'sm'),
       r('qa', 'Tester', 'specialist', 'sm'),
     ])
     expect(roots).toHaveLength(1)
-    expect(roots[0]!.label).toBe('CEO')
+    expect(roots[0]!.label).toBe('Operator')
     expect(roots[0]!.children.map(c => c.label)).toEqual(['Scrum Manager'])
     expect(roots[0]!.children[0]!.children.map(c => c.label).sort()).toEqual(['Programmierer', 'Tester'])
   })
@@ -38,7 +38,7 @@ describe('buildOrgTree', () => {
   it('merges org vars into every node, employee wins', () => {
     const roots = buildOrgTree(
       [
-        r('ceo', 'CEO', 'ceo', null),
+        r('ceo', 'Operator', 'ceo', null),
         r('dev', 'Programmierer', 'specialist', 'ceo', { vars: { boardUser: 254, project: 999 } }),
       ],
       { project: 125, lanes: { sprint: 2617 } },
@@ -47,11 +47,11 @@ describe('buildOrgTree', () => {
     expect(roots[0]!.children[0]!.vars).toEqual({ project: 999, lanes: { sprint: 2617 }, boardUser: 254 })
   })
   it('a node without vars still gets the org vars, never undefined', () => {
-    const roots = buildOrgTree([r('ceo', 'CEO', 'ceo', null)], { project: 125 })
+    const roots = buildOrgTree([r('ceo', 'Operator', 'ceo', null)], { project: 125 })
     expect(roots[0]!.vars).toEqual({ project: 125 })
   })
   it('no org vars and no employee vars yields an empty object', () => {
-    const roots = buildOrgTree([r('ceo', 'CEO', 'ceo', null)])
+    const roots = buildOrgTree([r('ceo', 'Operator', 'ceo', null)])
     expect(roots[0]!.vars).toEqual({})
   })
 })

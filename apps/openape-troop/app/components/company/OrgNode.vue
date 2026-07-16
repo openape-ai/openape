@@ -7,7 +7,7 @@ export interface TreeNode { e: Employee, children: TreeNode[] }
 
 defineProps<{ node: TreeNode }>()
 const emit = defineEmits<{ edit: [e: Employee], delete: [e: Employee], toggle: [e: Employee] }>()
-const roleLabel: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+const roleLabel: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
 </script>
 
 <template>

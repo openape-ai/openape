@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# OpenApe worker — reactive cockpit CEO + generic service executor, headless.
+# OpenApe worker — reactive cockpit Operator + generic service executor, headless.
 # PARALLEL: cockpit chat and services run as concurrent loops (own scratch each, no
-# file race) so a CEO answer is never blocked behind batch work. The cockpit CEO can
+# file race) so an Operator answer is never blocked behind batch work. The cockpit Operator can
 # do real read-only tool work (o365-cli mail, read files) + Buchhaltung filing.
 # All intelligence lives in troop (each task ships its systemPrompt + userMessage).
 #
@@ -22,12 +22,12 @@ CODEX_EFFORT="${OPENAPE_WORKER_CODEX_EFFORT:-low}"    # reasoning effort — low
 # the same worker.log.
 log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
 
-# Appended to the cockpit systemPrompt: keep chat answers CEO-conversational, enable
+# Appended to the cockpit systemPrompt: keep chat answers Operator-conversational, enable
 # real tool work, and enforce a hard read-only trust boundary. Engine-neutral.
 COCKPIT_DIRECTIVE='
 
 --- Antwort-Kontext (Cockpit-Chat) ---
-Du beantwortest EINE Chat-Nachricht als CEO, direkt und knapp (Deutsch, 2-5 Saetze). Kein
+Du beantwortest EINE Chat-Nachricht als Operator, direkt und knapp (Deutsch, 2-5 Saetze). Kein
 Coding-Agent-Meta-Gerede ("Sessions", "Zugriff freigeben", autonome Loops).
 
 WERKZEUGE: Braucht die Anfrage echte Werkzeuge (Mail pruefen -> o365-cli, eine Datei lesen),
@@ -105,7 +105,7 @@ generate_codex() {
 
 --- Aufgabe ---
 $(cat "$S/user.txt")"
-  # --disable collaboration_modes: keep it a single fast CEO, not a multi-agent
+  # --disable collaboration_modes: keep it a single fast Operator, not a multi-agent
   # investigation (it once spawned 13 "collab" sub-agents for a yes/no chat question).
   local args=(exec "$prompt" --json -o "$S/final.txt" --skip-git-repo-check -C "$HOME"
               --disable collaboration_modes -c "model_reasoning_effort=$CODEX_EFFORT")
@@ -132,7 +132,7 @@ GEN_RETRIES="${OPENAPE_WORKER_GEN_RETRIES:-2}"
 # answer <scratchdir> <id> <label> <progress> <allowedTools> <extraFlags>.
 answer() {
   local S="$1" id="$2" label="$3" ans try=1
-  [ "$4" = "1" ] && bash "$CA" progress "$id" "🧠 CEO denkt …" >/dev/null 2>&1 || true
+  [ "$4" = "1" ] && bash "$CA" progress "$id" "🧠 Operator denkt …" >/dev/null 2>&1 || true
   while :; do
     ans=$(generate "$S" "$5" "$6" "$id" "$label")
     [ -n "$ans" ] && break
@@ -146,7 +146,7 @@ answer() {
     printf '%s' "$ans" | bash "$CA" resolve "$id" completed >/dev/null 2>&1
     log "[$label] task ${id:0:8} -> resolved (${#ans} chars, try $try)"
   else
-    printf '%s' "⚠️ Der CEO konnte gerade nicht antworten (Netzwerk/Rate-Limit). Bitte die Frage nochmal senden." | bash "$CA" resolve "$id" failed >/dev/null 2>&1
+    printf '%s' "⚠️ Der Operator konnte gerade nicht antworten (Netzwerk/Rate-Limit). Bitte die Frage nochmal senden." | bash "$CA" resolve "$id" failed >/dev/null 2>&1
     log "[$label] task ${id:0:8} -> FAILED after $GEN_RETRIES tries"
   fi
 }
@@ -157,7 +157,7 @@ heartbeat_loop() {
   while true; do bash "$CA" heartbeat 20000 >/dev/null 2>&1 || true; sleep 15; done
 }
 
-# Cockpit loop: own scratch, sequential; CEO gets tools (privileged).
+# Cockpit loop: own scratch, sequential; Operator gets tools (privileged).
 cockpit_loop() {
   local S="$DIR/scratch/cockpit" worked task id
   mkdir -p "$S"; unset SVC_URL SVC_TASKS
