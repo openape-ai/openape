@@ -49,7 +49,7 @@ export default defineNitroPlugin(async () => {
     catch { /* column exists */ }
     try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_reason TEXT NOT NULL DEFAULT ''`) }
     catch { /* column exists */ }
-    // memory — company/role/agent-scoped facts the CEO reads (Memory feature).
+    // memory — company/role/agent-scoped facts the Operator reads (Memory feature).
     await db.run(sql`CREATE TABLE IF NOT EXISTS memory (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,

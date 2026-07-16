@@ -42,7 +42,7 @@ export const PERSONA_CATEGORIES: PersonaCategory[] = [
 export const PERSONAS: Persona[] = [
   {
     key: 'ceo',
-    title: 'Chief Executive (CEO)',
+    title: 'Operator',
     role: 'ceo',
     category: 'leadership',
     icon: 'i-lucide-crown',

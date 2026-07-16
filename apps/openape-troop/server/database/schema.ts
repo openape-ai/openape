@@ -276,7 +276,7 @@ export type NewChatMessage = typeof chatMessages.$inferInsert
 // NOT touch troop's machine surface (/api/agents/me/*, nest-ws, cli/exchange).
 
 // organizations — one row per virtual company. `visionMd` is owner-maintained
-// Markdown the CEO reads on every interaction; never agent-edited.
+// Markdown the Operator reads on every interaction; never agent-edited.
 export const organizations = sqliteTable('organizations', {
   id: text('id').primaryKey(),
   ownerEmail: text('owner_email').notNull(),
@@ -294,8 +294,8 @@ export const organizations = sqliteTable('organizations', {
 
 // org_members — agents working for this org, with hierarchy + role. `role`:
 // ceo / teamlead / specialist / sanierer / other. `reportsToEmail` is the
-// parent agent (null for CEO + Sanierer, who report to the Owner). The CEO is
-// the Owner's primary point of contact (talk to the CEO, not down the chain).
+// parent agent (null for Operator + Sanierer, who report to the Owner). The Operator is
+// the Owner's primary point of contact (talk to the Operator, not down the chain).
 export const orgMembers = sqliteTable('org_members', {
   orgId: text('org_id').notNull(),
   agentEmail: text('agent_email').notNull(),
@@ -320,7 +320,7 @@ export const orgMembers = sqliteTable('org_members', {
   index('idx_org_members_role').on(table.orgId, table.role),
 ])
 
-// objectives — flat Kanban list of what the org is working on. CEO writes here.
+// objectives — flat Kanban list of what the org is working on. Operator writes here.
 export const objectives = sqliteTable('objectives', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull(),
@@ -389,9 +389,9 @@ export const cockpitServices = sqliteTable('cockpit_services', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_services_owner').on(table.ownerEmail)])
 
-// cockpit_agents — the CEO's local delegation team: the online form of an
+// cockpit_agents — the Operator's local delegation team: the online form of an
 // `~/ape-companies/<ORG>/.ape-agent/**/AGENT.md`. Owner-scoped, per org. Each
-// row is a leaf the reactive CEO can delegate a tool-requiring task to (spawned
+// row is a leaf the reactive Operator can delegate a tool-requiring task to (spawned
 // locally under the owner's identity). `duties` is the free-text persona/brief,
 // `tools` the tool names it may run (e.g. ["o365-cli"]).
 export const cockpitAgents = sqliteTable('cockpit_agents', {
@@ -401,7 +401,7 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   role: text('role').notNull().default('specialist'),
   label: text('label').notNull().default(''),
   // Short summary — what the org chart card shows. The full work instruction
-  // is `procedure`; keeping both means the CEO's grounding stays readable.
+  // is `procedure`; keeping both means the Operator's grounding stays readable.
   duties: text('duties').notNull().default(''),
   // The role's work instruction, verbatim. Owner-only writable: this is the
   // program a subagent executes, not data it reads. Empty = the loop falls
@@ -477,7 +477,7 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
-// The chat no longer depends on the live SSE connection: user messages and CEO
+// The chat no longer depends on the live SSE connection: user messages and Operator
 // answers are stored here, so leaving and returning shows everything in between.
 export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
   id: text('id').primaryKey(),
@@ -490,7 +490,7 @@ export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
 
 // push_subscriptions — Web-Push endpoints for the owner's browsers/PWA installs.
 // One row per browser subscription (endpoint is the natural key). Used to notify
-// the owner when a CEO posts a cockpit-chat message while the tab is not focused.
+// the owner when an Operator posts a cockpit-chat message while the tab is not focused.
 export const pushSubscriptions = sqliteTable('push_subscriptions', {
   endpoint: text('endpoint').primaryKey(),
   ownerEmail: text('owner_email').notNull(),

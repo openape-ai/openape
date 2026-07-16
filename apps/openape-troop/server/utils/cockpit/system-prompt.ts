@@ -4,12 +4,12 @@ export interface TeamMember { id: string, role: string, label: string, duties: s
 export interface MemoryDoc { id: string, title: string, body: string, mode: string, scope?: string, targetId?: string }
 export interface SkillRef { id: string, name: string, description: string, assignedTo: string[] }
 
-// The CEO's grounding: who it is, its delegation team (so it can hand a
+// The Operator's grounding: who it is, its delegation team (so it can hand a
 // tool-requiring task to the right leaf), and the org's live vision/goals/budget.
 // `memory` = the org's nachschlagbare Fakten: 'inline' docs go straight into the
 // prompt, 'reference' docs only as an index line the agent fetches on demand.
 export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner: string, team: TeamMember[], memory: MemoryDoc[] = [], skills: SkillRef[] = []): string {
-  let p = `Du bist die CEO der Firma „${org.name}". Antworte als diese CEO: knapp, konkret, auf Deutsch. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an.`
+  let p = `Du bist der Operator der Firma „${org.name}". Antworte als dieser Operator: knapp, konkret, auf Deutsch. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an.`
   if (team.length) {
     p += `\n\nDein Team — du kannst an diese Rollen delegieren, wenn eine Aufgabe ihr Werkzeug braucht:`
     for (const m of team) {
@@ -24,7 +24,7 @@ export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner
   if (org.visionMd) p += `\n\nVision/Kontext (aus dem Control-Plane):\n${org.visionMd}`
   if (objs.length) p += `\n\nAktuelle Ziele:\n${objs.map(o => `- ${o.title} (${o.status})`).join('\n')}`
   if (org.budgetMonthlyEur) p += `\n\nMonatsbudget: ${org.budgetMonthlyEur} €.`
-  // Role/agent-scoped memory names its target so the CEO knows when it applies
+  // Role/agent-scoped memory names its target so the Operator knows when it applies
   // (and whom to hand it to) — company-scoped memory has no such tag.
   const tag = (m: MemoryDoc) => m.scope === 'role' && m.targetId ? ` (Rolle: ${m.targetId})` : m.scope === 'agent' && m.targetId ? ` (Agent: ${m.targetId})` : ''
   for (const m of memory) {
@@ -36,7 +36,7 @@ export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner
     for (const m of refs) p += `\n- ${m.title}${tag(m)} [${m.id}]`
   }
   // Skills = named procedures an agent follows. Surface every assigned skill with
-  // its target: 'ceo' skills the CEO runs itself; agent-tagged ones it hands to
+  // its target: 'ceo' skills the Operator runs itself; agent-tagged ones it hands to
   // the matching leaf. The agent selects by description, then fetches the prompt.
   const assignedSkills = skills.filter(s => s.assignedTo.length)
   if (assignedSkills.length) {

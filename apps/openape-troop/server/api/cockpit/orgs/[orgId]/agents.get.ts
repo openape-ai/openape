@@ -3,7 +3,7 @@ import { useDb } from '../../../../database/drizzle'
 import { cockpitAgents } from '../../../../database/schema'
 import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 
-// The CEO's delegation team for one org — the shape the owner's editor reads back.
+// The Operator's delegation team for one org — the shape the owner's editor reads back.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
   const rows = await useDb().select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, orgId)))

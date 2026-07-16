@@ -3,14 +3,14 @@ import { computed, reactive, ref, watch } from 'vue'
 
 // Skills panel: reusable named procedures assigned to agents. An assigned agent
 // picks a skill by its description and follows the prompt (M2 fetch). Assignment
-// targets: the CEO ('ceo') and/or the org's delegation agents.
+// targets: the Operator ('ceo') and/or the org's delegation agents.
 const props = defineProps<{ orgId: string, agents: { id: string, role: string, label: string }[] }>()
 
 interface Skill { id: string, name: string, description: string, prompt: string, assignedTo: string[], updatedAt: number }
 
-// The CEO is a fixed target; the rest are the (non-CEO) delegation agents.
+// The Operator is a fixed target; the rest are the (non-Operator) delegation agents.
 const targetOptions = computed(() => [
-  { value: 'ceo', label: 'CEO' },
+  { value: 'ceo', label: 'Operator' },
   ...props.agents.filter(a => a.role !== 'ceo').map(a => ({ value: a.id, label: a.label })),
 ])
 const targetLabel = (t: string) => targetOptions.value.find(o => o.value === t)?.label ?? t

@@ -9,8 +9,8 @@ import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '.
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
 const MAX_STREAM_MS = 240000
-const WAIT_TEXT = '💤 CEO im Ruhemodus'
-const OFFLINE_TEXT = '💤 Deine Nachricht ist aufgenommen — der CEO beantwortet sie, sobald er wieder da ist. Beim nächsten Öffnen ist die Antwort da.'
+const WAIT_TEXT = '💤 Operator im Ruhemodus'
+const OFFLINE_TEXT = '💤 Deine Nachricht ist aufgenommen — der Operator beantwortet sie, sobald er wieder da ist. Beim nächsten Öffnen ist die Antwort da.'
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // Split into word-sized tokens, keeping trailing whitespace/newlines intact.
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
   const team = teamRows.filter(t => t.enabled).map(t => ({ id: t.id, role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
   // The org's memory: company-scoped facts every employee shares, plus role/
-  // agent-scoped docs the CEO surfaces (and hands to the matching leaf) when a
+  // agent-scoped docs the Operator surfaces (and hands to the matching leaf) when a
   // topic calls for them. The leaf fetches by id under the same owner identity.
   const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.ownerEmail, owner)))
   const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode, scope: m.scope, targetId: m.targetId }))
@@ -39,11 +39,11 @@ export default defineEventHandler(async (event) => {
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
   if (latestUser.trim()) await saveChatMessage(company, owner, 'user', latestUser)
-  // Give the CEO the recent conversation (last 20 turns) so follow-ups like
+  // Give the Operator the recent conversation (last 20 turns) so follow-ups like
   // "bitte ablegen - ja" resolve against what was said before — not just the last line.
   const recent = history.slice(-20)
   const prompt = recent.length > 1
-    ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als CEO, ohne Namenspräfix.`
+    ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
     : latestUser
   const task = enqueue(company, buildSystemPrompt(org, objs, owner, team, mem, skills), prompt, owner)
 
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
   })
 
   let clientGone = false
-  // Client leaving must NOT kill the task — the CEO still answers and the answer
+  // Client leaving must NOT kill the task — the Operator still answers and the answer
   // is persisted; the browser reloads it later. Just stop streaming.
   event.node.req.on('close', () => { clientGone = true })
   const encoder = new TextEncoder()
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
         catch { /* stream closed */ }
       }
       // SSE comment — keeps the connection alive through the proxy during quiet
-      // stretches (a long, progress-less CEO answer). The client parser ignores it.
+      // stretches (a long, progress-less Operator answer). The client parser ignores it.
       const keepAlive = () => {
         try { controller.enqueue(encoder.encode(':ka\n\n')); lastByteAt = Date.now() }
         catch { /* stream closed */ }
@@ -77,7 +77,7 @@ export default defineEventHandler(async (event) => {
         // Hand the browser the task id first thing, so if the stream drops it can
         // re-attach to this task's live progress (GET tasks/<id>/progress).
         emit({ k: 'id', id: task.id })
-        // Wait for the owner's CEO brain to claim the task. We never fake an
+        // Wait for the owner's Operator brain to claim the task. We never fake an
         // answer: if a brain is present we wait for it (showing "übernimmt" when
         // it's awake, a live "Ruhemodus" countdown when it's sleeping); only if
         // no brain is reachable do we return an honest offline notice.
@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
           if (first.mode === 'idle' && first.nextPollInSec != null)
             emit({ k: 'wait', text: WAIT_TEXT, sec: first.nextPollInSec })
           else
-            emit({ k: 'think', text: '🧠 Dein CEO übernimmt …' })
+            emit({ k: 'think', text: '🧠 Dein Operator übernimmt …' })
 
           const waitStart = Date.now()
           let nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
@@ -104,7 +104,7 @@ export default defineEventHandler(async (event) => {
         }
 
         if (isClaimed(task.id)) {
-          emit({ k: 'think', text: '🧠 CEO denkt …' })
+          emit({ k: 'think', text: '🧠 Operator denkt …' })
           let pi = 0
           let answered = false
           const streamDeadline = Date.now() + MAX_STREAM_MS
@@ -119,13 +119,13 @@ export default defineEventHandler(async (event) => {
                   for (const tok of tokenize(ans)) { if (clientGone) break; emit({ k: 'tok', t: tok }); await delay(18) }
                 }
                 else {
-                  emit({ k: 'tok', t: '_(Der CEO hat keine Antwort formuliert — frag bitte nochmal.)_' })
+                  emit({ k: 'tok', t: '_(Der Operator hat keine Antwort formuliert — frag bitte nochmal.)_' })
                 }
                 answered = true
                 break
               }
               if (t.state === 'failed') {
-                emit({ k: 'tok', t: (t.answer ?? '').trim() || '_(Der CEO konnte die Aufgabe nicht abschließen.)_' })
+                emit({ k: 'tok', t: (t.answer ?? '').trim() || '_(Der Operator konnte die Aufgabe nicht abschließen.)_' })
                 answered = true
                 break
               }
@@ -136,7 +136,7 @@ export default defineEventHandler(async (event) => {
           }
           // Never leave the bubble empty: if we timed out before a terminal state,
           // say so instead of streaming nothing (the task keeps running server-side).
-          if (!answered && !clientGone) emit({ k: 'tok', t: '⏳ Dein CEO braucht dafür länger als gewöhnlich — er arbeitet weiter, frag gleich nochmal nach.' })
+          if (!answered && !clientGone) emit({ k: 'tok', t: '⏳ Dein Operator braucht dafür länger als gewöhnlich — er arbeitet weiter, frag gleich nochmal nach.' })
         }
         else if (!clientGone) {
           emit({ k: 'offline', text: OFFLINE_TEXT })
