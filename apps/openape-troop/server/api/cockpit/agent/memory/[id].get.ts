@@ -3,7 +3,7 @@ import { useDb } from '../../../../database/drizzle'
 import { memory } from '../../../../database/schema'
 import { requireCockpitAgent } from '../../../../utils/cockpit/auth'
 
-// On-demand fetch of a reference-mode Memory doc. The serving agent (CEO brain)
+// On-demand fetch of a reference-mode Memory doc. The serving agent (Operator brain)
 // gets the body only for docs its owner owns — the same owner-bound scoping the
 // task queue uses (no allowlist, ownerEmail IS the boundary). Large docs stay out
 // of the prompt (index line only) and land here when the agent actually needs them.
