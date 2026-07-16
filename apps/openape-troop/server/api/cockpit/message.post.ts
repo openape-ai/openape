@@ -1,8 +1,9 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
 import { cockpitAgents, cockpitSkills, memory, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
+import { resolveOrgSkills } from '../../utils/cockpit/skill-scope'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
 import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
 
@@ -31,10 +32,12 @@ export default defineEventHandler(async (event) => {
   // topic calls for them. The leaf fetches by id under the same owner identity.
   const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.ownerEmail, owner)))
   const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode, scope: m.scope, targetId: m.targetId }))
-  // The org's skills: reusable procedures assigned to agents. Surfaced as index
-  // lines; the assigned agent fetches the prompt and follows it (M2).
-  const skillRows = await db.select().from(cockpitSkills).where(and(eq(cockpitSkills.orgId, company), eq(cockpitSkills.ownerEmail, owner)))
-  const skills = skillRows.map(s => ({ id: s.id, name: s.name, description: s.description, assignedTo: s.assignedTo }))
+  // The org's skills: its own (orgId=company) plus owner-level library skills
+  // (orgId='') assigned to one of this org's agents/operator. resolveOrgSkills
+  // trims a library skill's assignedTo to this org's targets (no cross-company leak).
+  const teamIds = new Set(teamRows.map(t => t.id))
+  const skillRows = await db.select().from(cockpitSkills).where(and(eq(cockpitSkills.ownerEmail, owner), or(eq(cockpitSkills.orgId, company), eq(cockpitSkills.orgId, ''))))
+  const skills = resolveOrgSkills(skillRows, company, teamIds)
 
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
