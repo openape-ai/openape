@@ -4,7 +4,7 @@
 # (cached per-target, 30-day) and retry. Each target gets its own token cache.
 #
 # Target selection:
-#   default            -> troop Cockpit ($CEO_SP_URL, /api/cockpit/agent/tasks)
+#   default            -> troop Cockpit ($Operator_SP_URL, /api/cockpit/agent/tasks)
 #   SVC_URL + SVC_TASKS -> any registered sp-tasks service (e.g. zaz.delta-mind.at)
 #
 # Commands:
@@ -15,9 +15,9 @@
 #   cockpit-agent.sh skill <id>                      # fetch a Skill's procedure (prints prompt)
 #   cockpit-agent.sh progress <id> "🧠 …"           # working update
 #   cockpit-agent.sh resolve  <id> completed <<<'…' # resolve (stdin = answer)
-# Dev: CEO_SP_URL=http://localhost:3010
+# Dev: Operator_SP_URL=http://localhost:3010
 set -euo pipefail
-TROOP="${CEO_SP_URL:-https://troop.openape.ai}"
+TROOP="${Operator_SP_URL:-https://troop.openape.ai}"
 SP="${SVC_URL:-$TROOP}"
 TP="${SVC_TASKS:-/api/cockpit/agent/tasks}"
 AUTH_JSON="$HOME/.config/apes/auth.json"
@@ -55,7 +55,7 @@ for s in json.load(sys.stdin):
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s}' "${1:-12000}")" ;;
   next)      call POST "$TP/next" ;;
-  memory)    # always troop; prints the doc body for the CEO to read
+  memory)    # always troop; prints the doc body for the Operator to read
     ID="${1:?usage: cockpit-agent.sh memory <id>}"
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call GET "/api/cockpit/agent/memory/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("body",""))' ;;

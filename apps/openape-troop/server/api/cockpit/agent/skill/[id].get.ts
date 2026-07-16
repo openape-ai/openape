@@ -3,7 +3,7 @@ import { useDb } from '../../../../database/drizzle'
 import { cockpitSkills } from '../../../../database/schema'
 import { requireCockpitAgent } from '../../../../utils/cockpit/auth'
 
-// On-demand fetch of a Skill's procedure. The serving agent (CEO or a delegated
+// On-demand fetch of a Skill's procedure. The serving agent (Operator or a delegated
 // leaf under the same owner identity) loads the prompt when a task matches the
 // skill's description, then follows it inline. Owner-bound, like memory fetch.
 export default defineEventHandler(async (event) => {

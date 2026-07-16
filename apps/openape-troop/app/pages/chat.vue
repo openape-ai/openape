@@ -16,7 +16,7 @@ useHead({
   ],
 })
 
-// Web-Push: register the SW, and let the owner opt in so a CEO answer notifies
+// Web-Push: register the SW, and let the owner opt in so an Operator answer notifies
 // them even when the tab/PWA is in the background.
 const showEnable = ref(false)
 const busy = ref(false)

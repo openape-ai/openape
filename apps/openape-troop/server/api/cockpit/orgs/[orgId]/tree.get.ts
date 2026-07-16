@@ -5,7 +5,7 @@ import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 import { buildOrgTree } from '../../../../utils/cockpit/tree'
 
 // The company's employee hierarchy as a tree — read by the orchestration loop
-// (the CEO walks it: teamleads → their reports). Each node carries its work
+// (the Operator walks it: teamleads → their reports). Each node carries its work
 // instruction (`procedure`) and the vars it needs, so the loop never reads a
 // file off the operator's disk. Owner/agent bearer scoped.
 export default defineEventHandler(async (event) => {

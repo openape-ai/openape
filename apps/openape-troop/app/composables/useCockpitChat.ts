@@ -62,7 +62,7 @@ export function useCockpitChat() {
     await loadFromServer(id)
   }
 
-  // The answer is persisted on the server; if the live stream drops or the CEO
+  // The answer is persisted on the server; if the live stream drops or the Operator
   // is asleep, poll for it instead of showing a dead-end error.
   async function pollForAnswer(companyId: string, sinceMs: number): Promise<string | null> {
     const deadline = Date.now() + POLL_MAX_MS
@@ -161,7 +161,7 @@ export function useCockpitChat() {
           const ans = await pollForAnswer(companyId, sinceMs)
           if (ans) { assistant.content = ans; assistant.system = undefined; assistant.waiting = undefined }
           else if (!assistant.system) {
-            assistant.system = 'Die Antwort kommt, sobald der CEO fertig ist — beim nächsten Öffnen ist sie da.'
+            assistant.system = 'Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.'
           }
         }
       }

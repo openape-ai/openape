@@ -399,7 +399,7 @@
 .cockpit-root .services-input:focus { border-color: var(--accent); }
 .cockpit-root .services-error { margin: 0; color: #e5484d; font-size: 13px; }
 
-/* Connection indicator — real CEO vs mock */
+/* Connection indicator — real Operator vs mock */
 .cockpit-root .conn-dot {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
