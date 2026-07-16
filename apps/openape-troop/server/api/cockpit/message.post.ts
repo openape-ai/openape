@@ -1,9 +1,5 @@
-import { and, eq, or } from 'drizzle-orm'
-import { useDb } from '../../database/drizzle'
-import { cockpitAgents, cockpitSkills, memory, objectives, organizations } from '../../database/schema'
 import { cockpitOwner } from '../../utils/cockpit/auth'
-import { buildSystemPrompt } from '../../utils/cockpit/system-prompt'
-import { resolveOrgSkills } from '../../utils/cockpit/skill-scope'
+import { buildOrgSystemPrompt } from '../../utils/cockpit/org-context'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
 import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
 
@@ -21,23 +17,8 @@ export default defineEventHandler(async (event) => {
   const owner = await cockpitOwner(event)
   const body = await readBody<{ company?: string, messages?: { role: string, content: string }[] }>(event)
   const company = body?.company ?? ''
-  const db = useDb()
-  const [org] = await db.select().from(organizations).where(and(eq(organizations.id, company), eq(organizations.ownerEmail, owner)))
-  if (!org) throw createError({ statusCode: 404, statusMessage: 'unknown company' })
-  const objs = await db.select().from(objectives).where(eq(objectives.orgId, company))
-  const teamRows = await db.select().from(cockpitAgents).where(and(eq(cockpitAgents.ownerEmail, owner), eq(cockpitAgents.orgId, company)))
-  const team = teamRows.filter(t => t.enabled).map(t => ({ id: t.id, role: t.role, label: t.label, duties: t.duties, tools: t.tools }))
-  // The org's memory: company-scoped facts every employee shares, plus role/
-  // agent-scoped docs the Operator surfaces (and hands to the matching leaf) when a
-  // topic calls for them. The leaf fetches by id under the same owner identity.
-  const memRows = await db.select().from(memory).where(and(eq(memory.orgId, company), eq(memory.ownerEmail, owner)))
-  const mem = memRows.map(m => ({ id: m.id, title: m.title, body: m.body, mode: m.mode, scope: m.scope, targetId: m.targetId }))
-  // The org's skills: its own (orgId=company) plus owner-level library skills
-  // (orgId='') assigned to one of this org's agents/operator. resolveOrgSkills
-  // trims a library skill's assignedTo to this org's targets (no cross-company leak).
-  const teamIds = new Set(teamRows.map(t => t.id))
-  const skillRows = await db.select().from(cockpitSkills).where(and(eq(cockpitSkills.ownerEmail, owner), or(eq(cockpitSkills.orgId, company), eq(cockpitSkills.orgId, ''))))
-  const skills = resolveOrgSkills(skillRows, company, teamIds)
+  const systemPrompt = await buildOrgSystemPrompt(owner, company)
+  if (systemPrompt == null) throw createError({ statusCode: 404, statusMessage: 'unknown company' })
 
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
@@ -48,7 +29,7 @@ export default defineEventHandler(async (event) => {
   const prompt = recent.length > 1
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
     : latestUser
-  const task = enqueue(company, buildSystemPrompt(org, objs, owner, team, mem, skills), prompt, owner)
+  const task = enqueue(company, systemPrompt, prompt, owner)
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
