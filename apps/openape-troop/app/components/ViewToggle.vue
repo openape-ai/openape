@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Top-level switch: Firmen (business + org), Services (external sp-tasks queues
 // the loop co-tends), Chat (the reactive cockpit). Nests fold into "providers" later.
-defineProps<{ active: 'companies' | 'services' | 'nests' | 'chat' }>()
+defineProps<{ active: 'companies' | 'services' | 'nests' | 'chat' | 'skills' }>()
 </script>
 
 <template>
@@ -11,6 +11,9 @@ defineProps<{ active: 'companies' | 'services' | 'nests' | 'chat' }>()
     </UButton>
     <UButton to="/services" :color="active === 'services' ? 'primary' : 'neutral'" :variant="active === 'services' ? 'solid' : 'ghost'" size="sm" icon="i-lucide-cable">
       Services
+    </UButton>
+    <UButton to="/skills" :color="active === 'skills' ? 'primary' : 'neutral'" :variant="active === 'skills' ? 'solid' : 'ghost'" size="sm" icon="i-lucide-wand-2">
+      Skills
     </UButton>
     <UButton to="/chat" :color="active === 'chat' ? 'primary' : 'neutral'" :variant="active === 'chat' ? 'solid' : 'ghost'" size="sm" icon="i-lucide-messages-square">
       Chat
