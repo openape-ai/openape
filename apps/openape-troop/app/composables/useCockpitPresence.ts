@@ -2,7 +2,7 @@ import { computed, onScopeDispose, ref } from 'vue'
 
 export type AgentMode = 'offline' | 'idle' | 'active' | 'working'
 
-// Poll the owner's CEO brain state so the header shows the real mode (and, when
+// Poll the owner's Operator brain state so the header shows the real mode (and, when
 // idle, a live countdown to the next check-in). Cheap GET every 5s; the countdown
 // ticks locally each second between fetches.
 export function useCockpitPresence() {
@@ -30,18 +30,18 @@ export function useCockpitPresence() {
 
   const label = computed(() => {
     switch (mode.value) {
-      case 'active': return 'CEO live'
-      case 'working': return 'CEO arbeitet'
+      case 'active': return 'Operator live'
+      case 'working': return 'Operator arbeitet'
       case 'idle': return nextPollInSec.value != null ? `Ruhemodus · ${nextPollInSec.value}s` : 'Ruhemodus'
-      default: return 'CEO offline'
+      default: return 'Operator offline'
     }
   })
   const title = computed(() => {
     switch (mode.value) {
-      case 'active': return 'CEO verbunden und wach — Antworten kommen sofort'
-      case 'working': return 'CEO arbeitet gerade an einer Aufgabe'
-      case 'idle': return 'CEO im Ruhemodus — deine Frage wird beim nächsten Check-in beantwortet'
-      default: return 'Kein CEO-Loop verbunden — Fragen bleiben unbeantwortet, bis er läuft'
+      case 'active': return 'Operator verbunden und wach — Antworten kommen sofort'
+      case 'working': return 'Operator arbeitet gerade an einer Aufgabe'
+      case 'idle': return 'Operator im Ruhemodus — deine Frage wird beim nächsten Check-in beantwortet'
+      default: return 'Kein Operator-Loop verbunden — Fragen bleiben unbeantwortet, bis er läuft'
     }
   })
 

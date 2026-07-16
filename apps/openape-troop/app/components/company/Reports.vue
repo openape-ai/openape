@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 
-// Reports inbox (B0 merge). Newest first. CEO/Sanierer write weekly/alert
+// Reports inbox (B0 merge). Newest first. Operator/Sanierer write weekly/alert
 // reports here (M1+); the Owner can also hand-author. This is Patrick's
 // steering cockpit — the company reporting up to him.
 const props = defineProps<{ orgId: string }>()

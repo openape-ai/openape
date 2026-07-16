@@ -4,7 +4,7 @@ export interface OrgNode { id: string, role: string, label: string, duties: stri
 
 // Build the org hierarchy from flat rows. Roots = report to the Owner (no parent
 // or a parent that no longer exists). Cycle-safe (a role never becomes its own
-// ancestor). Deterministic order: CEO first, then by label.
+// ancestor). Deterministic order: Operator first, then by label.
 //
 // `orgVars` are the company's facts (board, lanes, tags); a role's own `vars`
 // are its personal ones (its board user id) and win on conflict. Merged here so

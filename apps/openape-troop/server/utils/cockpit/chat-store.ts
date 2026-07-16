@@ -11,7 +11,7 @@ export type ChatRole = 'user' | 'assistant'
 export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string) {
   const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, createdAt: Date.now() }
   await useDb().insert(cockpitChatMessages).values(row)
-  // A CEO answer → notify the owner's installed PWA / browsers (fire-and-forget,
+  // A Operator answer → notify the owner's installed PWA / browsers (fire-and-forget,
   // never blocks or fails the save). The SW suppresses it if a tab is focused.
   if (role === 'assistant')
     void pushToOwner(owner, { title: 'Troop-Chat', body: content.slice(0, 140), url: '/chat' }).catch(() => {})

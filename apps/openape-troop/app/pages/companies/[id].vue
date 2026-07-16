@@ -64,7 +64,7 @@ interface RoleTemplate { key: string, label: string, name: string, role: string,
 const ROLE_TEMPLATES: RoleTemplate[] = [
   { key: '', label: 'Keine Vorlage (leer)', name: '', role: 'specialist', tools: '', duties: '' },
   { key: 'programmierer', label: 'Programmierer', name: 'Programmierer', role: 'specialist', tools: '*', duties: 'Implementiert Sprint-Todos in einem Worktree, verifiziert lokal und pusht einen PR. Merged nie selbst.', procedure: '' },
-  { key: 'ceo', label: 'CEO', name: 'CEO', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
+  { key: 'ceo', label: 'Operator', name: 'Operator', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
   { key: 'pm', label: 'Projektmanager', name: 'Projektmanager', role: 'teamlead', tools: 'ape-tasks *', duties: 'Pflegt Backlog/Aufgaben, plant, hält Termine/Blocker sichtbar.' },
   { key: 'mail-m365', label: 'Mail-Assistent · Microsoft 365', name: 'Mail-Assistent', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Triagiert die Inbox read-only, meldet die handlungsrelevanten Mails und liest Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht NIE.' },
   { key: 'mail-gmail', label: 'Mail-Assistent · Gmail', name: 'Mail-Assistent', role: 'specialist', tools: 'gmail-cli *', duties: 'Triagiert die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
@@ -74,11 +74,11 @@ const ROLE_TEMPLATES: RoleTemplate[] = [
 ]
 const templateItems = ROLE_TEMPLATES.map(t => ({ label: t.label, value: t.key }))
 const roleItems = [
-  { label: 'CEO', value: 'ceo' },
+  { label: 'Operator', value: 'ceo' },
   { label: 'Team-Lead', value: 'teamlead' },
   { label: 'Specialist', value: 'specialist' },
 ]
-const roleLabelShort: Record<string, string> = { ceo: 'CEO', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+const roleLabelShort: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
 const editingId = ref<string | null>(null)
 const supervisorItems = computed(() => [
   { label: '— Owner (kein Vorgesetzter)', value: '' },
@@ -332,7 +332,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           <UFormField label="Name">
             <UInput v-model="editForm.name" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Vision" description="Der CEO liest das bei jeder Interaktion.">
+          <UFormField label="Vision" description="Der Operator liest das bei jeder Interaktion.">
             <UTextarea v-model="editForm.vision" :rows="5" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UFormField label="Monatsbudget (EUR)">

@@ -5,7 +5,7 @@ import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 import { scoreProcedure } from '../../../../utils/cockpit/procedure-score'
 import { assertVars } from '../../../../utils/cockpit/vars'
 
-// Add a delegation leaf (role, duties, tools) the CEO can hand tool-work to.
+// Add a delegation leaf (role, duties, tools) the Operator can hand tool-work to.
 // `procedure` is its work instruction, `vars` its own facts — both owner-only.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
