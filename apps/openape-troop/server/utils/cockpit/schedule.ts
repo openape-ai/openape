@@ -1,4 +1,4 @@
-export interface Schedule { atHour: number | null, everyMinutes: number | null, enabled: boolean, lastRunAt: number | null }
+export interface Schedule { atHour: number | null, everyMinutes: number | null, fireAt: number | null, enabled: boolean, lastRunAt: number | null }
 
 const TZ = 'Europe/Vienna'
 function vienna(ms: number): { ymd: string, hour: number } {
@@ -7,11 +7,16 @@ function vienna(ms: number): { ymd: string, hour: number } {
   return { ymd: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) % 24 }
 }
 
-// Is this schedule due at `nowMs`? Daily (atHour): due once per Vienna-day, from
-// atHour onward, until it has run today. Periodic (everyMinutes): due when at
-// least that long has passed since the last run.
+// Is this schedule due at `nowMs`? Timer (fireAt): a one-shot, due once the
+// target time has passed and it hasn't run yet (the evaluator disables it after).
+// Daily (atHour): due once per Vienna-day, from atHour onward, until it has run
+// today. Periodic (everyMinutes): due when at least that long has passed since
+// the last run.
 export function isDue(s: Schedule, nowMs: number): boolean {
   if (!s.enabled) return false
+  if (s.fireAt != null) {
+    return s.lastRunAt == null && nowMs >= s.fireAt
+  }
   if (s.atHour != null) {
     const now = vienna(nowMs)
     if (now.hour < s.atHour) return false

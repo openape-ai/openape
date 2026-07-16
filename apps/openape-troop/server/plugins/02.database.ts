@@ -88,6 +88,12 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_schedules_owner ON cockpit_schedules(owner_email)`)
+    // Proactive triggers (#proactive-operators): `prompt` = what the Operator does
+    // when due; `fire_at` = one-shot timer alternative to at_hour/every_minutes.
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN prompt TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN fire_at INTEGER`) }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_chat_messages (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
