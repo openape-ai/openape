@@ -461,16 +461,21 @@ export const cockpitSkills = sqliteTable('cockpit_skills', {
 export type Skill = typeof cockpitSkills.$inferSelect
 export type NewSkill = typeof cockpitSkills.$inferInsert
 
-// cockpit_schedules — server-side schedule so the provider loop discovers WHEN
-// to act (e.g. a daily morning report). The loop polls GET /api/cockpit/due each
-// tick; troop is the source of truth for what's due, not a session cron.
+// cockpit_schedules — a proactive trigger: WHEN the Operator should act on its
+// own (not just on owner chat) and WHAT it should do. The server-side evaluator
+// (server/plugins/03.trigger-evaluator.ts) ticks every 15s, finds due rows, and
+// enqueues `prompt` as an Operator task for the org — whose answer lands in the
+// cockpit chat + fires a Web-Push. Cron = atHour (daily) or everyMinutes; timer
+// = a one-shot at `fireAt`. `kind` is a free label.
 export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   id: text('id').primaryKey(),
   ownerEmail: text('owner_email').notNull(),
   orgId: text('org_id').notNull(),
   kind: text('kind').notNull(),
+  prompt: text('prompt').notNull().default(''), // what the Operator does (task userMessage)
   atHour: integer('at_hour'), // daily: local (Europe/Vienna) hour 0–23
   everyMinutes: integer('every_minutes'), // periodic alternative
+  fireAt: integer('fire_at'), // one-shot timer: epoch ms; disabled after it fires
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   lastRunAt: integer('last_run_at'),
   createdAt: integer('created_at').notNull(),
