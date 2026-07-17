@@ -1,4 +1,4 @@
-export interface PromptOrg { name: string, visionMd: string, budgetMonthlyEur: number }
+export interface PromptOrg { id: string, name: string, visionMd: string, budgetMonthlyEur: number }
 export interface PromptObjective { title: string, status: string }
 export interface TeamMember { id: string, role: string, label: string, duties: string, tools: string[] }
 export interface MemoryDoc { id: string, title: string, body: string, mode: string, scope?: string, targetId?: string }
@@ -9,7 +9,7 @@ export interface SkillRef { id: string, name: string, description: string, assig
 // `memory` = the org's nachschlagbare Fakten: 'inline' docs go straight into the
 // prompt, 'reference' docs only as an index line the agent fetches on demand.
 export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner: string, team: TeamMember[], memory: MemoryDoc[] = [], skills: SkillRef[] = []): string {
-  let p = `Du bist der Operator der Firma „${org.name}". Antworte als dieser Operator: knapp, konkret, auf Deutsch. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an.`
+  let p = `Du bist der Operator der Firma „${org.name}" (orgId: ${org.id}). Antworte als dieser Operator: knapp, konkret, auf Deutsch. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an. Verlangt ein Werkzeug (z. B. Selbst-Planung/Automatik) eine orgId, nutze GENAU diese: ${org.id} (nicht den Firmennamen).`
   if (team.length) {
     p += `\n\nDein Team — du kannst an diese Rollen delegieren, wenn eine Aufgabe ihr Werkzeug braucht:`
     for (const m of team) {
