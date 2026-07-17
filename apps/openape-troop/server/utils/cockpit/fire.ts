@@ -1,5 +1,6 @@
 import { buildOrgSystemPrompt } from './org-context'
 import { enqueue } from './queue'
+import { saveTask } from './task-store'
 
 // Enqueue a proactive Operator task for (owner, org): build the org grounding and
 // hand `userMessage` to the queue. The always-on worker claims it like any cockpit
@@ -14,6 +15,8 @@ export async function fireProactiveTask(owner: string, orgId: string, userMessag
   const systemPrompt = await buildOrgSystemPrompt(owner, orgId)
   if (systemPrompt == null) return false
   const framed = `[Geplanter Trigger — jetzt fällig] Der folgende Auftrag ist gerade fällig geworden. Führe ihn JETZT aus und melde dem Owner das Ergebnis direkt im Chat. Keine Rückfrage und keine erneute Terminplanung — der Zeitpunkt ist jetzt. Ist es eine Erinnerung, sprich sie direkt aus.\n\nAuftrag:\n${userMessage}`
-  enqueue(orgId, systemPrompt, framed, owner)
+  const task = enqueue(orgId, systemPrompt, framed, owner)
+  // Persist so a restart before the worker claims doesn't silently drop the fire.
+  void saveTask({ id: task.id, company: orgId, owner, systemPrompt, userMessage: framed, createdAt: Date.now() }).catch(err => console.error('[task-store] save', err))
   return true
 }
