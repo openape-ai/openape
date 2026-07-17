@@ -94,6 +94,9 @@ export default defineNitroPlugin(async () => {
     catch { /* column exists */ }
     try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN fire_at INTEGER`) }
     catch { /* column exists */ }
+    // Self-scheduling (#proactive-operators Phase 3): who created this trigger.
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
+    catch { /* column exists */ }
     // Event hooks (#proactive-operators Phase 2): external POST /api/hooks/<token>
     // fires the Operator on the same spine as schedules.
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_hooks (
@@ -106,11 +109,14 @@ export default defineNitroPlugin(async () => {
       prompt TEXT NOT NULL DEFAULT '',
       include_payload INTEGER NOT NULL DEFAULT 0,
       enabled INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT 'owner',
       last_fired_at INTEGER,
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_owner ON cockpit_hooks(owner_email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_token ON cockpit_hooks(token)`)
+    try { await db.run(sql`ALTER TABLE cockpit_hooks ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
+    catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_chat_messages (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
