@@ -2,6 +2,7 @@ import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildOrgSystemPrompt } from '../../utils/cockpit/org-context'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
 import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
+import { saveTask } from '../../utils/cockpit/task-store'
 
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
@@ -30,6 +31,8 @@ export default defineEventHandler(async (event) => {
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
     : latestUser
   const task = enqueue(company, systemPrompt, prompt, owner)
+  // Persist the input so a troop restart before the worker resolves doesn't drop it.
+  void saveTask({ id: task.id, company, owner, systemPrompt, userMessage: prompt, createdAt: Date.now() }).catch(err => console.error('[task-store] save', err))
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
