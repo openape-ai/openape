@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../../database/drizzle'
 import { cockpitHooks, cockpitSchedules } from '../../../database/schema'
 import { requireAgentOrg } from '../../../utils/cockpit/agent-org'
+import { isValidCron } from '../../../utils/cockpit/schedule'
 
 // The Operator's self-scheduling surface. One action-dispatched endpoint (a single
 // auditable surface) the worker calls with its owner-resolving DDISA identity to
@@ -18,6 +19,7 @@ interface Body {
   atHour?: number
   everyMinutes?: number
   fireAt?: number
+  cronExpr?: string
   // create-hook
   label?: string
   includePayload?: boolean
@@ -42,9 +44,11 @@ export default defineEventHandler(async (event) => {
     const atHour = typeof body.atHour === 'number' ? Math.max(0, Math.min(23, Math.floor(body.atHour))) : null
     const everyMinutes = typeof body.everyMinutes === 'number' && body.everyMinutes > 0 ? Math.floor(body.everyMinutes) : null
     const fireAt = typeof body.fireAt === 'number' && body.fireAt > 0 ? Math.floor(body.fireAt) : null
-    if (atHour == null && everyMinutes == null && fireAt == null) throw createError({ statusCode: 400, statusMessage: 'atHour, everyMinutes or fireAt required' })
+    const cronExpr = typeof body.cronExpr === 'string' && body.cronExpr.trim() ? body.cronExpr.trim() : null
+    if (cronExpr != null && !isValidCron(cronExpr)) throw createError({ statusCode: 400, statusMessage: 'invalid cron expression (5-field, e.g. "0 7 * * 1-5")' })
+    if (atHour == null && everyMinutes == null && fireAt == null && cronExpr == null) throw createError({ statusCode: 400, statusMessage: 'cronExpr, atHour, everyMinutes or fireAt required' })
     const id = randomUUID()
-    await db.insert(cockpitSchedules).values({ id, ownerEmail: owner, orgId, kind, prompt, atHour, everyMinutes, fireAt, enabled: true, createdBy: 'operator', lastRunAt: null, createdAt: Date.now() })
+    await db.insert(cockpitSchedules).values({ id, ownerEmail: owner, orgId, kind, prompt, atHour, everyMinutes, fireAt, cronExpr, enabled: true, createdBy: 'operator', lastRunAt: null, createdAt: Date.now() })
     return { id }
   }
 
@@ -62,7 +66,7 @@ export default defineEventHandler(async (event) => {
     const schedules = await db.select().from(cockpitSchedules).where(and(eq(cockpitSchedules.ownerEmail, owner), eq(cockpitSchedules.orgId, orgId)))
     const hooks = await db.select().from(cockpitHooks).where(and(eq(cockpitHooks.ownerEmail, owner), eq(cockpitHooks.orgId, orgId)))
     return {
-      schedules: schedules.map(s => ({ id: s.id, kind: s.kind, prompt: s.prompt, atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, enabled: s.enabled, createdBy: s.createdBy, lastRunAt: s.lastRunAt })),
+      schedules: schedules.map(s => ({ id: s.id, kind: s.kind, prompt: s.prompt, atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, cronExpr: s.cronExpr, enabled: s.enabled, createdBy: s.createdBy, lastRunAt: s.lastRunAt })),
       hooks: hooks.map(h => ({ id: h.id, label: h.label, token: h.token, prompt: h.prompt, includePayload: h.includePayload, enabled: h.enabled, createdBy: h.createdBy, lastFiredAt: h.lastFiredAt })),
     }
   }
