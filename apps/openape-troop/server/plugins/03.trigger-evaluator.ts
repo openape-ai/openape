@@ -2,8 +2,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { cockpitSchedules } from '../database/schema'
 import { isDue } from '../utils/cockpit/schedule'
-import { buildOrgSystemPrompt } from '../utils/cockpit/org-context'
-import { enqueue } from '../utils/cockpit/queue'
+import { fireProactiveTask } from '../utils/cockpit/fire'
 
 // Proactive triggers. Every 15s, find due trigger rows and enqueue their `prompt`
 // as an Operator task for the org. The always-on worker claims it like any
@@ -20,9 +19,8 @@ async function tick(): Promise<void> {
   for (const s of rows) {
     if (!s.prompt.trim()) continue
     if (!isDue({ atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, enabled: s.enabled, lastRunAt: s.lastRunAt }, now)) continue
-    const systemPrompt = await buildOrgSystemPrompt(s.ownerEmail, s.orgId)
-    if (systemPrompt == null) continue // org gone or not owned — skip quietly
-    enqueue(s.orgId, systemPrompt, s.prompt, s.ownerEmail)
+    const fired = await fireProactiveTask(s.ownerEmail, s.orgId, s.prompt)
+    if (!fired) continue // org gone or not owned — skip quietly
     // Stamp lastRunAt at enqueue time (fire-and-forget: dedup, not delivery
     // guarantee); a one-shot timer disables itself after firing.
     await db.update(cockpitSchedules)
