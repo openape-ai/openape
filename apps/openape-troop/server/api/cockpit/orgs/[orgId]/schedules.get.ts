@@ -6,5 +6,5 @@ import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
   const rows = await useDb().select().from(cockpitSchedules).where(and(eq(cockpitSchedules.ownerEmail, owner), eq(cockpitSchedules.orgId, orgId)))
-  return rows.map(s => ({ id: s.id, kind: s.kind, prompt: s.prompt, atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, enabled: s.enabled, createdBy: s.createdBy, lastRunAt: s.lastRunAt }))
+  return rows.map(s => ({ id: s.id, kind: s.kind, prompt: s.prompt, atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, cronExpr: s.cronExpr, enabled: s.enabled, createdBy: s.createdBy, lastRunAt: s.lastRunAt }))
 })
