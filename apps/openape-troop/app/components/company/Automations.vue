@@ -14,6 +14,7 @@ interface Trigger {
   everyMinutes: number | null
   fireAt: number | null
   enabled: boolean
+  createdBy: string
   lastRunAt: number | null
 }
 
@@ -157,6 +158,9 @@ watch(() => props.orgId, load, { immediate: true })
               <span class="text-sm font-medium truncate">{{ t.kind || '(ohne Name)' }}</span>
               <UBadge color="neutral" variant="subtle" size="xs" icon="i-lucide-clock">
                 {{ scheduleLabel(t) }}
+              </UBadge>
+              <UBadge v-if="t.createdBy === 'operator'" color="info" variant="subtle" size="xs" icon="i-lucide-bot">
+                vom Operator
               </UBadge>
               <UBadge v-if="!t.enabled" color="warning" variant="subtle" size="xs">
                 pausiert
