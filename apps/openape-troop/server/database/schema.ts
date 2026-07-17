@@ -476,6 +476,7 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   atHour: integer('at_hour'), // daily: local (Europe/Vienna) hour 0–23
   everyMinutes: integer('every_minutes'), // periodic alternative
   fireAt: integer('fire_at'), // one-shot timer: epoch ms; disabled after it fires
+  cronExpr: text('cron_expr'), // 5-field cron (Europe/Vienna); takes precedence over atHour/everyMinutes
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-scheduled)
   lastRunAt: integer('last_run_at'),

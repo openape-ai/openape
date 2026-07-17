@@ -97,6 +97,8 @@ export default defineNitroPlugin(async () => {
     // Self-scheduling (#proactive-operators Phase 3): who created this trigger.
     try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
     catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN cron_expr TEXT`) }
+    catch { /* column exists */ }
     // Event hooks (#proactive-operators Phase 2): external POST /api/hooks/<token>
     // fires the Operator on the same spine as schedules.
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_hooks (
