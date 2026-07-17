@@ -477,6 +477,7 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   everyMinutes: integer('every_minutes'), // periodic alternative
   fireAt: integer('fire_at'), // one-shot timer: epoch ms; disabled after it fires
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-scheduled)
   lastRunAt: integer('last_run_at'),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
@@ -496,6 +497,7 @@ export const cockpitHooks = sqliteTable('cockpit_hooks', {
   prompt: text('prompt').notNull().default(''), // what the Operator does on the event
   includePayload: integer('include_payload', { mode: 'boolean' }).notNull().default(false),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-created)
   lastFiredAt: integer('last_fired_at'),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_hooks_owner').on(table.ownerEmail), index('idx_cockpit_hooks_token').on(table.token)])
