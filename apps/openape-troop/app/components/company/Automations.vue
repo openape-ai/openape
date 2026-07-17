@@ -223,5 +223,9 @@ watch(() => props.orgId, load, { immediate: true })
         </div>
       </template>
     </UModal>
+
+    <div class="mt-10 border-t border-zinc-800 pt-8">
+      <CompanyWebhooks :org-id="props.orgId" />
+    </div>
   </div>
 </template>
