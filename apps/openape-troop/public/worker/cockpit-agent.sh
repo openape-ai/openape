@@ -65,5 +65,6 @@ for s in json.load(sys.stdin):
       call GET "/api/cockpit/agent/skill/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("prompt",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
   resolve)   ID="$1"; STATE="$2"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)")" ;;
-  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed>" >&2; exit 2 ;;
+  automation) call POST /api/cockpit/agent/automations "$(cat)" ;; # Operator self-scheduling: JSON action body on stdin
+  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed>|automation (json on stdin)" >&2; exit 2 ;;
 esac
