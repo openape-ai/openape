@@ -481,6 +481,25 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
 
+// cockpit_hooks — an event trigger: an external system POSTs to /api/hooks/<token>
+// and the Operator runs `prompt` (optionally with the request body appended as
+// data) on the same spine as schedules → cockpit chat + Web-Push. `token` is the
+// unguessable URL credential; `secret` (optional) adds HMAC-SHA256 verification of
+// the raw body via the X-Signature header.
+export const cockpitHooks = sqliteTable('cockpit_hooks', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  label: text('label').notNull().default(''),
+  token: text('token').notNull().unique(),
+  secret: text('secret'), // optional HMAC secret; null = token-only
+  prompt: text('prompt').notNull().default(''), // what the Operator does on the event
+  includePayload: integer('include_payload', { mode: 'boolean' }).notNull().default(false),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  lastFiredAt: integer('last_fired_at'),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_hooks_owner').on(table.ownerEmail), index('idx_cockpit_hooks_token').on(table.token)])
+
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
 // The chat no longer depends on the live SSE connection: user messages and Operator
 // answers are stored here, so leaving and returning shows everything in between.
