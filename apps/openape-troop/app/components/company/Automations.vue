@@ -13,6 +13,7 @@ interface Trigger {
   atHour: number | null
   everyMinutes: number | null
   fireAt: number | null
+  cronExpr: string | null
   enabled: boolean
   createdBy: string
   lastRunAt: number | null
@@ -30,24 +31,26 @@ async function load() {
 
 const fmt = (ms: number) => new Date(ms).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' })
 function scheduleLabel(t: Trigger): string {
+  if (t.cronExpr) return `cron · ${t.cronExpr}`
   if (t.fireAt != null) return `einmalig · ${fmt(t.fireAt)}`
   if (t.atHour != null) return `täglich · ${String(t.atHour).padStart(2, '0')}:00 Uhr`
   if (t.everyMinutes != null) return `alle ${t.everyMinutes} min`
   return '—'
 }
 
-type Mode = 'daily' | 'periodic' | 'timer'
+type Mode = 'daily' | 'periodic' | 'timer' | 'cron'
 const modeOptions = [
   { value: 'daily', label: 'Täglich zur Uhrzeit' },
   { value: 'periodic', label: 'Alle N Minuten' },
   { value: 'timer', label: 'Einmalig zum Zeitpunkt' },
+  { value: 'cron', label: 'Cron-Ausdruck' },
 ]
 
 const showForm = ref(false)
 const editingId = ref('')
 const saving = ref(false)
 const formError = ref('')
-const form = reactive({ kind: '', prompt: '', mode: 'daily' as Mode, atHour: 7, everyMinutes: 60, fireAtLocal: '' })
+const form = reactive({ kind: '', prompt: '', mode: 'daily' as Mode, atHour: 7, everyMinutes: 60, fireAtLocal: '', cronExpr: '' })
 
 function toLocalInput(ms: number): string {
   const d = new Date(ms)
@@ -57,13 +60,13 @@ function toLocalInput(ms: number): string {
 
 function openAdd() {
   editingId.value = ''
-  Object.assign(form, { kind: '', prompt: '', mode: 'daily', atHour: 7, everyMinutes: 60, fireAtLocal: '' })
+  Object.assign(form, { kind: '', prompt: '', mode: 'daily', atHour: 7, everyMinutes: 60, fireAtLocal: '', cronExpr: '' })
   formError.value = ''
   showForm.value = true
 }
 function openEdit(t: Trigger) {
   editingId.value = t.id
-  const mode: Mode = t.fireAt != null ? 'timer' : t.everyMinutes != null ? 'periodic' : 'daily'
+  const mode: Mode = t.cronExpr ? 'cron' : t.fireAt != null ? 'timer' : t.everyMinutes != null ? 'periodic' : 'daily'
   Object.assign(form, {
     kind: t.kind,
     prompt: t.prompt,
@@ -71,6 +74,7 @@ function openEdit(t: Trigger) {
     atHour: t.atHour ?? 7,
     everyMinutes: t.everyMinutes ?? 60,
     fireAtLocal: t.fireAt != null ? toLocalInput(t.fireAt) : '',
+    cronExpr: t.cronExpr ?? '',
   })
   formError.value = ''
   showForm.value = true
@@ -79,12 +83,16 @@ function openEdit(t: Trigger) {
 async function submit() {
   if (!form.kind.trim()) { formError.value = 'Name nötig.'; return }
   if (!form.prompt.trim()) { formError.value = 'Anweisung nötig.'; return }
-  const body: Record<string, unknown> = { kind: form.kind.trim(), prompt: form.prompt.trim(), atHour: null, everyMinutes: null, fireAt: null }
+  const body: Record<string, unknown> = { kind: form.kind.trim(), prompt: form.prompt.trim(), atHour: null, everyMinutes: null, fireAt: null, cronExpr: null }
   if (form.mode === 'daily') {
     body.atHour = Math.max(0, Math.min(23, Math.floor(form.atHour)))
   }
   else if (form.mode === 'periodic') {
     body.everyMinutes = Math.max(1, Math.floor(form.everyMinutes))
+  }
+  else if (form.mode === 'cron') {
+    if (!form.cronExpr.trim()) { formError.value = 'Cron-Ausdruck nötig.'; return }
+    body.cronExpr = form.cronExpr.trim()
   }
   else {
     const ms = form.fireAtLocal ? new Date(form.fireAtLocal).getTime() : Number.NaN
@@ -204,10 +212,16 @@ watch(() => props.orgId, load, { immediate: true })
                 <UInput v-model.number="form.everyMinutes" type="number" :min="1" class="w-24" />
                 <span class="text-sm text-zinc-500">Minuten Intervall</span>
               </div>
-              <div v-else>
+              <div v-else-if="form.mode === 'timer'">
                 <UInput v-model="form.fireAtLocal" type="datetime-local" class="w-full" :ui="{ base: 'w-full' }" />
                 <p v-if="timerPreview" class="text-xs text-zinc-500 mt-1">
                   feuert einmalig am {{ timerPreview }}
+                </p>
+              </div>
+              <div v-else>
+                <UInput v-model="form.cronExpr" placeholder="0 7 * * 1-5" class="w-full font-mono" :ui="{ base: 'w-full' }" />
+                <p class="text-xs text-zinc-500 mt-1">
+                  5-Feld-Cron (Wiener Zeit): Minute Stunde Tag Monat Wochentag. Beispiel: <code>0 7 * * 1-5</code> = werktags 7:00.
                 </p>
               </div>
             </div>
