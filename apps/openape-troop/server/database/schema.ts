@@ -502,6 +502,19 @@ export const cockpitHooks = sqliteTable('cockpit_hooks', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_hooks_owner').on(table.ownerEmail), index('idx_cockpit_hooks_token').on(table.token)])
 
+// cockpit_tasks — durability for the in-memory cockpit queue: the INPUT of an
+// in-flight task, so a troop restart doesn't silently drop a proactive fire
+// (trigger/hook). Only unfinished tasks live here; the boot rehydrate re-offers
+// them to the worker, a terminal resolve deletes the row.
+export const cockpitTasks = sqliteTable('cockpit_tasks', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  systemPrompt: text('system_prompt').notNull(),
+  userMessage: text('user_message').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
 // The chat no longer depends on the live SSE connection: user messages and Operator
 // answers are stored here, so leaving and returning shows everything in between.
