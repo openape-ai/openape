@@ -117,15 +117,9 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_token ON cockpit_hooks(token)`)
     try { await db.run(sql`ALTER TABLE cockpit_hooks ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
     catch { /* column exists */ }
-    // Queue durability (#queue-durability): in-flight task inputs survive a restart.
-    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_tasks (
-      id TEXT PRIMARY KEY,
-      owner_email TEXT NOT NULL,
-      org_id TEXT NOT NULL,
-      system_prompt TEXT NOT NULL,
-      user_message TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    )`)
+    // Queue durability (#queue-durability): cockpit_tasks DDL is owned by
+    // server/utils/cockpit/task-store.ts (ensureTaskTable), created by the boot
+    // rehydrate before requests — avoids a plugin-ordering race.
     await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_chat_messages (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
