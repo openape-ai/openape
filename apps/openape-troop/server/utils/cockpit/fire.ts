@@ -6,9 +6,14 @@ import { enqueue } from './queue'
 // task; the answer lands in the chat + fires a Web-Push. Returns false if the org
 // is gone/unowned (nothing enqueued). Shared by the schedule evaluator and event
 // hooks so every proactive path is grounded identically.
+//
+// The task is framed as a DUE trigger firing NOW, so the Operator executes it and
+// reports to the owner directly instead of asking a clarifying question — a stored
+// reminder prompt like "Patrick erinnern: X" must be delivered, not re-negotiated.
 export async function fireProactiveTask(owner: string, orgId: string, userMessage: string): Promise<boolean> {
   const systemPrompt = await buildOrgSystemPrompt(owner, orgId)
   if (systemPrompt == null) return false
-  enqueue(orgId, systemPrompt, userMessage, owner)
+  const framed = `[Geplanter Trigger — jetzt fällig] Der folgende Auftrag ist gerade fällig geworden. Führe ihn JETZT aus und melde dem Owner das Ergebnis direkt im Chat. Keine Rückfrage und keine erneute Terminplanung — der Zeitpunkt ist jetzt. Ist es eine Erinnerung, sprich sie direkt aus.\n\nAuftrag:\n${userMessage}`
+  enqueue(orgId, systemPrompt, framed, owner)
   return true
 }
