@@ -14,6 +14,7 @@ interface Hook {
   prompt: string
   includePayload: boolean
   enabled: boolean
+  createdBy: string
   lastFiredAt: number | null
 }
 
@@ -109,6 +110,9 @@ if (import.meta.client) origin.value = window.location.origin
           <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-sm font-medium truncate">{{ h.label || '(ohne Name)' }}</span>
+              <UBadge v-if="h.createdBy === 'operator'" color="info" variant="subtle" size="xs" icon="i-lucide-bot">
+                vom Operator
+              </UBadge>
               <UBadge v-if="h.secret" color="primary" variant="subtle" size="xs" icon="i-lucide-shield-check">
                 HMAC
               </UBadge>
