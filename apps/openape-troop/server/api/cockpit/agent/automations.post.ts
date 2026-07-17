@@ -87,5 +87,14 @@ export default defineEventHandler(async (event) => {
     return { ok: true }
   }
 
-  throw createError({ statusCode: 400, statusMessage: 'unknown action' })
+  // Self-documenting: the worker reads this body, so a wrong guess converges on the
+  // next try instead of a blind loop.
+  throw createError({
+    statusCode: 400,
+    statusMessage: `unknown action '${action}'. Valid actions: create-schedule | create-hook | list | update | delete. Reminder example: {"action":"create-schedule","orgId":"${orgId}","kind":"followup","prompt":"...","fireAt":<epoch-ms-in-future>}`,
+    data: {
+      validActions: ['create-schedule', 'create-hook', 'list', 'update', 'delete'],
+      example: { action: 'create-schedule', orgId, kind: 'followup', prompt: '…', fireAt: '<epoch-ms in the future>' },
+    },
+  })
 })
