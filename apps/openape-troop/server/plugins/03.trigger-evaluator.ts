@@ -18,7 +18,7 @@ async function tick(): Promise<void> {
   const rows = await db.select().from(cockpitSchedules).where(eq(cockpitSchedules.enabled, true))
   for (const s of rows) {
     if (!s.prompt.trim()) continue
-    if (!isDue({ atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, enabled: s.enabled, lastRunAt: s.lastRunAt }, now)) continue
+    if (!isDue({ atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, cronExpr: s.cronExpr, enabled: s.enabled, lastRunAt: s.lastRunAt, createdAt: s.createdAt }, now)) continue
     const fired = await fireProactiveTask(s.ownerEmail, s.orgId, s.prompt)
     if (!fired) continue // org gone or not owned — skip quietly
     // Stamp lastRunAt at enqueue time (fire-and-forget: dedup, not delivery
