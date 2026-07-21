@@ -31,8 +31,10 @@ function daySep(i: number): string {
   return dayLabel(ms)
 }
 
-function onCompanyChange(e: Event): void {
-  void selectCompany((e.target as HTMLSelectElement).value)
+const showCompanies = ref(false)
+function pickCompany(id: string): void {
+  showCompanies.value = false
+  void selectCompany(id)
 }
 function onSend(text: string): void {
   void send(text)
@@ -46,11 +48,11 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
   <div class="cockpit-root">
     <div class="chat" :style="{ '--accent': currentCompany?.accent ?? '#6d5efc' }">
       <header class="chat-header">
-        <NuxtLink to="/companies" class="ghost nav-back" title="Zur troop-Steuerung" aria-label="Zur troop-Steuerung">
-          ‹ troop
-        </NuxtLink>
+        <button class="ghost nav-back" type="button" title="Firma wechseln" aria-label="Firma wechseln" @click="showCompanies = true">
+          ‹
+        </button>
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
-        <span class="conn-dot" :class="`m-${mode}`" :title="presenceTitle">{{ presenceLabel }}</span>
+        <span class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></span>
         <a
           v-if="mode === 'offline'"
           class="ceo-start"
@@ -58,21 +60,9 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           title="Öffnet Claude Code und richtet den Operator-Worker ein — dann einmal Enter drücken"
           style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);text-decoration:none;white-space:nowrap"
         >▸ Operator starten</a>
-        <div class="company-picker">
-          <select
-            class="company-select"
-            :value="currentCompany?.id ?? ''"
-            aria-label="Firma wählen"
-            @change="onCompanyChange"
-          >
-            <option v-if="!companies.length" value="">
-              Keine Firmen
-            </option>
-            <option v-for="c in companies" :key="c.id" :value="c.id">
-              {{ c.name }}
-            </option>
-          </select>
-        </div>
+        <button class="company-title" type="button" aria-label="Firma wechseln" @click="showCompanies = true">
+          {{ currentCompany?.name ?? 'Keine Firmen' }}
+        </button>
         <button v-if="messages.length" class="ghost" type="button" @click="clear">
           Neu
         </button>
@@ -102,6 +92,33 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
       </Transition>
 
       <CockpitComposer :streaming="isStreaming" @send="onSend" @stop="stop" />
+
+      <div v-if="showCompanies" class="services-overlay" @click.self="showCompanies = false">
+        <div class="services-panel">
+          <div class="services-head">
+            <span class="services-title">Firmen</span>
+            <button class="ghost" type="button" @click="showCompanies = false">
+              Fertig
+            </button>
+          </div>
+          <div class="services-list">
+            <button
+              v-for="c in companies"
+              :key="c.id"
+              class="company-row"
+              :class="{ current: c.id === currentCompany?.id }"
+              type="button"
+              @click="pickCompany(c.id)"
+            >
+              <span class="avatar" :style="{ background: c.accent }">{{ c.short }}</span>
+              <span class="company-row-name">{{ c.name }}</span>
+            </button>
+          </div>
+          <NuxtLink to="/companies" class="services-note">
+            troop-Steuerung ›
+          </NuxtLink>
+        </div>
+      </div>
     </div>
   </div>
 </template>
