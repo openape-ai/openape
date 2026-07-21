@@ -74,7 +74,7 @@ async function fleetPause(pause: boolean) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-zinc-800/80 px-4 sm:px-8 py-4 flex items-center justify-between gap-3">
+    <header class="app-header">
       <UButton to="/nests" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
         Nests
       </UButton>
