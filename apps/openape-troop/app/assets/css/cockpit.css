@@ -59,21 +59,22 @@
   flex: 0 0 auto;
   box-shadow: 0 2px 8px #0006;
 }
-.cockpit-root .company-picker { position: relative; display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
-.cockpit-root .company-select {
-  appearance: none; -webkit-appearance: none;
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* Header title = current company; tapping it (or ‹) opens the company sheet. */
+.cockpit-root .company-title {
+  flex: 1 1 auto; min-width: 0; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: transparent; border: none;
   color: var(--text); font: inherit; font-weight: 600; font-size: 16px;
-  padding: 4px 22px 4px 2px; border-radius: 8px;
+  padding: 4px 2px; border-radius: 8px;
 }
-.cockpit-root .company-select:active { background: var(--surface-2); }
-.cockpit-root .company-select option { color: #000; }
-.cockpit-root .company-picker::after {
-  content: "\25BE";
-  position: absolute; right: 6px;
-  color: var(--muted); pointer-events: none; font-size: 12px;
+.cockpit-root .company-title:active { background: var(--surface-2); }
+.cockpit-root .company-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); color: var(--text); font: inherit; text-align: left;
 }
+.cockpit-root .company-row.current { border-color: var(--accent); }
+.cockpit-root .company-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cockpit-root .chat-header .title { font-weight: 600; font-size: 16px; }
 .cockpit-root .chat-header .ghost {
   margin-left: auto;
@@ -416,6 +417,15 @@
 .cockpit-root .conn-dot.m-idle { color: #6d9eff; border-color: color-mix(in srgb, #6d9eff 40%, transparent); }
 .cockpit-root .conn-dot.m-offline { color: var(--muted); }
 @keyframes conn-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+/* Phone: the company name is the header's title, so the presence pill drops to
+   its dot and gives the name the room instead of truncating it to "D…". */
+@media (max-width: 560px) {
+  .cockpit-root .conn-label { display: none; }
+  .cockpit-root .conn-dot { padding: 4px; gap: 0; }
+  .cockpit-root .chat-header { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .cockpit-root .chat-header .nav-back { padding: 6px 10px; }
+  .cockpit-root .chat-header .ghost { padding: 6px 12px; }
+}
 
 /* in-chat waiting + honest system notice */
 .cockpit-root .waiting { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
@@ -434,5 +444,10 @@
 .cockpit-root .team-duties-input { resize: vertical; font-family: inherit; line-height: 1.4; }
 
 /* Header switch back to the troop control-plane */
-.cockpit-root .nav-back { flex: 0 0 auto; font-size: 13px; font-weight: 600; text-decoration: none; color: var(--muted); }
+.cockpit-root .nav-back {
+  flex: 0 0 auto; margin-left: 0;
+  width: 34px; height: 34px; padding: 0;
+  display: grid; place-items: center;
+  font-size: 20px; font-weight: 600; line-height: 1; text-decoration: none; color: var(--muted);
+}
 .cockpit-root .nav-back:hover { color: var(--text); }
