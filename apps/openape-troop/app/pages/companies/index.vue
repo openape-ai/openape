@@ -62,7 +62,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-zinc-800/80 px-4 sm:px-8 py-4 flex items-center justify-between gap-3">
+    <header class="app-header">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
         <ViewToggle active="companies" />

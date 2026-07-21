@@ -203,7 +203,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-zinc-800/80 px-4 sm:px-8 py-4 flex items-center justify-between gap-3">
+    <header class="app-header">
       <UButton to="/companies" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
         Firmen
       </UButton>
@@ -238,10 +238,11 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             :key="t.key"
             class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 shrink-0"
             :class="tab === t.key ? 'border-primary-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'"
+            :aria-label="t.label"
             @click="tab = t.key"
           >
             <UIcon :name="t.icon" class="size-4" />
-            {{ t.label }}
+            <span :class="tab === t.key ? '' : 'hidden sm:inline'">{{ t.label }}</span>
           </button>
         </div>
 
