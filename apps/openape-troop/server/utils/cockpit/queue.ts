@@ -142,6 +142,22 @@ export function markAgentPoll(owner: string, nextPollInMs?: number): void {
   })
 }
 
+// Doctor report — the worker resolves each declared CLI via `command -v` in
+// its REAL environment (launchd PATH, not the owner's login shell) and sends
+// the result with a heartbeat. In-memory like agentPolls: stale after a worker
+// restart is fine, the next doctor run overwrites.
+const agentDoctors = new Map<string, Record<string, boolean>>() // owner → cli → found
+
+export function markAgentDoctor(owner: string, report: Record<string, boolean>): void {
+  agentDoctors.set(owner, report)
+}
+
+export function missingTools(owner: string): string[] {
+  const report = agentDoctors.get(owner)
+  if (!report) return []
+  return Object.keys(report).filter(cli => !report[cli]).sort()
+}
+
 function ownerHasOpenTask(owner: string): boolean {
   for (const t of tasks.values()) {
     if (t.owner === owner && t.claimed && t.state === 'working') return true
@@ -149,17 +165,18 @@ function ownerHasOpenTask(owner: string): boolean {
   return false
 }
 
-export interface AgentStatus { mode: AgentMode, nextPollInSec: number | null }
+export interface AgentStatus { mode: AgentMode, nextPollInSec: number | null, missingTools: string[] }
 
 export function agentStatus(owner: string): AgentStatus {
+  const missing = missingTools(owner)
   const b = agentPolls.get(owner)
-  if (!b) return { mode: 'offline', nextPollInSec: null }
+  if (!b) return { mode: 'offline', nextPollInSec: null, missingTools: missing }
   const now = Date.now()
   const nextPollAt = b.at + b.nextPollInMs
-  if (now > nextPollAt + OFFLINE_GRACE_MS) return { mode: 'offline', nextPollInSec: null }
-  if (ownerHasOpenTask(owner)) return { mode: 'working', nextPollInSec: null }
-  if (b.nextPollInMs <= ACTIVE_MAX_MS) return { mode: 'active', nextPollInSec: null }
-  return { mode: 'idle', nextPollInSec: Math.max(0, Math.ceil((nextPollAt - now) / 1000)) }
+  if (now > nextPollAt + OFFLINE_GRACE_MS) return { mode: 'offline', nextPollInSec: null, missingTools: missing }
+  if (ownerHasOpenTask(owner)) return { mode: 'working', nextPollInSec: null, missingTools: missing }
+  if (b.nextPollInMs <= ACTIVE_MAX_MS) return { mode: 'active', nextPollInSec: null, missingTools: missing }
+  return { mode: 'idle', nextPollInSec: Math.max(0, Math.ceil((nextPollAt - now) / 1000)), missingTools: missing }
 }
 
 // A brain is "present" (not offline) — kept for callers that only need the binary.

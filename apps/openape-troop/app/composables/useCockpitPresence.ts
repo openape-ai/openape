@@ -8,14 +8,16 @@ export type AgentMode = 'offline' | 'idle' | 'active' | 'working'
 export function useCockpitPresence() {
   const mode = ref<AgentMode>('offline')
   const nextPollInSec = ref<number | null>(null)
+  const missingTools = ref<string[]>([])
   let poll: ReturnType<typeof setInterval> | undefined
   let tick: ReturnType<typeof setInterval> | undefined
 
   async function refresh(): Promise<void> {
     try {
-      const s = await $fetch<{ mode: AgentMode, nextPollInSec: number | null }>('/api/cockpit/status')
+      const s = await $fetch<{ mode: AgentMode, nextPollInSec: number | null, missingTools?: string[] }>('/api/cockpit/status')
       mode.value = s.mode
       nextPollInSec.value = s.nextPollInSec
+      missingTools.value = s.missingTools ?? []
     }
     catch { mode.value = 'offline'; nextPollInSec.value = null }
   }
@@ -46,5 +48,5 @@ export function useCockpitPresence() {
   })
 
   onScopeDispose(() => { if (poll) clearInterval(poll); if (tick) clearInterval(tick) })
-  return { mode, nextPollInSec, label, title, start, refresh }
+  return { mode, nextPollInSec, missingTools, label, title, start, refresh }
 }
