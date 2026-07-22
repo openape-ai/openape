@@ -62,9 +62,9 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
 // Put a persisted task back into the queue with its ORIGINAL id (used by the
 // boot rehydrate after a restart). Fresh submitted state — the worker re-runs it
 // from scratch; its original id keeps removeTask() matching the DB row.
-export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number }): void {
+export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string }): void {
   if (tasks.has(t.id)) return
-  tasks.set(t.id, { ...t, claimed: false, state: 'submitted', progress: [], answer: '' })
+  tasks.set(t.id, { ...t, claimed: false, state: 'submitted', progress: t.lastNote ? [t.lastNote] : [], answer: '' })
   pending.push(t.id)
 }
 
