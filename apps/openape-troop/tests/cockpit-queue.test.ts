@@ -34,6 +34,24 @@ describe('cockpit queue — owner-bound', () => {
     expect(getTask(t.id)?.answer).toBe('ok')
   })
 
+  it('defers a task until notBefore and keeps its progress note', () => {
+    const t = enqueue('c', 'sp', 'q', 'wait@x')
+    expect(claimNext('wait@x')?.id).toBe(t.id)
+    expect(resolve(t.id, 'deferred', 'warte auf CI', 'wait@x', 120_000)).toBe(true)
+    expect(getTask(t.id)?.progress).toEqual(['warte auf CI'])
+    expect(claimNext('wait@x')).toBeNull()
+  })
+
+  it('releases a deferred task after its delay', () => {
+    const t = enqueue('c', 'sp', 'q', 'later@x')
+    claimNext('later@x')
+    resolve(t.id, 'deferred', '', 'later@x', 1)
+    expect(getTask(t.id)?.notBefore).toBeGreaterThan(Date.now())
+    const task = getTask(t.id)!
+    task.notBefore = Date.now() - 1
+    expect(claimNext('later@x')?.id).toBe(t.id)
+  })
+
   it('never polled => offline', () => {
     expect(agentStatus('nobody@x').mode).toBe('offline')
   })

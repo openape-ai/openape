@@ -40,9 +40,9 @@ call() { # method path [body] -> echoes body; raw-token first, 401 -> exchange+r
   if [ "$code" = "401" ]; then rm -f "$CACHE"; out=$(curl -sS --max-time 30 -X "$m" "$SP$p" -H "authorization: Bearer $(mint)" -H 'content-type: application/json' ${b:+-d "$b"}); fi
   printf '%s' "$out"
 }
-resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" python3 -c 'import json,os;print(json.dumps({"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":[{"kind":"text","text":os.environ["TEXT"]}]}}))'; }
+resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" RETRY_IN_MS="${4:-}" python3 -c 'import json,os; body={"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":[{"kind":"text","text":os.environ["TEXT"]}]}}; retry=os.environ["RETRY_IN_MS"]; body.update({"retryInMs": int(retry)} if retry else {}); print(json.dumps(body))'; }
 
-CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|progress <id> <text>|resolve <id> <state>}"; shift || true
+CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|progress <id> <text>|resolve <id> <state> [retryInMs]}"; shift || true
 case "$CMD" in
   services) # always troop; prints: SVC_URL<TAB>SVC_TASKS<TAB>label  (enabled only)
     SP="$TROOP" TP="/api/cockpit" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
@@ -76,7 +76,7 @@ for s in json.load(sys.stdin):
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call GET "/api/cockpit/agent/skill/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("prompt",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
-  resolve)   ID="$1"; STATE="$2"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)")" ;;
+  resolve)   ID="$1"; STATE="$2"; RETRY_IN_MS="${3:-}"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)" "$RETRY_IN_MS")" ;;
   automation) call POST /api/cockpit/agent/automations "$(cat)" ;; # Operator self-scheduling: JSON action body on stdin
-  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed>|automation (json on stdin)" >&2; exit 2 ;;
+  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed|deferred> [retryInMs]|automation (json on stdin)" >&2; exit 2 ;;
 esac
