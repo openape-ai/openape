@@ -42,7 +42,7 @@ call() { # method path [body] -> echoes body; raw-token first, 401 -> exchange+r
 }
 resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" python3 -c 'import json,os;print(json.dumps({"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":[{"kind":"text","text":os.environ["TEXT"]}]}}))'; }
 
-CMD="${1:?usage: cockpit-agent.sh services|heartbeat|next|progress <id> <text>|resolve <id> <state>}"; shift || true
+CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|progress <id> <text>|resolve <id> <state>}"; shift || true
 case "$CMD" in
   services) # always troop; prints: SVC_URL<TAB>SVC_TASKS<TAB>label  (enabled only)
     SP="$TROOP" TP="/api/cockpit" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
@@ -54,6 +54,18 @@ for s in json.load(sys.stdin):
     # you end a turn so the cockpit shows "Ruhemodus · <countdown>" instead of guessing.
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s}' "${1:-12000}")" ;;
+  doctor) # always troop; resolve every declared CLI in THIS process's env and
+    # report cli→found with a heartbeat. Catches PATH drift between the owner's
+    # login shell and the worker (launchd) before any task fails on exit 127.
+    SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok"
+    CLIS=$(call GET /api/cockpit/agent/doctor | python3 -c 'import sys,json;print("\n".join(json.load(sys.stdin).get("clis",[])))')
+    REPORT=$(while IFS= read -r c; do
+      [ -z "$c" ] && continue
+      if command -v "$c" >/dev/null 2>&1; then echo "$c true"; else echo "$c false"; fi
+    done <<< "$CLIS" | python3 -c 'import sys,json;print(json.dumps({w[0]:w[1]=="true" for l in sys.stdin if (w:=l.split())}))')
+    SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
+      call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s,"doctor":%s}' "${1:-12000}" "$REPORT")"
+    echo "$REPORT" ;;
   next)      call POST "$TP/next" ;;
   memory)    # always troop; prints the doc body for the Operator to read
     ID="${1:?usage: cockpit-agent.sh memory <id>}"
