@@ -3,7 +3,7 @@ import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
-const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
+const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 // Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
 // setup, so the user can bring their Operator online (headless or in-session) without typing.
 const workerDeepLink = `claude-cli://open?q=${encodeURIComponent(
@@ -67,6 +67,10 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           Neu
         </button>
       </header>
+
+      <p v-if="missingTools.length" class="sys-notice doctor-warn">
+        ⚠ Beim Operator fehlen Werkzeuge: {{ missingTools.join(', ') }} — im Worker-PATH nicht gefunden.
+      </p>
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">

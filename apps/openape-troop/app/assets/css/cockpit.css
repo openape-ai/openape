@@ -451,3 +451,11 @@
   font-size: 20px; font-weight: 600; line-height: 1; text-decoration: none; color: var(--muted);
 }
 .cockpit-root .nav-back:hover { color: var(--text); }
+
+/* Doctor preflight — declared CLIs the worker's env can't resolve (issue #984). */
+.cockpit-root .doctor-warn {
+  margin: 8px 14px 0;
+  border-color: color-mix(in srgb, #f5a623 50%, transparent);
+  color: #f5a623;
+  font-style: normal;
+}
