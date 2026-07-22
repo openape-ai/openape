@@ -178,9 +178,19 @@ answer() {
 }
 
 # Heartbeat loop: independent so a long generation never drops presence.
+# Runs the doctor preflight (declared CLIs resolvable in THIS env?) at start
+# and hourly — PATH drift between login shell and launchd surfaces in the
+# cockpit instead of as a task failing with exit 127.
 heartbeat_loop() {
+  local i=0
   unset SVC_URL SVC_TASKS
-  while true; do bash "$CA" heartbeat 20000 >/dev/null 2>&1 || true; sleep 15; done
+  bash "$CA" doctor 20000 >/dev/null 2>&1 || true
+  while true; do
+    bash "$CA" heartbeat 20000 >/dev/null 2>&1 || true
+    sleep 15
+    i=$((i + 1))
+    [ $((i % 240)) -eq 0 ] && { bash "$CA" doctor 20000 >/dev/null 2>&1 || true; }
+  done
 }
 
 # Cockpit loop: own scratch, sequential; Operator gets tools (privileged).
