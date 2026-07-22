@@ -5,7 +5,7 @@
 // package yet). The wire matches what a stock ape-agent consumes/produces (verified M0),
 // so the real worker serves it unmodified once auth is DDISA (M2).
 
-export type TaskState = 'submitted' | 'working' | 'completed' | 'failed'
+export type TaskState = 'submitted' | 'working' | 'completed' | 'failed' | 'deferred'
 
 export interface QueueTask {
   id: string
@@ -18,6 +18,7 @@ export interface QueueTask {
   progress: string[] // intermediate "thinking" artifacts
   answer: string // terminal artifact text
   createdAt: number
+  notBefore?: number
 }
 
 const tasks = new Map<string, QueueTask>()
@@ -73,7 +74,8 @@ export function claimNext(owner: string): QueueTask | null {
   for (let i = 0; i < pending.length; i++) {
     const task = tasks.get(pending[i]!)
     if (!task) { pending.splice(i, 1); i--; continue }
-    if (task.owner === owner && !task.claimed && task.state === 'submitted') {
+    if (task.owner === owner && !task.claimed && task.state === 'submitted' &&
+      (!task.notBefore || Date.now() >= task.notBefore)) {
       pending.splice(i, 1)
       task.claimed = true
       task.state = 'working'
@@ -104,12 +106,19 @@ export function addProgress(id: string, text: string): boolean {
 }
 
 /** Apply a ResolveTask: terminal state sets the answer; `working` adds a progress note. */
-export function resolve(id: string, state: TaskState, text: string, owner: string): boolean {
+export function resolve(id: string, state: TaskState, text: string, owner: string, retryInMs?: number): boolean {
   const task = tasks.get(id)
   if (!task || task.owner !== owner) return false
   if (state === 'completed' || state === 'failed') {
     task.state = state
     task.answer = text
+  }
+  else if (state === 'deferred') {
+    task.state = 'submitted'
+    task.claimed = false
+    task.notBefore = Date.now() + (retryInMs ?? 0)
+    if (text) task.progress.push(text)
+    if (id && !pending.includes(id)) pending.push(id)
   }
   else if (text) {
     task.progress.push(text)
