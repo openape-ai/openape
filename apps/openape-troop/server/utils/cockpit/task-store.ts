@@ -6,7 +6,7 @@ import { cockpitTasks } from '../../database/schema'
 // forget it on terminal resolve, reload the unfinished ones on boot. Best-effort
 // (callers fire-and-forget) — an occasional orphan self-heals in one cycle.
 
-export interface StoredTask { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number }
+export interface StoredTask { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string }
 
 // This module owns the cockpit_tasks DDL. The boot rehydrate runs before the
 // server accepts requests, so ensuring the table here (idempotent) removes the
@@ -18,8 +18,12 @@ export async function ensureTaskTable(): Promise<void> {
     org_id TEXT NOT NULL,
     system_prompt TEXT NOT NULL,
     user_message TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    not_before INTEGER,
+    last_note TEXT
   )`)
+  await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN not_before INTEGER`).catch(() => {})
+  await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN last_note TEXT`).catch(() => {})
 }
 
 export async function saveTask(t: StoredTask): Promise<void> {
@@ -30,7 +34,9 @@ export async function saveTask(t: StoredTask): Promise<void> {
     systemPrompt: t.systemPrompt,
     userMessage: t.userMessage,
     createdAt: t.createdAt,
-  }).onConflictDoNothing()
+    notBefore: t.notBefore,
+    lastNote: t.lastNote,
+  }).onConflictDoUpdate({ target: cockpitTasks.id, set: { notBefore: t.notBefore, lastNote: t.lastNote } })
 }
 
 export async function removeTask(id: string): Promise<void> {
@@ -42,7 +48,7 @@ export async function removeTask(id: string): Promise<void> {
 export async function loadAndPrunePending(maxAgeMs: number, now: number): Promise<StoredTask[]> {
   await ensureTaskTable()
   const db = useDb()
-  await db.delete(cockpitTasks).where(lt(cockpitTasks.createdAt, now - maxAgeMs))
+  await db.delete(cockpitTasks).where(lt(sql`max(${cockpitTasks.createdAt}, coalesce(${cockpitTasks.notBefore}, ${cockpitTasks.createdAt}))`, now - maxAgeMs))
   const rows = await db.select().from(cockpitTasks)
-  return rows.map(r => ({ id: r.id, company: r.orgId, owner: r.ownerEmail, systemPrompt: r.systemPrompt, userMessage: r.userMessage, createdAt: r.createdAt }))
+  return rows.map(r => ({ id: r.id, company: r.orgId, owner: r.ownerEmail, systemPrompt: r.systemPrompt, userMessage: r.userMessage, createdAt: r.createdAt, notBefore: r.notBefore ?? undefined, lastNote: r.lastNote ?? undefined }))
 }
