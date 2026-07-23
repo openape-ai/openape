@@ -36,8 +36,8 @@ function pickCompany(id: string): void {
   showCompanies.value = false
   void selectCompany(id)
 }
-function onSend(text: string): void {
-  void send(text)
+function onSend(text: string, files: { id: string, mime: string, name: string }[] = []): void {
+  void send(text, files)
   void refreshPresence()
   void nextTick(() => scrollToBottom(false))
 }
@@ -95,7 +95,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
         </button>
       </Transition>
 
-      <CockpitComposer :streaming="isStreaming" @send="onSend" @stop="stop" />
+      <CockpitComposer :streaming="isStreaming" :company="currentCompany?.id ?? ''" @send="onSend" @stop="stop" />
 
       <div v-if="showCompanies" class="services-overlay" @click.self="showCompanies = false">
         <div class="services-panel">
