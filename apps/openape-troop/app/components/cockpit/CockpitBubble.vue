@@ -62,6 +62,16 @@ function onCopyClick(e: MouseEvent): void {
     <div v-else class="plain">
       {{ message.content }}
     </div>
+    <div v-if="message.files?.length" class="bubble-files">
+      <template v-for="f in message.files" :key="f.id">
+        <a v-if="f.mime.startsWith('image/')" :href="`/api/cockpit/files/${f.id}`" target="_blank" rel="noopener">
+          <img class="bubble-img" :src="`/api/cockpit/files/${f.id}`" :alt="f.name">
+        </a>
+        <a v-else class="bubble-filecard" :href="`/api/cockpit/files/${f.id}`" target="_blank" rel="noopener">
+          📄 <span>{{ f.name }}</span>
+        </a>
+      </template>
+    </div>
     <time v-if="timeLabel" class="time">{{ timeLabel }}</time>
   </div>
 </template>

@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
         kind: 'message',
         messageId: `m${Date.now()}-${mseq}`,
         role: 'user',
-        parts: [{ kind: 'data', data: { systemPrompt: task.systemPrompt, userMessage: task.userMessage } }],
+        parts: [{ kind: 'data', data: { systemPrompt: task.systemPrompt, userMessage: task.userMessage, files: task.files ?? [] } }],
         taskId: task.id,
         contextId,
       }],

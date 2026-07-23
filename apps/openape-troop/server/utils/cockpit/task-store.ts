@@ -6,7 +6,7 @@ import { cockpitTasks } from '../../database/schema'
 // forget it on terminal resolve, reload the unfinished ones on boot. Best-effort
 // (callers fire-and-forget) — an occasional orphan self-heals in one cycle.
 
-export interface StoredTask { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number }
+export interface StoredTask { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number, files?: { id: string, mime: string, name: string }[] }
 
 // An open question waits for a human, so it outlives the normal in-flight
 // window by far (mirrors ASK_TTL_MS in queue.ts).
@@ -27,13 +27,15 @@ export async function ensureTaskTable(): Promise<void> {
     last_note TEXT,
     question TEXT,
     options TEXT,
-    asked_at INTEGER
+    asked_at INTEGER,
+    files TEXT
   )`)
   await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN not_before INTEGER`).catch(() => {})
   await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN last_note TEXT`).catch(() => {})
   await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN question TEXT`).catch(() => {})
   await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN options TEXT`).catch(() => {})
   await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN asked_at INTEGER`).catch(() => {})
+  await useDb().run(sql`ALTER TABLE cockpit_tasks ADD COLUMN files TEXT`).catch(() => {})
 }
 
 export async function saveTask(t: StoredTask): Promise<void> {
@@ -44,6 +46,7 @@ export async function saveTask(t: StoredTask): Promise<void> {
     question: t.question ?? null,
     options: t.options ? JSON.stringify(t.options) : null,
     askedAt: t.askedAt ?? null,
+    files: t.files?.length ? JSON.stringify(t.files) : null,
   }
   await useDb().insert(cockpitTasks).values({
     id: t.id,
@@ -82,5 +85,6 @@ export async function loadAndPrunePending(maxAgeMs: number, now: number): Promis
     question: r.question ?? undefined,
     options: r.options ? JSON.parse(r.options) as string[] : undefined,
     askedAt: r.askedAt ?? undefined,
+    files: r.files ? JSON.parse(r.files) as { id: string, mime: string, name: string }[] : undefined,
   }))
 }
