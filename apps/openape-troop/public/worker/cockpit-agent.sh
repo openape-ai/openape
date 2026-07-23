@@ -77,6 +77,21 @@ for s in json.load(sys.stdin):
       call GET "/api/cockpit/agent/skill/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("prompt",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
   resolve)   ID="$1"; STATE="$2"; RETRY_IN_MS="${3:-}"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)" "$RETRY_IN_MS")" ;;
+  file) # download an attachment to a path: file <id> <outpath>
+    ID="${1:?usage: cockpit-agent.sh file <id> <outpath>}"; OUT="${2:?usage: cockpit-agent.sh file <id> <outpath>}"
+    curl -sS --max-time 60 -o "$OUT" -H "authorization: Bearer $(authtok)" "$SP/api/cockpit/agent/files/$ID" || exit 4
+    # 401 → token stale: mint + retry once (call() buffers bodies, files stream to disk)
+    if head -c 20 "$OUT" | grep -q '"status":401' 2>/dev/null; then
+      curl -sS --max-time 60 -o "$OUT" -H "authorization: Bearer $(mint)" "$SP/api/cockpit/agent/files/$ID"
+    fi ;;
+  upload) # upload a file, print its id: upload <pfad> [name]
+    P="${1:?usage: cockpit-agent.sh upload <pfad> [name]}"; N="${2:-$(basename "$P")}"
+    MIME=$(file --mime-type -b "$P" 2>/dev/null || echo application/octet-stream)
+    OUT=$(curl -sS --max-time 60 -X POST "$SP/api/cockpit/agent/files" -H "authorization: Bearer $(authtok)" -F "file=@$P;type=$MIME;filename=$N")
+    if printf '%s' "$OUT" | grep -q '"status":401'; then
+      OUT=$(curl -sS --max-time 60 -X POST "$SP/api/cockpit/agent/files" -H "authorization: Bearer $(mint)" -F "file=@$P;type=$MIME;filename=$N")
+    fi
+    printf '%s' "$OUT" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("id") or sys.exit(4))' ;;
   ask) # pause the task on an owner question: ask <id> "Frage" [opt1] [opt2] [opt3] [opt4]
     ID="${1:?usage: cockpit-agent.sh ask <id> <frage> [optionen...]}"; shift
     Q="${1:?usage: cockpit-agent.sh ask <id> <frage> [optionen...]}"; shift

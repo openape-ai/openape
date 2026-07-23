@@ -64,7 +64,9 @@ export async function sweepOrphanFiles(maxAgeMs: number, now: number): Promise<n
   const db = useDb()
   const referenced = new Set<string>()
   const rows = await db.select({ files: cockpitChatMessages.files }).from(cockpitChatMessages).where(sql`${cockpitChatMessages.files} IS NOT NULL`)
-  for (const r of rows) for (const f of r.files ?? []) referenced.add(f.id)
+  for (const r of rows) {
+    for (const f of r.files ?? []) referenced.add(f.id)
+  }
   const cutoff = now - maxAgeMs
   const stale = referenced.size
     ? and(lt(cockpitFiles.createdAt, cutoff), notInArray(cockpitFiles.id, [...referenced]))

@@ -14,4 +14,12 @@ open(os.path.join(outdir, "user.txt"), "w").write(data.get("userMessage", ""))
 tools = data.get("tools")
 tools_str = " ".join(x for x in tools if isinstance(x, str)) if isinstance(tools, list) else ""
 open(os.path.join(outdir, "tools.txt"), "w").write(tools_str)
+# Attachments: one line per file (id<TAB>mime<TAB>name) — worker.sh downloads them.
+files = data.get("files")
+lines = []
+if isinstance(files, list):
+    for f in files:
+        if isinstance(f, dict) and f.get("id"):
+            lines.append("%s\t%s\t%s" % (f["id"], f.get("mime", ""), f.get("name", "")))
+open(os.path.join(outdir, "files.txt"), "w").write("".join(l + "\n" for l in lines))
 print(t["id"])
