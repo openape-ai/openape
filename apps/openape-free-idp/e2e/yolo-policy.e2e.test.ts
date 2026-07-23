@@ -27,6 +27,8 @@ const SESSION_SECRET = 'openape-yolo-test-session-secret-1234567890'
 const OWNER_EMAIL = 'owner@example.com'
 const AGENT_EMAIL = 'yolo-agent@example.com'
 const OTHER_EMAIL = 'other@example.com'
+// Parallel Nuxt boots in CI can exceed the normal startup window.
+const FREE_IDP_BOOT_TIMEOUT_MS = 120_000
 
 function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
@@ -73,7 +75,7 @@ describe('YOLO policy admin API', () => {
     server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
     server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
     try {
-      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 60_000)
+      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, FREE_IDP_BOOT_TIMEOUT_MS)
     }
     catch (err) {
       console.error('Server failed to start. Last logs:\n', serverLogs.slice(-4000))
