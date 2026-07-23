@@ -1,6 +1,10 @@
 import { computed, onScopeDispose, ref } from 'vue'
 
-export type AgentMode = 'offline' | 'idle' | 'active' | 'working'
+export type AgentMode = 'offline' | 'disconnected' | 'unauthenticated' | 'idle' | 'active' | 'working'
+
+export function presenceErrorMode(error: unknown): 'unauthenticated' | 'disconnected' {
+  return (error as { statusCode?: number })?.statusCode === 401 ? 'unauthenticated' : 'disconnected'
+}
 
 // Poll the owner's Operator brain state so the header shows the real mode (and, when
 // idle, a live countdown to the next check-in). Cheap GET every 5s; the countdown
@@ -19,7 +23,7 @@ export function useCockpitPresence(company?: () => string) {
       nextPollInSec.value = s.nextPollInSec
       missingTools.value = s.missingTools ?? []
     }
-    catch { mode.value = 'offline'; nextPollInSec.value = null }
+    catch (error) { mode.value = presenceErrorMode(error); nextPollInSec.value = null }
   }
   function start(): void {
     if (poll) return
@@ -35,6 +39,8 @@ export function useCockpitPresence(company?: () => string) {
       case 'active': return 'Operator live'
       case 'working': return 'Operator arbeitet'
       case 'idle': return nextPollInSec.value != null ? `Ruhemodus · ${nextPollInSec.value}s` : 'Ruhemodus'
+      case 'unauthenticated': return 'Neu einloggen'
+      case 'disconnected': return 'Keine Verbindung'
       default: return 'Operator offline'
     }
   })
@@ -43,6 +49,8 @@ export function useCockpitPresence(company?: () => string) {
       case 'active': return 'Operator verbunden und wach — Antworten kommen sofort'
       case 'working': return 'Operator arbeitet gerade an einer Aufgabe'
       case 'idle': return 'Operator im Ruhemodus — deine Frage wird beim nächsten Check-in beantwortet'
+      case 'unauthenticated': return 'Deine Sitzung ist abgelaufen — bitte neu einloggen'
+      case 'disconnected': return 'Die Verbindung zum Cockpit ist unterbrochen'
       default: return 'Kein Operator-Loop verbunden — Fragen bleiben unbeantwortet, bis er läuft'
     }
   })
