@@ -4,7 +4,7 @@ import { createSseParser } from '../utils/cockpit/sse'
 import { loadCockpitCompany, saveCockpitCompany } from '../utils/cockpit/store'
 
 export interface Company { id: string, name: string, short: string, accent: string }
-interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, meta?: { taskId: string, options: string[], answered?: boolean }, createdAt: number }
+interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, meta?: { taskId: string, options: string[], answered?: boolean }, files?: { id: string, mime: string, name: string }[], createdAt: number }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const POLL_EVERY_MS = 2000
@@ -27,7 +27,7 @@ export function useCockpitChat() {
   async function loadFromServer(companyId: string): Promise<void> {
     try {
       const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId } })
-      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta ?? undefined, createdAt: m.createdAt }))
+      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta ?? undefined, files: m.files ?? undefined, createdAt: m.createdAt }))
     }
     catch { /* not logged in / none yet */ }
   }
@@ -103,12 +103,12 @@ export function useCockpitChat() {
     }
   }
 
-  async function send(text: string): Promise<void> {
-    const content = text.trim()
+  async function send(text: string, files: { id: string, mime: string, name: string }[] = []): Promise<void> {
+    const content = text.trim() || (files.length ? '(Anhang)' : '')
     if (!content || isStreaming.value || !currentCompanyId.value) return
     const companyId = currentCompanyId.value
     const sinceMs = Date.now() - 1000
-    messages.value.push({ id: makeId(), role: 'user', content, createdAt: Date.now() })
+    messages.value.push({ id: makeId(), role: 'user', content, files: files.length ? files : undefined, createdAt: Date.now() })
     messages.value.push({ id: makeId(), role: 'assistant', content: '', createdAt: Date.now(), streaming: true, thoughts: [] })
     const assistant = messages.value.at(-1)!
 
@@ -125,6 +125,7 @@ export function useCockpitChat() {
           body: JSON.stringify({
             company: companyId,
             messages: messages.value.filter(m => !m.streaming).map(({ role, content: c }) => ({ role, content: c })),
+            files: files.map(f => f.id),
           }),
           signal: controller.signal,
         })
