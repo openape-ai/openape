@@ -42,7 +42,7 @@ call() { # method path [body] -> echoes body; raw-token first, 401 -> exchange+r
 }
 resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" RETRY_IN_MS="${4:-}" python3 -c 'import json,os; body={"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":[{"kind":"text","text":os.environ["TEXT"]}]}}; retry=os.environ["RETRY_IN_MS"]; body.update({"retryInMs": int(retry)} if retry else {}); print(json.dumps(body))'; }
 
-CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|progress <id> <text>|resolve <id> <state> [retryInMs]}"; shift || true
+CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|ask <id> <frage> [opt…]|progress <id> <text>|resolve <id> <state> [retryInMs]}"; shift || true
 case "$CMD" in
   services) # always troop; prints: SVC_URL<TAB>SVC_TASKS<TAB>label  (enabled only)
     SP="$TROOP" TP="/api/cockpit" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
@@ -77,6 +77,13 @@ for s in json.load(sys.stdin):
       call GET "/api/cockpit/agent/skill/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("prompt",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
   resolve)   ID="$1"; STATE="$2"; RETRY_IN_MS="${3:-}"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)" "$RETRY_IN_MS")" ;;
+  ask) # pause the task on an owner question: ask <id> "Frage" [opt1] [opt2] [opt3] [opt4]
+    ID="${1:?usage: cockpit-agent.sh ask <id> <frage> [optionen...]}"; shift
+    Q="${1:?usage: cockpit-agent.sh ask <id> <frage> [optionen...]}"; shift
+    BODY=$(TASK_ID="$ID" QUESTION="$Q" python3 -c 'import json,os,sys
+opts=[o for o in sys.argv[1:] if o.strip()]
+print(json.dumps({"id":os.environ["TASK_ID"],"state":"input-required","question":os.environ["QUESTION"],"options":opts}))' "$@")
+    call POST "$TP/resolve" "$BODY" ;;
   automation) call POST /api/cockpit/agent/automations "$(cat)" ;; # Operator self-scheduling: JSON action body on stdin
-  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed|deferred> [retryInMs]|automation (json on stdin)" >&2; exit 2 ;;
+  *) echo "usage: cockpit-agent.sh services|heartbeat|next|memory <id>|skill <id>|progress <id> <text>|resolve <id> <completed|failed|deferred> [retryInMs]|ask <id> <frage> [opt…]|automation (json on stdin)" >&2; exit 2 ;;
 esac
