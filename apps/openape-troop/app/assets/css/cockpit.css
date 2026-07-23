@@ -459,3 +459,17 @@
   color: #f5a623;
   font-style: normal;
 }
+
+/* Ask chips — an open Operator question the owner answers with one tap (#981). */
+.cockpit-root .ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cockpit-root .ask-chip {
+  min-height: 44px; /* comfortable mobile tap target */
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font: inherit; font-size: 14.5px; font-weight: 600;
+}
+.cockpit-root .ask-chip:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.cockpit-root .ask-chips.settled .ask-chip { border-color: var(--border); color: var(--muted); }

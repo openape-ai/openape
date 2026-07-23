@@ -4,7 +4,7 @@ import { createSseParser } from '../utils/cockpit/sse'
 import { loadCockpitCompany, saveCockpitCompany } from '../utils/cockpit/store'
 
 export interface Company { id: string, name: string, short: string, accent: string }
-interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, createdAt: number }
+interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, meta?: { taskId: string, options: string[], answered?: boolean }, createdAt: number }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const POLL_EVERY_MS = 2000
@@ -27,7 +27,7 @@ export function useCockpitChat() {
   async function loadFromServer(companyId: string): Promise<void> {
     try {
       const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId } })
-      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt }))
+      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta ?? undefined, createdAt: m.createdAt }))
     }
     catch { /* not logged in / none yet */ }
   }
@@ -137,12 +137,14 @@ export function useCockpitChat() {
           if (done) break
           for (const payload of parse(decoder.decode(value, { stream: true }))) {
             if (payload === '[DONE]') continue
-            const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number, id?: string }
+            const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number, id?: string, options?: string[], taskId?: string }
             if (ev.k === 'id' && ev.id) { taskId = ev.id }
             else if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
             else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
             else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? `${ev.text} · Antwort in ~${ev.sec}s` : ev.text }
             else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
+            // The Operator paused on a question — the bubble settles into chips.
+            else if (ev.k === 'ask' && ev.text) { assistant.content = ev.text; assistant.ask = { taskId: ev.taskId ?? taskId, options: ev.options ?? [] }; assistant.waiting = undefined; assistant.system = undefined }
           }
         }
       }
@@ -173,6 +175,39 @@ export function useCockpitChat() {
     }
   }
 
+  // Chip tap: resume the SAME task with the choice. If the task is gone
+  // (restart + prune) the choice degrades to a normal message carrying the
+  // question as context — never a dead end.
+  async function answer(msg: ChatMessage, choice: string): Promise<void> {
+    if (!msg.ask || msg.ask.answered || isStreaming.value) return
+    const ask = msg.ask
+    ask.answered = true
+    try {
+      await $fetch(`/api/cockpit/tasks/${ask.taskId}/answer`, { method: 'POST', body: { choice } })
+    }
+    catch {
+      await send(`Zu deiner Frage „${msg.content}": ${choice}`)
+      return
+    }
+    messages.value.push({ id: makeId(), role: 'user', content: choice, createdAt: Date.now() })
+    const assistant: ChatMessage = { id: makeId(), role: 'assistant', content: '', createdAt: Date.now(), streaming: true, thoughts: [] }
+    messages.value.push(assistant)
+    isStreaming.value = true
+    pollAbort = false
+    try {
+      await reattachProgress(ask.taskId, assistant)
+      if (!assistant.content.trim() && !pollAbort) {
+        const ans = await pollForAnswer(currentCompanyId.value, Date.now() - 1000)
+        if (ans) assistant.content = ans
+        else if (!assistant.system) assistant.system = 'Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.'
+      }
+    }
+    finally {
+      assistant.streaming = false
+      isStreaming.value = false
+    }
+  }
+
   function stop(): void { controller?.abort(); pollAbort = true }
   async function clear(): Promise<void> {
     stop()
@@ -183,5 +218,5 @@ export function useCockpitChat() {
     }
   }
 
-  return { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear, refresh }
+  return { messages, isStreaming, companies, currentCompany, selectCompany, send, answer, stop, clear, refresh }
 }
