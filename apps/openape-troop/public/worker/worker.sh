@@ -47,6 +47,11 @@ LOGGING: Hast du handlungsrelevante Arbeit getan (Datei abgelegt, Mail archivier
 logge sie KURZ fuer die Abrechnung: claude-log "<kurze Aktion>" <project> <company> <type> op-agent - die
 Werte project/company/type stehen als ACTIVITY-LOG in deinem Memory. Eine Zeile; bei reiner Auskunft nicht noetig.
 
+ANHAENGE: Angehaengte Bilder siehst du direkt (Vision); andere Dateien liegen im Scratch-Pfad aus
+der Aufgabe. Willst du dem Owner eine Datei zeigen (Screenshot-Beweis!), lade sie hoch:
+bash "'"$CA"'" upload <pfad>  → gibt eine file-id; dann resolve mit --file <id>. Behaupte NIE einen
+Anhang, den du nicht hochgeladen hast.
+
 RUECKFRAGEN: Fehlt dir eine Entscheidung des Owners, stelle sie statt zu raten:
 bash "'"$CA"'" ask <task-id> "Frage" [Option1] [Option2] ... (max 4 Optionen) - der Task pausiert,
 Patricks Chip-Antwort setzt IHN fort (nicht final resolven!). Heikle Aktionen (Deploy, Merge,
@@ -109,6 +114,30 @@ generate_claude() {
   python3 "$DIR/clean.py" < "$S/out.jsonl"
 }
 
+# Chat attachments: files.txt (id\tmime\tname from parse.py) -> scratch downloads.
+# Images collect in images.txt (codex -i flags = real vision); other files get a
+# path hint appended to user.txt so the agent reads them with its tools.
+fetch_attachments() {
+  local S="$1" n=0 id mime name ext out
+  : > "$S/images.txt"
+  [ -s "$S/files.txt" ] || return 0
+  while IFS=$'\t' read -r id mime name || [ -n "$id" ]; do
+    [ -z "$id" ] && continue
+    n=$((n + 1))
+    case "$mime" in
+      image/png) ext=png ;; image/jpeg) ext=jpg ;; image/webp) ext=webp ;;
+      application/pdf) ext=pdf ;; *) ext=bin ;;
+    esac
+    out="$S/att-$n.$ext"
+    bash "$CA" file "$id" "$out" || { log "attachment $id download failed"; continue; }
+    case "$mime" in
+      image/*) printf '%s\n' "$out" >> "$S/images.txt" ;;
+      *) printf '\n[Anhang %s: %s — Datei liegt unter %s, lies sie mit deinen Werkzeugen (PDF: pdftotext).]\n' "$n" "$name" "$out" >> "$S/user.txt" ;;
+    esac
+  done < "$S/files.txt"
+  # ponytail: read || [ -n ] wäre die Alternative — parse.py schreibt jetzt IMMER trailing newline
+}
+
 # codex backend: codex exec; system prompt is prepended to the task (no separate flag),
 # --json streams events (progress/stall), -o writes the final message verbatim.
 generate_codex() {
@@ -122,6 +151,11 @@ $(cat "$S/user.txt")"
   # investigation (it once spawned 13 "collab" sub-agents for a yes/no chat question).
   local args=(exec "$prompt" --json -o "$S/final.txt" --skip-git-repo-check -C "$HOME"
               --disable collaboration_modes -c "model_reasoning_effort=$CODEX_EFFORT")
+  # Attached images ride along as real vision input, not as path prose.
+  if [ -s "$S/images.txt" ]; then
+    local img
+    while IFS= read -r img; do [ -f "$img" ] && args+=(-i "$img"); done < "$S/images.txt"
+  fi
   if [ "$priv" = "1" ]; then args+=(--dangerously-bypass-approvals-and-sandbox); else args+=(-s read-only); fi
   [ -n "$CODEX_MODEL" ] && args+=(--model "$CODEX_MODEL")
   codex "${args[@]}" < /dev/null > "$S/out.jsonl" 2>/dev/null &
@@ -210,6 +244,7 @@ cockpit_loop() {
       id=$(printf '%s' "$task" | python3 "$DIR/parse.py" "$S" 2>/dev/null || true)
       [ -z "$id" ] && break
       worked=1
+      fetch_attachments "$S"
       printf '%s' "$COCKPIT_DIRECTIVE" >> "$S/sys.txt"
       log "[cockpit] task ${id:0:8} -> generating"
       answer "$S" "$id" cockpit 1 "Task Bash" "--dangerously-skip-permissions"

@@ -132,7 +132,20 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`ALTER TABLE cockpit_chat_messages ADD COLUMN meta TEXT`).catch(() => {})
+    await db.run(sql`ALTER TABLE cockpit_chat_messages ADD COLUMN files TEXT`).catch(() => {})
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_chat_owner_org ON cockpit_chat_messages(owner_email, org_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_files (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      mime TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      bytes BLOB NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_files_owner ON cockpit_files(owner_email, org_id)`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
       endpoint TEXT PRIMARY KEY,

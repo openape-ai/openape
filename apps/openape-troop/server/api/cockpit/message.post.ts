@@ -1,6 +1,7 @@
 import { cockpitOwner } from '../../utils/cockpit/auth'
 import { buildOrgSystemPrompt } from '../../utils/cockpit/org-context'
 import { saveChatMessage } from '../../utils/cockpit/chat-store'
+import { resolveRefs } from '../../utils/cockpit/file-store'
 import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
 import { saveTask } from '../../utils/cockpit/task-store'
 
@@ -16,23 +17,27 @@ const tokenize = (text: string): string[] => text.match(/\S+\s*|\s+/g) ?? [text]
 
 export default defineEventHandler(async (event) => {
   const owner = await cockpitOwner(event)
-  const body = await readBody<{ company?: string, messages?: { role: string, content: string }[] }>(event)
+  const body = await readBody<{ company?: string, messages?: { role: string, content: string }[], files?: unknown[] }>(event)
   const company = body?.company ?? ''
   const systemPrompt = await buildOrgSystemPrompt(owner, company)
   if (systemPrompt == null) throw createError({ statusCode: 404, statusMessage: 'unknown company' })
 
   const history = body?.messages ?? []
   const latestUser = [...history].reverse().find(m => m.role === 'user')?.content ?? ''
-  if (latestUser.trim()) await saveChatMessage(company, owner, 'user', latestUser)
+  // Attachments: ids must exist AND belong to this owner — anything else is a 400.
+  const fileIds = Array.isArray(body?.files) ? body.files.filter(f => typeof f === 'string') : []
+  const files = await resolveRefs(owner, fileIds)
+  if (files === null) throw createError({ statusCode: 400, statusMessage: 'invalid files' })
+  if (latestUser.trim() || files.length) await saveChatMessage(company, owner, 'user', latestUser.trim() || '(Anhang)', undefined, files)
   // Give the Operator the recent conversation (last 20 turns) so follow-ups like
   // "bitte ablegen - ja" resolve against what was said before — not just the last line.
   const recent = history.slice(-20)
   const prompt = recent.length > 1
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
     : latestUser
-  const task = enqueue(company, systemPrompt, prompt, owner)
+  const task = enqueue(company, systemPrompt, prompt, owner, files)
   // Persist the input so a troop restart before the worker resolves doesn't drop it.
-  void saveTask({ id: task.id, company, owner, systemPrompt, userMessage: prompt, createdAt: Date.now() }).catch(err => console.error('[task-store] save', err))
+  void saveTask({ id: task.id, company, owner, systemPrompt, userMessage: prompt, createdAt: Date.now(), files: files.length ? files : undefined }).catch(err => console.error('[task-store] save', err))
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',
