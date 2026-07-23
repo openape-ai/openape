@@ -67,13 +67,13 @@ describe('SSH-key login for humans', () => {
     server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
 
     try {
-      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 60_000)
+      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 120_000) // cold CI boot on shared runners (#991)
     }
     catch (err) {
       console.error('Server failed to start. Last logs:\n', serverLogs.slice(-4000))
       throw err
     }
-  }, 90_000)
+  }, 150_000) // inline arg OVERRIDES config hookTimeout — must exceed the boot wait (#991)
 
   afterAll(async () => {
     if (server?.pid) {
