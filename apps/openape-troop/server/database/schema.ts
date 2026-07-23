@@ -514,6 +514,8 @@ export const cockpitTasks = sqliteTable('cockpit_tasks', {
   systemPrompt: text('system_prompt').notNull(),
   userMessage: text('user_message').notNull(),
   createdAt: integer('created_at').notNull(),
+  notBefore: integer('not_before'),
+  lastNote: text('last_note'),
 })
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
