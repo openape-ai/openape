@@ -447,6 +447,8 @@
 .cockpit-root .conn-dot.m-working::before { box-shadow: 0 0 6px #f5a623; animation: conn-pulse 1.2s ease-in-out infinite; }
 .cockpit-root .conn-dot.m-idle { color: #6d9eff; border-color: color-mix(in srgb, #6d9eff 40%, transparent); }
 .cockpit-root .conn-dot.m-offline { color: var(--muted); }
+.cockpit-root .conn-dot.m-unauthenticated { color: var(--accent); }
+.cockpit-root .conn-dot.m-disconnected { color: var(--muted); }
 @keyframes conn-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 /* Phone: the company name is the header's title, so the presence pill drops to
    its dot and gives the name the room instead of truncating it to "D…". */

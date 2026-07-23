@@ -18,6 +18,7 @@ export function useCockpitChat() {
   const isStreaming = ref(false)
   const companies = ref<Company[]>([])
   const currentCompanyId = ref('')
+  const authRequired = ref(false)
   const currentCompany = computed(() => companies.value.find(c => c.id === currentCompanyId.value) ?? companies.value[0])
   let controller: AbortController | null = null
   let pollAbort = false
@@ -29,7 +30,9 @@ export function useCockpitChat() {
       const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId } })
       messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta ?? undefined, files: m.files ?? undefined, createdAt: m.createdAt }))
     }
-    catch { /* not logged in / none yet */ }
+    catch (error) {
+      if ((error as { statusCode?: number })?.statusCode === 401) authRequired.value = true
+    }
   }
   async function refresh(): Promise<void> {
     if (currentCompanyId.value && !isStreaming.value) await loadFromServer(currentCompanyId.value)
@@ -41,7 +44,9 @@ export function useCockpitChat() {
         const list = await $fetch<Company[]>('/api/cockpit/companies')
         if (Array.isArray(list)) companies.value = list
       }
-      catch { /* not logged in / no orgs */ }
+      catch (error) {
+        if ((error as { statusCode?: number })?.statusCode === 401) authRequired.value = true
+      }
       const saved = await loadCockpitCompany()
       currentCompanyId.value = saved && companies.value.some(c => c.id === saved)
         ? saved
@@ -219,5 +224,5 @@ export function useCockpitChat() {
     }
   }
 
-  return { messages, isStreaming, companies, currentCompany, selectCompany, send, answer, stop, clear, refresh }
+  return { messages, isStreaming, companies, currentCompany, authRequired, selectCompany, send, answer, stop, clear, refresh }
 }
