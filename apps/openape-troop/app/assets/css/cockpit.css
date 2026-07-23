@@ -239,15 +239,46 @@
 .cockpit-root .pill-enter-active, .cockpit-root .pill-leave-active { transition: opacity 0.18s, transform 0.18s; }
 .cockpit-root .pill-enter-from, .cockpit-root .pill-leave-to { opacity: 0; transform: translate(-50%, 8px); }
 /* Composer */
+.cockpit-root .composer-wrap {
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  border-top: 1px solid var(--border);
+}
 .cockpit-root .composer {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: saturate(140%) blur(12px);
-  border-top: 1px solid var(--border);
 }
+/* Attachments (#980): pending chips above the input, media in bubbles. */
+.cockpit-root .attach-input { display: none; }
+.cockpit-root .attach-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px 0; }
+.cockpit-root .attach-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 220px; padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font-size: 12.5px;
+}
+.cockpit-root .attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cockpit-root .attach-remove {
+  border: none; background: var(--surface-2); color: var(--muted);
+  width: 20px; height: 20px; border-radius: 50%; font-size: 11px; line-height: 1;
+}
+.cockpit-root .attach-error { color: #e5484d; font-size: 12.5px; align-self: center; }
+.cockpit-root .bubble-files { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.cockpit-root .bubble-files > a { display: block; line-height: 0; }
+.cockpit-root .bubble-img {
+  display: block; width: 100%; max-width: 320px; max-height: 320px; object-fit: contain; object-position: left;
+  border-radius: 12px; border: 1px solid var(--border); background: #000;
+  min-height: 60px; /* reserves layout before load — content-visibility needs a box */
+}
+.cockpit-root .bubble-filecard {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); color: var(--text); text-decoration: none; font-size: 13.5px;
+  max-width: 100%;
+}
+.cockpit-root .bubble-filecard span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cockpit-root .composer-input {
   flex: 1;
   resize: none;
