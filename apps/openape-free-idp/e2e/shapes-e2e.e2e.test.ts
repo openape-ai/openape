@@ -179,7 +179,7 @@ describe('free-idp + shapes end-to-end', () => {
     server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
     server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
 
-    await waitForServer(`${baseUrl}/.well-known/openid-configuration`)
+    await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 120_000) // cold CI boot on shared runners (#991)
 
     const { publicKey, privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
     const sshPublicKey = await publicKeyToSsh(publicKey)
