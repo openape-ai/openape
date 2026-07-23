@@ -5,7 +5,7 @@ export type AgentMode = 'offline' | 'idle' | 'active' | 'working'
 // Poll the owner's Operator brain state so the header shows the real mode (and, when
 // idle, a live countdown to the next check-in). Cheap GET every 5s; the countdown
 // ticks locally each second between fetches.
-export function useCockpitPresence() {
+export function useCockpitPresence(company?: () => string) {
   const mode = ref<AgentMode>('offline')
   const nextPollInSec = ref<number | null>(null)
   const missingTools = ref<string[]>([])
@@ -14,7 +14,7 @@ export function useCockpitPresence() {
 
   async function refresh(): Promise<void> {
     try {
-      const s = await $fetch<{ mode: AgentMode, nextPollInSec: number | null, missingTools?: string[] }>('/api/cockpit/status')
+      const s = await $fetch<{ mode: AgentMode, nextPollInSec: number | null, missingTools?: string[] }>('/api/cockpit/status', { query: company?.() ? { company: company() } : undefined })
       mode.value = s.mode
       nextPollInSec.value = s.nextPollInSec
       missingTools.value = s.missingTools ?? []
