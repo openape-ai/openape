@@ -116,6 +116,13 @@ export default defineEventHandler(async (event) => {
                 answered = true
                 break
               }
+              // Soft terminal: the agent paused on a question — hand the chips to
+              // the client and end THIS stream; the task itself stays alive.
+              if (t.state === 'input-required') {
+                emit({ k: 'ask', text: t.question ?? '', options: t.options ?? [], taskId: t.id })
+                answered = true
+                break
+              }
             }
             if (Date.now() > streamDeadline) break
             if (Date.now() - lastByteAt >= KEEPALIVE_MS) keepAlive()

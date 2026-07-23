@@ -4,6 +4,7 @@ import type { ChatMessage } from '../../utils/cockpit/types'
 import { renderMarkdown } from '../../utils/cockpit/markdown'
 
 const props = defineProps<{ message: ChatMessage }>()
+const emit = defineEmits<{ answer: [choice: string] }>()
 const html = computed(() => props.message.role === 'assistant' ? renderMarkdown(props.message.content) : '')
 const showWaiting = computed(() => props.message.streaming && !props.message.content && !!props.message.waiting)
 const showThoughts = computed(() => props.message.streaming && !props.message.content && !props.message.waiting && (props.message.thoughts?.length ?? 0) > 0)
@@ -32,6 +33,18 @@ function onCopyClick(e: MouseEvent): void {
       <div v-if="message.content" class="md-wrap">
         <!-- eslint-disable-next-line vue/no-v-html -- assistant content is our own trusted mock/agent markdown -->
         <div class="md" @click="onCopyClick" v-html="html" />
+        <div v-if="message.ask?.options?.length" class="ask-chips" :class="{ settled: message.ask.answered }">
+          <button
+            v-for="opt in message.ask.options"
+            :key="opt"
+            class="ask-chip"
+            type="button"
+            :disabled="message.ask.answered"
+            @click="emit('answer', opt)"
+          >
+            {{ opt }}
+          </button>
+        </div>
       </div>
       <div v-else-if="message.system" class="sys-notice">
         {{ message.system }}
