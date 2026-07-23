@@ -1,8 +1,9 @@
 import { getTask, resolve } from '../../../../utils/cockpit/queue'
 import { saveChatMessage } from '../../../../utils/cockpit/chat-store'
-import { removeTask } from '../../../../utils/cockpit/task-store'
+import { removeTask, saveTask } from '../../../../utils/cockpit/task-store'
 import type { TaskState } from '../../../../utils/cockpit/queue'
 import { requireCockpitAgent } from '../../../../utils/cockpit/auth'
+import { shouldPersistDeferredTask } from '../../../../utils/cockpit/resolve-guard'
 
 export default defineEventHandler(async (event) => {
   const agent = await requireCockpitAgent(event)
@@ -11,11 +12,12 @@ export default defineEventHandler(async (event) => {
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
   const state: TaskState = body?.state ?? 'completed'
   const text = (body?.artifact?.parts ?? []).find(p => p.kind === 'text')?.text ?? ''
-  if (state === 'deferred' && (typeof body?.retryInMs !== 'number' || !Number.isFinite(body.retryInMs) || body.retryInMs <= 0)) {
-    throw createError({ statusCode: 400, statusMessage: 'retryInMs must be a positive number' })
+  if (state === 'deferred' && (typeof body?.retryInMs !== 'number' || !Number.isFinite(body.retryInMs) || body.retryInMs <= 0 || body.retryInMs > 24 * 60 * 60_000)) {
+    throw createError({ statusCode: 400, statusMessage: 'retryInMs must be a positive number ≤ 24h' })
   }
   const task = getTask(id)
   resolve(id, state, text, agent, state === 'deferred' ? body.retryInMs as number : undefined)
+  if (state === 'deferred' && shouldPersistDeferredTask(task, agent)) void saveTask({ ...task!, notBefore: task!.notBefore, lastNote: text || undefined }).catch(err => console.error('[task-store] save', err))
   // Persist the assistant turn for both outcomes: a completed answer, or a failed
   // task's honest notice — so a failure leaves a visible message instead of silence.
   if ((state === 'completed' || state === 'failed') && task && task.owner === agent && text.trim()) await saveChatMessage(task.company, task.owner, 'assistant', text)
