@@ -52,7 +52,9 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           ‹
         </button>
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
-        <NuxtLink v-if="mode === 'unauthenticated'" to="/login" class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></NuxtLink>
+        <NuxtLink v-if="mode === 'unauthenticated'" to="/login" class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel">
+          <span class="conn-label">{{ presenceLabel }}</span>
+        </NuxtLink>
         <span v-else class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></span>
         <a
           v-if="mode === 'offline'"
@@ -72,7 +74,11 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
       <p v-if="missingTools.length" class="sys-notice doctor-warn">
         ⚠ Beim Operator fehlen Werkzeuge: {{ missingTools.join(', ') }} — im Worker-PATH nicht gefunden.
       </p>
-      <p v-if="authRequired" class="sys-notice"><NuxtLink to="/login">Sitzung abgelaufen — neu einloggen</NuxtLink></p>
+      <p v-if="authRequired" class="sys-notice">
+        <NuxtLink to="/login">
+          Sitzung abgelaufen — neu einloggen
+        </NuxtLink>
+      </p>
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">
