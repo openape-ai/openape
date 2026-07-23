@@ -47,6 +47,11 @@ LOGGING: Hast du handlungsrelevante Arbeit getan (Datei abgelegt, Mail archivier
 logge sie KURZ fuer die Abrechnung: claude-log "<kurze Aktion>" <project> <company> <type> op-agent - die
 Werte project/company/type stehen als ACTIVITY-LOG in deinem Memory. Eine Zeile; bei reiner Auskunft nicht noetig.
 
+ANHAENGE: Angehaengte Bilder siehst du direkt (Vision); andere Dateien liegen im Scratch-Pfad aus
+der Aufgabe. Willst du dem Owner eine Datei zeigen (Screenshot-Beweis!), lade sie hoch:
+bash "'"$CA"'" upload <pfad>  → gibt eine file-id; dann resolve mit --file <id>. Behaupte NIE einen
+Anhang, den du nicht hochgeladen hast.
+
 RUECKFRAGEN: Fehlt dir eine Entscheidung des Owners, stelle sie statt zu raten:
 bash "'"$CA"'" ask <task-id> "Frage" [Option1] [Option2] ... (max 4 Optionen) - der Task pausiert,
 Patricks Chip-Antwort setzt IHN fort (nicht final resolven!). Heikle Aktionen (Deploy, Merge,
