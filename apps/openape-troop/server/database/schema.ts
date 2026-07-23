@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { blob, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // agents — one row per registered agent.
 //
@@ -534,8 +534,25 @@ export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
   // Ask-Chips: {taskId, options, answered?} — set on input-required questions so
   // a reload re-renders the chips (or their settled state) from the DB.
   meta: text('meta', { mode: 'json' }).$type<{ taskId: string, options: string[], answered?: boolean } | null>(),
+  // Attachments shown in the bubble: refs into cockpit_files (never inline bytes).
+  files: text('files', { mode: 'json' }).$type<{ id: string, mime: string, name: string }[] | null>(),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
+
+// cockpit_files — chat attachments as LibSQL blobs (8 MB cap, allowlisted types).
+// Owner-scoped like everything cockpit; a boot sweep drops rows no chat message
+// references anymore. Blob-in-DB is deliberate: no extra storage infra, backup
+// rides along (S3 driver exists in the monorepo if volume ever demands it).
+export const cockpitFiles = sqliteTable('cockpit_files', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull(),
+  bytes: blob('bytes', { mode: 'buffer' }).notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_files_owner').on(table.ownerEmail, table.orgId)])
 
 // push_subscriptions — Web-Push endpoints for the owner's browsers/PWA installs.
 // One row per browser subscription (endpoint is the natural key). Used to notify

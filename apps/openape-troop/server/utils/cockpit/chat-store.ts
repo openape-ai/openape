@@ -12,8 +12,8 @@ export interface ChatMeta { taskId: string, options: string[], answered?: boolea
 
 // Persist one message of the (owner, org) conversation. Independent of any live
 // stream — the answer survives even if the client is gone.
-export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta) {
-  const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, meta: meta ?? null, createdAt: Date.now() }
+export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta, files?: { id: string, mime: string, name: string }[]) {
+  const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, meta: meta ?? null, files: files?.length ? files : null, createdAt: Date.now() }
   await useDb().insert(cockpitChatMessages).values(row)
   // A Operator answer → notify the owner's installed PWA / browsers (fire-and-forget,
   // never blocks or fails the save). The SW suppresses it if a tab is focused.

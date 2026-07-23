@@ -1,4 +1,5 @@
 import { loadAndPrunePending } from '../utils/cockpit/task-store'
+import { sweepOrphanFiles } from '../utils/cockpit/file-store'
 import { restoreTask } from '../utils/cockpit/queue'
 
 // On boot, re-offer the tasks that were in-flight when troop last stopped, so a
@@ -13,6 +14,9 @@ export default defineNitroPlugin(async () => {
     const rows = await loadAndPrunePending(MAX_AGE_MS, Date.now())
     for (const t of rows) restoreTask(t)
     if (rows.length) console.log(`[rehydrate-queue] restored ${rows.length} in-flight task(s) after restart`)
+    // Attachments nobody ever sent (or whose chat was cleared) age out here.
+    const swept = await sweepOrphanFiles(30 * 24 * 60 * 60_000, Date.now())
+    if (swept) console.log(`[rehydrate-queue] swept ${swept} orphan file(s)`)
   }
   catch (err) {
     console.error('[rehydrate-queue]', err)
