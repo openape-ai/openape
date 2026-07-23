@@ -5,7 +5,7 @@
 // package yet). The wire matches what a stock ape-agent consumes/produces (verified M0),
 // so the real worker serves it unmodified once auth is DDISA (M2).
 
-export type TaskState = 'submitted' | 'working' | 'completed' | 'failed' | 'deferred'
+export type TaskState = 'submitted' | 'working' | 'completed' | 'failed' | 'deferred' | 'input-required'
 
 export interface QueueTask {
   id: string
@@ -19,6 +19,10 @@ export interface QueueTask {
   answer: string // terminal artifact text
   createdAt: number
   notBefore?: number
+  // input-required: the agent's open question to the owner (answerTask resumes).
+  question?: string
+  options?: string[]
+  askedAt?: number
 }
 
 const tasks = new Map<string, QueueTask>()
@@ -32,11 +36,15 @@ function makeId(): string {
 }
 
 const TASK_TTL_MS = 30 * 60_000
+// An open question waits for a human — hours, not minutes. Same window as the
+// DB prune in task-store so memory and durability agree on a task's lifetime.
+const ASK_TTL_MS = 7 * 24 * 60 * 60_000
 function gcStaleTasks(): void {
   const now = Date.now()
   for (const [id, t] of tasks) {
     const terminal = t.state === 'completed' || t.state === 'failed'
-    if (terminal || now - t.createdAt > TASK_TTL_MS) tasks.delete(id)
+    const ttl = t.state === 'input-required' ? ASK_TTL_MS : TASK_TTL_MS
+    if (terminal || now - t.createdAt > ttl) tasks.delete(id)
   }
 }
 
@@ -62,10 +70,13 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
 // Put a persisted task back into the queue with its ORIGINAL id (used by the
 // boot rehydrate after a restart). Fresh submitted state — the worker re-runs it
 // from scratch; its original id keeps removeTask() matching the DB row.
-export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string }): void {
+export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number }): void {
   if (tasks.has(t.id)) return
-  tasks.set(t.id, { ...t, claimed: false, state: 'submitted', progress: t.lastNote ? [t.lastNote] : [], answer: '' })
-  pending.push(t.id)
+  // A persisted open question comes back AS the question — waiting for the
+  // owner's answer, not re-offered to the worker.
+  const asking = Boolean(t.question)
+  tasks.set(t.id, { ...t, claimed: false, state: asking ? 'input-required' : 'submitted', progress: t.lastNote ? [t.lastNote] : [], answer: '' })
+  if (!asking) pending.push(t.id)
 }
 
 // Owner-bound: an agent only ever claims tasks whose owner matches its own
@@ -106,7 +117,7 @@ export function addProgress(id: string, text: string): boolean {
 }
 
 /** Apply a ResolveTask: terminal state sets the answer; `working` adds a progress note. */
-export function resolve(id: string, state: TaskState, text: string, owner: string, retryInMs?: number): boolean {
+export function resolve(id: string, state: TaskState, text: string, owner: string, retryInMs?: number, ask?: { question: string, options: string[] }): boolean {
   const task = tasks.get(id)
   if (!task || task.owner !== owner) return false
   if (state === 'completed' || state === 'failed') {
@@ -120,9 +131,34 @@ export function resolve(id: string, state: TaskState, text: string, owner: strin
     if (text) task.progress.push(text)
     if (id && !pending.includes(id)) pending.push(id)
   }
+  else if (state === 'input-required') {
+    // The agent pauses this task on a question; answerTask() resumes it. Not in
+    // `pending` — claimNext must not hand it out while the owner deliberates.
+    task.state = 'input-required'
+    task.claimed = false
+    task.question = ask?.question ?? ''
+    task.options = ask?.options ?? []
+    task.askedAt = Date.now()
+    if (text) task.progress.push(text)
+  }
   else if (text) {
     task.progress.push(text)
   }
+  return true
+}
+
+/** The owner answers an open question: the SAME task resumes with the choice appended. */
+export function answerTask(id: string, owner: string, choice: string): boolean {
+  const task = tasks.get(id)
+  if (!task || task.owner !== owner || task.state !== 'input-required') return false
+  task.userMessage += `\n\n[Rückfrage] ${task.question}\n[Antwort] ${choice}`
+  task.progress.push(`Antwort des Owners: ${choice}`)
+  task.state = 'submitted'
+  task.claimed = false
+  task.question = undefined
+  task.options = undefined
+  task.askedAt = undefined
+  if (!pending.includes(id)) pending.push(id)
   return true
 }
 
