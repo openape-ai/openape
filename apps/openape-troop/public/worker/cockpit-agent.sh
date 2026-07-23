@@ -40,7 +40,13 @@ call() { # method path [body] -> echoes body; raw-token first, 401 -> exchange+r
   if [ "$code" = "401" ]; then rm -f "$CACHE"; out=$(curl -sS --max-time 30 -X "$m" "$SP$p" -H "authorization: Bearer $(mint)" -H 'content-type: application/json' ${b:+-d "$b"}); fi
   printf '%s' "$out"
 }
-resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" RETRY_IN_MS="${4:-}" python3 -c 'import json,os; body={"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":[{"kind":"text","text":os.environ["TEXT"]}]}}; retry=os.environ["RETRY_IN_MS"]; body.update({"retryInMs": int(retry)} if retry else {}); print(json.dumps(body))'; }
+resolve_body() { TASK_ID="$1" STATE="$2" TEXT="$3" RETRY_IN_MS="${4:-}" FILE_IDS="${5:-}" python3 -c 'import json,os
+parts=[{"kind":"text","text":os.environ["TEXT"]}]
+parts+= [{"kind":"file","fileId":f} for f in os.environ["FILE_IDS"].split() if f]
+body={"id":os.environ["TASK_ID"],"state":os.environ["STATE"],"artifact":{"parts":parts}}
+retry=os.environ["RETRY_IN_MS"]
+body.update({"retryInMs": int(retry)} if retry else {})
+print(json.dumps(body))'; }
 
 CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|ask <id> <frage> [opt…]|progress <id> <text>|resolve <id> <state> [retryInMs]}"; shift || true
 case "$CMD" in
@@ -76,7 +82,15 @@ for s in json.load(sys.stdin):
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call GET "/api/cockpit/agent/skill/$ID" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("prompt",""))' ;;
   progress)  ID="$1"; shift; call POST "$TP/resolve" "$(resolve_body "$ID" working "$*")" ;;
-  resolve)   ID="$1"; STATE="$2"; RETRY_IN_MS="${3:-}"; call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)" "$RETRY_IN_MS")" ;;
+  resolve)   # resolve <id> <state> [retryInMs] [--file <id>]...  (stdin = Antworttext)
+    ID="$1"; STATE="$2"; shift 2; RETRY_IN_MS=""; FILE_IDS=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --file) FILE_IDS="$FILE_IDS $2"; shift 2 ;;
+        *) RETRY_IN_MS="$1"; shift ;;
+      esac
+    done
+    call POST "$TP/resolve" "$(resolve_body "$ID" "$STATE" "$(cat)" "$RETRY_IN_MS" "$FILE_IDS")" ;;
   file) # download an attachment to a path: file <id> <outpath>
     ID="${1:?usage: cockpit-agent.sh file <id> <outpath>}"; OUT="${2:?usage: cockpit-agent.sh file <id> <outpath>}"
     curl -sS --max-time 60 -o "$OUT" -H "authorization: Bearer $(authtok)" "$SP/api/cockpit/agent/files/$ID" || exit 4
