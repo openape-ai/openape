@@ -48,20 +48,24 @@ async function waitForServer(url: string, timeoutMs = 30_000) {
 const managementHeader = { Authorization: `Bearer ${MANAGEMENT_TOKEN}` }
 
 describe('YOLO policy admin API', () => {
-  const port = 3601 + Math.floor(Math.random() * 200)
-  const baseUrl = `http://127.0.0.1:${port}`
+  let baseUrl = ''
   let server: ReturnType<typeof spawn> | null = null
   let serverLogs = ''
 
-  beforeAll(async () => {
-    server = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
+  // One boot attempt on a fresh random port. vitest's `retry` re-runs tests but
+  // never a failed beforeAll, so the boot gets its own retry: a slow/crashed
+  // nuxt-dev under CI load (shared runners, #991) is absorbed here instead of
+  // failing the whole suite.
+  function spawnServer(port: number): ReturnType<typeof spawn> {
+    const url = `http://127.0.0.1:${port}`
+    const proc = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: appDir,
       detached: true,
       env: {
         ...process.env,
         OPENAPE_E2E: '1',
-        OPENAPE_ISSUER: baseUrl,
-        OPENAPE_RP_ORIGIN: baseUrl,
+        OPENAPE_ISSUER: url,
+        OPENAPE_RP_ORIGIN: url,
         OPENAPE_RP_ID: '127.0.0.1',
         OPENAPE_RP_HOST_ALLOWLIST: '127.0.0.1',
         OPENAPE_SESSION_SECRET: SESSION_SECRET,
@@ -72,15 +76,39 @@ describe('YOLO policy admin API', () => {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    try {
-      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, FREE_IDP_BOOT_TIMEOUT_MS)
+    proc.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
+    proc.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
+    return proc
+  }
+  function killServer(): void {
+    if (server?.pid) {
+      try { process.kill(-server.pid, 'SIGKILL') }
+      catch { /* already gone */ }
     }
-    catch (err) {
-      console.error('Server failed to start. Last logs:\n', serverLogs.slice(-4000))
-      throw err
+    server = null
+  }
+
+  beforeAll(async () => {
+    const BOOT_ATTEMPTS = 2
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= BOOT_ATTEMPTS; attempt++) {
+      const port = 3601 + Math.floor(Math.random() * 200)
+      baseUrl = `http://127.0.0.1:${port}`
+      server = spawnServer(port)
+      try {
+        await waitForServer(`${baseUrl}/.well-known/openid-configuration`, FREE_IDP_BOOT_TIMEOUT_MS)
+        lastErr = undefined
+        break
+      }
+      catch (err) {
+        lastErr = err
+        console.error(`Server boot attempt ${attempt}/${BOOT_ATTEMPTS} failed. Last logs:\n`, serverLogs.slice(-4000))
+        killServer()
+        serverLogs = ''
+        await wait(500)
+      }
     }
+    if (lastErr) throw lastErr
 
     // Seed: owner + agent (agent.owner = owner)
     const r1 = await fetch(`${baseUrl}/api/admin/users`, {
@@ -107,15 +135,14 @@ describe('YOLO policy admin API', () => {
       console.error('admin/agents create failed', r3.status, await r3.text())
     }
     expect([200, 201, 409]).toContain(r3.status)
-  }, 90_000)
+    // Explicit hook budget: must cover BOTH boot attempts (2 × 120s) + seeding.
+    // An inline timeout OVERRIDES the config's hookTimeout — the 120s fix in
+    // #992 never took effect because this arg still said 90s.
+  }, 2 * FREE_IDP_BOOT_TIMEOUT_MS + 30_000)
 
   afterAll(async () => {
-    if (server?.pid) {
-      // Kill the whole process group (pnpm + nuxt child) so no orphans linger
-      try { process.kill(-server.pid, 'SIGKILL') }
-      catch { /* already gone */ }
-    }
-    server = null
+    // Kill the whole process group (pnpm + nuxt child) so no orphans linger
+    killServer()
     // Give the kernel a moment to release the bound port
     await wait(200)
   })
