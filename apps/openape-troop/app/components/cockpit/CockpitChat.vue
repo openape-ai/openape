@@ -3,7 +3,7 @@ import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, answer, stop, clear } = useCockpitChat()
-const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
+const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence(() => currentCompany.value?.id ?? '')
 // Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
 // setup, so the user can bring their Operator online (headless or in-session) without typing.
 const workerDeepLink = `claude-cli://open?q=${encodeURIComponent(
