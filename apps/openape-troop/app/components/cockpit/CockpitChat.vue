@@ -2,7 +2,7 @@
 import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
-const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
+const { messages, isStreaming, companies, currentCompany, selectCompany, send, answer, stop, clear } = useCockpitChat()
 const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
 // Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
 // setup, so the user can bring their Operator online (headless or in-session) without typing.
@@ -84,7 +84,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
             <div v-if="daySep(i)" class="date-sep">
               <span>{{ daySep(i) }}</span>
             </div>
-            <CockpitBubble :message="m" />
+            <CockpitBubble :message="m" @answer="c => answer(m, c)" />
           </template>
         </div>
       </div>
