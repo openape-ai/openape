@@ -11,6 +11,10 @@ export default defineConfig({
     include: ['e2e/**/*.e2e.test.ts'],
     testTimeout: 120_000,
     hookTimeout: 180_000,
+    // One nuxt-dev boot at a time: the default parallel file execution boots
+    // all three e2e servers at once and starves one of them on a loaded/shared
+    // runner — the actual root cause behind the #991 flake class.
+    fileParallelism: false,
     environment: 'node',
     retry: 1,
   },
