@@ -200,10 +200,10 @@ export function markAgentDoctor(owner: string, report: Record<string, boolean>):
   agentDoctors.set(owner, report)
 }
 
-export function missingTools(owner: string): string[] {
+export function missingTools(owner: string, scope?: Set<string>): string[] {
   const report = agentDoctors.get(owner)
   if (!report) return []
-  return Object.keys(report).filter(cli => !report[cli]).sort()
+  return Object.keys(report).filter(cli => !report[cli] && (!scope || scope.has(cli))).sort()
 }
 
 function ownerHasOpenTask(owner: string): boolean {
@@ -215,8 +215,8 @@ function ownerHasOpenTask(owner: string): boolean {
 
 export interface AgentStatus { mode: AgentMode, nextPollInSec: number | null, missingTools: string[] }
 
-export function agentStatus(owner: string): AgentStatus {
-  const missing = missingTools(owner)
+export function agentStatus(owner: string, toolScope?: Set<string>): AgentStatus {
+  const missing = missingTools(owner, toolScope)
   const b = agentPolls.get(owner)
   if (!b) return { mode: 'offline', nextPollInSec: null, missingTools: missing }
   const now = Date.now()
