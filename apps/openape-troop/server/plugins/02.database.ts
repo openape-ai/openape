@@ -128,8 +128,10 @@ export default defineNitroPlugin(async () => {
       org_id TEXT NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      meta TEXT,
       created_at INTEGER NOT NULL
     )`)
+    await db.run(sql`ALTER TABLE cockpit_chat_messages ADD COLUMN meta TEXT`).catch(() => {})
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_chat_owner_org ON cockpit_chat_messages(owner_email, org_id, created_at)`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (

@@ -11,5 +11,5 @@ export default defineEventHandler(async (event) => {
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
   const task = getTask(id)
   if (!task || task.owner !== owner) throw createError({ statusCode: 404, statusMessage: 'unknown task' })
-  return { state: task.state, progress: task.progress, answer: task.answer }
+  return { state: task.state, progress: task.progress, answer: task.answer, question: task.question, options: task.options }
 })
