@@ -27,4 +27,12 @@ describe('doctor report in presence', () => {
     markAgentDoctor(owner, { 'gmail-cli': true, 'o365-cli': true, 'pdftotext': true }) // fixed → clears
     expect(agentStatus(owner).missingTools).toEqual([])
   })
+
+  it('a tool scope hides misses that belong to another org (#996)', () => {
+    const owner = 'doctor-scope@example.com'
+    markAgentDoctor(owner, { 'iurio': false, 'gmail-cli': false })
+    expect(agentStatus(owner).missingTools).toEqual(['gmail-cli', 'iurio']) // ohne Scope: owner-weit
+    expect(agentStatus(owner, new Set(['gmail-cli'])).missingTools).toEqual(['gmail-cli']) // OpenApe sieht iurio nicht
+    expect(agentStatus(owner, new Set(['iurio'])).missingTools).toEqual(['iurio'])
+  })
 })
