@@ -10,5 +10,5 @@ export default defineEventHandler(async (event) => {
   if (!company) throw createError({ statusCode: 400, statusMessage: 'company required' })
   const since = Number(q.since ?? 0) || 0
   const rows = await loadChat(company, owner, since)
-  return rows.map(m => ({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt }))
+  return rows.map(m => ({ id: m.id, role: m.role, content: m.content, meta: m.meta ?? undefined, createdAt: m.createdAt }))
 })

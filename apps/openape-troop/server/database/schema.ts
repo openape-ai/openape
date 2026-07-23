@@ -516,6 +516,10 @@ export const cockpitTasks = sqliteTable('cockpit_tasks', {
   createdAt: integer('created_at').notNull(),
   notBefore: integer('not_before'),
   lastNote: text('last_note'),
+  // input-required: the open question the owner still has to answer (survives restarts).
+  question: text('question'),
+  options: text('options'), // JSON string[]
+  askedAt: integer('asked_at'),
 })
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
@@ -527,6 +531,9 @@ export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
   orgId: text('org_id').notNull(),
   role: text('role', { enum: ['user', 'assistant'] }).notNull(),
   content: text('content').notNull(),
+  // Ask-Chips: {taskId, options, answered?} — set on input-required questions so
+  // a reload re-renders the chips (or their settled state) from the DB.
+  meta: text('meta', { mode: 'json' }).$type<{ taskId: string, options: string[], answered?: boolean } | null>(),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
 
