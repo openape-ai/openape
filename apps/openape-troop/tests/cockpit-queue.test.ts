@@ -11,11 +11,13 @@ describe('cockpit queue — owner-bound', () => {
   })
 
   it('restoreTask re-offers a persisted task with its original id (boot rehydrate)', () => {
-    restoreTask({ id: 'restored-1', company: 'c', owner: 'frank@x', systemPrompt: 'sp', userMessage: 'do it', createdAt: 1 })
+    restoreTask({ id: 'restored-1', company: 'c', owner: 'frank@x', systemPrompt: 'sp', userMessage: 'do it', createdAt: 1, notBefore: Date.now() + 60_000, lastNote: 'warte auf CI' })
     const t = claimNext('frank@x')
-    expect(t?.id).toBe('restored-1')
-    expect(t?.userMessage).toBe('do it')
-    expect(t?.state).toBe('working')
+    expect(t).toBeNull()
+    expect(getTask('restored-1')?.notBefore).toBeGreaterThan(Date.now())
+    expect(getTask('restored-1')?.progress).toEqual(['warte auf CI'])
+    getTask('restored-1')!.notBefore = Date.now() - 1
+    expect(claimNext('frank@x')?.id).toBe('restored-1')
   })
 
   it('restoreTask is idempotent — a duplicate id is not re-queued', () => {
