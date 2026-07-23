@@ -2,7 +2,7 @@
 import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
-const { messages, isStreaming, companies, currentCompany, selectCompany, send, answer, stop, clear } = useCockpitChat()
+const { messages, isStreaming, companies, currentCompany, authRequired, selectCompany, send, answer, stop, clear } = useCockpitChat()
 const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence(() => currentCompany.value?.id ?? '')
 // Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
 // setup, so the user can bring their Operator online (headless or in-session) without typing.
@@ -52,7 +52,8 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           ‹
         </button>
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
-        <span class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></span>
+        <NuxtLink v-if="mode === 'unauthenticated'" to="/login" class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></NuxtLink>
+        <span v-else class="conn-dot" :class="`m-${mode}`" :title="presenceTitle" :aria-label="presenceLabel"><span class="conn-label">{{ presenceLabel }}</span></span>
         <a
           v-if="mode === 'offline'"
           class="ceo-start"
@@ -71,6 +72,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
       <p v-if="missingTools.length" class="sys-notice doctor-warn">
         ⚠ Beim Operator fehlen Werkzeuge: {{ missingTools.join(', ') }} — im Worker-PATH nicht gefunden.
       </p>
+      <p v-if="authRequired" class="sys-notice"><NuxtLink to="/login">Sitzung abgelaufen — neu einloggen</NuxtLink></p>
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">
