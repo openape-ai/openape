@@ -37,7 +37,8 @@ export default defineEventHandler(async (event) => {
     ask = { question, options }
   }
   const task = getTask(id)
-  resolve(id, state, text, agent, state === 'deferred' ? body.retryInMs as number : undefined, ask)
+  const resolved = resolve(id, state, text, agent, state === 'deferred' ? body.retryInMs as number : undefined, ask)
+  if (!resolved) return { ok: true }
   const ownGuarded = ownsTask(task, agent) // task exists AND belongs to this agent
   if (state === 'deferred' && ownGuarded) void saveTask({ ...task!, notBefore: task!.notBefore, lastNote: text || undefined }).catch(err => console.error('[task-store] save', err))
   if (state === 'input-required' && ownGuarded && ask) {
