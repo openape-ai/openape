@@ -1,5 +1,5 @@
 import { getTask, resolve } from '../../../../utils/cockpit/queue'
-import { saveChatMessage } from '../../../../utils/cockpit/chat-store'
+import { saveChatMessage, saveProgressChatMessage } from '../../../../utils/cockpit/chat-store'
 import { removeTask, saveTask } from '../../../../utils/cockpit/task-store'
 import type { TaskState } from '../../../../utils/cockpit/queue'
 import { requireCockpitAgent } from '../../../../utils/cockpit/auth'
@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
   const resolved = resolve(id, state, text, agent, state === 'deferred' ? body.retryInMs as number : undefined, ask)
   if (!resolved) return { ok: true }
   const ownGuarded = ownsTask(task, agent) // task exists AND belongs to this agent
+  if (state === 'working' && ownGuarded && text.trim()) await saveProgressChatMessage(task!.company, task!.owner, id, text.trim())
   if (state === 'deferred' && ownGuarded) void saveTask({ ...task!, notBefore: task!.notBefore, lastNote: text || undefined }).catch(err => console.error('[task-store] save', err))
   if (state === 'input-required' && ownGuarded && ask) {
     // Durability + the persistent chat rendition (chips come from `meta` on reload).

@@ -31,6 +31,7 @@ function onCopyClick(e: MouseEvent): void {
   <div class="bubble" :class="[message.role]">
     <template v-if="message.role === 'assistant'">
       <div v-if="message.content" class="md-wrap">
+        <div v-if="message.progress" class="progress-label">Zwischenstand</div>
         <!-- eslint-disable-next-line vue/no-v-html -- assistant content is our own trusted mock/agent markdown -->
         <div class="md" @click="onCopyClick" v-html="html" />
         <div v-if="message.ask?.options?.length" class="ask-chips" :class="{ settled: message.ask.answered }">
