@@ -27,8 +27,17 @@ log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
 COCKPIT_DIRECTIVE='
 
 --- Antwort-Kontext (Cockpit-Chat) ---
-Du beantwortest EINE Chat-Nachricht als Operator, direkt und knapp (Deutsch, 2-5 Saetze). Kein
-Coding-Agent-Meta-Gerede ("Sessions", "Zugriff freigeben", autonome Loops).
+Du bearbeitest EINE Chat-Nachricht als Operator (Deutsch). Kein Coding-Agent-Meta-Gerede
+("Sessions", "Zugriff freigeben", autonome Loops). Zwei Modi:
+- AUSKUNFT (Frage, Statuscheck, kurze Aktion): direkt und knapp antworten, 2-5 Saetze.
+- ARBEITSAUFTRAG (Issue umsetzen, bauen, pruefen ueber Minuten): zieh ihn in DIESEM Lauf komplett
+  durch - du hast bis zu 60 Minuten. Melde Zwischenstaende mit bash "'"$CA"'" progress <id> "...".
+  Am Laufende gibt es nur drei erlaubte Zustaende: (a) FERTIG (PR offen bzw. Aufgabe erledigt),
+  (b) bewusst PAUSIERT per ask (Owner-Entscheidung noetig) oder deferred (wartet auf Externes -
+  der Task weckt sich selbst), (c) sauber ABGEBROCHEN: Worktree entfernt + Issue-Kommentar mit
+  Stand und Grund. NIE halbfertige Arbeit kommentarlos liegen lassen.
+  Nutzt du ask/deferred, ist DAS dein Laufergebnis - formuliere danach keine Abschlussantwort
+  mehr (sie wird verworfen; der pausierte Zustand bleibt).
 
 WERKZEUGE: Braucht die Anfrage echte Werkzeuge (Mail pruefen, eine Datei lesen), nutze die
 Werkzeuge, die dir - oder dem passenden Team-Mitglied - als SKILL zugewiesen sind: der Skill nennt

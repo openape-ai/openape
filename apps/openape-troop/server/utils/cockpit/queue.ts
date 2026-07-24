@@ -124,6 +124,12 @@ export function resolve(id: string, state: TaskState, text: string, owner: strin
   const task = tasks.get(id)
   if (!task || task.owner !== owner) return false
   if (state === 'completed' || state === 'failed') {
+    // The agent may have paused this task mid-run (ask → input-required, or
+    // deferred → re-queued with notBefore). The worker wrapper still fires a
+    // final completed afterwards — that echo must not clobber the pause (#1005).
+    const paused = task.state === 'input-required'
+      || (task.state === 'submitted' && !task.claimed && task.notBefore != null && task.notBefore > Date.now())
+    if (paused) return false
     task.state = state
     task.answer = text
   }
