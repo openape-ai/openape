@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, gt } from 'drizzle-orm'
 import { useDb } from '../../database/drizzle'
-import { cockpitChatMessages } from '../../database/schema'
+import { cockpitChatMessages, organizations } from '../../database/schema'
 import { pushToOwner } from './push'
 
 export type ChatRole = 'user' | 'assistant'
@@ -13,12 +13,16 @@ export interface ChatMeta { taskId: string, options: string[], answered?: boolea
 // Persist one message of the (owner, org) conversation. Independent of any live
 // stream — the answer survives even if the client is gone.
 export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta, files?: { id: string, mime: string, name: string }[]) {
+  const db = useDb()
   const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, meta: meta ?? null, files: files?.length ? files : null, createdAt: Date.now() }
-  await useDb().insert(cockpitChatMessages).values(row)
+  await db.insert(cockpitChatMessages).values(row)
   // A Operator answer → notify the owner's installed PWA / browsers (fire-and-forget,
   // never blocks or fails the save). The SW suppresses it if a tab is focused.
-  if (role === 'assistant')
-    void pushToOwner(owner, { title: 'Troop-Chat', body: content.slice(0, 140), url: '/chat' }).catch(() => {})
+  if (role === 'assistant') {
+    const org = await db.select({ name: organizations.name }).from(organizations).where(and(eq(organizations.id, orgId), eq(organizations.ownerEmail, owner))).get()
+    const orgName = org?.name ?? orgId
+    void pushToOwner(owner, { title: orgName, body: `Troop-Chat · ${content.slice(0, 120)}`, url: '/chat' }).catch(() => {})
+  }
   return row
 }
 
