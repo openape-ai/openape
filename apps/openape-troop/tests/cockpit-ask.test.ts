@@ -76,3 +76,22 @@ describe('worker-wrapper final resolve must not clobber a paused task (#1005)', 
     expect(task.notBefore).toBeGreaterThan(Date.now())
   })
 })
+
+describe('duplicate terminal resolve is a no-op (#1011)', () => {
+  it('preserves the first completed result', () => {
+    const t = enqueue('c', 'sp', 'still', 'silent1@x')
+    claimNext('silent1@x')
+    expect(resolve(t.id, 'completed', '', 'silent1@x')).toBe(true)
+    expect(resolve(t.id, 'completed', 'Wrapper-Echo', 'silent1@x')).toBe(false)
+    expect(getTask(t.id)?.state).toBe('completed')
+    expect(getTask(t.id)?.answer).toBe('')
+  })
+
+  it('preserves the first failed result', () => {
+    const t = enqueue('c', 'sp', 'still', 'silent2@x')
+    claimNext('silent2@x')
+    expect(resolve(t.id, 'failed', 'Fehler', 'silent2@x')).toBe(true)
+    expect(resolve(t.id, 'failed', 'Wrapper-Echo', 'silent2@x')).toBe(false)
+    expect(getTask(t.id)?.answer).toBe('Fehler')
+  })
+})
