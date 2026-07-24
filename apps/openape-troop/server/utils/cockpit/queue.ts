@@ -124,6 +124,10 @@ export function resolve(id: string, state: TaskState, text: string, owner: strin
   const task = tasks.get(id)
   if (!task || task.owner !== owner) return false
   if (state === 'completed' || state === 'failed') {
+    // A worker wrapper may send its final resolve after the task already
+    // finished (for example after a deliberate silent completion). Preserve
+    // the first terminal result and make the echo a no-op.
+    if (isTerminal(id)) return false
     // The agent may have paused this task mid-run (ask → input-required, or
     // deferred → re-queued with notBefore). The worker wrapper still fires a
     // final completed afterwards — that echo must not clobber the pause (#1005).
