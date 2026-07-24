@@ -54,3 +54,25 @@ describe('input-required — ask & answer on the same task', () => {
     expect(claimNext('ask5@x')?.id).toBe('ask-restored')
   })
 })
+
+describe('worker-wrapper final resolve must not clobber a paused task (#1005)', () => {
+  it('completed after input-required is ignored — the question survives', () => {
+    const t = enqueue('c', 'sp', 'frag mich', 'wrap1@x')
+    claimNext('wrap1@x')
+    resolve(t.id, 'input-required', '', 'wrap1@x', undefined, { question: 'Deploy?', options: ['Ja'] })
+    // worker.sh answer() fires its final completed AFTER the agent already paused the task
+    expect(resolve(t.id, 'completed', 'Ich habe dich gefragt.', 'wrap1@x')).toBe(false)
+    expect(getTask(t.id)?.state).toBe('input-required')
+    expect(answerTask(t.id, 'wrap1@x', 'Ja')).toBe(true)
+  })
+
+  it('completed after deferred is ignored — the retry survives', () => {
+    const t = enqueue('c', 'sp', 'warte auf CI', 'wrap2@x')
+    claimNext('wrap2@x')
+    resolve(t.id, 'deferred', 'warte', 'wrap2@x', 60_000)
+    expect(resolve(t.id, 'completed', 'Ich warte auf CI.', 'wrap2@x')).toBe(false)
+    const task = getTask(t.id)!
+    expect(task.state).toBe('submitted')
+    expect(task.notBefore).toBeGreaterThan(Date.now())
+  })
+})
