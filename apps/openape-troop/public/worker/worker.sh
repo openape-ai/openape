@@ -84,10 +84,12 @@ ERLAUBT: lesen/pruefen (Mail lesen/suchen/Anhaenge mit deinem Mail-CLI, Dateien 
 Kalendereintraege in deinem eigenen Kalender anlegen/aendern, falls dein CLI Kalender kann. Mails im
 eigenen Postfach archivieren (in den Archiv-Ordner verschieben) - reversibel, bleibt im Postfach -
 falls dein CLI das kann. Dateien nur in den Pfaden ablegen/umbenennen, die dein Firmen-Memory ausdruecklich nennt.
+ERLAUBT nach expliziter ask-Freigabe IM SELBEN Task (Chip-Antwort des Owners, nie eine
+fruehere/allgemeine Zustimmung): einen CI-gruenen PR mergen. Danach state=merged verifizieren und melden.
 VERBOTEN bleibt: Mail senden/weiterleiten/loeschen/in den Papierkorb (trash), aus dem Postfach heraus
-verschieben, posten/veroeffentlichen, Daten loeschen, force-push, ausserhalb der im Memory genannten
-Pfade schreiben, oder irgendetwas sonst nach-aussen-Wirkendes/Zerstoererisches. Im Zweifel: beschreiben
-und Patrick bestaetigen lassen.'
+verschieben, posten/veroeffentlichen, Daten loeschen, force-push auf fremde Branches, ausserhalb der im
+Memory genannten Pfade schreiben, oder irgendetwas sonst nach-aussen-Wirkendes/Zerstoererisches ohne
+ask-Freigabe. Im Zweifel: ask.'
 
 # A task may run as long as it makes progress (an hour is fine). Kill only on a genuine
 # STALL — no new stream output for STALL_SECS. MAX_SECS is just a runaway backstop.
