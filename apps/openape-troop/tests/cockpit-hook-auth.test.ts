@@ -5,7 +5,8 @@ import { allowHookHit, verifyHookSignature } from '../server/utils/cockpit/hook-
 describe('verifyHookSignature', () => {
   const secret = 'topsecret'
   const body = '{"event":"push"}'
-  const sig = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`
+  const digest = createHmac('sha256', secret).update(body).digest('hex')
+  const sig = `sha256=${digest}`
 
   it('accepts a correct signature', () => {
     expect(verifyHookSignature(secret, body, sig)).toBe(true)
@@ -21,6 +22,12 @@ describe('verifyHookSignature', () => {
   })
   it('rejects the wrong secret', () => {
     expect(verifyHookSignature('other', body, sig)).toBe(false)
+  })
+  it.each(['X-Forgejo-Signature', 'X-Gitea-Signature'])('accepts the prefix-less %s value', () => {
+    expect(verifyHookSignature(secret, body, digest, true)).toBe(true)
+  })
+  it('rejects a prefix-less signature on the legacy header', () => {
+    expect(verifyHookSignature(secret, body, digest)).toBe(false)
   })
 })
 
