@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { shouldSubmitComposerKey } from './composer-input'
 
 export interface PendingFile { id: string, mime: string, name: string }
 
@@ -55,6 +56,12 @@ function onSubmit(): void {
   uploadError.value = ''
   requestAnimationFrame(() => { if (ta.value) ta.value.style.height = 'auto' })
 }
+
+function onKeydown(e: KeyboardEvent): void {
+  if (!shouldSubmitComposerKey(e)) return
+  e.preventDefault()
+  onSubmit()
+}
 </script>
 
 <template>
@@ -95,7 +102,7 @@ function onSubmit(): void {
         autocomplete="off"
         autocorrect="off"
         @input="autoGrow"
-        @keydown.enter.exact.prevent="onSubmit"
+        @keydown="onKeydown"
       />
       <button v-if="!streaming" class="icon-btn send" type="submit" :disabled="(!text.trim() && !pending.length) || uploading" aria-label="Senden">
         ↑
