@@ -2,10 +2,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 // HMAC-SHA256 of the raw body, compared timing-safe against the X-Signature header
 // (format "sha256=<hex>"). True only when a secret is set and the signature matches.
-export function verifyHookSignature(secret: string, rawBody: string, header: string | undefined): boolean {
+export function verifyHookSignature(secret: string, rawBody: string, header: string | undefined, allowUnprefixed = false): boolean {
   if (!header) return false
   const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`
-  const a = Buffer.from(header)
+  const normalized = allowUnprefixed && /^[\da-f]{64}$/i.test(header) ? `sha256=${header}` : header
+  const a = Buffer.from(normalized)
   const b = Buffer.from(expected)
   return a.length === b.length && timingSafeEqual(a, b)
 }

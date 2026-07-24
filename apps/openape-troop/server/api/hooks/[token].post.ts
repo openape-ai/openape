@@ -25,7 +25,13 @@ export default defineEventHandler(async (event) => {
   // Rate-limit only after the hook is known — bounds the in-memory map to real tokens.
   if (!allowHookHit(token, Date.now())) throw createError({ statusCode: 429, statusMessage: 'rate limited' })
 
-  if (hook.secret && !verifyHookSignature(hook.secret, raw, getHeader(event, 'x-signature')))
+  const signature = getHeader(event, 'x-signature')
+  const forgejoSignature = getHeader(event, 'x-forgejo-signature')
+  const giteaSignature = getHeader(event, 'x-gitea-signature')
+  const validSignature = verifyHookSignature(hook.secret ?? '', raw, signature)
+    || verifyHookSignature(hook.secret ?? '', raw, forgejoSignature, true)
+    || verifyHookSignature(hook.secret ?? '', raw, giteaSignature, true)
+  if (hook.secret && !validSignature)
     throw createError({ statusCode: 401, statusMessage: 'bad signature' })
 
   const userMessage = hook.includePayload && raw.trim()
