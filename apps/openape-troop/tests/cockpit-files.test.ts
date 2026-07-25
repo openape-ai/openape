@@ -6,7 +6,7 @@ vi.mock('../server/database/drizzle', async () => {
   const { createClient } = await import('@libsql/client')
   const { drizzle } = await import('drizzle-orm/libsql')
   const schema = await import('../server/database/schema')
-  const client = createClient({ url: ':memory:' })
+  const client = createClient({ url: 'file::memory:?cache=shared' })
   await client.execute(`CREATE TABLE organizations (id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, name TEXT NOT NULL, vision_md TEXT NOT NULL DEFAULT '', budget_monthly_eur INTEGER NOT NULL DEFAULT 0, vars TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`)
   await client.execute(`CREATE TABLE cockpit_files (id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, org_id TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, bytes BLOB NOT NULL, created_at INTEGER NOT NULL)`)
   await client.execute(`CREATE TABLE cockpit_chat_messages (id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, org_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, meta TEXT, files TEXT, created_at INTEGER NOT NULL)`)
@@ -16,7 +16,7 @@ vi.mock('../server/database/drizzle', async () => {
 vi.mock('../server/utils/cockpit/push', () => ({ pushToOwner: vi.fn(async () => {}) }))
 
 const { loadFile, MAX_FILE_BYTES, resolveRefs, saveFile, sweepOrphanFiles } = await import('../server/utils/cockpit/file-store')
-const { saveChatMessage } = await import('../server/utils/cockpit/chat-store')
+const { saveChatMessage, saveProgressChatMessage } = await import('../server/utils/cockpit/chat-store')
 const { pushToOwner } = await import('../server/utils/cockpit/push')
 const { useDb } = await import('../server/database/drizzle')
 const { organizations } = await import('../server/database/schema')
@@ -73,5 +73,14 @@ describe('cockpit file store', () => {
       body: 'Troop-Chat · Die Prüfung ist abgeschlossen.',
       url: '/chat',
     })
+  })
+
+  it('throttles progress per task and pushes only the first note', async () => {
+    vi.mocked(pushToOwner).mockClear()
+
+    expect(await saveProgressChatMessage('org-progress', 'progress@x', 'task-1', 'Erster Zwischenstand')).toBeDefined()
+    expect(await saveProgressChatMessage('org-progress', 'progress@x', 'task-1', 'Zweiter Zwischenstand')).toBeNull()
+
+    expect(pushToOwner).toHaveBeenCalledTimes(1)
   })
 })
