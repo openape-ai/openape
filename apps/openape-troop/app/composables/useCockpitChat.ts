@@ -4,7 +4,7 @@ import { createSseParser } from '../utils/cockpit/sse'
 import { loadCockpitCompany, saveCockpitCompany } from '../utils/cockpit/store'
 
 export interface Company { id: string, name: string, short: string, accent: string }
-interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, meta?: { taskId: string, options: string[], answered?: boolean }, files?: { id: string, mime: string, name: string }[], createdAt: number }
+interface ServerMsg { id: string, role: 'user' | 'assistant', content: string, meta?: { taskId: string, options?: string[], answered?: boolean, progress?: boolean }, files?: { id: string, mime: string, name: string }[], createdAt: number }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const POLL_EVERY_MS = 2000
@@ -28,7 +28,7 @@ export function useCockpitChat() {
   async function loadFromServer(companyId: string): Promise<void> {
     try {
       const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId } })
-      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta ?? undefined, files: m.files ?? undefined, createdAt: m.createdAt }))
+      messages.value = rows.map(m => ({ id: m.id, role: m.role, content: m.content, ask: m.meta?.progress ? undefined : (m.meta ? { taskId: m.meta.taskId, options: m.meta.options ?? [], answered: m.meta.answered } : undefined), progress: m.meta?.progress, files: m.files ?? undefined, createdAt: m.createdAt }))
     }
     catch (error) {
       if ((error as { statusCode?: number })?.statusCode === 401) authRequired.value = true
