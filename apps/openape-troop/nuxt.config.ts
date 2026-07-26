@@ -9,7 +9,10 @@ export default defineNuxtConfig({
   // .claude/plans/nest-troop-ws.md). asyncContext stays on for
   // useEvent()-based session lookups in PATCH handlers that hook
   // the broadcast on the way out.
-  nitro: { experimental: { asyncContext: true, websocket: true } },
+  nitro: {
+    experimental: { asyncContext: true, websocket: true },
+    serverAssets: [{ baseName: 'changelog', dir: './server/assets' }],
+  },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-sp', '@nuxtjs/i18n'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
