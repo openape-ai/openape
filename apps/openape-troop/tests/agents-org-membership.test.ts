@@ -31,17 +31,22 @@ async function seed() {
   await db.insert(organizations).values([
     { id: 'org-a', ownerEmail: OWNER, name: 'OpenApe', createdAt: 1, updatedAt: 1 },
     { id: 'org-b', ownerEmail: OWNER, name: 'Delta Mind', createdAt: 1, updatedAt: 1 },
+    { id: 'org-foreign', ownerEmail: 'other@example.test', name: 'Foreign', createdAt: 1, updatedAt: 1 },
   ])
   await db.insert(agents).values([
     { email: 'pm@x', ownerEmail: OWNER, agentName: 'pm', createdAt: 3 },
     { email: 'backend@x', ownerEmail: OWNER, agentName: 'backend', createdAt: 2 },
     { email: 'zaz@x', ownerEmail: OWNER, agentName: 'zaz', createdAt: 1 },
+    { email: 'foreign@x', ownerEmail: OWNER, agentName: 'foreign', createdAt: 1 },
+    { email: 'retired@x', ownerEmail: OWNER, agentName: 'retired', createdAt: 1 },
   ])
   await db.insert(orgMembers).values([
     { orgId: 'org-a', agentEmail: 'pm@x', agentName: 'pm', role: 'teamlead', status: 'active', createdAt: 10 },
     { orgId: 'org-a', agentEmail: 'backend@x', agentName: 'backend', role: 'specialist', reportsToEmail: 'pm@x', status: 'active', createdAt: 11 },
     // backend joined a second org later — the earliest membership stays its home.
     { orgId: 'org-b', agentEmail: 'backend@x', agentName: 'backend', role: 'specialist', status: 'active', createdAt: 99 },
+    { orgId: 'org-foreign', agentEmail: 'foreign@x', agentName: 'foreign', role: 'specialist', status: 'active', createdAt: 1 },
+    { orgId: 'org-a', agentEmail: 'retired@x', agentName: 'retired', role: 'specialist', status: 'retired', createdAt: 1 },
   ])
 }
 
@@ -54,6 +59,8 @@ describe('GET /api/agents org membership', () => {
     expect(by.pm).toMatchObject({ orgId: 'org-a', orgName: 'OpenApe', orgRole: 'teamlead', reportsToEmail: null })
     expect(by.backend).toMatchObject({ orgName: 'OpenApe', orgRole: 'specialist', reportsToEmail: 'pm@x' })
     expect(by.zaz).toMatchObject({ orgId: null, orgName: null, orgRole: null, reportsToEmail: null })
+    expect(by.foreign).toMatchObject({ orgId: null, orgName: null, orgRole: null, reportsToEmail: null })
+    expect(by.retired).toMatchObject({ orgId: null, orgName: null, orgRole: null, reportsToEmail: null })
   })
 
   it('keeps one row per agent even with a second membership', async () => {
