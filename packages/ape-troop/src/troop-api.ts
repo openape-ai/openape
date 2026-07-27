@@ -42,6 +42,11 @@ export interface AgentRow {
   taskCount: number
   lastRunStatus: string | null
   lastRunAt: number | null
+  // Org membership — null when the agent belongs to no company.
+  orgId: string | null
+  orgName: string | null
+  orgRole: string | null
+  reportsToEmail: string | null
 }
 
 export interface IntentResult {
