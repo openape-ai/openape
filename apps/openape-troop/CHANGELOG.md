@@ -1,5 +1,14 @@
 # @openape/troop
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [d8833f6]
+- Updated dependencies [3d81df0]
+  - @openape/prompt-injection-detector@0.2.0
+  - @openape/nuxt-auth-sp@0.14.0
+
 ## 0.1.10
 
 ### Patch Changes
