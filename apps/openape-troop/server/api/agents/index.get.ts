@@ -15,6 +15,7 @@ import { requireOwner } from '../../utils/auth'
 // agent's home company, so the pick is stable instead of arbitrary.
 export default defineEventHandler(async (event) => {
   const owner = await requireOwner(event)
+  const ownerEmail = owner.toLowerCase()
   const db = useDb()
 
   const rows = await db
@@ -31,13 +32,13 @@ export default defineEventHandler(async (event) => {
       taskCount: sql<number>`(SELECT COUNT(*) FROM ${tasks} WHERE ${tasks.agentEmail} = ${agents.email})`,
       lastRunStatus: sql<string | null>`(SELECT status FROM ${runs} WHERE ${runs.agentEmail} = ${agents.email} ORDER BY ${runs.startedAt} DESC LIMIT 1)`,
       lastRunAt: sql<number | null>`(SELECT started_at FROM ${runs} WHERE ${runs.agentEmail} = ${agents.email} ORDER BY ${runs.startedAt} DESC LIMIT 1)`,
-      orgId: sql<string | null>`(SELECT org_id FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
-      orgName: sql<string | null>`(SELECT name FROM ${organizations} WHERE ${organizations.id} = (SELECT org_id FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} ORDER BY ${orgMembers.createdAt} LIMIT 1))`,
-      orgRole: sql<string | null>`(SELECT role FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
-      reportsToEmail: sql<string | null>`(SELECT reports_to_email FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
+      orgId: sql<string | null>`(SELECT ${orgMembers.orgId} FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} AND ${orgMembers.status} = 'active' AND EXISTS (SELECT 1 FROM ${organizations} WHERE ${organizations.id} = ${orgMembers.orgId} AND ${organizations.ownerEmail} = ${ownerEmail}) ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
+      orgName: sql<string | null>`(SELECT ${organizations.name} FROM ${orgMembers} INNER JOIN ${organizations} ON ${organizations.id} = ${orgMembers.orgId} WHERE ${orgMembers.agentEmail} = ${agents.email} AND ${orgMembers.status} = 'active' AND ${organizations.ownerEmail} = ${ownerEmail} ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
+      orgRole: sql<string | null>`(SELECT ${orgMembers.role} FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} AND ${orgMembers.status} = 'active' AND EXISTS (SELECT 1 FROM ${organizations} WHERE ${organizations.id} = ${orgMembers.orgId} AND ${organizations.ownerEmail} = ${ownerEmail}) ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
+      reportsToEmail: sql<string | null>`(SELECT ${orgMembers.reportsToEmail} FROM ${orgMembers} WHERE ${orgMembers.agentEmail} = ${agents.email} AND ${orgMembers.status} = 'active' AND EXISTS (SELECT 1 FROM ${organizations} WHERE ${organizations.id} = ${orgMembers.orgId} AND ${organizations.ownerEmail} = ${ownerEmail}) ORDER BY ${orgMembers.createdAt} LIMIT 1)`,
     })
     .from(agents)
-    .where(eq(agents.ownerEmail, owner.toLowerCase()))
+    .where(eq(agents.ownerEmail, ownerEmail))
     .orderBy(desc(agents.createdAt))
 
   return rows
