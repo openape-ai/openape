@@ -45,6 +45,8 @@ export default defineNuxtConfig({
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET
       || 'dev-session-secret-at-least-32-characters-long',
     fallbackIdpUrl: process.env.NUXT_FALLBACK_IDP_URL || 'https://id.openape.ai',
+    // Real landing page (the Q&A UI) — module default is `/` since #1021.
+    postLoginRedirect: '/dashboard',
     // Scope catalog — discoverable at /.well-known/openape.json.
     manifest: {
       scopes: [
