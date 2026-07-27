@@ -15,7 +15,15 @@ const error = ref('')
 onMounted(async () => {
   await fetchUser()
   if (user.value) {
-    await navigateTo('/teams')
+    // Post-login deep-link: invite.vue saves the intended destination in
+    // sessionStorage before login; the OIDC callback lands back on `/`.
+    let target = '/teams'
+    const stored = window.sessionStorage.getItem('openape-plans:returnTo')
+    if (stored && stored.startsWith('/')) {
+      target = stored
+      window.sessionStorage.removeItem('openape-plans:returnTo')
+    }
+    await navigateTo(target, { replace: true })
   }
 })
 
