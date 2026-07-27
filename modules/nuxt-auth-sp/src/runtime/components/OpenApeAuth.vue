@@ -2,6 +2,7 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
 import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
+import { DEFAULT_POST_LOGIN_REDIRECT } from '../config-defaults'
 
 const props = defineProps({
   title: { type: String, required: false, default: 'Sign in' },
@@ -11,11 +12,10 @@ const props = defineProps({
   /**
    * Where to navigate when the user is already signed in (the
    * onMounted fast-path). Server-side OIDC callback uses its own
-   * config (`openapeSp.postLoginRedirect`); this prop is just the
-   * client-side equivalent so SPs without a `/dashboard` page
-   * (e.g. troop) don't 404 on re-visit while signed in.
+   * config (`openapeSp.postLoginRedirect`); this prop is the
+   * client-side equivalent. Shared default: `config-defaults.ts`.
    */
-  postLoginRedirect: { type: String, required: false, default: '/dashboard' },
+  postLoginRedirect: { type: String, required: false, default: DEFAULT_POST_LOGIN_REDIRECT },
 })
 const emit = defineEmits(['error'])
 const { user, loading, fetchUser, login } = useOpenApeAuth()

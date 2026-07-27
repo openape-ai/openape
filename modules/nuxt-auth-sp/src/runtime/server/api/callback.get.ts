@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { handleCallback } from '@openape/auth'
+import { DEFAULT_POST_LOGIN_REDIRECT } from '../../config-defaults'
 import { getClientId, getSpConfig, getFlowState, clearFlowState } from '../utils/sp-config'
 import { getSpSession } from '../utils/sp-session'
 
@@ -42,12 +43,12 @@ export default defineEventHandler(async (event) => {
     })
 
     // Where to land after a successful login. SPs override via the
-    // `openapeSp.postLoginRedirect` module option (default `/dashboard`
-    // for back-compat). Keeping a single source of truth here so
-    // `OpenApeAuth.vue`'s already-logged-in fast-path and the callback
-    // exit agree on the destination.
+    // `openapeSp.postLoginRedirect` module option; the shared default
+    // lives in `runtime/config-defaults.ts` so `OpenApeAuth.vue`'s
+    // already-logged-in fast-path and the callback exit agree on the
+    // destination.
     const { postLoginRedirect } = getSpConfig()
-    return sendRedirect(event, postLoginRedirect || '/dashboard')
+    return sendRedirect(event, postLoginRedirect || DEFAULT_POST_LOGIN_REDIRECT)
   }
   catch (err: unknown) {
     clearFlowState(event)
