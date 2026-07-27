@@ -1,5 +1,12 @@
 # @openape/ape-agent
 
+## 2.11.3
+
+### Patch Changes
+
+- Updated dependencies [d8833f6]
+  - @openape/prompt-injection-detector@0.2.0
+
 ## 2.11.2
 
 ### Patch Changes
@@ -74,6 +81,7 @@
 - b6ed0ed: Remove legacy chat backend and Mac-path handling (M2 cutover confirmed).
 
   The single live nest is device-bound; no keypair or Mac-based nests remain.
+
   - `chat-api.ts` (ChatApi) deleted — troop is the sole chat backend
   - `OPENAPE_BRIDGE_TARGET` env var and `'chat' | 'troop'` config union removed
   - `loadBridgeEnvFile` (Mac `~/Library/Application Support` env loader) removed
@@ -370,6 +378,7 @@
   **Before**: every agent reply showed "(edited)" because the bridge posted a `…` placeholder and then PATCHed body once per ~300ms while LLM tokens streamed. Each PATCH bumped `edited_at`. Plus there was no signal _what_ the agent was doing during tool calls — the user just saw "…" hang for seconds.
 
   **After**: messages carry a `streaming` flag distinct from `edited_at`. While streaming:
+
   - Empty placeholder renders as a 3-dot typing cursor (pure CSS animation)
   - Body updates from token streams don't bump `edited_at`
   - Tool calls set `streamingStatus` (e.g. `🔧 time.now`) shown as italic subtitle under the cursor — cleared on tool-result / stream-end
@@ -399,6 +408,7 @@
   ```
 
   The parser now uses the `yaml` package (added as a runtime dep) instead of a hand-rolled regex pass, so nested YAML structures Just Work. Reads:
+
   - `metadata.openape.requires_tools` (canonical for us)
   - `metadata.openclaw.requires.bins` (canonical for OpenClaw — we honor it as binary-eligibility)
   - legacy top-level `requires_tools` (existing skills keep parsing)
@@ -418,12 +428,14 @@
   Default skills for the six built-in tool families (`time`, `http`, `file`, `tasks`, `mail`, `bash`) ship bundled with the package under `default-skills/`. They get merged with agent-side skills (same-name agent skill wins) and filtered against the agent's enabled tools — a skill whose `requires_tools` aren't enabled is dropped from the prompt.
 
   **`@openape/apes`** — `apes agents sync` now writes:
+
   - `~/.openape/agent/SOUL.md` (from troop's `soul` column)
   - `~/.openape/agent/skills/<name>/SKILL.md` for each enabled row in troop's `agent_skills` table
 
   The sync is a one-way mirror: rows deleted/disabled in troop get pruned from disk on the next sync. Existing agents pick up the feature on first sync after the deploy; their SOUL is empty and their skills list is empty until the owner adds some in the troop UI.
 
   **Troop** (separate app, not versioned here) adds:
+
   - `agents.soul TEXT NOT NULL DEFAULT ''`
   - new `agent_skills` table: `(agent_email, name)` primary key, `description`, `body`, `enabled`
   - `PATCH /api/agents/:name` accepts `soul: string`
@@ -461,6 +473,7 @@
   the rest of the CLI surface (`apes`, `ape-tasks`, `ape-agent`).
 
   **Migration:**
+
   - `npm i -g @openape/ape-agent@latest` — installs both the new
     canonical binary `ape-agent` and the legacy `openape-chat-bridge`
     alias (same script).
@@ -486,6 +499,7 @@
 - [#390](https://github.com/openape-ai/openape/pull/390) [`35d19af`](https://github.com/openape-ai/openape/commit/35d19af86afc4236c2b9afdfd0b8b65e385b70b4) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Per-agent tool whitelist — owner-controlled via troop, default all-tools-enabled on first sync.
 
   **What changed**:
+
   - `openape-troop`: `agents` table gains a `tools text` column (JSON string array, defaults to `'[]'` for legacy rows). New agents on first sync get the full `tool-catalog.json` list as their default — owner narrows via `PATCH /api/agents/<name>` (the existing endpoint now also accepts `tools: string[]`).
   - `GET /api/agents/me/tasks` returns the agent's `tools[]` alongside `system_prompt` and `tasks`.
   - `apes agents sync` writes the resolved tool list into `~/.openape/agent/agent.json` (alongside `systemPrompt`).
@@ -564,6 +578,7 @@
   The bridge previously spawned `apes agents serve --rpc` as a long-lived stdio JSON-RPC subprocess and dispatched each turn through it. Now it imports `runLoop` from `@openape/apes` directly. Same loop, no IPC overhead, no second process to keep alive. Per-thread message history that used to live in the subprocess's `RpcSessionMap` now lives on each `ThreadSession` itself.
 
   `@openape/apes` exposes the runtime surface for in-process use:
+
   - `runLoop`, `RpcSessionMap` (classes/functions)
   - `ChatMessage`, `RunOptions`, `RunResult`, `RuntimeConfig`, `RunStreamHandlers`, `TraceEntry`, `ToolDefinition` (types)
   - `taskTools`, `TOOLS` (helpers)
@@ -603,6 +618,7 @@
 ### Patch Changes
 
 - [#350](https://github.com/openape-ai/openape/pull/350) [`07a8346`](https://github.com/openape-ai/openape/commit/07a834625f076d0d1faa8e6c551c38e4f81fa95d) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix two issues that surfaced on first cron-task DM:
+
   1. **Tool names rejected by ChatGPT API**: catalog tool names like `time.now` failed the Responses API's `^[a-zA-Z0-9_-]+$` pattern via LiteLLM. Wire-encode dots to underscores when sending tools to the LLM (`time.now` → `time_now`); decode the model's tool_call back to the local catalog name.
 
   2. **Task DMs landing in main thread instead of dedicated thread**: cron-runner now explicitly POSTs `/api/rooms/<id>/threads` with the task's name on first run, then reuses the returned threadId for every subsequent run of that task.
@@ -622,6 +638,7 @@
 - [#332](https://github.com/openape-ai/openape/pull/332) [`a77db3a`](https://github.com/openape-ai/openape/commit/a77db3a4be9cc3e37af574578a70fb5095c73cc5) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - **BREAKING**: chat-bridge now spawns `apes agents serve --rpc` instead of `pi --mode rpc`. Drops the `@mariozechner/pi-coding-agent` runtime dependency entirely — the bridge runs against `@openape/apes` (≥ 0.32.0) which embeds a LiteLLM-backed runtime with the OpenApe tool catalog.
 
   Env vars changed:
+
   - removed: `APE_CHAT_BRIDGE_PI_BIN`, `APE_CHAT_BRIDGE_PROVIDER`
   - renamed: `APE_CHAT_BRIDGE_MODEL` (default now `claude-haiku-4-5` instead of `gpt-5.4`)
   - new: `APE_CHAT_BRIDGE_APES_BIN` (default: `apes` on `$PATH`), `APE_CHAT_BRIDGE_TOOLS` (comma-separated, default empty), `APE_CHAT_BRIDGE_MAX_STEPS` (default 10), `APE_CHAT_BRIDGE_SYSTEM_PROMPT` (default: friendly assistant)
@@ -640,6 +657,7 @@
 ### Patch Changes
 
 - [`b519e3f`](https://github.com/openape-ai/openape/commit/b519e3f858011358056daaec8f54a2694c59f191) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Fix bridge crash-loop "auth.json missing 'owner_email'" after `apes login`.
+
   - `@openape/cli-auth`: `saveIdpAuth` now merges with existing fields instead of overwriting wholesale. `apes login` (called from the bridge's `start.sh` on every daemon boot) used to silently drop `owner_email` written by `apes agents spawn`, leaving the bridge in a fatal restart loop until the auth.json was manually re-stamped. The merge preserves any unknown keys in the file across logins.
   - `@openape/chat-bridge`: `readAgentIdentity` falls back to `OPENAPE_OWNER_EMAIL` env var when `owner_email` is missing from auth.json, so an old agent (spawned before the Phase A migration) can be unblocked by adding one line to its launchd plist.
 
