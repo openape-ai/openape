@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* Safe-area helpers (iPhone notch / home bar / Android gesture bar). */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe { padding-bottom: calc(1.5rem + var(--safe-bottom)); }
+.pt-safe { padding-top: calc(1rem + var(--safe-top)); }
+.bottom-safe { bottom: calc(1.5rem + var(--safe-bottom)); }
