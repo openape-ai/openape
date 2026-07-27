@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import { createApp, toNodeListener } from 'h3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { H3Event } from 'h3'
+import packageJson from '../package.json'
 import { buildChangelogPayload } from '../server/utils/changelog'
 import changelogHandler from '../server/api/changelog.get'
 
@@ -11,13 +12,18 @@ vi.mock('nitropack/runtime', () => ({
   useStorage: () => ({ getItem }),
 }))
 
+// The payload's `version` comes from package.json, never from the changelog
+// text — so assert it against package.json rather than a literal, or every
+// release breaks this test. The fixture's "## 0.1.10" heading stays
+// deliberately unrelated to the real version: that mismatch is what proves
+// the version is not parsed out of the text.
 describe('GET /api/changelog payload', () => {
   it('returns the Troop version and the complete changelog text', () => {
     const payload = buildChangelogPayload('# @openape/troop\n\n## 0.1.10\n')
 
     expect(payload).toEqual({
       service: 'openape-troop',
-      version: '0.1.10',
+      version: packageJson.version,
       changelog: '# @openape/troop\n\n## 0.1.10\n',
     })
   })
@@ -44,7 +50,7 @@ describe('GET /api/changelog handler', () => {
 
     await expect(changelogHandler(request)).resolves.toEqual({
       service: 'openape-troop',
-      version: '0.1.10',
+      version: packageJson.version,
       changelog: '# @openape/troop\n\n## 0.1.10\n',
     })
     expect(getItem).toHaveBeenCalledWith('assets:server:CHANGELOG.md')
@@ -78,7 +84,7 @@ describe('GET /api/changelog handler', () => {
       expect(response.headers.get('cache-control')).toBe('public, max-age=60')
       await expect(response.json()).resolves.toEqual({
         service: 'openape-troop',
-        version: '0.1.10',
+        version: packageJson.version,
         changelog: '# @openape/troop\n\n## 0.1.10\n',
       })
     }
