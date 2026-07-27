@@ -1,0 +1,28 @@
+{
+  "name": "@openape-question-service/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3017",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.114",
+    "@libsql/client": "^0.14.0",
+    "@nuxt/ui": "^4.9.0",
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "@openape/sp-tasks": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "nuxt": "^4.4.8",
+    "tailwindcss": "^4.3.1"
+  },
+  "devDependencies": {
+    "@vue/language-core": "^3.3.5",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.5"
+  }
+}

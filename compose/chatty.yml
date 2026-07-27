@@ -202,3 +202,23 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  question-service:
+    image: registry.openape.ai/openape-question-service:${QUESTION_SERVICE_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-question-service/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+    volumes:
+      - /home/openape/projects/openape-question-service/shared:/home/openape/projects/openape-question-service/shared
+    ports:
+      - "127.0.0.1:3017:3017"
+      - "10.0.1.1:3017:3017"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3017/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
