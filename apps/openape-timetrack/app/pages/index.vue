@@ -10,7 +10,15 @@ const error = ref('')
 onMounted(async () => {
   await fetchUser()
   if (user.value) {
-    await navigateTo('/me')
+    // Post-login deep-link: invite.vue saves the intended destination in
+    // sessionStorage before login; the OIDC callback lands back on `/`.
+    let target = '/me'
+    const stored = window.sessionStorage.getItem('openape-timetrack:returnTo')
+    if (stored && stored.startsWith('/')) {
+      target = stored
+      window.sessionStorage.removeItem('openape-timetrack:returnTo')
+    }
+    await navigateTo(target, { replace: true })
   }
 })
 
