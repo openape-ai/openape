@@ -48,6 +48,7 @@ apps/             # Deployable applications (private, not published)
   openape-plans/      # plans.openape.ai — living plans → self-hosted (chatty)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
+  openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -102,7 +103,7 @@ Uses Changesets with a single root `.changeset/config.json`. **Publishing is loc
 **Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
-pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor
+pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service
 pnpm run deploy:image --all
 ```
 
@@ -118,6 +119,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `testrun`    | 3006 | openape-testrun        |
 | `timetrack`  | 3011 | openape-timetrack      |
 | `monitor`    | 3018 | openape-monitor        |
+| `question-service` | 3017 | openape-question-service |
 | `pr`         | 3014 | openape-pr             |
 
 **Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Das alte rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) bleibt für `docs` (statisches Site-Deploy) und als Legacy-Pfad erhalten.
