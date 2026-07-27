@@ -178,3 +178,27 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  monitor:
+    image: registry.openape.ai/openape-monitor:${MONITOR_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-monitor/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      # shared/.env carries no port — the app's dev default (3018) is pinned
+      # here so the container matches the nginx upstream.
+      PORT: "3018"
+      NITRO_PORT: "3018"
+    volumes:
+      - /home/openape/projects/openape-monitor/shared:/home/openape/projects/openape-monitor/shared
+    ports:
+      - "127.0.0.1:3018:3018"
+      - "10.0.1.1:3018:3018"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3018/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
