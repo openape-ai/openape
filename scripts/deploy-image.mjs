@@ -55,6 +55,7 @@ const TARGETS = {
   'pr': { filter: '@openape-pr/app', dir: 'apps/openape-pr', image: 'openape-pr', port: 3014, compose: 'pr', unit: 'openape-pr', domain: 'pr.openape.ai', envVar: 'PR_TAG' },
   'plans': { filter: '@openape-plans/app', dir: 'apps/openape-plans', image: 'openape-plans', port: 3004, compose: 'plans', unit: 'openape-plans', domain: 'plans.openape.ai', envVar: 'PLANS_TAG' },
   'timetrack': { filter: '@openape-timetrack/app', dir: 'apps/openape-timetrack', image: 'openape-timetrack', port: 3011, compose: 'timetrack', unit: 'openape-timetrack', domain: 'timetrack.openape.ai', envVar: 'TIMETRACK_TAG' },
+  'monitor': { filter: '@openape-monitor/app', dir: 'apps/openape-monitor', image: 'openape-monitor', port: 3018, compose: 'monitor', unit: 'openape-monitor', domain: 'monitor.openape.ai', envVar: 'MONITOR_TAG' },
 }
 
 function sh(cmd, args, opts = {}) {
