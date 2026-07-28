@@ -141,8 +141,30 @@ export default defineEventHandler(async (event) => {
   // of (a) the catalog, AND (b) the delegation grant's scopes if any.
   // The grant's scopes ride in the token claim `scope` per the spec.
   // Receivers MAY narrow scope at exchange; never widen.
+  //
+  // tokenScopes is null only when the token carries NO scope claim at
+  // all — distinct from scope:[], which is a real (empty) bound.
   const tokenScopes = parseTokenScopes(claims)
-  const requestedScopes = Array.isArray(body.scopes) ? body.scopes : tokenScopes
+
+  // Delegation detection on the RAW claim: normalizeActClaim also maps
+  // an ABSENT act to 'agent', which would misclassify first-party tokens
+  // here. Only the RFC 8693 object form ({sub}) marks a delegation.
+  const isDelegated = typeof claims.act === 'object' && claims.act !== null
+
+  // protocol#6: a delegated token MUST state its own bounds — a foreign
+  // or pre-#1039 IdP can still mint delegations without `scope`, and
+  // treating that as "free pick from the catalog" would let the delegate
+  // self-grant everything. Fail closed. First-party tokens (string act,
+  // no scope claim) stay unrestricted per sp-data-access §5.3.
+  if (isDelegated && tokenScopes === null) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'delegated token carries no scope claim',
+      data: { detail: 'A delegation subject_token must carry a scope claim (openape-ai/protocol#6). Re-issue the token from an IdP that embeds the delegation grant\'s scopes.' },
+    })
+  }
+
+  const requestedScopes = Array.isArray(body.scopes) ? body.scopes : (tokenScopes ?? [])
   const catalogCheck = scopesAreCovered(requestedScopes)
   if (!catalogCheck.ok) {
     throw createError({
@@ -151,7 +173,10 @@ export default defineEventHandler(async (event) => {
       data: { detail: `unknown scopes: ${catalogCheck.unknown.join(', ')}` },
     })
   }
-  if (tokenScopes.length > 0) {
+  // A present scope claim bounds the exchange even when empty: scope:[]
+  // means "nothing", not "no restriction" (#1035 — the old length check
+  // let [] fall through to free scope choice).
+  if (tokenScopes !== null) {
     const widenedBy = requestedScopes.filter(s => !tokenScopes.includes(s))
     if (widenedBy.length > 0) {
       throw createError({
@@ -185,11 +210,16 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-function parseTokenScopes(claims: JWTPayload): string[] {
+// null = the token has NO scope claim; [] = it has one that grants
+// nothing. The caller needs the difference to fail closed on scope-less
+// delegations (protocol#6) without touching first-party tokens.
+function parseTokenScopes(claims: JWTPayload): string[] | null {
   // RFC 8693 / OAuth: `scope` is a space-separated string OR array
   const raw = (claims as { scope?: unknown }).scope ?? (claims as { scopes?: unknown }).scopes
+  if (raw === undefined || raw === null) return null
   if (Array.isArray(raw)) return raw.filter((s): s is string => typeof s === 'string')
   if (typeof raw === 'string') return raw.split(/\s+/).filter(Boolean)
+  // present but unparseable → an empty bound, not "unbounded"
   return []
 }
 
