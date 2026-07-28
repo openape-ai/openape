@@ -51,6 +51,9 @@ export const TROOP_SCOPES: TroopScope[] = [
     id: 'troop:cockpit-serve',
     description: 'Claim and resolve the owner\'s cockpit tasks (companies and services) as their operator. Does not include agent or nest management.',
     grants: [
+      // Serving the owner's services starts with discovering them (#1075) —
+      // without this the worker's service loop only ever sees an empty list.
+      'GET /api/cockpit/services',
       'POST /api/cockpit/agent/tasks/next',
       'POST /api/cockpit/agent/tasks/resolve',
       'POST /api/cockpit/agent/heartbeat',
