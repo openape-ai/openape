@@ -1,5 +1,13 @@
 # @openape/shapes
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [76dd28c]
+  - @openape/core@0.19.0
+  - @openape/grants@0.12.2
+
 ## 0.7.1
 
 ### Patch Changes

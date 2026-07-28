@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.15.0
+
+### Minor Changes
+
+- 76fe424: Catalog-aware scope enforcement in `requireCaller`: delegated tokens holding exact catalog scopes (e.g. `troop:cockpit-serve`) now pass when the SP manifest's catalog entry (`openapeSp.manifest.scopes[].grants`) covers the request's method + path (`:param`/`[param]` segments match one path segment, method case-insensitive). The `<prefix>:read|write` method convention remains the unchanged fallback for SPs without a catalog or scopes without a catalog entry. 403 responses now name the held scopes and what would be required. (#1033)
+- 9885d25: Consolidate `/api/cli/exchange` into a single hardened implementation (sp-data-access §5): the module handler now enforces the SP's scope catalog (`openapeSp.manifest.scopes`, skipped for SPs without one), live-checks `delegation_grant` revocation at the IdP (fail-closed 502 when unreachable), rejects scope-less delegated tokens (protocol#6) and forbids scope widening — including past an empty `scope: []` bound. Scoped/delegated exchanges answer with `scope` and `delegate` provenance and mint short-TTL tokens carrying both claims; the first-party CLI path (no scope claim, no requested scopes) stays byte-identical.
+
+### Patch Changes
+
+- 76dd28c: Normalize the polymorphic DDISA `act` claim through one shared helper.
+
+  `@openape/core` gains `normalizeActClaim(act: unknown): 'human' | 'agent'`:
+  only the literal string `'human'` yields `'human'`; an RFC 8693 delegation
+  object (`{sub}`) and everything else (absent claim, unknown strings,
+  malformed objects) fail closed to `'agent'`. A delegated actor must never
+  be classified as an unrestricted human.
+
+  `@openape/nuxt-auth-sp` now uses the helper in `requireCaller`, the CLI
+  exchange handlers, and the agent-token fallback, so a subject token whose
+  `act` is a delegation object mints/reports `act='agent'` instead of
+  `'human'`.
+
+- Updated dependencies [76dd28c]
+- Updated dependencies [e06c651]
+  - @openape/core@0.19.0
+  - @openape/auth@0.13.0
+
 ## 0.14.0
 
 ### Minor Changes
