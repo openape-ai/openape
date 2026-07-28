@@ -129,6 +129,11 @@ async function handleClientCredentialsGrant(
           nonce: crypto.randomUUID(),
           delegation_act: { sub },
           delegation_grant: grant.id,
+          // Mirror the grant's scopes into the assertion (grants.md §6.1,
+          // protocol#6). Fail-closed: legacy grants without scopes yield
+          // `scope: []` — a delegated token must always state its own limits,
+          // and [] means "nothing allowed", not "everything allowed".
+          scope: grant.request.scopes ?? [],
         },
         stores.keyStore,
         config.issuer,
