@@ -79,7 +79,10 @@ export interface ApesConfig {
 }
 
 const CONFIG_DIR = join(homedir(), '.config', 'apes')
-const AUTH_FILE = join(CONFIG_DIR, 'auth.json')
+// APES_AUTH_FILE runs apes/ape-shell under an alternate identity (e.g. the
+// worker's operator agent, #1062) without touching HOME. The file's directory
+// must already exist — saveAuth only ensures the default CONFIG_DIR.
+const AUTH_FILE = process.env.APES_AUTH_FILE || join(CONFIG_DIR, 'auth.json')
 const CONFIG_FILE = join(CONFIG_DIR, 'config.toml')
 
 function ensureDir() {
