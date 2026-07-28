@@ -4,6 +4,7 @@ import { saveChatMessage } from '../../utils/cockpit/chat-store'
 import { resolveRefs } from '../../utils/cockpit/file-store'
 import { agentStatus, cleanup, enqueue, getTask, isClaimed, isTerminal } from '../../utils/cockpit/queue'
 import { saveTask } from '../../utils/cockpit/task-store'
+import { orgAllowedTools } from '../../utils/cockpit/allowed-tools'
 
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
@@ -35,9 +36,12 @@ export default defineEventHandler(async (event) => {
   const prompt = recent.length > 1
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
     : latestUser
-  const task = enqueue(company, systemPrompt, prompt, owner, files)
+  // Server-derived command allowlist (#1036) — rides the task as data; the
+  // worker enforces it. Never taken from the client request.
+  const allowedTools = await orgAllowedTools(owner, company)
+  const task = enqueue(company, systemPrompt, prompt, owner, files, allowedTools)
   // Persist the input so a troop restart before the worker resolves doesn't drop it.
-  void saveTask({ id: task.id, company, owner, systemPrompt, userMessage: prompt, createdAt: Date.now(), files: files.length ? files : undefined }).catch(err => console.error('[task-store] save', err))
+  void saveTask({ id: task.id, company, owner, systemPrompt, userMessage: prompt, createdAt: Date.now(), files: files.length ? files : undefined, allowedTools }).catch(err => console.error('[task-store] save', err))
 
   setResponseHeaders(event, {
     'content-type': 'text/event-stream; charset=utf-8',

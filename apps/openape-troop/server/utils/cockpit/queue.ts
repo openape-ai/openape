@@ -25,6 +25,10 @@ export interface QueueTask {
   askedAt?: number
   // chat attachments the worker downloads into its scratch dir
   files?: { id: string, mime: string, name: string }[]
+  // Command allowlist the worker enforces (#1036) — derived server-side at
+  // enqueue (union of the org's enabled roles' tool patterns), never client-set.
+  // Empty = hard sandbox: no commands at all.
+  allowedTools: string[]
 }
 
 const tasks = new Map<string, QueueTask>()
@@ -50,7 +54,7 @@ function gcStaleTasks(): void {
   }
 }
 
-export function enqueue(company: string, systemPrompt: string, userMessage: string, owner = '', files?: { id: string, mime: string, name: string }[]): { id: string } {
+export function enqueue(company: string, systemPrompt: string, userMessage: string, owner = '', files?: { id: string, mime: string, name: string }[], allowedTools: string[] = []): { id: string } {
   gcStaleTasks()
   const task: QueueTask = {
     id: makeId(),
@@ -64,6 +68,7 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
     answer: '',
     createdAt: Date.now(),
     files: files?.length ? files : undefined,
+    allowedTools,
   }
   tasks.set(task.id, task)
   pending.push(task.id)
@@ -73,12 +78,12 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
 // Put a persisted task back into the queue with its ORIGINAL id (used by the
 // boot rehydrate after a restart). Fresh submitted state — the worker re-runs it
 // from scratch; its original id keeps removeTask() matching the DB row.
-export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number, files?: { id: string, mime: string, name: string }[] }): void {
+export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number, files?: { id: string, mime: string, name: string }[], allowedTools?: string[] }): void {
   if (tasks.has(t.id)) return
   // A persisted open question comes back AS the question — waiting for the
   // owner's answer, not re-offered to the worker.
   const asking = Boolean(t.question)
-  tasks.set(t.id, { ...t, claimed: false, state: asking ? 'input-required' : 'submitted', progress: t.lastNote ? [t.lastNote] : [], answer: '' })
+  tasks.set(t.id, { ...t, allowedTools: t.allowedTools ?? [], claimed: false, state: asking ? 'input-required' : 'submitted', progress: t.lastNote ? [t.lastNote] : [], answer: '' })
   if (!asking) pending.push(t.id)
 }
 
