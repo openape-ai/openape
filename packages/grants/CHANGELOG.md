@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.2
+
+### Patch Changes
+
+- Updated dependencies [76dd28c]
+  - @openape/core@0.19.0
+
 ## 0.12.1
 
 ### Patch Changes
@@ -76,6 +83,7 @@
 ### Minor Changes
 
 - [#127](https://github.com/openape-ai/openape/pull/127) [`d8e1516`](https://github.com/openape-ai/openape/commit/d8e15161d7edda67139633ec18c959a2cc8a57bd) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Phase 4: Safe-Commands seeding + UX.
+
   - Agent enrollment now auto-seeds 14 default safe-command standing grants for the new agent (ls, cat, head, tail, wc, file, stat, which, echo, date, whoami, pwd, find, grep). Low-risk read-only invocations of those CLIs auto-approve without a prompt.
   - New UI section on `/agents/:email` to toggle defaults and add custom safe commands.
   - New `/agents` page modal to bulk-apply safe commands across all of a user's agents (idempotent — already-present entries are skipped).
@@ -96,6 +104,7 @@
   **Shape Registry (server-side):** the IdP now hosts shapes in a DB table
   (seeded from the shapes-registry repo via `pnpm seed:shapes`) and exposes
   them via three public endpoints:
+
   - `GET /api/shapes` — list all registered shapes
   - `GET /api/shapes/:cliId` — fetch single shape
   - `POST /api/shapes/resolve` — resolve `{cli_id, argv}` → structured
@@ -105,6 +114,7 @@
   **Standing Grants:** users can pre-authorize a (delegate, resource-chain)
   pattern so matching future agent grant requests auto-approve without
   human intervention:
+
   - `POST /api/standing-grants` — create (auto-approved by creator)
   - `GET /api/standing-grants` — list own
   - `DELETE /api/standing-grants/:id` — revoke
@@ -122,6 +132,7 @@ true` so clients can distinguish auto-approved from manually-approved
   ## Public surface
 
   **`@openape/grants`** — new exports:
+
   - `ServerShape`, `ServerShapeOperation`, `ShapeStore`,
     `createInMemoryShapeStore`
   - `resolveServerShape`, `ServerResolvedCommand`, `GENERIC_OPERATION_ID`
@@ -130,6 +141,7 @@ true` so clients can distinguish auto-approved from manually-approved
     `buildCoverageDetailFromStandingGrant`
 
   **`@openape/core`** — extensions:
+
   - `GrantCategory` now includes `'standing'`
   - `OpenApeGrant.decided_by_standing_grant` audit column
 
@@ -158,6 +170,7 @@ true` so clients can distinguish auto-approved from manually-approved
   directory, subtree, wildcard) and presents them as radio buttons in the approval UI.
   The approver can choose how broad the grant should be in a single click instead of
   needing a second request to trigger the widen flow.
+
   - `@openape/grants` adds `suggestWideningsForDetail`, `buildWideningSuggestionsForGrant`,
     and `approveGrantWithWidening` with server-side validation (structural match +
     coverage) that rejects any client-forged "widening" that would be a different grant.
@@ -236,15 +249,18 @@ true` so clients can distinguish auto-approved from manually-approved
 - [#1](https://github.com/openape-ai/openape/pull/1) [`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Align implementation with DDISA spec v1.0-draft
 
   **@openape/core:**
+
   - **BREAKING:** `OpenApeGrantRequest.target` → `target_host` (host/domain), `audience` now REQUIRED
   - `OpenApeAuthZClaims` gets `target_host` as REQUIRED claim
   - Fix error status codes: `invalid_audience`/`invalid_nonce` → 401, `grant_not_approved` → 400, `grant_already_used` → 410
   - Add missing error types: `policyDenied`, `invalidPkce`, `invalidState`
 
   **@openape/grants:**
+
   - **BREAKING:** `issueAuthzJWT` sets `aud` from `audience` (not `target`), adds `target_host` + `run_as` claims
 
   **@openape/nuxt-auth-idp:**
+
   - Grant creation validates `target_host` + `audience` (REQUIRED)
   - Fix `ddisa_version` from `'ddisa1'` to `'1.0'`
   - Fix `ddisa_auth_methods_supported` from `'passkey'` to `'webauthn'`
@@ -255,11 +271,13 @@ true` so clients can distinguish auto-approved from manually-approved
   - Delegation list supports `?role=delegator|delegate` query parameter
 
   **@openape/grapes:**
+
   - **BREAKING:** Replace `exec` command with audience-first `run` command
   - `request` command uses `--audience` + `--host` instead of `--for`
   - Remove `defaults.for` from config
 
   **@openape/proxy:**
+
   - Update `GrantsClient` to use `targetHost` + `audience` parameters
 
 ### Patch Changes
