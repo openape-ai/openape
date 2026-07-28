@@ -17,12 +17,50 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
+      # The three test steps are teed to /tmp so the failure step below can
+      # post the failing step's log tail to the PR (#1050).
       - name: E2E (self-contained idp+sp, fresh, no prod)
-        run: pnpm turbo run test --filter=openape-e2e
+        run: |
+          set -o pipefail
+          pnpm turbo run test --filter=openape-e2e 2>&1 | tee /tmp/e2e-core.log
       - name: E2E proof-link round-trip (testrun, dev-mode boot)
-        run: pnpm turbo run test:e2e --filter=@openape-testrun/app
+        run: |
+          set -o pipefail
+          pnpm turbo run test:e2e --filter=@openape-testrun/app 2>&1 | tee /tmp/e2e-testrun.log
       - name: E2E free-idp admin/login flows (nuxt-dev boot)
         # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
         # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
         # so the per-PR `ci` job stays deterministic under load.
-        run: pnpm turbo run test:e2e --filter=openape-free-idp
+        run: |
+          set -o pipefail
+          pnpm turbo run test:e2e --filter=openape-free-idp 2>&1 | tee /tmp/e2e-freeidp.log
+      - name: Post failure log tail as PR comment (#1050)
+        # The docker runner's logs are not reachable from outside, so on failure
+        # the tail of the failing step's log is posted to the PR. The last log
+        # written is the step that failed (steps run in order, a failed step
+        # stops the job). Push builds (no PR) skip via the `if` guard.
+        if: failure() && github.event.pull_request.number
+        env:
+          FJ_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          logs = [
+              ('E2E free-idp admin/login flows', '/tmp/e2e-freeidp.log'),
+              ('E2E proof-link round-trip (testrun)', '/tmp/e2e-testrun.log'),
+              ('E2E idp+sp', '/tmp/e2e-core.log'),
+          ]
+          section = 'Kein Log erfasst — Fehler lag vor den instrumentierten Steps (checkout/install?).'
+          for name, path in logs:
+              if os.path.exists(path):
+                  tail = open(path, 'rb').read()[-12000:].decode('utf-8', 'replace')
+                  section = f"Fehlgeschlagener Step: **{name}** (letzte 12 KB von `{path}`):\n\n```\n{tail}\n```"
+                  break
+          body = 'CI-Fehlerlog (letzter Abschnitt)\n\n' + section
+          req = urllib.request.Request(
+              f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{os.environ['PR_NUMBER']}/comments",
+              data=json.dumps({'body': body}).encode(),
+              headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'})
+          print(urllib.request.urlopen(req).status)
+          PYEOF
