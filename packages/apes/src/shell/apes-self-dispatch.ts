@@ -29,7 +29,7 @@ import type { ParsedShellCommand } from '../shapes/index.js'
  * `shell-grant-dispatch.test.ts` — the tripwire that forces a review
  * decision whenever a new top-level apes subcommand is added.
  */
-export const APES_GATED_SUBCOMMANDS = new Set(['run', 'fetch', 'mcp'])
+const APES_GATED_SUBCOMMANDS = new Set(['run', 'fetch', 'mcp'])
 
 /**
  * Returns true if the parsed shell command is an `apes <subcmd>`

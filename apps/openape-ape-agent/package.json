@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-agent",
-  "version": "2.11.1",
+  "version": "2.11.3",
   "description": "OpenApe agent runtime: per-agent process that connects to chat.openape.ai, runs the LLM loop with tools + cron tasks, and streams replies back to owners.",
   "type": "module",
   "license": "MIT",
@@ -43,15 +43,15 @@
     "@openape/prompt-injection-detector": "workspace:*",
     "@openape/sp-tasks": "workspace:*",
     "jose": "catalog:",
-    "ofetch": "^1.4.1",
-    "ws": "^8.18.0",
-    "yaml": "^2.8.0"
+    "ofetch": "^1.5.1",
+    "ws": "^8.21.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "^8.5.13",
-    "eslint": "catalog:",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.4",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

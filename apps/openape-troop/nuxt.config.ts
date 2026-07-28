@@ -1,3 +1,5 @@
+import { TROOP_SCOPES } from './server/utils/scope-catalog'
+
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
   // asyncContext is required for `useEvent()` to resolve in Vercel
@@ -9,7 +11,10 @@ export default defineNuxtConfig({
   // .claude/plans/nest-troop-ws.md). asyncContext stays on for
   // useEvent()-based session lookups in PATCH handlers that hook
   // the broadcast on the way out.
-  nitro: { experimental: { asyncContext: true, websocket: true } },
+  nitro: {
+    experimental: { asyncContext: true, websocket: true },
+    serverAssets: [{ baseName: 'changelog', dir: './server/assets' }],
+  },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-sp', '@nuxtjs/i18n'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
@@ -85,13 +90,23 @@ export default defineNuxtConfig({
     // Without this the SP module's default would 404 after every
     // successful OIDC callback.
     postLoginRedirect: '/',
+    // Scope catalog for the module's consolidated /api/cli/exchange (#1043):
+    // without it the catalog check is inert (SP-without-catalog behaviour).
+    // Same source as the /.well-known/openape.json route — one catalog.
+    manifest: {
+      scopes: TROOP_SCOPES,
+    },
   },
 
   runtimeConfig: {
     tursoUrl: process.env.NUXT_TURSO_URL || 'file:./openape-troop.db',
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
+    vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',
+      // Web-Push public key (safe to ship). Private key lives in env only.
+      vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || 'BD23IE3i1Arxaby2HtxR6VyI2LAYRQF62x5TlwDdlB4kT3V7gTQK0G5ZWsrJOiUs9rPJcBmIvP3fWv6uG-96WDA',
     },
   },
 })

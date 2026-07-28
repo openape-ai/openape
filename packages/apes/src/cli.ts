@@ -1,6 +1,6 @@
 import consola from 'consola'
 import { rewriteApeShellArgs } from './ape-shell'
-import { defineCommand, runMain } from 'citty'
+import { defineCommand, runCommand as runCittyCommand, runMain } from 'citty'
 import { loginCommand } from './commands/auth/login'
 import { logoutCommand } from './commands/auth/logout'
 import { whoamiCommand } from './commands/auth/whoami'
@@ -205,7 +205,7 @@ await maybeRefreshAuth()
 // Cached 24h, so this is a one-time cost per day.
 await maybeWarnStaleVersion(__VERSION__).catch(() => { /* never block */ })
 
-runMain(main).catch((err) => {
+function handleCliError(err: unknown): never {
   if (err instanceof CliExit) {
     process.exit(err.exitCode)
   }
@@ -220,4 +220,34 @@ runMain(main).catch((err) => {
     consola.error(err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err))
   }
   process.exit(1)
-})
+}
+
+// citty's `runMain` wraps every command in its own try/catch that dumps the
+// error WITH a stack trace via `console.error(error, '\n')` and forces exit 1
+// — so our CliExit/CliError handling never runs and controlled exits (e.g. a
+// pending grant signalling exit 75) surface as a misleading internal stack
+// trace. Route builtin help/version/usage through `runMain` (those paths never
+// throw), and execute real commands via `runCommand`, which re-throws so we
+// render the error ourselves and honour its exit code. citty's own
+// command-resolution errors fall back to `runMain` so usage output is unchanged.
+const rawArgs = process.argv.slice(2)
+const dashDash = rawArgs.indexOf('--')
+const flagScan = dashDash === -1 ? rawArgs : rawArgs.slice(0, dashDash)
+const wantsBuiltin = rawArgs.length === 0
+  || flagScan.some(a => a === '-h' || a === '--help' || a === '-v' || a === '--version')
+
+if (wantsBuiltin) {
+  runMain(main).catch(handleCliError)
+}
+else {
+  runCittyCommand(main, { rawArgs }).catch((err) => {
+    // citty's command-resolution errors (unknown/no command) carry an `E_*`
+    // code — let runMain render proper usage instead of a bare message.
+    const code = (err as { code?: unknown })?.code
+    if (typeof code === 'string' && code.startsWith('E_')) {
+      runMain(main).catch(handleCliError)
+      return
+    }
+    handleCliError(err)
+  })
+}

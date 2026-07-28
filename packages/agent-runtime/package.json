@@ -31,12 +31,12 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@openape/core": "workspace:*",
-    "@openape/cli-auth": "workspace:*"
+    "@openape/cli-auth": "workspace:*",
+    "@openape/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@vitest/coverage-istanbul": "^4.1.7",
+    "@vitest/coverage-istanbul": "^4.1.9",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

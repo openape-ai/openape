@@ -1,20 +1,47 @@
 packages:
-  - 'packages/*'
-  - 'modules/*'
-  - 'apps/*'
-  - 'examples/*'
+  - packages/*
+  - modules/*
+  - apps/*
+  - examples/*
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-r5fr-rjxr-66jc
+    - GHSA-gv7w-rqvm-qjhr
+    - GHSA-fx2h-pf6j-xcff
 
 catalog:
-  typescript: ^5.9.3
+  '@antfu/eslint-config': ^7.7.3
+  '@changesets/cli': ^2.31.0
+  '@types/node': ^22.20.0
+  jose: ^5.10.0
   tsup: ^8.5.1
-  vitest: ^4.1.7
-  eslint: ^10.4.0
-  '@antfu/eslint-config': ^7.6.1
-  '@types/node': ^22.19.13
-  '@changesets/cli': ^2.30.0
-  nuxt: ^4.4.6
-  '@nuxt/kit': ^3.21.1
-  '@nuxt/module-builder': ^1.0.2
-  vue: ^3.5.30
-  h3: ^1.15.5
-  jose: ^5.9.0
+  typescript: ^5.9.3
+  vitest: ^4.1.9
+  vue: ^3.5.39
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - better-sqlite3
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - vue-demi
+
+overrides:
+  '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
+  defu: '>=6.1.5'
+  devalue: '>=5.8.1'
+  drizzle-orm: '>=0.45.2'
+  fast-uri: '>=3.1.2'
+  flatted: '>=3.4.2'
+  hono: '>=4.12.21'
+  lodash: ^4.17.21
+  node-forge: '>=1.4.0'
+  path-to-regexp: '>=8.4.0'
+  picomatch: '>=4.0.4'
+  serialize-javascript: '>=7.0.3'
+  shell-quote: '>=1.8.4'
+  simple-git: '>=3.36.0'
+  socket.io-parser: '>=4.2.6'
+  ws: '>=8.21.0'

@@ -1,6 +1,6 @@
 # 0004 — Tool-Time Isolation via `sudo -u <agent>` + Secret Self-Materialization
 
-- Status: Accepted (owner-approved direction, 2026-06-14; M3 not yet implemented)
+- Status: Accepted (owner-approved direction, 2026-06-14; openclaw runtime path implemented on main, #769/#808/#815, 2026-06-19; native `ThreadSession` tool-drop pending, security-gated)
 - Deciders: Patrick Hofmann (owner)
 - Related: [0001 — Single-Process Nest](0001-single-process-nest.md), `.claude/plans/single-process-nest.md` (M0 spike, M3)
 

@@ -23,7 +23,7 @@ export interface NestDeviceCreds {
 
 // `OPENAPE_NEST_DEVICE_PATH` overrides the default file location, mirroring
 // the registry's `OPENAPE_NEST_REGISTRY_PATH` convention.
-export function resolveDevicePath(): string {
+function resolveDevicePath(): string {
   return process.env.OPENAPE_NEST_DEVICE_PATH ?? join(homedir(), 'nest-device.json')
 }
 

@@ -56,7 +56,6 @@ services:
       OPENAPE_TROOP_URL: ${opts.troopUrl}
       OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
       OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
-      OPENAPE_BRIDGE_TARGET: troop
       LITELLM_BASE_URL: ${CODEX_PROXY_BASE_URL}
       LITELLM_API_KEY: ${CODEX_PROXY_API_KEY}
       APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-${DEFAULT_BRIDGE_MODEL}}
@@ -90,7 +89,6 @@ export function buildPodComposeYaml(opts: { troopUrl: string, ownerEmail: string
       OPENAPE_TROOP_URL: ${opts.troopUrl}
       OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
       OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
-      OPENAPE_BRIDGE_TARGET: troop
       LITELLM_BASE_URL: ${CODEX_PROXY_BASE_URL}
       LITELLM_API_KEY: ${CODEX_PROXY_API_KEY}
       APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-${DEFAULT_BRIDGE_MODEL}}

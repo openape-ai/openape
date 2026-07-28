@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -31,17 +31,22 @@ const TMP_DIR = join(tmpdir(), `apes-login-test-${process.pid}-${Date.now()}`)
 const TMP_SYMLINK = join(TMP_DIR, 'ape-shell')
 
 describe('ape-shell login shell + $SHELL compatibility', () => {
-  // The beforeAll spawns a full pnpm build which can take 10–20s
-  // depending on machine + cache state. Default hook timeout (10s)
-  // makes this flake — bump it.
+  // Reuse the existing dist if present (CI builds every workspace before the
+  // check wave, and local `turbo test` builds deps via `^build`), and only
+  // spawn a build as a fallback. Spawning a full `pnpm build` unconditionally
+  // inside the hook starved on the loaded CI runner and hit the 60s hook
+  // timeout (then a turbo SIGSEGV) — a nested build has no business running
+  // here when dist/cli.js already exists.
   beforeAll(() => {
-    const build = spawnSync('pnpm', ['--filter', '@openape/apes', 'build'], {
-      cwd: REPO_ROOT,
-      stdio: 'pipe',
-      encoding: 'utf-8',
-    })
-    if (build.status !== 0) {
-      throw new Error(`Failed to build @openape/apes for login-integration test:\n${build.stderr}`)
+    if (!existsSync(DIST_CLI)) {
+      const build = spawnSync('pnpm', ['--filter', '@openape/apes', 'build'], {
+        cwd: REPO_ROOT,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      })
+      if (build.status !== 0) {
+        throw new Error(`Failed to build @openape/apes for login-integration test:\n${build.stderr}`)
+      }
     }
 
     // Create a symlink called literally "ape-shell" pointing at the built

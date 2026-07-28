@@ -52,3 +52,7 @@ Intent, tools, and schedules hot-update via the agent's normal `apes
 agents sync` cycle (~5 min) — no destroy/respawn. To roll out a new
 recipe version (or new capabilities), re-deploy at the new ref; deploy is
 an upsert (see plan INT-4).
+
+## Safety
+
+This agent opens pull requests only — it never merges them or pushes to a protected branch. Merge decisions stay with the orchestrator's policy gate and human reviewers.

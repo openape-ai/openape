@@ -37,7 +37,7 @@ function isAllowedOrigin(origin: string | undefined): boolean {
  *   - **Allowlist** (env set): for requests whose `Origin` header is
  *     in `NUXT_OPENAPE_IDP_CORS_ALLOWED_ORIGINS`, echo that origin +
  *     `Allow-Credentials: true` on BOTH preflight AND actual response.
- *     Enables Receiver SPs (e.g. org.openape.ai) to call IdP endpoints
+ *     Enables Receiver SPs (e.g. a company SP) to call IdP endpoints
  *     from the Owner's browser using their IdP session cookie (the
  *     sp-data-access.md flow). Requests from non-allowlisted origins
  *     fall back to the legacy wildcard on preflight (and get no CORS

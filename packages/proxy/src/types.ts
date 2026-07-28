@@ -37,7 +37,7 @@ export interface RuleEntry {
   note?: string
 }
 
-export interface GrantRuleEntry extends RuleEntry {
+interface GrantRuleEntry extends RuleEntry {
   grant_type: 'once' | 'timed' | 'always'
   permissions?: string[]
   duration?: number

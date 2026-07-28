@@ -26,7 +26,7 @@ export interface ChatMessage {
 
 export interface RuntimeConfig {
   apiBase: string // LITELLM_BASE_URL (e.g. "http://127.0.0.1:4000/v1")
-  apiKey: string // LITELLM_API_KEY (or LITELLM_MASTER_KEY)
+  apiKey: string // LITELLM_API_KEY
   model: string
   /**
    * Reasoning/thinking depth for models that support it (gpt-5.x via the

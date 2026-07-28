@@ -12,10 +12,6 @@ import type { ChatState } from './client'
 // Re-export getEndpoint under the name the rest of the codebase uses.
 export { resolveEndpoint as getEndpoint }
 
-export function setEndpoint(endpoint: string): void {
-  saveConfig({ ...loadConfig(), endpoint: endpoint.replace(/\/$/, '') })
-}
-
 export function getDefaultRoomId(override?: string | null): string | undefined {
   if (override) return override
   const env = process.env.APE_CHAT_ROOM

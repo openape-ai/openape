@@ -12,14 +12,14 @@ const DEFAULT_SYSTEM_PROMPT
     + 'When asked for facts, say "I don\'t know" rather than guess.'
 
 const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
-export type ReasoningEffort = typeof REASONING_EFFORTS[number]
+type ReasoningEffort = typeof REASONING_EFFORTS[number]
 
 /**
  * Telegram chat-adapter config. Present only when the owner has bound a bot
  * token to this agent (delivered as a sealed secret → bridge env). Its mere
  * presence activates the Telegram channel — no separate toggle.
  */
-export interface TelegramConfig {
+interface TelegramConfig {
   botToken: string
   /**
    * The one Telegram user id allowed to drive the bot. Optional: when unset,

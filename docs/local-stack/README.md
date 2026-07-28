@@ -53,7 +53,6 @@ Then visit `https://id.openape.test`, `https://troop.openape.test`,
 | `idp`        | `openape-free-idp` — DDISA Identity Provider (passkeys)              | `https://id.openape.test`    |
 | `troop`      | `openape-troop` — SP (agent control plane)                          | `https://troop.openape.test` |
 | `chat`       | `openape-chat` — SP (chat)                                          | `https://chat.openape.test`  |
-| `org`        | `openape-org` — SP (agent organization)                             | `https://org.openape.test`   |
 | `playwright` | headless-Chromium runner (on the same network) — captures the flows | —                            |
 
 Real DNS, real TLS (Node trusts Caddy's CA — verification is **not** disabled),

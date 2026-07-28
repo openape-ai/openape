@@ -12,7 +12,7 @@ import { apiFetch, getGrantsEndpoint } from './http.js'
  */
 
 /** Poll interval (seconds). Default 10. */
-export function getPollIntervalSeconds(): number {
+function getPollIntervalSeconds(): number {
   const envValue = process.env.APES_GRANT_POLL_INTERVAL
   if (envValue) {
     const n = Number(envValue)

@@ -89,9 +89,6 @@ const CHAT_ENV_FORWARDS = [
   'APE_CHAT_BRIDGE_TOOLS',
   'APE_CHAT_BRIDGE_MAX_STEPS',
   'APE_CHAT_BRIDGE_SYSTEM_PROMPT',
-  // Chat backend selection (chat.openape.ai vs troop.openape.ai) —
-  // honoured by the bridge at startup. See ape-agent/src/bridge.ts.
-  'OPENAPE_BRIDGE_TARGET',
   'APE_CHAT_ENDPOINT',
   // The bridge's actual troop endpoint (bridge.ts readConfig → endpoint).
   // Unset in prod → defaults to https://troop.openape.ai; the local stack
@@ -111,7 +108,7 @@ export function ecosystemEnvLines(agent: AgentEntry): string {
     const candidates: Record<string, string | undefined> = {
       OPENAPE_SP_BASE_URL: agent.service?.spBaseUrl,
       LITELLM_BASE_URL: br.baseUrl ?? process.env.LITELLM_BASE_URL,
-      LITELLM_API_KEY: br.apiKey ?? process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY,
+      LITELLM_API_KEY: br.apiKey ?? process.env.LITELLM_API_KEY,
       APE_SERVICE_MODEL: br.model ?? process.env.APE_SERVICE_MODEL ?? process.env.APE_CHAT_BRIDGE_MODEL,
       APE_SERVICE_POLL_MS: agent.service?.pollIntervalMs != null ? String(agent.service.pollIntervalMs) : undefined,
     }

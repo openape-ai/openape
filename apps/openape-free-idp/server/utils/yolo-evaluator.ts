@@ -1,6 +1,12 @@
-// YOLO evaluator + minimal glob matcher. Pure functions; no side effects.
+// YOLO evaluator + minimal glob matcher. Pure decision logic; the only side
+// effect is a once-per-policy operator warning about ineffective policies.
 import type { OpenApeGrantRequest } from '@openape/core'
 import type { RiskLevel, YoloPolicy } from './yolo-policy-store'
+
+// Stored deny-list policies without any rules predate the fail-closed check
+// in the PUT endpoint. They are neutralized below, but the operator should
+// notice — warn once per policy per process, not per request.
+const warnedIneffectivePolicies = new Set<string>()
 
 const RISK_ORDER: Record<RiskLevel, number> = {
   low: 1,
@@ -68,6 +74,24 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   }
 
   // Deny-list mode (default allow + restrictions).
+  // Fail closed (#1037): without at least one denyPattern or a risk threshold
+  // there is no restriction at all — "default allow" would auto-approve every
+  // request and silently bypass human approval. Auto-approval must be an
+  // explicit opt-in (DDISA grants.md §3.1), so a rule-less deny-list is a
+  // no-op policy → normal human-approval flow.
+  const hasDenyRules = (p.denyPatterns?.length ?? 0) > 0 || p.denyRiskThreshold != null
+  if (!hasDenyRules) {
+    const key = `${p.agentEmail}|${p.audience}`
+    if (!warnedIneffectivePolicies.has(key)) {
+      warnedIneffectivePolicies.add(key)
+      console.warn(
+        `[yolo] Ignoring ineffective deny-list YOLO policy for ${p.agentEmail} (audience: ${p.audience}): `
+        + 'no denyPatterns and no denyRiskThreshold. Requests fall back to human approval — '
+        + 'delete the policy or add restrictions.',
+      )
+    }
+    return null
+  }
   if (ctx.resolvedRisk && p.denyRiskThreshold) {
     // Risk > threshold → don't approve.
     if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null

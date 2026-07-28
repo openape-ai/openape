@@ -1,6 +1,6 @@
 {
   "name": "@openape/nest",
-  "version": "2.4.1",
+  "version": "2.4.3",
   "description": "OpenApe Nest — local control-plane daemon that supervises agent processes on this computer. Talks to troop SP for ownership state, spawns/destroys agents via DDISA always-grants, supervises chat-bridge children (replacing per-agent launchd plists).",
   "type": "module",
   "license": "MIT",
@@ -26,15 +26,14 @@
   "dependencies": {
     "@openape/ape-agent": "workspace:*",
     "@openape/cli-auth": "workspace:*",
-    "@openape/core": "workspace:*",
-    "ofetch": "^1.4.1",
-    "ws": "^8.18.0"
+    "ofetch": "^1.5.1",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "^8.5.13",
-    "eslint": "catalog:",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.4",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

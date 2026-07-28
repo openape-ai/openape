@@ -4,22 +4,27 @@
 
 - Node.js >= 22
 - pnpm (latest)
-- GitHub CLI (`gh`)
+- An account on **git.openape.ai** (Forgejo) — issues and PRs live there
 
 ## Setup
 
 ```bash
-git clone git@github.com:openape-ai/openape.git
+git clone https://git.openape.ai/openape-ai/openape.git
 cd openape
 pnpm install
 ```
+
+> **Canonical host is git.openape.ai (Forgejo)** — issues, PRs and CI all live there.
+> `github.com/openape-ai/openape` is a **read-only mirror** (code only): never open issues/PRs
+> or push there. If you cloned the mirror, point `origin` at Forgejo:
+> `git remote set-url origin https://git.openape.ai/openape-ai/openape.git`.
 
 ## Development Workflow
 
 ### 1. Pick an Issue
 
-All work starts with a GitHub issue. Browse open issues:
-https://github.com/openape-ai/openape/issues
+All work starts with an issue on git.openape.ai. Browse open issues:
+https://git.openape.ai/openape-ai/openape/issues
 
 ### 2. Create a Feature Branch
 
@@ -58,11 +63,12 @@ The pre-commit hook enforces this automatically.
 
 ```bash
 git push -u origin <branch>
-gh pr create
 ```
 
+Then open the PR on git.openape.ai (the push prints a "Create a new pull request" link, or use the web UI / API). `gh` does not work against Forgejo.
+
 - Link the issue: `Closes #<nr>` in the PR body
-- The **pre-push hook** runs the full local gate (build + audit + lint + typecheck + test) before the push leaves your machine — this is the CI. There is no server-side CI (no GitHub Actions / Blacksmith). Emergency bypass: `SKIP_HOOKS=1 git push`.
+- The **pre-push hook** runs the full gate (build + audit + lint + typecheck + test) locally before the push leaves your machine. CI also runs server-side as **Forgejo Actions** on git.openape.ai — the `CI / ci` check must be green before merge. Emergency bypass of the local hook: `SKIP_HOOKS=1 git push`.
 - Add a changeset if publishable packages changed: `pnpm changeset`
 
 ### 6. After Merge — Release

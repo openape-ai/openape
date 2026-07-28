@@ -31,6 +31,8 @@
 //   sub  = delegator email (i.e. the subject_token's sub)
 //   act  = { sub: delegate email, type: 'agent' } per DDISA's RFC-8693
 //          mapping — see DelegationActClaim in @openape/core/types.
+//   scope = the delegation grant's scopes (string[], grants.md §6.1);
+//          [] for legacy grants without scopes (fail-closed).
 // Downstream verifiers can read both pieces and decide owner-attribution
 // without server-side heuristics.
 
@@ -177,9 +179,17 @@ export default defineEventHandler(async (event) => {
   // `claims.act && typeof claims.act === 'object' && 'sub' in claims.act`.
   const actClaim: DelegationActClaim = { sub: actorClaims.sub }
   const expiresInSec = 3600
+  // Mirror the delegation grant's scopes into the token (grants.md §6.1 —
+  // AuthZ-JWTs already do this). Fail-closed: legacy grants without scopes
+  // yield `scope: []`, never a missing claim — a delegated token must always
+  // state its own limits, and `[]` means "nothing allowed", not "everything
+  // allowed". Downstream SPs use this to tell first-party tokens (no scope
+  // claim) apart from delegated ones.
+  const scope = delegation.request.scopes ?? []
   const access_token = await new SignJWT({
     act: actClaim,
     delegation_grant: delegation.id,
+    scope,
   })
     .setProtectedHeader({ alg: 'EdDSA', kid: signingKey.kid })
     .setIssuer(issuer)

@@ -40,7 +40,7 @@ export interface Member {
   joinedAt: number
 }
 
-export type WsFrameType
+type WsFrameType
   = | 'message'
     | 'reaction'
     | 'reaction-removed'

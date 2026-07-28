@@ -106,4 +106,25 @@ describe('apes agents list', () => {
 
     expect(apiFetch).toHaveBeenCalledWith('/api/my-agents', { idp: 'https://id.openape.ai' })
   })
+
+  it('off a nest host (non-Linux): lists IdP agents without touching the host platform', async () => {
+    const { isLinux, getHostPlatform } = await import('../src/lib/host-platform/index.js')
+    vi.mocked(isLinux).mockReturnValue(false)
+
+    const { apiFetch } = await import('../src/http.js')
+    vi.mocked(apiFetch).mockResolvedValueOnce(TWO_AGENTS as any)
+
+    const { listAgentsCommand } = await import('../src/commands/agents/list.js')
+    await (listAgentsCommand as any).run({ args: { json: true } })
+
+    // The list still comes through, but no OS-user lookup is attempted —
+    // getHostPlatform() would throw on a real non-Linux host.
+    expect(getHostPlatform).not.toHaveBeenCalled()
+    const out = (writeSpy.mock.calls[0]![0] as string).trim()
+    const parsed = JSON.parse(out)
+    expect(parsed).toHaveLength(2)
+    expect(parsed[0]).toMatchObject({ name: 'agent-a', isActive: true })
+    expect(parsed[0]).not.toHaveProperty('osUser')
+    expect(parsed[0]).not.toHaveProperty('home')
+  })
 })

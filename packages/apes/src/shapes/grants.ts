@@ -190,7 +190,7 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
  * inheriting stdio so the caller's terminal is handed to the child. Used by
  * the one-shot `apes run --shell` path.
  */
-export function executeResolvedViaExec(resolved: ResolvedCommand): void {
+function executeResolvedViaExec(resolved: ResolvedCommand): void {
   consola.info(`Executing ${(resolved.executionContext.argv ?? [resolved.executable, ...resolved.commandArgv]).join(' ')}`)
   execFileSync(resolved.executable, resolved.commandArgv, { stdio: 'inherit' })
 }
@@ -273,7 +273,7 @@ export async function resolveFromGrant(
   if (!argv || argv.length === 0)
     throw new Error('Grant request is missing command argv')
 
-  const executable = argv[0]
+  const executable = argv[0]! // argv.length === 0 throws above
   const adapter = await loadOrInstallAdapter(executable)
   if (!adapter)
     throw new Error(`No shapes adapter found for ${executable}`)

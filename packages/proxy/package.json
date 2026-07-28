@@ -1,7 +1,7 @@
 {
   "name": "@openape/proxy",
   "type": "module",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "turbo": {
     "tags": [
       "publishable"
@@ -29,18 +29,16 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "@openape/grants": "workspace:*",
-    "jose": "^5.9.0",
     "node-forge": "^1.4.0",
-    "smol-toml": "^1.3.0"
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.10",
-    "@types/node": "^22.0.0",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^22.20.0",
     "@types/node-forge": "^1.3.14",
-    "tsup": "^8.3.0",
-    "typescript": "^5.7.0",
-    "vitest": "^4.1.7"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   },
   "publishConfig": {
     "access": "public"

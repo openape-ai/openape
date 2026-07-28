@@ -6,7 +6,7 @@ import { generateCodeChallenge, signJWT, verifyJWT } from '@openape/core'
 // Cross-SP delegation authorization code.
 //
 // The redirect/code variant of the cross-SP spawn flow (supersedes the
-// browser-fetch + IdP-CORS path). The Receiver SP (e.g. org.openape.ai)
+// browser-fetch + IdP-CORS path). The Receiver SP (e.g. a company SP)
 // drives the Owner through a top-level redirect to the IdP; the IdP issues
 // a short-lived **signed authorization code** and redirects back; the SP's
 // *server* redeems it server-to-server for the delegation AuthZ-JWT. No
