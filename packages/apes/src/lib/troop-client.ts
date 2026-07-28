@@ -35,7 +35,7 @@ export interface TaskSpec {
   updatedAt: number
 }
 
-export interface SkillSpec {
+interface SkillSpec {
   /** Slug — becomes the directory name on disk (`skills/<name>/SKILL.md`). */
   name: string
   /** One-line summary the LLM sees in the system prompt's available_skills block. */

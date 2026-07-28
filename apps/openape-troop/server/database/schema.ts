@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { blob, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 // agents — one row per registered agent.
 //
@@ -48,6 +48,11 @@ export const agents = sqliteTable('agents', {
   // The `<repo>@<ref>` this agent was deployed from; the agent checks
   // out its tools/ from it. Null for manually-spawned agents.
   recipeRef: text('recipe_ref'),
+  // Owner-set pause: a paused agent stays enrolled but runs no LLM turns on the
+  // nest (zero tokens). Authoritative state lives in the nest registry; this
+  // mirror is written by the pause/resume endpoints (which originate the action)
+  // so the UI can show a badge without round-tripping the nest.
+  paused: integer('paused', { mode: 'boolean' }).notNull().default(false),
   firstSeenAt: integer('first_seen_at'),
   lastSeenAt: integer('last_seen_at'),
   createdAt: integer('created_at').notNull(),
@@ -271,13 +276,16 @@ export type NewChatMessage = typeof chatMessages.$inferInsert
 // NOT touch troop's machine surface (/api/agents/me/*, nest-ws, cli/exchange).
 
 // organizations — one row per virtual company. `visionMd` is owner-maintained
-// Markdown the CEO reads on every interaction; never agent-edited.
+// Markdown the Operator reads on every interaction; never agent-edited.
 export const organizations = sqliteTable('organizations', {
   id: text('id').primaryKey(),
   ownerEmail: text('owner_email').notNull(),
   name: text('name').notNull(),
   visionMd: text('vision_md').notNull().default(''),
   budgetMonthlyEur: integer('budget_monthly_eur').notNull().default(0),
+  // Company-wide facts every employee shares (board id, lanes, tags). A role's
+  // own `vars` are merged over these.
+  vars: text('vars', { mode: 'json' }).notNull().$type<Record<string, unknown>>().default({}),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [
@@ -286,8 +294,8 @@ export const organizations = sqliteTable('organizations', {
 
 // org_members — agents working for this org, with hierarchy + role. `role`:
 // ceo / teamlead / specialist / sanierer / other. `reportsToEmail` is the
-// parent agent (null for CEO + Sanierer, who report to the Owner). The CEO is
-// the Owner's primary point of contact (talk to the CEO, not down the chain).
+// parent agent (null for Operator + Sanierer, who report to the Owner). The Operator is
+// the Owner's primary point of contact (talk to the Operator, not down the chain).
 export const orgMembers = sqliteTable('org_members', {
   orgId: text('org_id').notNull(),
   agentEmail: text('agent_email').notNull(),
@@ -312,7 +320,7 @@ export const orgMembers = sqliteTable('org_members', {
   index('idx_org_members_role').on(table.orgId, table.role),
 ])
 
-// objectives — flat Kanban list of what the org is working on. CEO writes here.
+// objectives — flat Kanban list of what the org is working on. Operator writes here.
 export const objectives = sqliteTable('objectives', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull(),
@@ -366,3 +374,194 @@ export type Report = typeof reports.$inferSelect
 export type NewReport = typeof reports.$inferInsert
 export type CostSnapshot = typeof costSnapshots.$inferSelect
 export type NewCostSnapshot = typeof costSnapshots.$inferInsert
+
+// cockpit_services — external sp-tasks services the owner's reactive loop co-tends
+// (in addition to troop's own cockpit queue). Owner-scoped; the loop reads this
+// list and polls each. troop only stores the list — the owner's own identity
+// (allowlisted at each service) is what grants access.
+export const cockpitServices = sqliteTable('cockpit_services', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  baseUrl: text('base_url').notNull(),
+  tasksPath: text('tasks_path').notNull().default('/api/agent/tasks'),
+  label: text('label').notNull().default(''),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_services_owner').on(table.ownerEmail)])
+
+// cockpit_agents — the Operator's local delegation team: the online form of an
+// `~/ape-companies/<ORG>/.ape-agent/**/AGENT.md`. Owner-scoped, per org. Each
+// row is a leaf the reactive Operator can delegate a tool-requiring task to (spawned
+// locally under the owner's identity). `duties` is the free-text persona/brief,
+// `tools` the tool names it may run (e.g. ["o365-cli"]).
+export const cockpitAgents = sqliteTable('cockpit_agents', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  role: text('role').notNull().default('specialist'),
+  label: text('label').notNull().default(''),
+  // Short summary — what the org chart card shows. The full work instruction
+  // is `procedure`; keeping both means the Operator's grounding stays readable.
+  duties: text('duties').notNull().default(''),
+  // The role's work instruction, verbatim. Owner-only writable: this is the
+  // program a subagent executes, not data it reads. Empty = the loop falls
+  // back to read-and-report on `duties`.
+  procedure: text('procedure').notNull().default(''),
+  // The role's own facts (e.g. its board user id). Merged over the org's vars
+  // in buildOrgTree; the role wins on conflict.
+  vars: text('vars', { mode: 'json' }).notNull().$type<Record<string, unknown>>().default({}),
+  // Prompt-injection score of the last `procedure` write. Surfaced, never
+  // enforced — the owner may override behaviour (see the plan's trust boundary).
+  injectionScore: real('injection_score').notNull().default(0),
+  injectionReason: text('injection_reason').notNull().default(''),
+  tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  reportsTo: text('reports_to'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
+
+// memory — nachschlagbare Fakten/Referenz für die Agents einer Firma (≈ CLAUDE.md/
+// Memory). `scope`: 'company' (jede Rolle) | 'role' (nur diese Rolle) | 'agent'
+// (nur dieser cockpit_agent). `targetId` = Rollen-String bzw. cockpit_agent-id;
+// leer bei 'company'. `mode`: 'inline' klein → direkt in den Prompt; 'reference'
+// groß → nur als Index-Zeile, der Agent holt den Body bei Bedarf per Fetch.
+export const memory = sqliteTable('memory', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  scope: text('scope').notNull().default('company'),
+  targetId: text('target_id').notNull().default(''),
+  title: text('title').notNull().default(''),
+  body: text('body').notNull().default(''),
+  mode: text('mode').notNull().default('inline'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_memory_org_scope').on(table.orgId, table.scope)])
+
+export type Memory = typeof memory.$inferSelect
+export type NewMemory = typeof memory.$inferInsert
+
+// cockpit_skills — reusable, named procedures (≈ Claude Skills) an agent follows
+// inline when a task matches its `description`. Assigned to agents via `assignedTo`
+// (a JSON list of cockpit_agent ids and/or the literal 'ceo'). Distinct from
+// `cockpitAgents.procedure` (which is role-bound) and from the machine-agent
+// `agent_skills` table (a different layer). Org-scoped.
+export const cockpitSkills = sqliteTable('cockpit_skills', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  name: text('name').notNull().default(''),
+  description: text('description').notNull().default(''),
+  prompt: text('prompt').notNull().default(''),
+  assignedTo: text('assigned_to', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [index('idx_cockpit_skills_org').on(table.orgId)])
+
+export type Skill = typeof cockpitSkills.$inferSelect
+export type NewSkill = typeof cockpitSkills.$inferInsert
+
+// cockpit_schedules — a proactive trigger: WHEN the Operator should act on its
+// own (not just on owner chat) and WHAT it should do. The server-side evaluator
+// (server/plugins/03.trigger-evaluator.ts) ticks every 15s, finds due rows, and
+// enqueues `prompt` as an Operator task for the org — whose answer lands in the
+// cockpit chat + fires a Web-Push. Cron = atHour (daily) or everyMinutes; timer
+// = a one-shot at `fireAt`. `kind` is a free label.
+export const cockpitSchedules = sqliteTable('cockpit_schedules', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  kind: text('kind').notNull(),
+  prompt: text('prompt').notNull().default(''), // what the Operator does (task userMessage)
+  atHour: integer('at_hour'), // daily: local (Europe/Vienna) hour 0–23
+  everyMinutes: integer('every_minutes'), // periodic alternative
+  fireAt: integer('fire_at'), // one-shot timer: epoch ms; disabled after it fires
+  cronExpr: text('cron_expr'), // 5-field cron (Europe/Vienna); takes precedence over atHour/everyMinutes
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-scheduled)
+  lastRunAt: integer('last_run_at'),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
+
+// cockpit_hooks — an event trigger: an external system POSTs to /api/hooks/<token>
+// and the Operator runs `prompt` (optionally with the request body appended as
+// data) on the same spine as schedules → cockpit chat + Web-Push. `token` is the
+// unguessable URL credential; `secret` (optional) adds HMAC-SHA256 verification of
+// the raw body via the X-Signature header.
+export const cockpitHooks = sqliteTable('cockpit_hooks', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  label: text('label').notNull().default(''),
+  token: text('token').notNull().unique(),
+  secret: text('secret'), // optional HMAC secret; null = token-only
+  prompt: text('prompt').notNull().default(''), // what the Operator does on the event
+  includePayload: integer('include_payload', { mode: 'boolean' }).notNull().default(false),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-created)
+  lastFiredAt: integer('last_fired_at'),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_hooks_owner').on(table.ownerEmail), index('idx_cockpit_hooks_token').on(table.token)])
+
+// cockpit_tasks — durability for the in-memory cockpit queue: the INPUT of an
+// in-flight task, so a troop restart doesn't silently drop a proactive fire
+// (trigger/hook). Only unfinished tasks live here; the boot rehydrate re-offers
+// them to the worker, a terminal resolve deletes the row.
+export const cockpitTasks = sqliteTable('cockpit_tasks', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  systemPrompt: text('system_prompt').notNull(),
+  userMessage: text('user_message').notNull(),
+  createdAt: integer('created_at').notNull(),
+  notBefore: integer('not_before'),
+  lastNote: text('last_note'),
+  // input-required: the open question the owner still has to answer (survives restarts).
+  question: text('question'),
+  options: text('options'), // JSON string[]
+  askedAt: integer('asked_at'),
+  files: text('files'), // JSON [{id,mime,name}] — chat attachments riding the task
+})
+
+// cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
+// The chat no longer depends on the live SSE connection: user messages and Operator
+// answers are stored here, so leaving and returning shows everything in between.
+export const cockpitChatMessages = sqliteTable('cockpit_chat_messages', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull(),
+  // Ask-Chips: {taskId, options, answered?} — set on input-required questions so
+  // a reload re-renders the chips (or their settled state) from the DB.
+  meta: text('meta', { mode: 'json' }).$type<{ taskId: string, options: string[], answered?: boolean } | null>(),
+  // Attachments shown in the bubble: refs into cockpit_files (never inline bytes).
+  files: text('files', { mode: 'json' }).$type<{ id: string, mime: string, name: string }[] | null>(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_chat_owner_org').on(table.ownerEmail, table.orgId, table.createdAt)])
+
+// cockpit_files — chat attachments as LibSQL blobs (8 MB cap, allowlisted types).
+// Owner-scoped like everything cockpit; a boot sweep drops rows no chat message
+// references anymore. Blob-in-DB is deliberate: no extra storage infra, backup
+// rides along (S3 driver exists in the monorepo if volume ever demands it).
+export const cockpitFiles = sqliteTable('cockpit_files', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  orgId: text('org_id').notNull(),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull(),
+  bytes: blob('bytes', { mode: 'buffer' }).notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_cockpit_files_owner').on(table.ownerEmail, table.orgId)])
+
+// push_subscriptions — Web-Push endpoints for the owner's browsers/PWA installs.
+// One row per browser subscription (endpoint is the natural key). Used to notify
+// the owner when an Operator posts a cockpit-chat message while the tab is not focused.
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  endpoint: text('endpoint').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_push_subs_owner').on(table.ownerEmail)])

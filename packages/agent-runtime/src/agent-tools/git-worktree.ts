@@ -61,7 +61,7 @@ function assertBranch(v: unknown): string {
 // Resolve a repo reference to a base-clone dir + a clonable source.
 // URL → clone into ~/repos/<derived>. Local path → must be a git repo
 // already inside $HOME (jailed); used in place.
-export function resolveRepo(repo: unknown): { source: string; baseDir: string; isUrl: boolean } {
+function resolveRepo(repo: unknown): { source: string; baseDir: string; isUrl: boolean } {
   if (typeof repo !== 'string' || repo === '') {
     throw new Error('repo must be a non-empty string (URL or path under $HOME)')
   }
@@ -127,14 +127,14 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
   ].join(' && ')
 }
 
-export function buildRemoveCommand(repo: unknown, taskId: string): string {
+function buildRemoveCommand(repo: unknown, taskId: string): string {
   const id = assertTaskId(taskId)
   const { baseDir } = resolveRepo(repo)
   const wt = worktreePathFor(id)
   return `git -C ${q(baseDir)} worktree remove --force ${q(wt)} && git -C ${q(baseDir)} worktree prune`
 }
 
-export function buildListCommand(): string {
+function buildListCommand(): string {
   return `ls -1 ${q(workRoot())} 2>/dev/null || true`
 }
 

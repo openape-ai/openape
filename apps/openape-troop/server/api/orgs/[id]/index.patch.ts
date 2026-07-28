@@ -8,6 +8,8 @@ const Body = z.object({
   name: z.string().min(1).max(80).optional(),
   vision_md: z.string().max(40_000).optional(),
   budget_monthly_eur: z.number().int().min(0).max(1_000_000).optional(),
+  // Company-wide facts every employee inherits (board id, lanes, tags).
+  vars: z.record(z.string(), z.unknown()).optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -20,6 +22,7 @@ export default defineEventHandler(async (event) => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name
   if (parsed.data.vision_md !== undefined) updates.visionMd = parsed.data.vision_md
   if (parsed.data.budget_monthly_eur !== undefined) updates.budgetMonthlyEur = parsed.data.budget_monthly_eur
+  if (parsed.data.vars !== undefined) updates.vars = parsed.data.vars
 
   const db = useDb()
   await db.update(organizations).set(updates).where(eq(organizations.id, org.id))

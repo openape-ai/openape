@@ -1,0 +1,31 @@
+{
+  "name": "@openape-pr/app",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3006",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.114",
+    "@libsql/client": "^0.14.0",
+    "@nuxt/ui": "^4.9.0",
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "diff2html": "^3.4.56",
+    "drizzle-orm": "^0.45.2",
+    "h3": "^1.15.11",
+    "marked": "^18.0.5",
+    "nuxt": "^4.4.8",
+    "tailwindcss": "^4.3.1",
+    "ulid": "^2.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.6"
+  }
+}

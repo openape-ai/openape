@@ -4,7 +4,7 @@ import { navigateTo, useHead, useIdpAuth } from '#imports'
 
 // /delegations — owner-facing management of standing cross-SP delegations
 // ("apps acting on your behalf"). Each is a delegation grant where a Receiver
-// SP (e.g. org.openape.ai) may act for you at a Provider (e.g. troop.openape.ai)
+// SP (e.g. a company SP) may act for you at a Provider (e.g. troop.openape.ai)
 // — created when you approve the cross-SP consent. Lists the active ones and
 // lets you revoke. Same-origin (session cookie) — no CORS.
 

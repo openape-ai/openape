@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
+import type { AgentNode } from '../agent-tree'
+import { buildCompanyTree } from '../agent-tree'
 import { CliError } from '../errors'
 import { TroopApi } from '../troop-api'
 
@@ -26,16 +28,34 @@ const listCommand = defineCommand({
       consola.info('No agents found.')
       return
     }
-    const nameW = Math.max(4, ...rows.map(r => r.agentName.length))
-    const emailW = Math.max(5, ...rows.map(r => r.email.length))
-    const header = `${'NAME'.padEnd(nameW)}  ${'EMAIL'.padEnd(emailW)}  TASKS  LAST-RUN`
-    console.log(header)
-    console.log('-'.repeat(header.length))
-    for (const r of rows) {
-      console.log(`${r.agentName.padEnd(nameW)}  ${r.email.padEnd(emailW)}  ${String(r.taskCount).padEnd(5)}  ${r.lastRunStatus ?? '—'}`)
+
+    // Widest name across ALL companies plus the deepest indent, so the status
+    // columns line up in one vertical rule down the whole listing.
+    const groups = buildCompanyTree(rows)
+    const nameW = Math.max(4, ...groups.flatMap(g => g.roots.flatMap(n => widths(n, 0))))
+    for (const group of groups) {
+      console.log(`\n${group.company ?? 'Ohne Firma'}`)
+      for (const node of group.roots) printNode(node, 0, nameW)
     }
   },
 })
+
+const INDENT = '  '
+
+function widths(node: AgentNode, depth: number): number[] {
+  return [
+    node.agent.agentName.length + depth * INDENT.length,
+    ...node.reports.flatMap(child => widths(child, depth + 1)),
+  ]
+}
+
+function printNode(node: AgentNode, depth: number, nameW: number): void {
+  const { agent } = node
+  const name = `${INDENT.repeat(depth)}${agent.agentName}`
+  const role = agent.orgRole ? `[${agent.orgRole}]` : ''
+  console.log(`  ${name.padEnd(nameW)}  ${role.padEnd(13)} ${String(agent.taskCount).padEnd(5)} ${agent.lastRunStatus ?? '—'}`)
+  for (const child of node.reports) printNode(child, depth + 1, nameW)
+}
 
 const spawnCommand = defineCommand({
   meta: { name: 'spawn', description: 'Spawn a new agent on a bound device (requires DDISA approval on your device)' },
@@ -132,11 +152,41 @@ const destroyCommand = defineCommand({
   },
 })
 
+const pauseCommand = defineCommand({
+  meta: { name: 'pause', description: 'Pause an agent — stays enrolled but runs no LLM turns (zero tokens)' },
+  args: {
+    'name': { type: 'positional', required: true, description: 'Agent short name' },
+    'host-id': { type: 'string', description: 'Target device host_id (default: first connected nest)' },
+    'json': { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setAgentPaused({ name: String(args.name), hostId: args['host-id'] ? String(args['host-id']) : undefined, paused: true })
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Paused ${args.name} on ${r.hostname}`)
+  },
+})
+
+const resumeCommand = defineCommand({
+  meta: { name: 'resume', description: 'Resume a paused agent (instant — no respawn)' },
+  args: {
+    'name': { type: 'positional', required: true, description: 'Agent short name' },
+    'host-id': { type: 'string', description: 'Target device host_id (default: first connected nest)' },
+    'json': { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setAgentPaused({ name: String(args.name), hostId: args['host-id'] ? String(args['host-id']) : undefined, paused: false })
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Resumed ${args.name} on ${r.hostname}`)
+  },
+})
+
 export const agentsCommand = defineCommand({
-  meta: { name: 'agents', description: 'Manage agents on this troop (list, spawn, destroy)' },
+  meta: { name: 'agents', description: 'Manage agents on this troop (list, spawn, pause, resume, destroy)' },
   subCommands: {
     list: listCommand,
     spawn: spawnCommand,
+    pause: pauseCommand,
+    resume: resumeCommand,
     destroy: destroyCommand,
   },
 })

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { useDb } from '../../../../database/drizzle'
 import { orgMembers } from '../../../../database/schema'
 import { requireOwnedOrg } from '../../../../utils/orgs'
-import { getPersona } from '../../../../utils/persona-catalog'
+import { getPersona } from '#shared/persona-catalog'
 
 // `agent_email` is optional: the natural Owner workflow is "design the
 // org-chart first (planning), spawn the actual agents in troop later".

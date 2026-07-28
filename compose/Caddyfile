@@ -38,17 +38,57 @@ chat.openape.test {
 	}
 }
 
-org.openape.test {
+coder.openape.test {
 	tls internal
-	reverse_proxy org:3020 {
+	reverse_proxy coder:3030 {
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-Host {host}
 	}
 }
 
-coder.openape.test {
+tasks.openape.test {
 	tls internal
-	reverse_proxy coder:3030 {
+	reverse_proxy tasks:3005 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+plans.openape.test {
+	tls internal
+	reverse_proxy plans:3004 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+testrun.openape.test {
+	tls internal
+	reverse_proxy testrun:3006 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+timetrack.openape.test {
+	tls internal
+	reverse_proxy timetrack:3011 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+pr.openape.test {
+	tls internal
+	reverse_proxy pr:3014 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
+docs.openape.test {
+	tls internal
+	reverse_proxy docs:3015 {
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-Host {host}
 	}

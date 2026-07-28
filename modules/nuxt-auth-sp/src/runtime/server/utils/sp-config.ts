@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { getRequestURL, useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import type { AuthFlowState } from '@openape/core'
+import { DEFAULT_POST_LOGIN_REDIRECT } from '../../config-defaults'
 import { resolveClientId } from './client-id'
 
 const FLOW_COOKIE = 'openape-flow'
@@ -22,10 +23,7 @@ export function getSpConfig() {
     openapeUrl: (sp.openapeUrl || '').trim(),
     spName: (sp.spName || 'OpenApe Service Provider').trim(),
     fallbackIdpUrl: (sp.fallbackIdpUrl || 'https://id.openape.at').trim(),
-    // Default `/dashboard` matches the original hardcoded value so
-    // existing SPs (chat) keep working. troop overrides to `/` via
-    // its nuxt.config — see `openapeSp.postLoginRedirect`.
-    postLoginRedirect: (sp.postLoginRedirect || '/dashboard').trim(),
+    postLoginRedirect: (sp.postLoginRedirect || DEFAULT_POST_LOGIN_REDIRECT).trim(),
   }
 }
 

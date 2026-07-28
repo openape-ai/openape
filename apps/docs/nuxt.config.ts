@@ -17,6 +17,19 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   content: {
+    // Drop the better-sqlite3 native dep so docs builds/runs in the shared
+    // Nuxt container like every other app. Two @nuxt/content databases:
+    //  - runtime server DB → libsql (prebuilt binding, pinned by the Dockerfile)
+    //  - build-time local DB → Node's built-in node:sqlite (no native build),
+    //    otherwise it defaults to better-sqlite3 which the container's
+    //    `pnpm install --ignore-scripts` never compiles.
+    experimental: {
+      nativeSqlite: true,
+    },
+    database: {
+      type: 'libsql',
+      url: 'file:./.data/content/contents.db',
+    },
     build: {
       markdown: {
         toc: {
@@ -39,10 +52,11 @@ export default defineNuxtConfig({
       ],
       crawlLinks: true,
       autoSubfolderIndex: false,
-      // nuxt-og-image 400s on its static og.png routes in clean builds
-      // ("Invalid island request hash") — OG images are non-essential,
-      // don't fail the whole prerender over them.
-      failOnError: false,
+      // Fail the build on any prerender error so a broken route (or a missing
+      // OG-image renderer) is loud, not silently shipped. The earlier
+      // "Invalid island request hash" 400s were the satori renderer failing
+      // because `satori` wasn't installed — fixed by depending on it.
+      failOnError: true,
     },
   },
 

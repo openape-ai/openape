@@ -1,10 +1,7 @@
 export {
   appendAuditLog,
-  buildExactCommandGrantRequest,
   buildStructuredCliGrantRequest,
-  buildGenericAdapter,
   buildGenericResolved,
-  discoverEndpoints,
   extractShellCommandString,
   fetchRegistry,
   findAdapter,
@@ -12,32 +9,20 @@ export {
   GENERIC_OPERATION_ID,
   getInstalledDigest,
   installAdapter,
-  isGenericResolved,
   isInstalled,
   loadAdapter,
   loadOrInstallAdapter,
   parseShellCommand,
   removeAdapter,
-  resolveAdapterPath,
   resolveCapabilityRequest,
   resolveCommand,
   resolveGenericOrReject,
   searchAdapters,
-  tryLoadAdapter,
 } from '@openape/shapes'
 export type {
-  AdapterMeta,
-  AuditEntry,
-  BuiltGrantRequest,
-  GrantRequestOptions,
-  LoadedAdapter,
   ParsedShellCommand,
-  RegistryEntry,
-  RegistryIndex,
-  ResolvedCapability,
   ResolvedCommand,
-  ShapesAdapter,
   ShapesOperation,
 } from '@openape/shapes'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
-export { createShapesGrant, executeResolvedViaExec, fetchGrantToken, findExistingGrant, resolveFromGrant, verifyAndConsume, verifyAndExecute, waitForGrantStatus } from './grants.js'
+export { createShapesGrant, fetchGrantToken, findExistingGrant, resolveFromGrant, verifyAndConsume, verifyAndExecute, waitForGrantStatus } from './grants.js'

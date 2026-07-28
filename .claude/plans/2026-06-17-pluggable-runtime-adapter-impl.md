@@ -20,11 +20,15 @@
 - ⚠️ **Only-live (cannot test without a real model/nest):** tool-calling (CLI-as-tool), multi-turn continuity, gateway-with-real-DDISA-token, on-nest spawn — all fall to the deferred live E2E.
 
 ### Remaining (outward / deferred — needs explicit go)
-- **Commit + PR** (spans apes/ape-troop/troop/nest; main is protected → branch+PR+CI).
-- **Publish** `@openape/apes` + `@openape/ape-troop` (nest uses npm apes) + **rebuild nest image** + **deploy troop**.
-- **Live E2E on a real nest**: spawn `--type openclaw`, real troop chat, real gateway; confirm a CLI tool call lands under the DDISA identity (the echo can't trigger tool calls).
-- **DDISA-per-agent token to the gateway** (MVP uses the shared LITELLM key, same as the in-process bridge) + **`sudo -u <agent>` tool-drop** (shared pending isolation work with the bridge).
-- **Task 2** bridge→adapter refactor (cleanup).
+- ✅ **DDISA-per-agent token to the gateway DONE (PR #808, 2026-06-19).** The MVP shared-LITELLM-key approach broke once the gateway went DDISA-only (master key → 401) + M4 (default path = LocalCore, gpt-5.x → 400). `resolveOpenclawGatewayKey` now mints the agent's own DDISA token per turn (`ensureFreshIdpAuth(home)` + `exchangeForSpToken`, home-scoped) and rewrites the openclaw config per one-shot turn; `GATEWAY_MODELS` → `LocalCore-*`.
+- ✅ **Live E2E on a real nest DONE (2026-06-19).** Blue-green nest rebuild (`IMAGE=openape-nest:openclaw compose/nest-prod.run.sh`, 16 bridges reconnected, `-prev` kept). Spawned `openclaw-test --type openclaw` (own DDISA identity) → `session-host: now hosting 1 agent`. Proof: the agent'"'"'s **zero-grant** DDISA token → default `/v1` → 200 `LocalCore-Instant` (`'"'"'Hello there, how are you?'"'"'`) = M4 ungating; full `openclaw agent --local` turn → gateway (DDISA, LocalCore-Thinking) → reply `OPENCLAW-RUNTIME-OK`. Gotcha hit: the nest enroll-auth was stale → key-based reauth (`apes login --key`, config.toml identity) — see [[reference_nest_auth_reauth]].
+- ✅ **CLI-tool-call under the DDISA identity DONE (2026-06-19) — works out of the box, no code change.** openclaw'"'"'s `exec` tool runs the agent'"'"'s `apes`/`ape-tasks`/`ape-troop` CLIs with `HOME=agent-home`, so they auth as the agent. Proven live on `openclaw-test`: read (`ape-tasks list` → the agent'"'"'s real list) and **write** (`ape-tasks new` created task `01KVFD3E…` under the agent'"'"'s identity, verified in its task list). `toolSummary: { calls: 1, tools: ['exec'], failures: 0 }`. The `apes run --as` escapes-grant gate was a red herring — that'"'"'s a different path; the chat exec runs the CLIs directly.
+- ✅ **Nest image blessed as `:latest` DONE (2026-06-19)** — `:latest` = the fixed image (#808 + #810 typing); survives a recreate. `-prev` is the rollback.
+- ✅ **`sudo -u <agent>` tool-drop DONE (PR #815, 2026-06-19).** In the container sandbox (`OPENAPE_BYPASS_APE_SHELL=1`) the openclaw exec is wrapped in passwordless `sudo -u <agent>` (`sudoArgv`/`sudoRunAs`, env re-applied via `env KEY=VAL …` since sudo strips it); `prepareOpenclawHome` chowns the `.openclaw` tree to the agent uid so the dropped user reads its mode-600 config + writes state. **Proven live:** openclaw on `openclaw-test` ran `id` → `uid=1019(openclaw-test) … groups=1019` — the CLI tool-call runs as the agent user, not root. (The in-process **bridge** still has this gap — same fix can follow.)
+- **Still deferred:** Task 2 bridge→adapter refactor (cleanup); apply the same `sudo -u` drop to the in-process bridge runtime.
+
+## openclaw — overall status (2026-06-19): COMPLETE
+The pluggable-runtime vision is live end-to-end: a foreign runtime (openclaw `2026.6.8`) runs in our nest under a per-agent DDISA identity, talks to the M4 gateway with the agent's own minted token, shows a typing indicator, **acts via our CLIs** (read + write proven), and runs **as the agent's OS user**. The moat held: identity + nest + control-plane + CLIs-as-tools carried the foreign loop with near-zero loop-specific code. Nest image `:latest` carries #808 (gateway sync) + #810 (typing) + #815 (sudo drop).
 
 ---
 

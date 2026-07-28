@@ -53,7 +53,7 @@ const RECIPE_INDEX: RecipeIndexEntry[] = [
   },
   {
     id: 'ceo',
-    label: 'Org CEO',
+    label: 'Org Operator',
     repo_ref: 'github.com/openape-ai/agent-catalog/ceo@v0.1.0',
     repo_url: 'https://github.com/openape-ai/agent-catalog/tree/main/ceo',
     hintKey: 'spawn.recipe.entries.ceo.hint',

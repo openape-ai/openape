@@ -1,6 +1,12 @@
 import crypto from 'node:crypto'
 import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, addComponentsDir, useLogger } from '@nuxt/kit'
 import { defu } from 'defu'
+import { DEFAULT_POST_LOGIN_REDIRECT } from './runtime/config-defaults'
+
+// Public type surface — `requireCaller` is auto-imported into SP apps' server
+// context; its `Caller` shape is re-exported here so app code can annotate
+// against it via `import type { Caller } from '@openape/nuxt-auth-sp'`.
+export type { Caller } from './runtime/server/utils/require-auth'
 
 export interface ManifestConfig {
   service?: {
@@ -66,8 +72,8 @@ export interface ModuleOptions {
    * Where to send the user after a successful login (in `OpenApeAuth.vue`'s
    * already-logged-in onMounted check + after the OIDC callback exchange).
    * Path is treated as same-origin; full URLs are valid for off-site
-   * redirects. Default: `/dashboard` (back-compat for openape-chat which
-   * has that page; troop, which doesn't, overrides to `/`).
+   * redirects. Default: `/` (see `runtime/config-defaults.ts`) — the one
+   * route every SP has; apps with a dedicated landing page override it.
    * Env: `NUXT_OPENAPE_SP_POST_LOGIN_REDIRECT`.
    */
   postLoginRedirect: string
@@ -89,7 +95,7 @@ export default defineNuxtModule<ModuleOptions>({
     openapeUrl: '',
     fallbackIdpUrl: 'https://id.openape.at',
     routes: true,
-    postLoginRedirect: '/dashboard',
+    postLoginRedirect: DEFAULT_POST_LOGIN_REDIRECT,
   },
   setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
@@ -149,6 +155,8 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/callback', handler: resolve('./runtime/server/api/callback.get') })
       addServerHandler({ route: '/api/logout', method: 'post', handler: resolve('./runtime/server/api/logout.post') })
       addServerHandler({ route: '/api/me', handler: resolve('./runtime/server/api/me.get') })
+      addServerHandler({ route: '/api/cli/me', handler: resolve('./runtime/server/api/cli/me.get') })
+      addServerHandler({ route: '/api/cli/exchange', method: 'post', handler: resolve('./runtime/server/api/cli/exchange.post') })
       addServerHandler({ route: '/.well-known/oauth-client-metadata', handler: resolve('./runtime/server/routes/well-known/oauth-client-metadata.get') })
       addServerHandler({ route: '/.well-known/auth.md', handler: resolve('./runtime/server/routes/well-known/auth.md.get') })
       addServerHandler({ route: '/.well-known/openape.json', handler: resolve('./runtime/server/routes/well-known/openape.json.get') })

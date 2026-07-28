@@ -647,7 +647,7 @@ describe('grant lifecycle', () => {
 
       const grants = await store.findByDelegate('agent+patrick@id.openape.at')
       expect(grants).toHaveLength(1)
-      expect(grants[0].type).toBe('delegation')
+      expect(grants[0]!.type).toBe('delegation')
     })
 
     it('findByDelegator returns delegation grants', async () => {
@@ -661,7 +661,7 @@ describe('grant lifecycle', () => {
 
       const grants = await store.findByDelegator('patrick@hofmann.eco')
       expect(grants).toHaveLength(1)
-      expect(grants[0].request.delegate).toBe('agent+patrick@id.openape.at')
+      expect(grants[0]!.request.delegate).toBe('agent+patrick@id.openape.at')
     })
   })
 

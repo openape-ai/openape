@@ -8,21 +8,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export interface BridgeConfig {
-  /** Where the bridge will POST messages — http://host:port/v1 */
-  baseUrl: string
-  /** Master key for the litellm proxy */
-  apiKey: string
-  /**
-   * Model the bridge sends in every chat-completion request. Optional:
-   * if undefined, the bridge falls back to its built-in default
-   * (`claude-haiku-4-5`). Set this when the upstream proxy doesn't
-   * route that model — e.g. a LiteLLM proxy fronting only ChatGPT
-   * subscription needs `gpt-5.4` or the proxy 404s every request.
-   */
-  model?: string
-}
-
 /**
  * Read defaults from `~/litellm/.env` (the hand-crafted location patrick
  * uses today). Returns null if no file or no key found.

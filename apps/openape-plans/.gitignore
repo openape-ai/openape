@@ -1,0 +1,3 @@
+# Local dev SQLite DB (created by nuxt dev / node .output)
+dev.db
+dev.db-*

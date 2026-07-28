@@ -52,7 +52,7 @@ const recipeSchema = z.object({
   intent: z.string().min(1),
   capabilities: z.array(capabilitySchema).default([]),
   params: z.array(paramSchema).default([]),
-  // Chat-only agents (e.g. the CEO recipe) legitimately have no schedules.
+  // Chat-only agents (e.g. the Operator recipe) legitimately have no schedules.
   schedules: z.array(scheduleSchema).default([]),
   user_addendum: z.boolean().default(false),
   tools: z.array(z.string().min(1)).default([]),

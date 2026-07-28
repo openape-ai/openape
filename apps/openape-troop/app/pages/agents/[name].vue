@@ -25,6 +25,7 @@ interface Agent {
    *  to the LLM during live thread turns. Defaults to all known tools
    *  on first sync; owner narrows here. */
   tools: string[]
+  paused: boolean
   firstSeenAt: number | null
   lastSeenAt: number | null
   createdAt: number
@@ -103,6 +104,26 @@ const nestLabel = computed(() => {
   const names = nestHosts.value.map(h => h.hostname).join(', ')
   return t('agentDetail.nest.onlineLabel', { names })
 })
+
+// Pause toggle. A paused agent stays enrolled but runs no LLM turns; resume is
+// instant. State mirrors the nest registry via the agent's `paused` field.
+const paused = computed(() => detail.value?.agent.paused ?? false)
+const pausing = ref(false)
+async function togglePause() {
+  if (!detail.value) return
+  pausing.value = true
+  try {
+    const verb = paused.value ? 'resume' : 'pause'
+    await ($fetch as any)(`/api/agents/${agentName.value}/${verb}`, { method: 'POST' })
+    detail.value.agent.paused = !paused.value
+  }
+  catch (err: any) {
+    error.value = err?.data?.statusMessage || err?.message || t('agentDetail.error.loadFailed')
+  }
+  finally {
+    pausing.value = false
+  }
+}
 
 // Agent-level system prompt editor — saved on blur via PATCH
 // /api/agents/[name]. The bridge daemon re-reads agent.json on every
@@ -496,12 +517,32 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
         🦍 {{ detail.agent.agentName }}
       </span>
       <span
+        v-if="detail && paused"
+        class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap text-amber-300 bg-amber-500/10"
+        :title="$t('agentDetail.pause.badgeTitle')"
+      >
+        ⏸ {{ $t('agentDetail.pause.badge') }}
+      </span>
+      <span
         class="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
         :class="nestOnline ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-800/50'"
         :title="nestLabel"
       >
         {{ nestOnline ? $t('agentDetail.nest.badgeLive') : $t('agentDetail.nest.badgePoll') }}
       </span>
+      <UButton
+        v-if="detail"
+        :icon="paused ? 'i-lucide-play' : 'i-lucide-pause'"
+        :color="paused ? 'primary' : 'neutral'"
+        variant="ghost"
+        size="sm"
+        :loading="pausing"
+        :title="paused ? $t('agentDetail.pause.resumeTitle') : $t('agentDetail.pause.pauseTitle')"
+        :ui="{ base: 'shrink-0' }"
+        @click="togglePause"
+      >
+        <span class="hidden sm:inline">{{ paused ? $t('agentDetail.pause.resume') : $t('agentDetail.pause.pause') }}</span>
+      </UButton>
       <LocaleSwitcher />
     </header>
 

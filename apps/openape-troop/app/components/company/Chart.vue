@@ -1,153 +1,63 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { Employee, TreeNode } from './OrgNode.vue'
 
-// Company hierarchy chart (B0 merge — preserves the org-chart hierarchy from the
-// former openape-org app). Owner is the root; CEO + Sanierer report to the Owner
-// in parallel; Teamleads sit under the CEO with their Specialists; unassigned
-// specialists and other roles are surfaced so nobody disappears.
+// The company's org chart = its employees (whole hierarchy), Owner at the root.
+const props = defineProps<{ employees: Employee[], ownerEmail: string }>()
+defineEmits<{ add: [], edit: [e: Employee], delete: [e: Employee], toggle: [e: Employee] }>()
 
-interface Member { agentEmail: string, agentName: string, role: string, status: string, persona: string | null, reportsToEmail: string | null }
-
-const props = defineProps<{ members: Member[], ownerEmail: string, spawning: Record<string, string> }>()
-defineEmits<{ spawn: [member: Member] }>()
-
-const active = computed(() => props.members.filter(m => m.status !== 'retired'))
-const ceo = computed(() => active.value.find(m => m.role === 'ceo') ?? null)
-const sanierer = computed(() => active.value.find(m => m.role === 'sanierer') ?? null)
-const teamleads = computed(() => active.value.filter(m => m.role === 'teamlead'))
-function specialistsOf(email: string) {
-  return active.value.filter(m => m.role === 'specialist' && m.reportsToEmail === email)
+const byId = computed(() => Object.fromEntries(props.employees.map(e => [e.id, e])))
+function build(e: Employee, seen: Set<string>): TreeNode {
+  seen.add(e.id)
+  const children = props.employees
+    .filter(c => c.reportsTo === e.id && !seen.has(c.id))
+    .map(c => build(c, seen))
+  return { e, children }
 }
-const unassignedSpecialists = computed(() =>
-  active.value.filter(m => m.role === 'specialist' && (!m.reportsToEmail || !teamleads.value.some(tl => tl.agentEmail === m.reportsToEmail))),
-)
-const others = computed(() => active.value.filter(m => !['ceo', 'sanierer', 'teamlead', 'specialist'].includes(m.role)))
-
-const roleLabel = { ceo: 'CEO', sanierer: 'Controlling', teamlead: 'Team-Lead', specialist: 'Specialist', other: 'Mitglied' } as const
-const roleLabelOf = (role: string): string => (roleLabel as Record<string, string>)[role] ?? role
-function roleColor(role: string): string {
-  switch (role) {
-    case 'ceo': return 'bg-amber-500/15 text-amber-200 border-amber-500/40'
-    case 'sanierer': return 'bg-red-500/15 text-red-200 border-red-500/40'
-    case 'teamlead': return 'bg-blue-500/15 text-blue-200 border-blue-500/40'
-    case 'specialist': return 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
-    default: return 'bg-zinc-500/15 text-zinc-200 border-zinc-500/40'
-  }
-}
+// Roots = report to the Owner (no supervisor, or a supervisor that no longer exists).
+const roots = computed<TreeNode[]>(() => {
+  const seen = new Set<string>()
+  return props.employees
+    .filter(e => !e.reportsTo || !byId.value[e.reportsTo])
+    .map(e => build(e, seen))
+})
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Owner — root of the chart -->
-    <div class="flex justify-center">
-      <div class="rounded-lg border border-amber-600/40 bg-amber-500/5 px-4 py-3 text-center min-w-[180px]">
-        <div class="text-xs uppercase tracking-wide text-amber-400 font-semibold">
-          Owner
-        </div>
-        <div class="font-mono text-sm mt-1 break-all">
-          {{ ownerEmail }}
-        </div>
-      </div>
+  <div class="space-y-4">
+    <div class="flex items-center justify-center gap-2">
+      <span class="text-xs text-zinc-500">Organigramm</span>
+      <UButton size="xs" variant="soft" color="primary" icon="i-lucide-user-plus" @click="$emit('add')">
+        Mitarbeiter
+      </UButton>
     </div>
 
-    <div v-if="!active.length" class="rounded-lg border border-dashed border-zinc-700 p-8 text-center text-zinc-400">
-      <div class="text-4xl mb-2">
-        👔
-      </div>
-      <p class="text-sm">
-        Noch keine Mitglieder. Über „Mitglied“ einen CEO anlegen.
-      </p>
+    <div v-if="employees.length" class="overflow-x-auto pb-4">
+      <ul class="org-tree">
+        <li>
+          <div class="org-card" style="border-color: color-mix(in srgb, #f59e0b 40%, transparent); background: color-mix(in srgb, #f59e0b 6%, #18181b)">
+            <div class="org-role" style="color:#f59e0b">
+              Owner
+            </div>
+            <div class="org-name" style="font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all">
+              {{ ownerEmail }}
+            </div>
+          </div>
+          <ul v-if="roots.length">
+            <CompanyOrgNode
+              v-for="n in roots"
+              :key="n.e.id"
+              :node="n"
+              @edit="$emit('edit', $event)"
+              @delete="$emit('delete', $event)"
+              @toggle="$emit('toggle', $event)"
+            />
+          </ul>
+        </li>
+      </ul>
     </div>
-
-    <template v-else>
-      <!-- CEO + Sanierer — parallel under the Owner -->
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <CompanyChartNode
-          v-if="ceo"
-          :member="ceo"
-          :role-label="roleLabel.ceo"
-          :color-class="roleColor('ceo')"
-          size="lg"
-          primary
-          :spawning-text="spawning[ceo.agentEmail]"
-          @spawn="$emit('spawn', $event)"
-        />
-        <CompanyChartNode
-          v-if="sanierer"
-          :member="sanierer"
-          :role-label="roleLabel.sanierer"
-          :color-class="roleColor('sanierer')"
-          size="lg"
-          :spawning-text="spawning[sanierer.agentEmail]"
-          @spawn="$emit('spawn', $event)"
-        />
-      </div>
-
-      <!-- Teamleads under CEO, with their specialists -->
-      <div v-if="teamleads.length" class="space-y-4">
-        <div v-for="tl in teamleads" :key="tl.agentEmail" class="space-y-3">
-          <div class="flex justify-center">
-            <CompanyChartNode
-              :member="tl"
-              :role-label="roleLabel.teamlead"
-              :color-class="roleColor('teamlead')"
-              size="lg"
-              :spawning-text="spawning[tl.agentEmail]"
-              @spawn="$emit('spawn', $event)"
-            />
-          </div>
-          <div v-if="specialistsOf(tl.agentEmail).length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <CompanyChartNode
-              v-for="sp in specialistsOf(tl.agentEmail)"
-              :key="sp.agentEmail"
-              :member="sp"
-              :role-label="roleLabel.specialist"
-              :color-class="roleColor('specialist')"
-              size="sm"
-              :spawning-text="spawning[sp.agentEmail]"
-              @spawn="$emit('spawn', $event)"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- Specialists without a teamlead -->
-      <div v-if="unassignedSpecialists.length" class="space-y-2">
-        <div class="text-xs text-zinc-500 text-center">
-          Ohne Team-Lead
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <CompanyChartNode
-            v-for="sp in unassignedSpecialists"
-            :key="sp.agentEmail"
-            :member="sp"
-            :role-label="roleLabel.specialist"
-            :color-class="roleColor('specialist')"
-            size="sm"
-            :spawning-text="spawning[sp.agentEmail]"
-            @spawn="$emit('spawn', $event)"
-          />
-        </div>
-      </div>
-
-      <!-- Other roles -->
-      <div v-if="others.length" class="space-y-2">
-        <div class="text-xs text-zinc-500 text-center">
-          Weitere
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <CompanyChartNode
-            v-for="m in others"
-            :key="m.agentEmail"
-            :member="m"
-            :role-label="roleLabelOf(m.role)"
-            :color-class="roleColor(m.role)"
-            size="sm"
-            :spawning-text="spawning[m.agentEmail]"
-            @spawn="$emit('spawn', $event)"
-          />
-        </div>
-      </div>
-    </template>
+    <p v-else class="text-center text-sm text-zinc-500">
+      Noch keine Mitarbeiter — leg den Operator und sein Team an.
+    </p>
   </div>
 </template>

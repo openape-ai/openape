@@ -60,6 +60,18 @@ export default defineEventHandler(async (event) => {
     expiresAt: body.expiresAt !== undefined ? body.expiresAt : (existing?.expiresAt ?? null),
     updatedAt: now,
   }
+  // Fail closed (#1037): a deny-list policy with neither denyPatterns nor a
+  // denyRiskThreshold would express no restriction — "default allow" then
+  // means auto-approve for everything, bypassing human approval entirely.
+  // Reject instead of storing it; the evaluator additionally neutralizes any
+  // pre-existing stored policy of this shape.
+  if (policy.mode === 'deny-list' && policy.denyPatterns.length === 0 && policy.denyRiskThreshold == null) {
+    throw createProblemError({
+      status: 400,
+      title: 'A deny-list policy needs at least one denyPattern or a denyRiskThreshold — without restrictions it would auto-approve every request',
+    })
+  }
+
   await store.put(policy)
   return { policy }
 })

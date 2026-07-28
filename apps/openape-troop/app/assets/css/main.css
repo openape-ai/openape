@@ -1,6 +1,26 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+/* One header shell for every admin page — same metrics as the cockpit chat
+ * header (safe-area inset, sticky, blurred bar) so both surfaces read as one
+ * product instead of two apps. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: calc(env(safe-area-inset-top) + 0.75rem) 1rem 0.75rem;
+  border-bottom: 1px solid --alpha(var(--color-zinc-800) / 80%);
+  background: color-mix(in srgb, var(--color-zinc-950) 80%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+}
+@media (min-width: 640px) {
+  .app-header { padding-left: 2rem; padding-right: 2rem; }
+}
+
 /* iOS Safari zooms into any input whose computed font-size is below
  * 16px on focus — feels like the page jumps mid-interaction. Nuxt UI
  * inputs default to a 14px size class on `size="md"` (the implicit

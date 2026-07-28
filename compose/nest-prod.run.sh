@@ -10,9 +10,13 @@
 set -euo pipefail
 IMAGE="${IMAGE:-openape-nest:latest}"
 ENVFILE="${ENVFILE:-$HOME/.config/openape/nest.env}"
-SVC_AGENT="/Users/patrickhofmann/Companies/private/repos/openape/service-agent"
+SVC_AGENT="${SVC_AGENT:-$HOME/Companies/private/repos/openape/agent-catalog/service-agent}"
 
 test -f "$ENVFILE" || { echo "missing env-file $ENVFILE"; exit 1; }
+# Docker creates a missing bind source as an EMPTY directory, so a wrong path
+# yields a healthy-looking container whose agent runs all die with
+# "Cannot find module /opt/recipe-dev/tools/serve.mjs". Fail here instead.
+test -d "$SVC_AGENT/tools" || { echo "missing recipe dir $SVC_AGENT (set SVC_AGENT=)"; exit 1; }
 
 # Blue-green rename for rollback (drop any stale -prev first).
 if docker inspect openape-nest >/dev/null 2>&1; then

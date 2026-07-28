@@ -78,7 +78,7 @@ function parseField(token: string, range: [number, number], allowStep: boolean):
   return { type: 'fixed', value: n }
 }
 
-export function parseCron(expr: string): CronExpr | null {
+function parseCron(expr: string): CronExpr | null {
   const parts = expr.trim().split(/\s+/)
   if (parts.length !== 5) return null
   const [m, h, dom, mo, dow] = parts as [string, string, string, string, string]
@@ -104,7 +104,7 @@ function fieldMatches(field: CronExpr['minute'] | CronExpr['dom'], value: number
   return false
 }
 
-export function cronMatches(expr: CronExpr, now: Date): boolean {
+function cronMatches(expr: CronExpr, now: Date): boolean {
   const dow = now.getDay() // 0 = Sun
   return (
     fieldMatches(expr.minute, now.getMinutes())

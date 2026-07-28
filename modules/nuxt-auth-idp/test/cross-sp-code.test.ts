@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { mintCrossSpCode, verifyCrossSpCode } from '../src/runtime/server/utils/cross-sp-code'
 
 const VERIFIER = 'a'.repeat(64)
-const CLIENT = 'org.openape.ai'
-const REDIRECT = 'https://org.openape.ai/oauth/spawn-callback'
+const CLIENT = 'app.example'
+const REDIRECT = 'https://app.example/oauth/spawn-callback'
 
 async function setup() {
   const keyStore = new InMemoryKeyStore()

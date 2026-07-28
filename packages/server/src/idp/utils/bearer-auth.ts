@@ -4,7 +4,7 @@ import type { KeyStore } from '@openape/auth'
 import type { AuthTokenPayload } from './auth-token.js'
 import { verifyAuthToken } from './auth-token.js'
 
-export function extractBearerToken(event: H3Event): string | null {
+function extractBearerToken(event: H3Event): string | null {
   const authHeader = getHeader(event, 'authorization')
   if (!authHeader?.startsWith('Bearer '))
     return null

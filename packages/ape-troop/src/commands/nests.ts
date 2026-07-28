@@ -79,11 +79,39 @@ const removeCommand = defineCommand({
   },
 })
 
+const pauseCommand = defineCommand({
+  meta: { name: 'pause', description: 'Pause every agent on a device (fleet kill-switch) — they stay connected, run no LLM turns' },
+  args: {
+    host_id: { type: 'positional', required: true, description: 'host_id of the device to pause' },
+    json: { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setNestPaused(String(args.host_id), true)
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Paused all agents on ${r.hostname}`)
+  },
+})
+
+const resumeCommand = defineCommand({
+  meta: { name: 'resume', description: 'Resume a paused device (clears the fleet switch; per-agent pauses still stand)' },
+  args: {
+    host_id: { type: 'positional', required: true, description: 'host_id of the device to resume' },
+    json: { type: 'boolean', description: 'Output as JSON' },
+  },
+  async run({ args }) {
+    const r = await new TroopApi().setNestPaused(String(args.host_id), false)
+    if (args.json) { process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); return }
+    consola.success(`Resumed ${r.hostname}`)
+  },
+})
+
 export const nestsCommand = defineCommand({
   meta: { name: 'nests', description: 'Manage devices (pods) bound to your account' },
   subCommands: {
     bind: bindCommand,
     list: listCommand,
+    pause: pauseCommand,
+    resume: resumeCommand,
     remove: removeCommand,
   },
 })

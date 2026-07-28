@@ -1,6 +1,6 @@
 # 0001 — Single-Process Nest (collapse ~26 processes to 1)
 
-- Status: Accepted (owner-approved direction, 2026-06-14; implementation in progress, M2)
+- Status: Accepted (owner-approved direction, 2026-06-14; M2 code merged + M3 openclaw tool-drop on main, #815; M4 cutover + native ThreadSession tool-drop pending)
 - Deciders: Patrick Hofmann (owner)
 - Related: `.claude/plans/single-process-nest.md`
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 useSeoMeta({ title: 'Login' })
 
@@ -8,6 +8,17 @@ const loginHint = (route.query.login_hint as string) || ''
 
 const email = ref(loginHint)
 const keyMode = ref(false)
+
+// With a pre-filled email (login_hint) the user just needs to confirm — focus the
+// passkey button so Enter authenticates; otherwise focus the email field to type.
+const emailInput = ref<{ $el?: HTMLElement } | null>(null)
+const passkeyBtn = ref<{ $el?: HTMLElement } | null>(null)
+onMounted(() => {
+  const target = loginHint
+    ? (passkeyBtn.value?.$el as HTMLElement | undefined)
+    : emailInput.value?.$el?.querySelector<HTMLElement>('input')
+  target?.focus()
+})
 
 // Challenge-response state
 const challenge = ref('')
@@ -161,6 +172,7 @@ onUnmounted(() => {
       <!-- Passkey mode (default) -->
       <form v-if="!keyMode" class="w-full space-y-4" @submit.prevent="handlePasskeyLogin">
         <UInput
+          ref="emailInput"
           v-model="email"
           type="email"
           placeholder="you@example.com (optional)"
@@ -170,6 +182,7 @@ onUnmounted(() => {
         />
 
         <UButton
+          ref="passkeyBtn"
           type="submit"
           color="primary"
           size="xl"

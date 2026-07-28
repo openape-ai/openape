@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import consola from 'consola'
 import { parse as shellParse } from 'shell-quote'
-import { loadAdapter, tryLoadAdapter } from './adapters.js'
+import { tryLoadAdapter } from './adapters.js'
 import { installAdapter } from './installer.js'
 import { fetchRegistry, findAdapter } from './registry.js'
 import { appendAuditLog } from './audit.js'
@@ -126,6 +126,3 @@ export async function loadOrInstallAdapter(cliId: string): Promise<LoadedAdapter
     return null
   }
 }
-
-// Re-export loadAdapter so callers can import everything from one module
-export { loadAdapter }

@@ -52,10 +52,10 @@ management, admin) or an SP by adding `modules/nuxt-auth-sp` (login via DNS
 discovery, callback, session, well-known endpoints). The web apps below are
 thin shells around exactly these modules (see their `nuxt.config.ts`).
 
-**`apps/` — deployables.** Four self-hosted Nuxt web apps:
+**`apps/` — deployables.** Three self-hosted Nuxt web apps:
 `apps/openape-free-idp` (the free IdP, id.openape.ai — uses `nuxt-auth-idp`),
-`apps/openape-troop` (agent control plane), `apps/openape-chat` (human↔agent
-chat), `apps/openape-org` (org management) — the latter three are SPs using
+`apps/openape-troop` (agent control plane, includes the company/org view) and
+`apps/openape-chat` (human↔agent chat) — the latter two are SPs using
 `nuxt-auth-sp`. Beside them: `apps/openape-nest` (local daemon supervising
 agents on a machine), `apps/openape-ape-agent` (one runtime process per
 agent), `apps/openape-llm` (LiteLLM proxy container), `apps/docs`
@@ -71,7 +71,7 @@ publishes the `@openape/*` packages to npm in dependency order.
 
 ### Production (host "chatty")
 
-The four web apps run as Docker containers from `registry.openape.ai`,
+The three web apps run as Docker containers from `registry.openape.ai`,
 orchestrated by `compose/chatty.yml`, each publishing on `127.0.0.1:<port>`
 behind nginx:
 
@@ -80,7 +80,6 @@ behind nginx:
 | `idp` | openape-free-idp | 3003 | id.openape.ai |
 | `troop` | openape-troop | 3010 | troop.openape.ai |
 | `chat` | openape-chat | 3007 | chat.openape.ai |
-| `org` | openape-org | 3020 | org.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets

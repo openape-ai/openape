@@ -2,7 +2,7 @@ import { jwtVerify, SignJWT } from 'jose'
 
 // Pattern copied from openape-chat. troop's CLI-scoped SP token is an
 // HS256 JWT minted by /api/cli/exchange after the IdP-issued
-// subject_token has been verified via JWKS. Clients (org.openape.ai's
+// subject_token has been verified via JWKS. Clients (a Receiver SP's
 // spawn-proxy + future delegates) cache it for the duration of its TTL
 // and present it as `Authorization: Bearer …` on troop's gated routes.
 const ISSUER = 'troop.openape.ai'

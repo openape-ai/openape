@@ -3,7 +3,7 @@ import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
 import { CliError } from '../../errors'
 import { apiFetch } from '../../http'
-import { getHostPlatform } from '../../lib/host-platform'
+import { getHostPlatform, isLinux } from '../../lib/host-platform'
 
 interface IdpUser {
   email: string
@@ -15,10 +15,38 @@ interface IdpUser {
   createdAt: number
 }
 
+interface AgentRow {
+  name: string
+  email: string
+  isActive: boolean
+  /** Local OS-user state — only present on a Linux nest host. */
+  osUser?: boolean
+  home?: string | null
+}
+
+/**
+ * Build a resolver for an agent's local OS-user state. Only meaningful on a
+ * Linux nest host, where managed agent users actually exist — checks both the
+ * prefixed (`openape-agent-<name>`) and bare (`<name>`) records so legacy
+ * pre-prefix agents keep showing up.
+ */
+function buildOsStateResolver(): (agentName: string) => { osUser: boolean, home: string | null } {
+  const platform = getHostPlatform()
+  const osUsers = platform.listAgentUserNames()
+  return (agentName) => {
+    const u = platform.lookupAgentUser(agentName)
+    if (u) return { osUser: true, home: u.homeDir }
+    if (osUsers.has(platform.agentUsername(agentName)) || osUsers.has(agentName)) {
+      return { osUser: true, home: null }
+    }
+    return { osUser: false, home: null }
+  }
+}
+
 export const listAgentsCommand = defineCommand({
   meta: {
     name: 'list',
-    description: 'List agents owned by the current user, with local OS-user status',
+    description: 'List agents owned by the current user (from the IdP); annotated with local OS-user status on a nest host',
   },
   args: {
     json: {
@@ -45,31 +73,18 @@ export const listAgentsCommand = defineCommand({
       ? all
       : all.filter(u => u.isActive !== false)
 
-    const platform = getHostPlatform()
-    const osUsers = platform.listAgentUserNames()
-    // Resolve OS state per agent, checking both the prefixed
-    // (`openape-agent-<name>`) and bare (`<name>`) records so legacy
-    // pre-prefix agents keep showing up in the table.
-    const osStateOf = (agentName: string): { osUser: boolean, home: string | null } => {
-      const u = platform.lookupAgentUser(agentName)
-      if (u) return { osUser: true, home: u.homeDir }
-      // listAgentUserNames covers ad-hoc records that the read path can't
-      // see (e.g. names with unusual characters) — keep it as a sentinel.
-      if (osUsers.has(platform.agentUsername(agentName)) || osUsers.has(agentName)) {
-        return { osUser: true, home: null }
-      }
-      return { osUser: false, home: null }
-    }
+    // The agent list itself comes from the IdP and works anywhere the user is
+    // logged in. The local OS-user cross-reference (OS-USER/HOME) is a
+    // Linux-nest concern — off-nest there are no managed agent users, so skip
+    // the host-platform lookups and those columns instead of failing.
+    const onNest = isLinux()
+    const osStateOf = onNest ? buildOsStateResolver() : null
 
-    const rows = filtered.map((u) => {
+    const rows: AgentRow[] = filtered.map((u) => {
+      const base: AgentRow = { name: u.name, email: u.email, isActive: u.isActive !== false }
+      if (!osStateOf) return base
       const os = osStateOf(u.name)
-      return {
-        name: u.name,
-        email: u.email,
-        isActive: u.isActive !== false,
-        osUser: os.osUser,
-        home: os.home,
-      }
+      return { ...base, osUser: os.osUser, home: os.home }
     })
 
     if (args.json) {
@@ -84,14 +99,25 @@ export const listAgentsCommand = defineCommand({
 
     const nameW = Math.max(4, ...rows.map(r => r.name.length))
     const emailW = Math.max(5, ...rows.map(r => r.email.length))
-    const header = `${'NAME'.padEnd(nameW)}  ${'EMAIL'.padEnd(emailW)}  ACTIVE  OS-USER  HOME`
+
+    if (onNest) {
+      const header = `${'NAME'.padEnd(nameW)}  ${'EMAIL'.padEnd(emailW)}  ACTIVE  OS-USER  HOME`
+      console.log(header)
+      console.log('-'.repeat(header.length))
+      for (const r of rows) {
+        const active = r.isActive ? '✓' : '✗'
+        const os = r.osUser ? '✓' : '✗'
+        const homeCol = r.home ?? '(missing)'
+        console.log(`${r.name.padEnd(nameW)}  ${r.email.padEnd(emailW)}  ${active.padEnd(6)}  ${os.padEnd(7)}  ${homeCol}`)
+      }
+      return
+    }
+
+    const header = `${'NAME'.padEnd(nameW)}  ${'EMAIL'.padEnd(emailW)}  ACTIVE`
     console.log(header)
     console.log('-'.repeat(header.length))
     for (const r of rows) {
-      const active = r.isActive ? '✓' : '✗'
-      const os = r.osUser ? '✓' : '✗'
-      const homeCol = r.home ?? '(missing)'
-      console.log(`${r.name.padEnd(nameW)}  ${r.email.padEnd(emailW)}  ${active.padEnd(6)}  ${os.padEnd(7)}  ${homeCol}`)
+      console.log(`${r.name.padEnd(nameW)}  ${r.email.padEnd(emailW)}  ${r.isActive ? '✓' : '✗'}`)
     }
   },
 })

@@ -7,7 +7,7 @@ import * as pty from '@lydell/node-pty'
  * for the next one. The `output` is everything bash printed since the last
  * frame, with the marker line stripped.
  */
-export interface CompletedLineFrame {
+interface CompletedLineFrame {
   output: string
   exitCode: number
 }
