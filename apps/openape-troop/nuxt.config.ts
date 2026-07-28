@@ -1,3 +1,5 @@
+import { TROOP_SCOPES } from './server/utils/scope-catalog'
+
 export default defineNuxtConfig({
   future: { compatibilityVersion: 4 },
   // asyncContext is required for `useEvent()` to resolve in Vercel
@@ -88,6 +90,12 @@ export default defineNuxtConfig({
     // Without this the SP module's default would 404 after every
     // successful OIDC callback.
     postLoginRedirect: '/',
+    // Scope catalog for the module's consolidated /api/cli/exchange (#1043):
+    // without it the catalog check is inert (SP-without-catalog behaviour).
+    // Same source as the /.well-known/openape.json route — one catalog.
+    manifest: {
+      scopes: TROOP_SCOPES,
+    },
   },
 
   runtimeConfig: {
