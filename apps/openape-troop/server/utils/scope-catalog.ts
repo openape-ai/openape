@@ -48,6 +48,21 @@ export const TROOP_SCOPES: TroopScope[] = [
     grants: ['GET /api/agents', 'GET /api/agents/:name', 'GET /api/nest/hosts'],
   },
   {
+    id: 'troop:cockpit-serve',
+    description: 'Claim and resolve the owner\'s cockpit tasks (companies and services) as their operator. Does not include agent or nest management.',
+    grants: [
+      'POST /api/cockpit/agent/tasks/next',
+      'POST /api/cockpit/agent/tasks/resolve',
+      'POST /api/cockpit/agent/heartbeat',
+      'POST /api/cockpit/agent/automations',
+      'GET /api/cockpit/agent/doctor',
+      'POST /api/cockpit/agent/files',
+      'GET /api/cockpit/agent/files/:id',
+      'GET /api/cockpit/agent/memory/:id',
+      'GET /api/cockpit/agent/skill/:id',
+    ],
+  },
+  {
     id: 'nest:bind',
     description: 'Bind a new device (pod) to your account on this troop. This lets the device run agents on your behalf without its own identity — you can revoke the binding any time, instantly cutting the device off.',
     grants: ['POST /api/nests/bind'],
