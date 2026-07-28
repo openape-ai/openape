@@ -208,9 +208,19 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // A deny hit in ANY segment blocks — prefixing a harmless command must not
   // hide it. The full line is still checked too so cross-segment patterns
   // operators wrote against the old joined-line behavior keep blocking.
-  for (const pattern of p.denyPatterns || []) {
+  const denyPatterns = p.denyPatterns || []
+  for (const pattern of denyPatterns) {
     if (matchesGlob(target, pattern)) return null
     if (segments.some(seg => matchesGlob(seg, pattern))) return null
+  }
+  // Harder than the usual default-allow semantics on purpose: a blocklist
+  // cannot see into a substitution — `echo $(rm -rf ~)` matches no `*rm*`
+  // pattern even though the shell runs the nested command. Fail closed to
+  // the human, unless a deny pattern spells the construct out itself (then
+  // the owner governs substitutions by pattern and normal deny logic rules).
+  const ownerGovernsSubstitution = denyPatterns.some(pattern => containsCommandSubstitution(pattern))
+  if (!ownerGovernsSubstitution && segments.some(seg => containsCommandSubstitution(seg))) {
+    return null
   }
   return { kind: 'yolo', decidedBy: p.enabledBy }
 }
