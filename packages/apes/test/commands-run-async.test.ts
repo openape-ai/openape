@@ -982,10 +982,12 @@ describe('commands/run async default', () => {
   describe('execShellCommand APES_SHELL_WRAPPER env strip', () => {
     afterEach(() => {
       delete process.env.APES_SHELL_WRAPPER
+      delete process.env.APES_SHELL_MODE
     })
 
     it('strips APES_SHELL_WRAPPER from the bash child env when self-dispatching', async () => {
       process.env.APES_SHELL_WRAPPER = '1'
+      process.env.APES_SHELL_MODE = '1'
       const shapes = await import('../src/shapes/index.js')
       vi.mocked(shapes.parseShellCommand).mockReturnValue({
         executable: 'apes',
@@ -1007,12 +1009,14 @@ describe('commands/run async default', () => {
       const opts = callArgs[2] as { env?: Record<string, string | undefined> }
       expect(opts.env).toBeDefined()
       expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+      expect(opts.env!.APES_SHELL_MODE).toBeUndefined()
       // Other env vars still there
       expect(opts.env!.PATH).toBeDefined()
     })
 
     it('strips APES_SHELL_WRAPPER from escapes pipe in runAudienceMode --wait mode', async () => {
       process.env.APES_SHELL_WRAPPER = '1'
+      process.env.APES_SHELL_MODE = '1'
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
         .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
@@ -1036,6 +1040,7 @@ describe('commands/run async default', () => {
       const opts = callArgs[2] as { env?: Record<string, string | undefined> }
       expect(opts.env).toBeDefined()
       expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+      expect(opts.env!.APES_SHELL_MODE).toBeUndefined()
     })
   })
 
