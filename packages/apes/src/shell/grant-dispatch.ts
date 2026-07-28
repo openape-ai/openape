@@ -13,6 +13,7 @@ import {
   verifyAndConsume,
   waitForGrantStatus,
 } from '../shapes/index.js'
+import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
 
 /**
@@ -213,6 +214,8 @@ export async function requestGrantForShellLine(
     const maxWait = 300_000
     const interval = 3_000
     const start = Date.now()
+    // Progress lines on stderr while pending — see wait-progress.ts (#1065).
+    const reportProgress = createWaitProgressReporter(grant.id)
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
@@ -222,6 +225,7 @@ export async function requestGrantForShellLine(
       }
       if (status.status === 'denied' || status.status === 'revoked')
         return { kind: 'denied', reason: `Grant ${status.status}` }
+      reportProgress()
       await new Promise(r => setTimeout(r, interval))
     }
 
