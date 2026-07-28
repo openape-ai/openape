@@ -201,6 +201,29 @@ describe('YOLO policy admin API', () => {
     expect(put.status).toBe(400)
   })
 
+  it('PUT rejects a deny-list without patterns and without threshold (fail closed, #1037)', async () => {
+    const put = await fetch(`${baseUrl}/api/users/${encodeURIComponent(AGENT_EMAIL)}/yolo-policy`, {
+      method: 'PUT',
+      headers: { ...managementHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ denyPatterns: [], denyRiskThreshold: null }),
+    })
+    expect(put.status).toBe(400)
+    const body = await put.json()
+    expect(body.title).toContain('deny-list')
+  })
+
+  it('PUT accepts a deny-list with at least one pattern', async () => {
+    const put = await fetch(`${baseUrl}/api/users/${encodeURIComponent(AGENT_EMAIL)}/yolo-policy`, {
+      method: 'PUT',
+      headers: { ...managementHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ denyPatterns: ['sudo *'], denyRiskThreshold: null }),
+    })
+    expect(put.status).toBe(200)
+    const body = await put.json()
+    expect(body.policy.denyPatterns).toEqual(['sudo *'])
+    expect(body.policy.denyRiskThreshold).toBeNull()
+  })
+
   it('PUT rejects non-agent target', async () => {
     const put = await fetch(`${baseUrl}/api/users/${encodeURIComponent(OWNER_EMAIL)}/yolo-policy`, {
       method: 'PUT',
@@ -211,11 +234,12 @@ describe('YOLO policy admin API', () => {
   })
 
   it('auto-approves a grant request when YOLO policy is active', async () => {
-    // Fresh policy without deny-patterns or risk threshold → all commands auto-approve.
+    // Deny-list with a non-matching pattern → everything else auto-approves.
+    // (An empty deny-list is rejected by the PUT endpoint since #1037.)
     await fetch(`${baseUrl}/api/users/${encodeURIComponent(AGENT_EMAIL)}/yolo-policy`, {
       method: 'PUT',
       headers: { ...managementHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ denyPatterns: [], denyRiskThreshold: null }),
+      body: JSON.stringify({ denyPatterns: ['sudo *'], denyRiskThreshold: null }),
     })
 
     const res = await fetch(`${baseUrl}/api/grants`, {
