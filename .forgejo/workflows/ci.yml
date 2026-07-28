@@ -58,10 +58,42 @@ jobs:
         #   - building their Nitro output on the runner triggers the pnpm + Nitro
         #     `.output/server/node_modules` ELOOP symlink cycle
         #     (vue↔@vue/server-renderer; nuxt#30539 / #12012) — no reliable fix.
-        run: pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --filter='@openape/ape-agent' --filter='@openape/ape-chat' --filter='@openape/nest' --concurrency=1
+        # Teed to /tmp so the failure step below can post the log tail (#1050).
+        run: |
+          set -o pipefail
+          pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --filter='@openape/ape-agent' --filter='@openape/ape-chat' --filter='@openape/nest' --concurrency=1 2>&1 | tee /tmp/ci-build.log
       - name: Lint · Typecheck · Test (affected)
         # e2e needs a running stack (dedicated job); docs prerenders OG images
         # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
         # built above, so every `^build` here is a cache hit — no fresh dts writes
         # race the typechecks.
-        run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
+        # Teed to /tmp so the failure step below can post the log tail (#1050).
+        run: |
+          set -o pipefail
+          pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs' 2>&1 | tee /tmp/ci-checks.log
+      - name: Post failure log tail as PR comment (#1050)
+        # The docker runner's logs are not reachable from outside, so on failure
+        # the tail of the failing step's log is posted to the PR. The last log
+        # written is the step that failed (a failed build never reaches the
+        # checks). Push builds (no PR) skip via the `if` guard.
+        if: failure() && github.event.pull_request.number
+        env:
+          FJ_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+          logs = [('Lint · Typecheck · Test', '/tmp/ci-checks.log'), ('Build', '/tmp/ci-build.log')]
+          section = 'Kein Log erfasst — Fehler lag vor den instrumentierten Steps (checkout/install?).'
+          for name, path in logs:
+              if os.path.exists(path):
+                  tail = open(path, 'rb').read()[-12000:].decode('utf-8', 'replace')
+                  section = f"Fehlgeschlagener Step: **{name}** (letzte 12 KB von `{path}`):\n\n```\n{tail}\n```"
+                  break
+          body = 'CI-Fehlerlog (letzter Abschnitt)\n\n' + section
+          req = urllib.request.Request(
+              f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{os.environ['PR_NUMBER']}/comments",
+              data=json.dumps({'body': body}).encode(),
+              headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'})
+          print(urllib.request.urlopen(req).status)
+          PYEOF
