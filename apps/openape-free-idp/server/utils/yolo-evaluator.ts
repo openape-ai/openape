@@ -38,8 +38,100 @@ export interface YoloDecisionContext {
    * right field from the grant request via `targetFromRequest`.
    */
   target: string | undefined
+  /**
+   * How to interpret `target` for pattern matching (#1079): `'command'`
+   * targets are split into shell segments and evaluated per segment,
+   * `'host'` targets have no shell semantics and are matched as-is.
+   * Defaults to `'command'` — segmentation is the fail-safe direction.
+   */
+  targetKind?: 'command' | 'host'
   resolvedRisk: RiskLevel | null
   now?: number
+}
+
+/**
+ * Split a command line at the shell control operators (`&&`, `||`, `;`, `|`,
+ * `&`, newlines) into trimmed, non-empty segments. Operators inside single
+ * or double quotes are literal text, not separators; a backslash escapes the
+ * next character (except inside single quotes) so `\"` never toggles quote
+ * state. Why: allow/deny patterns describe COMMANDS, not line prefixes —
+ * every chained command must be judged on its own (#1079).
+ */
+export function splitCommandSegments(target: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: '\'' | '"' | null = null
+  let escaped = false
+  for (const ch of target) {
+    if (escaped) {
+      current += ch
+      escaped = false
+      continue
+    }
+    if (ch === '\\' && quote !== '\'') {
+      current += ch
+      escaped = true
+      continue
+    }
+    if (quote) {
+      current += ch
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '\'' || ch === '"') {
+      current += ch
+      quote = ch
+      continue
+    }
+    if (ch === '&' || ch === '|' || ch === ';' || ch === '\n' || ch === '\r') {
+      segments.push(current)
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  segments.push(current)
+  return segments.map(s => s.trim()).filter(s => s.length > 0)
+}
+
+/**
+ * True when the text contains a construct the shell would run as a NESTED
+ * command inside a single segment: command substitution (`$(…)`, backticks)
+ * or process substitution (`<(…)`, `>(…)`). Quote semantics follow the
+ * shell: single-quoted text is literal; inside double quotes `$(…)` and
+ * backticks still execute (process substitution does not); a backslash
+ * escapes the next character. Boundary drawn on purpose: plain `${…}`
+ * parameter expansion only expands variables and spawns no command — and a
+ * command substitution nested inside it (`${x:-$(cmd)}`) still contains
+ * `$(` and is caught by this character scan.
+ */
+export function containsCommandSubstitution(text: string): boolean {
+  let quote: '\'' | '"' | null = null
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (ch === '\\' && quote !== '\'') {
+      escaped = true
+      continue
+    }
+    if (quote === '\'') {
+      if (ch === '\'') quote = null
+      continue
+    }
+    if (ch === '`') return true
+    if (ch === '$' && text[i + 1] === '(') return true
+    if (quote === '"') {
+      if (ch === '"') quote = null
+      continue
+    }
+    if ((ch === '<' || ch === '>') && text[i + 1] === '(') return true
+    if (ch === '\'' || ch === '"') quote = ch
+  }
+  return false
 }
 
 export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | null {
@@ -51,6 +143,13 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   const target = ctx.target && ctx.target.length ? ctx.target : null
   if (!target) return null
 
+  // Patterns allow commands, not prefixes (#1079): command lines are judged
+  // per shell segment so `allowed-cmd && anything` can't ride along. Hosts
+  // carry no shell semantics and stay a single segment.
+  const segments = ctx.targetKind === 'host' ? [target] : splitCommandSegments(target)
+  // A line consisting only of operators has nothing to judge → human decides.
+  if (segments.length === 0) return null
+
   // Risk-threshold semantic is SYMMETRIC across modes:
   //   "alles bis zu diesem Level wird auto-approved, alles darüber wartet"
   // - deny-list (default allow): risk > threshold → don't approve.
@@ -59,9 +158,19 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // - deny-list: explicit deny-pattern → don't approve (further restrict).
   // - allow-list: explicit allow-pattern → approve (further open).
   if (p.mode === 'allow-list') {
-    // 1. Explicit allow-pattern match → approve.
-    for (const pattern of p.allowPatterns || []) {
-      if (matchesGlob(target, pattern)) return { kind: 'yolo', decidedBy: p.enabledBy }
+    // 1. EVERY segment matches at least one allow-pattern → approve. One
+    //    unmatched segment means an unvetted command → risk check / human.
+    //    A pattern hit does not vouch for nested commands: a segment with
+    //    command/process substitution is only allowed by a pattern spelling
+    //    the construct out itself — that is the owner's explicit opt-in.
+    const allowPatterns = p.allowPatterns || []
+    const segmentAllowed = (seg: string) => {
+      const needsExplicitOptIn = containsCommandSubstitution(seg)
+      return allowPatterns.some(pattern => matchesGlob(seg, pattern)
+        && (!needsExplicitOptIn || containsCommandSubstitution(pattern)))
+    }
+    if (allowPatterns.length > 0 && segments.every(segmentAllowed)) {
+      return { kind: 'yolo', decidedBy: p.enabledBy }
     }
     // 2. Risk ≤ threshold → approve.
     if (ctx.resolvedRisk && p.denyRiskThreshold) {
@@ -96,8 +205,22 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
     // Risk > threshold → don't approve.
     if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null
   }
-  for (const pattern of p.denyPatterns || []) {
+  // A deny hit in ANY segment blocks — prefixing a harmless command must not
+  // hide it. The full line is still checked too so cross-segment patterns
+  // operators wrote against the old joined-line behavior keep blocking.
+  const denyPatterns = p.denyPatterns || []
+  for (const pattern of denyPatterns) {
     if (matchesGlob(target, pattern)) return null
+    if (segments.some(seg => matchesGlob(seg, pattern))) return null
+  }
+  // Harder than the usual default-allow semantics on purpose: a blocklist
+  // cannot see into a substitution — `echo $(rm -rf ~)` matches no `*rm*`
+  // pattern even though the shell runs the nested command. Fail closed to
+  // the human, unless a deny pattern spells the construct out itself (then
+  // the owner governs substitutions by pattern and normal deny logic rules).
+  const ownerGovernsSubstitution = denyPatterns.some(pattern => containsCommandSubstitution(pattern))
+  if (!ownerGovernsSubstitution && segments.some(seg => containsCommandSubstitution(seg))) {
+    return null
   }
   return { kind: 'yolo', decidedBy: p.enabledBy }
 }
