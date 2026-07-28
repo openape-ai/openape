@@ -133,7 +133,10 @@ export default defineNitroPlugin(async () => {
     }
 
     const target = targetFromRequest(request)
-    const result = evaluateYoloPolicy({ policy, target, resolvedRisk })
+    // Command targets are evaluated per shell segment (#1079); a bare
+    // target_host has no shell semantics and must not be split.
+    const targetKind = cmd && cmd.length > 0 ? 'command' as const : 'host' as const
+    const result = evaluateYoloPolicy({ policy, target, targetKind, resolvedRisk })
     return result ? { kind: result.kind, decidedBy: result.decidedBy } : null
   })
 })

