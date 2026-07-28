@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import type { NitroApp } from 'nitropack'
 import { getRequestIP } from 'h3'
+import { renderErrorPage, wantsHtmlErrorPage } from '../utils/error-page'
 
 interface RateLimitEntry {
   count: number
@@ -226,6 +227,15 @@ export default (nitroApp: NitroApp) => {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
       res.setHeader('Retry-After', String(retryAfter))
       res.statusCode = 429
+
+      // Browser navigations get a readable page with the wait time
+      // (#1074); API clients keep the problem+json below unchanged.
+      if (wantsHtmlErrorPage(event.node.req.headers)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end(renderErrorPage(429, { retryAfterSeconds: retryAfter }))
+        return
+      }
+
       res.setHeader('Content-Type', 'application/problem+json')
       res.end(JSON.stringify({
         type: 'about:blank',
