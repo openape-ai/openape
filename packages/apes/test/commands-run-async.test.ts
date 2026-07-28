@@ -293,6 +293,42 @@ describe('commands/run async default', () => {
 
       expect(execFileSync).toHaveBeenCalled()
     })
+
+    // #1070: the wait loop is left either by approval OR by the 5-minute
+    // timeout. Executing on the timeout path made the approval requirement
+    // bypassable by sitting it out — measured in production: grant still
+    // `pending`, command executed with exit 0.
+    it('--wait timeout: does NOT exec, fails closed', async () => {
+      vi.useFakeTimers()
+      try {
+        const shapes = await import('../src/shapes/index.js')
+        vi.mocked(shapes.parseShellCommand).mockReturnValue(null as any)
+
+        const { apiFetch } = await import('../src/http.js')
+        vi.mocked(apiFetch)
+          .mockResolvedValueOnce({ data: [] } as any) // grants list lookup
+          .mockResolvedValueOnce({ id: 'sess-3', status: 'pending' } as any) // create
+          .mockResolvedValue({ status: 'pending' } as any) // every poll: still pending
+
+        const { execFileSync } = await import('node:child_process')
+
+        const { runCommand } = await import('../src/commands/run.js')
+        const run = runCommand.run!({
+          rawArgs: ['run', '--shell', '--wait', '--', 'bash', '-c', 'echo a | echo b'],
+          args: { shell: true, wait: true, approval: 'once' } as any,
+        } as any)
+        const assertion = expect(run).rejects.toThrow(/timed out/i)
+
+        // Past the 5-minute ceiling — the loop gives up here.
+        await vi.advanceTimersByTimeAsync(310_000)
+        await assertion
+
+        expect(execFileSync).not.toHaveBeenCalled()
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   // ------------------------------------------------------------------------

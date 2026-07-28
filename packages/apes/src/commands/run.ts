@@ -399,15 +399,24 @@ async function runShellMode(
     const maxWait = 300_000
     const interval = 3_000
     const start = Date.now()
+    let approved = false
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
-      if (status.status === 'approved')
+      if (status.status === 'approved') {
+        approved = true
         break
+      }
       if (status.status === 'denied' || status.status === 'revoked')
         throw new CliError(`Grant ${status.status}.`)
       await new Promise(r => setTimeout(r, interval))
     }
+
+    // #1070: the loop also ends when the 5 minutes run out. Executing on that
+    // path made the approval requirement bypassable by sitting it out, so an
+    // undecided grant must fail closed here.
+    if (!approved)
+      throw new CliError('Grant approval timed out after 5 minutes.')
 
     execShellCommand(command)
     return
