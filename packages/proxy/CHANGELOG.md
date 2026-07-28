@@ -1,5 +1,12 @@
 # @openape/proxy
 
+## 0.4.8
+
+### Patch Changes
+
+- Updated dependencies [76dd28c]
+  - @openape/core@0.19.0
+
 ## 0.4.7
 
 ### Patch Changes
@@ -70,6 +77,7 @@
   Previously the SSRF check (`isPrivateOrLoopback`) collapsed three different
   egress conditions into one boolean and surfaced all of them as **403
   Forbidden** with audit `rule=ssrf-blocked`:
+
   - the host resolves to a private/loopback IP (a real policy refusal)
   - DNS returns no A/AAAA records (NXDOMAIN, NODATA)
   - DNS query itself errors out (timeout, SERVFAIL)
@@ -114,6 +122,7 @@
   The proxy used to append a JSONL audit record to a local file (default
   `~/.local/state/openape/proxy-audit.jsonl`, configurable via
   `proxy.audit_log`). Two problems with that:
+
   1. **It can't function as an audit trail.** Anything written on the agent's
      host is also writable by the agent — there's no integrity story we'd be
      willing to put in front of a reviewer. Local files are debugging data, not
@@ -131,6 +140,7 @@
   audit view will be exposed there in a follow-up.
 
   Removed surfaces:
+
   - `proxy.audit_log` config field (TOML) — silently ignored if still present in
     legacy configs; nothing reads it.
   - `initAudit()` export from `@openape/proxy` — now no-op semantics, function
@@ -156,6 +166,7 @@
 
   Now CONNECT runs the same `evaluateRules(domain, 'CONNECT', '/')` pipeline
   the HTTP path uses:
+
   - `[[deny]]` host-match → 403 fast-reject + audit
   - `[[grant_required]]` → blocking grant request to the IdP, tunnel only on
     approval, 403/504 on deny/timeout
@@ -238,6 +249,7 @@
   which is now spawned as a child process per invocation.
 
   Two lifecycle modes:
+
   1. **Ephemeral (default):** `apes proxy --` spawns a new `openape-proxy` child
      bound to a random free port on `127.0.0.1`, runs the wrapped command with
      `HTTPS_PROXY` / `HTTP_PROXY` pointing at it, kills the proxy on wrapped-
@@ -362,15 +374,18 @@
 - [#1](https://github.com/openape-ai/openape/pull/1) [`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Align implementation with DDISA spec v1.0-draft
 
   **@openape/core:**
+
   - **BREAKING:** `OpenApeGrantRequest.target` → `target_host` (host/domain), `audience` now REQUIRED
   - `OpenApeAuthZClaims` gets `target_host` as REQUIRED claim
   - Fix error status codes: `invalid_audience`/`invalid_nonce` → 401, `grant_not_approved` → 400, `grant_already_used` → 410
   - Add missing error types: `policyDenied`, `invalidPkce`, `invalidState`
 
   **@openape/grants:**
+
   - **BREAKING:** `issueAuthzJWT` sets `aud` from `audience` (not `target`), adds `target_host` + `run_as` claims
 
   **@openape/nuxt-auth-idp:**
+
   - Grant creation validates `target_host` + `audience` (REQUIRED)
   - Fix `ddisa_version` from `'ddisa1'` to `'1.0'`
   - Fix `ddisa_auth_methods_supported` from `'passkey'` to `'webauthn'`
@@ -381,11 +396,13 @@
   - Delegation list supports `?role=delegator|delegate` query parameter
 
   **@openape/grapes:**
+
   - **BREAKING:** Replace `exec` command with audience-first `run` command
   - `request` command uses `--audience` + `--host` instead of `--for`
   - Remove `defaults.for` from config
 
   **@openape/proxy:**
+
   - Update `GrantsClient` to use `targetHost` + `audience` parameters
 
 - Updated dependencies [[`3f0a62f`](https://github.com/openape-ai/openape/commit/3f0a62f25b07623d13f4e450683133415807358f)]:
