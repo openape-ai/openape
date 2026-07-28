@@ -133,6 +133,17 @@ describe('notifyApproverOfPendingGrantByMail', () => {
     expect(await notifyApproverOfPendingGrantByMail(pendingGrant({ id: 'grant-2' }), deps)).toBe('sent')
   })
 
+  it('reopens the cooldown window when the pending count lookup fails', async () => {
+    const countPendingForApprover = vi.fn(async () => {
+      throw new Error('db down')
+    })
+    const deps = makeDeps({ countPendingForApprover })
+    await expect(notifyApproverOfPendingGrantByMail(pendingGrant(), deps)).rejects.toThrow('db down')
+
+    countPendingForApprover.mockImplementation(async () => 1)
+    expect(await notifyApproverOfPendingGrantByMail(pendingGrant({ id: 'grant-2' }), deps)).toBe('sent')
+  })
+
   it('escapes the grant id in the approve url', async () => {
     const deps = makeDeps()
     await notifyApproverOfPendingGrantByMail(pendingGrant({ id: 'a b/c' }), deps)
