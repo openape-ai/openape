@@ -39,8 +39,8 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { ensureFreshIdpAuth, NotLoggedInError } from '@openape/cli-auth'
-import type { Detector } from '@openape/prompt-injection-detector'
-import { createHeuristicDetector, decide } from '@openape/prompt-injection-detector'
+import type { AuditStore, DecisionResult } from '@openape/prompt-injection-detector'
+import { createAuditStore } from '@openape/prompt-injection-detector'
 import { decodeJwt } from 'jose'
 import WebSocket from 'ws'
 import type { RuntimeConfig } from '@openape/apes'
@@ -171,15 +171,16 @@ class Bridge {
   private chat: TroopChatApi
   private bearer: () => Promise<string>
   private cron: CronRunner | undefined
-  // Prompt-injection gate (#277). Pure heuristic by default — pluggable
-  // backend later. The bridge is the choke-point for every chat message
-  // before it reaches the agent runtime, so this is the right place.
-  private injectionDetector: Detector = createHeuristicDetector()
-  // LLM gateway key. Starts as the env key (master_key — the rollout fallback);
-  // upgraded to this agent's own DDISA-exchanged token by refreshLlmGatewayKey()
-  // when the gateway is llms.openape.ai. ponytail: cron keeps the boot key,
-  // chat threads pick up the refreshed token — drop master_key + cron-DDISA later.
-  private llmKey: string = process.env.LITELLM_API_KEY ?? process.env.LITELLM_MASTER_KEY ?? ''
+  // Prompt-injection gate (#463). LLM/heuristic backend selectable via
+  // APE_AGENT_INJECTION_BACKEND. The bridge is the choke-point for every
+  // chat message before it reaches the agent runtime.
+  private auditStore: AuditStore
+  // LLM gateway key. For the prod gateway (llms.openape.ai) this static boot key
+  // is replaced per turn by this agent's own DDISA-exchanged token
+  // (refreshLlmGatewayKey), so it only matters for the local codex-proxy
+  // loopback. (The legacy `LITELLM_MASTER_KEY` rollout fallback was dropped — the
+  // gateway is DDISA-only and the env always sets `LITELLM_API_KEY`.)
+  private llmKey: string = process.env.LITELLM_API_KEY ?? ''
 
   constructor(
     private cfg: BridgeConfig,
@@ -217,6 +218,10 @@ class Bridge {
     // error so a flaky exchange never takes the agent offline.
     void this.refreshLlmGatewayKey()
     setInterval(() => void this.refreshLlmGatewayKey(), 40 * 60 * 1000)
+    // Audit store logs all prompt-injection detections (#463). The detector
+    // and per-agent thresholds live in the canonical AgentSession now —
+    // handleInbound delegates the decision to this.session.screenInjection.
+    this.auditStore = createAuditStore(this.selfEmail)
   }
 
   private async refreshLlmGatewayKey(): Promise<void> {
@@ -244,7 +249,7 @@ class Bridge {
     const apiBase = (process.env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
     const apiKey = this.llmKey
     if (!apiKey) {
-      throw new Error('LITELLM_API_KEY (or LITELLM_MASTER_KEY) must be set in the bridge env.')
+      throw new Error('LITELLM_API_KEY must be set in the bridge env.')
     }
     return { apiBase, apiKey, model: this.cfg.model, reasoningEffort: this.cfg.reasoningEffort }
   }
@@ -319,39 +324,14 @@ class Bridge {
   }
 
   /**
-   * Translate troop's chat-frame payload shape into the
-   * chat.openape.ai-style Message the rest of this bridge expects.
-   * Troop's payload uses `role` (human|agent) + `chatId` + no
-   * senderEmail; the bridge's handleInbound checks
-   * `senderEmail === selfEmail` to skip its own echoes, so we
-   * synthesize the email from role (agent → self, human → owner).
-   * threadId is the synthetic 'main' because troop has no threads.
-   */
-  private translateTroopPayload(chatId: string, payload: Record<string, unknown>): Message {
-    const role = payload.role === 'agent' ? 'agent' : 'human'
-    return {
-      id: String(payload.id ?? ''),
-      roomId: chatId || String(payload.chatId ?? ''),
-      threadId: 'main',
-      senderEmail: role === 'agent' ? this.selfEmail : this.ownerEmail,
-      senderAct: role,
-      body: typeof payload.body === 'string' ? payload.body : '',
-      replyTo: typeof payload.replyTo === 'string' ? payload.replyTo : null,
-      createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Math.floor(Date.now() / 1000),
-      editedAt: typeof payload.editedAt === 'number' ? payload.editedAt : null,
-    }
-  }
-
-  /**
    * Handle one inbound message from any channel. `backend` is the channel's
    * own outbound surface (troop or telegram) — refusals and the agent's reply
    * go back out through it, so the agent communicates on the same channel it
    * was reached on.
    */
   async handleInbound(msg: Message, backend: ChatBackend): Promise<void> {
-    if (msg.senderEmail === this.selfEmail) return
-    if (!msg.body.trim()) return
-    if (this.cfg.roomFilter && msg.roomId !== this.cfg.roomFilter) return
+    if (this.session.isOwnEcho(msg)) return
+    if (!this.session.shouldDispatch(msg)) return
     if (!msg.threadId) {
       log(`[${msg.roomId}] dropping message ${msg.id} without threadId — server too old?`)
       return
@@ -359,19 +339,30 @@ class Bridge {
 
     log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] in: ${truncate(msg.body, 80)}`)
 
-    // Prompt-injection check (#277). The bridge is the choke-point
+    // Prompt-injection check (#463). The bridge is the choke-point
     // before pi sees inbound text — by the time the message hits the
     // agent runtime, refusing it is harder (it's already in history)
     // and inconsistent (model may or may not comply with refusal).
     // Owners get a higher threshold so legitimate "run shell, do X"
     // instructions from the actual owner aren't refused.
-    const decision = await decide(this.injectionDetector, {
-      text: msg.body,
+    const decision = await this.session.screenInjection(msg)
+
+    // Log to audit store (all detections, not just blocked ones)
+    void this.auditStore.log({
+      messageText: msg.body.length > 500 ? `${msg.body.slice(0, 497)}...` : msg.body,
       sender: {
         email: msg.senderEmail,
         isOwner: msg.senderEmail === this.ownerEmail,
       },
-    })
+      result: {
+        score: decision.score,
+        reason: decision.reason,
+        backend: decision.backend,
+      },
+      blocked: decision.blocked,
+      threshold: decision.threshold,
+    }).catch(err => log(`audit log failed: ${err instanceof Error ? err.message : String(err)}`))
+
     if (decision.blocked) {
       log(`[${msg.roomId}/${msg.threadId.slice(0, 8)}] BLOCKED prompt-injection (score=${decision.score.toFixed(2)}, reason=${decision.reason ?? 'n/a'})`)
       try {
@@ -384,11 +375,31 @@ class Bridge {
         const m = err instanceof Error ? err.message : String(err)
         log(`[${msg.roomId}] failed to post refusal: ${m}`)
       }
+      // Notify owner about blocked message
+      void this.notifyOwnerAboutBlockedMessage(msg, decision).catch(err =>
+        log(`owner notification failed: ${err instanceof Error ? err.message : String(err)}`),
+      )
       return
     }
 
     const session = this.getOrCreateThread(msg.roomId, msg.threadId, backend)
     session.enqueue(msg.body, msg.id)
+  }
+
+  // DM the owner when a message was blocked as suspected prompt-injection, so
+  // a silent block doesn't hide a real attack (or a false positive worth
+  // tuning). Resolves the owner's room the same way the cron runner does;
+  // skips quietly if the owner has no connected room.
+  private async notifyOwnerAboutBlockedMessage(msg: Message, decision: DecisionResult): Promise<void> {
+    const contacts = await this.chat.listContacts()
+    const ownerLower = this.ownerEmail.toLowerCase()
+    const room = contacts.find(c => c.peerEmail.toLowerCase() === ownerLower && c.connected && c.roomId)
+    if (!room?.roomId) return
+    const preview = msg.body.length > 200 ? `${msg.body.slice(0, 197)}...` : msg.body
+    await this.chat.postMessage(
+      room.roomId,
+      `⚠️ Blocked a suspected prompt-injection message (score ${decision.score.toFixed(2)}, threshold ${decision.threshold.toFixed(2)}, sender ${msg.senderEmail}).\nPreview: ${preview}`,
+    )
   }
 
   private getOrCreateThread(roomId: string, threadId: string, backend: ChatBackend): ThreadSession {
@@ -428,8 +439,7 @@ class Bridge {
 
   async pumpOnce(): Promise<void> {
     const bearer = await this.bearer()
-    const wsUrl = `${this.cfg.endpoint.replace(/^http/, 'ws')}/_ws/chat?token=${encodeURIComponent(bearer.replace(/^Bearer\s+/i, ''))}`
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(this.session.chatSocketUrl(bearer))
     return new Promise<void>((resolve, reject) => {
       let pingTimer: NodeJS.Timeout | undefined
       let allowlistTimer: NodeJS.Timeout | undefined
@@ -451,17 +461,11 @@ class Bridge {
       })
 
       ws.on('message', (data: WebSocket.RawData) => {
-        const text = typeof data === 'string'
-          ? data
-          : Buffer.isBuffer(data) ? data.toString('utf8') : ''
-        if (!text) return
-        let frame: { type?: string, room_id?: string, chat_id?: string, payload?: Record<string, unknown> }
-        try { frame = JSON.parse(text) as typeof frame }
-        catch { return }
-        if (frame.type !== 'message' || !frame.payload) return
+        const frame = this.session.parseChatFrame(data)
+        if (!frame) return
         // Troop ships `{chat_id, payload: {id,chatId,role,body,...}}`.
         // Translate to the bridge's internal Message shape.
-        const msg: Message = this.translateTroopPayload(frame.chat_id ?? '', frame.payload)
+        const msg: Message = this.session.toMessage(frame)
         void this.handleInbound(msg, this.chat)
       })
 

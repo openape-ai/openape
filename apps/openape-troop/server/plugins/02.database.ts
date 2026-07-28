@@ -12,6 +12,150 @@ export default defineNitroPlugin(async () => {
   try {
     const db = useDb()
 
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_services (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      tasks_path TEXT NOT NULL DEFAULT '/api/agent/tasks',
+      label TEXT NOT NULL DEFAULT '',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_services_owner ON cockpit_services(owner_email)`)
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_agents (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'specialist',
+      label TEXT NOT NULL DEFAULT '',
+      duties TEXT NOT NULL DEFAULT '',
+      procedure TEXT NOT NULL DEFAULT '',
+      vars TEXT NOT NULL DEFAULT '{}',
+      injection_score REAL NOT NULL DEFAULT 0,
+      injection_reason TEXT NOT NULL DEFAULT '',
+      tools TEXT NOT NULL DEFAULT '[]',
+      reports_to TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_agents_org ON cockpit_agents(owner_email, org_id)`)
+    // Cockpit procedures (#930): the role's work instruction + its own facts
+    // live in troop, not in a file on the operator's disk.
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN procedure TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN vars TEXT NOT NULL DEFAULT '{}'`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_score REAL NOT NULL DEFAULT 0`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_reason TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
+    // memory — company/role/agent-scoped facts the Operator reads (Memory feature).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS memory (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'company',
+      target_id TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      mode TEXT NOT NULL DEFAULT 'inline',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_memory_org_scope ON memory(org_id, scope)`)
+    // cockpit_skills — reusable named procedures assigned to agents (Skills feature).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_skills (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      prompt TEXT NOT NULL DEFAULT '',
+      assigned_to TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_skills_org ON cockpit_skills(org_id)`)
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_schedules (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      at_hour INTEGER,
+      every_minutes INTEGER,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at INTEGER,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_schedules_owner ON cockpit_schedules(owner_email)`)
+    // Proactive triggers (#proactive-operators): `prompt` = what the Operator does
+    // when due; `fire_at` = one-shot timer alternative to at_hour/every_minutes.
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN prompt TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN fire_at INTEGER`) }
+    catch { /* column exists */ }
+    // Self-scheduling (#proactive-operators Phase 3): who created this trigger.
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
+    catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN cron_expr TEXT`) }
+    catch { /* column exists */ }
+    // Event hooks (#proactive-operators Phase 2): external POST /api/hooks/<token>
+    // fires the Operator on the same spine as schedules.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_hooks (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      label TEXT NOT NULL DEFAULT '',
+      token TEXT NOT NULL UNIQUE,
+      secret TEXT,
+      prompt TEXT NOT NULL DEFAULT '',
+      include_payload INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT 'owner',
+      last_fired_at INTEGER,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_owner ON cockpit_hooks(owner_email)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_token ON cockpit_hooks(token)`)
+    try { await db.run(sql`ALTER TABLE cockpit_hooks ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
+    catch { /* column exists */ }
+    // Queue durability (#queue-durability): cockpit_tasks DDL is owned by
+    // server/utils/cockpit/task-store.ts (ensureTaskTable), created by the boot
+    // rehydrate before requests — avoids a plugin-ordering race.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_chat_messages (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      meta TEXT,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`ALTER TABLE cockpit_chat_messages ADD COLUMN meta TEXT`).catch(() => {})
+    await db.run(sql`ALTER TABLE cockpit_chat_messages ADD COLUMN files TEXT`).catch(() => {})
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_chat_owner_org ON cockpit_chat_messages(owner_email, org_id, created_at)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_files (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      mime TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      bytes BLOB NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_files_owner ON cockpit_files(owner_email, org_id)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_owner ON push_subscriptions(owner_email)`)
+
     await db.run(sql`CREATE TABLE IF NOT EXISTS agents (
       email TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
@@ -72,6 +216,11 @@ export default defineNitroPlugin(async () => {
     // The nest an agent belongs to (recorded at spawn from the spawning nest).
     try {
       await db.run(sql`ALTER TABLE agents ADD COLUMN nest_host_id TEXT`)
+    }
+    catch { /* column exists */ }
+    // Owner-set pause mirror (enforcement lives on the nest; this drives the UI badge).
+    try {
+      await db.run(sql`ALTER TABLE agents ADD COLUMN paused INTEGER NOT NULL DEFAULT 0`)
     }
     catch { /* column exists */ }
     await db.run(sql`CREATE TABLE IF NOT EXISTS agent_skills (
@@ -213,10 +362,14 @@ export default defineNitroPlugin(async () => {
       name TEXT NOT NULL,
       vision_md TEXT NOT NULL DEFAULT '',
       budget_monthly_eur INTEGER NOT NULL DEFAULT 0,
+      vars TEXT NOT NULL DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_org_owner ON organizations(owner_email)`)
+    // Cockpit procedures (#930): company-wide facts shared by every employee.
+    try { await db.run(sql`ALTER TABLE organizations ADD COLUMN vars TEXT NOT NULL DEFAULT '{}'`) }
+    catch { /* column exists */ }
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS org_members (
       org_id TEXT NOT NULL,

@@ -13,9 +13,12 @@ import chatStories from './stories/chat.mjs'
 import coderStories from './stories/coder.mjs'
 import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
+import prStories from './stories/pr.mjs'
+import plansStories from './stories/plans.mjs'
+import tasksStories from './stories/tasks.mjs'
+import timetrackStories from './stories/timetrack.mjs'
+import testrunStories from './stories/testrun.mjs'
 import troopStories from './stories/troop.mjs'
-// NB: the org guide is captured by compose/agent/org-ceo.mjs instead — its
-// final story spawns a real CEO agent, which needs a bound nest.
 
 const OUT = '/demo/out'
 mkdirSync(OUT, { recursive: true })
@@ -48,12 +51,16 @@ const ctx = {
   IDP: 'https://id.openape.test',
   TROOP: 'https://troop.openape.test',
   CHAT: 'https://chat.openape.test',
-  ORG: 'https://org.openape.test',
   CODER: 'https://coder.openape.test',
+  TESTRUN: 'https://testrun.openape.test',
+  PR: 'https://pr.openape.test',
+  TASKS: 'https://tasks.openape.test',
+  PLANS: 'https://plans.openape.test',
+  TIMETRACK: 'https://timetrack.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, coderStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, coderStories, testrunStories, prStories, tasksStories, plansStories, timetrackStories])
   await run(ctx)
 
 const failures = kit.finish('demo')

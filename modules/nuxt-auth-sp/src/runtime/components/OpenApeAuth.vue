@@ -1,7 +1,8 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { navigateTo, useOpenApeAuth, useRoute } from '#imports'
 import { DEFAULT_OAUTH_ERROR_MESSAGES } from '../composables/useOpenApeOAuthError'
+import { DEFAULT_POST_LOGIN_REDIRECT } from '../config-defaults'
 
 const props = defineProps({
   title: { type: String, required: false, default: 'Sign in' },
@@ -11,15 +12,15 @@ const props = defineProps({
   /**
    * Where to navigate when the user is already signed in (the
    * onMounted fast-path). Server-side OIDC callback uses its own
-   * config (`openapeSp.postLoginRedirect`); this prop is just the
-   * client-side equivalent so SPs without a `/dashboard` page
-   * (e.g. troop) don't 404 on re-visit while signed in.
+   * config (`openapeSp.postLoginRedirect`); this prop is the
+   * client-side equivalent. Shared default: `config-defaults.ts`.
    */
-  postLoginRedirect: { type: String, required: false, default: '/dashboard' },
+  postLoginRedirect: { type: String, required: false, default: DEFAULT_POST_LOGIN_REDIRECT },
 })
 const emit = defineEmits(['error'])
 const { user, loading, fetchUser, login } = useOpenApeAuth()
 const email = ref('')
+const emailInput = ref(null)
 const error = ref('')
 const submitting = ref(false)
 const route = useRoute()
@@ -27,11 +28,16 @@ onMounted(async () => {
   await fetchUser()
   if (user.value) {
     navigateTo(props.postLoginRedirect)
+    return
   }
   if (typeof route.query.error === 'string' && route.query.error) {
     const code = route.query.error
     error.value = DEFAULT_OAUTH_ERROR_MESSAGES[code] ?? `Login failed: ${code}.`
   }
+  // The form is behind a v-if="loading" gate that only clears after fetchUser;
+  // wait for the re-render so the input exists before focusing it.
+  await nextTick()
+  emailInput.value?.focus()
 })
 async function handleSubmit() {
   error.value = ''
@@ -77,6 +83,7 @@ async function handleSubmit() {
       </slot>
 
       <input
+        ref="emailInput"
         v-model="email"
         type="email"
         class="openape-auth-input"

@@ -1,7 +1,7 @@
 // troop's scope catalog per openape-ai/protocol sp-data-access.md §3.
 //
 // Published at /.well-known/openape.json#scopes so any Receiver SP
-// (e.g. org.openape.ai) can discover what they can request a
+// can discover what they can request a
 // delegation for. Each entry is {id, description, grants[]} —
 // `description` is rendered verbatim on the IdP consent screen the
 // Owner sees, so write it plainly.
@@ -36,6 +36,11 @@ export const TROOP_SCOPES: TroopScope[] = [
     id: 'troop:destroy-agent',
     description: 'Destroy existing agents on this troop on the user\'s behalf. High-stakes — each destroy still triggers the user\'s DDISA approval.',
     grants: ['POST /api/agents/destroy-intent'],
+  },
+  {
+    id: 'troop:pause-agent',
+    description: 'Pause and resume agents (and whole nests) on this troop on the user\'s behalf. A paused agent stays enrolled but runs no LLM turns — reversible any time.',
+    grants: ['POST /api/agents/:name/pause', 'POST /api/agents/:name/resume', 'POST /api/nests/:host_id/pause', 'POST /api/nests/:host_id/resume'],
   },
   {
     id: 'troop:read-agents',

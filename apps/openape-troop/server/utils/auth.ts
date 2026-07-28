@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { createRemoteJWKS, verifyJWT } from '@openape/core'
+import { createRemoteJWKS, normalizeActClaim, verifyJWT } from '@openape/core'
 import { verifyCliToken } from './cli-token'
 
 // Two distinct auth tracks because owner-side and agent-side endpoints
@@ -20,7 +20,8 @@ import { verifyCliToken } from './cli-token'
 
 interface DDISAClaims {
   sub?: string
-  act?: 'human' | 'agent' | string
+  /** Polymorphic per spec: string OR RFC 8693 delegation object {sub}. */
+  act?: unknown
   aud?: string | string[]
 }
 
@@ -119,13 +120,28 @@ export async function resolveOwnerContext(event: H3Event): Promise<{
       const result = await verifyJWT(token, getJwks(), { issuer: idpUrl })
       const claims = result.payload as DDISAClaims
       const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
-      if (claims.act === 'human' && auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
+      // normalizeActClaim: only the literal 'human' string reaches the
+      // unrestricted owner path — a delegation act OBJECT is an agent
+      // (#1034) and must never get `scopes: null` here.
+      if (normalizeActClaim(claims.act) === 'human' && auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
         return { owner: claims.sub, scopes: null, delegate: null }
       }
     }
     catch { /* fall through to 401 */ }
   }
+  const dev = devOwner()
+  if (dev) return { owner: dev, scopes: null, delegate: null }
   problem(401, 'Authentication required')
+}
+
+/**
+ * Dev-only owner, mirroring `cockpitOwner()` in `cockpit/auth.ts`. The IdP login
+ * cannot redirect back to localhost, so without this the company page cannot be
+ * opened locally at all. `import.meta.dev` is compiled away in the prod build.
+ */
+function devOwner(): string | undefined {
+  if (import.meta.dev && process.env.COCKPIT_DEV_OWNER) return process.env.COCKPIT_DEV_OWNER
+  return undefined
 }
 
 /**
@@ -152,11 +168,13 @@ export async function resolveCallerIdentity(event: H3Event): Promise<{ sub: stri
       const claims = result.payload as DDISAClaims
       const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
       if (auds.includes(CLI_AUDIENCE) && typeof claims.sub === 'string') {
-        return { sub: claims.sub, act: claims.act === 'agent' ? 'agent' : 'human' }
+        return { sub: claims.sub, act: normalizeActClaim(claims.act) }
       }
     }
     catch { /* fall through to 401 */ }
   }
+  const dev = devOwner()
+  if (dev) return { sub: dev, act: 'human' }
   problem(401, 'Authentication required')
 }
 

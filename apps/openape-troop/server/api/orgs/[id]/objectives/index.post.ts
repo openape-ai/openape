@@ -12,7 +12,7 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  // Owner, or a member agent acting for the owner (e.g. the CEO setting
+  // Owner, or a member agent acting for the owner (e.g. the Operator setting
   // objectives). `caller` is the actual author (agent email or owner).
   const { org, caller } = await requireOrgReadAccess(event)
 

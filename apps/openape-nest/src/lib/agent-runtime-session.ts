@@ -2,32 +2,94 @@ import type { BridgeConfig, TroopMessage } from '@openape/ape-agent'
 import type { AgentEntry } from './registry'
 import type { HostedSession } from './session-host'
 import { AgentSession, readAgentIdentity, ThreadSession, TroopChatApi } from '@openape/ape-agent'
-import { ensureFreshIdpAuth } from '@openape/cli-auth'
+import type { IdpAuth, SpToken } from '@openape/cli-auth'
+import { ensureFreshIdpAuth, exchangeForSpToken } from '@openape/cli-auth'
 import WebSocket from 'ws'
 import type { OpenclawAgent, OpenclawRuntime } from './openclaw-adapter'
 import { resolveBridgeConfig } from './bridge-config'
-import { invokeOpenclaw, prepareOpenclawHome } from './openclaw-adapter'
+import { isAgentPaused } from './nest-state'
+import { invokeOpenclaw, prepareOpenclawHome, sudoRunAs } from './openclaw-adapter'
 
 /** Inject the openclaw exec for tests; defaults to the real one-shot invoker. */
 export interface OpenclawTurnDeps {
   invoke: (agent: OpenclawAgent, rt: OpenclawRuntime, message: string, sessionKey: string) => Promise<string>
 }
 
+/** The chat surface a turn drives: a streaming placeholder, then a patch. */
+export interface OpenclawChat {
+  postMessage: (roomId: string, body: string, opts: { replyTo?: string, threadId?: string, streaming?: boolean }) => Promise<{ id: string }>
+  patchMessage: (id: string, opts: { body?: string, streaming?: boolean }) => Promise<void>
+}
+
 /**
- * Run one openclaw turn for an accepted chat message and post its reply.
- * Exported so the integration (invoke → post) is unit-tested without a live
- * openclaw or troop: inject `invoke`, spy on `post`.
+ * Run one openclaw turn for an accepted chat message. openclaw is one-shot (no
+ * token stream), so post an empty `streaming: true` placeholder first — the chat
+ * renders that as the agent "typing…" — run the exec, then patch the finished
+ * reply in (`streaming: false`). Without the placeholder the human sees nothing
+ * until the whole reply lands. Exported so the flow is unit-tested without a
+ * live openclaw or troop: inject `invoke`, spy on `chat`.
  */
 export async function runOpenclawTurn(
   agent: OpenclawAgent,
   rt: OpenclawRuntime,
   message: Pick<TroopMessage, 'body' | 'roomId' | 'threadId' | 'id'>,
-  post: (roomId: string, text: string, opts: { replyTo: string, threadId: string }) => Promise<void>,
+  chat: OpenclawChat,
   deps: OpenclawTurnDeps = { invoke: invokeOpenclaw },
 ): Promise<void> {
-  const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
-  if (reply)
-    await post(message.roomId, reply, { replyTo: message.id, threadId: message.threadId })
+  const placeholder = await chat.postMessage(message.roomId, '', {
+    replyTo: message.id,
+    threadId: message.threadId,
+    streaming: true,
+  })
+  try {
+    const reply = await deps.invoke(agent, rt, message.body, `${message.roomId}:${message.threadId}`)
+    await chat.patchMessage(placeholder.id, { body: reply, streaming: false })
+  }
+  catch (err) {
+    await chat.patchMessage(placeholder.id, { body: '⚠️ openclaw turn failed', streaming: false }).catch(() => {})
+    throw err
+  }
+}
+
+/** Injectable seam for {@link resolveOpenclawGatewayKey} (real exchange in prod). */
+export interface GatewayKeyDeps {
+  ensureIdp: (home: string) => Promise<IdpAuth>
+  exchange: (idp: IdpAuth, req: { endpoint: string, aud: string }) => Promise<SpToken>
+}
+const realGatewayKeyDeps: GatewayKeyDeps = {
+  ensureIdp: home => ensureFreshIdpAuth(undefined, home),
+  exchange: (idp, req) => exchangeForSpToken(idp, req),
+}
+
+/**
+ * Mint this agent's gateway key for one openclaw turn. For the DDISA gateway
+ * (`llms.openape.ai`) the static env key is NOT accepted (the gateway is
+ * DDISA-only) — so exchange the agent's own IdP token (read from *its* home via
+ * `authHome`, so the one daemon mints per agent) for a short-lived gateway
+ * token. This mirrors the per-agent bridge's `resolveLlmGatewayKey`; openclaw is
+ * one-shot, so we mint per turn. For any other base (e.g. a local codex-proxy)
+ * the static `fallback` stands. Any exchange error returns `fallback` so a flaky
+ * mint never strands the agent.
+ */
+export async function resolveOpenclawGatewayKey(
+  apiBase: string,
+  fallback: string,
+  home: string,
+  log: (line: string) => void,
+  deps: GatewayKeyDeps = realGatewayKeyDeps,
+): Promise<string> {
+  if (!apiBase.includes('llms.openape.ai'))
+    return fallback
+  try {
+    const u = new URL(apiBase)
+    const idp = await deps.ensureIdp(home)
+    const sp = await deps.exchange(idp, { endpoint: u.origin, aud: u.host })
+    return sp.access_token
+  }
+  catch (err) {
+    log(`openclaw gateway token exchange failed (keeping env key): ${err instanceof Error ? err.message : String(err)}`)
+    return fallback
+  }
 }
 
 /**
@@ -169,10 +231,10 @@ export function resolveAgentRuntimeContext(
 
   // The LiteLLM proxy + model the per-thread runtime drives, resolved from the
   // nest env exactly as the per-agent bridge's `runtimeConfig()`
-  // (`LITELLM_BASE_URL` / `LITELLM_API_KEY`|`LITELLM_MASTER_KEY` + the agent's
-  // model). Built once and shared across this agent's threads.
+  // (`LITELLM_BASE_URL` / `LITELLM_API_KEY` + the agent's model). Built once and
+  // shared across this agent's threads.
   const apiBase = (env.LITELLM_BASE_URL ?? 'http://127.0.0.1:4000/v1').replace(/\/$/, '')
-  const apiKey = env.LITELLM_API_KEY ?? env.LITELLM_MASTER_KEY ?? ''
+  const apiKey = env.LITELLM_API_KEY ?? ''
   const runtimeConfig = { apiBase, apiKey, model: bridgeConfig.model }
 
   // One ThreadSession per `${roomId}:${threadId}`, mirroring the bridge's
@@ -185,14 +247,17 @@ export function resolveAgentRuntimeContext(
   // each accepted message exec's `openclaw agent --local` and we post its reply.
   // openclaw has no daemon — the nest drives one turn per message. The agent's
   // CLIs (apes/ape-tasks/ape-troop) are its tools and read its auth.json, so
-  // actions land under the DDISA identity. Runs as the nest user with
-  // HOME=<agent home> for now (reads the agent's auth.json) — the `sudo -u
-  // <agent>` drop is the SAME pending isolation work as the bridge's text-only
-  // limitation below; until it lands, openclaw shares that constraint.
+  // actions land under the DDISA identity. In the container the exec drops to
+  // the agent's OS user via `sudo -u` (see runAs below); on the host/dev path
+  // it runs as the nest user with HOME=<agent home>. Unlike the native
+  // ThreadSession path below — still text-only because its tool-drop isn't
+  // built yet — openclaw's tool isolation is in place.
   if (entry.runtimeType === 'openclaw') {
-    const oclAgent = { name: entry.name, email: entry.email, home: entry.home }
-    const oclRt = { apiBase, apiKey, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
-    let prepared = false
+    const oclAgent = { name: entry.name, email: entry.email, home: entry.home, uid: entry.uid }
+    // In the container sandbox (OPENAPE_BYPASS_APE_SHELL=1, same flag the bridge
+    // reads) drop the exec — and its CLI tool-calls — to the agent's OS user via
+    // passwordless `sudo -u`. On the host/dev path openclaw runs as the nest user.
+    const runAs = process.env.OPENAPE_BYPASS_APE_SHELL === '1' ? sudoRunAs(entry.name) : undefined
     return {
       ownerEmail: readAgentIdentity(entry.home).ownerEmail,
       bridgeConfig,
@@ -201,11 +266,20 @@ export function resolveAgentRuntimeContext(
         await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
       },
       dispatchTurn: (message) => {
+        if (isAgentPaused(entry.name)) {
+          log(`agent-runtime: ⏸ ${entry.name} paused, dropping turn (no tokens)`)
+          return
+        }
         void (async () => {
           try {
-            if (!prepared) { prepareOpenclawHome(oclAgent, oclRt); prepared = true }
-            await runOpenclawTurn(oclAgent, oclRt, message, async (roomId, text, opts) => {
-              await chat.postMessage(roomId, text, opts)
+            // Mint a fresh per-agent DDISA gateway token each turn (the gateway
+            // is DDISA-only — the static env key 401s), then (re)write the
+            // openclaw config with it before the one-shot exec.
+            const key = await resolveOpenclawGatewayKey(apiBase, apiKey, entry.home, log)
+            const turnRt = { apiBase, apiKey: key, model: bridgeConfig.model, systemPrompt: bridgeConfig.systemPrompt }
+            prepareOpenclawHome(oclAgent, turnRt)
+            await runOpenclawTurn(oclAgent, turnRt, message, chat, {
+              invoke: (a, r, m, sk) => invokeOpenclaw(a, r, m, sk, runAs ? { runAs } : undefined),
             })
           }
           catch (err) {
@@ -224,12 +298,16 @@ export function resolveAgentRuntimeContext(
       await chat.postMessage(roomId, text, { replyTo: opts.replyTo, threadId: opts.threadId })
     },
     dispatchTurn: (message) => {
+      if (isAgentPaused(entry.name)) {
+        log(`agent-runtime: ⏸ ${entry.name} paused, dropping turn (no tokens)`)
+        return
+      }
       // Without an API key runLoop can't reach the model at all — fail loudly
       // per turn rather than silently swallowing it. (The bridge fails fast at
       // boot on the same missing key; the nest keeps reconcile alive and logs
       // here so one misconfigured agent never strands the others.)
       if (!apiKey) {
-        log(`agent-runtime: ! ${entry.name} cannot dispatch — LITELLM_API_KEY/LITELLM_MASTER_KEY unset`)
+        log(`agent-runtime: ! ${entry.name} cannot dispatch — LITELLM_API_KEY unset`)
         return
       }
       const key = `${message.roomId}:${message.threadId}`

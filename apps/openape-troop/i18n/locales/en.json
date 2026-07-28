@@ -250,6 +250,14 @@
         "pollFailed": "Poll failed",
         "startFailed": "Failed to start destroy"
       }
+    },
+    "pause": {
+      "badge": "Paused",
+      "badgeTitle": "This agent runs no LLM turns until resumed",
+      "pause": "Pause",
+      "resume": "Resume",
+      "pauseTitle": "Pause this agent — it stays connected but runs no LLM turns",
+      "resumeTitle": "Resume this agent"
     }
   },
   "chat": {
@@ -345,7 +353,7 @@
           "hint": "Twice-daily digest of your Bluesky home timeline. Param: topic."
         },
         "ceo": {
-          "hint": "CEO for an org.openape.ai organization — reads vision/members/objectives/costs live. Params: org_id, org_name."
+          "hint": "CEO for a company — reads vision/members/objectives/costs live. Params: org_id, org_name."
         }
       }
     },

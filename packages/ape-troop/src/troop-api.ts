@@ -42,12 +42,25 @@ export interface AgentRow {
   taskCount: number
   lastRunStatus: string | null
   lastRunAt: number | null
+  // Org membership — null when the agent belongs to no company.
+  orgId: string | null
+  orgName: string | null
+  orgRole: string | null
+  reportsToEmail: string | null
 }
 
 export interface IntentResult {
   intent_id: string
   host_id: string
   hostname: string
+}
+
+export interface PauseResult {
+  ok: boolean
+  paused: boolean
+  host_id: string
+  hostname: string
+  name?: string
 }
 
 export interface SpawnPoll {
@@ -144,5 +157,18 @@ export class TroopApi {
 
   pollDestroy(intentId: string): Promise<DestroyPoll> {
     return this.request(`/api/agents/destroy-intent/${encodeURIComponent(intentId)}`)
+  }
+
+  setAgentPaused(input: { name: string, hostId?: string, paused: boolean }): Promise<PauseResult> {
+    const verb = input.paused ? 'pause' : 'resume'
+    return this.request(`/api/agents/${encodeURIComponent(input.name)}/${verb}`, {
+      method: 'POST',
+      body: JSON.stringify(input.hostId ? { host_id: input.hostId } : {}),
+    })
+  }
+
+  setNestPaused(hostId: string, paused: boolean): Promise<PauseResult> {
+    const verb = paused ? 'pause' : 'resume'
+    return this.request(`/api/nests/${encodeURIComponent(hostId)}/${verb}`, { method: 'POST' })
   }
 }

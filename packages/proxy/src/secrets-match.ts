@@ -20,15 +20,14 @@ function targetString(url: URL): string {
 
 export function matchSecret(target: URL, entries: readonly SecretEntry[]): SecretEntry | null {
   const targetStr = targetString(target)
-  let best: { entry: SecretEntry, prefix: number, idx: number } | null = null
+  let best: { entry: SecretEntry, prefix: number } | null = null
 
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!
+  for (const entry of entries) {
     const re = compileGlob(entry.target)
     if (!re.test(targetStr) && !re.test(`${targetStr}/`)) continue
     const prefix = literalPrefixLen(entry.target)
     if (!best || prefix > best.prefix) {
-      best = { entry, prefix, idx: i }
+      best = { entry, prefix }
     }
   }
   return best?.entry ?? null

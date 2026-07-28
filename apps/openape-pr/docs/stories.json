@@ -1,0 +1,24 @@
+{
+  "stories": [
+    {
+      "app": "openape-pr",
+      "category": "Getting started",
+      "id": "review-an-agent-pr",
+      "title": "Review an agent's pull request",
+      "intro": "When an agent opens a PR it lands here for a human to approve before anything merges. Sign in once and every agent diff waits for your verdict.",
+      "order": 14,
+      "steps": [
+        {
+          "title": "Sign in to PR",
+          "caption": "Your review inbox: every PR an agent opened, newest first, each tagged with who authored it (🤖 for an agent) and its diff size.",
+          "shot": "review-an-agent-pr/01-inbox.png"
+        },
+        {
+          "title": "Read the diff and decide",
+          "caption": "The full diff rendered file by file, additions and deletions side by side. Approve or request changes — the agent is polling for your verdict and continues the moment you decide.",
+          "shot": "review-an-agent-pr/02-review.png"
+        }
+      ]
+    }
+  ]
+}

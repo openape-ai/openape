@@ -34,9 +34,9 @@ const PACKAGES = [
   { name: '@openape/grants', dir: 'packages/grants' },
   { name: '@openape/auth', dir: 'packages/auth' },
   { name: '@openape/cli-auth', dir: 'packages/cli-auth' },
+  { name: '@openape/proof-cli', dir: 'packages/proof-cli' },
   { name: '@openape/proxy', dir: 'packages/proxy' },
   { name: '@openape/server', dir: 'packages/server' },
-  { name: '@openape/browser', dir: 'packages/browser' },
   { name: '@openape/vue-components', dir: 'packages/vue-components' },
   { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/agent-runtime', dir: 'packages/agent-runtime' },
@@ -52,6 +52,11 @@ const PACKAGES = [
   { name: '@openape/ape-agent', dir: 'apps/openape-ape-agent' },
   { name: '@openape/nest', dir: 'apps/openape-nest' },
   { name: '@openape/ape-troop', dir: 'packages/ape-troop' },
+  { name: '@openape/ape-testruns', dir: 'packages/ape-testruns' },
+  { name: '@openape/ape-tasks', dir: 'packages/ape-tasks' },
+  { name: '@openape/ape-pr', dir: 'packages/ape-pr' },
+  { name: '@openape/ape-plans', dir: 'packages/ape-plans' },
+  { name: '@openape/ape-timetrack', dir: 'packages/ape-timetrack' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')

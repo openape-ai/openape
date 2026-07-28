@@ -58,25 +58,6 @@ async function computeRequestHash(method: string, targetUrl: string, body: Array
   return hash.digest('hex')
 }
 
-/** Legacy single-agent proxy */
-export function createProxy(config: ProxyConfig) {
-  const multiConfig: MultiAgentProxyConfig = {
-    proxy: {
-      listen: config.proxy.listen,
-      default_action: config.proxy.default_action,
-      mandatory_auth: config.proxy.mandatory_auth,
-    },
-    agents: [{
-      email: config.proxy.agent_email,
-      idp_url: config.proxy.idp_url,
-      allow: config.allow,
-      deny: config.deny,
-      grant_required: config.grant_required,
-    }],
-  }
-  return createMultiAgentProxy(multiConfig)
-}
-
 /**
  * Build the per-agent GrantsClient map used by both the HTTP forward-proxy
  * handler (in this file's `createMultiAgentProxy`) and the CONNECT handler
@@ -211,7 +192,7 @@ export function createMultiAgentProxy(
       }
       else if (config.agents.length === 1) {
         // Non-mandatory auth, single agent: use the only agent config
-        agentConf = config.agents[0]
+        agentConf = config.agents[0]! // length === 1 checked above
       }
       else {
         return new Response('Unauthorized: JWT required for multi-agent proxy', { status: 401 })

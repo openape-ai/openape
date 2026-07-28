@@ -1,4 +1,4 @@
-export interface WorkflowStep {
+interface WorkflowStep {
   description?: string
   command?: string
   note?: string

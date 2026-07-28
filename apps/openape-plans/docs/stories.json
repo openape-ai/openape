@@ -1,0 +1,29 @@
+{
+  "stories": [
+    {
+      "app": "openape-plans",
+      "category": "Getting started",
+      "id": "write-a-plan",
+      "title": "Start a team and write a plan",
+      "intro": "Plans keeps living, versioned plans a team edits together — the same document an agent reads and updates over the `ape-plans` CLI. Sign in, make a team, and write your first plan.",
+      "order": 16,
+      "steps": [
+        {
+          "title": "Sign in with one click",
+          "caption": "One click and you are in — your passkey, your IdP. You land on your teams; a fresh account is ready for its first one.",
+          "shot": "write-a-plan/01-teams.png"
+        },
+        {
+          "title": "Create a team",
+          "caption": "A team is the shared home for its plans. Invite people or authorise an agent — everyone sees the same living documents.",
+          "shot": "write-a-plan/02-team.png"
+        },
+        {
+          "title": "Write a plan",
+          "caption": "Give the plan a title and it opens ready to edit — Markdown body, status, and a full revision history as it evolves.",
+          "shot": "write-a-plan/03-plan.png"
+        }
+      ]
+    }
+  ]
+}

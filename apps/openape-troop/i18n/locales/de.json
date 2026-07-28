@@ -250,6 +250,14 @@
         "pollFailed": "Polling fehlgeschlagen",
         "startFailed": "Zerstörung konnte nicht gestartet werden"
       }
+    },
+    "pause": {
+      "badge": "Pausiert",
+      "badgeTitle": "Dieser Agent führt keine LLM-Turns aus, bis er fortgesetzt wird",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "pauseTitle": "Agent pausieren — bleibt verbunden, führt aber keine LLM-Turns aus",
+      "resumeTitle": "Agent fortsetzen"
     }
   },
   "chat": {
@@ -345,7 +353,7 @@
           "hint": "Zweimal täglich ein Digest deiner Bluesky-Home-Timeline. Param: topic."
         },
         "ceo": {
-          "hint": "CEO für eine org.openape.ai-Organisation — liest Vision/Team/Objectives/Kosten live. Params: org_id, org_name."
+          "hint": "CEO für eine Firma — liest Vision/Team/Objectives/Kosten live. Params: org_id, org_name."
         }
       }
     },
