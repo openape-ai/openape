@@ -1,5 +1,12 @@
 # @openape/vue-components
 
+## 0.2.10
+
+### Patch Changes
+
+- Updated dependencies [76dd28c]
+  - @openape/core@0.19.0
+
 ## 0.2.9
 
 ### Patch Changes
@@ -74,6 +81,7 @@
   directory, subtree, wildcard) and presents them as radio buttons in the approval UI.
   The approver can choose how broad the grant should be in a single click instead of
   needing a second request to trigger the widen flow.
+
   - `@openape/grants` adds `suggestWideningsForDetail`, `buildWideningSuggestionsForGrant`,
     and `approveGrantWithWidening` with server-side validation (structural match +
     coverage) that rejects any client-forged "widening" that would be a different grant.
