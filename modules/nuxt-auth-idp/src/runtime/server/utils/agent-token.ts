@@ -19,14 +19,15 @@ export interface AuthTokenPayload {
   /**
    * Either a simple actor-type string ('human' | 'agent') for direct
    * tokens, or a structured DDISA DelegationActClaim object for
-   * delegated tokens minted via /api/oauth/token-exchange. The
-   * structured form's `sub` field is the email of the actor (delegate).
+   * delegated tokens minted via /token (client_credentials with
+   * delegation_grant). The structured form's `sub` field is the email
+   * of the actor (delegate).
    */
   act: ActorType | DelegationActClaim
   aud?: string
   /**
    * Set on delegated tokens — the id of the delegation grant that
-   * authorised this token-exchange.
+   * authorised the delegated issuance.
    */
   delegation_grant?: string
 }

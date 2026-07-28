@@ -273,3 +273,99 @@ describe('client_credentials grant', () => {
     expect(result.error_description).toContain('Unsupported client_assertion_type')
   })
 })
+
+// Issue #1046 (assertions ported from the removed, never-registered
+// /api/oauth/token-exchange handler): delegated assertions minted via
+// /token must carry a `scope` claim mirroring the delegation grant's
+// scopes — otherwise downstream SPs cannot tell "first-party,
+// unrestricted" apart from "delegated, scopes lost".
+describe('client_credentials delegation flow (scope claim, issue #1046)', () => {
+  const DELEGATOR_EMAIL = 'alice@example.com'
+
+  function mockActiveAgent() {
+    mockUserStore.findByEmail.mockResolvedValue({
+      email: AGENT_EMAIL,
+      name: 'Test Agent',
+      isActive: true,
+      owner: 'admin@test.com',
+      createdAt: 1000,
+    })
+    mockSshKeyStore.findByUser.mockResolvedValue([{
+      keyId: 'k1',
+      userEmail: AGENT_EMAIL,
+      publicKey: 'ssh-ed25519 mock',
+      name: 'test',
+      createdAt: 1000,
+    }])
+    mockKeyStore.getSigningKey.mockResolvedValue(idpSigningKey)
+    mockJtiStore.hasBeenUsed.mockResolvedValue(false)
+  }
+
+  function buildDelegationGrant(overrides: { scopes?: string[] } = {}) {
+    return {
+      id: 'grant-1046',
+      type: 'delegation',
+      status: 'approved',
+      request: {
+        requester: DELEGATOR_EMAIL,
+        target_host: 'sp.example.com',
+        audience: 'sp.example.com',
+        delegator: DELEGATOR_EMAIL,
+        delegate: AGENT_EMAIL,
+        grant_type: 'always',
+        ...('scopes' in overrides ? { scopes: overrides.scopes } : {}),
+      },
+      created_at: 1000,
+    }
+  }
+
+  async function callDelegationTokenEndpoint() {
+    const assertion = await buildClientAssertion()
+    const { readRawBody } = await import('h3')
+    ;(readRawBody as any).mockResolvedValue(JSON.stringify({
+      grant_type: 'client_credentials',
+      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      client_assertion: assertion,
+      delegation_grant: 'grant-1046',
+      audience: 'sp.example.com',
+    }))
+
+    const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    return handler({} as any)
+  }
+
+  it('mirrors the delegation grant scopes into the assertion', async () => {
+    await setup()
+    mockActiveAgent()
+    mockGrantStore.findById.mockResolvedValue(
+      buildDelegationGrant({ scopes: ['tasks:read', 'tasks:write'] }),
+    )
+
+    const result = await callDelegationTokenEndpoint()
+    expect(result.access_token).toBeTruthy()
+
+    const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
+      algorithms: ['EdDSA'],
+    })
+    expect(payload.sub).toBe(DELEGATOR_EMAIL)
+    expect(payload.act).toEqual({ sub: AGENT_EMAIL })
+    expect(payload.delegation_grant).toBe('grant-1046')
+    expect(payload.scope).toEqual(['tasks:read', 'tasks:write'])
+  })
+
+  it('writes scope: [] for legacy grants without scopes (fail-closed)', async () => {
+    await setup()
+    mockActiveAgent()
+    mockGrantStore.findById.mockResolvedValue(buildDelegationGrant())
+
+    const result = await callDelegationTokenEndpoint()
+    expect(result.access_token).toBeTruthy()
+
+    const { payload } = await jwtVerify(result.access_token, idpSigningKey.publicKey, {
+      algorithms: ['EdDSA'],
+    })
+    // [] means "nothing allowed", never "everything allowed" — a delegated
+    // token must always state its own limits.
+    expect(payload.scope).toEqual([])
+  })
+})
