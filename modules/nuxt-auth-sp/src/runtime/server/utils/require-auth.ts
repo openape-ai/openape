@@ -11,29 +11,75 @@ export interface Caller {
   scope?: string[]
 }
 
+interface CatalogScopeEntry {
+  id: string
+  grants?: string[]
+}
+
+/** The SP's published scope catalog (`openapeSp.manifest.scopes`), if any. */
+function getCatalogScopes(): CatalogScopeEntry[] {
+  const config = useRuntimeConfig()
+  const raw = (config.openapeSp as unknown as { manifest?: { scopes?: CatalogScopeEntry[] } } | undefined)
+    ?.manifest
+    ?.scopes
+  return Array.isArray(raw) ? raw : []
+}
+
+/**
+ * Does a catalog grant like `POST /api/cockpit/agent/skill/:id` cover the
+ * request? Method matches case-insensitively; path segments match exactly,
+ * except `:param` / `[param]` segments, which match exactly one arbitrary
+ * segment.
+ */
+function grantCoversRequest(grant: string, method: string, path: string): boolean {
+  const [grantMethod, grantPath] = grant.trim().split(/\s+/)
+  if (!grantMethod || !grantPath) return false
+  if (grantMethod.toUpperCase() !== method) return false
+  const grantSegments = grantPath.split('/').filter(Boolean)
+  const pathSegments = path.split('/').filter(Boolean)
+  if (grantSegments.length !== pathSegments.length) return false
+  return grantSegments.every((segment, i) =>
+    segment.startsWith(':') || (segment.startsWith('[') && segment.endsWith(']')) || segment === pathSegments[i])
+}
+
 /**
  * Scope enforcement chokepoint (sp-data-access.md §5.3). Only delegated
- * tokens carry `scope`; first-party callers pass through unchanged. Method
- * → required scope: GET/HEAD → `<prefix>:read`, mutating → `<prefix>:write`.
- * `<prefix>` is derived from the granted scopes themselves (e.g.
- * `tasks:read` → `tasks`), so this util needs no per-app configuration.
+ * tokens carry `scope`; first-party callers pass through unchanged.
+ *
+ * Catalog first, convention fallback (#1033, blocker found in #1047):
+ *
+ *   1. Exact catalog scope ids (`<sp>:<action>`) are the spec convention
+ *      (sp-data-access.md §3.2). If any held scope's catalog entry declares a
+ *      grant covering the current `METHOD + path`, the request passes.
+ *   2. The `<prefix>:read|write` method convention is the older scheme and
+ *      stays as fallback — for SPs without a catalog and for held scopes
+ *      without a catalog entry — so read/write-pair SPs (tasks, timetrack)
+ *      behave exactly as before.
  */
 function enforceScope(event: H3Event, caller: Caller): Caller {
   if (!caller.scope) return caller
   if (caller.scope.length === 0) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'Delegated token carries no scope' })
   }
-  const prefix = caller.scope[0]!.split(':')[0]
   const method = getMethod(event).toUpperCase()
+  const path = event.path.split('?')[0]!
+
+  const heldCatalogEntries = getCatalogScopes().filter(entry => caller.scope!.includes(entry.id))
+  const catalogCovers = heldCatalogEntries.some(entry =>
+    entry.grants?.some(grant => grantCoversRequest(grant, method, path)))
+  if (catalogCovers) return caller
+
+  const prefix = caller.scope[0]!.split(':')[0]
   const needed = method === 'GET' || method === 'HEAD' ? `${prefix}:read` : `${prefix}:write`
-  if (!caller.scope.includes(needed)) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Forbidden',
-      message: `Delegated token lacks required scope "${needed}" (has: ${caller.scope.join(', ')})`,
-    })
-  }
-  return caller
+  if (caller.scope.includes(needed)) return caller
+
+  throw createError({
+    statusCode: 403,
+    statusMessage: 'Forbidden',
+    message: heldCatalogEntries.length > 0
+      ? `Delegated token scopes (${caller.scope.join(', ')}) do not cover ${method} ${path}: no catalog grant matches this route and conventional scope "${needed}" is not held`
+      : `Delegated token lacks required scope "${needed}" for ${method} ${path} (has: ${caller.scope.join(', ')})`,
+  })
 }
 
 interface SpSessionData {
