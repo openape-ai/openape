@@ -64,4 +64,28 @@ jobs:
         # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
         # built above, so every `^build` here is a cache hit — no fresh dts writes
         # race the typechecks.
-        run: pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs'
+        # Preserve the tail for the failure step below so flaky runner failures
+        # leave actionable context on the PR instead of only "CI:failure".
+        run: |
+          set -o pipefail
+          pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs' 2>&1 | tee /tmp/ci-checks.log
+      - name: Post CI failure log tail to PR
+        if: failure()
+        env:
+          FJ_TOKEN: ${{ github.token }}
+        run: |
+          PR=${{ github.event.pull_request.number }}
+          [ -z "$PR" ] && exit 0
+          python3 - "$PR" <<'PYEOF'
+          import json, os, sys, urllib.request
+
+          pr = sys.argv[1]
+          tail = open('/tmp/ci-checks.log', 'rb').read()[-12000:].decode('utf-8', 'replace')
+          body = "CI failure — Log-Schwanz des Check-Steps:\n\n```\n" + tail + "\n```"
+          req = urllib.request.Request(
+              f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{pr}/comments",
+              data=json.dumps({'body': body}).encode(),
+              headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'},
+          )
+          print(urllib.request.urlopen(req).status)
+          PYEOF
