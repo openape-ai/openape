@@ -1,4 +1,5 @@
 import type { JWTPayload } from 'jose'
+import { normalizeActClaim } from '@openape/core'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { signCliToken } from '../../utils/cli-token'
@@ -100,7 +101,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const act = (claims as { act?: string }).act === 'agent' ? 'agent' : 'human'
+  // Polymorphic claim: a delegation AuthZ-JWT carries act as an OBJECT
+  // ({sub: <delegate>}). It must mint an agent token — the previous
+  // string comparison upgraded it to 'human', which downstream skips
+  // the entire scope check (#1034). normalizeActClaim fails closed.
+  const act = normalizeActClaim(claims.act)
 
   // Revocation check (sp-data-access §5.4): a delegation AuthZ-JWT carries the
   // `delegation_grant` id. Expiry is visible in the token itself, but the Owner

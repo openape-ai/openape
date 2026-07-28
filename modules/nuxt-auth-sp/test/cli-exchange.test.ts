@@ -76,7 +76,7 @@ jwksHolder.keys.push(idpPubJwk)
 
 async function signSubjectToken(
   key: KeyLike,
-  claims: { iss?: string, aud?: string, sub?: string, act?: string } = {},
+  claims: { iss?: string, aud?: string, sub?: string, act?: unknown } = {},
 ): Promise<string> {
   return new SignJWT(claims.act ? { act: claims.act } : {})
     .setProtectedHeader({ alg: 'EdDSA', kid: 'idp-test-key' })
@@ -128,6 +128,15 @@ describe('createCliExchangeHandler — real signature verification', () => {
   it('maps act=agent from the verified claims onto the minted SP token', async () => {
     mockResolveIssuer.mockResolvedValue({ sub: 'bot@openape.ai', issuer: IDP_URL, jwksUri: `${IDP_URL}/.well-known/jwks.json` })
     mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { sub: 'bot@openape.ai', act: 'agent' }) })
+    const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
+    const [, payloadB64] = (result.access_token as string).split('.')
+    const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf-8'))
+    expect(payload.act).toBe('agent')
+  })
+
+  it('maps an RFC 8693 delegation act OBJECT to act=agent — never human (#1034)', async () => {
+    mockResolveIssuer.mockResolvedValue({ sub: 'alice@openape.ai', issuer: IDP_URL, jwksUri: `${IDP_URL}/.well-known/jwks.json` })
+    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { act: { sub: 'agent@openape.ai' } }) })
     const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
     const [, payloadB64] = (result.access_token as string).split('.')
     const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf-8'))

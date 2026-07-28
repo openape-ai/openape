@@ -1,4 +1,5 @@
 import type { JWTPayload } from 'jose'
+import { normalizeActClaim } from '@openape/core'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { signCliToken } from './cli-token'
@@ -120,7 +121,9 @@ export function createCliExchangeHandler() {
       })
     }
 
-    const act = (claims as { act?: string }).act === 'agent' ? 'agent' : 'human'
+    // Polymorphic claim: a delegation OBJECT must mint an agent token,
+    // never a human one (#1034) — normalizeActClaim fails closed.
+    const act = normalizeActClaim(claims.act)
 
     const { token, expiresAt } = await signCliToken({ email: sub, act })
 
