@@ -521,6 +521,7 @@ export const cockpitTasks = sqliteTable('cockpit_tasks', {
   options: text('options'), // JSON string[]
   askedAt: integer('asked_at'),
   files: text('files'), // JSON [{id,mime,name}] — chat attachments riding the task
+  allowedTools: text('allowed_tools'), // JSON string[] — the worker's command allowlist (#1036)
 })
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
