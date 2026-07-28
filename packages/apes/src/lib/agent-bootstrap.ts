@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { createPrivateKey, sign } from 'node:crypto'
+import { homedir } from 'node:os'
 import { exchangeWithDelegation } from '@openape/cli-auth'
 import { loadAuth } from '../config'
 import { apiFetch, getAgentAuthenticateEndpoint, getAgentChallengeEndpoint } from '../http'
@@ -88,6 +89,8 @@ async function tryDelegatedEnrollToken(idp?: string): Promise<string | null> {
     const result = await exchangeWithDelegation({
       idp: idpUrl,
       actorToken: auth.access_token,
+      clientEmail: myEmail,
+      clientKeyPath: auth.key_path ?? `${homedir()}/.ssh/id_ed25519`,
       audience: ENROLL_AUDIENCE,
       delegationGrantId: grantId,
     })
