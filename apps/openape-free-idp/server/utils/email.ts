@@ -1,3 +1,4 @@
+import type { PendingGrantMail } from './grant-mail'
 import { createError } from 'h3'
 import { Resend } from 'resend'
 import { useRuntimeConfig } from '#imports'
@@ -46,6 +47,55 @@ async function sendViaResend(label: string, to: string, subject: string, html: s
     })
   }
   console.info(`[email] ${label} email queued id=${data?.id ?? 'unknown'} to=${to}`)
+}
+
+// Grant summaries contain raw shell command lines — they must never be
+// interpolated into mail HTML unescaped.
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+/**
+ * Notify an approver that a grant is waiting for them (#1059). One mail
+ * per approver per cooldown window (see grant-mail.ts), so the copy
+ * covers a whole burst: it links the single approve URL plus the
+ * grants overview with the total pending count.
+ */
+export async function sendPendingGrantEmail(to: string, mail: PendingGrantMail) {
+  const subject = mail.pendingCount > 1
+    ? `${mail.pendingCount} Grant-Anfragen warten auf Freigabe — OpenApe`
+    : 'Grant-Anfrage wartet auf Freigabe — OpenApe'
+
+  await sendViaResend('pending grant', to, subject, brandedHtml(520, `
+        <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px;">
+          <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Freigabe benötigt</h2>
+          <p style="color: #a1a1aa; margin: 0 0 16px 0; font-size: 14px; line-height: 1.6;">
+            <strong style="color: #f5f5f5;">${escapeHtml(mail.requester)}</strong> wartet auf deine Freigabe:
+          </p>
+          <p style="color: #f5f5f5; background: #27272a; border-radius: 8px; padding: 12px 16px; margin: 0 0 24px 0; font-size: 13px; font-family: ui-monospace, monospace; word-break: break-all;">
+            ${escapeHtml(mail.summary)}
+          </p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${mail.approveUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+              Anfrage prüfen
+            </a>
+          </div>
+          ${mail.pendingCount > 1
+            ? `<p style="color: #a1a1aa; margin: 24px 0 0 0; font-size: 14px; line-height: 1.6;">
+            Insgesamt warten <strong style="color: #f5f5f5;">${mail.pendingCount} offene Anfragen</strong> —
+            <a href="${mail.overviewUrl}" style="color: #f97316;">alle ansehen</a>.
+          </p>`
+            : ''}
+          <p style="color: #71717a; margin: 24px 0 0 0; font-size: 12px;">
+            Weitere Anfragen der nächsten Minuten werden ohne zusätzliche Mail gesammelt —
+            du findest sie jederzeit in der <a href="${mail.overviewUrl}" style="color: #71717a;">Übersicht</a>.
+          </p>
+        </div>
+    `))
 }
 
 export async function sendRegistrationEmail(email: string, registerUrl: string) {
