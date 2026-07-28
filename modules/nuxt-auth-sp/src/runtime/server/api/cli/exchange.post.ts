@@ -1,3 +1,4 @@
+import { normalizeActClaim } from '@openape/core'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
@@ -86,7 +87,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const act = claims.act === 'agent' ? 'agent' : 'human'
+  // Polymorphic claim: a delegation OBJECT must mint an agent token,
+  // never a human one (#1034) — normalizeActClaim fails closed.
+  const act = normalizeActClaim(claims.act)
   const { clientId } = getSpConfig()
 
   const FIRST_PARTY_AUD = 'apes-cli'

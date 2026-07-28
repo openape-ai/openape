@@ -116,6 +116,11 @@ describe('requireCaller — session cookie path', () => {
     mockUseSession.mockResolvedValue({ data: { claims: { email: 'human@openape.ai', act: 'human' } } })
     await expect(requireCaller(event)).resolves.toEqual({ email: 'human@openape.ai', act: 'human' })
   })
+
+  it('reports an RFC 8693 delegation act OBJECT as agent, never human', async () => {
+    mockUseSession.mockResolvedValue({ data: { claims: { email: 'human@openape.ai', act: { sub: 'agent@openape.ai' } } } })
+    await expect(requireCaller(event)).resolves.toEqual({ email: 'human@openape.ai', act: 'agent' })
+  })
 })
 
 describe('requireCaller — delegated scope enforcement', () => {
