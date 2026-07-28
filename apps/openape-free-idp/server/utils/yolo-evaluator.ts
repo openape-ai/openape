@@ -94,6 +94,46 @@ export function splitCommandSegments(target: string): string[] {
   return segments.map(s => s.trim()).filter(s => s.length > 0)
 }
 
+/**
+ * True when the text contains a construct the shell would run as a NESTED
+ * command inside a single segment: command substitution (`$(…)`, backticks)
+ * or process substitution (`<(…)`, `>(…)`). Quote semantics follow the
+ * shell: single-quoted text is literal; inside double quotes `$(…)` and
+ * backticks still execute (process substitution does not); a backslash
+ * escapes the next character. Boundary drawn on purpose: plain `${…}`
+ * parameter expansion only expands variables and spawns no command — and a
+ * command substitution nested inside it (`${x:-$(cmd)}`) still contains
+ * `$(` and is caught by this character scan.
+ */
+export function containsCommandSubstitution(text: string): boolean {
+  let quote: '\'' | '"' | null = null
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (ch === '\\' && quote !== '\'') {
+      escaped = true
+      continue
+    }
+    if (quote === '\'') {
+      if (ch === '\'') quote = null
+      continue
+    }
+    if (ch === '`') return true
+    if (ch === '$' && text[i + 1] === '(') return true
+    if (quote === '"') {
+      if (ch === '"') quote = null
+      continue
+    }
+    if ((ch === '<' || ch === '>') && text[i + 1] === '(') return true
+    if (ch === '\'' || ch === '"') quote = ch
+  }
+  return false
+}
+
 export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | null {
   const now = ctx.now ?? Math.floor(Date.now() / 1000)
   const p = ctx.policy
@@ -120,9 +160,16 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   if (p.mode === 'allow-list') {
     // 1. EVERY segment matches at least one allow-pattern → approve. One
     //    unmatched segment means an unvetted command → risk check / human.
+    //    A pattern hit does not vouch for nested commands: a segment with
+    //    command/process substitution is only allowed by a pattern spelling
+    //    the construct out itself — that is the owner's explicit opt-in.
     const allowPatterns = p.allowPatterns || []
-    if (allowPatterns.length > 0
-      && segments.every(seg => allowPatterns.some(pattern => matchesGlob(seg, pattern)))) {
+    const segmentAllowed = (seg: string) => {
+      const needsExplicitOptIn = containsCommandSubstitution(seg)
+      return allowPatterns.some(pattern => matchesGlob(seg, pattern)
+        && (!needsExplicitOptIn || containsCommandSubstitution(pattern)))
+    }
+    if (allowPatterns.length > 0 && segments.every(segmentAllowed)) {
       return { kind: 'yolo', decidedBy: p.enabledBy }
     }
     // 2. Risk ≤ threshold → approve.
