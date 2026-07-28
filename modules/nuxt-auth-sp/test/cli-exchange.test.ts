@@ -76,9 +76,12 @@ jwksHolder.keys.push(idpPubJwk)
 
 async function signSubjectToken(
   key: KeyLike,
-  claims: { iss?: string, aud?: string, sub?: string, act?: unknown } = {},
+  claims: { iss?: string, aud?: string, sub?: string, act?: unknown, scope?: unknown } = {},
 ): Promise<string> {
-  return new SignJWT(claims.act ? { act: claims.act } : {})
+  return new SignJWT({
+    ...(claims.act !== undefined ? { act: claims.act } : {}),
+    ...(claims.scope !== undefined ? { scope: claims.scope } : {}),
+  })
     .setProtectedHeader({ alg: 'EdDSA', kid: 'idp-test-key' })
     .setIssuer(claims.iss ?? IDP_URL)
     .setAudience(claims.aud ?? 'apes-cli')
@@ -136,17 +139,20 @@ describe('createCliExchangeHandler — real signature verification', () => {
 
   it('maps an RFC 8693 delegation act OBJECT to act=agent — never human (#1034)', async () => {
     mockResolveIssuer.mockResolvedValue({ sub: 'alice@openape.ai', issuer: IDP_URL, jwksUri: `${IDP_URL}/.well-known/jwks.json` })
-    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { act: { sub: 'agent@openape.ai' } }) })
+    // scope: [] because a delegated token WITHOUT a scope claim is rejected
+    // (protocol#6) — this test only cares about act normalization.
+    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { act: { sub: 'agent@openape.ai' }, scope: [] }) })
     const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
     const [, payloadB64] = (result.access_token as string).split('.')
     const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf-8'))
     expect(payload.act).toBe('agent')
   })
 
-  it('echoes requested scopes back on success', async () => {
+  it('returns granted scope + delegate provenance on a scoped exchange', async () => {
     mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv), scopes: ['chat:read', 'chat:write'] })
     const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
-    expect(result.scopes).toEqual(['chat:read', 'chat:write'])
+    expect(result.scope).toEqual(['chat:read', 'chat:write'])
+    expect(result.delegate).toBeNull()
   })
 })
 
