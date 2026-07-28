@@ -577,6 +577,9 @@ describe('delegation endpoints', () => {
       expect(payload.act).toEqual({ sub: 'bob@example.com' })
       // delegation_grant should reference the delegation
       expect(payload.delegation_grant).toBe(delegation.id)
+      // Regression (issue #1046): the authorization_code path is unchanged —
+      // only the client_credentials delegation branch mints a scope claim.
+      expect(payload.scope).toBeUndefined()
     })
 
     it('client_credentials delegation flow: assertion has sub=Alice, act={sub:Bob}', async () => {
@@ -624,6 +627,52 @@ describe('delegation endpoints', () => {
 
       expect(payload.sub).toBe('alice@example.com')
       expect(payload.act).toEqual({ sub: 'bob@example.com' })
+      // Issue #1046: grant without scopes → fail-closed empty scope claim.
+      // [] means "nothing allowed", never "everything allowed".
+      expect(payload.scope).toEqual([])
+    })
+
+    it('client_credentials delegation flow: assertion mirrors grant scopes (issue #1046)', async () => {
+      const aliceToken = await getAuthToken('alice@example.com', aliceKey.privateKey)
+      const createRes = await apiJson('/api/delegations', {
+        delegate: 'bob@example.com',
+        audience: 'sp.example.com',
+        grant_type: 'always',
+        scopes: ['tasks:read', 'tasks:write'],
+      }, { Authorization: `Bearer ${aliceToken}` })
+      expect(createRes.status).toBe(201)
+      const delegation = await createRes.json()
+
+      const assertion = await new SignJWT({
+        sub: 'bob@example.com',
+        iss: 'bob@example.com',
+      })
+        .setProtectedHeader({ alg: 'EdDSA' })
+        .setAudience(`${ISSUER}/token`)
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .setJti(crypto.randomUUID())
+        .sign(bobKey.privateKey)
+
+      const tokenRes = await apiJson('/token', {
+        grant_type: 'client_credentials',
+        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: assertion,
+        delegation_grant: delegation.id,
+        audience: 'sp.example.com',
+      })
+      expect(tokenRes.status).toBe(200)
+      const tokenData = await tokenRes.json()
+
+      const signingKey = await stores.keyStore.getSigningKey()
+      const { payload } = await jwtVerify(tokenData.access_token, signingKey.publicKey, {
+        issuer: ISSUER,
+        audience: 'sp.example.com',
+      })
+
+      expect(payload.sub).toBe('alice@example.com')
+      expect(payload.act).toEqual({ sub: 'bob@example.com' })
+      expect(payload.scope).toEqual(['tasks:read', 'tasks:write'])
     })
 
     it('revoked delegation blocks authorize flow', async () => {
