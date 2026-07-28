@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { normalizeActClaim } from '@openape/core'
 import { createError, getHeader, getMethod, useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { verifyCliToken } from './cli-token'
@@ -63,7 +64,7 @@ export async function requireCaller(event: H3Event): Promise<Caller> {
       const claims = session.data?.claims
       const email = claims?.email ?? claims?.sub
       if (email) {
-        return { email, act: normalizeAct(claims?.act) }
+        return { email, act: normalizeActClaim(claims?.act) }
       }
     }
   }
@@ -87,14 +88,6 @@ export async function requireCaller(event: H3Event): Promise<Caller> {
   throw createError({ statusCode: 401, statusMessage: 'Unauthorized', message: 'Valid session or bearer token required' })
 }
 
-function normalizeAct(raw: unknown): 'human' | 'agent' {
-  // DDISA `act` can be a string OR a nested object (delegation chain).
-  // When nested (agent acting for human), treat caller as agent.
-  if (raw === 'agent') return 'agent'
-  if (typeof raw === 'object' && raw !== null) return 'agent'
-  return 'human'
-}
-
 /**
  * Verify an agent bearer token by posting it to the issuing IdP's verify endpoint.
  * The IdP URL is derived from the token's `iss` claim via DDISA, or falls back to
@@ -108,7 +101,7 @@ async function verifyAgentToken(token: string): Promise<Caller | null> {
       iss?: string
       sub?: string
       email?: string
-      act?: string
+      act?: unknown
       exp?: number
     }
     if (payload.exp && payload.exp * 1000 < Date.now()) return null
@@ -119,7 +112,7 @@ async function verifyAgentToken(token: string): Promise<Caller | null> {
     const idpUrl = iss?.startsWith('https://') ? iss : fallbackIdpUrl
 
     // POST {idpUrl}/api/grants/verify — returns { valid: boolean, claims? }
-    const result = await $fetch<{ valid: boolean, claims?: { sub?: string, email?: string, act?: string } }>(
+    const result = await $fetch<{ valid: boolean, claims?: { sub?: string, email?: string, act?: unknown } }>(
       `${idpUrl}/api/grants/verify`,
       { method: 'POST', body: { token } },
     )
@@ -128,7 +121,7 @@ async function verifyAgentToken(token: string): Promise<Caller | null> {
     if (!email) return null
     return {
       email,
-      act: (result.claims?.act as 'human' | 'agent' | undefined) ?? (payload.act as 'human' | 'agent' | undefined) ?? 'agent',
+      act: normalizeActClaim(result.claims?.act ?? payload.act),
     }
   }
   catch (err) {
