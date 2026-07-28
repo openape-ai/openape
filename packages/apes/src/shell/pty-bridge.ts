@@ -89,7 +89,7 @@ export class PtyBridge {
     // script sets this marker on the parent ape-shell process; leaking it
     // into bash would cause `apes <subcommand>` at the REPL prompt to print
     // "unsupported invocation" instead of running.
-    const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+    const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
     this.term = pty.spawn('bash', ['--login', '-i'], {
       name: 'xterm-256color',
       cols,

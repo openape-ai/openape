@@ -127,5 +127,56 @@ describe('ape-shell argv rewriting', () => {
       ])
       expect(result).toBeNull()
     })
+
+    it('documents the shim failure mode: -c via bare cli.js without any signal is NOT rewritten', () => {
+      // A package-manager shim (pnpm) execs `node .../dist/cli.js "$@"`
+      // directly — argv[1] is cli.js, no env signal. Detection must NOT
+      // fire (this argv is indistinguishable from a plain `apes -c` typo),
+      // which is exactly why the published `ape-shell` bin must be the
+      // wrapper script: without it the -c command silently never runs.
+      delete process.env.APES_SHELL_WRAPPER
+      const result = rewriteApeShellArgs(['node', '/x/dist/cli.js', '-c', 'echo hi'])
+      expect(result).toBeNull()
+    })
+
+    it('rewrites the shim argv shape when APES_SHELL_WRAPPER=1 is set', () => {
+      const result = rewriteApeShellArgs(['node', '/x/dist/cli.js', '-c', 'echo hi'])
+      expect(result).toEqual({
+        action: 'rewrite',
+        argv: ['node', '/x/dist/cli.js', 'run', '--shell', '--', 'bash', '-c', 'echo hi'],
+      })
+    })
+  })
+
+  describe('explicit shell-mode switch (APES_SHELL_MODE env var)', () => {
+    const savedEnv = process.env.APES_SHELL_MODE
+
+    beforeEach(() => {
+      process.env.APES_SHELL_MODE = '1'
+    })
+
+    afterEach(() => {
+      if (savedEnv === undefined) delete process.env.APES_SHELL_MODE
+      else process.env.APES_SHELL_MODE = savedEnv
+    })
+
+    it('treats APES_SHELL_MODE=1 as equivalent to the wrapper signal for -c', () => {
+      const result = rewriteApeShellArgs(['node', '/x/dist/cli.js', '-c', 'echo hi'])
+      expect(result).toEqual({
+        action: 'rewrite',
+        argv: ['node', '/x/dist/cli.js', 'run', '--shell', '--', 'bash', '-c', 'echo hi'],
+      })
+    })
+
+    it('enters interactive mode with APES_SHELL_MODE=1 and no args', () => {
+      const result = rewriteApeShellArgs(['node', '/x/dist/cli.js'])
+      expect(result).toEqual({ action: 'interactive' })
+    })
+
+    it('returns null when APES_SHELL_MODE is unset and argv does not match', () => {
+      delete process.env.APES_SHELL_MODE
+      const result = rewriteApeShellArgs(['node', '/x/dist/cli.js', '-c', 'echo hi'])
+      expect(result).toBeNull()
+    })
   })
 })
