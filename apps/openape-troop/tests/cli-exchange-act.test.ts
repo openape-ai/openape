@@ -54,9 +54,12 @@ const idpPair = await generateKeyPair('EdDSA', { extractable: true })
 const idpPriv: KeyLike = idpPair.privateKey
 jwksHolder.keys.push({ ...(await exportJWK(idpPair.publicKey)), kid: 'idp-test-key', alg: 'EdDSA', use: 'sig' })
 
-async function signSubjectToken(claims: { sub?: string, act?: unknown } = {}): Promise<string> {
+async function signSubjectToken(claims: { sub?: string, act?: unknown, scope?: unknown } = {}): Promise<string> {
   const sub = claims.sub ?? 'alice@openape.ai'
-  return new SignJWT(claims.act !== undefined ? { act: claims.act } : {})
+  const payload: Record<string, unknown> = {}
+  if (claims.act !== undefined) payload.act = claims.act
+  if (claims.scope !== undefined) payload.scope = claims.scope
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: 'EdDSA', kid: 'idp-test-key' })
     .setIssuer(IDP_URL)
     .setAudience('apes-cli')
@@ -78,7 +81,9 @@ beforeEach(() => {
 
 describe('POST /api/cli/exchange — act normalization (#1034)', () => {
   it('mints act=agent for an RFC 8693 delegation act OBJECT — never human', async () => {
-    bodyHolder.body = { subject_token: await signSubjectToken({ act: { sub: 'igor4-cb6bf26a+patrick+hofmann_eco@id.openape.ai' } }) }
+    // scope: [] because #1035 rejects delegated tokens WITHOUT a scope
+    // claim — this test only cares about act normalization.
+    bodyHolder.body = { subject_token: await signSubjectToken({ act: { sub: 'igor4-cb6bf26a+patrick+hofmann_eco@id.openape.ai' }, scope: [] }) }
     const result = await handler({})
     const minted = decodeMintedAct(result)
     expect(minted.act).toBe('agent')
