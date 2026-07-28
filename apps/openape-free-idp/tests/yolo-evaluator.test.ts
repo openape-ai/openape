@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
-import { evaluateYoloPolicy, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
+import { containsCommandSubstitution, evaluateYoloPolicy, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -83,6 +83,36 @@ describe('splitCommandSegments', () => {
   })
   it('operator-only input yields no segments', () => {
     expect(splitCommandSegments('&& ; |')).toEqual([])
+  })
+})
+
+describe('containsCommandSubstitution', () => {
+  it('plain commands have none', () => {
+    expect(containsCommandSubstitution('o365-cli mail list --limit 1')).toBe(false)
+    // eslint-disable-next-line no-template-curly-in-string -- deliberately a plain ${…} expansion
+    expect(containsCommandSubstitution('echo $HOME ${PATH}')).toBe(false)
+  })
+  it('detects $( ), backticks and process substitution outside quotes', () => {
+    expect(containsCommandSubstitution('echo $(rm -rf ~/x)')).toBe(true)
+    expect(containsCommandSubstitution('echo `evil`')).toBe(true)
+    expect(containsCommandSubstitution('cat <(evil)')).toBe(true)
+    expect(containsCommandSubstitution('tee >(evil)')).toBe(true)
+  })
+  it('single-quoted constructs are literal and harmless', () => {
+    expect(containsCommandSubstitution('echo \'$(x)\'')).toBe(false)
+    expect(containsCommandSubstitution('echo \'`x`\'')).toBe(false)
+    expect(containsCommandSubstitution('echo \'<(x)\'')).toBe(false)
+  })
+  it('double quotes do NOT neutralize $( ) or backticks', () => {
+    expect(containsCommandSubstitution('echo "$(evil)"')).toBe(true)
+    expect(containsCommandSubstitution('echo "`evil`"')).toBe(true)
+  })
+  it('process substitution inside double quotes is literal', () => {
+    expect(containsCommandSubstitution('echo "<(x)"')).toBe(false)
+  })
+  it('escaped $ or backtick is literal', () => {
+    expect(containsCommandSubstitution('echo \\$(x)')).toBe(false)
+    expect(containsCommandSubstitution('echo \\`x\\`')).toBe(false)
   })
 })
 
@@ -273,6 +303,34 @@ describe('evaluateYoloPolicy', () => {
       // A host is not a shell command line — no operator semantics apply.
       const p = allow(['*.openai.com'])
       expect(evaluateYoloPolicy({ policy: p, target: 'api.openai.com', resolvedRisk: null, targetKind: 'host' }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('command substitution inside an allowed segment is NOT auto-approved', () => {
+      const p = allow(['o365-cli mail list *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list $(rm -rf ~/x)', resolvedRisk: null }))
+        .toBeNull()
+    })
+    it('backtick substitution inside an allowed segment is NOT auto-approved', () => {
+      const p = allow(['o365-cli *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'o365-cli mail list `evil`', resolvedRisk: null }))
+        .toBeNull()
+    })
+    it('process substitution inside an allowed segment is NOT auto-approved', () => {
+      const p = allow(['cat *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'cat <(evil)', resolvedRisk: null })).toBeNull()
+    })
+    it('single-quoted substitution text is literal and stays approved', () => {
+      const p = allow(['echo *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo \'$(harmless literal)\'', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('double-quoted substitution still executes and is NOT auto-approved', () => {
+      const p = allow(['echo *'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo "$(evil)"', resolvedRisk: null })).toBeNull()
+    })
+    it('a pattern spelling out $( itself opts the owner in', () => {
+      const p = allow(['git commit -m "$(date)*'])
+      expect(evaluateYoloPolicy({ policy: p, target: 'git commit -m "$(date)"', resolvedRisk: null }))
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
     })
     it('operator-only command line is never auto-approved', () => {
