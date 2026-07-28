@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
 import { evaluateYoloPolicy, matchesGlob, targetFromRequest } from '../server/utils/yolo-evaluator'
@@ -61,10 +61,31 @@ describe('evaluateYoloPolicy', () => {
     expect(evaluateYoloPolicy({ policy: p, target: undefined, resolvedRisk: null })).toBeNull()
     expect(evaluateYoloPolicy({ policy: p, target: '', resolvedRisk: null })).toBeNull()
   })
-  it('match without any rules → approves with enabledBy', () => {
+  // Fail closed (#1037): a deny-list policy with neither patterns nor a risk
+  // threshold expresses no restriction — treating it as "approve everything"
+  // would silently bypass human approval. It is a no-op policy instead.
+  it('deny-list without any rules → null (fail closed, no auto-approve)', () => {
     const p = policy()
-    const result = evaluateYoloPolicy({ policy: p, target: 'ls -la', resolvedRisk: null })
-    expect(result).toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    expect(evaluateYoloPolicy({ policy: p, target: 'ls -la', resolvedRisk: null })).toBeNull()
+  })
+  it('deny-list without rules warns once per policy, not per request', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const p = { ...policy(), agentEmail: 'warn-once@x', audience: 'ape-shell' }
+      evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: null })
+      evaluateYoloPolicy({ policy: p, target: 'rm foo', resolvedRisk: null })
+      const calls = warn.mock.calls.filter(args => String(args[0]).includes('warn-once@x'))
+      expect(calls).toHaveLength(1)
+      expect(String(calls[0]![0])).toContain('ape-shell')
+    }
+    finally {
+      warn.mockRestore()
+    }
+  })
+  it('deny-pattern makes the policy effective: non-matching target approves', () => {
+    const p = policy({ denyPatterns: ['rm *'] })
+    expect(evaluateYoloPolicy({ policy: p, target: 'ls -la', resolvedRisk: null }))
+      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
   })
   it('deny-pattern drops the match', () => {
     const p = policy({ denyPatterns: ['rm *'] })
@@ -90,6 +111,8 @@ describe('evaluateYoloPolicy', () => {
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
   })
   it('risk-threshold only applies when resolvedRisk is non-null', () => {
+    // The threshold alone makes the policy effective (it restricts by risk),
+    // so the deny-list default-allow behavior is unchanged here.
     const p = policy({ denyRiskThreshold: 'high' })
     expect(evaluateYoloPolicy({ policy: p, target: 'ls', resolvedRisk: null }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
@@ -104,10 +127,9 @@ describe('evaluateYoloPolicy', () => {
     expect(evaluateYoloPolicy({ policy: p, target: 'api.github.com', resolvedRisk: null }))
       .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
   })
-  it('host-target without deny patterns auto-approves', () => {
+  it('host-target without any deny rules → null (fail closed)', () => {
     const p = policy()
-    expect(evaluateYoloPolicy({ policy: p, target: 'example.org', resolvedRisk: null }))
-      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    expect(evaluateYoloPolicy({ policy: p, target: 'example.org', resolvedRisk: null })).toBeNull()
   })
 
   describe('allow-list mode', () => {
@@ -152,14 +174,19 @@ describe('evaluateYoloPolicy', () => {
   })
 
   describe('inactive list survives mode flips', () => {
-    it('deny-list mode ignores allowPatterns (would otherwise auto-approve)', () => {
-      // Inactive `allowPatterns` MUST NOT be consulted in deny-list mode.
-      // If they were, this `rm` would auto-approve (since it matches an
-      // entry in the inactive list) — but in deny-list mode the only thing
-      // that should drop the request is a denyPattern match.
-      const p = policy({ mode: 'deny-list', allowPatterns: ['rm *'] })
+    it('deny-list mode ignores allowPatterns for matching', () => {
+      // Inactive `allowPatterns` MUST NOT be consulted in deny-list mode —
+      // only a denyPattern match may drop the request. The extra denyPattern
+      // makes the policy effective without matching the target.
+      const p = policy({ mode: 'deny-list', denyPatterns: ['sudo *'], allowPatterns: ['rm *'] })
       expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: null }))
         .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('inactive allowPatterns do not make an otherwise-empty deny-list effective', () => {
+      // Only the ACTIVE rule set counts for the fail-closed check: a deny-list
+      // whose sole content is a leftover allow-list is still a no-op policy.
+      const p = policy({ mode: 'deny-list', allowPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf foo', resolvedRisk: null })).toBeNull()
     })
   })
 })
