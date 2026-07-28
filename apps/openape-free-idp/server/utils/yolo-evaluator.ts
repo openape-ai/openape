@@ -38,8 +38,60 @@ export interface YoloDecisionContext {
    * right field from the grant request via `targetFromRequest`.
    */
   target: string | undefined
+  /**
+   * How to interpret `target` for pattern matching (#1079): `'command'`
+   * targets are split into shell segments and evaluated per segment,
+   * `'host'` targets have no shell semantics and are matched as-is.
+   * Defaults to `'command'` — segmentation is the fail-safe direction.
+   */
+  targetKind?: 'command' | 'host'
   resolvedRisk: RiskLevel | null
   now?: number
+}
+
+/**
+ * Split a command line at the shell control operators (`&&`, `||`, `;`, `|`,
+ * `&`, newlines) into trimmed, non-empty segments. Operators inside single
+ * or double quotes are literal text, not separators; a backslash escapes the
+ * next character (except inside single quotes) so `\"` never toggles quote
+ * state. Why: allow/deny patterns describe COMMANDS, not line prefixes —
+ * every chained command must be judged on its own (#1079).
+ */
+export function splitCommandSegments(target: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: '\'' | '"' | null = null
+  let escaped = false
+  for (const ch of target) {
+    if (escaped) {
+      current += ch
+      escaped = false
+      continue
+    }
+    if (ch === '\\' && quote !== '\'') {
+      current += ch
+      escaped = true
+      continue
+    }
+    if (quote) {
+      current += ch
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '\'' || ch === '"') {
+      current += ch
+      quote = ch
+      continue
+    }
+    if (ch === '&' || ch === '|' || ch === ';' || ch === '\n' || ch === '\r') {
+      segments.push(current)
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  segments.push(current)
+  return segments.map(s => s.trim()).filter(s => s.length > 0)
 }
 
 export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | null {
@@ -51,6 +103,13 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   const target = ctx.target && ctx.target.length ? ctx.target : null
   if (!target) return null
 
+  // Patterns allow commands, not prefixes (#1079): command lines are judged
+  // per shell segment so `allowed-cmd && anything` can't ride along. Hosts
+  // carry no shell semantics and stay a single segment.
+  const segments = ctx.targetKind === 'host' ? [target] : splitCommandSegments(target)
+  // A line consisting only of operators has nothing to judge → human decides.
+  if (segments.length === 0) return null
+
   // Risk-threshold semantic is SYMMETRIC across modes:
   //   "alles bis zu diesem Level wird auto-approved, alles darüber wartet"
   // - deny-list (default allow): risk > threshold → don't approve.
@@ -59,9 +118,12 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // - deny-list: explicit deny-pattern → don't approve (further restrict).
   // - allow-list: explicit allow-pattern → approve (further open).
   if (p.mode === 'allow-list') {
-    // 1. Explicit allow-pattern match → approve.
-    for (const pattern of p.allowPatterns || []) {
-      if (matchesGlob(target, pattern)) return { kind: 'yolo', decidedBy: p.enabledBy }
+    // 1. EVERY segment matches at least one allow-pattern → approve. One
+    //    unmatched segment means an unvetted command → risk check / human.
+    const allowPatterns = p.allowPatterns || []
+    if (allowPatterns.length > 0
+      && segments.every(seg => allowPatterns.some(pattern => matchesGlob(seg, pattern)))) {
+      return { kind: 'yolo', decidedBy: p.enabledBy }
     }
     // 2. Risk ≤ threshold → approve.
     if (ctx.resolvedRisk && p.denyRiskThreshold) {
@@ -96,8 +158,12 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
     // Risk > threshold → don't approve.
     if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null
   }
+  // A deny hit in ANY segment blocks — prefixing a harmless command must not
+  // hide it. The full line is still checked too so cross-segment patterns
+  // operators wrote against the old joined-line behavior keep blocking.
   for (const pattern of p.denyPatterns || []) {
     if (matchesGlob(target, pattern)) return null
+    if (segments.some(seg => matchesGlob(seg, pattern))) return null
   }
   return { kind: 'yolo', decidedBy: p.enabledBy }
 }
