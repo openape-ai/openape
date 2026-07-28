@@ -72,8 +72,8 @@ export async function notifyApproverOfPendingGrantByMail(
 
   if (!deps.debouncer.shouldSend(approver)) return 'debounced'
 
-  const pendingCount = await deps.countPendingForApprover(approver)
   try {
+    const pendingCount = await deps.countPendingForApprover(approver)
     await deps.sendMail(approver, {
       requester: grant.request.requester,
       summary: summarizeRequest(grant.request),
@@ -84,8 +84,8 @@ export async function notifyApproverOfPendingGrantByMail(
     })
   }
   catch (err) {
-    // A failed send must not consume the cooldown — the next pending
-    // grant retries instead of going silent for the whole window.
+    // A failure before or during the send must not consume the cooldown —
+    // the next pending grant retries instead of going silent for the window.
     deps.debouncer.reset(approver)
     throw err
   }
