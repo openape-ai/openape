@@ -359,6 +359,46 @@ describe('requestGrantForShellLine', () => {
     expect(approvalCall).toBeDefined()
   })
 
+  it('emits stderr progress lines while the session grant poll is pending (#1065)', async () => {
+    vi.useFakeTimers()
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+      // list → create → 6× pending (t=0..15 s) → approved (t=18 s):
+      // exactly one progress line is due, at the 15 s mark.
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'slow-session-grant', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const promise = requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      const result = await promise
+
+      expect(result).toEqual({ kind: 'approved', grantId: 'slow-session-grant', mode: 'session' })
+      const progress = stderrWrite.mock.calls
+        .map(call => String(call[0]))
+        .filter(line => line.includes('still waiting'))
+      expect(progress).toHaveLength(1)
+      expect(progress[0]).toContain('15s')
+      expect(progress[0]).toContain('slow-ses')
+    }
+    finally {
+      stderrWrite.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('logs an approval ack line after adapter grant waitForGrantStatus resolves approved', async () => {
     const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'curl', argv: ['https://example.com'], isCompound: false, raw: 'curl https://example.com' })
