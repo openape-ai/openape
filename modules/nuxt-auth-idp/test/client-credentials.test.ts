@@ -140,6 +140,10 @@ describe('client_credentials grant', () => {
     expect(payload.sub).toBe(AGENT_EMAIL)
     expect(payload.act).toBe('agent')
     expect(payload.iss).toBe(ISSUER)
+    // Regression (issue #1035): only DELEGATED tokens carry a scope claim.
+    // First-party agent tokens stay scope-less — their authority is the
+    // agent's own identity, not a delegation boundary.
+    expect(payload.scope).toBeUndefined()
   })
 
   it('rejects unknown agent', async () => {
