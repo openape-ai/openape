@@ -1,5 +1,12 @@
 # @openape/apes
 
+## 1.33.1
+
+### Patch Changes
+
+- Updated dependencies [af7f762]
+  - @openape/shapes@0.8.0
+
 ## 1.33.0
 
 ### Minor Changes
