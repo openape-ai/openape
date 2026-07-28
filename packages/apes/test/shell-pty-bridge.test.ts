@@ -158,27 +158,34 @@ describe('PtyBridge', () => {
     expect(h.exitInfo).not.toBeNull()
   })
 
-  it('does not leak APES_SHELL_WRAPPER into the bash child env', async () => {
+  it('does not leak APES_SHELL_WRAPPER or APES_SHELL_MODE into the bash child env', async () => {
     const saved = process.env.APES_SHELL_WRAPPER
+    const savedMode = process.env.APES_SHELL_MODE
     process.env.APES_SHELL_WRAPPER = '1'
+    process.env.APES_SHELL_MODE = '1'
     try {
       const h = createHarness()
       harnesses.push(h)
       await h.bridge.waitForReady()
-      // Print the var; bash emits an empty value if unset. Use `$VAR` (not
+      // Print the vars; bash emits an empty value if unset. Use `$VAR` (not
       // `${VAR}`) so the JS lint rule no-template-curly-in-string isn't
       // triggered by the bash-side parameter expansion.
-      h.bridge.writeLine('printf "WRAPPER=[%s]\\n" "$APES_SHELL_WRAPPER"')
+      h.bridge.writeLine('printf "WRAPPER=[%s] MODE=[%s]\\n" "$APES_SHELL_WRAPPER" "$APES_SHELL_MODE"')
       await waitUntil(() => h.completedLines.length >= 1)
       const out = h.completedLines[0]!.output
-      expect(out).toContain('WRAPPER=[]')
+      expect(out).toContain('WRAPPER=[] MODE=[]')
       expect(out).not.toContain('WRAPPER=[1]')
+      expect(out).not.toContain('MODE=[1]')
     }
     finally {
       if (saved === undefined)
         delete process.env.APES_SHELL_WRAPPER
       else
         process.env.APES_SHELL_WRAPPER = saved
+      if (savedMode === undefined)
+        delete process.env.APES_SHELL_MODE
+      else
+        process.env.APES_SHELL_MODE = savedMode
     }
   })
 })
