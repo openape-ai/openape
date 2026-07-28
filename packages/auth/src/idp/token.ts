@@ -136,6 +136,13 @@ export interface AssertionClaimsInput {
   delegation_act?: DelegationActClaim
   /** Delegation grant ID */
   delegation_grant?: string
+  /**
+   * Scopes mirrored from the delegation grant (grants.md §6.1). Pass `[]`
+   * (not undefined) for delegated assertions so verifiers can fail closed:
+   * a delegated token must always state its own limits, and `[]` means
+   * "nothing allowed". First-party assertions omit the claim entirely.
+   */
+  scope?: string[]
 }
 
 /**
@@ -149,7 +156,7 @@ export async function issueAssertion(
   const key = await keyStore.getSigningKey()
   const now = Math.floor(Date.now() / 1000)
 
-  const payload: DDISAAssertionClaims & { email?: string, name?: string, approver?: string, authorization_details?: OpenApeAuthorizationDetail[] } = {
+  const payload: DDISAAssertionClaims & { email?: string, name?: string, approver?: string, authorization_details?: OpenApeAuthorizationDetail[], scope?: string[] } = {
     iss: issuer,
     sub: claims.sub,
     aud: claims.aud,
@@ -162,6 +169,12 @@ export async function issueAssertion(
 
   if (claims.delegation_grant) {
     payload.delegation_grant = claims.delegation_grant
+  }
+
+  // Deliberately not `?.length` — an empty array must survive into the JWT
+  // (fail-closed scope for legacy delegation grants, see AssertionClaimsInput).
+  if (claims.scope) {
+    payload.scope = claims.scope
   }
 
   if (claims.delegate) {
