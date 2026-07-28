@@ -11,8 +11,13 @@
 #
 #   env: node: No such file or directory
 #
-# This wrapper is the actual file pointed at by `chsh` and by the
-# `/usr/local/bin/ape-shell` symlink. It:
+# This wrapper is the published `ape-shell` bin of `@openape/apes` (see
+# package.json) and the file pointed at by `chsh`. Making it the bin is what
+# keeps ape-shell working under shim-based installers (pnpm et al.): their
+# generated shim execs `node .../dist/cli.js` directly, so argv[1]-based
+# mode detection inside the CLI would silently fail — with the effect that
+# `ape-shell -c '<cmd>'` prints the apes help and executes NOTHING. This
+# wrapper instead:
 #
 #   1. Prepends known node install locations to PATH (Homebrew, nvm)
 #   2. Sets APES_SHELL_WRAPPER=1 so the CLI knows it was invoked via this
@@ -34,10 +39,13 @@
 
 set -e
 
-# Known node install locations searched in order. The first one found wins.
-# Users with exotic setups can override via APES_SHELL_NODE env var.
+# Node resolution order: explicit override, then whatever node is on PATH
+# (the normal case when this wrapper is installed as a package-manager bin —
+# nvm/fnm/volta setups land here), then known install locations as a
+# fallback for login-shell invocations where PATH is the bare system default.
 _node_candidates=(
   "${APES_SHELL_NODE:-}"
+  "$(command -v node 2>/dev/null || true)"
   "/opt/homebrew/bin/node"
   "/usr/local/bin/node"
   "/usr/bin/node"

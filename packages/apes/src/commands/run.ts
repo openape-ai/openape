@@ -528,7 +528,7 @@ function execShellCommand(command: string[]): void {
   if (command.length === 0)
     throw new CliError('No command to execute')
   try {
-    const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+    const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
     execFileSync(command[0]!, command.slice(1), {
       stdio: 'inherit',
       env: inheritedEnv,
@@ -767,9 +767,9 @@ function executeWithGrantToken(opts: {
   if (audience === 'escapes') {
     consola.info(`Executing: ${command.join(' ')}`)
     try {
-      // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside
+      // Strip the shell-mode markers so nested `apes` invocations inside
       // the escapes pipe don't self-detect as ape-shell mode.
-      const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+      const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
       execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', token, '--', ...command], {
         stdio: 'inherit',
         env: inheritedEnv,
