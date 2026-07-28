@@ -6,6 +6,7 @@ import { hostname } from 'node:os'
 import consola from 'consola'
 import { getGenericAuditLogPath } from '../config.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
+import { createWaitProgressReporter } from '../wait-progress.js'
 import {
   apiFetch,
   discoverEndpoints,
@@ -60,14 +61,23 @@ export async function createShapesGrant(
   })
 }
 
+/**
+ * Poll a grant until it leaves `pending` (max 5 minutes). While waiting,
+ * a short progress line is written to stderr every 15 seconds so callers
+ * (and their stall heuristics) can tell an ongoing wait from a hang —
+ * stdout stays untouched. Suppress the progress output with
+ * `APES_QUIET_WAIT=1` for quiet/non-interactive runs.
+ */
 export async function waitForGrantStatus(idp: string, grantId: string): Promise<'approved' | 'denied' | 'revoked'> {
   const grantsEndpoint = await getGrantsEndpoint(idp)
   const deadline = Date.now() + 300_000
+  const reportProgress = createWaitProgressReporter(grantId)
 
   while (Date.now() < deadline) {
     const grant = await apiFetch<{ status: 'pending' | 'approved' | 'denied' | 'revoked' }>(`${grantsEndpoint}/${grantId}`, { idp })
     if (grant.status === 'approved' || grant.status === 'denied' || grant.status === 'revoked')
       return grant.status
+    reportProgress()
     await new Promise(resolve => setTimeout(resolve, 3000))
   }
 
