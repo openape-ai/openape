@@ -339,6 +339,50 @@ describe('evaluateYoloPolicy', () => {
     })
   })
 
+  // SECURITY (#1079): a blocklist cannot see into a substitution —
+  // `echo $(rm -rf ~)` matches no `*rm*` deny pattern even though the shell
+  // runs the nested command. Deny-list mode therefore fails closed on
+  // substitution segments instead of default-allowing them.
+  describe('deny-list: substitution fails closed (#1079)', () => {
+    it('command substitution → human approval even though no deny pattern matches', () => {
+      // The anchored pattern `rm *` cannot see into the substitution — the
+      // segment starts with `echo`, so without the fail-closed rule this
+      // was auto-approved while the shell ran the nested `rm`.
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo $(rm -rf /)', resolvedRisk: null })).toBeNull()
+    })
+    it('backtick substitution → human approval', () => {
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo `rm -rf /`', resolvedRisk: null })).toBeNull()
+    })
+    it('substitution with only a risk threshold configured → human approval', () => {
+      const p = policy({ denyRiskThreshold: 'high' })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo $(evil)', resolvedRisk: 'low' })).toBeNull()
+    })
+    it('normal command without substitution is still approved', () => {
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'ls -la', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('single-quoted substitution text is literal and stays approved', () => {
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo \'$(literal)\'', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+    })
+    it('a deny hit still blocks, substitution or not', () => {
+      const p = policy({ denyPatterns: ['rm *'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'rm -rf /', resolvedRisk: null })).toBeNull()
+    })
+    it('owner opt-out: a deny pattern spelling out $( restores normal deny logic', () => {
+      // The owner governs substitutions by pattern — non-matching ones pass.
+      const p = policy({ denyPatterns: ['*$(curl*'] })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo $(date)', resolvedRisk: null }))
+        .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+      expect(evaluateYoloPolicy({ policy: p, target: 'echo $(curl evil.sh)', resolvedRisk: null }))
+        .toBeNull()
+    })
+  })
+
   describe('inactive list survives mode flips', () => {
     it('deny-list mode ignores allowPatterns for matching', () => {
       // Inactive `allowPatterns` MUST NOT be consulted in deny-list mode —
