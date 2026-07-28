@@ -13,16 +13,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const SESSION_SECRET = 'test-session-secret-at-least-32-chars!!'
 const CLIENT_ID = 'tasks.openape.ai'
 
-const { mockGetHeader, mockGetMethod, mockUseSession } = vi.hoisted(() => ({
+const { mockGetHeader, mockGetMethod, mockUseSession, mockRuntimeConfig } = vi.hoisted(() => ({
   mockGetHeader: vi.fn(),
   mockGetMethod: vi.fn(),
   mockUseSession: vi.fn(),
+  mockRuntimeConfig: vi.fn(),
 }))
 
 vi.mock('nitropack/runtime', () => ({
-  useRuntimeConfig: vi.fn(() => ({
-    openapeSp: { sessionSecret: SESSION_SECRET },
-  })),
+  useRuntimeConfig: mockRuntimeConfig,
 }))
 
 vi.mock('../src/runtime/server/utils/sp-config', () => ({
@@ -47,8 +46,20 @@ const { requireCaller } = await import('../src/runtime/server/utils/require-auth
 // token deterministically ends in 401 rather than a real round-trip.
 ;(globalThis as Record<string, unknown>).$fetch = vi.fn().mockRejectedValue(new Error('no network in test'))
 
-const event = {} as H3Event
+const event = { path: '/' } as H3Event
 const bearer = (token: string) => mockGetHeader.mockReturnValue(`Bearer ${token}`)
+
+function request(method: string, path = '/') {
+  mockGetMethod.mockReturnValue(method)
+  ;(event as { path: string }).path = path
+}
+
+/** Point useRuntimeConfig at an SP that publishes the given scope catalog. */
+function withCatalog(scopes: Array<{ id: string, description: string, grants?: string[] }>) {
+  mockRuntimeConfig.mockReturnValue({
+    openapeSp: { sessionSecret: SESSION_SECRET, manifest: { scopes } },
+  })
+}
 
 // Sign a raw CLI token directly — for edge cases signCliToken won't mint
 // (empty scope array, deliberately-past expiry).
@@ -65,8 +76,9 @@ function rawCliToken(claims: Record<string, unknown>, opts: { expSeconds?: numbe
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockRuntimeConfig.mockReturnValue({ openapeSp: { sessionSecret: SESSION_SECRET } }) // no manifest by default
   mockUseSession.mockResolvedValue({ data: {} }) // no session → fall through to bearer
-  mockGetMethod.mockReturnValue('GET')
+  request('GET', '/')
   mockGetHeader.mockReturnValue(undefined)
 })
 
@@ -149,5 +161,98 @@ describe('requireCaller — delegated scope enforcement', () => {
     const token = await rawCliToken({ sub: 'bot@openape.ai', email: 'bot@openape.ai', act: 'agent', scope: [] })
     bearer(token)
     await expect(requireCaller(event)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('accepts a read+write token on a mutating POST', async () => {
+    const { token } = await signCliToken({ email: 'bot@openape.ai', act: 'agent', scope: ['tasks:read', 'tasks:write'] })
+    bearer(token)
+    mockGetMethod.mockReturnValue('POST')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['tasks:read', 'tasks:write'] })
+  })
+})
+
+// Exact catalog scopes (`<sp>:<action>`, sp-data-access.md §3.2) grant specific
+// routes, not a read/write pair — the module must honor the SP's published
+// catalog before falling back to the `<prefix>:read|write` convention (#1033,
+// blocker found in #1047).
+describe('requireCaller — catalog-aware scope enforcement', () => {
+  const TROOP_CATALOG = [
+    {
+      id: 'troop:cockpit-serve',
+      description: 'Serve cockpit agent tasks',
+      grants: [
+        'POST /api/cockpit/agent/tasks/next',
+        'POST /api/cockpit/agent/tasks/resolve',
+        'GET /api/cockpit/agent/skill/:id',
+      ],
+    },
+    { id: 'troop:spawn-agent', description: 'Spawn agents', grants: ['POST /api/agents/spawn-intent'] },
+  ]
+
+  async function cockpitToken() {
+    const { token } = await signCliToken({ email: 'bot@openape.ai', act: 'agent', scope: ['troop:cockpit-serve'] })
+    bearer(token)
+  }
+
+  it('accepts an exact catalog scope on a POST route its grants cover', async () => {
+    withCatalog(TROOP_CATALOG)
+    await cockpitToken()
+    request('POST', '/api/cockpit/agent/tasks/next')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['troop:cockpit-serve'] })
+  })
+
+  it('matches a :param grant segment against exactly one path segment', async () => {
+    withCatalog(TROOP_CATALOG)
+    await cockpitToken()
+    request('GET', '/api/cockpit/agent/skill/abc123')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['troop:cockpit-serve'] })
+  })
+
+  it('does not let a :param segment swallow more than one segment', async () => {
+    withCatalog(TROOP_CATALOG)
+    await cockpitToken()
+    request('GET', '/api/cockpit/agent/skill/abc123/extra')
+    await expect(requireCaller(event)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('rejects a catalog scope on a route outside its grants with 403 naming held scopes', async () => {
+    withCatalog(TROOP_CATALOG)
+    await cockpitToken()
+    request('POST', '/api/agents/spawn-intent')
+    await expect(requireCaller(event)).rejects.toMatchObject({
+      statusCode: 403,
+      message: expect.stringContaining('troop:cockpit-serve'),
+    })
+  })
+
+  it('matches grant methods case-insensitively', async () => {
+    withCatalog([{ id: 'troop:cockpit-serve', description: 'x', grants: ['post /api/cockpit/agent/tasks/next'] }])
+    await cockpitToken()
+    request('POST', '/api/cockpit/agent/tasks/next')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['troop:cockpit-serve'] })
+  })
+
+  it('keeps the read/write convention as fallback for scopes without a catalog entry', async () => {
+    withCatalog(TROOP_CATALOG)
+    const { token } = await signCliToken({ email: 'bot@openape.ai', act: 'agent', scope: ['tasks:read'] })
+    bearer(token)
+    request('GET', '/api/tasks')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['tasks:read'] })
+  })
+
+  it('rejects an empty scope with 403 even when a catalog is published', async () => {
+    withCatalog(TROOP_CATALOG)
+    const token = await rawCliToken({ sub: 'bot@openape.ai', email: 'bot@openape.ai', act: 'agent', scope: [] })
+    bearer(token)
+    request('POST', '/api/cockpit/agent/tasks/next')
+    await expect(requireCaller(event)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('passes a first-party token (no scope claim) through unchecked', async () => {
+    withCatalog(TROOP_CATALOG)
+    const { token } = await signCliToken({ email: 'pat@example.com', act: 'human' })
+    bearer(token)
+    request('POST', '/api/agents/spawn-intent')
+    await expect(requireCaller(event)).resolves.toEqual({ email: 'pat@example.com', act: 'human' })
   })
 })
