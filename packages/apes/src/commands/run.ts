@@ -3,18 +3,22 @@ import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { defineCommand } from 'citty'
 import {
+  createCompoundGrant,
   createShapesGrant,
   extractOption,
   extractShellCommandString,
   extractWrappedCommand,
   fetchGrantToken,
+  findExistingCompoundGrant,
   findExistingGrant,
   isAutoApproved,
   loadAdapter,
   loadOrInstallAdapter,
   parseShellCommand,
   resolveCommand,
+  resolveCompoundCommand,
   resolveGenericOrReject,
+  verifyAndConsumeCompound,
   verifyAndExecute,
   waitForGrantStatus,
 } from '../shapes/index.js'
@@ -481,7 +485,12 @@ async function tryAdapterModeFromShell(
 
   const parsed = parseShellCommand(cmdString)
   if (!parsed) return false
-  if (parsed.isCompound) return false
+  // Compound lines (`a | b`, `a && b`) resolve segment by segment into ONE
+  // structured grant (plan 2026-07-29-compound-shapes-grants M2). When the
+  // line cannot be modelled precisely (substitution, redirects, mixed
+  // audiences) this returns false and the opaque session-grant path below
+  // takes over — same fail-closed direction as before.
+  if (parsed.isCompound) return await tryCompoundModeFromShell(command, idp, args)
 
   const loaded = await loadOrInstallAdapter(parsed.executable)
   if (!loaded) return false
@@ -549,6 +558,83 @@ async function tryAdapterModeFromShell(
 
     const token = await fetchGrantToken(idp, grant.id)
     await verifyAndExecute(token, resolved, grant.id)
+    return true
+  }
+
+  printPendingGrantInfo(grant, idp)
+  throw new CliExit(getAsyncExitCode())
+}
+
+/**
+ * Compound sibling of the adapter path: segment-wise resolution, ONE grant
+ * with every segment's structured detail, execution of the ORIGINAL line
+ * through the shell after verify+consume (pipes need the shell, per-segment
+ * exec would change semantics).
+ */
+async function tryCompoundModeFromShell(
+  command: string[],
+  idp: string,
+  args: Record<string, unknown>,
+): Promise<boolean> {
+  const compound = await resolveCompoundCommand(command)
+  if (!compound) return false
+
+  // sudo never rides a structured grant — root work goes through the
+  // escapes flow (`apes run --as root`). A sudo segment drops the whole
+  // line back to the opaque path, matching the pre-compound behavior.
+  if (compound.segments.some(seg => basename(seg.executable) === 'sudo'))
+    return false
+
+  // Reuse an approved timed/always grant that covers every segment.
+  try {
+    const existingGrantId = await findExistingCompoundGrant(compound, idp)
+    if (existingGrantId) {
+      consola.info(`Reusing grant ${existingGrantId} for compound: ${compound.innerLine.slice(0, 100)}`)
+      const token = await fetchGrantToken(idp, existingGrantId)
+      await verifyAndConsumeCompound(token, compound)
+      execShellCommand(command)
+      return true
+    }
+  }
+  catch {
+    // Fall through to request a new grant
+  }
+
+  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
+  consola.info(`Requesting grant for compound command (${compound.segments.length} segments): ${compound.innerLine.slice(0, 100)}`)
+  const grant = await createCompoundGrant(compound, {
+    idp,
+    approval,
+    reason: (args.reason as string) || `ape-shell compound: ${compound.innerLine.slice(0, 100)}`,
+  })
+
+  if (grant.similar_grants?.similar_grants?.length) {
+    const n = grant.similar_grants.similar_grants.length
+    consola.info('')
+    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
+  }
+
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: compound.innerLine.slice(0, 200),
+      audience: compound.audience,
+      host: (args.host as string) || hostname(),
+    })
+  }
+
+  if (shouldWaitForGrant(args)) {
+    consola.info(`Grant requested: ${grant.id}`)
+    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+
+    const status = await waitForGrantStatus(idp, grant.id)
+    if (status !== 'approved')
+      throw new CliError(`Grant ${status}`)
+
+    const token = await fetchGrantToken(idp, grant.id)
+    await verifyAndConsumeCompound(token, compound)
+    execShellCommand(command)
     return true
   }
 
