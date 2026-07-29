@@ -12,6 +12,7 @@ interface Hook {
   token: string
   secret: string | null
   prompt: string
+  eventFilter: string
   includePayload: boolean
   enabled: boolean
   createdBy: string
@@ -44,11 +45,11 @@ async function load() {
 const showForm = ref(false)
 const saving = ref(false)
 const formError = ref('')
-const form = reactive({ label: '', prompt: '', includePayload: false, useSecret: false })
+const form = reactive({ label: '', prompt: '', eventFilter: '', includePayload: false, useSecret: false })
 const created = ref<{ url: string, secret: string | null } | null>(null)
 
 function openAdd() {
-  Object.assign(form, { label: '', prompt: '', includePayload: false, useSecret: false })
+  Object.assign(form, { label: '', prompt: '', eventFilter: '', includePayload: false, useSecret: false })
   formError.value = ''
   created.value = null
   showForm.value = true
@@ -116,6 +117,9 @@ if (import.meta.client) origin.value = window.location.origin
               <UBadge v-if="h.secret" color="primary" variant="subtle" size="xs" icon="i-lucide-shield-check">
                 HMAC
               </UBadge>
+              <UBadge v-if="h.eventFilter" color="neutral" variant="subtle" size="xs" icon="i-lucide-filter">
+                {{ h.eventFilter }}
+              </UBadge>
               <UBadge v-if="h.includePayload" color="neutral" variant="subtle" size="xs">
                 Payload
               </UBadge>
@@ -162,6 +166,9 @@ if (import.meta.client) origin.value = window.location.origin
             </UFormField>
             <UFormField label="Anweisung (prompt)" description="Was der Operator tut, wenn das Ereignis eintrifft.">
               <UTextarea v-model="form.prompt" :rows="6" placeholder="Ein CI-Build ist fehlgeschlagen — melde welcher und was zu tun ist." class="w-full text-xs" :ui="{ base: 'w-full' }" />
+            </UFormField>
+            <UFormField label="Nur diese Ereignisse" description="Kommagetrennt, z. B. „issues, pull_request“. Leer = jedes Ereignis. Gilt für Sender, die den Ereignistyp im Header nennen (Forgejo, Gitea, GitHub).">
+              <UInput v-model="form.eventFilter" placeholder="issues" class="w-full" :ui="{ base: 'w-full' }" />
             </UFormField>
             <label class="flex items-center gap-2 cursor-pointer text-sm">
               <UCheckbox v-model="form.includePayload" />
