@@ -31,6 +31,20 @@ interface SimilarGrantsInfo {
   merged_details: Array<{ permission: string }>
 }
 
+/**
+ * POST /grants response. `approved_automatically` / `auto_approval_kind`
+ * are set when the IdP approved the grant at creation time (standing
+ * grants, pre-approval hooks like YOLO) — the async info block relies
+ * on them to report the real status (#1081).
+ */
+interface CreateShapesGrantResult {
+  id: string
+  status: string
+  approved_automatically?: boolean
+  auto_approval_kind?: string
+  similar_grants?: SimilarGrantsInfo
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {
@@ -38,13 +52,13 @@ export async function createShapesGrant(
     approval: 'once' | 'timed' | 'always'
     reason?: string
   },
-): Promise<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }> {
+): Promise<CreateShapesGrantResult> {
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
   const requester = getRequesterIdentity()
   if (!requester) {
     throw new Error('No requester identity available. Run `apes login` first.')
   }
-  return apiFetch<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }>(grantsEndpoint, {
+  return apiFetch<CreateShapesGrantResult>(grantsEndpoint, {
     method: 'POST',
     idp: params.idp,
     body: {
