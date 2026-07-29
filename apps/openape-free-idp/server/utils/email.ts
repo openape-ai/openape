@@ -117,6 +117,49 @@ export async function sendRegistrationEmail(email: string, registerUrl: string) 
     `))
 }
 
+export async function sendAddDeviceEmail(email: string, registerUrl: string) {
+  await sendViaResend('add-device', email, 'Weiteres Gerät hinzufügen — OpenApe', brandedHtml(480, `
+        <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px; text-align: center;">
+          <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Weiteres Gerät hinzufügen</h2>
+          <p style="color: #a1a1aa; margin: 0 0 24px 0; font-size: 14px; line-height: 1.6;">
+            Öffne diesen Link auf deinem <strong style="color: #f5f5f5;">neuen Gerät</strong>,
+            um dort einen Passkey für
+            <strong style="color: #f5f5f5;">${email}</strong> zu erstellen.
+            Der Link ist 1 Stunde gültig und nur einmal verwendbar.
+          </p>
+          <a href="${registerUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+            Passkey auf neuem Gerät erstellen
+          </a>
+          <p style="color: #71717a; margin: 24px 0 0 0; font-size: 12px;">
+            Falls du das nicht angefordert hast, ignoriere diese Email und
+            prüfe unter Account &rarr; Passkeys deine registrierten Geräte.
+          </p>
+        </div>
+    `))
+}
+
+export async function sendExistingAccountEmail(email: string, loginUrl: string, recoverUrl: string) {
+  await sendViaResend('existing-account', email, 'Du hast bereits einen Account — OpenApe', brandedHtml(480, `
+        <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 32px; text-align: center;">
+          <h2 style="color: #f5f5f5; margin: 0 0 16px 0; font-size: 18px;">Du hast bereits einen Account</h2>
+          <p style="color: #a1a1aa; margin: 0 0 24px 0; font-size: 14px; line-height: 1.6;">
+            Für <strong style="color: #f5f5f5;">${email}</strong> sind schon Passkeys registriert.
+            Um ein neues Gerät hinzuzufügen, melde dich auf einem Gerät mit
+            Passkey an und wähle unter Passkeys
+            <strong style="color: #f5f5f5;">&bdquo;Email me a link&ldquo;</strong>.
+          </p>
+          <a href="${loginUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+            Anmelden
+          </a>
+          <p style="color: #71717a; margin: 24px 0 0 0; font-size: 12px;">
+            Kein Gerät mit Passkey mehr? Nutze die
+            <a href="${recoverUrl}" style="color: #a1a1aa;">Account-Wiederherstellung</a>.
+            Falls du das nicht angefordert hast, ignoriere diese Email.
+          </p>
+        </div>
+    `))
+}
+
 export async function sendRecoveryEmail(
   email: string,
   recoveryUrl: string,
