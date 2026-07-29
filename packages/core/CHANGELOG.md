@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0
+
+### Minor Changes
+
+- 0140dc3: Neue Exporte `splitCommandSegments` + `containsCommandSubstitution` (aus dem
+  free-idp-YOLO-Evaluator extrahiert, #1079-gehärtet) — geteilte Grundlage für
+  Grant-Policy-Auswertung und die segmentweise Compound-Auflösung des
+  Shapes-Tracks.
+
 ## 0.19.0
 
 ### Minor Changes
