@@ -37,6 +37,88 @@ const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.author
 const isGenericGrant = computed(() =>
   cliDetails.value.some(d => d?.operation_id === '_generic.exec'),
 )
+
+/**
+ * "Make a rule from this" (plan 2026-07-29-compound-shapes-grants M3):
+ * derive a standing-grant proposal per shaped CLI in the request. The
+ * template keeps the first resource link's selector (the account/scope
+ * anchor) and wildcards the rest; max_risk caps at the highest incoming
+ * risk, so the risk model of the adapter does the verb-gating (a low rule
+ * never covers send/delete). Generic details are excluded — a rule for
+ * one exact argv is pointless.
+ */
+const RULE_RISK_ORDER = { low: 0, medium: 1, high: 2, critical: 3 }
+const RULE_DURATIONS = [
+  { label: '24 hours', value: '86400' },
+  { label: '7 days', value: '604800' },
+  { label: 'Forever', value: 'always' },
+]
+const ruleDurationByCli = ref({})
+const ruleCreatedByCli = ref({})
+const ruleErrorByCli = ref({})
+const ruleProcessing = ref(false)
+
+const ruleProposals = computed(() => {
+  const byCli = new Map()
+  for (const detail of cliDetails.value) {
+    if (!detail || detail.operation_id === '_generic.exec') continue
+    const existing = byCli.get(detail.cli_id)
+    if (!existing) {
+      byCli.set(detail.cli_id, {
+        cliId: detail.cli_id,
+        template: detail.resource_chain.map((ref, i) => i === 0 ? ref : { resource: ref.resource }),
+        maxRisk: detail.risk,
+        samples: [detail.display],
+      })
+    }
+    else {
+      if (RULE_RISK_ORDER[detail.risk] > RULE_RISK_ORDER[existing.maxRisk]) existing.maxRisk = detail.risk
+      existing.samples.push(detail.display)
+    }
+  }
+  return [...byCli.values()]
+})
+
+function ruleTemplatePreview(proposal) {
+  const chain = proposal.template
+    .map(ref => ref.selector
+      ? `${ref.resource}[${Object.entries(ref.selector).map(([k, v]) => `${k}=${v}`).join(',')}]`
+      : `${ref.resource}[*]`)
+    .join('.')
+  return `${proposal.cliId}.${chain} — risk ≤ ${proposal.maxRisk}`
+}
+
+async function createRule(proposal) {
+  ruleProcessing.value = true
+  ruleErrorByCli.value = { ...ruleErrorByCli.value, [proposal.cliId]: null }
+  try {
+    const duration = ruleDurationByCli.value[proposal.cliId] ?? '604800'
+    await $fetch('/api/standing-grants', {
+      method: 'POST',
+      body: {
+        delegate: grant.value.request.requester,
+        audience: grant.value.request.audience,
+        // Host-bound on purpose: the narrower default. Owners who want a
+        // host-independent rule manage it on the agent page instead.
+        ...(grant.value.request.target_host ? { target_host: grant.value.request.target_host } : {}),
+        cli_id: proposal.cliId,
+        resource_chain_template: proposal.template,
+        max_risk: proposal.maxRisk,
+        grant_type: duration === 'always' ? 'always' : 'timed',
+        ...(duration !== 'always' ? { duration: Number(duration) } : {}),
+        reason: `Rule created from grant ${grantId.value}`,
+      },
+    })
+    ruleCreatedByCli.value = { ...ruleCreatedByCli.value, [proposal.cliId]: true }
+  }
+  catch (err) {
+    const e = err
+    ruleErrorByCli.value = { ...ruleErrorByCli.value, [proposal.cliId]: e.data?.title ?? e.message ?? 'Failed to create rule' }
+  }
+  finally {
+    ruleProcessing.value = false
+  }
+}
 const delegateDuration = computed(() => {
   const req = grant.value?.request
   if (!req?.duration) return null
@@ -492,6 +574,51 @@ function isExactCommand(detail) {
                 type="number"
                 :min="60"
                 placeholder="Duration in seconds"
+              />
+            </div>
+          </div>
+
+          <div v-if="ruleProposals.length" class="rounded-lg border border-default p-4 space-y-3">
+            <div>
+              <h3 class="text-sm font-semibold">
+                Make a rule for the future
+              </h3>
+              <p class="text-xs text-muted mt-1">
+                Auto-approve requests like this one — same agent, same host, capped at the shown risk.
+                This request itself still needs your approval below.
+              </p>
+            </div>
+            <div v-for="proposal in ruleProposals" :key="proposal.cliId" class="space-y-2">
+              <p class="font-mono text-xs break-all">
+                {{ ruleTemplatePreview(proposal) }}
+              </p>
+              <div v-if="ruleCreatedByCli[proposal.cliId]" class="text-sm text-success">
+                Rule created — future matching requests auto-approve.
+              </div>
+              <div v-else class="flex items-center gap-2">
+                <label :for="`rule-duration-${proposal.cliId}`" class="sr-only">Rule duration for {{ proposal.cliId }}</label>
+                <USelect
+                  :id="`rule-duration-${proposal.cliId}`"
+                  :model-value="ruleDurationByCli[proposal.cliId] ?? '604800'"
+                  :items="RULE_DURATIONS"
+                  class="w-36"
+                  @update:model-value="v => ruleDurationByCli = { ...ruleDurationByCli, [proposal.cliId]: v }"
+                />
+                <UButton
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  :loading="ruleProcessing"
+                  @click="createRule(proposal)"
+                >
+                  Create rule
+                </UButton>
+              </div>
+              <UAlert
+                v-if="ruleErrorByCli[proposal.cliId]"
+                color="error"
+                variant="subtle"
+                :description="ruleErrorByCli[proposal.cliId]"
               />
             </div>
           </div>
