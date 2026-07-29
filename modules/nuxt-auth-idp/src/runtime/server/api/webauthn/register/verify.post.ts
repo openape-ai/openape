@@ -56,7 +56,13 @@ export default defineEventHandler(async (event) => {
   // assertion against an existing credential). Recovery for users who
   // lost everything goes through the new 72h-mail-hold flow specified
   // in #297.
-  if (existingUser) {
+  //
+  // The one exception (#1097): tokens with createdBy 'add-device' may
+  // append to an account with existing passkeys. They are minted
+  // exclusively by an authenticated endpoint and mailed to the
+  // account's own address — the trust anchor is the session that
+  // requested the link, not the mailbox.
+  if (existingUser && regUrl.createdBy !== 'add-device') {
     const existingCredentials = await credentialStore.findByUser(regUrl.email)
     if (existingCredentials.length > 0) {
       throw createProblemError({
