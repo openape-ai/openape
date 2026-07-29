@@ -45,6 +45,20 @@ interface CreateShapesGrantResult {
   similar_grants?: SimilarGrantsInfo
 }
 
+/**
+ * True when the IdP already decided this grant at creation time (standing
+ * grant, YOLO policy). Callers use it to skip everything that only makes
+ * sense while a human still has to act: the approve URL, the waiting
+ * protocol (#1081) and the "grant is waiting for you" notification (#1083).
+ *
+ * Unknown shapes read as pending — the safe direction is to tell the owner
+ * about a grant that turned out to be automatic, not to stay silent about
+ * one that is genuinely waiting.
+ */
+export function isAutoApproved(grant: { status?: string, approved_automatically?: boolean }): boolean {
+  return grant.approved_automatically === true || grant.status === 'approved'
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {

@@ -13,8 +13,6 @@ import { navigateTo, useIdpAuth } from '#imports'
 //     → "unverified" tone with explicit warning. Primary action is
 //       still labelled but visually de-emphasised vs. cancel.
 
-definePageMeta({ layout: false })
-
 const { user, fetchUser } = useIdpAuth()
 const data = ref(null)
 const error = ref('')
@@ -68,171 +66,112 @@ async function submit(action) {
 </script>
 
 <template>
-  <div class="consent-root">
-    <div v-if="error && !data" class="card error-card">
-      <h1>Konnte Consent-Anfrage nicht laden</h1>
-      <p class="muted">
+  <IdpHero>
+    <div v-if="error && !data" class="rounded-lg border border-error/40 bg-default p-6">
+      <h1 class="text-xl font-semibold tracking-tight">
+        Konnte Consent-Anfrage nicht laden
+      </h1>
+      <p class="mt-2 text-sm text-muted">
         {{ error }}
       </p>
-      <a href="/" class="btn btn-secondary">Zur Startseite</a>
+      <UButton to="/" color="neutral" variant="outline" class="mt-4">
+        Zur Startseite
+      </UButton>
     </div>
 
-    <div v-else-if="data" class="card" :class="data.verified ? 'verified' : 'unverified'">
-      <header>
-        <span class="badge" :class="data.verified ? 'badge-verified' : 'badge-warn'">
-          {{ data.verified ? 'Verifizierter Dienst' : 'Unverifizierter Dienst' }}
-        </span>
-      </header>
+    <div v-else-if="data" class="rounded-lg border border-default bg-default p-6">
+      <UBadge
+        :color="data.verified ? 'success' : 'warning'"
+        variant="subtle"
+        size="sm"
+      >
+        {{ data.verified ? 'Verifizierter Dienst' : 'Unverifizierter Dienst' }}
+      </UBadge>
 
       <template v-if="data.verified">
-        <div class="sp-row">
-          <div>
-            <h1>{{ data.metadata?.client_name || data.clientId }}</h1>
-            <p class="muted">
-              {{ data.clientId }}
-            </p>
-          </div>
-        </div>
-        <p>Diese Anwendung möchte deine OpenApe-Identität nutzen.</p>
-        <p class="muted small">
-          Nach der Anmeldung wirst du zu <code>{{ data.redirectUri }}</code> weitergeleitet.
+        <h1 class="mt-4 text-xl font-semibold tracking-tight">
+          {{ data.metadata?.client_name || data.clientId }}
+        </h1>
+        <p class="font-mono text-sm text-muted">
+          {{ data.clientId }}
         </p>
-        <p v-if="data.metadata?.policy_uri || data.metadata?.tos_uri" class="muted small">
-          <a v-if="data.metadata.policy_uri" :href="data.metadata.policy_uri" target="_blank" rel="noopener">Datenschutz</a>
+        <p class="mt-4 text-sm">
+          Diese Anwendung möchte deine OpenApe-Identität nutzen.
+        </p>
+        <p class="mt-2 text-sm text-muted">
+          Nach der Anmeldung wirst du zu
+          <code class="break-all font-mono text-xs text-default">{{ data.redirectUri }}</code>
+          weitergeleitet.
+        </p>
+        <p v-if="data.metadata?.policy_uri || data.metadata?.tos_uri" class="mt-2 text-sm text-muted">
+          <a v-if="data.metadata.policy_uri" :href="data.metadata.policy_uri" target="_blank" rel="noopener" class="text-primary hover:underline">Datenschutz</a>
           <span v-if="data.metadata.policy_uri && data.metadata.tos_uri"> · </span>
-          <a v-if="data.metadata.tos_uri" :href="data.metadata.tos_uri" target="_blank" rel="noopener">AGB</a>
+          <a v-if="data.metadata.tos_uri" :href="data.metadata.tos_uri" target="_blank" rel="noopener" class="text-primary hover:underline">AGB</a>
         </p>
       </template>
 
       <template v-else>
-        <h1>Anmeldung an einen unverifizierten Dienst</h1>
-        <p>
+        <h1 class="mt-4 text-xl font-semibold tracking-tight">
+          Anmeldung an einen unverifizierten Dienst
+        </h1>
+        <p class="mt-3 text-sm">
           Diese Anwendung hat keine Authentifizierungs-Metadaten unter
-          <code>/.well-known/oauth-client-metadata</code> veröffentlicht.
-          Wir können nicht bestätigen, wer sie betreibt.
+          <code class="break-all font-mono text-xs text-default">/.well-known/oauth-client-metadata</code>
+          veröffentlicht. Wir können nicht bestätigen, wer sie betreibt.
         </p>
-        <dl class="kv">
-          <dt>Domain</dt>
-          <dd><code>{{ data.clientId }}</code></dd>
-          <dt>Weiterleitung</dt>
-          <dd><code>{{ data.redirectUri }}</code></dd>
+        <dl class="mt-4 space-y-2 rounded-lg border border-default bg-elevated p-4 text-sm">
+          <div>
+            <dt class="text-xs uppercase tracking-wider text-dimmed">
+              Domain
+            </dt>
+            <dd class="break-all font-mono text-xs">
+              {{ data.clientId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-wider text-dimmed">
+              Weiterleitung
+            </dt>
+            <dd class="break-all font-mono text-xs">
+              {{ data.redirectUri }}
+            </dd>
+          </div>
         </dl>
-        <p>
+        <p class="mt-4 text-sm">
           Wenn du diesen Dienst nicht erkennst oder ihm nicht vertraust,
           brich hier ab. Nach dem Anmelden bekommt diese Anwendung
           deine Identität.
         </p>
       </template>
 
-      <p v-if="error" class="error">
-        {{ error }}
-      </p>
+      <UAlert v-if="error" color="error" variant="subtle" class="mt-4" :description="error" />
 
-      <div class="actions">
-        <button
-          v-if="data.verified"
-          class="btn btn-primary"
+      <div class="mt-6 flex flex-col gap-2">
+        <UButton
+          :color="data.verified ? 'primary' : 'warning'"
+          size="lg"
+          block
+          :loading="submitting"
           :disabled="submitting"
           @click="submit('approve')"
         >
-          Anmelden
-        </button>
-        <button
-          v-else
-          class="btn btn-warning"
-          :disabled="submitting"
-          @click="submit('approve')"
-        >
-          Trotzdem anmelden
-        </button>
-        <button
-          class="btn btn-secondary"
+          {{ data.verified ? 'Anmelden' : 'Trotzdem anmelden' }}
+        </UButton>
+        <UButton
+          color="neutral"
+          variant="outline"
+          size="lg"
+          block
           :disabled="submitting"
           @click="submit('cancel')"
         >
           Abbrechen
-        </button>
+        </UButton>
       </div>
     </div>
 
-    <div v-else class="card">
-      <p class="muted">
-        Lade …
-      </p>
+    <div v-else class="rounded-lg border border-default bg-default p-6 text-sm text-muted">
+      Loading…
     </div>
-  </div>
+  </IdpHero>
 </template>
-
-<style scoped>
-.consent-root {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: #0b0b10;
-  color: #e4e4ea;
-  font-family: system-ui, -apple-system, sans-serif;
-}
-.card {
-  width: 100%;
-  max-width: 480px;
-  background: #15151b;
-  border: 1px solid #2a2a35;
-  border-radius: 12px;
-  padding: 1.75rem;
-}
-.card.unverified {
-  border-color: #c97a18;
-  background: linear-gradient(180deg, rgba(201,122,24,0.08), #15151b);
-}
-.card.verified {
-  border-color: #2a2a35;
-}
-.error-card { border-color: #c83030; }
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.625rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  margin-bottom: 1rem;
-}
-.badge-verified {
-  background: rgba(60,180,60,0.15);
-  color: #6ec96e;
-  border: 1px solid rgba(60,180,60,0.3);
-}
-.badge-warn {
-  background: rgba(201,122,24,0.18);
-  color: #f0a83d;
-  border: 1px solid rgba(201,122,24,0.4);
-}
-.sp-row { display: flex; gap: 0.875rem; align-items: center; margin-bottom: 0.5rem; }
-.logo { width: 48px; height: 48px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; }
-h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
-p { line-height: 1.5; margin: 0.5rem 0; }
-.muted { color: #9b9ba8; }
-.small { font-size: 0.875rem; }
-.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0.875rem 0; }
-.kv dt { color: #9b9ba8; font-size: 0.875rem; }
-.kv dd { margin: 0; }
-code { background: #25252e; padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875em; }
-.error { color: #ff7070; font-size: 0.875rem; margin-top: 0.5rem; }
-.actions { display: flex; flex-direction: column-reverse; gap: 0.5rem; margin-top: 1.25rem; }
-@media (min-width: 480px) { .actions { flex-direction: row; justify-content: flex-end; } }
-.btn {
-  appearance: none;
-  border: 0;
-  border-radius: 8px;
-  padding: 0.625rem 1rem;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  font-weight: 500;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: #4a86ff; color: white; }
-.btn-warning { background: #c97a18; color: white; }
-.btn-secondary { background: transparent; color: #c0c0cc; border: 1px solid #3a3a48; }
-.btn-secondary:hover:not(:disabled) { background: #25252e; }
-</style>

@@ -1,142 +1,77 @@
 <script setup lang="ts">
 useSeoMeta({ title: 'Free Identity Provider' })
 
-const { user, loading, fetchUser, logout } = useIdpAuth()
+const { user } = useIdpAuth()
 
-await fetchUser()
-
-async function handleLogout() {
-  await logout()
-  navigateTo('/login')
-}
+const issuer = 'id.openape.ai'
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <!-- Logged in -->
-    <UCard v-if="user" class="w-full max-w-md bg-gray-900 border border-gray-800">
-      <div class="flex flex-col items-center gap-4 py-4">
-        <AppLogo />
-        <div class="text-center">
-          <p class="text-sm text-gray-400">
-            Angemeldet als
-          </p>
-          <p class="text-white font-medium mt-1">
-            {{ user.email }}
-          </p>
-        </div>
-        <div class="w-full space-y-2">
-          <UButton
-            to="/passkeys"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-key-round"
-          >
-            Passkeys verwalten
-          </UButton>
-          <UButton
-            to="/ssh-keys"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-terminal"
-          >
-            SSH-Keys verwalten
-          </UButton>
-          <UButton
-            to="/agents"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-bot"
-          >
-            Agents verwalten
-          </UButton>
-          <UButton
-            to="/grants"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-shield-check"
-          >
-            Berechtigungen
-          </UButton>
-          <UButton
-            to="/delegations"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-shield-check"
-          >
-            Delegationen
-          </UButton>
-          <UButton
-            to="/connected-services"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-link"
-          >
-            Verbundene Dienste
-          </UButton>
-          <UButton
-            to="/recovery-protection"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-life-buoy"
-          >
-            Wiederherstellungsschutz
-          </UButton>
-          <UButton
-            to="/admin"
-            color="primary"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-shield"
-          >
-            Domain-Admin
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="outline"
-            size="lg"
-            block
-            icon="i-lucide-log-out"
-            :loading="loading"
-            @click="handleLogout"
-          >
-            Abmelden
-          </UButton>
-        </div>
-
-        <ClientOnly>
-          <EnableNotifications />
-        </ClientOnly>
+  <!-- Signed in: the identity the IdP publishes about you, then one way on. -->
+  <IdpPage
+    v-if="user"
+    title="Your identity"
+    subtitle="This is what OpenApe ID tells a service when you sign in."
+  >
+    <dl class="rounded-lg border border-default bg-default p-5 font-mono text-sm">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <dt class="w-12 shrink-0 text-dimmed">
+          sub
+        </dt>
+        <dd class="min-w-0 break-all">
+          {{ user.email }}
+        </dd>
       </div>
-    </UCard>
+      <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <dt class="w-12 shrink-0 text-dimmed">
+          act
+        </dt>
+        <dd class="text-primary">
+          human
+        </dd>
+      </div>
+      <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <dt class="w-12 shrink-0 text-dimmed">
+          iss
+        </dt>
+        <dd class="min-w-0 break-all text-muted">
+          {{ issuer }}
+        </dd>
+      </div>
+    </dl>
 
-    <!-- Not logged in -->
-    <div v-else class="w-full max-w-md flex flex-col items-center text-center">
-      <div class="text-6xl mb-6">
+    <!-- space-y rather than a margin on the banner: the notification card only
+         renders in the installed PWA, and an empty ClientOnly leaves no element
+         behind, so no phantom gap in the browser. -->
+    <div class="mt-6 space-y-6">
+      <UButton
+        to="/account"
+        color="primary"
+        size="lg"
+        trailing-icon="i-lucide-arrow-right"
+      >
+        Account &amp; security
+      </UButton>
+
+      <ClientOnly>
+        <EnableNotifications />
+      </ClientOnly>
+    </div>
+  </IdpPage>
+
+  <!-- Signed out -->
+  <IdpHero v-else>
+    <div class="flex flex-col items-center text-center">
+      <div class="mb-6 text-6xl">
         🦍
       </div>
 
-      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+      <h1 class="mb-4 text-4xl font-extrabold sm:text-5xl">
         One login.<br>
         <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
       </h1>
 
-      <p class="text-lg text-gray-400 mb-8">
+      <p class="mb-8 text-lg text-muted">
         Free identity provider for the open web. Secured by passkeys.
       </p>
 
@@ -163,11 +98,11 @@ async function handleLogout() {
         </UButton>
       </div>
 
-      <p class="mt-8 text-sm text-gray-500">
-        Powered by <NuxtLink to="https://openape.ai" external class="text-gray-400 hover:text-white transition-colors">
+      <p class="mt-8 text-sm text-dimmed">
+        Powered by <NuxtLink to="https://openape.ai" external class="text-muted transition-colors hover:text-default">
           OpenApe
         </NuxtLink>
       </p>
     </div>
-  </div>
+  </IdpHero>
 </template>

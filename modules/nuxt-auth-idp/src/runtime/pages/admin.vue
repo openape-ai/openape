@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { navigateTo, useRoute } from '#imports'
+import { navigateTo, useHead, useRoute } from '#imports'
 import { useIdpAuth } from '../composables/useIdpAuth'
+
+useHead({ title: 'Domain admin' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -222,73 +224,59 @@ function regUrlStatus(entry) {
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-5xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            Admin Dashboard
-          </h1>
-          <p class="text-sm text-muted">
-            Manage users, agents, and registration URLs
-          </p>
-        </div>
-        <UButton to="/" color="neutral" variant="soft" size="sm">
-          Back
-        </UButton>
-      </div>
+  <IdpPage title="Domain admin" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <div v-if="authLoading" class="text-center text-muted mt-10">
+      Loading…
+    </div>
 
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
+    <template v-else>
+      <UTabs
+        v-model="activeTab"
+        :items="[
+          { label: `Users (${users.length})`, value: 'users', slot: 'users' },
+          { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' },
+          { label: 'Registration URLs', value: 'registration', slot: 'registration' }
+        ]"
+      >
+        <!-- Users Tab -->
+        <template #users>
+          <div class="space-y-6 mt-6">
+            <UCard>
+              <template #header>
+                <h2 class="text-lg font-semibold">
+                  Add User
+                </h2>
+              </template>
 
-      <template v-else>
-        <UTabs
-          v-model="activeTab"
-          :items="[
-            { label: `Users (${users.length})`, value: 'users', slot: 'users' },
-            { label: `Agents (${agents.length})`, value: 'agents', slot: 'agents' },
-            { label: 'Registration URLs', value: 'registration', slot: 'registration' }
-          ]"
-        >
-          <!-- Users Tab -->
-          <template #users>
-            <div class="space-y-6 mt-6">
-              <UCard>
-                <template #header>
-                  <h2 class="text-lg font-semibold">
-                    Add User
-                  </h2>
-                </template>
+              <UAlert v-if="userError" color="error" :title="userError" class="mb-4" />
+              <UAlert v-if="userSuccess" color="success" :title="userSuccess" class="mb-4" />
 
-                <UAlert v-if="userError" color="error" :title="userError" class="mb-4" />
-                <UAlert v-if="userSuccess" color="success" :title="userSuccess" class="mb-4" />
-
-                <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createUser">
-                  <div class="flex-1 min-w-[150px]">
-                    <UFormField label="Name" required>
-                      <UInput v-model="newUser.name" required placeholder="Name" />
-                    </UFormField>
-                  </div>
-                  <div class="flex-1 min-w-[200px]">
-                    <UFormField label="Email" required>
-                      <UInput v-model="newUser.email" type="email" required placeholder="user@domain.com" />
-                    </UFormField>
-                  </div>
-                  <UButton color="primary" type="submit">
-                    Add User
-                  </UButton>
-                </form>
-              </UCard>
-
-              <UCard :ui="{ body: 'p-0' }">
-                <div v-if="usersLoading" class="p-6 text-center text-muted">
-                  Loading...
+              <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createUser">
+                <div class="flex-1 min-w-[150px]">
+                  <UFormField label="Name" required>
+                    <UInput v-model="newUser.name" required placeholder="Name" />
+                  </UFormField>
                 </div>
-                <div v-else-if="users.length === 0" class="p-6 text-center text-muted">
-                  No users found.
+                <div class="flex-1 min-w-[200px]">
+                  <UFormField label="Email" required>
+                    <UInput v-model="newUser.email" type="email" required placeholder="user@domain.com" />
+                  </UFormField>
                 </div>
-                <table v-else class="w-full">
+                <UButton color="primary" type="submit">
+                  Add User
+                </UButton>
+              </form>
+            </UCard>
+
+            <UCard :ui="{ body: 'p-0' }">
+              <div v-if="usersLoading" class="p-6 text-center text-muted">
+                Loading…
+              </div>
+              <div v-else-if="users.length === 0" class="p-6 text-center text-muted">
+                No users found.
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -325,103 +313,105 @@ function regUrlStatus(entry) {
                     </tr>
                   </tbody>
                 </table>
-              </UCard>
-            </div>
-          </template>
-
-          <!-- Agents Tab -->
-          <template #agents>
-            <div class="space-y-6 mt-6">
-              <UAlert
-                v-if="enrolledAgentId"
-                color="success"
-                title="Agent enrolled successfully"
-                description="The agent is now active and ready to use."
-                :close-button="{ onClick: () => enrolledAgentId = '' }"
-              />
-
-              <div v-if="editingAgent">
-                <UModal :open="true" title="Edit Agent" @update:open="editingAgent = null">
-                  <template #body>
-                    <form class="space-y-3" @submit.prevent="saveEditAgent">
-                      <UFormField label="Email" required>
-                        <UInput v-model="editingAgent.email" type="email" required />
-                      </UFormField>
-                      <UFormField label="Name" required>
-                        <UInput v-model="editingAgent.name" required />
-                      </UFormField>
-                      <UFormField label="Owner Email" required>
-                        <UInput v-model="editingAgent.owner" type="email" required />
-                      </UFormField>
-                      <UFormField label="Approver Email" required>
-                        <UInput v-model="editingAgent.approver" type="email" required />
-                      </UFormField>
-                      <UFormField label="Public Key (ssh-ed25519)" required>
-                        <UTextarea v-model="editingAgent.publicKey" required :rows="2" />
-                      </UFormField>
-                      <div class="flex gap-3 justify-end pt-2">
-                        <UButton variant="ghost" @click="editingAgent = null">
-                          Cancel
-                        </UButton>
-                        <UButton color="primary" type="submit">
-                          Save
-                        </UButton>
-                      </div>
-                    </form>
-                  </template>
-                </UModal>
               </div>
+            </UCard>
+          </div>
+        </template>
 
-              <UCard>
-                <template #header>
-                  <h2 class="text-lg font-semibold">
-                    Add Agent
-                  </h2>
+        <!-- Agents Tab -->
+        <template #agents>
+          <div class="space-y-6 mt-6">
+            <UAlert
+              v-if="enrolledAgentId"
+              color="success"
+              title="Agent enrolled successfully"
+              description="The agent is now active and ready to use."
+              :close-button="{ onClick: () => enrolledAgentId = '' }"
+            />
+
+            <div v-if="editingAgent">
+              <UModal :open="true" title="Edit Agent" @update:open="editingAgent = null">
+                <template #body>
+                  <form class="space-y-3" @submit.prevent="saveEditAgent">
+                    <UFormField label="Email" required>
+                      <UInput v-model="editingAgent.email" type="email" required />
+                    </UFormField>
+                    <UFormField label="Name" required>
+                      <UInput v-model="editingAgent.name" required />
+                    </UFormField>
+                    <UFormField label="Owner Email" required>
+                      <UInput v-model="editingAgent.owner" type="email" required />
+                    </UFormField>
+                    <UFormField label="Approver Email" required>
+                      <UInput v-model="editingAgent.approver" type="email" required />
+                    </UFormField>
+                    <UFormField label="Public Key (ssh-ed25519)" required>
+                      <UTextarea v-model="editingAgent.publicKey" required :rows="2" />
+                    </UFormField>
+                    <div class="flex gap-3 justify-end pt-2">
+                      <UButton variant="ghost" @click="editingAgent = null">
+                        Cancel
+                      </UButton>
+                      <UButton color="primary" type="submit">
+                        Save
+                      </UButton>
+                    </div>
+                  </form>
                 </template>
+              </UModal>
+            </div>
 
-                <UAlert v-if="agentError" color="error" :title="agentError" class="mb-4" />
-                <UAlert v-if="agentSuccess" color="success" :title="agentSuccess" class="mb-4" />
+            <UCard>
+              <template #header>
+                <h2 class="text-lg font-semibold">
+                  Add Agent
+                </h2>
+              </template>
 
-                <form class="space-y-3" @submit.prevent="createAgent">
-                  <div class="flex flex-wrap gap-3">
-                    <div class="flex-1 min-w-[200px]">
-                      <UFormField label="Agent Email" required>
-                        <UInput v-model="newAgent.email" type="email" required placeholder="agent@domain.com" />
-                      </UFormField>
-                    </div>
-                    <div class="flex-1 min-w-[200px]">
-                      <UFormField label="Agent Name" required>
-                        <UInput v-model="newAgent.name" required placeholder="My Agent" />
-                      </UFormField>
-                    </div>
-                    <div class="flex-1 min-w-[200px]">
-                      <UFormField label="Owner Email" required>
-                        <UInput v-model="newAgent.owner" type="email" required placeholder="owner@domain.com" />
-                      </UFormField>
-                    </div>
-                    <div class="flex-1 min-w-[200px]">
-                      <UFormField label="Approver Email" required>
-                        <UInput v-model="newAgent.approver" type="email" required placeholder="approver@domain.com" />
-                      </UFormField>
-                    </div>
+              <UAlert v-if="agentError" color="error" :title="agentError" class="mb-4" />
+              <UAlert v-if="agentSuccess" color="success" :title="agentSuccess" class="mb-4" />
+
+              <form class="space-y-3" @submit.prevent="createAgent">
+                <div class="flex flex-wrap gap-3">
+                  <div class="flex-1 min-w-[200px]">
+                    <UFormField label="Agent Email" required>
+                      <UInput v-model="newAgent.email" type="email" required placeholder="agent@domain.com" />
+                    </UFormField>
                   </div>
-                  <UFormField label="Public Key (ssh-ed25519)" required>
-                    <UTextarea v-model="newAgent.publicKey" required :rows="2" placeholder="ssh-ed25519 AAAA..." />
-                  </UFormField>
-                  <UButton color="primary" type="submit">
-                    Add Agent
-                  </UButton>
-                </form>
-              </UCard>
+                  <div class="flex-1 min-w-[200px]">
+                    <UFormField label="Agent Name" required>
+                      <UInput v-model="newAgent.name" required placeholder="My Agent" />
+                    </UFormField>
+                  </div>
+                  <div class="flex-1 min-w-[200px]">
+                    <UFormField label="Owner Email" required>
+                      <UInput v-model="newAgent.owner" type="email" required placeholder="owner@domain.com" />
+                    </UFormField>
+                  </div>
+                  <div class="flex-1 min-w-[200px]">
+                    <UFormField label="Approver Email" required>
+                      <UInput v-model="newAgent.approver" type="email" required placeholder="approver@domain.com" />
+                    </UFormField>
+                  </div>
+                </div>
+                <UFormField label="Public Key (ssh-ed25519)" required>
+                  <UTextarea v-model="newAgent.publicKey" required :rows="2" placeholder="ssh-ed25519 AAAA..." />
+                </UFormField>
+                <UButton color="primary" type="submit">
+                  Add Agent
+                </UButton>
+              </form>
+            </UCard>
 
-              <UCard :ui="{ body: 'p-0' }">
-                <div v-if="agentsLoading" class="p-6 text-center text-muted">
-                  Loading...
-                </div>
-                <div v-else-if="agents.length === 0" class="p-6 text-center text-muted">
-                  No agents found.
-                </div>
-                <table v-else class="w-full">
+            <UCard :ui="{ body: 'p-0' }">
+              <div v-if="agentsLoading" class="p-6 text-center text-muted">
+                Loading…
+              </div>
+              <div v-else-if="agents.length === 0" class="p-6 text-center text-muted">
+                No agents found.
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -483,64 +473,66 @@ function regUrlStatus(entry) {
                     </tr>
                   </tbody>
                 </table>
-              </UCard>
-            </div>
-          </template>
+              </div>
+            </UCard>
+          </div>
+        </template>
 
-          <!-- Registration URLs Tab -->
-          <template #registration>
-            <div class="space-y-6 mt-6">
-              <UCard>
-                <template #header>
-                  <h2 class="text-lg font-semibold">
-                    Create Registration URL
-                  </h2>
-                </template>
+        <!-- Registration URLs Tab -->
+        <template #registration>
+          <div class="space-y-6 mt-6">
+            <UCard>
+              <template #header>
+                <h2 class="text-lg font-semibold">
+                  Create Registration URL
+                </h2>
+              </template>
 
-                <UAlert v-if="regUrlError" color="error" :title="regUrlError" class="mb-4" />
-                <UAlert v-if="regUrlSuccess" color="success" class="mb-4">
-                  <div class="flex items-center gap-2">
-                    <code class="text-xs break-all flex-1">{{ regUrlSuccess }}</code>
-                    <UButton
-                      size="xs"
-                      variant="soft"
-                      @click="copyToClipboard(regUrlSuccess, 'success')"
-                    >
-                      {{ copiedToken === "success" ? "Copied!" : "Copy" }}
-                    </UButton>
-                  </div>
-                </UAlert>
-
-                <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createRegUrl">
-                  <div class="flex-1 min-w-[200px]">
-                    <UFormField label="Email" required>
-                      <UInput v-model="newRegUrl.email" type="email" required placeholder="user@domain.com" />
-                    </UFormField>
-                  </div>
-                  <div class="flex-1 min-w-[150px]">
-                    <UFormField label="Name" required>
-                      <UInput v-model="newRegUrl.name" required placeholder="User Name" />
-                    </UFormField>
-                  </div>
-                  <div class="w-[120px]">
-                    <UFormField label="Expires (hours)">
-                      <UInput v-model.number="newRegUrl.expiresInHours" type="number" :min="1" :max="168" />
-                    </UFormField>
-                  </div>
-                  <UButton color="primary" type="submit">
-                    Create URL
+              <UAlert v-if="regUrlError" color="error" :title="regUrlError" class="mb-4" />
+              <UAlert v-if="regUrlSuccess" color="success" class="mb-4">
+                <div class="flex items-center gap-2">
+                  <code class="text-xs break-all flex-1">{{ regUrlSuccess }}</code>
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    @click="copyToClipboard(regUrlSuccess, 'success')"
+                  >
+                    {{ copiedToken === "success" ? "Copied!" : "Copy" }}
                   </UButton>
-                </form>
-              </UCard>
+                </div>
+              </UAlert>
 
-              <UCard :ui="{ body: 'p-0' }">
-                <div v-if="regUrlsLoading" class="p-6 text-center text-muted">
-                  Loading...
+              <form class="flex flex-wrap gap-3 items-end" @submit.prevent="createRegUrl">
+                <div class="flex-1 min-w-[200px]">
+                  <UFormField label="Email" required>
+                    <UInput v-model="newRegUrl.email" type="email" required placeholder="user@domain.com" />
+                  </UFormField>
                 </div>
-                <div v-else-if="regUrls.length === 0" class="p-6 text-center text-muted">
-                  No registration URLs found.
+                <div class="flex-1 min-w-[150px]">
+                  <UFormField label="Name" required>
+                    <UInput v-model="newRegUrl.name" required placeholder="User Name" />
+                  </UFormField>
                 </div>
-                <table v-else class="w-full">
+                <div class="w-[120px]">
+                  <UFormField label="Expires (hours)">
+                    <UInput v-model.number="newRegUrl.expiresInHours" type="number" :min="1" :max="168" />
+                  </UFormField>
+                </div>
+                <UButton color="primary" type="submit">
+                  Create URL
+                </UButton>
+              </form>
+            </UCard>
+
+            <UCard :ui="{ body: 'p-0' }">
+              <div v-if="regUrlsLoading" class="p-6 text-center text-muted">
+                Loading…
+              </div>
+              <div v-else-if="regUrls.length === 0" class="p-6 text-center text-muted">
+                No registration URLs found.
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="w-full">
                   <thead class="border-b border-(--ui-border)">
                     <tr>
                       <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -592,11 +584,11 @@ function regUrlStatus(entry) {
                     </tr>
                   </tbody>
                 </table>
-              </UCard>
-            </div>
-          </template>
-        </UTabs>
-      </template>
-    </div>
-  </div>
+              </div>
+            </UCard>
+          </div>
+        </template>
+      </UTabs>
+    </template>
+  </IdpPage>
 </template>

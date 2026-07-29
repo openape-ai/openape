@@ -6,7 +6,7 @@ import { useIdpAuth } from '../composables/useIdpAuth'
 // /ssh-keys — register/remove SSH public keys for "Sign in with SSH Key".
 // Split out of the old /account page.
 
-useHead({ title: 'SSH Keys — OpenApe' })
+useHead({ title: 'SSH keys' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const sshKeys = ref([])
@@ -79,72 +79,58 @@ function fingerprint(keyId) {
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            SSH Keys
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
+  <IdpPage title="SSH keys" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <div v-if="authLoading" class="text-center text-muted mt-10">
+      Loading…
+    </div>
+
+    <template v-else>
+      <UAlert v-if="error" color="error" :title="error" class="mb-4" />
+      <UAlert v-if="success" color="success" :title="success" class="mb-4" />
+
+      <UCard class="mb-6">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            Add SSH Key
+          </h2>
+          <p class="text-sm text-muted mt-1">
+            Register your public key to use "Sign in with SSH Key" on the login page.
           </p>
+        </template>
+
+        <div class="space-y-3">
+          <UFormField label="Name (optional)">
+            <UInput v-model="newSshKeyName" placeholder="e.g. Work Laptop" />
+          </UFormField>
+          <UFormField label="Public Key">
+            <UTextarea
+              v-model="newSshKey"
+              placeholder="ssh-ed25519 AAAA... (paste contents of ~/.ssh/id_ed25519.pub)"
+              :rows="2"
+              class="font-mono text-xs"
+            />
+          </UFormField>
+          <UButton color="primary" :loading="sshKeyAdding" :disabled="!newSshKey.trim() || sshKeyAdding" @click="handleAddSshKey">
+            Add SSH Key
+          </UButton>
         </div>
-        <UButton to="/account" color="neutral" variant="soft" size="sm">
-          Back
-        </UButton>
-      </div>
+      </UCard>
 
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
+      <UCard :ui="{ body: 'p-0' }">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            SSH Keys
+          </h2>
+        </template>
 
-      <template v-else>
-        <UAlert v-if="error" color="error" :title="error" class="mb-4" />
-        <UAlert v-if="success" color="success" :title="success" class="mb-4" />
-
-        <UCard class="mb-6">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Add SSH Key
-            </h2>
-            <p class="text-sm text-muted mt-1">
-              Register your public key to use "Sign in with SSH Key" on the login page.
-            </p>
-          </template>
-
-          <div class="space-y-3">
-            <UFormField label="Name (optional)">
-              <UInput v-model="newSshKeyName" placeholder="e.g. Work Laptop" />
-            </UFormField>
-            <UFormField label="Public Key">
-              <UTextarea
-                v-model="newSshKey"
-                placeholder="ssh-ed25519 AAAA... (paste contents of ~/.ssh/id_ed25519.pub)"
-                :rows="2"
-                class="font-mono text-xs"
-              />
-            </UFormField>
-            <UButton color="primary" :loading="sshKeyAdding" :disabled="!newSshKey.trim() || sshKeyAdding" @click="handleAddSshKey">
-              Add SSH Key
-            </UButton>
-          </div>
-        </UCard>
-
-        <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              SSH Keys
-            </h2>
-          </template>
-
-          <div v-if="sshKeysLoading" class="p-6 text-center text-muted">
-            Loading...
-          </div>
-          <div v-else-if="sshKeys.length === 0" class="p-6 text-center text-muted">
-            No SSH keys registered.
-          </div>
-          <table v-else class="w-full">
+        <div v-if="sshKeysLoading" class="p-6 text-center text-muted">
+          Loading…
+        </div>
+        <div v-else-if="sshKeys.length === 0" class="p-6 text-center text-muted">
+          No SSH keys registered.
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full">
             <thead class="border-b border-(--ui-border)">
               <tr>
                 <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -180,8 +166,8 @@ function fingerprint(keyId) {
               </tr>
             </tbody>
           </table>
-        </UCard>
-      </template>
-    </div>
-  </div>
+        </div>
+      </UCard>
+    </template>
+  </IdpPage>
 </template>
