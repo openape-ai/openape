@@ -1,5 +1,11 @@
 # @openape-plans/app
 
+## 0.0.3
+
+### Patch Changes
+
+- @openape/nuxt-auth-sp@0.15.1
+
 ## 0.0.2
 
 ### Patch Changes
