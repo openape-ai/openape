@@ -44,21 +44,33 @@ const roleLabel: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lea
 <style>
 /* Classic pure-CSS org chart (nested ul/li with connector lines). */
 .org-tree, .org-tree ul { list-style: none; margin: 0; padding: 0; }
-.org-tree ul { display: flex; justify-content: center; position: relative; padding-top: 22px; }
-.org-tree li { position: relative; padding: 22px 10px 0; text-align: center; }
-/* connectors */
-.org-tree li::before, .org-tree li::after {
-  content: ''; position: absolute; top: 0; right: 50%;
-  width: 50%; height: 22px; border-top: 1px solid #3f3f46;
-}
-.org-tree li::after { right: auto; left: 50%; border-left: 1px solid #3f3f46; }
-.org-tree li:only-child::before, .org-tree li:only-child::after { display: none; }
-.org-tree li:only-child { padding-top: 22px; }
-.org-tree li:first-child::before, .org-tree li:last-child::after { border: 0 none; }
-.org-tree li:last-child::before { border-right: 1px solid #3f3f46; }
-.org-tree ul ul::before {
-  content: ''; position: absolute; top: 0; left: 50%;
-  width: 0; height: 22px; border-left: 1px solid #3f3f46;
+/* Let the tree take its intrinsic width so the scroll container can reach all of
+   it. Squeezed into a narrower parent, the centered flex rows below spill over
+   BOTH edges — and everything left of the scroll origin is unreachable, which is
+   how the team-lead and the first specialists went missing on a phone (#1086).
+   min-width keeps it filling (and centered) whenever it does fit. */
+.org-tree { width: max-content; min-width: 100%; }
+.org-tree li { position: relative; }
+.org-tree li::before, .org-tree li::after { content: ''; position: absolute; }
+
+/* Wide screens: the classic side-by-side tree with elbow connectors. Kept behind
+   a min-width query so the phone layout below needs no specificity fight with the
+   :first-child / :only-child rules here. */
+@media (min-width: 641px) {
+  .org-tree ul { display: flex; justify-content: center; position: relative; padding-top: 22px; }
+  .org-tree li { padding: 22px 10px 0; text-align: center; }
+  .org-tree li::before, .org-tree li::after {
+    top: 0; right: 50%; width: 50%; height: 22px; border-top: 1px solid #3f3f46;
+  }
+  .org-tree li::after { right: auto; left: 50%; border-left: 1px solid #3f3f46; }
+  .org-tree li:only-child::before, .org-tree li:only-child::after { display: none; }
+  .org-tree li:only-child { padding-top: 22px; }
+  .org-tree li:first-child::before, .org-tree li:last-child::after { border: 0 none; }
+  .org-tree li:last-child::before { border-right: 1px solid #3f3f46; }
+  .org-tree ul ul::before {
+    content: ''; position: absolute; top: 0; left: 50%;
+    width: 0; height: 22px; border-left: 1px solid #3f3f46;
+  }
 }
 /* node card */
 .org-card {
@@ -78,4 +90,30 @@ const roleLabel: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lea
 .org-actions button { padding: 3px; border-radius: 6px; color: #a1a1aa; }
 .org-actions button:hover { background: #27272a; color: #e4e4e7; }
 .org-actions button.danger:hover { color: #f87171; }
+
+/* Phone: a side-by-side tree needs ~1000px, so on a 390px screen it can only ever
+   show two cards. Below 640px the same markup becomes an indented tree — every
+   card full width and readable, no horizontal scrolling at all. */
+@media (max-width: 640px) {
+  .org-tree { width: auto; min-width: 0; }
+  .org-tree ul { display: block; padding-left: 15px; }
+  .org-tree li { padding: 6px 0 0 15px; text-align: left; }
+  /* Connectors become a spine down the left plus an elbow into each card. The
+     spine stops at the elbow on the last child, so it doesn't dangle. */
+  .org-tree li::before {
+    left: 0; top: 0; bottom: 0; width: 0;
+    border-left: 1px solid #3f3f46;
+  }
+  .org-tree li:last-child::before { bottom: auto; height: 34px; }
+  .org-tree li::after {
+    left: 0; top: 34px; width: 11px;
+    border-top: 1px solid #3f3f46;
+  }
+  .org-tree > li { padding-left: 0; }
+  .org-tree > li::before, .org-tree > li::after { display: none; }
+  .org-card { display: flex; align-items: flex-start; width: 100%; min-width: 0; max-width: none; }
+  .org-tools { max-width: 100%; }
+  /* No hover on touch — the edit/pause/remove buttons would stay invisible. */
+  .org-actions { opacity: 1; }
+}
 </style>

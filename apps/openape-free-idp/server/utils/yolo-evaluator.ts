@@ -39,6 +39,14 @@ export interface YoloDecisionContext {
    */
   target: string | undefined
   /**
+   * The pre-unwrap joined command line when `target` was extracted from a
+   * `bash -c` wrapper. Deny patterns are ALSO checked against this so
+   * policies written against the outer form (`bash -c *rm*`) keep blocking
+   * after the unwrap — disarming an existing deny rule would fail open.
+   * Allow patterns never consult it (fail-closed direction).
+   */
+  outerTarget?: string
+  /**
    * How to interpret `target` for pattern matching (#1079): `'command'`
    * targets are split into shell segments and evaluated per segment,
    * `'host'` targets have no shell semantics and are matched as-is.
@@ -212,6 +220,9 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   for (const pattern of denyPatterns) {
     if (matchesGlob(target, pattern)) return null
     if (segments.some(seg => matchesGlob(seg, pattern))) return null
+    // Outer-form compatibility: deny rules written before the bash -c unwrap
+    // matched the joined wrapper line. Keep honoring them.
+    if (ctx.outerTarget && matchesGlob(ctx.outerTarget, pattern)) return null
   }
   // Harder than the usual default-allow semantics on purpose: a blocklist
   // cannot see into a substitution — `echo $(rm -rf ~)` matches no `*rm*`
@@ -263,7 +274,20 @@ export function commandFromRequest(body: OpenApeGrantRequest): string[] | undefi
  */
 export function targetFromRequest(body: OpenApeGrantRequest): string | undefined {
   const cmd = commandFromRequest(body)
-  if (cmd && cmd.length > 0) return cmd.join(' ')
+  if (cmd && cmd.length > 0) {
+    // `bash -c <line>` unwrap: patterns describe the command the agent runs,
+    // not the shell that carries it — without this, operators need every
+    // pattern in a bash-c double form. Only the exact 3-element shape is
+    // unwrapped: extra argv after the -c string become $0/$1 positional
+    // params and flags before -c change semantics, both fall back to the
+    // joined form (fail closed). One level only — a nested `bash -c` stays
+    // wrapped and needs its own explicit pattern. Returning the inner string
+    // VERBATIM also fixes a subtle corruption: joining destroyed the quoting
+    // before the quote-aware segment splitter ran.
+    if (cmd.length === 3 && (cmd[0] === 'bash' || cmd[0] === 'sh') && cmd[1] === '-c')
+      return cmd[2]
+    return cmd.join(' ')
+  }
   if (body.target_host) return body.target_host
   return undefined
 }

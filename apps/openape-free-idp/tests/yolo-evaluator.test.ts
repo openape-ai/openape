@@ -432,4 +432,93 @@ describe('targetFromRequest', () => {
       audience: 'ape-proxy',
     } as never)).toBeUndefined()
   })
+
+  describe('bash -c unwrapping', () => {
+    function req(command: string[]) {
+      return { requester: 'a@x', target_host: 'mini', audience: 'ape-shell', command } as never
+    }
+
+    it('unwraps exactly ["bash","-c",line] to the inner line, quotes intact', () => {
+      // Joining would corrupt the quoting BEFORE the quote-aware segment
+      // splitter runs — the verbatim inner string is the correct target.
+      expect(targetFromRequest(req(['bash', '-c', 'o365-cli mail read "X Y" --account p@h.eco'])))
+        .toBe('o365-cli mail read "X Y" --account p@h.eco')
+    })
+
+    it('unwraps sh -c the same way', () => {
+      expect(targetFromRequest(req(['sh', '-c', 'ls -la']))).toBe('ls -la')
+    })
+
+    it('does NOT unwrap when extra argv follows the -c string ($0/$1 params)', () => {
+      // `bash -c 'echo $1' _ foo` — positional params change the semantics;
+      // fail closed to the joined form.
+      expect(targetFromRequest(req(['bash', '-c', 'echo $1', '_', 'foo'])))
+        .toBe('bash -c echo $1 _ foo')
+    })
+
+    it('does NOT unwrap flags before -c', () => {
+      expect(targetFromRequest(req(['bash', '-x', '-c', 'ls']))).toBe('bash -x -c ls')
+    })
+
+    it('unwraps only one level — a nested bash -c stays wrapped in the target', () => {
+      expect(targetFromRequest(req(['bash', '-c', 'bash -c "rm -rf /"'])))
+        .toBe('bash -c "rm -rf /"')
+    })
+  })
+})
+
+describe('evaluateYoloPolicy with unwrapped bash -c targets', () => {
+  function policy(overrides: Record<string, unknown>) {
+    return {
+      agentEmail: 'op@x',
+      audience: 'ape-shell',
+      mode: 'deny-list',
+      enabledBy: 'owner@x',
+      denyRiskThreshold: null,
+      denyPatterns: [],
+      allowPatterns: [],
+      enabledAt: 1,
+      expiresAt: null,
+      updatedAt: 1,
+      ...overrides,
+    } as never
+  }
+
+  it('allow-list matches mail commands without the bash -c double form', () => {
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli mail list*', 'o365-cli mail read *', 'jq *'],
+    })
+    const target = targetFromRequest({
+      requester: 'op@x',
+      target_host: 'mini',
+      audience: 'ape-shell',
+      command: ['bash', '-c', 'o365-cli mail list --json | jq -r ".[].id"'],
+    } as never)
+    expect(evaluateYoloPolicy({ policy: p, target, resolvedRisk: null }))
+      .toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+
+  it('allow-list still refuses when one segment is unvetted', () => {
+    const p = policy({ mode: 'allow-list', allowPatterns: ['o365-cli mail list*'] })
+    const target = targetFromRequest({
+      requester: 'op@x',
+      target_host: 'mini',
+      audience: 'ape-shell',
+      command: ['bash', '-c', 'o365-cli mail list && rm -rf ~'],
+    } as never)
+    expect(evaluateYoloPolicy({ policy: p, target, resolvedRisk: null })).toBeNull()
+  })
+
+  it('deny patterns written against the OUTER bash -c form keep blocking via outerTarget', () => {
+    // Pre-unwrap policies could only match the joined outer line. Unwrapping
+    // must not silently disarm them — the deny path also checks the original.
+    const p = policy({ denyPatterns: ['bash -c *rm*'] })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'rm -rf /tmp/x',
+      outerTarget: 'bash -c rm -rf /tmp/x',
+      resolvedRisk: null,
+    })).toBeNull()
+  })
 })
