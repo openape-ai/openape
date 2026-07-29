@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.33.0
+
+### Minor Changes
+
+- 433ff94: Approval-Karte: „Make a rule for the future" — aus einem strukturierten
+  Grant-Request per Klick einen Standing Grant ableiten (Template: erster
+  Resource-Link behält seinen Selector, Rest wildcard; max_risk = höchstes
+  Incoming-Risk; Dauer 24h / 7 Tage / immer). Generic-only Requests bekommen
+  keinen Vorschlag.
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+- Updated dependencies [42b3257]
+  - @openape/core@0.20.0
+  - @openape/grants@0.13.0
+  - @openape/auth@0.13.1
+
 ## 0.32.0
 
 ### Minor Changes
