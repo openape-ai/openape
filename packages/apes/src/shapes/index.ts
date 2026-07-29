@@ -25,4 +25,4 @@ export type {
   ShapesOperation,
 } from '@openape/shapes'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
-export { createShapesGrant, fetchGrantToken, findExistingGrant, resolveFromGrant, verifyAndConsume, verifyAndExecute, waitForGrantStatus } from './grants.js'
+export { createShapesGrant, fetchGrantToken, findExistingGrant, isAutoApproved, resolveFromGrant, verifyAndConsume, verifyAndExecute, waitForGrantStatus } from './grants.js'
