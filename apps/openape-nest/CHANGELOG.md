@@ -1,5 +1,11 @@
 # @openape/nest
 
+## 2.4.9
+
+### Patch Changes
+
+- @openape/ape-agent@2.11.9
+
 ## 2.4.8
 
 ### Patch Changes

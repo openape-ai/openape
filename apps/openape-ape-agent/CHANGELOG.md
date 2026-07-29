@@ -1,5 +1,12 @@
 # @openape/ape-agent
 
+## 2.11.9
+
+### Patch Changes
+
+- Updated dependencies [2c015d6]
+  - @openape/apes@1.33.3
+
 ## 2.11.8
 
 ### Patch Changes
