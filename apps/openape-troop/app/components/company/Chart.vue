@@ -32,7 +32,7 @@ const roots = computed<TreeNode[]>(() => {
       </UButton>
     </div>
 
-    <div v-if="employees.length" class="overflow-x-auto pb-4">
+    <div v-if="employees.length" class="org-scroll overflow-x-auto pb-4">
       <ul class="org-tree">
         <li>
           <div class="org-card" style="border-color: color-mix(in srgb, #f59e0b 40%, transparent); background: color-mix(in srgb, #f59e0b 6%, #18181b)">
@@ -61,3 +61,17 @@ const roots = computed<TreeNode[]>(() => {
     </p>
   </div>
 </template>
+
+<style>
+.org-scroll {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Keep the chart's geometry intact on narrow screens and let the containing
+ * scroller expose the complete hierarchy instead of squeezing cards together. */
+.org-tree {
+  width: max-content;
+  min-width: 100%;
+}
+</style>
