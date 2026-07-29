@@ -7,7 +7,7 @@ import { useIdpAuth } from '../composables/useIdpAuth'
 // pages (one per concern) so the dashboard's named buttons land on exactly
 // what they say. This page just indexes them (and catches old /account links).
 
-useHead({ title: 'Account & security — OpenApe' })
+useHead({ title: 'Account & security' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 
@@ -25,37 +25,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            Account &amp; security
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
-          </p>
-        </div>
-        <UButton to="/" color="neutral" variant="soft" size="sm">
-          Dashboard
-        </UButton>
-      </div>
-
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
-
-      <ul v-else class="space-y-3">
-        <li v-for="s in sections" :key="s.to">
-          <UButton :to="s.to" color="neutral" variant="soft" block class="justify-start" size="lg">
-            <UIcon :name="s.icon" class="size-5 shrink-0" />
-            <span class="text-left">
-              <span class="block font-medium">{{ s.title }}</span>
-              <span class="block text-xs text-muted">{{ s.desc }}</span>
-            </span>
-          </UButton>
-        </li>
-      </ul>
+  <IdpPage title="Account &amp; security" :subtitle="user?.email" back-to="/" back-label="Your identity">
+    <div v-if="authLoading" class="text-center text-muted mt-10">
+      Loading…
     </div>
-  </div>
+
+    <ul v-else class="space-y-3">
+      <li v-for="s in sections" :key="s.to">
+        <UButton :to="s.to" color="neutral" variant="soft" block class="justify-start" size="lg">
+          <UIcon :name="s.icon" class="size-5 shrink-0" />
+          <span class="text-left">
+            <span class="block font-medium">{{ s.title }}</span>
+            <span class="block text-xs text-muted">{{ s.desc }}</span>
+          </span>
+        </UButton>
+      </li>
+    </ul>
+  </IdpPage>
 </template>

@@ -629,6 +629,64 @@ describe('issueAssertion', () => {
     expect(payload.delegation_grant).toBeUndefined()
   })
 
+  it('includes scope claim when provided (grants.md §6.1)', async () => {
+    const keyStore = new InMemoryKeyStore()
+
+    const assertion = await issueAssertion(
+      {
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        nonce: 'n',
+        delegation_act: { sub: 'agent@id.openape.at' },
+        delegation_grant: 'del-scoped',
+        scope: ['tasks:read', 'tasks:write'],
+      },
+      keyStore,
+      'https://idp.example.com',
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(assertion, key.publicKey)
+    expect(payload.scope).toEqual(['tasks:read', 'tasks:write'])
+  })
+
+  it('includes empty scope array as-is (fail-closed, not dropped)', async () => {
+    const keyStore = new InMemoryKeyStore()
+
+    const assertion = await issueAssertion(
+      {
+        sub: 'alice@example.com',
+        aud: 'sp.example.com',
+        nonce: 'n',
+        delegation_act: { sub: 'agent@id.openape.at' },
+        delegation_grant: 'del-legacy',
+        scope: [],
+      },
+      keyStore,
+      'https://idp.example.com',
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(assertion, key.publicKey)
+    // [] means "nothing allowed", never "everything allowed" — a delegated
+    // token must always state its own limits.
+    expect(payload.scope).toEqual([])
+  })
+
+  it('omits scope claim when not provided', async () => {
+    const keyStore = new InMemoryKeyStore()
+
+    const assertion = await issueAssertion(
+      { sub: 'alice@example.com', aud: 'sp.example.com', nonce: 'n' },
+      keyStore,
+      'https://idp.example.com',
+    )
+
+    const key = await keyStore.getSigningKey()
+    const { payload } = await verifyJWT(assertion, key.publicKey)
+    expect(payload.scope).toBeUndefined()
+  })
+
   it('passes delegation through token exchange', async () => {
     const codeStore = new InMemoryCodeStore()
     const keyStore = new InMemoryKeyStore()

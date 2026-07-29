@@ -9,7 +9,11 @@ interface AuthData {
   expires_at: number
 }
 
-const AUTH_FILE = join(homedir(), '.config', 'apes', 'auth.json')
+// APES_AUTH_FILE must be honoured here too (#1066): the adapter grant path
+// resolves its identity through this module, so without the override a wrapper
+// running under an alternate identity would silently request grants as the
+// logged-in human. Same semantics as @openape/apes' config.
+const AUTH_FILE = process.env.APES_AUTH_FILE || join(homedir(), '.config', 'apes', 'auth.json')
 
 export function loadAuth(): AuthData | null {
   if (!existsSync(AUTH_FILE))

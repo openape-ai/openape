@@ -52,3 +52,7 @@ export function useIdpAuth() {
 export function useRoute() {
   return route
 }
+
+export function useHead(_input: unknown) {
+  // Pages set their own <title>; nothing to assert, but the call must not throw.
+}

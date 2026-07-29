@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.1
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+  - @openape/core@0.20.0
+
+## 0.13.0
+
+### Minor Changes
+
+- e06c651: Delegated assertions minted via `/token` (client_credentials + delegation_grant) now carry a `scope` claim mirroring the delegation grant's scopes (grants.md §6.1, protocol#6). `issueAssertion` accepts an optional `scope: string[]` claim; both served delegation branches (nuxt-auth-idp route and @openape/server handler) pass `grant.request.scopes ?? []` — fail-closed `[]` for legacy grants without scopes. First-party client_credentials tokens and the authorization_code path are unchanged (no scope claim). The never-registered `/api/oauth/token-exchange` handler in nuxt-auth-idp was removed; its scope assertions were ported to the served `/token` path.
+
+### Patch Changes
+
+- Updated dependencies [76dd28c]
+  - @openape/core@0.19.0
+
 ## 0.12.0
 
 ### Minor Changes
@@ -79,6 +97,7 @@
   **`@openape/auth`** gains `AdminAllowlistStore` + `InMemoryAdminAllowlistStore`. `evaluatePolicy` accepts an optional 5th `options` arg with `adminAllowlistStore`; with no store wired up the mode keeps its previous safe-deny behaviour.
 
   **`@openape/nuxt-auth-idp`** wires the new store into `useIdpStores`, exposes a `defineAdminAllowlistStore(...)` registration helper, and adds two pluggable admin resolvers on `event.context`:
+
   - `openapeAdminResolver(event, email): boolean` — overrides the env-config email allowlist for `requireAdmin`.
   - `openapeRootAdminResolver(event, email): boolean` — strict tier for actions that must NOT be gateable by env config (e.g. operator promotion). New `requireRootAdmin` consults it; without one registered, fails closed.
 
@@ -106,6 +125,7 @@
 - [`2e753fd`](https://github.com/openape-ai/openape/commit/2e753fda9e7beaf1cec20077fbe2576a52c1c1df) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Connected services UI — list & revoke approved SPs (#301 follow-up).
 
   Users running in DDISA `mode=allowlist-user` need to be able to walk back a previous consent. Without that, the consent screen was a one-way door.
+
   - **`@openape/auth.ConsentStore`**: extended with `list(userId)` and `revoke(userId, clientId)`. `InMemoryConsentStore` gets the implementations + 4 unit tests pinning sort-order, scoping, and idempotent revoke.
   - **`@openape/nuxt-auth-idp`**:
     - `defineConsentStore` factory + auto-imported `createConsentStore` (unstorage default for module/playground/tests).
@@ -124,6 +144,7 @@
   Previously: `evaluatePolicy` had the right logic for `allowlist-user`, but `authorize.get.ts` treated `decision === 'consent'` as an error (`access_denied` redirect) and used a `noopConsentStore` that always returned `hasConsent: false`. Net effect: any user with `mode=allowlist-user` in their `_ddisa.{domain}` TXT record was permanently locked out.
 
   Now:
+
   - **Real `ConsentStore`** backed by unstorage (default) with the same shape as `@openape/auth`'s in-memory implementation. Free-idp can swap in a Drizzle-backed version via the existing store-registry.
   - **`authorize.get.ts` routing fixed**: `'deny'` still produces `access_denied`; `'consent'` stashes the original /authorize state in the user's session under `pendingConsent` (with a one-shot CSRF token) and redirects to `/consent`.
   - **`/consent` page** (Vue) renders metadata-aware UI:
@@ -148,10 +169,12 @@
   This isn't a centralised registry — it's the same DNS/HTTP-discoverable pattern DDISA uses for IdPs. SP is source-of-truth for its own callbacks; IdP fetches and validates.
 
   Implementation:
+
   - **`@openape/auth`**: new `createClientMetadataResolver()` fetches and caches SP metadata (300s TTL, parallel to DDISA DNS cache). Falls back to legacy `/.well-known/sp-manifest.json` per the spec's migration note. New `validateRedirectUri()` does strict-equality matching (no path-prefix, no wildcards — RFC 6749 §3.1.2.2 + OAuth 2.0 Security BCP).
   - **`@openape/nuxt-auth-idp`**: `/authorize` calls the resolver before issuing a code; rejects with 400 on mismatch.
 
   **Rollout-safe defaults**:
+
   - `spMetadataMode: 'permissive'` (default) tolerates unresolvable SP metadata so existing SPs keep working while they catch up. Explicit redirect_uri MISMATCH is always rejected though — permissive only forgives missing metadata.
   - `spMetadataMode: 'strict'` once all SPs publish: also rejects unresolvable.
   - Native CLIs (RFC 8252 public clients) without a domain go through a static `publicClients` map — `apes-cli` registered for the `localhost:9876` callback.

@@ -11,6 +11,9 @@ export interface SkillRef { id: string, name: string, description: string, assig
 export function buildSystemPrompt(org: PromptOrg, objs: PromptObjective[], owner: string, team: TeamMember[], memory: MemoryDoc[] = [], skills: SkillRef[] = []): string {
   let p = `Du bist der Operator der Firma „${org.name}" (orgId: ${org.id}). Antworte als dieser Operator: knapp, konkret, auf Deutsch. Du sprichst gerade direkt mit deinem Owner (${owner}) — sprich ihn persönlich an. Verlangt ein Werkzeug (z. B. Selbst-Planung/Automatik) eine orgId, nutze GENAU diese: ${org.id} (nicht den Firmennamen).`
   if (team.length) {
+    // The tool patterns below are PROSE for the model's guidance only. The
+    // authoritative allowlist rides the task payload as data (#1036):
+    // tasks/next metadata.allowedTools, enforced by the worker before execution.
     p += `\n\nDein Team — du kannst an diese Rollen delegieren, wenn eine Aufgabe ihr Werkzeug braucht:`
     for (const m of team) {
       const tools = m.tools.length ? ` Darf Kommandos ausführen (Muster): ${m.tools.join(', ')}.` : ' (keine Werkzeuge)'
