@@ -7,7 +7,7 @@ import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 // and, if requested, an HMAC secret — both shown so the owner can wire the sender.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
-  const body = await readBody<{ label?: string, prompt?: string, includePayload?: boolean, useSecret?: boolean }>(event)
+  const body = await readBody<{ label?: string, prompt?: string, includePayload?: boolean, useSecret?: boolean, eventFilter?: string }>(event)
   const prompt = (body?.prompt ?? '').trim()
   if (!prompt) throw createError({ statusCode: 400, statusMessage: 'prompt required' })
   const row = {
@@ -18,11 +18,12 @@ export default defineEventHandler(async (event) => {
     token: randomBytes(24).toString('base64url'),
     secret: body?.useSecret ? randomBytes(32).toString('hex') : null,
     prompt,
+    eventFilter: (body?.eventFilter ?? '').trim(),
     includePayload: body?.includePayload === true,
     enabled: true,
     lastFiredAt: null,
     createdAt: Date.now(),
   }
   await useDb().insert(cockpitHooks).values(row)
-  return { id: row.id, label: row.label, token: row.token, secret: row.secret, prompt: row.prompt, includePayload: row.includePayload, enabled: true }
+  return { id: row.id, label: row.label, token: row.token, secret: row.secret, prompt: row.prompt, eventFilter: row.eventFilter, includePayload: row.includePayload, enabled: true }
 })
