@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.1
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+  - @openape/core@0.20.0
+
 ## 0.13.0
 
 ### Minor Changes

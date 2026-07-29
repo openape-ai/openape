@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.1
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+  - @openape/core@0.20.0
+  - @openape/auth@0.13.1
+
 ## 0.15.0
 
 ### Minor Changes
