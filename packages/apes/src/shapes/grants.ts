@@ -16,7 +16,7 @@ import {
   loadOrInstallAdapter,
   resolveCommand,
 } from '@openape/shapes'
-import type { ResolvedCommand } from '@openape/shapes'
+import type { ResolvedCommand, ResolvedCompound } from '@openape/shapes'
 
 function decodePayload(token: string): Record<string, unknown> {
   const [, payload] = token.split('.')
@@ -366,4 +366,143 @@ export async function findExistingGrant(
   }
 
   return null
+}
+
+/**
+ * True when `granted` covers every segment detail of a compound line —
+ * the coverage question for one grant carrying N per-segment details.
+ * Pure so it can be unit-tested without token plumbing.
+ */
+export function compoundCoveredByDetails(
+  granted: OpenApeCliAuthorizationDetail[],
+  compound: Pick<ResolvedCompound, 'segments'>,
+): boolean {
+  return compound.segments.every(seg =>
+    granted.some(detail => cliAuthorizationDetailCovers(detail, seg.detail)),
+  )
+}
+
+/**
+ * Compound sibling of `createShapesGrant`: ONE grant request whose
+ * authorization_details are the merged per-segment details and whose
+ * command/execution_context bind the ORIGINAL `bash -c` argv — after
+ * approval the line runs as a whole (pipes need the shell).
+ */
+export async function createCompoundGrant(
+  compound: ResolvedCompound,
+  params: {
+    idp: string
+    approval: 'once' | 'timed' | 'always'
+    reason?: string
+  },
+): Promise<CreateShapesGrantResult> {
+  const grantsEndpoint = await getGrantsEndpoint(params.idp)
+  const requester = getRequesterIdentity()
+  if (!requester) {
+    throw new Error('No requester identity available. Run `apes login` first.')
+  }
+  return apiFetch<CreateShapesGrantResult>(grantsEndpoint, {
+    method: 'POST',
+    idp: params.idp,
+    body: {
+      requester,
+      target_host: hostname(),
+      audience: compound.audience,
+      grant_type: params.approval,
+      command: compound.executionContext.argv,
+      reason: params.reason ?? `Compound: ${compound.innerLine.slice(0, 120)}`,
+      permissions: compound.permissions,
+      authorization_details: compound.details,
+      execution_context: compound.executionContext,
+    },
+  })
+}
+
+/**
+ * Reuse check for compound lines: an approved timed/always grant qualifies
+ * only when it covers EVERY segment. Adapter-digest pinning is skipped —
+ * a compound line spans several adapters, per-segment integrity lives in
+ * the segment resource chains instead.
+ */
+export async function findExistingCompoundGrant(
+  compound: ResolvedCompound,
+  idp: string,
+): Promise<string | null> {
+  const grantsEndpoint = await getGrantsEndpoint(idp)
+  const response = await apiFetch<{ data: OpenApeGrant[] }>(
+    `${grantsEndpoint}?status=approved`,
+    { idp },
+  )
+  const now = Math.floor(Date.now() / 1000)
+
+  for (const grant of response.data) {
+    const req = grant.request
+    if (req.grant_type === 'once')
+      continue
+    if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
+      continue
+    if (req.audience !== compound.audience)
+      continue
+    const cliDetails = (req.authorization_details ?? []).filter(
+      (d): d is OpenApeCliAuthorizationDetail => d.type === 'openape_cli',
+    )
+    if (cliDetails.length > 0 && compoundCoveredByDetails(cliDetails, compound))
+      return grant.id
+  }
+  return null
+}
+
+/**
+ * Compound sibling of `verifyAndConsume`: verifies the authz token covers
+ * every segment, binds once grants to the original argv, consumes — and
+ * leaves execution to the caller (the whole line must run through the
+ * shell, not per segment).
+ */
+export async function verifyAndConsumeCompound(token: string, compound: ResolvedCompound): Promise<void> {
+  const payload = decodePayload(token)
+  const issuer = String(payload.iss ?? '')
+  if (!issuer)
+    throw new Error('Grant token is missing issuer')
+
+  const discovery = await discoverEndpoints(issuer)
+  const jwksUri = String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const result = await verifyAuthzJWT(token, {
+    expectedIss: issuer,
+    expectedAud: compound.audience,
+    jwksUri,
+  })
+  if (!result.valid || !result.claims) {
+    throw new Error(result.error ?? 'Grant verification failed')
+  }
+
+  const claims = result.claims
+  const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
+  if (details.length === 0)
+    throw new Error('Grant carries no structured CLI details for a compound command')
+
+  if (!compoundCoveredByDetails(details, compound)) {
+    const missing = compound.segments.find(seg => !details.some(d => cliAuthorizationDetailCovers(d, seg.detail)))
+    throw new Error(`Grant does not cover required permission: ${missing?.permission ?? 'unknown segment'}`)
+  }
+
+  // Generic segments carry exact_command; a once grant binds the whole
+  // wrapped argv. Either way the binding target is the ORIGINAL line.
+  const exactRequired = compound.segments.some(seg => seg.detail.constraints?.exact_command)
+  const isOnce = claims.grant_type === 'once' || claims.approval === 'once'
+  if ((exactRequired || isOnce) && claims.execution_context?.argv_hash !== compound.executionContext.argv_hash) {
+    throw new Error('Granted command does not match current argv')
+  }
+
+  const grantsEndpoint = await getGrantsEndpoint(issuer)
+  const consume = await fetch(`${grantsEndpoint}/${claims.grant_id}/consume`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!consume.ok) {
+    throw new Error(`Consume failed: ${consume.status} ${consume.statusText}`)
+  }
+  const consumeResult = await consume.json() as { error?: string }
+  if (consumeResult.error) {
+    throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
+  }
 }
