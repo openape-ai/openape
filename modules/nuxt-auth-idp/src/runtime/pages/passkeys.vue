@@ -8,7 +8,7 @@ import { useWebAuthn } from '../composables/useWebAuthn'
 // ones). Split out of the old overloaded /account page so the dashboard's
 // "Passkeys verwalten" button lands on exactly this.
 
-useHead({ title: 'Passkeys — OpenApe' })
+useHead({ title: 'Passkeys' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const { addDevice, error: webauthnError, loading: webauthnLoading } = useWebAuthn()
@@ -74,63 +74,49 @@ function deviceLabel(c) {
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            Passkeys
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
-          </p>
+  <IdpPage title="Passkeys" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <div v-if="authLoading" class="text-center text-muted mt-10">
+      Loading…
+    </div>
+
+    <template v-else>
+      <UAlert v-if="error" color="error" :title="error" class="mb-4" />
+      <UAlert v-if="success" color="success" :title="success" class="mb-4" />
+
+      <UCard class="mb-6">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            Add Device
+          </h2>
+        </template>
+
+        <div class="flex gap-3 items-end">
+          <div class="flex-1">
+            <UFormField label="Device Name (optional)">
+              <UInput v-model="newDeviceName" placeholder="e.g. Work Laptop" />
+            </UFormField>
+          </div>
+          <UButton color="primary" :loading="webauthnLoading" :disabled="webauthnLoading" @click="handleAddDevice">
+            Add Device
+          </UButton>
         </div>
-        <UButton to="/account" color="neutral" variant="soft" size="sm">
-          Back
-        </UButton>
-      </div>
+      </UCard>
 
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
+      <UCard :ui="{ body: 'p-0' }">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            Registered Devices
+          </h2>
+        </template>
 
-      <template v-else>
-        <UAlert v-if="error" color="error" :title="error" class="mb-4" />
-        <UAlert v-if="success" color="success" :title="success" class="mb-4" />
-
-        <UCard class="mb-6">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Add Device
-            </h2>
-          </template>
-
-          <div class="flex gap-3 items-end">
-            <div class="flex-1">
-              <UFormField label="Device Name (optional)">
-                <UInput v-model="newDeviceName" placeholder="e.g. Work Laptop" />
-              </UFormField>
-            </div>
-            <UButton color="primary" :loading="webauthnLoading" :disabled="webauthnLoading" @click="handleAddDevice">
-              Add Device
-            </UButton>
-          </div>
-        </UCard>
-
-        <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Registered Devices
-            </h2>
-          </template>
-
-          <div v-if="credentialsLoading" class="p-6 text-center text-muted">
-            Loading...
-          </div>
-          <div v-else-if="credentials.length === 0" class="p-6 text-center text-muted">
-            No devices registered.
-          </div>
-          <table v-else class="w-full">
+        <div v-if="credentialsLoading" class="p-6 text-center text-muted">
+          Loading…
+        </div>
+        <div v-else-if="credentials.length === 0" class="p-6 text-center text-muted">
+          No devices registered.
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full">
             <thead class="border-b border-(--ui-border)">
               <tr>
                 <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -168,8 +154,8 @@ function deviceLabel(c) {
               </tr>
             </tbody>
           </table>
-        </UCard>
-      </template>
-    </div>
-  </div>
+        </div>
+      </UCard>
+    </template>
+  </IdpPage>
 </template>

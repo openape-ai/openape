@@ -123,43 +123,45 @@ function browserOf(userAgent?: string) {
       <div v-if="attempts.length === 0" class="text-center text-muted">
         No one has tried to recover this account.
       </div>
-      <table v-else class="w-full">
-        <thead class="border-b border-(--ui-border)">
-          <tr>
-            <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
-              When
-            </th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
-              Origin
-            </th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
-              Outcome
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-(--ui-border)">
-          <tr v-for="a in attempts" :key="a.requestedAt" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
-            <td class="px-4 py-3 text-sm whitespace-nowrap">
-              {{ formatTime(a.requestedAt) }}
-            </td>
-            <td class="px-4 py-3 text-sm">
-              <span v-if="a.requestIp" class="font-mono text-xs">{{ a.requestIp }}</span>
-              <span v-else class="text-muted">unknown</span>
-              <div v-if="a.requestUserAgent" class="text-xs text-muted" :title="a.requestUserAgent">
-                {{ browserOf(a.requestUserAgent) }}
-              </div>
-            </td>
-            <td class="px-4 py-3">
-              <UBadge :color="STATUS[a.status].color" variant="subtle" size="sm">
-                {{ STATUS[a.status].label }}
-              </UBadge>
-              <div v-if="a.status === 'pending' && a.usableAt" class="text-xs text-muted mt-1">
-                until {{ formatTime(a.usableAt) }}
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="border-b border-(--ui-border)">
+            <tr>
+              <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                When
+              </th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                Origin
+              </th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                Outcome
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-(--ui-border)">
+            <tr v-for="a in attempts" :key="a.requestedAt" class="odd:bg-(--ui-bg-elevated)/40 even:bg-(--ui-bg) hover:bg-(--ui-bg-elevated)">
+              <td class="px-4 py-3 text-sm whitespace-nowrap">
+                {{ formatTime(a.requestedAt) }}
+              </td>
+              <td class="px-4 py-3 text-sm">
+                <span v-if="a.requestIp" class="font-mono text-xs">{{ a.requestIp }}</span>
+                <span v-else class="text-muted">unknown</span>
+                <div v-if="a.requestUserAgent" class="text-xs text-muted" :title="a.requestUserAgent">
+                  {{ browserOf(a.requestUserAgent) }}
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <UBadge :color="STATUS[a.status].color" variant="subtle" size="sm">
+                  {{ STATUS[a.status].label }}
+                </UBadge>
+                <div v-if="a.status === 'pending' && a.usableAt" class="text-xs text-muted mt-1">
+                  until {{ formatTime(a.usableAt) }}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </UCard>
 </template>
