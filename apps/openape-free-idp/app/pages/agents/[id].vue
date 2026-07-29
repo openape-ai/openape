@@ -6,7 +6,7 @@ import BucketYoloCard from '../../components/BucketYoloCard.vue'
 import ScopedCommandWizard from '../../components/ScopedCommandWizard.vue'
 import { BUCKET_DISPLAY } from '../../utils/audience-buckets'
 
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const { user, loading: authLoading } = useIdpAuth()
 const route = useRoute()
 
 interface Agent {
@@ -60,8 +60,6 @@ function bucketByValue(value: string) {
 }
 
 useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 'Agent') })
-
-await fetchUser()
 
 async function loadAgent() {
   loading.value = true
@@ -196,300 +194,293 @@ async function handleDelete() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-lg bg-gray-900 border border-gray-800">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <h1 class="text-2xl font-bold text-white">
-            Agent Details
-          </h1>
-          <UButton
-            to="/agents"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-arrow-left"
-            size="sm"
-          />
+  <IdpPage
+    :title="agent?.name ?? 'Agent'"
+    :subtitle="agent?.email"
+    back-to="/agents"
+    back-label="Agents"
+  >
+    <div v-if="authLoading || loading" class="text-center text-muted">
+      Loading...
+    </div>
+
+    <template v-else-if="!user">
+      <p class="mb-4 text-center text-muted">
+        Du musst angemeldet sein.
+      </p>
+      <UButton
+        :to="`/login?returnTo=/agents/${route.params.id}`"
+        color="primary"
+        block
+        label="Anmelden"
+      />
+    </template>
+
+    <template v-else-if="!agent">
+      <UAlert
+        color="error"
+        title="Agent nicht gefunden"
+        description="Dieser Agent existiert nicht oder gehört nicht zu deinem Account."
+      />
+      <UButton
+        to="/agents"
+        color="primary"
+        block
+        class="mt-4"
+        label="Zurück zur Übersicht"
+      />
+    </template>
+
+    <template v-else>
+      <div class="space-y-4">
+        <div>
+          <p class="mb-1 text-sm text-muted">
+            Name
+          </p>
+          <div class="flex items-center gap-2">
+            <pre class="flex-1 overflow-x-auto rounded-lg border border-default bg-elevated px-3 py-2 text-sm text-default">{{ agent.name }}</pre>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :icon="copied === 'name' ? 'i-lucide-check' : 'i-lucide-copy'"
+              aria-label="Agent-Namen kopieren"
+              @click="copyField('name', agent.name)"
+            />
+          </div>
         </div>
-      </template>
 
-      <div v-if="authLoading || loading" class="text-center text-gray-400">
-        Loading...
-      </div>
-
-      <template v-else-if="!user">
-        <p class="text-center text-gray-400 mb-4">
-          Du musst angemeldet sein.
-        </p>
-        <UButton
-          :to="`/login?returnTo=/agents/${route.params.id}`"
-          color="primary"
-          block
-          label="Anmelden"
-        />
-      </template>
-
-      <template v-else-if="!agent">
-        <UAlert
-          color="error"
-          title="Agent nicht gefunden"
-          description="Dieser Agent existiert nicht oder gehört nicht zu deinem Account."
-        />
-        <UButton
-          to="/agents"
-          color="primary"
-          block
-          class="mt-4"
-          label="Zurück zur Übersicht"
-        />
-      </template>
-
-      <template v-else>
-        <div class="space-y-4">
-          <div>
-            <p class="text-sm text-gray-400 mb-1">
-              Name
-            </p>
-            <div class="flex items-center gap-2">
-              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 overflow-x-auto">{{ agent.name }}</pre>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :icon="copied === 'name' ? 'i-lucide-check' : 'i-lucide-copy'"
-                @click="copyField('name', agent.name)"
-              />
-            </div>
+        <div>
+          <p class="mb-1 text-sm text-muted">
+            Email
+          </p>
+          <div class="flex items-center gap-2">
+            <pre class="flex-1 overflow-x-auto rounded-lg border border-default bg-elevated px-3 py-2 font-mono text-xs text-default">{{ agent.email }}</pre>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :icon="copied === 'email' ? 'i-lucide-check' : 'i-lucide-copy'"
+              aria-label="Agent-Email kopieren"
+              @click="copyField('email', agent.email)"
+            />
           </div>
+        </div>
 
-          <div>
-            <p class="text-sm text-gray-400 mb-1">
-              Email
-            </p>
-            <div class="flex items-center gap-2">
-              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono overflow-x-auto">{{ agent.email }}</pre>
+        <div>
+          <p class="mb-1 text-sm text-muted">
+            Public Key
+          </p>
+          <template v-if="editingKey">
+            <UTextarea
+              v-model="editKeyValue"
+              :rows="3"
+              class="font-mono text-xs"
+              placeholder="ssh-ed25519 AAAA..."
+            />
+            <UAlert
+              v-if="keyError"
+              color="error"
+              :title="keyError"
+              class="mt-2"
+            />
+            <div class="mt-2 flex gap-2">
               <UButton
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :icon="copied === 'email' ? 'i-lucide-check' : 'i-lucide-copy'"
-                @click="copyField('email', agent.email)"
-              />
-            </div>
-          </div>
-
-          <div>
-            <p class="text-sm text-gray-400 mb-1">
-              Public Key
-            </p>
-            <template v-if="editingKey">
-              <UTextarea
-                v-model="editKeyValue"
-                :rows="3"
-                class="font-mono text-xs"
-                placeholder="ssh-ed25519 AAAA..."
-              />
-              <UAlert
-                v-if="keyError"
-                color="error"
-                :title="keyError"
-                class="mt-2"
-              />
-              <div class="flex gap-2 mt-2">
-                <UButton
-                  color="primary"
-                  size="sm"
-                  :loading="savingKey"
-                  icon="i-lucide-check"
-                  label="Speichern"
-                  @click="saveKey"
-                />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  icon="i-lucide-x"
-                  label="Abbrechen"
-                  :disabled="savingKey"
-                  @click="cancelEditKey"
-                />
-              </div>
-            </template>
-            <div v-else class="flex items-center gap-2">
-              <pre class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono overflow-x-auto break-all whitespace-pre-wrap">{{ agent.publicKey }}</pre>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                icon="i-lucide-pencil"
-                @click="startEditKey"
+                color="primary"
+                size="sm"
+                :loading="savingKey"
+                icon="i-lucide-check"
+                label="Speichern"
+                @click="saveKey"
               />
               <UButton
                 color="neutral"
                 variant="ghost"
-                size="xs"
-                :icon="copied === 'key' ? 'i-lucide-check' : 'i-lucide-copy'"
-                @click="copyField('key', agent.publicKey)"
+                size="sm"
+                icon="i-lucide-x"
+                label="Abbrechen"
+                :disabled="savingKey"
+                @click="cancelEditKey"
               />
             </div>
+          </template>
+          <div v-else class="flex items-center gap-2">
+            <pre class="flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-default bg-elevated px-3 py-2 font-mono text-xs text-default">{{ agent.publicKey }}</pre>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-pencil"
+              aria-label="Public Key bearbeiten"
+              @click="startEditKey"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :icon="copied === 'key' ? 'i-lucide-check' : 'i-lucide-copy'"
+              aria-label="Public Key kopieren"
+              @click="copyField('key', agent.publicKey)"
+            />
           </div>
+        </div>
 
-          <div>
-            <p class="text-sm text-gray-400 mb-1">
-              Status
-            </p>
-            <div class="flex items-center gap-3">
-              <UBadge :color="agent.isActive ? 'success' : 'error'">
-                {{ agent.isActive ? 'Aktiv' : 'Inaktiv' }}
-              </UBadge>
+        <div>
+          <p class="mb-1 text-sm text-muted">
+            Status
+          </p>
+          <div class="flex items-center gap-3">
+            <UBadge :color="agent.isActive ? 'success' : 'error'">
+              {{ agent.isActive ? 'Aktiv' : 'Inaktiv' }}
+            </UBadge>
+            <UButton
+              size="xs"
+              variant="outline"
+              :loading="statusToggling"
+              :icon="agent.isActive ? 'i-lucide-pause' : 'i-lucide-play'"
+              :label="agent.isActive ? 'Deaktivieren' : 'Aktivieren'"
+              @click="toggleActive"
+            />
+          </div>
+          <UAlert v-if="statusError" color="error" :title="statusError" class="mt-2" @close="statusError = ''" />
+          <p class="mt-1 text-xs text-dimmed">
+            Inaktive Agents können nicht mehr authentifizieren.
+          </p>
+        </div>
+
+        <!-- Per-Bucket Tabs: Authorization-Layer (Commands / Web / Root /
+             Default-Fallback). Standing-Grants-Liste für "Erlaubte Commands"
+             ist nur unter Commands sichtbar — Web und Root haben heute noch
+             keine eigene UI dafür, kommt in Folge-PRs. Auth-Details sind
+             jetzt ein Help-Popover statt eines Accordion-Blocks. -->
+        <div class="overflow-hidden rounded-lg border border-default">
+          <div class="flex items-center justify-between gap-2 border-b border-default bg-elevated/40 px-3 py-2">
+            <h2 class="flex items-center gap-2 text-sm font-semibold text-muted">
+              <UIcon name="i-lucide-shield-check" class="size-4 text-muted" />
+              Auto-Approval (YOLO) + Standing Grants
+            </h2>
+            <UPopover :content="{ side: 'bottom', align: 'end' }">
               <UButton
+                icon="i-lucide-help-circle"
+                color="neutral"
+                variant="ghost"
                 size="xs"
-                variant="outline"
-                :loading="statusToggling"
-                :icon="agent.isActive ? 'i-lucide-pause' : 'i-lucide-play'"
-                :label="agent.isActive ? 'Deaktivieren' : 'Aktivieren'"
-                @click="toggleActive"
+                aria-label="Authentifizierung erklärt"
               />
-            </div>
-            <UAlert v-if="statusError" color="error" :title="statusError" class="mt-2" @close="statusError = ''" />
-            <p class="text-xs text-gray-500 mt-1">
-              Inaktive Agents können nicht mehr authentifizieren.
-            </p>
-          </div>
-
-          <!-- Per-Bucket Tabs: Authorization-Layer (Commands / Web / Root /
-               Default-Fallback). Standing-Grants-Liste für "Erlaubte Commands"
-               ist nur unter Commands sichtbar — Web und Root haben heute noch
-               keine eigene UI dafür, kommt in Folge-PRs. Auth-Details sind
-               jetzt ein Help-Popover statt eines Accordion-Blocks. -->
-          <div class="border border-gray-700 rounded-lg overflow-hidden">
-            <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-700 bg-gray-800/40">
-              <h2 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                <UIcon name="i-lucide-shield-check" class="w-4 h-4 text-gray-400" />
-                Auto-Approval (YOLO) + Standing Grants
-              </h2>
-              <UPopover :content="{ side: 'bottom', align: 'end' }">
-                <UButton
-                  icon="i-lucide-help-circle"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  aria-label="Authentifizierung erklärt"
-                />
-                <template #content>
-                  <div class="p-4 max-w-md text-sm text-gray-200 space-y-3">
-                    <h3 class="font-semibold text-gray-100">
-                      Authentifizierung
-                    </h3>
-                    <div class="space-y-1">
-                      <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                        1) Bei OpenApe anmelden
-                      </h4>
-                      <p class="text-xs text-gray-400">
-                        Ed25519-Challenge/Response mit dem privaten Schlüssel. Danach kann der Agent Grants anfordern.
-                      </p>
-                      <div class="relative">
-                        <pre class="bg-gray-800 border border-gray-700 rounded p-2 pr-8 text-xs text-gray-200 font-mono overflow-x-auto">{{ apesLoginCmd }}</pre>
-                        <UButton
-                          color="neutral"
-                          variant="ghost"
-                          size="xs"
-                          :icon="copied === 'apesLogin' ? 'i-lucide-check' : 'i-lucide-copy'"
-                          class="absolute top-1.5 right-1.5"
-                          @click="copyField('apesLogin', apesLoginCmd)"
-                        />
-                      </div>
-                    </div>
-                    <div class="space-y-1">
-                      <h4 class="text-xs uppercase tracking-wide text-gray-500 font-semibold">
-                        2) DDISA-Login auf SPs
-                      </h4>
-                      <p class="text-xs text-gray-400">
-                        Jede DDISA-fähige Website löst <span class="font-mono">_ddisa.{{ ddisaDomain }}</span> per DNS auf und vertraut diesem IdP.
-                        <a
-                          href="https://docs.openape.ai/getting-started/how-it-works"
-                          target="_blank"
-                          rel="noopener"
-                          class="text-orange-400 underline"
-                        >Mehr</a>.
-                      </p>
+              <template #content>
+                <div class="max-w-md space-y-3 p-4 text-sm text-default">
+                  <h3 class="font-semibold">
+                    Authentifizierung
+                  </h3>
+                  <div class="space-y-1">
+                    <h4 class="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                      1) Bei OpenApe anmelden
+                    </h4>
+                    <p class="text-xs text-muted">
+                      Ed25519-Challenge/Response mit dem privaten Schlüssel. Danach kann der Agent Grants anfordern.
+                    </p>
+                    <div class="relative">
+                      <pre class="overflow-x-auto rounded border border-default bg-elevated p-2 pr-8 font-mono text-xs text-default">{{ apesLoginCmd }}</pre>
+                      <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                        :icon="copied === 'apesLogin' ? 'i-lucide-check' : 'i-lucide-copy'"
+                        class="absolute top-1.5 right-1.5"
+                        aria-label="Login-Command kopieren"
+                        @click="copyField('apesLogin', apesLoginCmd)"
+                      />
                     </div>
                   </div>
-                </template>
-              </UPopover>
-            </div>
-            <div class="flex border-b border-gray-700 bg-gray-900/40 overflow-x-auto">
-              <button
-                v-for="b in BUCKET_DISPLAY"
-                :key="b.id"
-                type="button"
-                class="flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 transition-colors"
-                :class="activeBucketTab === b.id
-                  ? 'border-orange-500 text-orange-400 bg-gray-800/40'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-800/30'"
-                @click="activeBucketTab = b.id as typeof activeBucketTab"
-              >
-                <UIcon :name="b.icon" class="w-4 h-4" />
-                <span>{{ b.label }}</span>
-              </button>
-            </div>
-            <div v-if="activeBucketTab === 'commands'" class="space-y-3 p-3">
-              <BucketYoloCard
+                  <div class="space-y-1">
+                    <h4 class="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                      2) DDISA-Login auf SPs
+                    </h4>
+                    <p class="text-xs text-muted">
+                      Jede DDISA-fähige Website löst <span class="font-mono">_ddisa.{{ ddisaDomain }}</span> per DNS auf und vertraut diesem IdP.
+                      <a
+                        href="https://docs.openape.ai/getting-started/how-it-works"
+                        target="_blank"
+                        rel="noopener"
+                        class="text-primary underline"
+                      >Mehr</a>.
+                    </p>
+                  </div>
+                </div>
+              </template>
+            </UPopover>
+          </div>
+          <div class="flex overflow-x-auto border-b border-default bg-default/40">
+            <button
+              v-for="b in BUCKET_DISPLAY"
+              :key="b.id"
+              type="button"
+              class="flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              :class="activeBucketTab === b.id
+                ? 'border-primary text-primary bg-elevated/40'
+                : 'border-transparent text-muted hover:text-default hover:bg-elevated/30'"
+              @click="activeBucketTab = b.id as typeof activeBucketTab"
+            >
+              <UIcon :name="b.icon" class="size-4" />
+              <span>{{ b.label }}</span>
+            </button>
+          </div>
+          <div v-if="activeBucketTab === 'commands'" class="space-y-3 p-3">
+            <BucketYoloCard
+              :agent-email="agent.email"
+              :bucket="bucketByValue('commands')"
+            />
+            <div>
+              <h3 class="mb-2 mt-2 text-sm font-semibold text-muted">
+                Erlaubte Commands (Standing Grants)
+              </h3>
+              <AllowedCommandsList
                 :agent-email="agent.email"
-                :bucket="bucketByValue('commands')"
-              />
-              <div>
-                <h3 class="text-sm font-semibold text-gray-300 mb-2 mt-2">
-                  Erlaubte Commands (Standing Grants)
-                </h3>
-                <AllowedCommandsList
-                  :agent-email="agent.email"
-                  :owner="agent.owner ?? user?.email ?? ''"
-                  :standing-grants="standingGrants"
-                  @refresh="loadStandingGrants"
-                  @add-scoped="openWizard"
-                />
-              </div>
-            </div>
-            <div v-else-if="activeBucketTab === 'web'" class="p-3">
-              <BucketYoloCard
-                :agent-email="agent.email"
-                :bucket="bucketByValue('web')"
-              />
-            </div>
-            <div v-else-if="activeBucketTab === 'root'" class="p-3">
-              <BucketYoloCard
-                :agent-email="agent.email"
-                :bucket="bucketByValue('root')"
-              />
-            </div>
-            <div v-else-if="activeBucketTab === 'default'" class="p-3">
-              <BucketYoloCard
-                :agent-email="agent.email"
-                :bucket="bucketByValue('default')"
+                :owner="agent.owner ?? user?.email ?? ''"
+                :standing-grants="standingGrants"
+                @refresh="loadStandingGrants"
+                @add-scoped="openWizard"
               />
             </div>
           </div>
-
-          <UAlert
-            v-if="deleteError"
-            color="error"
-            :title="deleteError"
-          />
-
-          <UButton
-            color="error"
-            variant="outline"
-            block
-            :loading="deleting"
-            icon="i-lucide-trash-2"
-            @click="handleDelete"
-          >
-            Agent löschen
-          </UButton>
+          <div v-else-if="activeBucketTab === 'web'" class="p-3">
+            <BucketYoloCard
+              :agent-email="agent.email"
+              :bucket="bucketByValue('web')"
+            />
+          </div>
+          <div v-else-if="activeBucketTab === 'root'" class="p-3">
+            <BucketYoloCard
+              :agent-email="agent.email"
+              :bucket="bucketByValue('root')"
+            />
+          </div>
+          <div v-else-if="activeBucketTab === 'default'" class="p-3">
+            <BucketYoloCard
+              :agent-email="agent.email"
+              :bucket="bucketByValue('default')"
+            />
+          </div>
         </div>
-      </template>
-    </UCard>
+
+        <UAlert
+          v-if="deleteError"
+          color="error"
+          :title="deleteError"
+        />
+
+        <UButton
+          color="error"
+          variant="outline"
+          block
+          :loading="deleting"
+          icon="i-lucide-trash-2"
+          @click="handleDelete"
+        >
+          Agent löschen
+        </UButton>
+      </div>
+    </template>
 
     <ScopedCommandWizard
       v-if="agent"
@@ -497,5 +488,5 @@ async function handleDelete() {
       :agent-email="agent.email"
       @created="onWizardCreated"
     />
-  </div>
+  </IdpPage>
 </template>

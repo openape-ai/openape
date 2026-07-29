@@ -5,40 +5,23 @@
 
 useSeoMeta({ title: 'Recovery protection' })
 
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const { user, loading: authLoading } = useIdpAuth()
 
 onMounted(async () => {
-  await fetchUser()
   if (!user.value)
     await navigateTo('/login')
 })
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            Recovery protection
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
-          </p>
-        </div>
-        <UButton to="/account" color="neutral" variant="soft" size="sm">
-          Back
-        </UButton>
-      </div>
-
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
-
-      <template v-else>
-        <RecoveryVacationCard />
-        <RecoveryHistoryCard />
-      </template>
+  <IdpPage title="Recovery protection" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <div v-if="authLoading" class="mt-10 text-center text-muted">
+      Loading...
     </div>
-  </div>
+
+    <template v-else>
+      <RecoveryVacationCard />
+      <RecoveryHistoryCard />
+    </template>
+  </IdpPage>
 </template>
