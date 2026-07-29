@@ -84,7 +84,7 @@ const USelectStub = defineComponent({
     modelValue: { type: String, default: '' },
   },
   emits: ['update:modelValue'],
-  template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', ($event.target as HTMLSelectElement).value)"><slot /></select>',
+  template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
 })
 
 const UInputStub = defineComponent({
@@ -92,7 +92,7 @@ const UInputStub = defineComponent({
     modelValue: { type: [String, Number], default: '' },
   },
   emits: ['update:modelValue'],
-  template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', ($event.target as HTMLInputElement).value)" />',
+  template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 })
 
 const globalStubs = {
@@ -142,6 +142,71 @@ describe('grant approval pages', () => {
       },
     })
     expect(wrapper.text()).toContain('Grant approved')
+  })
+
+  it('offers "make a rule" for shaped details and POSTs a widened standing grant', async () => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(buildCliGrant())
+      .mockResolvedValueOnce({ id: 'sg-1' }) // POST /api/standing-grants
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    // Proposal preview: first link keeps its selector, the rest wildcard.
+    expect(wrapper.text()).toContain('Make a rule for the future')
+    expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[*].dns-record[*] — risk ≤ low')
+
+    await wrapper.findAll('button').find(button => button.text() === 'Create rule')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/standing-grants', {
+      method: 'POST',
+      body: {
+        delegate: 'agent@example.com',
+        audience: 'shapes',
+        target_host: 'macmini',
+        cli_id: 'exo',
+        resource_chain_template: [
+          { resource: 'account', selector: { name: 'current' } },
+          { resource: 'dns-domain' },
+          { resource: 'dns-record' },
+        ],
+        max_risk: 'low',
+        // Default duration: 7 days, timed.
+        grant_type: 'timed',
+        duration: 604800,
+        reason: 'Rule created from grant grant-1',
+      },
+    })
+    expect(wrapper.text()).toContain('Rule created')
+  })
+
+  it('offers no rule for generic-only grants', async () => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const generic = buildCliGrant()
+    generic.request.authorization_details = [{
+      type: 'openape_cli',
+      cli_id: 'jq',
+      operation_id: '_generic.exec',
+      resource_chain: [
+        { resource: 'cli', selector: { name: 'jq' } },
+        { resource: 'argv', selector: { hash: 'h' } },
+      ],
+      action: 'exec',
+      permission: 'jq.cli[name=jq].argv[hash=h]#exec',
+      display: 'Execute (unshaped): `jq .`',
+      risk: 'high',
+      constraints: { exact_command: true },
+    }]
+    const fetchMock = vi.fn().mockResolvedValueOnce(generic)
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Make a rule for the future')
   })
 
   it('denies a grant and redirects to the callback URL when present', async () => {
