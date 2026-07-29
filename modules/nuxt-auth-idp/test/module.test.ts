@@ -17,6 +17,7 @@ vi.mock('@nuxt/kit', () => ({
   addServerHandler: vi.fn(),
   addServerPlugin: vi.fn(),
   addImportsDir: vi.fn(),
+  addComponentsDir: vi.fn(),
   addServerImportsDir: vi.fn(),
   extendPages: vi.fn(),
 }))
