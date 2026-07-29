@@ -40,19 +40,23 @@ const issuer = 'id.openape.ai'
       </div>
     </dl>
 
-    <UButton
-      to="/account"
-      color="primary"
-      size="lg"
-      class="mt-6"
-      trailing-icon="i-lucide-arrow-right"
-    >
-      Account &amp; security
-    </UButton>
+    <!-- space-y rather than a margin on the banner: the notification card only
+         renders in the installed PWA, and an empty ClientOnly leaves no element
+         behind, so no phantom gap in the browser. -->
+    <div class="mt-6 space-y-6">
+      <UButton
+        to="/account"
+        color="primary"
+        size="lg"
+        trailing-icon="i-lucide-arrow-right"
+      >
+        Account &amp; security
+      </UButton>
 
-    <ClientOnly>
-      <EnableNotifications />
-    </ClientOnly>
+      <ClientOnly>
+        <EnableNotifications />
+      </ClientOnly>
+    </div>
   </IdpPage>
 
   <!-- Signed out -->
