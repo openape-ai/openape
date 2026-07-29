@@ -22,13 +22,13 @@ async function toggle() {
 </script>
 
 <template>
-  <div v-if="push.supported.value" class="w-full px-4 py-3 border border-gray-800 rounded-lg flex items-center gap-3 bg-gray-900/40">
-    <UIcon name="i-lucide-bell" class="size-5 text-gray-400" />
+  <div v-if="push.supported.value" class="w-full px-4 py-3 border border-default rounded-lg flex items-center gap-3 bg-default">
+    <UIcon name="i-lucide-bell" class="size-5 text-dimmed" />
     <div class="flex-1 text-sm text-left">
-      <p class="font-medium text-white">
+      <p class="font-medium">
         Approval-Benachrichtigungen
       </p>
-      <p class="text-gray-500 text-xs">
+      <p class="text-muted text-xs">
         {{ push.subscribed.value
           ? 'Aktiv — du wirst gepingt, wenn ein Grant auf deine Approval wartet.'
           : 'Push-Benachrichtigung wenn ein Grant deine Approval braucht.' }}
@@ -44,7 +44,7 @@ async function toggle() {
       {{ push.subscribed.value ? 'Aus' : 'Ein' }}
     </UButton>
   </div>
-  <p v-if="error" class="px-4 pt-1 text-xs text-red-400">
+  <p v-if="error" class="px-4 pt-1 text-xs text-error">
     {{ error }}
   </p>
 </template>
