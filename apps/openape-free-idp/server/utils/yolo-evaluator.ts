@@ -1,7 +1,12 @@
 // YOLO evaluator + minimal glob matcher. Pure decision logic; the only side
 // effect is a once-per-policy operator warning about ineffective policies.
 import type { OpenApeGrantRequest } from '@openape/core'
+import { containsCommandSubstitution, splitCommandSegments } from '@openape/core'
 import type { RiskLevel, YoloPolicy } from './yolo-policy-store'
+
+// Moved to @openape/core (shared with the shapes track); re-exported so the
+// app's existing imports and tests keep one canonical entry point here.
+export { containsCommandSubstitution, splitCommandSegments }
 
 // Stored deny-list policies without any rules predate the fail-closed check
 // in the PUT endpoint. They are neutralized below, but the operator should
@@ -38,6 +43,21 @@ export interface YoloDecisionContext {
    * right field from the grant request via `targetFromRequest`.
    */
   target: string | undefined
+  /**
+   * The pre-unwrap joined command line when `target` was extracted from a
+   * `bash -c` wrapper. Deny patterns are ALSO checked against this so
+   * policies written against the outer form (`bash -c *rm*`) keep blocking
+   * after the unwrap — disarming an existing deny rule would fail open.
+   * Allow patterns never consult it (fail-closed direction).
+   */
+  outerTarget?: string
+  /**
+   * How to interpret `target` for pattern matching (#1079): `'command'`
+   * targets are split into shell segments and evaluated per segment,
+   * `'host'` targets have no shell semantics and are matched as-is.
+   * Defaults to `'command'` — segmentation is the fail-safe direction.
+   */
+  targetKind?: 'command' | 'host'
   resolvedRisk: RiskLevel | null
   now?: number
 }
@@ -51,6 +71,13 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   const target = ctx.target && ctx.target.length ? ctx.target : null
   if (!target) return null
 
+  // Patterns allow commands, not prefixes (#1079): command lines are judged
+  // per shell segment so `allowed-cmd && anything` can't ride along. Hosts
+  // carry no shell semantics and stay a single segment.
+  const segments = ctx.targetKind === 'host' ? [target] : splitCommandSegments(target)
+  // A line consisting only of operators has nothing to judge → human decides.
+  if (segments.length === 0) return null
+
   // Risk-threshold semantic is SYMMETRIC across modes:
   //   "alles bis zu diesem Level wird auto-approved, alles darüber wartet"
   // - deny-list (default allow): risk > threshold → don't approve.
@@ -59,9 +86,19 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // - deny-list: explicit deny-pattern → don't approve (further restrict).
   // - allow-list: explicit allow-pattern → approve (further open).
   if (p.mode === 'allow-list') {
-    // 1. Explicit allow-pattern match → approve.
-    for (const pattern of p.allowPatterns || []) {
-      if (matchesGlob(target, pattern)) return { kind: 'yolo', decidedBy: p.enabledBy }
+    // 1. EVERY segment matches at least one allow-pattern → approve. One
+    //    unmatched segment means an unvetted command → risk check / human.
+    //    A pattern hit does not vouch for nested commands: a segment with
+    //    command/process substitution is only allowed by a pattern spelling
+    //    the construct out itself — that is the owner's explicit opt-in.
+    const allowPatterns = p.allowPatterns || []
+    const segmentAllowed = (seg: string) => {
+      const needsExplicitOptIn = containsCommandSubstitution(seg)
+      return allowPatterns.some(pattern => matchesGlob(seg, pattern)
+        && (!needsExplicitOptIn || containsCommandSubstitution(pattern)))
+    }
+    if (allowPatterns.length > 0 && segments.every(segmentAllowed)) {
+      return { kind: 'yolo', decidedBy: p.enabledBy }
     }
     // 2. Risk ≤ threshold → approve.
     if (ctx.resolvedRisk && p.denyRiskThreshold) {
@@ -96,8 +133,25 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
     // Risk > threshold → don't approve.
     if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null
   }
-  for (const pattern of p.denyPatterns || []) {
+  // A deny hit in ANY segment blocks — prefixing a harmless command must not
+  // hide it. The full line is still checked too so cross-segment patterns
+  // operators wrote against the old joined-line behavior keep blocking.
+  const denyPatterns = p.denyPatterns || []
+  for (const pattern of denyPatterns) {
     if (matchesGlob(target, pattern)) return null
+    if (segments.some(seg => matchesGlob(seg, pattern))) return null
+    // Outer-form compatibility: deny rules written before the bash -c unwrap
+    // matched the joined wrapper line. Keep honoring them.
+    if (ctx.outerTarget && matchesGlob(ctx.outerTarget, pattern)) return null
+  }
+  // Harder than the usual default-allow semantics on purpose: a blocklist
+  // cannot see into a substitution — `echo $(rm -rf ~)` matches no `*rm*`
+  // pattern even though the shell runs the nested command. Fail closed to
+  // the human, unless a deny pattern spells the construct out itself (then
+  // the owner governs substitutions by pattern and normal deny logic rules).
+  const ownerGovernsSubstitution = denyPatterns.some(pattern => containsCommandSubstitution(pattern))
+  if (!ownerGovernsSubstitution && segments.some(seg => containsCommandSubstitution(seg))) {
+    return null
   }
   return { kind: 'yolo', decidedBy: p.enabledBy }
 }
@@ -140,7 +194,20 @@ export function commandFromRequest(body: OpenApeGrantRequest): string[] | undefi
  */
 export function targetFromRequest(body: OpenApeGrantRequest): string | undefined {
   const cmd = commandFromRequest(body)
-  if (cmd && cmd.length > 0) return cmd.join(' ')
+  if (cmd && cmd.length > 0) {
+    // `bash -c <line>` unwrap: patterns describe the command the agent runs,
+    // not the shell that carries it — without this, operators need every
+    // pattern in a bash-c double form. Only the exact 3-element shape is
+    // unwrapped: extra argv after the -c string become $0/$1 positional
+    // params and flags before -c change semantics, both fall back to the
+    // joined form (fail closed). One level only — a nested `bash -c` stays
+    // wrapped and needs its own explicit pattern. Returning the inner string
+    // VERBATIM also fixes a subtle corruption: joining destroyed the quoting
+    // before the quote-aware segment splitter ran.
+    if (cmd.length === 3 && (cmd[0] === 'bash' || cmd[0] === 'sh') && cmd[1] === '-c')
+      return cmd[2]
+    return cmd.join(' ')
+  }
   if (body.target_host) return body.target_host
   return undefined
 }

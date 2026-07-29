@@ -7,12 +7,14 @@ import {
   createShapesGrant,
   fetchGrantToken,
   findExistingGrant,
+  isAutoApproved,
   loadOrInstallAdapter,
   parseShellCommand,
   resolveCommand,
   verifyAndConsume,
   waitForGrantStatus,
 } from '../shapes/index.js'
+import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
 
 /**
@@ -135,15 +137,16 @@ export async function requestGrantForShellLine(
           approval: options.approval ?? 'once',
           reason: `ape-shell: ${resolved.detail.display}`,
         })
-        consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
-        notifyGrantPending({
-          grantId: grant.id,
-          approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-          command: resolved.detail?.display ?? line,
-          audience: resolved.adapter?.cli?.audience ?? 'shapes',
-          host: options.targetHost,
-        })
+        if (!isAutoApproved(grant)) {
+          consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+          notifyGrantPending({
+            grantId: grant.id,
+            approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+            command: resolved.detail?.display ?? line,
+            audience: resolved.adapter?.cli?.audience ?? 'shapes',
+            host: options.targetHost,
+          })
+        }
 
         const status = await waitForGrantStatus(idp, grant.id)
         if (status !== 'approved') {
@@ -189,7 +192,7 @@ export async function requestGrantForShellLine(
   // Request a new session grant. The approver sees the literal shell line.
   consola.info(`Requesting ape-shell session grant on ${options.targetHost}`)
   try {
-    const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+    const grant = await apiFetch<{ id: string, status: string, approved_automatically?: boolean }>(grantsUrl, {
       method: 'POST',
       body: {
         requester: auth.email,
@@ -200,19 +203,22 @@ export async function requestGrantForShellLine(
         reason: `Shell session: ${line.slice(0, 100)}`,
       },
     })
-    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
-    notifyGrantPending({
-      grantId: grant.id,
-      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-      command: line.slice(0, 200),
-      audience: 'ape-shell',
-      host: options.targetHost,
-    })
+    if (!isAutoApproved(grant)) {
+      consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+      notifyGrantPending({
+        grantId: grant.id,
+        approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+        command: line.slice(0, 200),
+        audience: 'ape-shell',
+        host: options.targetHost,
+      })
+    }
 
     const maxWait = 300_000
     const interval = 3_000
     const start = Date.now()
+    // Progress lines on stderr while pending — see wait-progress.ts (#1065).
+    const reportProgress = createWaitProgressReporter(grant.id)
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
@@ -222,6 +228,7 @@ export async function requestGrantForShellLine(
       }
       if (status.status === 'denied' || status.status === 'revoked')
         return { kind: 'denied', reason: `Grant ${status.status}` }
+      reportProgress()
       await new Promise(r => setTimeout(r, interval))
     }
 

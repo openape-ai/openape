@@ -14,10 +14,12 @@ vi.mock('../src/http.js', () => ({
   apiFetch: vi.fn(),
   getGrantsEndpoint: vi.fn(async () => 'http://idp.test/api/grants'),
 }))
-vi.mock('../src/shapes/index.js', () => ({
+vi.mock('../src/shapes/index.js', async () => ({
   createShapesGrant: vi.fn(),
   fetchGrantToken: vi.fn(),
   findExistingGrant: vi.fn(),
+  // Real implementation on purpose — #1083 is about the call sites obeying it.
+  isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
   loadOrInstallAdapter: vi.fn(),
   parseShellCommand: vi.fn(),
   resolveCommand: vi.fn(),
@@ -218,6 +220,43 @@ describe('requestGrantForShellLine', () => {
     expect(loadOrInstallAdapter).not.toHaveBeenCalled()
   })
 
+  // #1083 — the "a grant is waiting for you" channel is only worth something if
+  // it never fires for something the IdP already decided by itself.
+  it('does NOT notify the owner when the session grant is auto-approved', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    const { notifyGrantPending } = await import('../src/notifications.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({ data: [] } as any) // list grants
+      .mockResolvedValueOnce({ id: 'yolo-grant', status: 'approved', approved_automatically: true } as any)
+      .mockResolvedValueOnce({ status: 'approved' } as any) // poll
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    const result = await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+    expect(result).toEqual({ kind: 'approved', grantId: 'yolo-grant', mode: 'session' })
+    expect(notifyGrantPending).not.toHaveBeenCalled()
+  })
+
+  it('DOES notify the owner when the session grant really is pending', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { apiFetch } = await import('../src/http.js')
+    const { notifyGrantPending } = await import('../src/notifications.js')
+    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce({ data: [] } as any)
+      .mockResolvedValueOnce({ id: 'pending-grant', status: 'pending' } as any)
+      .mockResolvedValueOnce({ status: 'approved' } as any)
+
+    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+    await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+
+    expect(notifyGrantPending).toHaveBeenCalledWith(expect.objectContaining({ grantId: 'pending-grant' }))
+  })
+
   it('reuses an existing timed session grant when one is found', async () => {
     const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
     const { apiFetch } = await import('../src/http.js')
@@ -357,6 +396,46 @@ describe('requestGrantForShellLine', () => {
       typeof call[0] === 'string' && /Grant .* approved/.test(call[0]),
     )
     expect(approvalCall).toBeDefined()
+  })
+
+  it('emits stderr progress lines while the session grant poll is pending (#1065)', async () => {
+    vi.useFakeTimers()
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
+
+      // list → create → 6× pending (t=0..15 s) → approved (t=18 s):
+      // exactly one progress line is due, at the 15 s mark.
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'slow-session-grant', status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'pending' } as any)
+        .mockResolvedValueOnce({ status: 'approved' } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const promise = requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      const result = await promise
+
+      expect(result).toEqual({ kind: 'approved', grantId: 'slow-session-grant', mode: 'session' })
+      const progress = stderrWrite.mock.calls
+        .map(call => String(call[0]))
+        .filter(line => line.includes('still waiting'))
+      expect(progress).toHaveLength(1)
+      expect(progress[0]).toContain('15s')
+      expect(progress[0]).toContain('slow-ses')
+    }
+    finally {
+      stderrWrite.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('logs an approval ack line after adapter grant waitForGrantStatus resolves approved', async () => {

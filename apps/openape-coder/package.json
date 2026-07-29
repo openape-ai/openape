@@ -1,7 +1,7 @@
 {
   "name": "openape-coder",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "private": true,
   "turbo": {
     "tags": [

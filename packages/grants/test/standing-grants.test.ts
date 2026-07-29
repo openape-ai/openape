@@ -383,6 +383,115 @@ describe('evaluateStandingGrants', () => {
     )
     expect(match).toBeNull()
   })
+
+  it('covers a compound-shaped request: several details of one CLI under one wildcard template', async () => {
+    // The shape ape-shell compound resolution produces (M2): one request,
+    // one detail per segment — here mail.list + mail.read, both o365.
+    const store = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'o365',
+        max_risk: 'low',
+        resource_chain_template: [{ resource: 'account' }, { resource: 'mail' }],
+      }),
+    ])
+    const listDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'o365',
+      operation_id: 'mail.list',
+      resource_chain: [{ resource: 'account', selector: { email: 'p@h.eco' } }, { resource: 'mail' }],
+      action: 'list',
+      permission: '',
+      display: 'List mails',
+      risk: 'low' as const,
+    }
+    listDetail.permission = canonicalizeCliPermission(listDetail)
+    const readDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'o365',
+      operation_id: 'mail.read',
+      resource_chain: [{ resource: 'account', selector: { email: 'p@h.eco' } }, { resource: 'mail', selector: { id: 'AAMk123' } }],
+      action: 'read',
+      permission: '',
+      display: 'Read mail AAMk123',
+      risk: 'low' as const,
+    }
+    readDetail.permission = canonicalizeCliPermission(readDetail)
+    const match = await evaluateStandingGrants(
+      makeIncomingGrantRequest({
+        authorization_details: [listDetail, readDetail],
+      }),
+      store,
+    )
+    expect(match).not.toBeNull()
+  })
+
+  it('unions ACROSS standing grants: o365 rule + jq rule together cover a piped compound request', async () => {
+    // The mixed-CLI shape from ape-shell compound resolution:
+    // `o365-cli mail list --json | jq -r '.[].id'` → one o365 detail + one
+    // jq detail. No single rule can cover both (cli_id differs) — coverage
+    // must union over all applicable standing grants.
+    const store = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'o365',
+        max_risk: 'low',
+        resource_chain_template: [{ resource: 'account' }, { resource: 'mail' }],
+      }),
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'jq',
+        max_risk: 'low',
+        resource_chain_template: [{ resource: 'stdin' }],
+      }),
+    ])
+    const mailDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'o365',
+      operation_id: 'mail.list',
+      resource_chain: [{ resource: 'account', selector: { email: 'p@h.eco' } }, { resource: 'mail' }],
+      action: 'list',
+      permission: '',
+      display: 'List mails',
+      risk: 'low' as const,
+    }
+    mailDetail.permission = canonicalizeCliPermission(mailDetail)
+    const jqDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'jq',
+      operation_id: 'filter.stdin',
+      resource_chain: [{ resource: 'stdin' }],
+      action: 'read',
+      permission: '',
+      display: 'Filter JSON from stdin',
+      risk: 'low' as const,
+    }
+    jqDetail.permission = canonicalizeCliPermission(jqDetail)
+
+    const match = await evaluateStandingGrants(
+      makeIncomingGrantRequest({ authorization_details: [mailDetail, jqDetail] }),
+      store,
+    )
+    expect(match).not.toBeNull()
+
+    // Remove the jq rule → the jq detail is uncovered → no auto-approve.
+    const storeWithoutJq = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'o365',
+        max_risk: 'low',
+        resource_chain_template: [{ resource: 'account' }, { resource: 'mail' }],
+      }),
+    ])
+    expect(await evaluateStandingGrants(
+      makeIncomingGrantRequest({ authorization_details: [mailDetail, jqDetail] }),
+      storeWithoutJq,
+    )).toBeNull()
+  })
 })
 
 describe('buildCoverageDetailFromStandingGrant', () => {

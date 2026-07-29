@@ -39,8 +39,18 @@ vi.mock('../src/shapes/index.js', async () => {
   const generic = await import('@openape/shapes')
   return {
     createShapesGrant: vi.fn(),
+    // Compound resolution answers null in these tests — the assertions
+    // here cover the OPAQUE fallback path; the structured compound path
+    // has its own suite (compound-mode.test.ts).
+    resolveCompoundCommand: vi.fn(async () => null),
+    createCompoundGrant: vi.fn(),
+    findExistingCompoundGrant: vi.fn(),
+    verifyAndConsumeCompound: vi.fn(),
+    compoundCoveredByDetails: vi.fn(),
     fetchGrantToken: vi.fn(),
     findExistingGrant: vi.fn(),
+    // Real implementation on purpose — #1083 is about the call sites obeying it.
+    isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
     loadOrInstallAdapter: vi.fn(),
     loadAdapter: vi.fn(),
     parseShellCommand: vi.fn(),
@@ -293,6 +303,42 @@ describe('commands/run async default', () => {
 
       expect(execFileSync).toHaveBeenCalled()
     })
+
+    // #1070: the wait loop is left either by approval OR by the 5-minute
+    // timeout. Executing on the timeout path made the approval requirement
+    // bypassable by sitting it out — measured in production: grant still
+    // `pending`, command executed with exit 0.
+    it('--wait timeout: does NOT exec, fails closed', async () => {
+      vi.useFakeTimers()
+      try {
+        const shapes = await import('../src/shapes/index.js')
+        vi.mocked(shapes.parseShellCommand).mockReturnValue(null as any)
+
+        const { apiFetch } = await import('../src/http.js')
+        vi.mocked(apiFetch)
+          .mockResolvedValueOnce({ data: [] } as any) // grants list lookup
+          .mockResolvedValueOnce({ id: 'sess-3', status: 'pending' } as any) // create
+          .mockResolvedValue({ status: 'pending' } as any) // every poll: still pending
+
+        const { execFileSync } = await import('node:child_process')
+
+        const { runCommand } = await import('../src/commands/run.js')
+        const run = runCommand.run!({
+          rawArgs: ['run', '--shell', '--wait', '--', 'bash', '-c', 'echo a | echo b'],
+          args: { shell: true, wait: true, approval: 'once' } as any,
+        } as any)
+        const assertion = expect(run).rejects.toThrow(/timed out/i)
+
+        // Past the 5-minute ceiling — the loop gives up here.
+        await vi.advanceTimersByTimeAsync(310_000)
+        await assertion
+
+        expect(execFileSync).not.toHaveBeenCalled()
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   // ------------------------------------------------------------------------
@@ -435,6 +481,162 @@ describe('commands/run async default', () => {
   })
 
   // ------------------------------------------------------------------------
+  // #1081 — auto-approved grants on every async exit
+  //
+  // The IdP may approve a grant at creation time (standing grants, YOLO
+  // pre-approval hooks): the POST response then carries
+  // `approved_automatically: true` / `status: 'approved'` /
+  // `auto_approval_kind`. Each async exit must report that honestly
+  // instead of claiming "pending approval" with an approve URL. The exit
+  // code stays the async default (75) — whether auto-approved should
+  // exit 0 is a separate owner decision.
+  // ------------------------------------------------------------------------
+  describe('auto-approved grant on each async exit (#1081)', () => {
+    function autoGrant(id: string, kind?: string) {
+      return {
+        id,
+        status: 'approved',
+        approved_automatically: true,
+        ...(kind ? { auto_approval_kind: kind } : {}),
+      }
+    }
+
+    function collectedOut(): string {
+      return consoleLogSpy.mock.calls.map(c => c.join(' ')).join('\n')
+    }
+
+    function collectedOk(): string {
+      return successSpy.mock.calls.map(c => c.join(' ')).join('\n')
+    }
+
+    function assertAutoApprovedBlock(grantId: string) {
+      expect(collectedOk()).toContain(grantId)
+      expect(collectedOk()).toContain('approved automatically')
+      expect(collectedOut()).toContain(`apes grants run ${grantId}`)
+      // No approve URL, no waiting protocol, no "pending" anywhere
+      expect(collectedOut()).not.toContain('grant-approval?grant_id=')
+      expect(collectedOut()).not.toContain('For agents:')
+      expect(collectedOut()).not.toContain('pending')
+      expect(collectedOk()).not.toContain('pending')
+    }
+
+    it('runShellMode session grant: reports auto-approval, does NOT exec', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue(null as any)
+
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // grants list lookup
+        .mockResolvedValueOnce(autoGrant('sess-auto', 'standing') as any)
+
+      const { execFileSync } = await import('node:child_process')
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'echo a | echo b'],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any), 75)
+
+      expect(execFileSync).not.toHaveBeenCalled()
+      assertAutoApprovedBlock('sess-auto')
+      expect(collectedOk()).toContain('(standing)')
+    })
+
+    it('tryAdapterModeFromShell: auto-approved without kind, no "(undefined)"', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.parseShellCommand).mockReturnValue({
+        executable: 'curl',
+        argv: ['https://example.com'],
+        isCompound: false,
+        raw: 'curl https://example.com',
+      } as any)
+      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
+      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
+      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
+      vi.mocked(shapes.createShapesGrant).mockResolvedValue({
+        id: 'shape-auto',
+        status: 'approved',
+        approved_automatically: true,
+      } as any)
+
+      const { execFileSync } = await import('node:child_process')
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'curl https://example.com'],
+        args: { shell: true, wait: false, approval: 'once' } as any,
+      } as any), 75)
+
+      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
+      expect(execFileSync).not.toHaveBeenCalled()
+      assertAutoApprovedBlock('shape-auto')
+      expect(collectedOk()).not.toContain('(undefined)')
+    })
+
+    it('runAdapterMode: auto-approved via status alone (no approved_automatically)', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
+      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
+      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
+      vi.mocked(shapes.createShapesGrant).mockResolvedValue({
+        id: 'adapter-auto',
+        status: 'approved',
+      } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--', 'whoami'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any), 75)
+
+      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
+      assertAutoApprovedBlock('adapter-auto')
+    })
+
+    it('APES_USER=human: auto-approved block replaces the human pending text too', async () => {
+      process.env.APES_USER = 'human'
+      try {
+        const { apiFetch } = await import('../src/http.js')
+        vi.mocked(apiFetch)
+          .mockResolvedValueOnce({ data: [] } as any)
+          .mockResolvedValueOnce(autoGrant('human-auto', 'yolo') as any)
+
+        const { runCommand } = await import('../src/commands/run.js')
+        await expectCliExit(runCommand.run!({
+          rawArgs: ['run', 'escapes', 'mount-nfs'],
+          args: { shell: false, wait: false, approval: 'once' } as any,
+        } as any), 75)
+
+        assertAutoApprovedBlock('human-auto')
+        expect(collectedOut()).not.toContain('awaiting your approval')
+      }
+      finally {
+        delete process.env.APES_USER
+      }
+    })
+
+    it('regression: pending response keeps the unchanged pending block, no exec', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({ id: 'still-pending', status: 'pending' } as any)
+
+      const { execFileSync } = await import('node:child_process')
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', 'escapes', 'mount-nfs'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any), 75)
+
+      expect(execFileSync).not.toHaveBeenCalled()
+      assertAsyncInfoBlock('still-pending')
+      expect(collectedOk()).toContain('created (pending approval)')
+      expect(collectedOk()).not.toContain('approved automatically')
+    })
+  })
+
+  // ------------------------------------------------------------------------
   // Async info block audience: agent (default) vs human
   //
   // The output of printPendingGrantInfo switches between two flavours:
@@ -519,6 +721,38 @@ describe('commands/run async default', () => {
       expect(out).not.toContain('For agents:')
       expect(out).not.toContain('--wait')
       expect(out).not.toContain('EX_TEMPFAIL')
+    })
+
+    it('auto-approved grant: reports approval without pending instructions', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({
+          id: 'grant-auto-test',
+          status: 'approved',
+          approved_automatically: true,
+          auto_approval_kind: 'yolo',
+        } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(
+        runCommand.run!({
+          rawArgs: ['run', 'escapes', 'mount-nfs'],
+          args: { shell: false, wait: false, approval: 'once' } as any,
+        } as any),
+        75,
+      )
+
+      const out = collectedLog()
+      const success = collectedSuccess()
+      expect(success).toContain('Grant grant-auto-test created and approved automatically (yolo)')
+      expect(out).toContain('apes grants run grant-auto-test')
+      expect(out).not.toContain('Approve:')
+      expect(out).not.toContain('For agents:')
+      expect(out).not.toContain('grant-approval?grant_id=grant-auto-test')
+      // "pending" must not appear anywhere — that false claim was the bug.
+      expect(out).not.toContain('pending')
+      expect(success).not.toContain('pending')
     })
 
     it('APES_USER=agent: same as default', async () => {
@@ -982,10 +1216,12 @@ describe('commands/run async default', () => {
   describe('execShellCommand APES_SHELL_WRAPPER env strip', () => {
     afterEach(() => {
       delete process.env.APES_SHELL_WRAPPER
+      delete process.env.APES_SHELL_MODE
     })
 
     it('strips APES_SHELL_WRAPPER from the bash child env when self-dispatching', async () => {
       process.env.APES_SHELL_WRAPPER = '1'
+      process.env.APES_SHELL_MODE = '1'
       const shapes = await import('../src/shapes/index.js')
       vi.mocked(shapes.parseShellCommand).mockReturnValue({
         executable: 'apes',
@@ -1007,12 +1243,14 @@ describe('commands/run async default', () => {
       const opts = callArgs[2] as { env?: Record<string, string | undefined> }
       expect(opts.env).toBeDefined()
       expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+      expect(opts.env!.APES_SHELL_MODE).toBeUndefined()
       // Other env vars still there
       expect(opts.env!.PATH).toBeDefined()
     })
 
     it('strips APES_SHELL_WRAPPER from escapes pipe in runAudienceMode --wait mode', async () => {
       process.env.APES_SHELL_WRAPPER = '1'
+      process.env.APES_SHELL_MODE = '1'
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
         .mockResolvedValueOnce({ data: [] } as any) // reuse-grant lookup
@@ -1036,6 +1274,7 @@ describe('commands/run async default', () => {
       const opts = callArgs[2] as { env?: Record<string, string | undefined> }
       expect(opts.env).toBeDefined()
       expect(opts.env!.APES_SHELL_WRAPPER).toBeUndefined()
+      expect(opts.env!.APES_SHELL_MODE).toBeUndefined()
     })
   })
 

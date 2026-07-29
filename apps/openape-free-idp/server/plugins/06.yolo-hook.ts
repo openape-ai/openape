@@ -133,7 +133,14 @@ export default defineNitroPlugin(async () => {
     }
 
     const target = targetFromRequest(request)
-    const result = evaluateYoloPolicy({ policy, target, resolvedRisk })
+    // Command targets are evaluated per shell segment (#1079); a bare
+    // target_host has no shell semantics and must not be split.
+    const targetKind = cmd && cmd.length > 0 ? 'command' as const : 'host' as const
+    // When targetFromRequest unwrapped a `bash -c` wrapper, deny patterns
+    // written against the outer form must keep blocking (see outerTarget docs).
+    const joined = cmd && cmd.length > 0 ? cmd.join(' ') : undefined
+    const outerTarget = joined !== undefined && joined !== target ? joined : undefined
+    const result = evaluateYoloPolicy({ policy, target, targetKind, outerTarget, resolvedRisk })
     return result ? { kind: result.kind, decidedBy: result.decidedBy } : null
   })
 })

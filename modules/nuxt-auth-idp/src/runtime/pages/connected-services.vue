@@ -7,7 +7,7 @@ import { useIdpAuth } from '../composables/useIdpAuth'
 // consents). Revoke = next sign-in to that service shows the consent again.
 // Split out of the old /account page.
 
-useHead({ title: 'Connected Services — OpenApe' })
+useHead({ title: 'Connected services' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const consents = ref([])
@@ -55,48 +55,34 @@ function formatDate(ts) {
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
+  <IdpPage title="Connected services" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <div v-if="authLoading" class="text-center text-muted mt-10">
+      Loading…
+    </div>
+
+    <template v-else>
+      <UAlert v-if="error" color="error" :title="error" class="mb-4" />
+      <UAlert v-if="success" color="success" :title="success" class="mb-4" />
+
+      <UCard :ui="{ body: 'p-0' }">
+        <template #header>
+          <h2 class="text-lg font-semibold">
             Connected Services
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
+          </h2>
+          <p class="text-sm text-muted mt-1">
+            Anwendungen, die du bei der Anmeldung an id.openape.ai genehmigt hast.
+            Widerrufen heißt: nächste Anmeldung an diesem Dienst zeigt wieder den Consent-Screen.
           </p>
+        </template>
+
+        <div v-if="consentsLoading" class="p-6 text-center text-muted">
+          Loading…
         </div>
-        <UButton to="/account" color="neutral" variant="soft" size="sm">
-          Back
-        </UButton>
-      </div>
-
-      <div v-if="authLoading" class="text-center text-muted mt-10">
-        Loading...
-      </div>
-
-      <template v-else>
-        <UAlert v-if="error" color="error" :title="error" class="mb-4" />
-        <UAlert v-if="success" color="success" :title="success" class="mb-4" />
-
-        <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Connected Services
-            </h2>
-            <p class="text-sm text-muted mt-1">
-              Anwendungen, die du bei der Anmeldung an id.openape.ai genehmigt hast.
-              Widerrufen heißt: nächste Anmeldung an diesem Dienst zeigt wieder den Consent-Screen.
-            </p>
-          </template>
-
-          <div v-if="consentsLoading" class="p-6 text-center text-muted">
-            Loading...
-          </div>
-          <div v-else-if="consents.length === 0" class="p-6 text-center text-muted">
-            Keine Dienste genehmigt. (Setze <code>mode=allowlist-user</code> in deiner DDISA-DNS, um Consent-Screens zu aktivieren.)
-          </div>
-          <table v-else class="w-full">
+        <div v-else-if="consents.length === 0" class="p-6 text-center text-muted">
+          Keine Dienste genehmigt. (Setze <code>mode=allowlist-user</code> in deiner DDISA-DNS, um Consent-Screens zu aktivieren.)
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full">
             <thead class="border-b border-(--ui-border)">
               <tr>
                 <th class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
@@ -139,8 +125,8 @@ function formatDate(ts) {
               </tr>
             </tbody>
           </table>
-        </UCard>
-      </template>
-    </div>
-  </div>
+        </div>
+      </UCard>
+    </template>
+  </IdpPage>
 </template>

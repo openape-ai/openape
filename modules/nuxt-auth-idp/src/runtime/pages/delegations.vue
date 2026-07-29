@@ -8,7 +8,7 @@ import { navigateTo, useHead, useIdpAuth } from '#imports'
 // — created when you approve the cross-SP consent. Lists the active ones and
 // lets you revoke. Same-origin (session cookie) — no CORS.
 
-useHead({ title: 'Delegations — OpenApe' })
+useHead({ title: 'Delegations' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 
@@ -77,20 +77,14 @@ async function confirmRevoke() {
 </script>
 
 <template>
-  <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-default px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 bg-zinc-950/95 backdrop-blur z-10">
-      <h1 class="font-semibold flex-1">
-        Apps acting on your behalf
-      </h1>
+  <IdpPage title="Delegations" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <template #actions>
       <UButton color="primary" variant="soft" size="sm" icon="i-lucide-refresh-cw" :loading="loading" @click="load">
         Refresh
       </UButton>
-      <UButton to="/account" color="neutral" variant="soft" size="sm">
-        Account
-      </UButton>
-    </header>
+    </template>
 
-    <main class="px-4 sm:px-6 py-6 max-w-2xl mx-auto space-y-4">
+    <div class="space-y-4">
       <p class="text-sm text-muted">
         These services may act on your behalf at another service — e.g. spawn agents on your troop.
         Each is a standing delegation you approved. Revoke any you no longer want; the next time that
@@ -121,7 +115,7 @@ async function confirmRevoke() {
                 <div>
                   Permissions:
                   <template v-if="scopesOf(g)">
-                    <span v-for="s in scopesOf(g)" :key="s" class="font-mono text-zinc-300 mr-2">{{ s }}</span>
+                    <span v-for="s in scopesOf(g)" :key="s" class="font-mono text-muted mr-2">{{ s }}</span>
                   </template>
                   <span v-else class="text-amber-400">full access</span>
                 </div>
@@ -150,6 +144,6 @@ async function confirmRevoke() {
           </UCard>
         </li>
       </ul>
-    </main>
-  </div>
+    </div>
+  </IdpPage>
 </template>

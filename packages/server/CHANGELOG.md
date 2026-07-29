@@ -1,5 +1,26 @@
 # @openape/server
 
+## 0.3.18
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+- Updated dependencies [42b3257]
+  - @openape/core@0.20.0
+  - @openape/grants@0.13.0
+  - @openape/auth@0.13.1
+
+## 0.3.17
+
+### Patch Changes
+
+- e06c651: Delegated assertions minted via `/token` (client_credentials + delegation_grant) now carry a `scope` claim mirroring the delegation grant's scopes (grants.md §6.1, protocol#6). `issueAssertion` accepts an optional `scope: string[]` claim; both served delegation branches (nuxt-auth-idp route and @openape/server handler) pass `grant.request.scopes ?? []` — fail-closed `[]` for legacy grants without scopes. First-party client_credentials tokens and the authorization_code path are unchanged (no scope claim). The never-registered `/api/oauth/token-exchange` handler in nuxt-auth-idp was removed; its scope assertions were ported to the served `/token` path.
+- Updated dependencies [76dd28c]
+- Updated dependencies [e06c651]
+  - @openape/core@0.19.0
+  - @openape/auth@0.13.0
+  - @openape/grants@0.12.2
+
 ## 0.3.16
 
 ### Patch Changes
@@ -131,6 +152,7 @@
 ### Minor Changes
 
 - [#160](https://github.com/openape-ai/openape/pull/160) [`caf8d93`](https://github.com/openape-ai/openape/commit/caf8d93bd7df18b7789fca14cbe40f4242cf8e57) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - IdP-issued auth tokens now carry `aud='apes-cli'` consistently across every flow (PKCE / authorization-code, client-credentials, agent-challenge-response). Previously only the PKCE flow set an audience claim; SSH-key and challenge-response flows issued audience-less tokens, which made it impossible for downstream service providers to do scoped replay-protection on token-exchange endpoints.
+
   - `issueAuthToken` and `issueAgentToken` (in both `@openape/nuxt-auth-idp` and `@openape/server`) accept an optional `aud` parameter and default to `'apes-cli'`.
   - New `DEFAULT_CLI_AUDIENCE` constant exported for downstream consumers (`expectedAud`).
   - `verifyAuthToken` / `verifyAgentToken` accept an optional `expectedAud` parameter for audience-restricted verification. When omitted, audience is not checked (preserves backward compatibility with consumers that don't care).

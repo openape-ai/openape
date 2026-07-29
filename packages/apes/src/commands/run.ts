@@ -3,17 +3,22 @@ import { hostname } from 'node:os'
 import { basename } from 'node:path'
 import { defineCommand } from 'citty'
 import {
+  createCompoundGrant,
   createShapesGrant,
   extractOption,
   extractShellCommandString,
   extractWrappedCommand,
   fetchGrantToken,
+  findExistingCompoundGrant,
   findExistingGrant,
+  isAutoApproved,
   loadAdapter,
   loadOrInstallAdapter,
   parseShellCommand,
   resolveCommand,
+  resolveCompoundCommand,
   resolveGenericOrReject,
+  verifyAndConsumeCompound,
   verifyAndExecute,
   waitForGrantStatus,
 } from '../shapes/index.js'
@@ -161,8 +166,25 @@ function getAsyncExitCode(): number {
 }
 
 /**
- * Print the async info block for a freshly created pending grant. Two
- * output modes:
+ * IdP response for a freshly created grant, as consumed by the async
+ * exits. The IdP may approve the grant at creation time (standing
+ * grants, pre-approval hooks like YOLO) — the POST response then
+ * carries `approved_automatically: true` plus the record's `status`
+ * and `auto_approval_kind` (#1081).
+ */
+interface CreatedGrantInfo {
+  id: string
+  status?: string
+  approved_automatically?: boolean
+  auto_approval_kind?: string
+}
+
+/**
+ * Print the async info block for a freshly created grant.
+ *
+ * A grant the IdP already approved at creation time gets a short
+ * confirmation instead — no approve URL, no waiting protocol, nothing
+ * is pending (#1081). Pending grants get one of two output modes:
  *
  * - **agent** (default): verbose, with an explicit polling protocol so
  *   the consuming LLM knows exactly what to do next. Tells the agent to
@@ -178,11 +200,23 @@ function getAsyncExitCode(): number {
  * Both modes keep the same core Approve / Status / Execute lines so
  * external scripts that grep for those labels keep working.
  */
-function printPendingGrantInfo(grant: { id: string }, idp: string): void {
+function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): void {
   const mode = getUserMode()
+  const executeCmd = `apes grants run ${grant.id}`
+
+  if (grant.approved_automatically === true || grant.status === 'approved') {
+    // Callers still exit with the async default (75) after this block.
+    // Whether an auto-approved grant should exit 0 instead is a
+    // behaviour change for existing callers and a deliberately open
+    // owner decision (#1081) — not an oversight.
+    const kind = grant.auto_approval_kind ? ` (${grant.auto_approval_kind})` : ''
+    consola.success(`Grant ${grant.id} created and approved automatically${kind}`)
+    console.log(`  Execute:   ${executeCmd}`)
+    return
+  }
+
   const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
   const statusCmd = `apes grants status ${grant.id}`
-  const executeCmd = `apes grants run ${grant.id}`
 
   if (mode === 'human') {
     consola.success(`Grant ${grant.id} created — awaiting your approval`)
@@ -372,7 +406,7 @@ async function runShellMode(
   // No session grant found — request one. Default: 'once', but the approver
   // can upgrade to 'timed' or 'always' during approval to enable reuse.
   consola.info(`Requesting ape-shell session grant on ${targetHost}`)
-  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+  const grant = await apiFetch<CreatedGrantInfo>(grantsUrl, {
     method: 'POST',
     body: {
       requester: auth.email,
@@ -384,13 +418,15 @@ async function runShellMode(
     },
   })
 
-  notifyGrantPending({
-    grantId: grant.id,
-    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-    command: command.join(' ').slice(0, 200),
-    audience: 'ape-shell',
-    host: targetHost,
-  })
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: command.join(' ').slice(0, 200),
+      audience: 'ape-shell',
+      host: targetHost,
+    })
+  }
 
   if (shouldWaitForGrant(args)) {
     consola.info(`Grant requested: ${grant.id}`)
@@ -399,15 +435,24 @@ async function runShellMode(
     const maxWait = 300_000
     const interval = 3_000
     const start = Date.now()
+    let approved = false
 
     while (Date.now() - start < maxWait) {
       const status = await apiFetch<{ status: string }>(`${grantsUrl}/${grant.id}`)
-      if (status.status === 'approved')
+      if (status.status === 'approved') {
+        approved = true
         break
+      }
       if (status.status === 'denied' || status.status === 'revoked')
         throw new CliError(`Grant ${status.status}.`)
       await new Promise(r => setTimeout(r, interval))
     }
+
+    // #1070: the loop also ends when the 5 minutes run out. Executing on that
+    // path made the approval requirement bypassable by sitting it out, so an
+    // undecided grant must fail closed here.
+    if (!approved)
+      throw new CliError('Grant approval timed out after 5 minutes.')
 
     execShellCommand(command)
     return
@@ -440,7 +485,12 @@ async function tryAdapterModeFromShell(
 
   const parsed = parseShellCommand(cmdString)
   if (!parsed) return false
-  if (parsed.isCompound) return false
+  // Compound lines (`a | b`, `a && b`) resolve segment by segment into ONE
+  // structured grant (plan 2026-07-29-compound-shapes-grants M2). When the
+  // line cannot be modelled precisely (substitution, redirects, mixed
+  // audiences) this returns false and the opaque session-grant path below
+  // takes over — same fail-closed direction as before.
+  if (parsed.isCompound) return await tryCompoundModeFromShell(command, idp, args)
 
   const loaded = await loadOrInstallAdapter(parsed.executable)
   if (!loaded) return false
@@ -488,13 +538,15 @@ async function tryAdapterModeFromShell(
     consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
   }
 
-  notifyGrantPending({
-    grantId: grant.id,
-    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-    command: resolved.detail?.display || parsed?.raw || 'unknown',
-    audience: resolved.adapter?.cli?.audience ?? 'shapes',
-    host: (args.host as string) || hostname(),
-  })
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: resolved.detail?.display || parsed?.raw || 'unknown',
+      audience: resolved.adapter?.cli?.audience ?? 'shapes',
+      host: (args.host as string) || hostname(),
+    })
+  }
 
   if (shouldWaitForGrant(args)) {
     consola.info(`Grant requested: ${grant.id}`)
@@ -506,6 +558,83 @@ async function tryAdapterModeFromShell(
 
     const token = await fetchGrantToken(idp, grant.id)
     await verifyAndExecute(token, resolved, grant.id)
+    return true
+  }
+
+  printPendingGrantInfo(grant, idp)
+  throw new CliExit(getAsyncExitCode())
+}
+
+/**
+ * Compound sibling of the adapter path: segment-wise resolution, ONE grant
+ * with every segment's structured detail, execution of the ORIGINAL line
+ * through the shell after verify+consume (pipes need the shell, per-segment
+ * exec would change semantics).
+ */
+async function tryCompoundModeFromShell(
+  command: string[],
+  idp: string,
+  args: Record<string, unknown>,
+): Promise<boolean> {
+  const compound = await resolveCompoundCommand(command)
+  if (!compound) return false
+
+  // sudo never rides a structured grant — root work goes through the
+  // escapes flow (`apes run --as root`). A sudo segment drops the whole
+  // line back to the opaque path, matching the pre-compound behavior.
+  if (compound.segments.some(seg => basename(seg.executable) === 'sudo'))
+    return false
+
+  // Reuse an approved timed/always grant that covers every segment.
+  try {
+    const existingGrantId = await findExistingCompoundGrant(compound, idp)
+    if (existingGrantId) {
+      consola.info(`Reusing grant ${existingGrantId} for compound: ${compound.innerLine.slice(0, 100)}`)
+      const token = await fetchGrantToken(idp, existingGrantId)
+      await verifyAndConsumeCompound(token, compound)
+      execShellCommand(command)
+      return true
+    }
+  }
+  catch {
+    // Fall through to request a new grant
+  }
+
+  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
+  consola.info(`Requesting grant for compound command (${compound.segments.length} segments): ${compound.innerLine.slice(0, 100)}`)
+  const grant = await createCompoundGrant(compound, {
+    idp,
+    approval,
+    reason: (args.reason as string) || `ape-shell compound: ${compound.innerLine.slice(0, 100)}`,
+  })
+
+  if (grant.similar_grants?.similar_grants?.length) {
+    const n = grant.similar_grants.similar_grants.length
+    consola.info('')
+    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
+  }
+
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: compound.innerLine.slice(0, 200),
+      audience: compound.audience,
+      host: (args.host as string) || hostname(),
+    })
+  }
+
+  if (shouldWaitForGrant(args)) {
+    consola.info(`Grant requested: ${grant.id}`)
+    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+
+    const status = await waitForGrantStatus(idp, grant.id)
+    if (status !== 'approved')
+      throw new CliError(`Grant ${status}`)
+
+    const token = await fetchGrantToken(idp, grant.id)
+    await verifyAndConsumeCompound(token, compound)
+    execShellCommand(command)
     return true
   }
 
@@ -528,7 +657,7 @@ function execShellCommand(command: string[]): void {
   if (command.length === 0)
     throw new CliError('No command to execute')
   try {
-    const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+    const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
     execFileSync(command[0]!, command.slice(1), {
       stdio: 'inherit',
       env: inheritedEnv,
@@ -694,7 +823,7 @@ async function runAudienceMode(
 
   // Step 1: Request grant
   consola.info(`Requesting ${audience} grant on ${targetHost}: ${command.join(' ')}`)
-  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+  const grant = await apiFetch<CreatedGrantInfo>(grantsUrl, {
     method: 'POST',
     body: {
       requester: auth.email,
@@ -767,9 +896,9 @@ function executeWithGrantToken(opts: {
   if (audience === 'escapes') {
     consola.info(`Executing: ${command.join(' ')}`)
     try {
-      // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside
+      // Strip the shell-mode markers so nested `apes` invocations inside
       // the escapes pipe don't self-detect as ape-shell mode.
-      const { APES_SHELL_WRAPPER: _wrapperMarker, ...inheritedEnv } = process.env
+      const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
       execFileSync((args['escapes-path'] as string) || 'escapes', ['--grant', token, '--', ...command], {
         stdio: 'inherit',
         env: inheritedEnv,
