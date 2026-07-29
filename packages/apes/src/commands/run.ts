@@ -161,8 +161,25 @@ function getAsyncExitCode(): number {
 }
 
 /**
- * Print the async info block for a freshly created pending grant. Two
- * output modes:
+ * IdP response for a freshly created grant, as consumed by the async
+ * exits. The IdP may approve the grant at creation time (standing
+ * grants, pre-approval hooks like YOLO) — the POST response then
+ * carries `approved_automatically: true` plus the record's `status`
+ * and `auto_approval_kind` (#1081).
+ */
+interface CreatedGrantInfo {
+  id: string
+  status?: string
+  approved_automatically?: boolean
+  auto_approval_kind?: string
+}
+
+/**
+ * Print the async info block for a freshly created grant.
+ *
+ * A grant the IdP already approved at creation time gets a short
+ * confirmation instead — no approve URL, no waiting protocol, nothing
+ * is pending (#1081). Pending grants get one of two output modes:
  *
  * - **agent** (default): verbose, with an explicit polling protocol so
  *   the consuming LLM knows exactly what to do next. Tells the agent to
@@ -178,11 +195,23 @@ function getAsyncExitCode(): number {
  * Both modes keep the same core Approve / Status / Execute lines so
  * external scripts that grep for those labels keep working.
  */
-function printPendingGrantInfo(grant: { id: string }, idp: string): void {
+function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): void {
   const mode = getUserMode()
+  const executeCmd = `apes grants run ${grant.id}`
+
+  if (grant.approved_automatically === true || grant.status === 'approved') {
+    // Callers still exit with the async default (75) after this block.
+    // Whether an auto-approved grant should exit 0 instead is a
+    // behaviour change for existing callers and a deliberately open
+    // owner decision (#1081) — not an oversight.
+    const kind = grant.auto_approval_kind ? ` (${grant.auto_approval_kind})` : ''
+    consola.success(`Grant ${grant.id} created and approved automatically${kind}`)
+    console.log(`  Execute:   ${executeCmd}`)
+    return
+  }
+
   const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
   const statusCmd = `apes grants status ${grant.id}`
-  const executeCmd = `apes grants run ${grant.id}`
 
   if (mode === 'human') {
     consola.success(`Grant ${grant.id} created — awaiting your approval`)
@@ -372,7 +401,7 @@ async function runShellMode(
   // No session grant found — request one. Default: 'once', but the approver
   // can upgrade to 'timed' or 'always' during approval to enable reuse.
   consola.info(`Requesting ape-shell session grant on ${targetHost}`)
-  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+  const grant = await apiFetch<CreatedGrantInfo>(grantsUrl, {
     method: 'POST',
     body: {
       requester: auth.email,
@@ -703,7 +732,7 @@ async function runAudienceMode(
 
   // Step 1: Request grant
   consola.info(`Requesting ${audience} grant on ${targetHost}: ${command.join(' ')}`)
-  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+  const grant = await apiFetch<CreatedGrantInfo>(grantsUrl, {
     method: 'POST',
     body: {
       requester: auth.email,
