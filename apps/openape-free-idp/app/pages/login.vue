@@ -154,18 +154,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md flex flex-col items-center text-center">
-      <div class="text-6xl mb-6">
+  <IdpHero>
+    <div class="flex flex-col items-center text-center">
+      <div class="mb-6 text-6xl">
         🦍
       </div>
 
-      <h1 class="text-4xl sm:text-5xl font-extrabold text-white mb-4">
+      <h1 class="mb-4 text-4xl font-extrabold sm:text-5xl">
         One login.<br>
         <span class="text-primary sm:whitespace-nowrap">Every human.<br class="sm:hidden"> Every agent.</span>
       </h1>
 
-      <p class="text-lg text-gray-400 mb-8">
+      <p class="mb-8 text-lg text-muted">
         Passwordless authentication for the open web.
       </p>
 
@@ -223,22 +223,23 @@ onUnmounted(() => {
 
         <!-- Step 2: Sign + Submit -->
         <div v-else class="space-y-4 text-left">
-          <div class="text-sm text-gray-400">
-            Sign this challenge with your private key <span class="text-gray-500">({{ countdown }}s)</span>
+          <div class="text-sm text-muted">
+            Sign this challenge with your private key <span class="text-dimmed">({{ countdown }}s)</span>
           </div>
 
           <div class="relative">
-            <pre class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs text-green-400 font-mono whitespace-pre-wrap break-all overflow-x-auto">{{ signCommand }}</pre>
+            <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-default bg-default p-3 font-mono text-xs text-green-400">{{ signCommand }}</pre>
             <button
-              class="absolute top-2 right-2 text-gray-500 hover:text-white transition-colors"
+              class="absolute top-2 right-2 text-dimmed transition-colors hover:text-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               title="Copy to clipboard"
+              aria-label="Copy sign command"
               @click="copyCommand"
             >
-              <UIcon name="i-lucide-copy" class="w-4 h-4" />
+              <UIcon name="i-lucide-copy" class="size-4" />
             </button>
           </div>
 
-          <div class="text-xs text-gray-500">
+          <div class="text-xs text-dimmed">
             Your key never leaves your machine.
           </div>
 
@@ -265,6 +266,7 @@ onUnmounted(() => {
               variant="ghost"
               size="xl"
               icon="i-lucide-rotate-ccw"
+              aria-label="Request a new challenge"
               @click="resetChallenge"
             />
           </div>
@@ -279,7 +281,7 @@ onUnmounted(() => {
            this email" (for current RP domain). Sends the user to the email-
            based registration flow which adds a new passkey to the existing
            account without touching whatever credentials they already have. -->
-      <div v-if="noPasskeyForDomain && email" class="mt-3 text-sm text-gray-400 text-center">
+      <div v-if="noPasskeyForDomain && email" class="mt-3 text-center text-sm text-muted">
         Kein Passkey für diese Domain hinterlegt.
         <NuxtLink :to="`/register-email?email=${encodeURIComponent(email)}`" class="text-primary hover:underline">
           Registrierungslink anfordern
@@ -287,31 +289,31 @@ onUnmounted(() => {
       </div>
 
       <button
-        class="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+        class="mt-4 text-sm text-dimmed transition-colors hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         @click="keyMode = !keyMode; resetChallenge()"
       >
         {{ keyMode ? 'Sign in with Passkey instead' : 'Sign in with SSH Key instead' }}
       </button>
 
-      <div class="mt-6 text-sm text-gray-500">
+      <div class="mt-6 text-sm text-dimmed">
         Noch keinen Account?
         <NuxtLink to="/register-email" class="text-primary hover:underline">
           Jetzt registrieren
         </NuxtLink>
       </div>
 
-      <div class="mt-2 text-sm text-gray-500">
+      <div class="mt-2 text-sm text-dimmed">
         Lost access to your passkeys?
         <NuxtLink to="/recover/request" class="text-primary hover:underline">
           Recover account
         </NuxtLink>
       </div>
 
-      <p class="mt-8 text-sm text-gray-500">
-        Powered by <NuxtLink to="https://openape.ai" external class="text-gray-400 hover:text-white transition-colors">
+      <p class="mt-8 text-sm text-dimmed">
+        Powered by <NuxtLink to="https://openape.ai" external class="text-muted transition-colors hover:text-default">
           OpenApe
         </NuxtLink>
       </p>
     </div>
-  </div>
+  </IdpHero>
 </template>
