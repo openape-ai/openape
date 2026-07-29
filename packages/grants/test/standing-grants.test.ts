@@ -383,6 +383,49 @@ describe('evaluateStandingGrants', () => {
     )
     expect(match).toBeNull()
   })
+
+  it('covers a compound-shaped request: several details of one CLI under one wildcard template', async () => {
+    // The shape ape-shell compound resolution produces (M2): one request,
+    // one detail per segment — here mail.list + mail.read, both o365.
+    const store = await withStandingGrants([
+      makeStandingGrant({
+        owner: 'patrick@',
+        delegate: 'claude@example.com',
+        cli_id: 'o365',
+        max_risk: 'low',
+        resource_chain_template: [{ resource: 'account' }, { resource: 'mail' }],
+      }),
+    ])
+    const listDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'o365',
+      operation_id: 'mail.list',
+      resource_chain: [{ resource: 'account', selector: { email: 'p@h.eco' } }, { resource: 'mail' }],
+      action: 'list',
+      permission: '',
+      display: 'List mails',
+      risk: 'low' as const,
+    }
+    listDetail.permission = canonicalizeCliPermission(listDetail)
+    const readDetail = {
+      type: 'openape_cli' as const,
+      cli_id: 'o365',
+      operation_id: 'mail.read',
+      resource_chain: [{ resource: 'account', selector: { email: 'p@h.eco' } }, { resource: 'mail', selector: { id: 'AAMk123' } }],
+      action: 'read',
+      permission: '',
+      display: 'Read mail AAMk123',
+      risk: 'low' as const,
+    }
+    readDetail.permission = canonicalizeCliPermission(readDetail)
+    const match = await evaluateStandingGrants(
+      makeIncomingGrantRequest({
+        authorization_details: [listDetail, readDetail],
+      }),
+      store,
+    )
+    expect(match).not.toBeNull()
+  })
 })
 
 describe('buildCoverageDetailFromStandingGrant', () => {
