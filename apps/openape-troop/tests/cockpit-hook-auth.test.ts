@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { allowHookHit, verifyHookSignature } from '../server/utils/cockpit/hook-auth'
+import { allowHookHit, hookAcceptsEvent, verifyHookSignature } from '../server/utils/cockpit/hook-auth'
 
 describe('verifyHookSignature', () => {
   const secret = 'topsecret'
@@ -28,6 +28,27 @@ describe('verifyHookSignature', () => {
   })
   it('rejects a prefix-less signature on the legacy header', () => {
     expect(verifyHookSignature(secret, body, digest)).toBe(false)
+  })
+})
+
+describe('hookAcceptsEvent', () => {
+  it('accepts everything when no filter is set', () => {
+    expect(hookAcceptsEvent('', 'push')).toBe(true)
+    expect(hookAcceptsEvent(null, undefined)).toBe(true)
+  })
+  it('accepts a listed event', () => {
+    expect(hookAcceptsEvent('issues', 'issues')).toBe(true)
+    expect(hookAcceptsEvent('issues, pull_request', 'pull_request')).toBe(true)
+  })
+  it('rejects an unlisted event — the #1085 case: push on an issues-only hook', () => {
+    expect(hookAcceptsEvent('issues', 'push')).toBe(false)
+  })
+  it('rejects when the sender names no event at all', () => {
+    expect(hookAcceptsEvent('issues', undefined)).toBe(false)
+    expect(hookAcceptsEvent('issues', '')).toBe(false)
+  })
+  it('ignores case and surrounding whitespace on both sides', () => {
+    expect(hookAcceptsEvent(' Issues , push ', 'ISSUES')).toBe(true)
   })
 })
 

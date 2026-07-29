@@ -22,6 +22,7 @@ interface Body {
   cronExpr?: string
   // create-hook
   label?: string
+  eventFilter?: string
   includePayload?: boolean
   useSecret?: boolean
   // update/delete
@@ -58,7 +59,7 @@ export default defineEventHandler(async (event) => {
     const id = randomUUID()
     const token = randomBytes(24).toString('base64url')
     const secret = body.useSecret ? randomBytes(32).toString('hex') : null
-    await db.insert(cockpitHooks).values({ id, ownerEmail: owner, orgId, label: (body.label ?? '').trim(), token, secret, prompt, includePayload: body.includePayload === true, enabled: true, createdBy: 'operator', lastFiredAt: null, createdAt: Date.now() })
+    await db.insert(cockpitHooks).values({ id, ownerEmail: owner, orgId, label: (body.label ?? '').trim(), token, secret, prompt, eventFilter: (body.eventFilter ?? '').trim(), includePayload: body.includePayload === true, enabled: true, createdBy: 'operator', lastFiredAt: null, createdAt: Date.now() })
     return { id, token, secret }
   }
 
@@ -67,7 +68,7 @@ export default defineEventHandler(async (event) => {
     const hooks = await db.select().from(cockpitHooks).where(and(eq(cockpitHooks.ownerEmail, owner), eq(cockpitHooks.orgId, orgId)))
     return {
       schedules: schedules.map(s => ({ id: s.id, kind: s.kind, prompt: s.prompt, atHour: s.atHour, everyMinutes: s.everyMinutes, fireAt: s.fireAt, cronExpr: s.cronExpr, enabled: s.enabled, createdBy: s.createdBy, lastRunAt: s.lastRunAt })),
-      hooks: hooks.map(h => ({ id: h.id, label: h.label, token: h.token, prompt: h.prompt, includePayload: h.includePayload, enabled: h.enabled, createdBy: h.createdBy, lastFiredAt: h.lastFiredAt })),
+      hooks: hooks.map(h => ({ id: h.id, label: h.label, token: h.token, prompt: h.prompt, eventFilter: h.eventFilter, includePayload: h.includePayload, enabled: h.enabled, createdBy: h.createdBy, lastFiredAt: h.lastFiredAt })),
     }
   }
 
@@ -76,6 +77,7 @@ export default defineEventHandler(async (event) => {
     if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
     const patch: Record<string, unknown> = {}
     if (typeof body.prompt === 'string') patch.prompt = body.prompt.trim()
+    if (typeof body.eventFilter === 'string' && body.type === 'hook') patch.eventFilter = body.eventFilter.trim()
     if (typeof body.enabled === 'boolean') patch.enabled = body.enabled
     if (Object.keys(patch).length === 0) throw createError({ statusCode: 400, statusMessage: 'no fields' })
     if (body.type === 'hook') await db.update(cockpitHooks).set(patch).where(and(eq(cockpitHooks.id, id), eq(cockpitHooks.ownerEmail, owner), eq(cockpitHooks.orgId, orgId)))
