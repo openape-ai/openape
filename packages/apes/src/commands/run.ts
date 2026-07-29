@@ -9,6 +9,7 @@ import {
   extractWrappedCommand,
   fetchGrantToken,
   findExistingGrant,
+  isAutoApproved,
   loadAdapter,
   loadOrInstallAdapter,
   parseShellCommand,
@@ -413,13 +414,15 @@ async function runShellMode(
     },
   })
 
-  notifyGrantPending({
-    grantId: grant.id,
-    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-    command: command.join(' ').slice(0, 200),
-    audience: 'ape-shell',
-    host: targetHost,
-  })
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: command.join(' ').slice(0, 200),
+      audience: 'ape-shell',
+      host: targetHost,
+    })
+  }
 
   if (shouldWaitForGrant(args)) {
     consola.info(`Grant requested: ${grant.id}`)
@@ -526,13 +529,15 @@ async function tryAdapterModeFromShell(
     consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
   }
 
-  notifyGrantPending({
-    grantId: grant.id,
-    approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-    command: resolved.detail?.display || parsed?.raw || 'unknown',
-    audience: resolved.adapter?.cli?.audience ?? 'shapes',
-    host: (args.host as string) || hostname(),
-  })
+  if (!isAutoApproved(grant)) {
+    notifyGrantPending({
+      grantId: grant.id,
+      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
+      command: resolved.detail?.display || parsed?.raw || 'unknown',
+      audience: resolved.adapter?.cli?.audience ?? 'shapes',
+      host: (args.host as string) || hostname(),
+    })
+  }
 
   if (shouldWaitForGrant(args)) {
     consola.info(`Grant requested: ${grant.id}`)

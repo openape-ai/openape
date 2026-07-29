@@ -41,6 +41,8 @@ vi.mock('../src/shapes/index.js', async () => {
     createShapesGrant: vi.fn(),
     fetchGrantToken: vi.fn(),
     findExistingGrant: vi.fn(),
+    // Real implementation on purpose — #1083 is about the call sites obeying it.
+    isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
     loadOrInstallAdapter: vi.fn(),
     loadAdapter: vi.fn(),
     parseShellCommand: vi.fn(),

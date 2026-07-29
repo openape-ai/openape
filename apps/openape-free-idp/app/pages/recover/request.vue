@@ -31,18 +31,16 @@ async function handleRequest() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-md">
-      <template #header>
-        <h1 class="text-2xl font-bold text-center">
-          Recover your account
-        </h1>
-        <p class="text-sm text-muted text-center mt-1">
-          Lost every device with a passkey? Recovery lets you register a new
-          one after a waiting period — it never signs anyone in by itself.
-        </p>
-      </template>
+  <IdpHero>
+    <h1 class="text-center text-4xl font-extrabold sm:text-5xl">
+      Recover your account
+    </h1>
+    <p class="mb-6 mt-3 text-center text-sm text-muted">
+      Lost every device with a passkey? Recovery lets you register a new
+      one after a waiting period — it never signs anyone in by itself.
+    </p>
 
+    <UCard>
       <UAlert
         v-if="error"
         color="error"
@@ -95,5 +93,5 @@ async function handleRequest() {
         </div>
       </template>
     </UCard>
-  </div>
+  </IdpHero>
 </template>

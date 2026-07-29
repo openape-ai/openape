@@ -32,18 +32,18 @@ async function requestRegistration() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
+  <IdpHero>
     <!-- Registration form -->
-    <div v-if="!sent" class="w-full max-w-md flex flex-col items-center text-center">
-      <div class="text-6xl mb-6">
+    <div v-if="!sent" class="flex flex-col items-center text-center">
+      <div class="mb-6 text-6xl">
         🦍
       </div>
 
-      <h1 class="text-3xl font-extrabold text-white mb-4">
+      <h1 class="mb-4 text-4xl font-extrabold sm:text-5xl">
         Account erstellen
       </h1>
 
-      <p class="text-gray-400 mb-8">
+      <p class="mb-8 text-muted">
         Gib deine Email-Adresse ein. Du erhältst einen Link zum Erstellen deines Passkeys.
       </p>
 
@@ -74,7 +74,7 @@ async function requestRegistration() {
         {{ error }}
       </p>
 
-      <div class="mt-6 text-sm text-gray-500">
+      <div class="mt-6 text-sm text-dimmed">
         Bereits registriert?
         <NuxtLink to="/login" class="text-primary hover:underline">
           Anmelden
@@ -83,15 +83,15 @@ async function requestRegistration() {
     </div>
 
     <!-- Email sent confirmation -->
-    <UCard v-else class="w-full max-w-md bg-gray-900 border border-gray-800">
-      <div class="text-center py-4">
-        <UIcon name="i-lucide-mail-check" class="text-4xl text-primary mb-3" />
-        <h2 class="text-lg font-semibold text-white mb-2">
+    <UCard v-else>
+      <div class="py-4 text-center">
+        <UIcon name="i-lucide-mail-check" class="mb-3 text-4xl text-primary" />
+        <h2 class="mb-2 text-lg font-semibold">
           Prüfe dein Postfach
         </h2>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-muted">
           Wir haben einen Registrierungslink an
-          <strong class="text-white">{{ email }}</strong>
+          <strong class="text-default">{{ email }}</strong>
           gesendet. Der Link ist 24 Stunden gültig.
         </p>
         <div class="mt-4">
@@ -101,5 +101,5 @@ async function requestRegistration() {
         </div>
       </div>
     </UCard>
-  </div>
+  </IdpHero>
 </template>
