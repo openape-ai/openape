@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.32.0
+
+### Minor Changes
+
+- 793b7da: Rate-limit buckets split by traffic nature (#1073): unauthenticated credential ceremonies stay strict (10/min per IP), `/token` joins the agent bucket (120/min, `OPENAPE_RATE_LIMIT_MAX_AGENT`), and authenticated owner-management APIs (`/api/my-agents`, `/api/users`) get their own bucket (60/min, new `OPENAPE_RATE_LIMIT_MAX_MANAGEMENT`). Machine work from the owner's own IP no longer drains the browser-login budget.
+
+### Patch Changes
+
+- 937870d: Browser-Navigationen erhalten bei Fehlern (429, 401, 404, 5xx, …) eine schlanke deutsche HTML-Fehlerseite statt rohem `application/problem+json` — bei 429 mit sichtbarer Wartezeit, Countdown und „Erneut versuchen". API-Clients (JSON-Accept, XHR, cors-Fetches) bekommen unverändert RFC-7807-Antworten.
+
 ## 0.31.0
 
 ### Minor Changes
