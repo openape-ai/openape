@@ -39,6 +39,14 @@ vi.mock('../src/shapes/index.js', async () => {
   const generic = await import('@openape/shapes')
   return {
     createShapesGrant: vi.fn(),
+    // Compound resolution answers null in these tests — the assertions
+    // here cover the OPAQUE fallback path; the structured compound path
+    // has its own suite (compound-mode.test.ts).
+    resolveCompoundCommand: vi.fn(async () => null),
+    createCompoundGrant: vi.fn(),
+    findExistingCompoundGrant: vi.fn(),
+    verifyAndConsumeCompound: vi.fn(),
+    compoundCoveredByDetails: vi.fn(),
     fetchGrantToken: vi.fn(),
     findExistingGrant: vi.fn(),
     // Real implementation on purpose — #1083 is about the call sites obeying it.
