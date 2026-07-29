@@ -1,5 +1,13 @@
 # @openape/troop
 
+## 0.1.13
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+  - @openape/core@0.20.0
+  - @openape/nuxt-auth-sp@0.15.1
+
 ## 0.1.12
 
 ### Patch Changes

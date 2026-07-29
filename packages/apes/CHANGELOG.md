@@ -1,5 +1,31 @@
 # @openape/apes
 
+## 1.34.0
+
+### Minor Changes
+
+- bea8e00: Compound-Shell-Zeilen (`a | b`, `a && b`) laufen segmentweise durch die
+  Shapes-Auflösung: EIN Grant-Request mit den strukturierten Details aller
+  Segmente (Adapter wo vorhanden, Generic-Fallback sonst), Ausführung nach
+  Approval als Original-Zeile. Substitution, Redirects, sudo-Segmente und
+  gemischte Audiences fallen weiter fail-closed auf den opaken Pfad.
+
+### Patch Changes
+
+- 7ad2d77: Keine „Grant wartet auf Freigabe"-Benachrichtigung mehr für Grants, die der IdP
+  bei der Erstellung selbst freigegeben hat (Standing Grant, YOLO). Die neue
+  `isAutoApproved`-Prüfung sitzt an allen vier Aufrufstellen; im ape-shell-Pfad
+  entfällt damit auch die irreführende „Approve at: …"-Zeile. Ein echter pending
+  Grant benachrichtigt unverändert.
+- Updated dependencies [0140dc3]
+- Updated dependencies [bea8e00]
+- Updated dependencies [42b3257]
+  - @openape/core@0.20.0
+  - @openape/shapes@0.9.0
+  - @openape/grants@0.13.0
+  - @openape/agent-runtime@0.2.5
+  - @openape/proxy@0.4.9
+
 ## 1.33.3
 
 ### Patch Changes
