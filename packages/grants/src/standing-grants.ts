@@ -138,7 +138,14 @@ export async function evaluateStandingGrants(
   // normalization rationale.
   const candidates = await grantStore.findByRequester(incoming.requester)
 
+  // Coverage unions ACROSS standing grants: a compound request carries one
+  // detail per pipe segment, possibly from different CLIs (o365 + jq), and
+  // no single rule can span two cli_ids. Each detail must be covered by AT
+  // LEAST ONE applicable grant; every scope filter (cli_id, action,
+  // max_risk, template) is checked per grant against the details IT covers,
+  // so the union never widens beyond what each owner-approved rule allows.
   const now = Math.floor(Date.now() / 1000)
+  const applicable: Array<{ id: string, req: StandingGrantRequest }> = []
   for (const grant of candidates) {
     if (grant.status !== 'approved') continue
     const req = grant.request as unknown
@@ -150,22 +157,30 @@ export async function evaluateStandingGrants(
     // as NOT NULL — see standing-grants/index.post.ts normalization.
     if (req.target_host && req.target_host !== '*' && req.target_host !== incoming.target_host) continue
     if (grant.expires_at && grant.expires_at < now) continue
-
-    const maxRisk = req.max_risk ? RISK_ORDER[req.max_risk] : Number.POSITIVE_INFINITY
-    let allCovered = true
-    for (const incomingDetail of incomingCli) {
-      if (req.cli_id && req.cli_id !== incomingDetail.cli_id) { allCovered = false; break }
-      if (req.action && req.action !== incomingDetail.action) { allCovered = false; break }
-      if (RISK_ORDER[incomingDetail.risk] > maxRisk) { allCovered = false; break }
-      const template = buildCoverageDetailFromStandingGrant(req, incomingDetail)
-      if (!cliAuthorizationDetailCovers(template, incomingDetail)) { allCovered = false; break }
-    }
-    if (!allCovered) continue
-
-    return {
-      standing_grant_id: grant.id,
-      derived_authorization_details: incomingCli,
-    }
+    applicable.push({ id: grant.id, req })
   }
-  return null
+  if (applicable.length === 0) return null
+
+  const coversDetail = (req: StandingGrantRequest, incomingDetail: OpenApeCliAuthorizationDetail): boolean => {
+    if (req.cli_id && req.cli_id !== incomingDetail.cli_id) return false
+    if (req.action && req.action !== incomingDetail.action) return false
+    const maxRisk = req.max_risk ? RISK_ORDER[req.max_risk] : Number.POSITIVE_INFINITY
+    if (RISK_ORDER[incomingDetail.risk] > maxRisk) return false
+    const template = buildCoverageDetailFromStandingGrant(req, incomingDetail)
+    return cliAuthorizationDetailCovers(template, incomingDetail)
+  }
+
+  // Audit attribution: the grant covering the FIRST detail is recorded as
+  // the deciding one (the schema stores a single standing_grant_id).
+  let primaryId: string | null = null
+  for (const incomingDetail of incomingCli) {
+    const coverer = applicable.find(({ req }) => coversDetail(req, incomingDetail))
+    if (!coverer) return null
+    primaryId = primaryId ?? coverer.id
+  }
+
+  return {
+    standing_grant_id: primaryId!,
+    derived_authorization_details: incomingCli,
+  }
 }
