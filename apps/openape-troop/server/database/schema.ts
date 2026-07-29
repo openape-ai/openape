@@ -496,6 +496,7 @@ export const cockpitHooks = sqliteTable('cockpit_hooks', {
   token: text('token').notNull().unique(),
   secret: text('secret'), // optional HMAC secret; null = token-only
   prompt: text('prompt').notNull().default(''), // what the Operator does on the event
+  eventFilter: text('event_filter').notNull().default(''), // comma-separated event names; '' = accept every event
   includePayload: integer('include_payload', { mode: 'boolean' }).notNull().default(false),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-created)
