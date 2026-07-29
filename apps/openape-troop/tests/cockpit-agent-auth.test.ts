@@ -54,4 +54,14 @@ describe('troop:cockpit-serve catalog entry (#1033)', () => {
     expect(scope!.grants).toContain('POST /api/cockpit/agent/tasks/next')
     expect(scope!.grants).toContain('POST /api/cockpit/agent/tasks/resolve')
   })
+
+  // #1075: serving the owner's services starts with discovering them. Without
+  // this route the catalog check rejects the listing, the worker's services
+  // loop sees an empty list and spins — silently, because the caller swallows
+  // the error. Cost the zaz service a full day of unserved tasks.
+  it('covers the service discovery its own description promises', () => {
+    const scope = TROOP_SCOPES.find(s => s.id === 'troop:cockpit-serve')
+    expect(scope!.description).toContain('services')
+    expect(scope!.grants).toContain('GET /api/cockpit/services')
+  })
 })

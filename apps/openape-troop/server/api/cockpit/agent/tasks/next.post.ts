@@ -24,7 +24,10 @@ export default defineEventHandler(async (event) => {
         contextId,
       }],
       artifacts: [],
-      metadata: { type: 'llm', assignee: task.owner || 'cockpit', deliveryCount: 1 },
+      // allowedTools + company are additive metadata (#1036): the worker reads
+      // its command allowlist from here (data), not from the prompt (prose).
+      // The history data-part format stays untouched — worker parse compat.
+      metadata: { type: 'llm', assignee: task.owner || 'cockpit', deliveryCount: 1, company: task.company, allowedTools: task.allowedTools },
     },
   }
 })

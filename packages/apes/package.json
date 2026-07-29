@@ -1,6 +1,6 @@
 {
   "name": "@openape/apes",
-  "version": "1.31.5",
+  "version": "1.34.0",
   "turbo": {
     "tags": [
       "publishable"
@@ -10,7 +10,7 @@
   "type": "module",
   "bin": {
     "apes": "./dist/cli.js",
-    "ape-shell": "./dist/cli.js"
+    "ape-shell": "./scripts/ape-shell-wrapper.sh"
   },
   "exports": {
     ".": {

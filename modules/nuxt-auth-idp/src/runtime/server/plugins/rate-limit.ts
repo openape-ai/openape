@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import type { NitroApp } from 'nitropack'
 import { getRequestIP } from 'h3'
+import { renderErrorPage, wantsHtmlErrorPage } from '../utils/error-page'
 
 interface RateLimitEntry {
   count: number
@@ -15,6 +16,11 @@ const DEFAULT_MAX_REQUESTS = 10
 // brute-force budget, so `/api/agent/*` gets its OWN per-IP bucket with a
 // higher default. Tunable via OPENAPE_RATE_LIMIT_MAX_AGENT.
 const DEFAULT_MAX_AGENT = 120
+// Authenticated owner-management APIs (my-agents, users) are legitimate
+// bulk targets — an owner cleaning up 33 stale agent identities is not a
+// brute-force attack. Before #1073 they drained the strict 10/min pot and
+// silently 429'd the owner's own browser login from the same IP.
+const DEFAULT_MAX_MANAGEMENT = 60
 
 // Per-IP auth cap for the window. Operators whose legitimate traffic
 // drives many auth ceremonies from one client IP (e.g. the local demo
@@ -33,6 +39,12 @@ function parseMaxAgentRequests(): number {
   return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_AGENT
 }
 
+// Separate cap for authenticated owner-management traffic.
+function parseMaxManagementRequests(): number {
+  const raw = Number(process.env.OPENAPE_RATE_LIMIT_MAX_MANAGEMENT)
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_MANAGEMENT
+}
+
 // Rate-limited path-prefixes. Anything brute-forceable (auth ceremonies,
 // agent challenges, push subscriptions, account registration, user lookups)
 // is in here. The hyphen in `my-agents` is escaped explicitly. Extended in
@@ -40,10 +52,23 @@ function parseMaxAgentRequests(): number {
 // push, users) which were previously unlimited — see audit 2026-05-04.
 const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users)\b|authorize\b|token\b)/
 
-// Agent-only auth paths (challenge/authenticate). These get the separate,
-// higher-capacity bucket so machine re-auth never throttles the human
-// `/authorize` + `/token` browser login from the same IP.
-const RE_AGENT_PATHS = /^\/api\/agent\b/
+// Machine-auth paths. These get the separate, higher-capacity bucket so
+// machine re-auth never throttles the human browser login from the same
+// IP. `/token` belongs here (#1073): it is either agent auth via signed
+// `client_assertion` (not guessable, so no brute-force target) or OIDC
+// code exchange (the code is single-use and short-lived) — but it IS the
+// path that many agent identities behind ONE egress IP hit every minute.
+const RE_AGENT_PATHS = /^\/(?:api\/agent\b|token\b)/
+
+// Authenticated owner-management APIs. Bulk operations here (deleting 33
+// stale agents, listing users) are legitimate owner work, not credential
+// guessing — they must not compete with the strict login budget (#1073).
+//
+// Deliberately still keyed per-IP, NOT per-`sub` from the Bearer token:
+// the limiter runs before any token verification, so an unverified `sub`
+// would be attacker-chosen — rotating it would bypass the limit entirely.
+// Identity-based keying would require verified tokens inside the limiter.
+const RE_MANAGEMENT_PATHS = /^\/api\/(?:my-agents|users)\b/
 
 const store = new Map<string, RateLimitEntry>()
 
@@ -154,6 +179,7 @@ export default (nitroApp: NitroApp) => {
   const trustedProxies = parseTrustedProxies()
   const maxAuth = parseMaxRequests()
   const maxAgent = parseMaxAgentRequests()
+  const maxManagement = parseMaxManagementRequests()
 
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
@@ -162,11 +188,26 @@ export default (nitroApp: NitroApp) => {
     cleanup()
 
     const ip = resolveClientIp(event, trustedProxies)
-    // Agent challenge/authenticate gets its own per-IP bucket + cap so the
-    // human browser login (/authorize, /token) keeps the strict budget.
-    const isAgent = RE_AGENT_PATHS.test(path)
-    const key = isAgent ? `${ip}:agent` : `${ip}:auth`
-    const maxRequests = isAgent ? maxAgent : maxAuth
+    // Three per-IP buckets, split by the NATURE of the traffic (#1073):
+    // strict = unauthenticated credential ceremonies (brute-forceable),
+    // agent = machine auth (/api/agent/*, /token),
+    // management = authenticated owner APIs (/api/my-agents, /api/users).
+    // Machine work must never drain the human login budget or vice versa.
+    let bucket: 'agent' | 'mgmt' | 'auth'
+    let maxRequests: number
+    if (RE_AGENT_PATHS.test(path)) {
+      bucket = 'agent'
+      maxRequests = maxAgent
+    }
+    else if (RE_MANAGEMENT_PATHS.test(path)) {
+      bucket = 'mgmt'
+      maxRequests = maxManagement
+    }
+    else {
+      bucket = 'auth'
+      maxRequests = maxAuth
+    }
+    const key = `${ip}:${bucket}`
     const now = Date.now()
 
     let entry = store.get(key)
@@ -186,6 +227,15 @@ export default (nitroApp: NitroApp) => {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
       res.setHeader('Retry-After', String(retryAfter))
       res.statusCode = 429
+
+      // Browser navigations get a readable page with the wait time
+      // (#1074); API clients keep the problem+json below unchanged.
+      if (wantsHtmlErrorPage(event.node.req.headers)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end(renderErrorPage(429, { retryAfterSeconds: retryAfter }))
+        return
+      }
+
       res.setHeader('Content-Type', 'application/problem+json')
       res.end(JSON.stringify({
         type: 'about:blank',
@@ -198,4 +248,4 @@ export default (nitroApp: NitroApp) => {
 }
 
 // Exported for unit tests.
-export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp, parseMaxRequests }
+export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp, parseMaxRequests, parseMaxManagementRequests }

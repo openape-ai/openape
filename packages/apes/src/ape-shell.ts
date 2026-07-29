@@ -26,7 +26,16 @@ export type ApeShellAction =
  *      which hoists node onto PATH before exec-ing cli.js. In that case
  *      argv[1] becomes `cli.js` (or some dist/chunk file) and the old
  *      basename check fails, so we trust the wrapper's declaration.
- *   2. Otherwise fall back to `argv[1]` basename matching literal
+ *   2. `process.env.APES_SHELL_MODE === '1'` is an equivalent explicit
+ *      switch for callers that invoke cli.js without going through the
+ *      wrapper (e.g. security hooks that must not depend on how the
+ *      package manager materialized the bin). Shim-based installers
+ *      (pnpm) exec `node .../dist/cli.js` directly, which defeats any
+ *      argv-based detection — an explicit env switch is the only
+ *      deterministic signal there. Heuristics on `process.argv0` (always
+ *      `node` under a shim) or `process.env._` (set only by interactive
+ *      shells, absent under spawn/execve) were rejected as unreliable.
+ *   3. Otherwise fall back to `argv[1]` basename matching literal
  *      `ape-shell` / `ape-shell.js` (the direct-symlink invocation path).
  *
  * After detection, the rest of the rules decide the action (first match):
@@ -50,10 +59,13 @@ export function rewriteApeShellArgs(argv: string[], argv0?: string): ApeShellAct
   const normalizedInvokedAs = dashFromArgv1 ? rawInvokedAs.slice(1) : rawInvokedAs
   const invokedAs = path.basename(normalizedInvokedAs)
 
-  // Primary detection: explicit wrapper signal via env var. Takes
+  // Primary detection: explicit shell-mode signal via env var. Takes
   // precedence because argv-based detection gets clobbered when the
-  // wrapper execs node directly and argv[1] becomes cli.js.
-  const wrapperEnv = typeof process !== 'undefined' && process.env?.APES_SHELL_WRAPPER === '1'
+  // wrapper (or a package-manager shim) execs node directly and argv[1]
+  // becomes cli.js. APES_SHELL_WRAPPER is set by ape-shell-wrapper.sh;
+  // APES_SHELL_MODE is the equivalent switch for direct callers.
+  const wrapperEnv = typeof process !== 'undefined'
+    && (process.env?.APES_SHELL_WRAPPER === '1' || process.env?.APES_SHELL_MODE === '1')
 
   // Secondary detection: argv[1] basename matches literal `ape-shell` or
   // `ape-shell.js` — the direct-symlink invocation path.

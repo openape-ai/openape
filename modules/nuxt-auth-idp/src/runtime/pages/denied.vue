@@ -11,8 +11,6 @@ import { useIdpAuth } from '#imports'
 // on the explicit "back to SP" button click. Bearer flows skip
 // this page entirely — they get the spec-direct redirect.
 
-definePageMeta({ layout: false })
-
 const { user, fetchUser } = useIdpAuth()
 const data = ref(null)
 const error = ref('')
@@ -64,117 +62,64 @@ async function backToSp() {
 </script>
 
 <template>
-  <div class="denied-root">
-    <div v-if="error && !data" class="card error-card">
-      <h1>Konnte Anmeldestatus nicht laden</h1>
-      <p class="muted">
+  <IdpHero>
+    <div v-if="error && !data" class="rounded-lg border border-error/40 bg-default p-6">
+      <h1 class="text-xl font-semibold tracking-tight">
+        Konnte Anmeldestatus nicht laden
+      </h1>
+      <p class="mt-2 text-sm text-muted">
         {{ error }}
       </p>
-      <a href="/" class="btn btn-secondary">Zur Startseite</a>
+      <UButton to="/" color="neutral" variant="outline" class="mt-4">
+        Zur Startseite
+      </UButton>
     </div>
 
-    <div v-else-if="data" class="card">
-      <header>
-        <span class="badge badge-warn">Zugriff verweigert</span>
-      </header>
+    <div v-else-if="data" class="rounded-lg border border-default bg-default p-6">
+      <UBadge color="warning" variant="subtle" size="sm">
+        Zugriff verweigert
+      </UBadge>
 
-      <h1>{{ heading }}</h1>
+      <h1 class="mt-4 text-xl font-semibold tracking-tight">
+        {{ heading }}
+      </h1>
 
-      <div class="sp-row">
-        <p class="muted">
-          Anwendung: <code>{{ data.clientId }}</code>
-        </p>
-      </div>
-
-      <p>{{ explanation }}</p>
-
-      <p v-if="user && data.reason === 'allowlist-admin-not-approved'" class="muted small">
-        Wenn du selbst Domain-Admin bist, kannst du <a href="/admin">die Allowlist hier verwalten</a>.
+      <p class="mt-1 text-sm text-muted">
+        Anwendung: <code class="break-all font-mono text-xs text-default">{{ data.clientId }}</code>
       </p>
 
-      <p v-if="error" class="error">
-        {{ error }}
+      <p class="mt-4 text-sm">
+        {{ explanation }}
       </p>
 
-      <div class="actions">
-        <button
-          class="btn btn-primary"
+      <p v-if="user && data.reason === 'allowlist-admin-not-approved'" class="mt-2 text-sm text-muted">
+        Wenn du selbst Domain-Admin bist, kannst du
+        <NuxtLink to="/admin" class="text-primary hover:underline">
+          die Allowlist hier verwalten
+        </NuxtLink>.
+      </p>
+
+      <UAlert v-if="error" color="error" variant="subtle" class="mt-4" :description="error" />
+
+      <div class="mt-6 flex flex-col gap-2">
+        <UButton
+          color="primary"
+          size="lg"
+          block
+          :loading="submitting"
           :disabled="submitting"
           @click="backToSp"
         >
           Zurück zu {{ data.clientId }}
-        </button>
-        <a href="/" class="btn btn-secondary">Startseite</a>
+        </UButton>
+        <UButton to="/" color="neutral" variant="outline" size="lg" block>
+          Startseite
+        </UButton>
       </div>
     </div>
 
-    <div v-else class="card">
-      <p class="muted">
-        Lade …
-      </p>
+    <div v-else class="rounded-lg border border-default bg-default p-6 text-sm text-muted">
+      Loading…
     </div>
-  </div>
+  </IdpHero>
 </template>
-
-<style scoped>
-.denied-root {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: #0b0b10;
-  color: #e4e4ea;
-  font-family: system-ui, -apple-system, sans-serif;
-}
-.card {
-  width: 100%;
-  max-width: 480px;
-  background: #15151b;
-  border: 1px solid #c97a18;
-  background: linear-gradient(180deg, rgba(201,122,24,0.08), #15151b);
-  border-radius: 12px;
-  padding: 1.75rem;
-}
-.error-card { border-color: #c83030; background: #15151b; }
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.625rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  margin-bottom: 1rem;
-}
-.badge-warn {
-  background: rgba(201,122,24,0.18);
-  color: #f0a83d;
-  border: 1px solid rgba(201,122,24,0.4);
-}
-.sp-row { display: flex; gap: 0.875rem; align-items: center; margin-bottom: 0.5rem; }
-h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
-p { line-height: 1.5; margin: 0.5rem 0; }
-.muted { color: #9b9ba8; }
-.muted a { color: #c0c0cc; }
-.small { font-size: 0.875rem; }
-code { background: #25252e; padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875em; }
-.error { color: #ff7070; font-size: 0.875rem; margin-top: 0.5rem; }
-.actions { display: flex; flex-direction: column-reverse; gap: 0.5rem; margin-top: 1.25rem; }
-@media (min-width: 480px) { .actions { flex-direction: row; justify-content: flex-end; } }
-.btn {
-  appearance: none;
-  border: 0;
-  border-radius: 8px;
-  padding: 0.625rem 1rem;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  font-weight: 500;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: #4a86ff; color: white; }
-.btn-secondary { background: transparent; color: #c0c0cc; border: 1px solid #3a3a48; }
-.btn-secondary:hover:not(:disabled) { background: #25252e; }
-</style>

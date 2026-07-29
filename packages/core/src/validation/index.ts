@@ -15,3 +15,8 @@ export {
   type OpenApeManifestValidationResult,
   validateOpenApeManifest,
 } from './openape-manifest.js'
+
+export {
+  containsCommandSubstitution,
+  splitCommandSegments,
+} from './shell-segments.js'

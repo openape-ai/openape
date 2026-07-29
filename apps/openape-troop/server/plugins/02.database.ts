@@ -119,6 +119,8 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_cockpit_hooks_token ON cockpit_hooks(token)`)
     try { await db.run(sql`ALTER TABLE cockpit_hooks ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'`) }
     catch { /* column exists */ }
+    try { await db.run(sql`ALTER TABLE cockpit_hooks ADD COLUMN event_filter TEXT NOT NULL DEFAULT ''`) }
+    catch { /* column exists */ }
     // Queue durability (#queue-durability): cockpit_tasks DDL is owned by
     // server/utils/cockpit/task-store.ts (ensureTaskTable), created by the boot
     // rehydrate before requests — avoids a plugin-ordering race.

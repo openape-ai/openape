@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useIdpAuth, useRoute, navigateTo } from '#imports'
 
-const { user, loading: authLoading, fetchUser } = useIdpAuth()
+const { user, loading: authLoading } = useIdpAuth()
 const route = useRoute()
 
 const agentId = computed(() => route.query.id as string || '')
@@ -19,10 +19,6 @@ const checkingAgents = ref(true)
 const config = useRuntimeConfig()
 const maxAgents = config.public.maxAgentsPerUser
 const limitReached = computed(() => agentCount.value >= maxAgents)
-
-onMounted(async () => {
-  await fetchUser()
-})
 
 watch(user, async (u) => {
   if (u?.email) {
@@ -65,20 +61,18 @@ async function handleEnroll() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-lg bg-gray-900 border border-gray-800">
-      <template #header>
-        <h1 class="text-2xl font-bold text-center text-white">
-          Agent Enrollment
-        </h1>
-      </template>
+  <IdpHero>
+    <h1 class="mb-6 text-center text-4xl font-extrabold sm:text-5xl">
+      Agent Enrollment
+    </h1>
 
-      <div v-if="authLoading || checkingAgents" class="text-center text-gray-400">
+    <UCard>
+      <div v-if="authLoading || checkingAgents" class="text-center text-muted">
         Loading...
       </div>
 
       <template v-else-if="!user">
-        <p class="text-center text-gray-400 mb-4">
+        <p class="mb-4 text-center text-muted">
           Du musst angemeldet sein, um einen Agent zu registrieren.
         </p>
         <UButton
@@ -152,5 +146,5 @@ async function handleEnroll() {
         </div>
       </template>
     </UCard>
-  </div>
+  </IdpHero>
 </template>

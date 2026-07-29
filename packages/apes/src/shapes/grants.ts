@@ -6,6 +6,7 @@ import { hostname } from 'node:os'
 import consola from 'consola'
 import { getGenericAuditLogPath } from '../config.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
+import { createWaitProgressReporter } from '../wait-progress.js'
 import {
   apiFetch,
   discoverEndpoints,
@@ -15,7 +16,7 @@ import {
   loadOrInstallAdapter,
   resolveCommand,
 } from '@openape/shapes'
-import type { ResolvedCommand } from '@openape/shapes'
+import type { ResolvedCommand, ResolvedCompound } from '@openape/shapes'
 
 function decodePayload(token: string): Record<string, unknown> {
   const [, payload] = token.split('.')
@@ -30,6 +31,34 @@ interface SimilarGrantsInfo {
   merged_details: Array<{ permission: string }>
 }
 
+/**
+ * POST /grants response. `approved_automatically` / `auto_approval_kind`
+ * are set when the IdP approved the grant at creation time (standing
+ * grants, pre-approval hooks like YOLO) — the async info block relies
+ * on them to report the real status (#1081).
+ */
+interface CreateShapesGrantResult {
+  id: string
+  status: string
+  approved_automatically?: boolean
+  auto_approval_kind?: string
+  similar_grants?: SimilarGrantsInfo
+}
+
+/**
+ * True when the IdP already decided this grant at creation time (standing
+ * grant, YOLO policy). Callers use it to skip everything that only makes
+ * sense while a human still has to act: the approve URL, the waiting
+ * protocol (#1081) and the "grant is waiting for you" notification (#1083).
+ *
+ * Unknown shapes read as pending — the safe direction is to tell the owner
+ * about a grant that turned out to be automatic, not to stay silent about
+ * one that is genuinely waiting.
+ */
+export function isAutoApproved(grant: { status?: string, approved_automatically?: boolean }): boolean {
+  return grant.approved_automatically === true || grant.status === 'approved'
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {
@@ -37,13 +66,13 @@ export async function createShapesGrant(
     approval: 'once' | 'timed' | 'always'
     reason?: string
   },
-): Promise<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }> {
+): Promise<CreateShapesGrantResult> {
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
   const requester = getRequesterIdentity()
   if (!requester) {
     throw new Error('No requester identity available. Run `apes login` first.')
   }
-  return apiFetch<{ id: string, status: string, similar_grants?: SimilarGrantsInfo }>(grantsEndpoint, {
+  return apiFetch<CreateShapesGrantResult>(grantsEndpoint, {
     method: 'POST',
     idp: params.idp,
     body: {
@@ -60,14 +89,23 @@ export async function createShapesGrant(
   })
 }
 
+/**
+ * Poll a grant until it leaves `pending` (max 5 minutes). While waiting,
+ * a short progress line is written to stderr every 15 seconds so callers
+ * (and their stall heuristics) can tell an ongoing wait from a hang —
+ * stdout stays untouched. Suppress the progress output with
+ * `APES_QUIET_WAIT=1` for quiet/non-interactive runs.
+ */
 export async function waitForGrantStatus(idp: string, grantId: string): Promise<'approved' | 'denied' | 'revoked'> {
   const grantsEndpoint = await getGrantsEndpoint(idp)
   const deadline = Date.now() + 300_000
+  const reportProgress = createWaitProgressReporter(grantId)
 
   while (Date.now() < deadline) {
     const grant = await apiFetch<{ status: 'pending' | 'approved' | 'denied' | 'revoked' }>(`${grantsEndpoint}/${grantId}`, { idp })
     if (grant.status === 'approved' || grant.status === 'denied' || grant.status === 'revoked')
       return grant.status
+    reportProgress()
     await new Promise(resolve => setTimeout(resolve, 3000))
   }
 
@@ -328,4 +366,143 @@ export async function findExistingGrant(
   }
 
   return null
+}
+
+/**
+ * True when `granted` covers every segment detail of a compound line —
+ * the coverage question for one grant carrying N per-segment details.
+ * Pure so it can be unit-tested without token plumbing.
+ */
+export function compoundCoveredByDetails(
+  granted: OpenApeCliAuthorizationDetail[],
+  compound: Pick<ResolvedCompound, 'segments'>,
+): boolean {
+  return compound.segments.every(seg =>
+    granted.some(detail => cliAuthorizationDetailCovers(detail, seg.detail)),
+  )
+}
+
+/**
+ * Compound sibling of `createShapesGrant`: ONE grant request whose
+ * authorization_details are the merged per-segment details and whose
+ * command/execution_context bind the ORIGINAL `bash -c` argv — after
+ * approval the line runs as a whole (pipes need the shell).
+ */
+export async function createCompoundGrant(
+  compound: ResolvedCompound,
+  params: {
+    idp: string
+    approval: 'once' | 'timed' | 'always'
+    reason?: string
+  },
+): Promise<CreateShapesGrantResult> {
+  const grantsEndpoint = await getGrantsEndpoint(params.idp)
+  const requester = getRequesterIdentity()
+  if (!requester) {
+    throw new Error('No requester identity available. Run `apes login` first.')
+  }
+  return apiFetch<CreateShapesGrantResult>(grantsEndpoint, {
+    method: 'POST',
+    idp: params.idp,
+    body: {
+      requester,
+      target_host: hostname(),
+      audience: compound.audience,
+      grant_type: params.approval,
+      command: compound.executionContext.argv,
+      reason: params.reason ?? `Compound: ${compound.innerLine.slice(0, 120)}`,
+      permissions: compound.permissions,
+      authorization_details: compound.details,
+      execution_context: compound.executionContext,
+    },
+  })
+}
+
+/**
+ * Reuse check for compound lines: an approved timed/always grant qualifies
+ * only when it covers EVERY segment. Adapter-digest pinning is skipped —
+ * a compound line spans several adapters, per-segment integrity lives in
+ * the segment resource chains instead.
+ */
+export async function findExistingCompoundGrant(
+  compound: ResolvedCompound,
+  idp: string,
+): Promise<string | null> {
+  const grantsEndpoint = await getGrantsEndpoint(idp)
+  const response = await apiFetch<{ data: OpenApeGrant[] }>(
+    `${grantsEndpoint}?status=approved`,
+    { idp },
+  )
+  const now = Math.floor(Date.now() / 1000)
+
+  for (const grant of response.data) {
+    const req = grant.request
+    if (req.grant_type === 'once')
+      continue
+    if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
+      continue
+    if (req.audience !== compound.audience)
+      continue
+    const cliDetails = (req.authorization_details ?? []).filter(
+      (d): d is OpenApeCliAuthorizationDetail => d.type === 'openape_cli',
+    )
+    if (cliDetails.length > 0 && compoundCoveredByDetails(cliDetails, compound))
+      return grant.id
+  }
+  return null
+}
+
+/**
+ * Compound sibling of `verifyAndConsume`: verifies the authz token covers
+ * every segment, binds once grants to the original argv, consumes — and
+ * leaves execution to the caller (the whole line must run through the
+ * shell, not per segment).
+ */
+export async function verifyAndConsumeCompound(token: string, compound: ResolvedCompound): Promise<void> {
+  const payload = decodePayload(token)
+  const issuer = String(payload.iss ?? '')
+  if (!issuer)
+    throw new Error('Grant token is missing issuer')
+
+  const discovery = await discoverEndpoints(issuer)
+  const jwksUri = String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const result = await verifyAuthzJWT(token, {
+    expectedIss: issuer,
+    expectedAud: compound.audience,
+    jwksUri,
+  })
+  if (!result.valid || !result.claims) {
+    throw new Error(result.error ?? 'Grant verification failed')
+  }
+
+  const claims = result.claims
+  const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
+  if (details.length === 0)
+    throw new Error('Grant carries no structured CLI details for a compound command')
+
+  if (!compoundCoveredByDetails(details, compound)) {
+    const missing = compound.segments.find(seg => !details.some(d => cliAuthorizationDetailCovers(d, seg.detail)))
+    throw new Error(`Grant does not cover required permission: ${missing?.permission ?? 'unknown segment'}`)
+  }
+
+  // Generic segments carry exact_command; a once grant binds the whole
+  // wrapped argv. Either way the binding target is the ORIGINAL line.
+  const exactRequired = compound.segments.some(seg => seg.detail.constraints?.exact_command)
+  const isOnce = claims.grant_type === 'once' || claims.approval === 'once'
+  if ((exactRequired || isOnce) && claims.execution_context?.argv_hash !== compound.executionContext.argv_hash) {
+    throw new Error('Granted command does not match current argv')
+  }
+
+  const grantsEndpoint = await getGrantsEndpoint(issuer)
+  const consume = await fetch(`${grantsEndpoint}/${claims.grant_id}/consume`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!consume.ok) {
+    throw new Error(`Consume failed: ${consume.status} ${consume.statusText}`)
+  }
+  const consumeResult = await consume.json() as { error?: string }
+  if (consumeResult.error) {
+    throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
+  }
 }

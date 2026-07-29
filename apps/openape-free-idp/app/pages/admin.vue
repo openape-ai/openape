@@ -4,8 +4,7 @@ import { useIdpAuth } from '#imports'
 
 useSeoMeta({ title: 'Domain-Admin' })
 
-const { user, fetchUser } = useIdpAuth()
-await fetchUser()
+const { user } = useIdpAuth()
 
 interface AdminStatus {
   email: string
@@ -226,16 +225,7 @@ watch(user, async (u) => {
 </script>
 
 <template>
-  <div class="px-4 py-8 max-w-3xl mx-auto">
-    <div class="mb-6 flex items-center justify-between">
-      <h1 class="text-2xl font-bold">
-        Domain-Admin
-      </h1>
-      <UButton to="/" variant="ghost" size="sm" icon="i-lucide-arrow-left">
-        Zurück
-      </UButton>
-    </div>
-
+  <IdpPage title="Domain admin" :subtitle="user?.email" back-to="/account" back-label="Account">
     <UAlert
       v-if="error"
       color="error"
@@ -354,7 +344,12 @@ watch(user, async (u) => {
             </p>
             <div class="flex gap-2">
               <code class="block flex-1 p-2 rounded bg-(--ui-bg-elevated) text-sm break-all">{{ lastIssuedTxtName }}</code>
-              <UButton variant="ghost" icon="i-lucide-copy" @click="copyToClipboard(lastIssuedTxtName!)" />
+              <UButton
+                variant="ghost"
+                icon="i-lucide-copy"
+                aria-label="TXT-Record-Namen kopieren"
+                @click="copyToClipboard(lastIssuedTxtName!)"
+              />
             </div>
           </div>
 
@@ -364,7 +359,12 @@ watch(user, async (u) => {
             </p>
             <div class="flex gap-2">
               <code class="block flex-1 p-2 rounded bg-(--ui-bg-elevated) text-sm break-all">{{ lastIssuedSecret }}</code>
-              <UButton variant="ghost" icon="i-lucide-copy" @click="copyToClipboard(lastIssuedSecret!)" />
+              <UButton
+                variant="ghost"
+                icon="i-lucide-copy"
+                aria-label="TXT-Record-Inhalt kopieren"
+                @click="copyToClipboard(lastIssuedSecret!)"
+              />
             </div>
           </div>
 
@@ -420,6 +420,7 @@ watch(user, async (u) => {
               color="error"
               size="xs"
               icon="i-lucide-trash-2"
+              :aria-label="`${entry.clientId} von der Allowlist entfernen`"
               @click="removeFromAllowlist(entry.clientId)"
             />
           </li>
@@ -483,11 +484,12 @@ watch(user, async (u) => {
               color="error"
               size="xs"
               icon="i-lucide-trash-2"
+              :aria-label="`${op.userEmail} als Operator entfernen`"
               @click="demoteOperator(op.userEmail)"
             />
           </li>
         </ul>
       </UCard>
     </template>
-  </div>
+  </IdpPage>
 </template>

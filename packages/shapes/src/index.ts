@@ -23,3 +23,5 @@ export type {
   ShapesAdapter,
   ShapesOperation,
 } from './types.js'
+export { resolveCompoundCommand } from './compound.js'
+export type { ResolvedCompound } from './compound.js'
