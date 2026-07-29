@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { Employee, TreeNode } from './OrgNode.vue'
 
 // The company's org chart = its employees (whole hierarchy), Owner at the root.
@@ -21,6 +21,17 @@ const roots = computed<TreeNode[]>(() => {
     .filter(e => !e.reportsTo || !byId.value[e.reportsTo])
     .map(e => build(e, seen))
 })
+
+// On a narrow screen the tree is wider than the viewport and scrolling starts at
+// the left edge — which opens the chart on an outer specialist with the Owner out
+// of sight. Start in the middle, where the Owner/Operator axis sits.
+const scroller = ref<HTMLElement | null>(null)
+function centerOnOwner() {
+  const el = scroller.value
+  if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
+}
+onMounted(centerOnOwner)
+watch(() => props.employees, () => nextTick(centerOnOwner))
 </script>
 
 <template>
@@ -32,7 +43,7 @@ const roots = computed<TreeNode[]>(() => {
       </UButton>
     </div>
 
-    <div v-if="employees.length" class="overflow-x-auto pb-4">
+    <div v-if="employees.length" ref="scroller" class="overflow-x-auto pb-4">
       <ul class="org-tree">
         <li>
           <div class="org-card" style="border-color: color-mix(in srgb, #f59e0b 40%, transparent); background: color-mix(in srgb, #f59e0b 6%, #18181b)">
