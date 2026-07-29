@@ -149,3 +149,42 @@ describe('webauthn register verify — security gate (#291)', () => {
     expect(saveCredentialMock).not.toHaveBeenCalled()
   })
 })
+
+describe('webauthn register verify — add-device tokens (#1097)', () => {
+  it('appends a credential for an add-device token despite existing passkeys', async () => {
+    // Minted by the authenticated /api/account/add-device-link endpoint,
+    // mailed to the account's own address, opened on the new device.
+    findRegUrlMock.mockResolvedValue({
+      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device',
+    })
+    findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
+    findCredentialsByUserMock.mockResolvedValue([
+      { credentialId: 'existing-cred-1', rpId: 'id.openape.ai' },
+    ])
+
+    const handler = await importHandler()
+    const result = await handler({} as any)
+
+    expect(result).toMatchObject({ ok: true, email: 'patrick@hofmann.eco' })
+    expect(createUserMock).not.toHaveBeenCalled() // user already exists
+    expect(saveCredentialMock).toHaveBeenCalled()
+    expect(consumeRegUrlMock).toHaveBeenCalledWith('reg-tok') // one-time
+    expect(updateSessionMock).toHaveBeenCalled() // new device is signed in
+  })
+
+  it('still REFUSES self-service tokens for accounts with passkeys', async () => {
+    // The #291 gate must stay closed for every other createdBy value —
+    // mailbox compromise alone must not graft a credential.
+    findRegUrlMock.mockResolvedValue({
+      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'self-service',
+    })
+    findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
+    findCredentialsByUserMock.mockResolvedValue([
+      { credentialId: 'existing-cred-1', rpId: 'id.openape.ai' },
+    ])
+
+    const handler = await importHandler()
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 409 })
+    expect(saveCredentialMock).not.toHaveBeenCalled()
+  })
+})
