@@ -557,6 +557,35 @@ describe('commands/run async default', () => {
       expect(out).not.toContain('EX_TEMPFAIL')
     })
 
+    it('auto-approved grant: reports approval without pending instructions', async () => {
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any)
+        .mockResolvedValueOnce({
+          id: 'grant-auto-test',
+          status: 'approved',
+          approved_automatically: true,
+          auto_approval_kind: 'yolo',
+        } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(
+        runCommand.run!({
+          rawArgs: ['run', 'escapes', 'mount-nfs'],
+          args: { shell: false, wait: false, approval: 'once' } as any,
+        } as any),
+        75,
+      )
+
+      const out = collectedLog()
+      const success = collectedSuccess()
+      expect(success).toContain('Grant grant-auto-test automatisch freigegeben (yolo)')
+      expect(out).toContain('apes grants run grant-auto-test')
+      expect(out).not.toContain('Approve:')
+      expect(out).not.toContain('For agents:')
+      expect(out).not.toContain('grant-approval?grant_id=grant-auto-test')
+    })
+
     it('APES_USER=agent: same as default', async () => {
       process.env.APES_USER = 'agent'
       await driveRun()
