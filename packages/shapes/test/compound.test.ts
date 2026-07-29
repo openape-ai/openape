@@ -4,8 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveCompoundCommand } from '../src/compound.js'
 
 // A minimal adapter in the cwd adapter dir so one segment resolves
-// structured while the other falls back to generic. The registry is
-// pointed at an unreachable URL so no network is touched.
+// structured while the other falls back to generic. The generic segment
+// uses a nonsense executable that can never exist in the live registry —
+// a real tool name (jq!) got auto-installed from the registry mid-test
+// the moment its adapter was published, flipping the expectation.
+// (Setting SHAPES_REGISTRY_URL in beforeAll is ineffective: registry.ts
+// reads it into a module-level const before test hooks run.)
 const ADAPTER_DIR = join(process.cwd(), '.openape', 'shapes', 'adapters')
 const ADAPTER_TOML = `schema = "openape-shapes/v1"
 
@@ -25,7 +29,6 @@ resource_chain = ["mail:*"]
 `
 
 beforeAll(() => {
-  process.env.SHAPES_REGISTRY_URL = 'http://127.0.0.1:1/unreachable.json'
   mkdirSync(ADAPTER_DIR, { recursive: true })
   writeFileSync(join(ADAPTER_DIR, 'mailx.toml'), ADAPTER_TOML)
 })
@@ -36,18 +39,18 @@ afterAll(() => {
 
 describe('resolveCompoundCommand', () => {
   it('resolves each pipe segment on its own — adapter where shaped, generic otherwise', async () => {
-    const result = await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list --json | jq -r ".[].id"'])
+    const result = await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list --json | zz-unshaped-xyz -r ".[].id"'])
     expect(result).not.toBeNull()
     expect(result!.segments).toHaveLength(2)
     expect(result!.segments[0]!.detail.cli_id).toBe('mailx')
     expect(result!.segments[0]!.detail.risk).toBe('low')
-    expect(result!.segments[1]!.detail.cli_id).toBe('jq')
+    expect(result!.segments[1]!.detail.cli_id).toBe('zz-unshaped-xyz')
     expect(result!.segments[1]!.detail.operation_id).toBe('_generic.exec')
     expect(result!.segments[1]!.detail.risk).toBe('high')
     expect(result!.details.length).toBeGreaterThanOrEqual(2)
     expect(result!.audience).toBe('shapes')
     // Execution context binds the ORIGINAL wrapped argv, not a segment.
-    expect(result!.executionContext.argv).toEqual(['bash', '-c', 'mailx-cli mail list --json | jq -r ".[].id"'])
+    expect(result!.executionContext.argv).toEqual(['bash', '-c', 'mailx-cli mail list --json | zz-unshaped-xyz -r ".[].id"'])
     expect(result!.executionContext.argv_hash).toBeTruthy()
   })
 
@@ -61,7 +64,7 @@ describe('resolveCompoundCommand', () => {
   })
 
   it('returns null when any segment contains command substitution (fail closed)', async () => {
-    expect(await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list $(cat /tmp/x) | jq .'])).toBeNull()
+    expect(await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list $(cat /tmp/x) | zz-unshaped-xyz .'])).toBeNull()
   })
 
   it('returns null for non bash -c argv shapes', async () => {
@@ -70,7 +73,7 @@ describe('resolveCompoundCommand', () => {
   })
 
   it('returns null when a segment carries redirections (unmodelled semantics)', async () => {
-    expect(await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list 2>/dev/null | jq .'])).toBeNull()
+    expect(await resolveCompoundCommand(['bash', '-c', 'mailx-cli mail list 2>/dev/null | zz-unshaped-xyz .'])).toBeNull()
   })
 
   it('returns null for a single-segment line (the non-compound path owns it)', async () => {
