@@ -178,11 +178,22 @@ function getAsyncExitCode(): number {
  * Both modes keep the same core Approve / Status / Execute lines so
  * external scripts that grep for those labels keep working.
  */
-function printPendingGrantInfo(grant: { id: string }, idp: string): void {
+function printPendingGrantInfo(
+  grant: { id: string, status?: string, approved_automatically?: boolean, auto_approval_kind?: string },
+  idp: string,
+): void {
   const mode = getUserMode()
+  const executeCmd = `apes grants run ${grant.id}`
+
+  if (grant.approved_automatically === true || grant.status === 'approved') {
+    const kind = grant.auto_approval_kind ? ` (${grant.auto_approval_kind})` : ''
+    consola.success(`Grant ${grant.id} automatisch freigegeben${kind}`)
+    console.log(`  Ausführen mit: ${executeCmd}`)
+    return
+  }
+
   const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
   const statusCmd = `apes grants status ${grant.id}`
-  const executeCmd = `apes grants run ${grant.id}`
 
   if (mode === 'human') {
     consola.success(`Grant ${grant.id} created — awaiting your approval`)
@@ -372,7 +383,12 @@ async function runShellMode(
   // No session grant found — request one. Default: 'once', but the approver
   // can upgrade to 'timed' or 'always' during approval to enable reuse.
   consola.info(`Requesting ape-shell session grant on ${targetHost}`)
-  const grant = await apiFetch<{ id: string, status: string }>(grantsUrl, {
+  const grant = await apiFetch<{
+    id: string
+    status: string
+    approved_automatically?: boolean
+    auto_approval_kind?: string
+  }>(grantsUrl, {
     method: 'POST',
     body: {
       requester: auth.email,
