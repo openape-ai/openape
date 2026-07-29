@@ -1,5 +1,14 @@
 # @openape/protocol-conformance
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [0140dc3]
+- Updated dependencies [42b3257]
+  - @openape/core@0.20.0
+  - @openape/grants@0.13.0
+
 ## 0.0.5
 
 ### Patch Changes
