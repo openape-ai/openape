@@ -1,4 +1,4 @@
-import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addServerImportsDir, extendPages } from '@nuxt/kit'
+import { addServerPlugin, defineNuxtModule, createResolver, addServerHandler, addImportsDir, addComponentsDir, addServerImportsDir, extendPages } from '@nuxt/kit'
 import { defu } from 'defu'
 
 export interface GrantsOptions {
@@ -145,6 +145,10 @@ export default defineNuxtModule<ModuleOptions>({
 
     // Register composables (auto-imported by Vue)
     addImportsDir(resolve('./runtime/composables'))
+
+    // Register components (auto-imported by Vue). Prefixed so a host app's
+    // own components can never collide with ours.
+    addComponentsDir({ path: resolve('./runtime/components'), prefix: 'Idp' })
 
     // Security headers
     // routeRules are build-time config, so we read the env var directly

@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { navigateTo } from '#imports'
+import { navigateTo, useHead } from '#imports'
 import { useIdpAuth } from '../composables/useIdpAuth'
+
+useHead({ title: 'Agents' })
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const agents = ref([])
@@ -87,61 +89,48 @@ const bulkTotalCreated = computed(() =>
 </script>
 
 <template>
-  <div class="min-h-screen py-8 px-4">
-    <div class="max-w-4xl mx-auto">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">
-            Agents
-          </h1>
-          <p v-if="user" class="text-sm text-muted">
-            {{ user.email }}
+  <IdpPage title="Agents" :subtitle="user?.email" back-to="/account" back-label="Account">
+    <template #actions>
+      <UButton
+        v-if="agents.length > 0"
+        color="primary"
+        variant="soft"
+        size="sm"
+        icon="i-lucide-shield-check"
+        @click="openBulk"
+      >
+        Apply safe commands
+      </UButton>
+    </template>
+
+    <div v-if="authLoading || loading" class="text-center text-muted mt-10">
+      Loading…
+    </div>
+
+    <UAlert v-else-if="error" color="error" :title="error" class="mb-4" />
+
+    <div v-else-if="agents.length === 0" class="text-center mt-10 space-y-3">
+      <p class="text-muted">
+        No agents yet.
+      </p>
+      <p class="text-sm text-muted">
+        Enroll one with <code class="bg-elevated px-1 rounded">apes enroll</code>
+        or see the <a href="https://docs.openape.at" class="text-primary underline" target="_blank" rel="noreferrer">docs</a>.
+      </p>
+    </div>
+
+    <template v-else>
+      <UCard :ui="{ body: 'p-0' }">
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            Your agents
+          </h2>
+          <p class="text-sm text-muted mt-1">
+            Grant activity per agent. Click an agent to manage standing grants.
           </p>
-        </div>
-        <div class="flex gap-2">
-          <UButton
-            v-if="agents.length > 0"
-            color="primary"
-            variant="soft"
-            size="sm"
-            icon="i-lucide-shield-check"
-            @click="openBulk"
-          >
-            Apply safe commands
-          </UButton>
-          <UButton to="/account" color="neutral" variant="soft" size="sm">
-            Account
-          </UButton>
-        </div>
-      </div>
+        </template>
 
-      <div v-if="authLoading || loading" class="text-center text-muted mt-10">
-        Loading…
-      </div>
-
-      <UAlert v-else-if="error" color="error" :title="error" class="mb-4" />
-
-      <div v-else-if="agents.length === 0" class="text-center mt-10 space-y-3">
-        <p class="text-muted">
-          No agents yet.
-        </p>
-        <p class="text-sm text-muted">
-          Enroll one with <code class="bg-gray-800 px-1 rounded">apes enroll</code>
-          or see the <a href="https://docs.openape.at" class="text-primary underline" target="_blank" rel="noreferrer">docs</a>.
-        </p>
-      </div>
-
-      <template v-else>
-        <UCard :ui="{ body: 'p-0' }">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              Your agents
-            </h2>
-            <p class="text-sm text-muted mt-1">
-              Grant activity per agent. Click an agent to manage standing grants.
-            </p>
-          </template>
-
+        <div class="overflow-x-auto">
           <table class="w-full">
             <thead class="border-b border-(--ui-border)">
               <tr>
@@ -209,9 +198,9 @@ const bulkTotalCreated = computed(() =>
               </tr>
             </tbody>
           </table>
-        </UCard>
-      </template>
-    </div>
+        </div>
+      </UCard>
+    </template>
 
     <UModal v-model:open="bulkOpen" :dismissible="!bulkBusy">
       <template #content>
@@ -279,5 +268,5 @@ const bulkTotalCreated = computed(() =>
         </UCard>
       </template>
     </UModal>
-  </div>
+  </IdpPage>
 </template>
