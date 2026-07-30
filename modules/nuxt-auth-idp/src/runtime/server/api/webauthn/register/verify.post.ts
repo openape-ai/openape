@@ -57,14 +57,26 @@ export default defineEventHandler(async (event) => {
   // lost everything goes through the new 72h-mail-hold flow specified
   // in #297.
   //
-  // The one exception (#1097): tokens with createdBy 'add-device' may
-  // append to an account with existing passkeys. They are minted
+  // The gate counts credentials PER RP (#1103), matching how options/
+  // login/list scope them: a passkey on another tenant domain does not
+  // close first-time enrolment on this one — the mailbox is the accepted
+  // trust anchor for every RP's first credential. Legacy rows without an
+  // rpId predate tenant scoping and count on every RP (conservative).
+  //
+  // The one exception (#1097): add-device tokens may append to an
+  // account with existing passkeys on this RP. They are minted
   // exclusively by an authenticated endpoint and mailed to the
   // account's own address — the trust anchor is the session that
-  // requested the link, not the mailbox.
-  if (existingUser && regUrl.createdBy !== 'add-device') {
-    const existingCredentials = await credentialStore.findByUser(regUrl.email)
-    if (existingCredentials.length > 0) {
+  // requested the link, not the mailbox. The token is bound to the RP
+  // it was minted on (createdBy 'add-device:<rpID>'): an attacker must
+  // not parlay a fresh first-time enrolment on tenant B into an
+  // authenticated add-device link that grafts onto the victim's
+  // passkey-protected account on tenant A.
+  const isAddDeviceForThisRp = regUrl.createdBy === `add-device:${rpConfig.rpID}`
+  if (existingUser && !isAddDeviceForThisRp) {
+    const allCredentials = await credentialStore.findByUser(regUrl.email)
+    const rpCredentials = allCredentials.filter(c => !c.rpId || c.rpId === rpConfig.rpID)
+    if (rpCredentials.length > 0) {
       throw createProblemError({
         status: 409,
         title: 'Account already has passkeys — sign in to add a new device',
