@@ -683,3 +683,56 @@ describe('explainYoloMiss', () => {
     expect(r.reason).toBe('would-have-approved')
   })
 })
+
+describe('diagnosis agrees with the decision (the whole point)', () => {
+  // The explanation is only trustworthy while it cannot contradict the
+  // decision. This walks a matrix of policies × command lines and asserts the
+  // equivalence in both directions:
+  //   decision blocked  ⟺  reason !== 'would-have-approved'
+  // If this ever fails, the card is lying about the decision.
+  const policies = [
+    { label: 'allow-list, mail verbs', mode: 'allow-list', allowPatterns: ['o365-cli mail list*', 'o365-cli mail read *', 'jq *'], denyPatterns: [] },
+    { label: 'allow-list + deny', mode: 'allow-list', allowPatterns: ['o365-cli *'], denyPatterns: ['*mail send*', '*rm -rf*'] },
+    { label: 'allow-list, risk only', mode: 'allow-list', allowPatterns: [], denyPatterns: [], denyRiskThreshold: 'medium' },
+    { label: 'deny-list', mode: 'deny-list', allowPatterns: [], denyPatterns: ['*rm -rf*', '*mail send*'] },
+    { label: 'deny-list, risk only', mode: 'deny-list', allowPatterns: [], denyPatterns: [], denyRiskThreshold: 'low' },
+  ]
+  const lines = [
+    'o365-cli mail list --json',
+    'o365-cli mail send --to x@y.z',
+    'o365-cli mail list --json | jq -r ".[].id"',
+    'o365-cli mail list && rm -rf ~',
+    'o365-cli mail read $(cat /tmp/id)',
+    'jq -r ".x"',
+    'something-unknown --flag',
+  ]
+  const risks = [null, 'low', 'high'] as const
+
+  for (const pol of policies) {
+    for (const line of lines) {
+      for (const risk of risks) {
+        it(`${pol.label} / ${line.slice(0, 34)} / risk=${risk}`, () => {
+          const policy = {
+            agentEmail: 'op@x',
+            audience: 'ape-shell',
+            enabledBy: 'owner@x',
+            denyRiskThreshold: null,
+            allowPatterns: [],
+            denyPatterns: [],
+            enabledAt: 1,
+            expiresAt: null,
+            updatedAt: 1,
+            ...pol,
+          } as never
+          const ctx = { policy, target: line, resolvedRisk: risk } as never
+          const decided = evaluateYoloPolicy(ctx)
+          const explained = explainYoloMiss(ctx)
+          if (decided === null)
+            expect(explained.reason).not.toBe('would-have-approved')
+          else
+            expect(explained.reason).toBe('would-have-approved')
+        })
+      }
+    }
+  }
+})

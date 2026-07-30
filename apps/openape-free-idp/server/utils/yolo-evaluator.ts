@@ -295,7 +295,13 @@ export function explainYoloMiss(ctx: YoloDecisionContext): YoloMissExplanation {
     }
     const allowed = segments.filter(segmentAllowed)
     const unmatched = segments.filter(seg => !segmentAllowed(seg))
-    if (unmatched.length > 0) {
+    // Mirror the DECISION's order: patterns first, then the risk threshold.
+    // Reporting 'segments-not-allowed' before checking risk would claim a
+    // block the evaluator does not perform — caught by the equivalence
+    // matrix below, which is exactly why that test exists.
+    const riskApproves = ctx.resolvedRisk != null && p.denyRiskThreshold != null
+      && RISK_ORDER[ctx.resolvedRisk] <= RISK_ORDER[p.denyRiskThreshold]
+    if (unmatched.length > 0 && !riskApproves) {
       return {
         ...base,
         reason: 'segments-not-allowed',
@@ -304,7 +310,7 @@ export function explainYoloMiss(ctx: YoloDecisionContext): YoloMissExplanation {
         substitutionSegments: unmatched.filter(containsCommandSubstitution),
       }
     }
-    // Every segment allowed and no deny hit → the decision approves too.
+    // Allowed by patterns or by risk, and no deny hit → the decision approves.
     return { ...base, reason: 'would-have-approved' }
   }
 
