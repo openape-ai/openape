@@ -1,0 +1,96 @@
+#!/bin/sh
+# fj — schmaler Forgejo-Wrapper fuer Operatoren. Benannte, EINFACHE Verben
+# statt curl+jq-Einzeiler mit $( )-Substitution: solche Einzeiler werden vom
+# YOLO-Evaluator fail-closed behandelt und landen als Karte beim Owner
+# (Befund 30.07.: 16 von 31 Karten waren genau das). Ein fj-Aufruf ist EIN
+# Kommando ohne Shell-Konstrukte und damit pattern-faehig; die Substitution
+# lebt hier drin, wo der Evaluator sie nicht bewerten muss.
+#
+# ci --wait pollt INTERN: ein Grant statt sechs Poll-Karten.
+set -eu
+
+REPO="${FJ_REPO:-openape-ai/openape}"
+BASE="${FJ_BASE:-https://git.openape.ai}/api/v1/repos/$REPO"
+TOK="${FORGEJO_TOKEN:?FORGEJO_TOKEN fehlt (org vars)}"
+
+api() { curl -fsS --max-time 30 -H "authorization: token $TOK" "$@"; }
+
+USAGE='usage: fj issues | issue <nr> | prs | pr <nr> | ci <nr|sha> [--wait] | comment <nr> <datei> | assign <nr> <user> | unassign <nr>'
+cmd="${1:?$USAGE}"; shift || true
+
+case "$cmd" in
+  issues)
+    api "$BASE/issues?state=open&type=issues&limit=50" | python3 -c '
+import json, sys
+for i in json.load(sys.stdin):
+    a = (i.get("assignee") or {}).get("login") or "-"
+    print("#%s\t%s\t%s" % (i["number"], a, i["title"]))' ;;
+  issue)
+    n="${1:?issue-nr}"
+    api "$BASE/issues/$n" | python3 -c '
+import json, sys
+i = json.load(sys.stdin)
+print(json.dumps({
+    "number": i["number"], "title": i["title"], "state": i["state"],
+    "assignees": [a["login"] for a in (i.get("assignees") or [])],
+    "labels": [l["name"] for l in (i.get("labels") or [])],
+    "body": i.get("body") or "",
+}, ensure_ascii=False, indent=1))' ;;
+  prs)
+    api "$BASE/pulls?state=open&limit=50" | python3 -c '
+import json, sys
+for p in json.load(sys.stdin):
+    print("#%s\t%s\t%s" % (p["number"], p["head"]["ref"], p["title"]))' ;;
+  pr)
+    n="${1:?pr-nr}"
+    api "$BASE/pulls/$n" | python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+print(json.dumps({
+    "number": p["number"], "title": p["title"], "state": p["state"],
+    "merged": p["merged"], "mergeable": p["mergeable"],
+    "head": {"ref": p["head"]["ref"], "sha": p["head"]["sha"]},
+    "base": p["base"]["ref"], "body": p.get("body") or "",
+}, ensure_ascii=False, indent=1))' ;;
+  ci)
+    ref="${1:?pr-nr oder sha}"; shift || true
+    wait_flag="${1:-}"
+    case "$ref" in
+      *[!0-9]*) sha="$ref" ;;
+      *) sha=$(api "$BASE/pulls/$ref" | python3 -c 'import json,sys;print(json.load(sys.stdin)["head"]["sha"])') ;;
+    esac
+    tries=1
+    [ "$wait_flag" = "--wait" ] && tries=40   # 40 x 30s = max 20 min
+    i=0
+    while [ "$i" -lt "$tries" ]; do
+      i=$((i + 1))
+      out=$(api "$BASE/commits/$sha/status" | python3 -c '
+import json, sys
+s = json.load(sys.stdin)
+parts = ", ".join("%s=%s" % (st["context"].split(" /")[0], st["status"]) for st in s.get("statuses") or [])
+print("%s\t%s" % (s["state"], parts))')
+      state="${out%%	*}"
+      printf '%s\n' "$out"
+      [ "$state" = "pending" ] || break
+      [ "$i" -lt "$tries" ] && sleep 30
+    done ;;
+  comment)
+    n="${1:?issue/pr-nr}"; f="${2:?datei mit dem kommentar-text}"
+    python3 -c '
+import json, sys
+print(json.dumps({"body": open(sys.argv[1]).read()}))' "$f" \
+      | api -X POST -H 'content-type: application/json' --data-binary @- "$BASE/issues/$n/comments" \
+      | python3 -c 'import json,sys;c=json.load(sys.stdin);print(c["html_url"])' ;;
+  assign)
+    n="${1:?issue-nr}"; u="${2:?username}"
+    printf '{"assignees":["%s"]}' "$u" \
+      | api -X PATCH -H 'content-type: application/json' --data-binary @- "$BASE/issues/$n" \
+      | python3 -c 'import json,sys;i=json.load(sys.stdin);print([a["login"] for a in (i.get("assignees") or [])])' ;;
+  unassign)
+    n="${1:?issue-nr}"
+    printf '{"assignees":[]}' \
+      | api -X PATCH -H 'content-type: application/json' --data-binary @- "$BASE/issues/$n" \
+      | python3 -c 'import json,sys;i=json.load(sys.stdin);print([a["login"] for a in (i.get("assignees") or [])])' ;;
+  *)
+    printf '%s\n' "$USAGE" >&2; exit 2 ;;
+esac

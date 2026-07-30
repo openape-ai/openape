@@ -51,6 +51,14 @@ oder die Daten einer anderen Firma. Fehlt ein passender Skill oder das Konto, fr
 raten. Nur wenn ein Werkzeug wirklich noetig ist - sonst direkt antworten. Erfinde nie
 Werkzeug-Ergebnisse.
 
+SHELL-STIL (Pflicht fuer ape-shell-Kommandos): Kommandos sind EINFACH - EIN Werkzeug-Aufruf pro
+Kommando. KEINE $( )-Substitution, keine for/while-Schleifen, keine Heredocs, keine Pipes um
+Plumbing-Aufrufe (cockpit-agent.sh, claude-log). Solche Konstrukte werden NIE auto-approved -
+jeder Versuch erzeugt nur eine wartende Karte beim Owner und dein Ergebnis kommt trotzdem nicht.
+Fuer Forgejo nutze fj: fj issues | fj issue <nr> | fj prs | fj pr <nr> | fj ci <nr|sha> [--wait]
+(pollt intern) | fj comment <nr> <datei> | fj assign <nr> <user>. Fuer Wiederholung gilt: erst die
+Liste holen (ein Kommando), dann PRO Element ein einzelnes Kommando absetzen.
+
 MEMORY: Zeigt der System-Prompt "Verfuegbares Memory" mit einer id, hol den Inhalt bei Bedarf mit
 bash "'"$CA"'" memory <id> und antworte geerdet darin. Nur abrufen, wenn die Anfrage es wirklich braucht.
 
@@ -355,7 +363,10 @@ yolo_sync() { # $1 = allowed.txt, $2 = orgId
   # `bash "<pfad>" *`): ein `"` im Muster ueberlebt den Weg durch Shell und CLI nicht
   # zuverlaessig — Fund 29.07., die Policy kam als einziges Muster `bash` an und der
   # Loop stand.
-  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *"
+  # fj komplett, inkl. comment/assign: Forgejo-Kommentare/Assignments sind das
+  # normale Arbeitsprodukt des Loops im eigenen Repo — kein Mail-Send-Fall
+  # (Owner-Freigabe Patrick 30.07., Plan 2026-07-30-recurring-grants-ux.md).
+  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *,fj issues,fj issue *,fj prs,fj pr *,fj ci *,fj comment *,fj assign *,fj unassign *"
   local wildcard=0
   grep -qx '\*' "$1" 2>/dev/null && wildcard=1
   if [ "$wildcard" = 1 ]; then
@@ -557,7 +568,7 @@ services_loop() {
 # NIE selbst ueberschreiben: der laufende Stand ist im Zweifel der bessere.
 drift_check() {
   local base="https://troop.openape.ai/worker" f local_sum remote_sum drifted=""
-  for f in worker.sh cockpit-agent.sh parse.py progress.py codex_progress.py clean.py; do
+  for f in worker.sh cockpit-agent.sh parse.py progress.py codex_progress.py clean.py fj; do
     [ -f "$DIR/$f" ] || continue
     local_sum=$(shasum -a 256 "$DIR/$f" 2>/dev/null | cut -d' ' -f1)
     remote_sum=$(curl -fsS --max-time 10 "$base/$f" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
@@ -572,7 +583,21 @@ drift_check() {
   fi
 }
 
+# fj nachziehen, wenn es fehlt: eine FEHLENDE Datei ist kein Overwrite (die
+# Drift-Regel "nie selbst ueberschreiben" bleibt unberuehrt). Symlink nach
+# ~/.local/bin, damit der Operator schlicht `fj ...` tippen kann (wie claude-log).
+ensure_fj() {
+  if [ ! -f "$DIR/fj" ]; then
+    curl -fsS --max-time 10 "https://troop.openape.ai/worker/fj" -o "$DIR/fj" 2>/dev/null || return 0
+    chmod +x "$DIR/fj"
+    log "[fj] installiert ($DIR/fj)"
+  fi
+  mkdir -p "$HOME/.local/bin"
+  [ -e "$HOME/.local/bin/fj" ] || ln -s "$DIR/fj" "$HOME/.local/bin/fj"
+}
+
 log "openape-worker start (backend=$BACKEND, cockpit ‖ services, stall=${STALL_SECS}s, max=${MAX_SECS}s)"
+ensure_fj
 drift_check
 rm -rf "$DIR/scratch"; mkdir -p "$DIR/scratch"
 heartbeat_loop & HPID=$!
