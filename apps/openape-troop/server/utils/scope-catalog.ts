@@ -57,6 +57,7 @@ export const TROOP_SCOPES: TroopScope[] = [
       'POST /api/cockpit/agent/tasks/next',
       'POST /api/cockpit/agent/tasks/resolve',
       'POST /api/cockpit/agent/heartbeat',
+      'POST /api/cockpit/agent/yolo-sync',
       'POST /api/cockpit/agent/automations',
       'GET /api/cockpit/agent/doctor',
       'POST /api/cockpit/agent/files',
