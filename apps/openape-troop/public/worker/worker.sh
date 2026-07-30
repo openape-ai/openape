@@ -363,10 +363,10 @@ yolo_sync() { # $1 = allowed.txt, $2 = orgId
   # `bash "<pfad>" *`): ein `"` im Muster ueberlebt den Weg durch Shell und CLI nicht
   # zuverlaessig — Fund 29.07., die Policy kam als einziges Muster `bash` an und der
   # Loop stand.
-  # fj: nur die LESE-Verben (issues/issue/prs/pr/ci) — comment/assign wirken
-  # nach aussen und bleiben Owner-gated, bis Patrick sie freigibt (Plan
-  # 2026-07-30-recurring-grants-ux.md, offene Entscheidung zu Hebel B).
-  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *,fj issues,fj issue *,fj prs,fj pr *,fj ci *"
+  # fj komplett, inkl. comment/assign: Forgejo-Kommentare/Assignments sind das
+  # normale Arbeitsprodukt des Loops im eigenen Repo — kein Mail-Send-Fall
+  # (Owner-Freigabe Patrick 30.07., Plan 2026-07-30-recurring-grants-ux.md).
+  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *,fj issues,fj issue *,fj prs,fj pr *,fj ci *,fj comment *,fj assign *,fj unassign *"
   local wildcard=0
   grep -qx '\*' "$1" 2>/dev/null && wildcard=1
   if [ "$wildcard" = 1 ]; then
