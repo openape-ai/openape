@@ -8,7 +8,7 @@ export type ChatRole = 'user' | 'assistant'
 
 // An open question rendered as chips in the chat; `answered` flips when the
 // owner picks (or the task dies) so a reload never shows live chips on a dead ask.
-export interface ChatMeta { taskId: string, options: string[], answered?: boolean, progress?: boolean, progressFirst?: boolean }
+export interface ChatMeta { taskId: string, options: string[], answered?: boolean, progress?: boolean }
 
 const PROGRESS_INTERVAL_MS = 60_000
 
@@ -25,15 +25,20 @@ export async function saveChatMessage(orgId: string, owner: string, role: ChatRo
 async function notifyAssistant(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta) {
   // A Operator answer → notify the owner's installed PWA / browsers (fire-and-forget,
   // never blocks or fails the save). The SW suppresses it if a tab is focused.
-  if (role === 'assistant' && (!meta?.progress || meta.progressFirst)) {
+  //
+  // ONLY the finished answer pushes. Progress rows are status noise ("🧠 Operator
+  // denkt …") — pushing the first one too meant two notifications per task, the
+  // first one carrying nothing the owner can act on. Progress stays visible in
+  // the chat itself, it just doesn't ring the phone.
+  if (role === 'assistant' && !meta?.progress) {
     const org = await useDb().select({ name: organizations.name }).from(organizations).where(and(eq(organizations.id, orgId), eq(organizations.ownerEmail, owner))).get()
     const orgName = org?.name ?? orgId
     void pushToOwner(owner, { title: orgName, body: `Troop-Chat · ${content.slice(0, 120)}`, url: '/chat' }).catch(() => {})
   }
 }
 
-// Persist at most one live progress note per task and minute. The first note
-// may notify the owner; later notes are intentionally quiet.
+// Persist at most one live progress note per task and minute. Progress never
+// pushes — it renders in the chat, the phone stays quiet until the answer.
 export async function saveProgressChatMessage(orgId: string, owner: string, taskId: string, content: string) {
   const now = Date.now()
   const db = useDb()
@@ -46,8 +51,7 @@ export async function saveProgressChatMessage(orgId: string, owner: string, task
     })
     const last = progressRows[0]?.createdAt ?? 0
     if (now - last < PROGRESS_INTERVAL_MS) return null
-    const first = progressRows.length === 0
-    const meta = { taskId, options: [], progress: true, progressFirst: first } as ChatMeta
+    const meta = { taskId, options: [], progress: true } as ChatMeta
     const row = { id: randomUUID(), ownerEmail: owner, orgId, role: 'assistant' as const, content, meta, files: null, createdAt: now }
     await tx.insert(cockpitChatMessages).values(row)
     return { row, meta }
