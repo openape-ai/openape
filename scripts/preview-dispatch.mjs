@@ -30,6 +30,14 @@ const APPS = [
   // org retired (merged into troop, B0) — no preview target.
 ]
 
+// Retired apps: keine neuen Previews mehr, aber der Teardown muss sie weiter
+// abräumen. Vorfall 30.07.: #792 nahm `org` am 18.06. aus APPS — die Previews
+// der noch offenen PRs #793/#835 wurden beim Schliessen nie abgeräumt und
+// liefen sechs Wochen weiter, weil der Teardown nur über APPS iterierte.
+// Eine App hier eintragen statt sie spurlos zu löschen; ein Eintrag darf
+// verschwinden, sobald kein PR von vor der Stilllegung mehr offen ist.
+const RETIRED_UUIDS = ['sf7j3jqd5u8wavamqqtx5g4z']
+
 // A change here affects every app's preview image (shared workspace deps and
 // the packaging Dockerfile all previews are built with).
 const SHARED_PREFIXES = ['packages/', 'modules/']
@@ -95,8 +103,13 @@ if (!pr) {
 
 if (action === 'closed') {
   // Teardown for every app — apps without a preview answer 404, which is fine.
+  // Retired apps are included: sonst überlebt ihr Preview das Schliessen des PRs.
+  const targets = [
+    ...APPS.map(a => ({ name: a.name, uuid: a.uuid })),
+    ...RETIRED_UUIDS.map(uuid => ({ name: `retired:${uuid.slice(0, 8)}`, uuid })),
+  ]
   let failed = false
-  for (const app of APPS) {
+  for (const app of targets) {
     const { status, text } = await coolify('DELETE', `/applications/${app.uuid}/previews/${pr}`)
     const ok = status === 200 || status === 404
     console.log(`[preview] ${app.name}: teardown HTTP ${status}${ok ? '' : ` — ${text.slice(0, 200)}`}`)
