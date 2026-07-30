@@ -512,7 +512,31 @@ services_loop() {
   done
 }
 
+# Drift-Check gegen die servierte Fassung (troop.openape.ai/worker/ ist das
+# deployte apps/openape-troop/public/worker/). Beide Richtungen sind relevant:
+# lokal abweichend heisst entweder "Fixes leben nur auf dieser Maschine" —
+# Vorfall 30.07.: 474 Zeilen ueber vier Dateien, ein Update haette sie
+# stillschweigend zurueckgedreht — oder "Update verfuegbar". Nur melden,
+# NIE selbst ueberschreiben: der laufende Stand ist im Zweifel der bessere.
+drift_check() {
+  local base="https://troop.openape.ai/worker" f local_sum remote_sum drifted=""
+  for f in worker.sh cockpit-agent.sh parse.py progress.py codex_progress.py clean.py; do
+    [ -f "$DIR/$f" ] || continue
+    local_sum=$(shasum -a 256 "$DIR/$f" 2>/dev/null | cut -d' ' -f1)
+    remote_sum=$(curl -fsS --max-time 10 "$base/$f" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    # Kein Netz / 404: nichts behaupten, was wir nicht wissen.
+    [ -n "$remote_sum" ] && [ "$remote_sum" != "$(printf '' | shasum -a 256 | cut -d' ' -f1)" ] || continue
+    [ "$local_sum" = "$remote_sum" ] || drifted="$drifted $f"
+  done
+  if [ -n "$drifted" ]; then
+    log "[drift] installiert != serviert:$drifted — lokale Fixes nicht committet ODER Update verfuegbar. Vergleich: diff <(curl -s $base/<datei>) $DIR/<datei>"
+  else
+    log "[drift] installierte Dateien == serviert"
+  fi
+}
+
 log "openape-worker start (backend=$BACKEND, cockpit ‖ services, stall=${STALL_SECS}s, max=${MAX_SECS}s)"
+drift_check
 rm -rf "$DIR/scratch"; mkdir -p "$DIR/scratch"
 heartbeat_loop & HPID=$!
 cockpit_loop & CPID=$!
