@@ -78,6 +78,22 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
   // A line consisting only of operators has nothing to judge → human decides.
   if (segments.length === 0) return null
 
+  // DENY WINS, IN BOTH MODES. A deny hit is a veto — no allow-pattern and no
+  // risk threshold can overrule it. Before 2026-07-30 denyPatterns were
+  // stored-but-inert in allow-list mode, which made the mode decide whether a
+  // safety rule applied at all: a role handing out a whole CLI (`o365-cli *`)
+  // auto-approved `mail send`, even though `*mail send*` sat right there in
+  // the deny list. One asymmetry nobody could see without reading this file.
+  const denyPatterns = p.denyPatterns || []
+  const denyHit = (text: string) => denyPatterns.some(pattern => matchesGlob(text, pattern))
+  if (denyPatterns.length > 0) {
+    // Full line, every segment, and the pre-unwrap outer form — a deny rule
+    // must not be dodgeable by chaining or by the bash -c wrapper.
+    if (denyHit(target)) return null
+    if (segments.some(denyHit)) return null
+    if (ctx.outerTarget && denyHit(ctx.outerTarget)) return null
+  }
+
   // Risk-threshold semantic is SYMMETRIC across modes:
   //   "alles bis zu diesem Level wird auto-approved, alles darüber wartet"
   // - deny-list (default allow): risk > threshold → don't approve.
@@ -133,17 +149,7 @@ export function evaluateYoloPolicy(ctx: YoloDecisionContext): YoloDecision | nul
     // Risk > threshold → don't approve.
     if (RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) return null
   }
-  // A deny hit in ANY segment blocks — prefixing a harmless command must not
-  // hide it. The full line is still checked too so cross-segment patterns
-  // operators wrote against the old joined-line behavior keep blocking.
-  const denyPatterns = p.denyPatterns || []
-  for (const pattern of denyPatterns) {
-    if (matchesGlob(target, pattern)) return null
-    if (segments.some(seg => matchesGlob(seg, pattern))) return null
-    // Outer-form compatibility: deny rules written before the bash -c unwrap
-    // matched the joined wrapper line. Keep honoring them.
-    if (ctx.outerTarget && matchesGlob(ctx.outerTarget, pattern)) return null
-  }
+  // The deny-pattern veto already ran above, for both modes.
   // Harder than the usual default-allow semantics on purpose: a blocklist
   // cannot see into a substitution — `echo $(rm -rf ~)` matches no `*rm*`
   // pattern even though the shell runs the nested command. Fail closed to
