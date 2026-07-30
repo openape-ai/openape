@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# Reactive service-agent helper. Auth = this Mac's apes DDISA identity.
-# Auto-auth: send the raw apes token; on 401 exchange it for an SP-scoped token
-# (cached per-target, 30-day) and retry. Each target gets its own token cache.
+# Reactive service-agent helper.
+#
+# Auth (#1033, Drei-Stufen-Modell):
+#   troop-Cockpit  -> DELEGIERTE Operator-Identität (operator.env): ed25519
+#                     client_assertion -> IdP /token (delegation_grant) ->
+#                     troop /api/cli/exchange -> 15-min-Token mit
+#                     troop:cockpit-serve. Fällt bei jedem Fehler auf den
+#                     Owner-Pfad zurück (Log-Zeile), damit der Loop nie stirbt.
+#   Services (zaz…) -> weiterhin Owner-Identität (raw apes token; die
+#                     Delegation gilt nur für die troop-Audience — pro-Service-
+#                     Delegationen sind der Folgeschritt, siehe Issue #1031/#1033).
 #
 # Target selection:
 #   default            -> troop Cockpit ($Operator_SP_URL, /api/cockpit/agent/tasks)
@@ -24,15 +32,109 @@ AUTH_JSON="$HOME/.config/apes/auth.json"
 CACHE="/tmp/cockpit-sp-$(printf '%s' "$SP" | shasum | cut -c1-12).tok"
 
 idp() { AUTH_JSON="$AUTH_JSON" python3 -c 'import json,os;print(json.load(open(os.environ["AUTH_JSON"]))["access_token"])'; }
-mint() { # exchange raw apes token -> SP-scoped token, cache it
-  local t
+
+# Delegierte Operator-Assertion vom IdP holen (leer bei jedem Fehler → Fallback).
+# Pure node:crypto — kein jose nötig: EdDSA-JWT von Hand bauen und signieren.
+# set -a: die Variablen müssen EXPORTIERT sein — der node-Kindprozess in
+# op_assertion liest sie aus process.env.
+[ -f "$HOME/.config/openape-worker/operator.env" ] && { set -a; . "$HOME/.config/openape-worker/operator.env"; set +a; }
+GRANTS_MAP="$HOME/.config/openape-worker/operator-grants.json"
+
+# Grant-Id für eine Audience: troop aus operator.env, Services aus der Map,
+# die `ensure-delegations` pflegt.
+op_grant_for() { # $1 = audience host
+  if [ "$1" = "troop.openape.ai" ]; then printf '%s' "${OPERATOR_GRANT:-}"; return; fi
+  [ -f "$GRANTS_MAP" ] || return 0
+  GRANTS_MAP="$GRANTS_MAP" AUD="$1" python3 -c 'import json,os;print(json.load(open(os.environ["GRANTS_MAP"])).get(os.environ["AUD"],""))' 2>/dev/null || true
+}
+
+op_assertion() { # $1 = audience host (default troop)
+  [ -n "${OPERATOR_KEY:-}" ] && [ -f "$OPERATOR_KEY" ] || return 0
+  local aud="${1:-troop.openape.ai}" grant
+  grant=$(op_grant_for "$aud"); [ -n "$grant" ] || return 0
+  OP_AUD="$aud" OP_GRANT="$grant" node - <<'NODEOF' || true
+const { createPrivateKey, sign, randomUUID } = require('node:crypto')
+const { readFileSync } = require('node:fs')
+const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url')
+const env = process.env
+const key = createPrivateKey(readFileSync(env.OPERATOR_KEY))
+const now = Math.floor(Date.now() / 1000)
+const h = b64({ alg: 'EdDSA', typ: 'JWT' })
+const p = b64({ iss: env.OPERATOR_EMAIL, sub: env.OPERATOR_EMAIL, aud: `${env.OPERATOR_IDP}/token`, jti: randomUUID(), iat: now, exp: now + 300 })
+const jwt = `${h}.${p}.` + sign(null, Buffer.from(`${h}.${p}`), key).toString('base64url')
+fetch(`${env.OPERATOR_IDP}/token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+  grant_type: 'client_credentials',
+  client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+  client_assertion: jwt,
+  delegation_grant: env.OP_GRANT,
+  audience: env.OP_AUD,
+}) }).then(async (r) => {
+  if (!r.ok) { console.error(`[op] /token HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`); process.exit(1) }
+  const d = await r.json(); process.stdout.write(d.access_token || '')
+}).catch((e) => { console.error('[op] fetch failed:', e?.cause?.code ?? e?.message ?? e); process.exit(1) })
+NODEOF
+}
+
+# Darf diese Audience den Operator-Pfad nutzen? troop immer; Services nur per
+# Opt-in (OPERATOR_SERVICE_AUDIENCES in operator.env, space-separiert) — ein SP
+# mit ALTEM nuxt-auth-sp-Modul (<0.15) würde ein delegiertes act-Objekt noch zu
+# 'human' hochstufen (#1034). Erst nach dessen Modul-Upgrade freischalten.
+op_enabled_for() { # $1 = audience host
+  [ "$1" = "troop.openape.ai" ] && return 0
+  case " ${OPERATOR_SERVICE_AUDIENCES:-} " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+mint() { # SP-Token minten: Operator-Delegation wo freigeschaltet, sonst/Fallback Owner
+  local t subj="" aud
+  aud=$(printf '%s' "$SP" | sed -E 's|https?://||; s|/.*$||')
+  if op_enabled_for "$aud"; then
+    subj=$(op_assertion "$aud" || true)
+    [ -n "$subj" ] || echo "[auth] operator assertion failed ($aud) — falling back to owner token" >&2
+  fi
+  # sp-tasks-Services (zaz & Co.) verifizieren den IdP-JWT direkt gegen die JWKS
+  # (eigene resolveServiceAgent-Allowlist auf `sub`) — ein SP-Exchange-Token (HS256)
+  # würde dort IMMER abgelehnt. Für Services also NIE exchangen: der Bearer ist die
+  # delegierte Assertion (Operator) oder der rohe Owner-Token (Fallback). Die
+  # 5-min-Assertion re-mintet über den bestehenden 401-Pfad in call().
+  if [ "$SP" != "$TROOP" ]; then
+    [ -n "$subj" ] || subj=$(idp)
+    printf '%s' "$subj" > "$CACHE"; printf '%s' "$subj"; return
+  fi
+  [ -n "$subj" ] || subj=$(idp)
   t=$(curl -sS --max-time 15 -X POST "$SP/api/cli/exchange" -H 'content-type: application/json' \
-        -d "$(IDP="$(idp)" python3 -c 'import json,os;print(json.dumps({"subject_token":os.environ["IDP"]}))')" \
+        -d "$(SUBJ="$subj" python3 -c 'import json,os;print(json.dumps({"subject_token":os.environ["SUBJ"]}))')" \
       | python3 -c 'import sys,json;print(json.load(sys.stdin).get("access_token",""))')
+  if [ -z "$t" ] && [ "$SP" = "$TROOP" ] && [ -n "${OPERATOR_KEY:-}" ]; then
+    # Operator-Exchange abgelehnt (z.B. Delegation widerrufen) → Owner-Fallback.
+    echo "[auth] operator exchange rejected — falling back to owner token" >&2
+    t=$(curl -sS --max-time 15 -X POST "$SP/api/cli/exchange" -H 'content-type: application/json' \
+          -d "$(SUBJ="$(idp)" python3 -c 'import json,os;print(json.dumps({"subject_token":os.environ["SUBJ"]}))')" \
+        | python3 -c 'import sys,json;print(json.load(sys.stdin).get("access_token",""))')
+  fi
   [ -n "$t" ] || { echo "exchange failed at $SP (apes login?)" >&2; exit 3; }
   printf '%s' "$t" > "$CACHE"; printf '%s' "$t"
 }
-authtok() { [ -s "$CACHE" ] && cat "$CACHE" || idp; }  # cached SP token, else raw apes token
+# troop: ohne Cache sofort minten (sonst ginge der rohe Owner-Token durch und
+# der Operator-Pfad würde nie benutzt). Services: wie bisher raw-first.
+# Stale-Guard: ein Owner-Fallback-Token (kein scope-Claim, 30d TTL) im Cache
+# würde den Operator-Pfad sonst bis zu 30 Tage aushebeln, weil er nie 401t
+# (Fund 28.07.: Cache von 15:40 überlebte das Operator-Setup).
+cache_is_stale_owner() { # op-enabled Audience + Cache-Token ohne scope = alter Owner-Fallback
+  op_enabled_for "$1" && [ -n "${OPERATOR_KEY:-}" ] || return 1
+  CACHE="$CACHE" python3 -c 'import base64,json,os,sys
+t=open(os.environ["CACHE"]).read().split(".")[1]
+c=json.loads(base64.urlsafe_b64decode(t+"="*(-len(t)%4)))
+sys.exit(0 if not c.get("scope") else 1)' 2>/dev/null
+}
+authtok() {
+  local aud
+  aud=$(printf '%s' "$SP" | sed -E 's|https?://||; s|/.*$||')
+  if [ -s "$CACHE" ] && ! cache_is_stale_owner "$aud"; then cat "$CACHE"
+  # Freigeschaltete Audiences minten sofort (Operator-Pfad) — sonst ginge der
+  # rohe Owner-Token durch und die Delegation würde nie benutzt.
+  elif op_enabled_for "$aud" && [ -n "${OPERATOR_KEY:-}" ]; then mint
+  else idp; fi
+}
 call() { # method path [body] -> echoes body; raw-token first, 401 -> exchange+retry
   local m="$1" p="$2" b="${3:-}" code out
   out=$(curl -sS --max-time 30 -w $'\n%{http_code}' -X "$m" "$SP$p" -H "authorization: Bearer $(authtok)" -H 'content-type: application/json' ${b:+-d "$b"})
@@ -50,6 +152,120 @@ print(json.dumps(body))'; }
 
 CMD="${1:?usage: cockpit-agent.sh services|heartbeat|doctor|next|ask <id> <frage> [opt…]|progress <id> <text>|resolve <id> <state> [retryInMs]}"; shift || true
 case "$CMD" in
+  ensure-op-auth) # #1036 Endgame: Standard-Agent-Token (aud apes-cli, 8h) fuer ape-shell.
+    # BEWUSST OHNE delegation_grant: der delegierte Pfad traegt sub=Owner —
+    # Grants wuerden Patrick zugerechnet und der YOLO-Policy-Key (requester =
+    # Operator) liefe ins Leere. Der Standard-Agent-Pfad traegt sub=Operator
+    # (verifiziert 2026-07-28: Grant requester=Operator, auto_approval=yolo).
+    # Block 4: optionales Org-Arg — Key/auth des FIRMEN-Operators aus
+    # operators.json; ohne Arg der Legacy-Single-Operator.
+    ORG_ARG="${1:-}"
+    OP_AUTH="$HOME/.config/openape-worker/op-home/.config/apes/auth.json"
+    if [ -n "$ORG_ARG" ]; then
+      MAP="$HOME/.config/openape-worker/operators.json"
+      row=$(ORG="$ORG_ARG" MAP="$MAP" python3 -c 'import json,os
+m=json.load(open(os.environ["MAP"])).get(os.environ["ORG"]) or {}
+print(m.get("email",""), m.get("key",""), m.get("auth",""))' 2>/dev/null) || row=""
+      read -r OP_EMAIL OP_KEY OP_AUTH_MAPPED <<< "$row"
+      [ -n "${OP_AUTH_MAPPED:-}" ] || { echo "[op] org $ORG_ARG nicht in operators.json" >&2; exit 4; }
+      OPERATOR_EMAIL="$OP_EMAIL"; OPERATOR_KEY="$OP_KEY"; OP_AUTH="$OP_AUTH_MAPPED"
+      export OPERATOR_EMAIL OPERATOR_KEY
+    fi
+    mkdir -p "$(dirname "$OP_AUTH")"
+    if OP_AUTH="$OP_AUTH" python3 - <<'PYEOF'
+import json, os, sys, time
+try:
+    d = json.load(open(os.environ['OP_AUTH']))
+    sys.exit(0 if d.get('expires_at', 0) - time.time() > 1800 else 1)
+except Exception:
+    sys.exit(1)
+PYEOF
+    then exit 0; fi
+    [ -n "${OPERATOR_KEY:-}" ] && [ -f "$OPERATOR_KEY" ] || { echo "[op] kein operator key" >&2; exit 3; }
+    tok=$(node - <<'NODEOF'
+const { createPrivateKey, sign, randomUUID } = require('node:crypto')
+const { readFileSync } = require('node:fs')
+const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url')
+const env = process.env
+const key = createPrivateKey(readFileSync(env.OPERATOR_KEY))
+const now = Math.floor(Date.now() / 1000)
+const h = b64({ alg: 'EdDSA', typ: 'JWT' })
+const p = b64({ iss: env.OPERATOR_EMAIL, sub: env.OPERATOR_EMAIL, aud: `${env.OPERATOR_IDP}/token`, jti: randomUUID(), iat: now, exp: now + 300 })
+const jwt = `${h}.${p}.` + sign(null, Buffer.from(`${h}.${p}`), key).toString('base64url')
+fetch(`${env.OPERATOR_IDP}/token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+  grant_type: 'client_credentials',
+  client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+  client_assertion: jwt,
+}) }).then(async (r) => {
+  if (!r.ok) { console.error(`[op] /token HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`); process.exit(1) }
+  const d = await r.json(); process.stdout.write(d.access_token || '')
+}).catch((e) => { console.error('[op] fetch failed:', e?.cause?.code ?? e?.message ?? e); process.exit(1) })
+NODEOF
+    ) || { echo "[auth] op agent-token mint failed" >&2; exit 3; }
+    [ -n "$tok" ] || { echo "[auth] op agent-token mint returned empty" >&2; exit 3; }
+    OP_AUTH="$OP_AUTH" TOK="$tok" python3 - <<'PYEOF'
+import json, os, time
+json.dump({
+    'email': os.environ.get('OPERATOR_EMAIL', ''),
+    'idp': os.environ.get('OPERATOR_IDP', 'https://id.openape.ai'),
+    'access_token': os.environ['TOK'],
+    # 5 min Puffer unter der 8h-Server-TTL, damit der Cache-Check nie
+    # einen Token durchwinkt, der serverseitig schon abgelaufen ist.
+    'expires_at': int(time.time()) + 8 * 3600 - 300,
+}, open(os.environ['OP_AUTH'], 'w'), indent=2)
+PYEOF
+    chmod 600 "$OP_AUTH"
+    echo "[op] agent token refreshed (8h)"
+    ;;
+  ensure-delegations) # idempotent: pro enabled Service eine Operator-Delegation sicherstellen (#1033).
+    # Erzeugung braucht den OWNER-Token (nur act:'human' darf delegieren, delegation.md §7.4).
+    # Scopes = konventionelles read/write-Paar: funktioniert mit ALTEM enforceScope
+    # (prefix-Konvention) UND neuem (Katalog-Fallback) — bis Services eigene Kataloge haben.
+    [ -n "${OPERATOR_EMAIL:-}" ] || { echo "kein operator.env — nichts zu tun" >&2; exit 0; }
+    SP="$TROOP" TP="/api/cockpit" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
+      call GET /api/cockpit/services > /tmp/op-services.json
+    OWNER_TOKEN="$(idp)" python3 - <<'PYEOF'
+import json, os, urllib.request
+IDP = os.environ.get('OPERATOR_IDP', 'https://id.openape.ai')
+OP = os.environ['OPERATOR_EMAIL']
+TOK = os.environ['OWNER_TOKEN']
+MAP = os.path.expanduser('~/.config/openape-worker/operator-grants.json')
+def api(method, path, body=None):
+    req = urllib.request.Request(f'{IDP}{path}', method=method,
+        data=json.dumps(body).encode() if body else None,
+        headers={'Authorization': f'Bearer {TOK}', 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req) as r: return json.loads(r.read())
+services = [s for s in json.load(open('/tmp/op-services.json')) if s.get('enabled')]
+# grants.md §5: Liste kann paginiert ({data, pagination}) oder nackt sein.
+resp = api('GET', '/api/delegations?role=delegator')
+existing = resp if isinstance(resp, list) else resp.get('data', [])
+def active_for(aud):
+    for d in existing:
+        r = d.get('request', {})
+        if d.get('status') == 'approved' and r.get('delegate') == OP and r.get('audience') == aud:
+            return d['id']
+    return None
+grants = {}
+try: grants = json.load(open(MAP))
+except Exception: pass
+for s in services:
+    aud = s['baseUrl'].split('//')[-1].split('/')[0]
+    gid = active_for(aud)
+    if not gid:
+        d = api('POST', '/api/delegations', {
+            'delegate': OP, 'audience': aud,
+            'scopes': ['sp-tasks:read', 'sp-tasks:write'],
+            'grant_type': 'timed', 'duration': 30 * 24 * 3600})
+        gid = d['id']
+        print(f'+ Delegation erzeugt: {aud} -> {gid[:8]}')
+    else:
+        print(f'= Delegation vorhanden: {aud} -> {gid[:8]}')
+    grants[aud] = gid
+json.dump(grants, open(MAP, 'w'), indent=1)
+os.chmod(MAP, 0o600)
+print(f'Map: {MAP} ({len(grants)} Audiences)')
+PYEOF
+    ;;
   services) # always troop; prints: SVC_URL<TAB>SVC_TASKS<TAB>label  (enabled only)
     SP="$TROOP" TP="/api/cockpit" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call GET /api/cockpit/services | python3 -c 'import sys,json
