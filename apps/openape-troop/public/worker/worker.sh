@@ -16,6 +16,11 @@ CODEX_MODEL="${OPENAPE_WORKER_CODEX_MODEL:-}"          # codex backend (empty = 
 CODEX_EFFORT="${OPENAPE_WORKER_CODEX_EFFORT:-low}"    # reasoning effort — low keeps chat snappy
 # claude auth = long-lived headless token; codex auth = ~/.codex/auth.json (nothing to do here).
 [ -f "$DIR/token" ] && export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$DIR/token")"
+# Forgejo-Token als ENV, nicht per $(cat …) im Kommando: die deny-list-Policy gibt
+# ein Kommando mit Command-Substitution NIE automatisch frei (fail closed auf $( ),
+# yolo-evaluator.ts). Jeder curl-Aufruf des Operators lief so in
+# "Grant approval timed out after 5 minutes". Reine $VAR-Expansion ist erlaubt.
+[ -f "$DIR/forgejo-token" ] && export FORGEJO_TOKEN="$(cat "$DIR/forgejo-token")"
 
 # Logs go to stderr, not stdout: generate() runs inside $(...) command substitution,
 # so any stdout there would leak into the captured answer. launchd routes stderr to
@@ -99,6 +104,27 @@ MAX_SECS="${OPENAPE_WORKER_MAX_SECS:-3600}"
 # watch_stall <pid> <scratch> <id> <label> <progress.py> — shared monitor for a running
 # generation writing JSONL events to $S/out.jsonl. Posts interim progress on stream
 # advance; kills on STALL_SECS of silence (a hang) or MAX_SECS total.
+# #1065: Warten auf eine Grant-Freigabe sieht wie ein Hang aus — der Stream
+# waechst nicht, waehrend ape-shell (APE_WAIT=1) pollt. Statt den Timeout blind
+# hochzudrehen, wird beim KILL-Entscheid EINMAL gefragt, ob dieser Operator
+# gerade wirklich einen pending Grant hat. Wenn ja: kein Hang, weiterlaufen
+# lassen (MAX_SECS bleibt der Backstop). Ein Call pro STALL_SECS — schont das
+# IdP-Rate-Limit.
+has_pending_grant() { # $1 = auth.json des Operators
+  [ -s "${1:-}" ] || return 1
+  AUTH="$1" python3 - <<'PYEOF' 2>/dev/null
+import json, os, sys, urllib.parse, urllib.request
+a = json.load(open(os.environ['AUTH']))
+url = f"{a['idp']}/api/grants?" + urllib.parse.urlencode(
+    {'requester': a['email'], 'status': 'pending', 'limit': '1'})
+req = urllib.request.Request(url, headers={'Authorization': f"Bearer {a['access_token']}"})
+with urllib.request.urlopen(req, timeout=10) as r:
+    d = json.loads(r.read())
+rows = d if isinstance(d, list) else d.get('data', [])
+sys.exit(0 if rows else 1)
+PYEOF
+}
+
 watch_stall() {
   local pid="$1" S="$2" id="$3" label="$4" pscript="$5" last=0 silent=0 total=0 size
   while kill -0 "$pid" 2>/dev/null; do
@@ -110,6 +136,12 @@ watch_stall() {
     else
       silent=$((silent + 5))
       if [ "$silent" -ge "$STALL_SECS" ]; then
+        if has_pending_grant "$(cat "$S/op-auth.txt" 2>/dev/null)"; then
+          silent=0
+          log "[$label] task ${id:0:8} -> wartet auf Grant-Freigabe, kein Hang"
+          [ -n "$id" ] && bash "$CA" progress "$id" "⏳ wartet auf deine Freigabe · ${total}s" >/dev/null 2>&1 || true
+          continue
+        fi
         pkill -9 -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null
         log "[$label] task ${id:0:8} -> KILLED (stalled ${silent}s, no output)"; break
       fi
@@ -178,7 +210,22 @@ $(cat "$S/user.txt")"
     local img
     while IFS= read -r img; do [ -f "$img" ] && args+=(-i "$img"); done < "$S/images.txt"
   fi
-  if [ "$priv" = "1" ]; then args+=(--dangerously-bypass-approvals-and-sandbox); else args+=(-s read-only); fi
+  if [ "$priv" = "1" ]; then
+    args+=(--dangerously-bypass-approvals-and-sandbox)
+    # #1036 Endgame (OPENAPE_WORKER_GATED=1): Sandbox ist aus, aber JEDES
+    # Shell-Kommando laeuft via PreToolUse-Hook durch ape-shell und damit
+    # durch den DDISA-Grant-Flow der OPERATOR-Identitaet (YOLO-auto-approve
+    # fuer Rollen-Werkzeuge, sonst pending + Approver-Mail, #1059).
+    # apply_patch ist im Hook gesperrt (waere die ungegatete Schreib-Flanke).
+    if [ "${OPENAPE_WORKER_GATED:-0}" = "1" ]; then
+      # Block 4: der Hook bekommt die auth.json des FIRMEN-Operators als argv
+      # (aus $S/op-auth.txt, von cockpit_loop pro Task geschrieben).
+      local opauth_arg=""
+      [ -s "$S/op-auth.txt" ] && opauth_arg=" $(cat "$S/op-auth.txt")"
+      args+=(--dangerously-bypass-hook-trust
+             -c "hooks.PreToolUse=[{matcher=\"^(Bash|apply_patch)\$\",hooks=[{type=\"command\",command=\"/usr/bin/python3 $HOME/.config/openape-worker/codex-pretooluse-hook.py$opauth_arg\",timeout=60}]}]")
+    fi
+  else args+=(-s read-only); fi
   [ -n "$CODEX_MODEL" ] && args+=(--model "$CODEX_MODEL")
   codex "${args[@]}" < /dev/null > "$S/out.jsonl" 2>/dev/null &
   pid=$!
@@ -255,9 +302,141 @@ heartbeat_loop() {
   done
 }
 
+# #1036/Block 4: allowedTools der Org -> YOLO-allow-Patterns des FIRMEN-
+# Operators (operators.json — je Org eine Identitaet, keine Pattern-Union).
+# Idempotent ueber eine State-Datei pro Org (schont das IdP-Rate-Limit); ein
+# Fehlschlag blockt den Task nicht — Kommandos bleiben dann pending (+Mail).
+# Orgs, deren Rollen `*` als Werkzeug fuehren (z.B. der OpenApe-Dev-Loop), bekommen
+# NICHT `--mode allow-list --allow '*'`: ein Allow-Treffer gewinnt im Evaluator vor
+# jeder Risikopruefung, damit waere auch `rm -rf /` auto-approved. Stattdessen
+# deny-list (= default allow) mit dieser kuratierten Sperrliste — Alltags-Kommandos
+# laufen durch, die gefaehrliche Spitze braucht Patricks Tap (Owner-Entscheidung
+# 28.07.). Muster globen gegen die GEJOINTE Kommandozeile, daher fuehrende `*`.
+# Nach aussen wirkende Mail-/Kalender-Aktionen stehen bewusst mit drin: in Wildcard-Orgs
+# (IURIO, OpenApe) waeren sie sonst auto-approved. Patricks Regel (29.07.): triagieren
+# eigenstaendig, SENDEN braucht seinen Grant. In allow-list-Orgs ergibt sich dasselbe
+# dadurch, dass die Rollen-Muster nur Lese-/Ablage-Verben nennen.
+YOLO_DANGEROUS='*rm -rf *,*sudo *,*mkfs*,*dd if=*,*shutdown*,*reboot*,*chmod 777*,*| sh*,*|sh*,*| bash*,*|bash*,*git push --force*,*npm publish*,*pnpm publish*,*apes yolo *,*mail send*,*mail reply*,*mail forward*,*mail trash*,*calendar create*,*calendar update*,*calendar delete*,*calendar accept*,*calendar decline*'
+
+yolo_sync() { # $1 = allowed.txt, $2 = orgId
+  local want org="$2" state op_email
+  state="$DIR/yolo-synced-$org.txt"
+  # Jedes Pattern in zwei Formen: nackt (Shapes-Adapter-Grants, command=argv)
+  # und mit "bash -c "-Praefix (generische ape-shell-Session-Grants — CLIs ohne
+  # Adapter wie ape-tasks/o365-cli laufen als `bash -c "<cmd>"`, und der
+  # YOLO-Evaluator globt gegen die gejointe Kommandozeile; E2E-Fund 28.07.).
+  # Die eigene Steuerungs-Schnittstelle des Loops (Skills/Memory/Progress holen) ist
+  # KEIN Werkzeug-Einsatz im Sinne der Rollen, sondern Innenleben — ohne sie kann der
+  # Operator nicht mal seine eigene Prozedur nachlesen (Fund 29.07.: Triage-Lauf
+  # blockierte an `cockpit-agent.sh skill <id>`). Eng auf den absoluten Pfad gebunden,
+  # damit das Muster nichts anderes durchlaesst.
+  # claude-log gehoert dazu: der Directive verlangt vom Operator die Abrechnungs-
+  # Zeile, blockiert sie, haengt jeder Task am Ende im Grant-Wait (Fund 29.07.).
+  # Muster kommen OHNE Anfuehrungszeichen aus (`bash *cockpit-agent.sh*` statt
+  # `bash "<pfad>" *`): ein `"` im Muster ueberlebt den Weg durch Shell und CLI nicht
+  # zuverlaessig — Fund 29.07., die Policy kam als einziges Muster `bash` an und der
+  # Loop stand.
+  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *"
+  local wildcard=0
+  grep -qx '\*' "$1" 2>/dev/null && wildcard=1
+  if [ "$wildcard" = 1 ]; then
+    want="deny-list:$YOLO_DANGEROUS"
+  else
+    # Je Muster vier Formen: nackt und mit `bash -c `-Praefix (Adapter- vs.
+    # Session-Grants), jeweils auch ohne das abschliessende ` *`, damit ein
+    # argumentloser Aufruf (`gmail-cli mail list`) nicht durchs Raster faellt.
+    want=$(PLUMB="$plumbing" python3 - "$1" 2>"$DIR/.yolo-broad.tmp" <<'PYEOF'
+import os, sys
+pats = [l.strip() for l in open(sys.argv[1]) if l.strip()]
+pats = [p for p in os.environ['PLUMB'].split(',') if p] + pats
+out = []
+# Patricks Regel: Triagieren eigenstaendig, SENDEN braucht seinen Grant.
+# Sie haengt daran, dass die Rollen nur Lese-/Ablage-VERBEN nennen. Ein
+# Rollen-Muster, das ein nach aussen wirkendes CLI als GANZES freigibt
+# (`o365-cli *`), unterlaeuft sie — YOLO_DANGEROUS greift nur im
+# deny-list-Zweig, in einer allow-list ist es inert. Vorfall 30.07.: die
+# Rolle "Buchhaltung" fuehrte `o365-cli *`, damit war `mail send`
+# auto-approved, sobald die Policy wieder frisch war. Also hier filtern
+# und laut melden — die Rollen-Korrektur ist eine Owner-Entscheidung.
+OUTWARD = {'o365-cli', 'gmail-cli'}
+too_broad = [p for p in pats if p.rstrip(' *') in OUTWARD]
+if too_broad:
+    print('YOLO_TOO_BROAD:' + ','.join(too_broad), file=sys.stderr)
+pats = [p for p in pats if p.rstrip(' *') not in OUTWARD]
+
+for p in pats:
+    # Seit dem bash-c-Unwrap im IdP (prod-4ff1cddc, 29.07.) matchen Muster
+    # gegen den INNEREN Befehl — die `bash -c `-Doppelformen von damals sind
+    # redundant und haben die Liste ueber das 64-Muster-Limit des Endpoints
+    # gedrueckt (Vorfall 30.07.: PUT 400, zwei Tage stale Policy). Bleibt die
+    # argumentlose Form: `X *` matcht `X` nicht.
+    forms = {p}
+    if p.endswith(' *'):
+        forms.add(p[:-2])
+    for f in sorted(forms):
+        if f not in out:
+            out.append(f)
+print(','.join(out))
+PYEOF
+    ) || return 0
+    [ -n "$want" ] || return 0
+    if [ -s "$DIR/.yolo-broad.tmp" ]; then
+      log "[yolo] ZU BREITES ROLLEN-MUSTER verworfen ($org): $(tr -d '\n' < "$DIR/.yolo-broad.tmp" | sed 's/YOLO_TOO_BROAD://') — ein nach aussen wirkendes CLI als Ganzes freigeben hebelt 'Senden braucht Grant' aus; Rollen-tools auf Verben einschraenken"
+      rm -f "$DIR/.yolo-broad.tmp"
+    fi
+  fi
+  [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$want" ] && return 0
+  op_email=$(ORG="$org" python3 -c 'import json,os
+print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.json"))).get(os.environ["ORG"]) or {}).get("email",""))' 2>/dev/null) || op_email=""
+  [ -n "$op_email" ] || return 0
+  # Retry mit Backoff statt einmal-und-aufgeben: der PUT teilt sich das
+  # IdP-Rate-Limit-Bucket mit Token-Refresh und /authorize und trifft
+  # genau zur gestaffelten Triage-Zeit auf Gegenverkehr. Vorfall 30.07.:
+  # `jq *` stand zwei Tage in der Rolle und kam nie in der Policy an —
+  # 26 stille "sync failed"-Zeilen, waehrenddessen liefen Kommandos, die
+  # die Rolle erlaubt, in pending + Approval-Karte.
+  # Muster-Budget des Endpoints (64) vor dem PUT pruefen: darueber lehnt der
+  # IdP die GANZE Policy ab und die alte bleibt stehen — lieber hier laut sein.
+  local n_pats; n_pats=$(printf '%s' "$want" | tr ',' '\n' | grep -c .)
+  if [ "$wildcard" != 1 ] && [ "$n_pats" -gt 64 ]; then
+    log "[yolo] ZU VIELE MUSTER ($n_pats > 64) fuer $org — Rollen-tools kuerzen, sonst bleibt die Policy stale"
+  fi
+  local ok=0 attempt=0 delay=5 err=""
+  while [ "$attempt" -lt 3 ]; do
+    attempt=$((attempt + 1))
+    if [ "$wildcard" = 1 ]; then
+      err=$("$HOME/.local/bin/apes" yolo set "$op_email" --mode deny-list --deny "$YOLO_DANGEROUS" 2>&1) && ok=1
+    else
+      err=$("$HOME/.local/bin/apes" yolo set "$op_email" --mode allow-list --allow "$want" 2>&1) && ok=1
+    fi
+    [ "$ok" = 1 ] && break
+    # 4xx ist ein Client-Fehler (zu viele Muster, ungueltiges Risk-Level, …) —
+    # Backoff aendert daran nichts, also sofort mit lauter Meldung aufhoeren.
+    case "$err" in *"failed (4"*) break ;; esac
+    if [ "$attempt" -lt 3 ]; then sleep "$delay"; delay=$((delay * 4)); fi
+  done
+  if [ "$ok" = 1 ]; then
+    printf '%s' "$want" > "$state"
+    rm -f "$state.stale"
+    log "[yolo] synced ($org -> $op_email)"
+  else
+    # Eine stale Policy ist gefaehrlich STILL: sie sieht im Betrieb aus wie
+    # "der Operator darf das halt nicht". Deshalb Alter + echter Fehlertext
+    # ins Log (vorher: pauschales "rate-limit?" mit Fragezeichen, niemand
+    # wusste es) und eine Marker-Datei, an der ein Health-Check haengen kann.
+    local age="unbekannt"
+    if [ -f "$state" ]; then
+      local mtime; mtime=$(stat -f %m "$state" 2>/dev/null || echo 0)
+      [ "$mtime" -gt 0 ] && age="$(( ($(date +%s) - mtime) / 3600 ))h"
+    fi
+    date +%s > "$state.stale"
+    log "[yolo] SYNC FEHLGESCHLAGEN nach $attempt Versuchen ($org -> $op_email) — Policy ist $age alt, Rollen-Aenderungen wirken NICHT. Fehler: $(printf '%s' "$err" | tr '\n' ' ' | cut -c1-180)"
+  fi
+}
+
 # Cockpit loop: own scratch, sequential; Operator gets tools (privileged).
 cockpit_loop() {
-  local S="$DIR/scratch/cockpit" worked task id
+  local S="$DIR/scratch/cockpit" worked task id org opauth
   mkdir -p "$S"; unset SVC_URL SVC_TASKS
   while true; do
     worked=0
@@ -269,7 +448,40 @@ cockpit_loop() {
       fetch_attachments "$S"
       printf '%s' "$COCKPIT_DIRECTIVE" >> "$S/sys.txt"
       log "[cockpit] task ${id:0:8} -> generating"
-      answer "$S" "$id" cockpit 1 "Task Bash" "--dangerously-skip-permissions"
+      # #1036: Werkzeug-Erlaubnis kommt als DATEN vom Server (allowed.txt via
+      # parse.py). Drei Zustände:
+      #   Datei fehlt  -> altes troop ohne Payload: Legacy (privilegiert)
+      #   Datei leer   -> Org hat KEINE Werkzeuge: read-only-Sandbox (hart)
+      #   Muster drin  -> privilegiert; Arg-Level-Enforcement unter codex ist
+      #                   erst mit ape-shell-Integration möglich (Issue #1036)
+      if [ -f "$S/allowed.txt" ] && [ ! -s "$S/allowed.txt" ]; then
+        log "[cockpit] task ${id:0:8} -> org ohne Werkzeuge, read-only-Sandbox"
+        answer "$S" "$id" cockpit 1 "" ""
+      elif [ "${OPENAPE_WORKER_GATED:-0}" = "1" ]; then
+        # Gated privilegiert (#1036/Block 4): Firmen-Operator der Task-Org
+        # waehlen, dessen YOLO-Policy syncen und 8h-Agent-Token sichern. Ohne
+        # Org-Mapping oder Operator-Auth NICHT ungegated privilegiert laufen:
+        # fail-closed auf read-only (Task antwortet dann ohne Werkzeuge).
+        org=$(cat "$S/org.txt" 2>/dev/null || true)
+        opauth=""
+        if [ -n "$org" ]; then
+          yolo_sync "$S/allowed.txt" "$org"
+          if bash "$CA" ensure-op-auth "$org" >/dev/null 2>&1; then
+            opauth=$(ORG="$org" python3 -c 'import json,os
+print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.json"))).get(os.environ["ORG"]) or {}).get("auth",""))' 2>/dev/null) || opauth=""
+          fi
+        fi
+        if [ -n "$opauth" ]; then
+          printf '%s' "$opauth" > "$S/op-auth.txt"
+          answer "$S" "$id" cockpit 1 "Task Bash" "--dangerously-skip-permissions"
+        else
+          rm -f "$S/op-auth.txt"
+          log "[cockpit] task ${id:0:8} -> kein Firmen-Operator fuer org '$org', fail-closed read-only"
+          answer "$S" "$id" cockpit 1 "" ""
+        fi
+      else
+        answer "$S" "$id" cockpit 1 "Task Bash" "--dangerously-skip-permissions"
+      fi
     done
     [ "$worked" -eq 0 ] && sleep 1
   done
