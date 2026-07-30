@@ -8,11 +8,13 @@ import { sendAddDeviceEmail } from '../../utils/email'
 // Minted ONLY from an authenticated session and mailed ONLY to the
 // account's own address: email is the transport that gets the link onto
 // the new device, not an auth factor. That is why this token — unlike
-// self-service registration tokens — may pass the #291 register gate
-// (createdBy 'add-device', checked in webauthn/register/verify).
+// self-service registration tokens — may pass the #291 register gate.
+// It is bound to the RP it was minted on (createdBy 'add-device:<rpID>',
+// #1103) so a session on one tenant domain cannot mint a link that
+// grafts a credential onto the same account on another tenant domain.
 
 export default defineEventHandler(async (event) => {
-  // requireAuth + useIdpStores are auto-imported module utils.
+  // requireAuth + useIdpStores + getRPConfig are auto-imported module utils.
   const email = await requireAuth(event)
 
   const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
@@ -31,7 +33,7 @@ export default defineEventHandler(async (event) => {
     name: user?.name ?? email,
     createdAt: now,
     expiresAt: now + oneHour,
-    createdBy: 'add-device',
+    createdBy: `add-device:${getRPConfig().rpID}`,
     consumed: false,
   })
 
