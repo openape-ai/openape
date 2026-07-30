@@ -183,6 +183,35 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('Rule created')
   })
 
+  it('renders the why-pending diagnostics the IdP attached', async () => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const withDiag = buildCliGrant()
+    withDiag.pending_diagnostics = [
+      {
+        source: 'yolo',
+        reason: 'segments-not-allowed',
+        summary: 'No allow pattern covers this command: jq -r ".[].id"',
+        detail: { unmatchedSegments: ['jq -r ".[].id"'], segments: ['o365-cli mail list', 'jq -r ".[].id"'] },
+      },
+      {
+        source: 'standing-grant',
+        reason: 'no-covering-rule',
+        summary: 'No standing rule covers all of: o365, jq. A rule is per CLI — a chain needs one for each.',
+        detail: { cliIds: ['o365', 'jq'] },
+      },
+    ]
+    const fetchMock = vi.fn().mockResolvedValueOnce(withDiag)
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Why this is waiting')
+    expect(wrapper.text()).toContain('No allow pattern covers this command')
+    expect(wrapper.text()).toContain('jq -r ".[].id"')
+    expect(wrapper.text()).toContain('A rule is per CLI')
+  })
+
   it('offers no rule for generic-only grants', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
     const generic = buildCliGrant()

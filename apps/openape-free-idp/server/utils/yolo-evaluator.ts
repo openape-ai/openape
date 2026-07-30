@@ -211,3 +211,105 @@ export function targetFromRequest(body: OpenApeGrantRequest): string | undefined
   if (body.target_host) return body.target_host
   return undefined
 }
+
+/**
+ * Why did this request NOT get auto-approved by the YOLO policy?
+ *
+ * Diagnosis only — it never decides anything. It deliberately re-uses the
+ * exact predicates `evaluateYoloPolicy` uses (`denyHit`, `segmentAllowed`,
+ * the same segmentation) so the explanation cannot drift away from the
+ * decision. If the two ever disagree, that shows up as
+ * `'would-have-approved'`, which is a bug signal, not a normal state.
+ *
+ * Motivation: on 2026-07-30 answering "why is this pending?" for a single
+ * request took a hand-written script against the live policy. The IdP knows
+ * the answer exactly — it should just say it.
+ */
+export type YoloMissReason =
+  | 'no-policy'
+  | 'policy-expired'
+  | 'no-target'
+  | 'denied-by-pattern'
+  | 'segments-not-allowed'
+  | 'risk-above-threshold'
+  | 'would-have-approved'
+
+export interface YoloMissExplanation {
+  reason: YoloMissReason
+  /** Shell segments the line was judged in (the unit patterns match against). */
+  segments?: string[]
+  /** Segments covered by an allow-pattern. */
+  allowedSegments?: string[]
+  /** Segments no allow-pattern covers — the actionable list. */
+  unmatchedSegments?: string[]
+  /** Segments carrying command substitution: these need a pattern spelling it out. */
+  substitutionSegments?: string[]
+  /** The deny pattern that vetoed, plus the segment that tripped it. */
+  deniedBy?: string
+  deniedSegment?: string
+  expiredAt?: number
+  resolvedRisk?: RiskLevel | null
+  riskThreshold?: RiskLevel | null
+  mode?: YoloPolicy['mode']
+}
+
+export function explainYoloMiss(ctx: YoloDecisionContext): YoloMissExplanation {
+  const now = ctx.now ?? Math.floor(Date.now() / 1000)
+  const p = ctx.policy
+  if (!p) return { reason: 'no-policy' }
+  if (p.expiresAt != null && p.expiresAt <= now)
+    return { reason: 'policy-expired', expiredAt: p.expiresAt, mode: p.mode }
+
+  const target = ctx.target && ctx.target.length ? ctx.target : null
+  if (!target) return { reason: 'no-target', mode: p.mode }
+
+  const segments = ctx.targetKind === 'host' ? [target] : splitCommandSegments(target)
+  const base = { segments, mode: p.mode, resolvedRisk: ctx.resolvedRisk, riskThreshold: p.denyRiskThreshold }
+
+  // Same veto as the decision — but reported segment-first. The decision
+  // checks the whole line first (order is irrelevant there, both block);
+  // for an explanation the precise segment is the useful answer.
+  const denyPatterns = p.denyPatterns || []
+  for (const pattern of denyPatterns) {
+    const seg = segments.find(sgm => matchesGlob(sgm, pattern))
+    if (seg)
+      return { ...base, reason: 'denied-by-pattern', deniedBy: pattern, deniedSegment: seg }
+    if (matchesGlob(target, pattern))
+      return { ...base, reason: 'denied-by-pattern', deniedBy: pattern, deniedSegment: target }
+    if (ctx.outerTarget && matchesGlob(ctx.outerTarget, pattern))
+      return { ...base, reason: 'denied-by-pattern', deniedBy: pattern, deniedSegment: ctx.outerTarget }
+  }
+
+  if (p.mode === 'allow-list') {
+    const allowPatterns = p.allowPatterns || []
+    const segmentAllowed = (seg: string) => {
+      const needsExplicitOptIn = containsCommandSubstitution(seg)
+      return allowPatterns.some(pattern => matchesGlob(seg, pattern)
+        && (!needsExplicitOptIn || containsCommandSubstitution(pattern)))
+    }
+    const allowed = segments.filter(segmentAllowed)
+    const unmatched = segments.filter(seg => !segmentAllowed(seg))
+    if (unmatched.length > 0) {
+      return {
+        ...base,
+        reason: 'segments-not-allowed',
+        allowedSegments: allowed,
+        unmatchedSegments: unmatched,
+        substitutionSegments: unmatched.filter(containsCommandSubstitution),
+      }
+    }
+    // Every segment allowed and no deny hit → the decision approves too.
+    return { ...base, reason: 'would-have-approved' }
+  }
+
+  // deny-list: the only remaining blockers are the risk threshold and the
+  // fail-closed substitution rule.
+  if (ctx.resolvedRisk && p.denyRiskThreshold
+    && RISK_ORDER[ctx.resolvedRisk] > RISK_ORDER[p.denyRiskThreshold]) {
+    return { ...base, reason: 'risk-above-threshold' }
+  }
+  const substitution = segments.filter(containsCommandSubstitution)
+  if (substitution.length > 0 && !denyPatterns.some(containsCommandSubstitution))
+    return { ...base, reason: 'segments-not-allowed', unmatchedSegments: substitution, substitutionSegments: substitution }
+  return { ...base, reason: 'would-have-approved' }
+}
