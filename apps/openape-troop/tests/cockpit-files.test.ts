@@ -75,11 +75,21 @@ describe('cockpit file store', () => {
     })
   })
 
-  it('throttles progress per task and pushes only the first note', async () => {
+  it('throttles progress per task and never pushes for progress notes', async () => {
     vi.mocked(pushToOwner).mockClear()
 
     expect(await saveProgressChatMessage('org-progress', 'progress@x', 'task-1', 'Erster Zwischenstand')).toBeDefined()
     expect(await saveProgressChatMessage('org-progress', 'progress@x', 'task-1', 'Zweiter Zwischenstand')).toBeNull()
+
+    // Progress is status noise ("Operator denkt …") — it belongs in the chat,
+    // not on the owner's phone. Only the finished answer pushes.
+    expect(pushToOwner).not.toHaveBeenCalled()
+  })
+
+  it('pushes once for a finished answer', async () => {
+    vi.mocked(pushToOwner).mockClear()
+
+    await saveChatMessage('org-progress', 'progress@x', 'assistant', 'Fertige Antwort')
 
     expect(pushToOwner).toHaveBeenCalledTimes(1)
   })
