@@ -138,10 +138,28 @@ describe('webauthn register verify — security gate (#291)', () => {
     expect(updateSessionMock).not.toHaveBeenCalled() // no session minted
   })
 
-  it('refuses even with a single existing credential (no minimum threshold)', async () => {
+  it('allows first-time enrolment on this RP when passkeys live on another RP (#1103)', async () => {
+    // Multi-tenant: the login page steers "no passkey for this domain"
+    // users into register-email. A credential on another tenant domain
+    // must not dead-end that path — first-time enrolment is per RP.
     findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
     findCredentialsByUserMock.mockResolvedValue([
       { credentialId: 'lone-cred', rpId: 'someother-rp.example' },
+    ])
+
+    const handler = await importHandler()
+    const result = await handler({} as any)
+
+    expect(result.ok).toBe(true)
+    expect(saveCredentialMock).toHaveBeenCalled()
+  })
+
+  it('refuses when a legacy credential has no rpId (counts on every RP)', async () => {
+    // Rows from before tenant scoping have no rpId; conservatively they
+    // close the self-service path everywhere.
+    findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
+    findCredentialsByUserMock.mockResolvedValue([
+      { credentialId: 'legacy-cred' },
     ])
 
     const handler = await importHandler()
@@ -155,7 +173,7 @@ describe('webauthn register verify — add-device tokens (#1097)', () => {
     // Minted by the authenticated /api/account/add-device-link endpoint,
     // mailed to the account's own address, opened on the new device.
     findRegUrlMock.mockResolvedValue({
-      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device',
+      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device:id.openape.ai',
     })
     findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
     findCredentialsByUserMock.mockResolvedValue([
@@ -170,6 +188,23 @@ describe('webauthn register verify — add-device tokens (#1097)', () => {
     expect(saveCredentialMock).toHaveBeenCalled()
     expect(consumeRegUrlMock).toHaveBeenCalledWith('reg-tok') // one-time
     expect(updateSessionMock).toHaveBeenCalled() // new device is signed in
+  })
+
+  it('REFUSES an add-device token minted on another RP (no cross-RP graft, #1103)', async () => {
+    // The escalation this kills: mailbox access → first-time enrolment on
+    // tenant B → authenticated add-device link minted there → redeemed on
+    // tenant A where the victim's passkeys live.
+    findRegUrlMock.mockResolvedValue({
+      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device:other-tenant.example',
+    })
+    findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
+    findCredentialsByUserMock.mockResolvedValue([
+      { credentialId: 'existing-cred-1', rpId: 'id.openape.ai' },
+    ])
+
+    const handler = await importHandler()
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 409 })
+    expect(saveCredentialMock).not.toHaveBeenCalled()
   })
 
   it('still REFUSES self-service tokens for accounts with passkeys', async () => {
