@@ -51,6 +51,13 @@ oder die Daten einer anderen Firma. Fehlt ein passender Skill oder das Konto, fr
 raten. Nur wenn ein Werkzeug wirklich noetig ist - sonst direkt antworten. Erfinde nie
 Werkzeug-Ergebnisse.
 
+CODE-ARBEIT (Forgejo-Issues umsetzen): patche NIE selbst per Shell (kein apply_patch, kein
+git clone in /tmp, keine Heredoc-Patches - das wird NIE auto-approved). Stattdessen:
+code-task start <issue-nr>  - baut einen Wegwerf-Worktree, implementiert, verifiziert, pusht
+und oeffnet den PR. Danach: resolve deferred (15-25 min); beim Aufwachen code-task status
+<issue-nr> abfragen und die PR-URL melden (bzw. den FAILED-Grund). CI beobachtest du mit
+fj ci <pr-nr>. Du reviewst/mergst NICHT selbst - das Gate ist der PR.
+
 SHELL-STIL (Pflicht fuer ape-shell-Kommandos): Kommandos sind EINFACH - EIN Werkzeug-Aufruf pro
 Kommando. KEINE $( )-Substitution, keine for/while-Schleifen, keine Heredocs, keine Pipes um
 Plumbing-Aufrufe (cockpit-agent.sh, claude-log). Solche Konstrukte werden NIE auto-approved -
@@ -366,7 +373,7 @@ yolo_sync() { # $1 = allowed.txt, $2 = orgId
   # fj komplett, inkl. comment/assign: Forgejo-Kommentare/Assignments sind das
   # normale Arbeitsprodukt des Loops im eigenen Repo — kein Mail-Send-Fall
   # (Owner-Freigabe Patrick 30.07., Plan 2026-07-30-recurring-grants-ux.md).
-  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *,fj issues,fj issue *,fj prs,fj pr *,fj ci *,fj comment *,fj assign *,fj unassign *"
+  local plumbing="bash *cockpit-agent.sh*,claude-log *,$HOME/.local/bin/claude-log *,fj issues,fj issue *,fj prs,fj pr *,fj ci *,fj comment *,fj assign *,fj unassign *,code-task start *,code-task status *"
   local wildcard=0
   grep -qx '\*' "$1" 2>/dev/null && wildcard=1
   if [ "$wildcard" = 1 ]; then
@@ -568,7 +575,7 @@ services_loop() {
 # NIE selbst ueberschreiben: der laufende Stand ist im Zweifel der bessere.
 drift_check() {
   local base="https://troop.openape.ai/worker" f local_sum remote_sum drifted=""
-  for f in worker.sh cockpit-agent.sh parse.py progress.py codex_progress.py clean.py fj; do
+  for f in worker.sh cockpit-agent.sh parse.py progress.py codex_progress.py clean.py fj code-task.sh; do
     [ -f "$DIR/$f" ] || continue
     local_sum=$(shasum -a 256 "$DIR/$f" 2>/dev/null | cut -d' ' -f1)
     remote_sum=$(curl -fsS --max-time 10 "$base/$f" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
@@ -583,21 +590,25 @@ drift_check() {
   fi
 }
 
-# fj nachziehen, wenn es fehlt: eine FEHLENDE Datei ist kein Overwrite (die
-# Drift-Regel "nie selbst ueberschreiben" bleibt unberuehrt). Symlink nach
-# ~/.local/bin, damit der Operator schlicht `fj ...` tippen kann (wie claude-log).
-ensure_fj() {
-  if [ ! -f "$DIR/fj" ]; then
-    curl -fsS --max-time 10 "https://troop.openape.ai/worker/fj" -o "$DIR/fj" 2>/dev/null || return 0
-    chmod +x "$DIR/fj"
-    log "[fj] installiert ($DIR/fj)"
-  fi
+# Wrapper nachziehen, wenn sie fehlen: eine FEHLENDE Datei ist kein Overwrite
+# (die Drift-Regel "nie selbst ueberschreiben" bleibt unberuehrt). Symlink nach
+# ~/.local/bin, damit der Operator sie schlicht beim Namen tippen kann.
+ensure_wrappers() {
+  local f name
   mkdir -p "$HOME/.local/bin"
-  [ -e "$HOME/.local/bin/fj" ] || ln -s "$DIR/fj" "$HOME/.local/bin/fj"
+  for f in fj code-task.sh; do
+    name="${f%.sh}"
+    if [ ! -f "$DIR/$f" ]; then
+      curl -fsS --max-time 10 "https://troop.openape.ai/worker/$f" -o "$DIR/$f" 2>/dev/null || continue
+      chmod +x "$DIR/$f"
+      log "[$name] installiert ($DIR/$f)"
+    fi
+    [ -e "$HOME/.local/bin/$name" ] || ln -s "$DIR/$f" "$HOME/.local/bin/$name"
+  done
 }
 
 log "openape-worker start (backend=$BACKEND, cockpit ‖ services, stall=${STALL_SECS}s, max=${MAX_SECS}s)"
-ensure_fj
+ensure_wrappers
 drift_check
 rm -rf "$DIR/scratch"; mkdir -p "$DIR/scratch"
 heartbeat_loop & HPID=$!
