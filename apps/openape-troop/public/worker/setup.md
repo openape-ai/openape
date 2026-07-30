@@ -61,8 +61,8 @@ Then loop (self-paced, until the session ends). Let `CA=~/.config/openape-worker
 2. **Files:**
    ```
    mkdir -p ~/.config/openape-worker && cd ~/.config/openape-worker
-   for f in worker.sh parse.py clean.py progress.py codex_progress.py cockpit-agent.sh; do curl -fsS "https://troop.openape.ai/worker/$f" -o "$f"; done
-   chmod +x worker.sh cockpit-agent.sh
+   for f in worker.sh parse.py clean.py progress.py codex_progress.py cockpit-agent.sh fj code-task.sh; do curl -fsS "https://troop.openape.ai/worker/$f" -o "$f"; done
+   chmod +x worker.sh cockpit-agent.sh fj code-task.sh
    ```
 3. **launchd plist:** fetch `at.openape.worker.plist.template`, replace `__HOME__` with `$HOME`, write to `~/Library/LaunchAgents/at.openape.worker.plist`. **For the Codex engine**, add `OPENAPE_WORKER_BACKEND=codex` to the plist's `EnvironmentVariables` dict (default is `claude`).
 4. **Load:** `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/at.openape.worker.plist`. Verify `launchctl list | grep at.openape.worker` + `tail ~/.config/openape-worker/worker.log` shows "openape-worker start (backend=…)".
