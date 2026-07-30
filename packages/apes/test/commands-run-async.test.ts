@@ -448,8 +448,9 @@ describe('commands/run async default', () => {
         args: { shell: false, wait: false, approval: 'once', 'escapes-path': 'escapes' } as any,
       } as any))
 
-      // One reuse-lookup + one grant-create call; no poll, no token fetch
-      expect(apiFetch).toHaveBeenCalledTimes(2)
+      // Reuse-lookup + grant-create + pending-diagnostics fetch; no poll,
+      // no token fetch
+      expect(apiFetch).toHaveBeenCalledTimes(3)
       expect(execFileSync).not.toHaveBeenCalled()
       assertAsyncInfoBlock('aud-1')
     })
