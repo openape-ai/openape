@@ -26,6 +26,7 @@ import type { ResolvedCommand } from '../shapes/index.js'
 import consola from 'consola'
 import { getIdpUrl, isGenericFallbackEnabled, loadAuth, loadConfig } from '../config'
 import { getPollMaxMinutes } from '../grant-poll'
+import { fetchPendingDiagnostics, formatPendingDiagnostics } from '../pending-diagnostics'
 import { apiFetch, getGrantsEndpoint } from '../http'
 import { CliError, CliExit } from '../errors'
 import { notifyGrantPending } from '../notifications'
@@ -200,7 +201,7 @@ interface CreatedGrantInfo {
  * Both modes keep the same core Approve / Status / Execute lines so
  * external scripts that grep for those labels keep working.
  */
-function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): void {
+async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): Promise<void> {
   const mode = getUserMode()
   const executeCmd = `apes grants run ${grant.id}`
 
@@ -217,12 +218,14 @@ function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): void {
 
   const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
   const statusCmd = `apes grants status ${grant.id}`
+  const diagLines = formatPendingDiagnostics(await fetchPendingDiagnostics(idp, grant.id))
 
   if (mode === 'human') {
     consola.success(`Grant ${grant.id} created — awaiting your approval`)
     console.log(`  Approve in browser:  ${approveUrl}`)
     console.log(`  Check status:        ${statusCmd}`)
     console.log(`  Run after approval:  ${executeCmd}`)
+    for (const line of diagLines) console.log(line)
     console.log('')
     console.log('  Tip: Approve as "timed" or "always" in the browser to reuse')
     console.log('  this grant without re-approval on the next invocation.')
@@ -235,6 +238,7 @@ function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): void {
   console.log(`  Approve:   ${approveUrl}`)
   console.log(`  Status:    ${statusCmd} [--json]`)
   console.log(`  Execute:   ${executeCmd} --wait`)
+  for (const line of diagLines) console.log(line)
   console.log('')
   console.log('  For agents:')
   console.log(`    1. Tell the user about the pending grant and the approve URL above.`)
@@ -458,7 +462,7 @@ async function runShellMode(
     return
   }
 
-  printPendingGrantInfo(grant, idp)
+  await printPendingGrantInfo(grant, idp)
   throw new CliExit(getAsyncExitCode())
 }
 
@@ -561,7 +565,7 @@ async function tryAdapterModeFromShell(
     return true
   }
 
-  printPendingGrantInfo(grant, idp)
+  await printPendingGrantInfo(grant, idp)
   throw new CliExit(getAsyncExitCode())
 }
 
@@ -638,7 +642,7 @@ async function tryCompoundModeFromShell(
     return true
   }
 
-  printPendingGrantInfo(grant, idp)
+  await printPendingGrantInfo(grant, idp)
   throw new CliExit(getAsyncExitCode())
 }
 
@@ -781,7 +785,7 @@ async function runAdapterMode(
     return
   }
 
-  printPendingGrantInfo(grant, idp)
+  await printPendingGrantInfo(grant, idp)
   throw new CliExit(getAsyncExitCode())
 }
 
@@ -836,7 +840,7 @@ async function runAudienceMode(
     },
   })
   if (!shouldWaitForGrant(args)) {
-    printPendingGrantInfo(grant, idp)
+    await printPendingGrantInfo(grant, idp)
     throw new CliExit(getAsyncExitCode())
   }
 
