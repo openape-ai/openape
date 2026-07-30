@@ -385,7 +385,10 @@ PYEOF
       rm -f "$DIR/.yolo-broad.tmp"
     fi
   fi
-  [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$want" ] && return 0
+  # Deny-Liste in den State-Vergleich: sonst haelt die Idempotenz-Abkuerzung
+  # eine Policy fuer aktuell, deren Veto-Liste sich geaendert hat.
+  local state_key="$want|DENY:$YOLO_DANGEROUS"
+  [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$state_key" ] && return 0
   op_email=$(ORG="$org" python3 -c 'import json,os
 print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.json"))).get(os.environ["ORG"]) or {}).get("email",""))' 2>/dev/null) || op_email=""
   [ -n "$op_email" ] || return 0
@@ -404,10 +407,16 @@ print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.jso
   local ok=0 attempt=0 delay=5 err=""
   while [ "$attempt" -lt 3 ]; do
     attempt=$((attempt + 1))
-    if [ "$wildcard" = 1 ]; then
+      if [ "$wildcard" = 1 ]; then
       err=$("$HOME/.local/bin/apes" yolo set "$op_email" --mode deny-list --deny "$YOLO_DANGEROUS" 2>&1) && ok=1
     else
-      err=$("$HOME/.local/bin/apes" yolo set "$op_email" --mode allow-list --allow "$want" 2>&1) && ok=1
+      # YOLO_DANGEROUS auch in allow-list-Orgs mitschicken: seit dem
+      # deny-wins-Fix im IdP ist die Deny-Liste in BEIDEN Modi ein Veto.
+      # Vorher hing die Sicherheitsregel am Modus — ein zu breites
+      # Rollen-Muster (`o365-cli *`) gab `mail send` frei, obwohl
+      # `*mail send*` in der Liste stand. Zweite Verteidigungslinie hinter
+      # dem OUTWARD-Filter der Muster-Expansion.
+      err=$("$HOME/.local/bin/apes" yolo set "$op_email" --mode allow-list --allow "$want" --deny "$YOLO_DANGEROUS" 2>&1) && ok=1
     fi
     [ "$ok" = 1 ] && break
     # 4xx ist ein Client-Fehler (zu viele Muster, ungueltiges Risk-Level, …) —
@@ -416,7 +425,7 @@ print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.jso
     if [ "$attempt" -lt 3 ]; then sleep "$delay"; delay=$((delay * 4)); fi
   done
   if [ "$ok" = 1 ]; then
-    printf '%s' "$want" > "$state"
+    printf '%s' "$state_key" > "$state"
     rm -f "$state.stale"
     log "[yolo] synced ($org -> $op_email)"
   else
