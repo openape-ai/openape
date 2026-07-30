@@ -23,6 +23,34 @@ const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?
 
 async function loadEmployees() { employees.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
 
+// YOLO-Drift: was der Worker zuletzt als Operator-Policy gemeldet hat vs. die
+// heutigen Rollen-tools. Fehlt der Report (alter Worker), zeigen wir nichts an.
+interface YoloSyncView {
+  state: { opEmail: string, mode: string, patternCount: number, ok: boolean, error: string, syncedAt: number, reportedAt: number } | null
+  added?: string[]
+  removed?: string[]
+  inSync?: boolean
+}
+const yoloSync = ref<YoloSyncView | null>(null)
+async function loadYoloSync() {
+  try { yoloSync.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/yolo-sync`) }
+  catch { yoloSync.value = null }
+}
+const driftDescription = computed(() => {
+  const s = yoloSync.value
+  if (!s?.state) return ''
+  const changes = [...(s.added ?? []).map(t => `+ ${t}`), ...(s.removed ?? []).map(t => `− ${t}`)].join(' · ')
+  return `Policy zuletzt bestätigt ${agoLabel(s.state.syncedAt)}. Wirkt erst nach dem nächsten Sync: ${changes}`
+})
+function agoLabel(ts: number) {
+  if (!ts) return 'nie'
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts)
+  if (s < 90) return 'gerade eben'
+  if (s < 5400) return `vor ${Math.round(s / 60)} min`
+  if (s < 129600) return `vor ${Math.round(s / 3600)} h`
+  return `vor ${Math.round(s / 86400)} Tagen`
+}
+
 // Provider status — the agentic provider running this company (today: the Claude
 // session loop). Reuses the cockpit presence (active/idle/working/offline).
 const providerMode = ref<'active' | 'idle' | 'working' | 'offline'>('offline')
@@ -38,7 +66,7 @@ async function load() {
   error.value = ''
   try {
     org.value = await ($fetch as any)(`/api/orgs/${orgId.value}`)
-    await Promise.all([loadEmployees(), loadProvider()])
+    await Promise.all([loadEmployees(), loadProvider(), loadYoloSync()])
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
@@ -154,18 +182,18 @@ async function submitForm() {
     if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${editingId.value}`, { method: 'PATCH', body })
     else await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body })
     showForm.value = false
-    await loadEmployees()
+    await Promise.all([loadEmployees(), loadYoloSync()])
   }
   catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
   finally { saving.value = false }
 }
 async function deleteEmployee(e: { id: string }) {
   await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'DELETE' })
-  await loadEmployees()
+  await Promise.all([loadEmployees(), loadYoloSync()])
 }
 async function toggleEmployee(e: { id: string, enabled: boolean }) {
   await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'PATCH', body: { enabled: !e.enabled } })
-  await loadEmployees()
+  await Promise.all([loadEmployees(), loadYoloSync()])
 }
 
 // ── Edit org ──
@@ -247,6 +275,30 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         </div>
 
         <section v-if="tab === 'firma'" class="mb-10">
+          <template v-if="yoloSync?.state">
+            <UAlert
+              v-if="!yoloSync.state.ok"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-shield-alert"
+              title="Policy-Sync fehlgeschlagen"
+              :description="`Letzter Versuch ${agoLabel(yoloSync.state.reportedAt)} — Rollen-Änderungen wirken nicht. ${yoloSync.state.error}`"
+              class="mb-4"
+            />
+            <UAlert
+              v-else-if="!yoloSync.inSync"
+              color="warning"
+              variant="subtle"
+              icon="i-lucide-shield-alert"
+              title="Rollen-Werkzeuge geändert seit dem letzten Policy-Sync"
+              :description="driftDescription"
+              class="mb-4"
+            />
+            <div v-else class="mb-4 flex items-center gap-2 text-xs text-zinc-500">
+              <UIcon name="i-lucide-shield-check" class="size-4 text-success-500" />
+              <span>Operator-Policy aktuell ({{ yoloSync.state.mode }}, {{ yoloSync.state.patternCount }} Muster) · bestätigt {{ agoLabel(yoloSync.state.syncedAt) }}</span>
+            </div>
+          </template>
           <CompanyChart :employees="employees" :owner-email="ownerEmail" @add="openAdd" @edit="openEdit" @delete="deleteEmployee" @toggle="toggleEmployee" />
         </section>
 
