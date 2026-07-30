@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.0
+
+### Minor Changes
+
+- ddc10c5: Approval-Karte erklärt, warum ein Grant wartet: neue Diagnose-Hooks
+  (`defineApprovalDiagnosticHook`, Spiegelbild der Pre-Approval-Hooks) lassen
+  jeden Auto-Approve-Mechanismus seinen eigenen Fehlschlag begründen. Der
+  Grant-Detail-Endpoint hängt die Erklärungen als `pending_diagnostics` an.
+
 ## 0.33.0
 
 ### Minor Changes
