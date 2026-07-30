@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
-import { containsCommandSubstitution, evaluateYoloPolicy, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
+import { containsCommandSubstitution, evaluateYoloPolicy, explainYoloMiss, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -609,4 +609,130 @@ describe('evaluateYoloPolicy with unwrapped bash -c targets', () => {
       resolvedRisk: null,
     })).toBeNull()
   })
+})
+
+describe('explainYoloMiss', () => {
+  function policy(overrides: Record<string, unknown>) {
+    return {
+      agentEmail: 'op@x',
+      audience: 'ape-shell',
+      mode: 'allow-list',
+      enabledBy: 'owner@x',
+      denyRiskThreshold: null,
+      denyPatterns: [],
+      allowPatterns: [],
+      enabledAt: 1,
+      expiresAt: null,
+      updatedAt: 1,
+      ...overrides,
+    } as never
+  }
+
+  it('names the segments that no allow-pattern covers', () => {
+    const p = policy({ mode: 'allow-list', allowPatterns: ['o365-cli mail list*'] })
+    const r = explainYoloMiss({
+      policy: p,
+      target: 'o365-cli mail list --json | jq -r ".[].id"',
+      resolvedRisk: null,
+    })
+    expect(r.reason).toBe('segments-not-allowed')
+    expect(r.unmatchedSegments).toEqual(['jq -r ".[].id"'])
+    expect(r.allowedSegments).toEqual(['o365-cli mail list --json'])
+  })
+
+  it('names the deny pattern that vetoed, and which segment tripped it', () => {
+    const p = policy({ mode: 'allow-list', allowPatterns: ['o365-cli *'], denyPatterns: ['*mail send*'] })
+    const r = explainYoloMiss({
+      policy: p,
+      target: 'o365-cli mail list && o365-cli mail send --to x@y.z',
+      resolvedRisk: null,
+    })
+    expect(r.reason).toBe('denied-by-pattern')
+    expect(r.deniedBy).toBe('*mail send*')
+    expect(r.deniedSegment).toBe('o365-cli mail send --to x@y.z')
+  })
+
+  it('reports a missing policy as such', () => {
+    const r = explainYoloMiss({ policy: null, target: 'anything', resolvedRisk: null })
+    expect(r.reason).toBe('no-policy')
+  })
+
+  it('reports an expired policy with its timestamp', () => {
+    const p = policy({ expiresAt: 1000, allowPatterns: ['*'] })
+    const r = explainYoloMiss({ policy: p, target: 'x', resolvedRisk: null, now: 2000 })
+    expect(r.reason).toBe('policy-expired')
+    expect(r.expiredAt).toBe(1000)
+  })
+
+  it('reports substitution as the explicit-opt-in case', () => {
+    const p = policy({ mode: 'allow-list', allowPatterns: ['o365-cli mail read *'] })
+    const r = explainYoloMiss({
+      policy: p,
+      target: 'o365-cli mail read $(cat /tmp/id)',
+      resolvedRisk: null,
+    })
+    expect(r.reason).toBe('segments-not-allowed')
+    expect(r.substitutionSegments).toEqual(['o365-cli mail read $(cat /tmp/id)'])
+  })
+
+  it('says so when the policy would in fact approve (diagnosis disagrees with the miss)', () => {
+    // Guard against a silently drifting explanation: if this ever fires in
+    // production the UI is lying about the decision, and we want to see it.
+    const p = policy({ mode: 'allow-list', allowPatterns: ['o365-cli *'] })
+    const r = explainYoloMiss({ policy: p, target: 'o365-cli mail list', resolvedRisk: null })
+    expect(r.reason).toBe('would-have-approved')
+  })
+})
+
+describe('diagnosis agrees with the decision (the whole point)', () => {
+  // The explanation is only trustworthy while it cannot contradict the
+  // decision. This walks a matrix of policies × command lines and asserts the
+  // equivalence in both directions:
+  //   decision blocked  ⟺  reason !== 'would-have-approved'
+  // If this ever fails, the card is lying about the decision.
+  const policies = [
+    { label: 'allow-list, mail verbs', mode: 'allow-list', allowPatterns: ['o365-cli mail list*', 'o365-cli mail read *', 'jq *'], denyPatterns: [] },
+    { label: 'allow-list + deny', mode: 'allow-list', allowPatterns: ['o365-cli *'], denyPatterns: ['*mail send*', '*rm -rf*'] },
+    { label: 'allow-list, risk only', mode: 'allow-list', allowPatterns: [], denyPatterns: [], denyRiskThreshold: 'medium' },
+    { label: 'deny-list', mode: 'deny-list', allowPatterns: [], denyPatterns: ['*rm -rf*', '*mail send*'] },
+    { label: 'deny-list, risk only', mode: 'deny-list', allowPatterns: [], denyPatterns: [], denyRiskThreshold: 'low' },
+  ]
+  const lines = [
+    'o365-cli mail list --json',
+    'o365-cli mail send --to x@y.z',
+    'o365-cli mail list --json | jq -r ".[].id"',
+    'o365-cli mail list && rm -rf ~',
+    'o365-cli mail read $(cat /tmp/id)',
+    'jq -r ".x"',
+    'something-unknown --flag',
+  ]
+  const risks = [null, 'low', 'high'] as const
+
+  for (const pol of policies) {
+    for (const line of lines) {
+      for (const risk of risks) {
+        it(`${pol.label} / ${line.slice(0, 34)} / risk=${risk}`, () => {
+          const policy = {
+            agentEmail: 'op@x',
+            audience: 'ape-shell',
+            enabledBy: 'owner@x',
+            denyRiskThreshold: null,
+            allowPatterns: [],
+            denyPatterns: [],
+            enabledAt: 1,
+            expiresAt: null,
+            updatedAt: 1,
+            ...pol,
+          } as never
+          const ctx = { policy, target: line, resolvedRisk: risk } as never
+          const decided = evaluateYoloPolicy(ctx)
+          const explained = explainYoloMiss(ctx)
+          if (decided === null)
+            expect(explained.reason).not.toBe('would-have-approved')
+          else
+            expect(explained.reason).toBe('would-have-approved')
+        })
+      }
+    }
+  }
 })

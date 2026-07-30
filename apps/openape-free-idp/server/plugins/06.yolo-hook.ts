@@ -6,7 +6,7 @@ import { resolveServerShape } from '@openape/grants'
 import { useDb } from '../database/drizzle'
 import { useYoloPolicyStore  } from '../utils/yolo-policy-store'
 import type { RiskLevel } from '../utils/yolo-policy-store'
-import { commandFromRequest, evaluateYoloPolicy, targetFromRequest } from '../utils/yolo-evaluator'
+import { commandFromRequest, evaluateYoloPolicy, explainYoloMiss, targetFromRequest } from '../utils/yolo-evaluator'
 
 export default defineNitroPlugin(async () => {
   // Idempotent schema ensure — safe on every boot, needed under OPENAPE_E2E=1
@@ -142,5 +142,60 @@ export default defineNitroPlugin(async () => {
     const outerTarget = joined !== undefined && joined !== target ? joined : undefined
     const result = evaluateYoloPolicy({ policy, target, targetKind, outerTarget, resolvedRisk })
     return result ? { kind: result.kind, decidedBy: result.decidedBy } : null
+  })
+
+  // Diagnosis twin: same context assembly, same predicates — it just reports
+  // instead of deciding. Answering "why is this pending?" used to require a
+  // script against the live policy (30.07.); now the card says it.
+  defineApprovalDiagnosticHook(async (_event, request) => {
+    let store
+    try { store = useYoloPolicyStore() }
+    catch { return null }
+
+    const policy = await store.get(request.requester, request.audience)
+    const cmd = commandFromRequest(request)
+    let resolvedRisk: RiskLevel | null = null
+    if (policy?.denyRiskThreshold && cmd && cmd.length > 0) {
+      try {
+        const shapeStore = useShapeStore()
+        const resolved = await resolveServerShape(shapeStore, cmd[0]!, cmd)
+        resolvedRisk = (resolved.synthetic ? 'high' : resolved.detail.risk) as RiskLevel
+      }
+      catch { resolvedRisk = 'high' }
+    }
+    const target = targetFromRequest(request)
+    const targetKind = cmd && cmd.length > 0 ? 'command' as const : 'host' as const
+    const joined = cmd && cmd.length > 0 ? cmd.join(' ') : undefined
+    const outerTarget = joined !== undefined && joined !== target ? joined : undefined
+
+    const miss = explainYoloMiss({ policy, target, targetKind, outerTarget, resolvedRisk })
+
+    // Copy is for the owner, not for the log: name the thing to fix.
+    const summaries: Record<string, string> = {
+      'no-policy': 'This agent has no YOLO policy — every request waits for you.',
+      'policy-expired': 'The YOLO policy expired, so nothing is auto-approved any more.',
+      'no-target': 'The request carries no command or host to match a policy against.',
+      'denied-by-pattern': `Blocked by the deny rule ${miss.deniedBy} — deny always wins, in both modes.`,
+      'segments-not-allowed': miss.unmatchedSegments?.length === 1
+        ? `No allow pattern covers this command: ${miss.unmatchedSegments[0]}`
+        : `No allow pattern covers ${miss.unmatchedSegments?.length ?? 0} of the ${miss.segments?.length ?? 0} commands in this line.`,
+      'risk-above-threshold': `The resolved risk (${miss.resolvedRisk}) is above the policy threshold (${miss.riskThreshold}).`,
+      'would-have-approved': 'The YOLO policy would approve this now — it may have changed since the request was made.',
+    }
+
+    return {
+      source: 'yolo',
+      reason: miss.reason,
+      summary: summaries[miss.reason] ?? `YOLO did not fire (${miss.reason}).`,
+      detail: {
+        mode: miss.mode,
+        segments: miss.segments,
+        unmatchedSegments: miss.unmatchedSegments,
+        substitutionSegments: miss.substitutionSegments,
+        deniedBy: miss.deniedBy,
+        deniedSegment: miss.deniedSegment,
+        expiredAt: miss.expiredAt,
+      },
+    }
   })
 })
