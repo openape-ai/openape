@@ -49,6 +49,18 @@ export default defineNitroPlugin(async () => {
     catch { /* column exists */ }
     try { await db.run(sql`ALTER TABLE cockpit_agents ADD COLUMN injection_reason TEXT NOT NULL DEFAULT ''`) }
     catch { /* column exists */ }
+    await db.run(sql`CREATE TABLE IF NOT EXISTS cockpit_yolo_sync (
+      org_id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      op_email TEXT NOT NULL DEFAULT '',
+      mode TEXT NOT NULL DEFAULT '',
+      pattern_count INTEGER NOT NULL DEFAULT 0,
+      tools TEXT NOT NULL DEFAULT '[]',
+      ok INTEGER NOT NULL DEFAULT 1,
+      error TEXT NOT NULL DEFAULT '',
+      synced_at INTEGER NOT NULL DEFAULT 0,
+      reported_at INTEGER NOT NULL
+    )`)
     // memory — company/role/agent-scoped facts the Operator reads (Memory feature).
     await db.run(sql`CREATE TABLE IF NOT EXISTS memory (
       id TEXT PRIMARY KEY,
