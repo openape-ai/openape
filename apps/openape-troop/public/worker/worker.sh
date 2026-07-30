@@ -318,6 +318,25 @@ heartbeat_loop() {
 # dadurch, dass die Rollen-Muster nur Lese-/Ablage-Verben nennen.
 YOLO_DANGEROUS='*rm -rf *,*sudo *,*mkfs*,*dd if=*,*shutdown*,*reboot*,*chmod 777*,*| sh*,*|sh*,*| bash*,*|bash*,*git push --force*,*npm publish*,*pnpm publish*,*apes yolo *,*mail send*,*mail reply*,*mail forward*,*mail trash*,*calendar create*,*calendar update*,*calendar delete*,*calendar accept*,*calendar decline*'
 
+# Sync-Ausgang an troop melden (Drift-Anzeige im Cockpit): orgId + Rollen-Union
+# (allowed.txt) + Modus/Muster-Zahl + ok/Fehler. Fire-and-forget — ein
+# fehlgeschlagener Report darf weder Task noch Sync blocken.
+yolo_report() { # $1 org, $2 op_email, $3 mode, $4 pattern_csv, $5 allowed.txt, $6 ok(0/1), $7 err
+  ORG="$1" OP="$2" MODE="$3" PATS="$4" ALLOWED="$5" OK="$6" ERR="$7" python3 - <<'PYEOF' 2>/dev/null | bash "$CA" yolo-report >/dev/null 2>&1 || true
+import json, os
+try:
+    tools = [l.strip() for l in open(os.environ['ALLOWED']) if l.strip()]
+except OSError:
+    tools = []
+pats = os.environ['PATS']
+print(json.dumps({
+    'orgId': os.environ['ORG'], 'opEmail': os.environ['OP'], 'mode': os.environ['MODE'],
+    'patternCount': len([p for p in pats.split(',') if p]),
+    'tools': tools, 'ok': os.environ['OK'] == '1', 'error': os.environ['ERR'][:500],
+}))
+PYEOF
+}
+
 yolo_sync() { # $1 = allowed.txt, $2 = orgId
   local want org="$2" state op_email
   state="$DIR/yolo-synced-$org.txt"
@@ -385,12 +404,19 @@ PYEOF
       rm -f "$DIR/.yolo-broad.tmp"
     fi
   fi
+  local mode_str="allow-list" pats_str="$want"
+  [ "$wildcard" = 1 ] && { mode_str="deny-list"; pats_str="$YOLO_DANGEROUS"; }
   # Deny-Liste in den State-Vergleich: sonst haelt die Idempotenz-Abkuerzung
   # eine Policy fuer aktuell, deren Veto-Liste sich geaendert hat.
   local state_key="$want|DENY:$YOLO_DANGEROUS"
-  [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$state_key" ] && return 0
   op_email=$(ORG="$org" python3 -c 'import json,os
 print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.json"))).get(os.environ["ORG"]) or {}).get("email",""))' 2>/dev/null) || op_email=""
+  if [ -f "$state" ] && [ "$(cat "$state" 2>/dev/null)" = "$state_key" ]; then
+    # Policy unveraendert aktuell — trotzdem melden, damit das Cockpit "zuletzt
+    # bestaetigt" zeigen kann statt ins Blaue zu altern.
+    yolo_report "$org" "$op_email" "$mode_str" "$pats_str" "$1" 1 ""
+    return 0
+  fi
   [ -n "$op_email" ] || return 0
   # Retry mit Backoff statt einmal-und-aufgeben: der PUT teilt sich das
   # IdP-Rate-Limit-Bucket mit Token-Refresh und /authorize und trifft
@@ -428,6 +454,7 @@ print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.jso
     printf '%s' "$state_key" > "$state"
     rm -f "$state.stale"
     log "[yolo] synced ($org -> $op_email)"
+    yolo_report "$org" "$op_email" "$mode_str" "$pats_str" "$1" 1 ""
   else
     # Eine stale Policy ist gefaehrlich STILL: sie sieht im Betrieb aus wie
     # "der Operator darf das halt nicht". Deshalb Alter + echter Fehlertext
@@ -440,6 +467,7 @@ print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.jso
     fi
     date +%s > "$state.stale"
     log "[yolo] SYNC FEHLGESCHLAGEN nach $attempt Versuchen ($org -> $op_email) — Policy ist $age alt, Rollen-Aenderungen wirken NICHT. Fehler: $(printf '%s' "$err" | tr '\n' ' ' | cut -c1-180)"
+    yolo_report "$org" "$op_email" "$mode_str" "$pats_str" "$1" 0 "$(printf '%s' "$err" | tr '\n' ' ')"
   fi
 }
 
