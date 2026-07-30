@@ -401,6 +401,94 @@ describe('evaluateYoloPolicy', () => {
   })
 })
 
+describe('deny wins over allow (both modes)', () => {
+  function policy(overrides: Record<string, unknown>) {
+    return {
+      agentEmail: 'op@x',
+      audience: 'ape-shell',
+      mode: 'allow-list',
+      enabledBy: 'owner@x',
+      denyRiskThreshold: null,
+      denyPatterns: [],
+      allowPatterns: [],
+      enabledAt: 1,
+      expiresAt: null,
+      updatedAt: 1,
+      ...overrides,
+    } as never
+  }
+
+  it('allow-list: a deny hit blocks even when every segment is allowed', () => {
+    // The asymmetry this closes: denyPatterns used to be stored-but-inert in
+    // allow-list mode. A role that hands out a whole CLI (`o365-cli *`) then
+    // auto-approved `mail send` — the exact hole found on 2026-07-30.
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli *'],
+      denyPatterns: ['*mail send*'],
+    })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'o365-cli mail send --to x@y.z --subject hi',
+      resolvedRisk: null,
+    })).toBeNull()
+  })
+
+  it('allow-list: the same policy still approves what is not denied', () => {
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli *'],
+      denyPatterns: ['*mail send*'],
+    })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'o365-cli mail list --json',
+      resolvedRisk: null,
+    })).toEqual({ kind: 'yolo', decidedBy: 'owner@x' })
+  })
+
+  it('allow-list: a deny hit in ANY segment blocks the whole line', () => {
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli *', 'jq *'],
+      denyPatterns: ['*mail send*'],
+    })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'o365-cli mail list | jq . && o365-cli mail send --to x@y.z',
+      resolvedRisk: null,
+    })).toBeNull()
+  })
+
+  it('allow-list: deny also beats the risk-threshold path', () => {
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: [],
+      denyPatterns: ['*mail send*'],
+      denyRiskThreshold: 'high',
+    })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'o365-cli mail send --to x@y.z',
+      resolvedRisk: 'low',
+    })).toBeNull()
+  })
+
+  it('allow-list: outer bash -c deny form still blocks after the unwrap', () => {
+    const p = policy({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli *'],
+      denyPatterns: ['bash -c *mail send*'],
+    })
+    expect(evaluateYoloPolicy({
+      policy: p,
+      target: 'o365-cli mail send --to x@y.z',
+      outerTarget: 'bash -c o365-cli mail send --to x@y.z',
+      resolvedRisk: null,
+    })).toBeNull()
+  })
+})
+
 describe('targetFromRequest', () => {
   it('prefers command over target_host', () => {
     expect(targetFromRequest({
