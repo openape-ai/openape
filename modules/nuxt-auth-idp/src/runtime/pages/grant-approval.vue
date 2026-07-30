@@ -27,6 +27,9 @@ const EXTEND_MODE_OPTIONS = [
   { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
 ]
 const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
+// Why is this still pending? Filled by the IdP's diagnostic hooks — one entry
+// per auto-approval mechanism that could have fired and didn't.
+const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 /**
  * True when this grant was requested via the `apes` generic-fallback path.
@@ -575,6 +578,32 @@ function isExactCommand(detail) {
                 :min="60"
                 placeholder="Duration in seconds"
               />
+            </div>
+          </div>
+
+          <div v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
+            <h3 class="text-sm font-semibold">
+              Why this is waiting
+            </h3>
+            <div v-for="d in pendingDiagnostics" :key="d.source" class="space-y-1">
+              <p class="text-sm">
+                <span class="text-dimmed">{{ d.source }}:</span> {{ d.summary }}
+              </p>
+              <ul v-if="d.detail?.unmatchedSegments?.length" class="space-y-1">
+                <li
+                  v-for="seg in d.detail.unmatchedSegments"
+                  :key="seg"
+                  class="break-all rounded bg-elevated px-2 py-1 font-mono text-xs"
+                >
+                  {{ seg }}
+                </li>
+              </ul>
+              <p v-if="d.detail?.deniedSegment" class="break-all rounded bg-elevated px-2 py-1 font-mono text-xs">
+                {{ d.detail.deniedSegment }}
+              </p>
+              <p v-if="d.detail?.substitutionSegments?.length" class="text-xs text-muted">
+                Contains command substitution — a pattern must spell the construct out to allow it.
+              </p>
             </div>
           </div>
 
