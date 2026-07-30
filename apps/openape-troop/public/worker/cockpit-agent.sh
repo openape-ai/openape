@@ -289,6 +289,9 @@ for s in json.load(sys.stdin):
       call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s,"doctor":%s}' "${1:-12000}" "$REPORT")"
     echo "$REPORT" ;;
   next)      call POST "$TP/next" ;;
+  yolo-report) # always troop; stdin = JSON body {orgId,opEmail,mode,patternCount,tools,ok,error}
+    SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
+      call POST /api/cockpit/agent/yolo-sync "$(cat)" ;;
   memory)    # always troop; prints the doc body for the Operator to read
     ID="${1:?usage: cockpit-agent.sh memory <id>}"
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \

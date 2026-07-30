@@ -420,6 +420,24 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
 
+// cockpit_yolo_sync — was der Worker zuletzt als YOLO-Policy des Firmen-Operators
+// ans IdP gemeldet hat. Ein Row pro Org; der Worker berichtet nach jedem
+// yolo_sync (auch auf dem idempotenten Skip-Pfad). `tools` ist die Rollen-Union
+// (allowed.txt) zum Zeitpunkt des letzten erfolgreichen Syncs — Drift = Vergleich
+// mit der aktuellen Union, ohne die Muster-Ableitung des Workers nachzubauen.
+export const cockpitYoloSync = sqliteTable('cockpit_yolo_sync', {
+  orgId: text('org_id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  opEmail: text('op_email').notNull().default(''),
+  mode: text('mode').notNull().default(''),
+  patternCount: integer('pattern_count').notNull().default(0),
+  tools: text('tools', { mode: 'json' }).notNull().$type<string[]>().default([]),
+  ok: integer('ok', { mode: 'boolean' }).notNull().default(true),
+  error: text('error').notNull().default(''),
+  syncedAt: integer('synced_at').notNull().default(0),
+  reportedAt: integer('reported_at').notNull(),
+})
+
 // memory — nachschlagbare Fakten/Referenz für die Agents einer Firma (≈ CLAUDE.md/
 // Memory). `scope`: 'company' (jede Rolle) | 'role' (nur diese Rolle) | 'agent'
 // (nur dieser cockpit_agent). `targetId` = Rollen-String bzw. cockpit_agent-id;
