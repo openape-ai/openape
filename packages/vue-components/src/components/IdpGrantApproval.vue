@@ -246,8 +246,7 @@ function isExactCommand(detail: any) {
 
         <!-- Request details -->
         <div
-          :class="[
-            'rounded-md border p-4',
+          class="rounded-md border p-4" :class="[
             isDelegate
               ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
               : 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800',
@@ -342,8 +341,7 @@ function isExactCommand(detail: any) {
                     <span class="inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300">{{ detail.action }}</span>
                     <span class="inline-flex items-center rounded-md bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-300">{{ detail.risk }}</span>
                     <span
-                      :class="[
-                        'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium',
+                      class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium" :class="[
                         isExactCommand(detail)
                           ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300'
                           : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
@@ -505,8 +503,7 @@ function isExactCommand(detail: any) {
       <!-- Already decided -->
       <div v-else class="space-y-4">
         <div
-          :class="[
-            'rounded-md border p-4',
+          class="rounded-md border p-4" :class="[
             grant.status === 'approved'
               ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
               : grant.status === 'denied'
