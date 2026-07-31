@@ -27,6 +27,11 @@ export interface RunManifest {
   project?: string
   /** Markdown. */
   summary?: string
+  /**
+   * Optional stability key: re-uploads with the same series (per uploader)
+   * update the same report link instead of creating a new one.
+   */
+  series?: string
   startedAt?: string
   finishedAt?: string
   tests: RunTest[]
@@ -73,6 +78,7 @@ export function validateManifest(raw: unknown): RunManifest {
   const title = asTrimmedString(m.title, 'title', { required: true, max: 300 })!
   const project = asTrimmedString(m.project, 'project', { max: 200 })
   const summary = asTrimmedString(m.summary, 'summary')
+  const series = asTrimmedString(m.series, 'series', { max: 200 })
   const startedAt = asTrimmedString(m.startedAt, 'startedAt', { max: 64 })
   const finishedAt = asTrimmedString(m.finishedAt, 'finishedAt', { max: 64 })
 
@@ -129,7 +135,7 @@ export function validateManifest(raw: unknown): RunManifest {
     }
   })
 
-  return { title, project, summary, startedAt, finishedAt, tests }
+  return { title, project, summary, series, startedAt, finishedAt, tests }
 }
 
 export function aggregateStatus(tests: RunTest[]): { status: RunStatus, passed: number, failed: number, skipped: number } {
