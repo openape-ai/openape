@@ -18,15 +18,16 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
+      // ratchet: raise as coverage improves
       thresholds: {
         // Agent-runtime cluster (agent-runtime.ts, agent-tools/, coding/)
         // was extracted into @openape/agent-runtime and its tests moved
         // there. Remaining apes code is mostly CLI command wrappers and
         // shell-out helpers that are integration-tested via dogfood, not
         // unit-tested here. Thresholds adjusted to reflect the new scope.
-        statements: 45,
-        functions: 45,
-        lines: 45,
+        statements: 52,
+        functions: 50,
+        lines: 54,
       },
     },
   },
