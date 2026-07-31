@@ -32,7 +32,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
@@ -42,7 +43,8 @@
   "devDependencies": {
     "@types/node": "^22.20.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=20"
