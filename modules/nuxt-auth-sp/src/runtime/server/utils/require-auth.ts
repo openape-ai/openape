@@ -43,8 +43,11 @@ function grantCoversRequest(grant: string, method: string, path: string): boolea
 }
 
 /**
- * Scope enforcement chokepoint (sp-data-access.md §5.3). Only delegated
- * tokens carry `scope`; first-party callers pass through unchanged.
+ * Scope enforcement chokepoint (sp-data-access.md §5.3). Throws 403 unless the
+ * held scopes cover `METHOD path`. Exported so SPs whose own auth helpers
+ * resolve the token themselves (troop's `requireOwner`) enforce the SAME rule
+ * instead of a second, drifting one. Callers with no scope claim at all are
+ * first-party and must not reach this.
  *
  * Catalog first, convention fallback (#1033, blocker found in #1047):
  *
@@ -56,30 +59,35 @@ function grantCoversRequest(grant: string, method: string, path: string): boolea
  *      without a catalog entry — so read/write-pair SPs (tasks, timetrack)
  *      behave exactly as before.
  */
-function enforceScope(event: H3Event, caller: Caller): Caller {
-  if (!caller.scope) return caller
-  if (caller.scope.length === 0) {
+export function assertScopeCoversRequest(event: H3Event, scope: string[]): void {
+  if (scope.length === 0) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden', message: 'Delegated token carries no scope' })
   }
   const method = getMethod(event).toUpperCase()
   const path = event.path.split('?')[0]!
 
-  const heldCatalogEntries = getCatalogScopes().filter(entry => caller.scope!.includes(entry.id))
+  const heldCatalogEntries = getCatalogScopes().filter(entry => scope.includes(entry.id))
   const catalogCovers = heldCatalogEntries.some(entry =>
     entry.grants?.some(grant => grantCoversRequest(grant, method, path)))
-  if (catalogCovers) return caller
+  if (catalogCovers) return
 
-  const prefix = caller.scope[0]!.split(':')[0]
+  const prefix = scope[0]!.split(':')[0]
   const needed = method === 'GET' || method === 'HEAD' ? `${prefix}:read` : `${prefix}:write`
-  if (caller.scope.includes(needed)) return caller
+  if (scope.includes(needed)) return
 
   throw createError({
     statusCode: 403,
     statusMessage: 'Forbidden',
     message: heldCatalogEntries.length > 0
-      ? `Delegated token scopes (${caller.scope.join(', ')}) do not cover ${method} ${path}: no catalog grant matches this route and conventional scope "${needed}" is not held`
-      : `Delegated token lacks required scope "${needed}" for ${method} ${path} (has: ${caller.scope.join(', ')})`,
+      ? `Delegated token scopes (${scope.join(', ')}) do not cover ${method} ${path}: no catalog grant matches this route and conventional scope "${needed}" is not held`
+      : `Delegated token lacks required scope "${needed}" for ${method} ${path} (has: ${scope.join(', ')})`,
   })
+}
+
+function enforceScope(event: H3Event, caller: Caller): Caller {
+  if (!caller.scope) return caller
+  assertScopeCoversRequest(event, caller.scope)
+  return caller
 }
 
 interface SpSessionData {
