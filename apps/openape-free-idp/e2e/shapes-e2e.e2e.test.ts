@@ -1,10 +1,11 @@
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { Buffer } from 'node:buffer'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { spawn, spawnSync } from 'node:child_process'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spawn, spawnSync } from 'node:child_process'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
+import { makeTempDir, startServer } from 'openape-e2e/lifecycle'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const testFile = fileURLToPath(import.meta.url)
@@ -19,20 +20,6 @@ const AGENT_EMAIL = 'agent+e2e@example.com'
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function waitForServer(url: string, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url)
-      if (response.ok)
-        return
-    }
-    catch {}
-    await wait(250)
-  }
-  throw new Error(`Timed out waiting for server: ${url}`)
 }
 
 async function waitForGrantId(
@@ -130,26 +117,22 @@ async function createAgentToken(baseUrl: string, privateKey: CryptoKey, agentEma
 
 describe('free-idp + shapes end-to-end', () => {
   let sandboxDir = ''
-  let server: ReturnType<typeof spawn> | null = null
+  let server: RunningServer | null = null
 
   beforeEach(() => {
-    sandboxDir = mkdtempSync(join(tmpdir(), 'openape-shapes-e2e-'))
+    // Tracked temp dir: a crashed run's sandbox is removed by the next run.
+    sandboxDir = makeTempDir('openape-shapes-e2e-')
   })
 
-  afterEach(() => {
-    if (server) {
-      server.kill('SIGTERM')
-      server = null
-    }
+  afterEach(async () => {
+    await server?.stop()
+    server = null
     if (sandboxDir) {
       rmSync(sandboxDir, { recursive: true, force: true })
     }
   })
 
   it('runs shapes request through grant creation, approval, token fetch, consume, and wrapped CLI execution', async () => {
-    const port = 3311 + Math.floor(Math.random() * 200)
-    const baseUrl = `http://127.0.0.1:${port}`
-
     // Build via turbo (not `pnpm --filter`): turbo builds @openape/apes's
     // workspace deps first (build dependsOn ^build), so a fresh checkout — CI,
     // where apes isn't otherwise "affected" by a free-idp change — doesn't fail
@@ -161,25 +144,20 @@ describe('free-idp + shapes end-to-end', () => {
     })
     expect(build.status, `\`@openape/apes\` build failed (status ${build.status}):\n${build.stderr}\n${build.stdout}`).toBe(0)
 
-    server = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
+    server = await startServer({
       cwd: appDir,
-      env: {
-        ...process.env,
+      readyPath: '/.well-known/openid-configuration',
+      timeoutMs: 120_000, // cold CI boot on shared runners (#991)
+      env: ({ url }) => ({
         OPENAPE_E2E: '1',
-        OPENAPE_ISSUER: baseUrl,
-        OPENAPE_RP_ORIGIN: baseUrl,
+        OPENAPE_ISSUER: url,
+        OPENAPE_RP_ORIGIN: url,
         OPENAPE_RP_ID: '127.0.0.1',
         OPENAPE_SESSION_SECRET: SESSION_SECRET,
         OPENAPE_MANAGEMENT_TOKEN: MANAGEMENT_TOKEN,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      }),
     })
-
-    let serverLogs = ''
-    server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
-
-    await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 120_000) // cold CI boot on shared runners (#991)
+    const baseUrl = server.url
 
     const { publicKey, privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
     const sshPublicKey = await publicKeyToSsh(publicKey)
@@ -255,7 +233,7 @@ describe('free-idp + shapes end-to-end', () => {
           `apes exited before creating a grant (code: ${apesExitCode})`,
           `stdout:\n${apesStdout}`,
           `stderr:\n${apesStderr}`,
-          `server:\n${serverLogs}`,
+          `server:\n${server?.logs()}`,
         ].join('\n\n'))
       }
     })
@@ -291,6 +269,7 @@ describe('free-idp + shapes end-to-end', () => {
     expect(grant.status).toBe('used')
     expect(grant.used_at).toBeTypeOf('number')
 
+    const serverLogs = server.logs()
     if (serverLogs.includes('ERROR')) {
       expect(serverLogs).not.toContain(' ERROR ')
     }

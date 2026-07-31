@@ -1,8 +1,9 @@
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { Buffer } from 'node:buffer'
-import { spawn } from 'node:child_process'
 import { generateKeyPairSync, sign } from 'node:crypto'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { startServer } from 'openape-e2e/lifecycle'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const appDir = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -11,23 +12,6 @@ const MANAGEMENT_TOKEN = 'openape-ssh-key-test-management-token'
 const SESSION_SECRET = 'openape-ssh-key-test-session-secret-123456'
 const USER_EMAIL = 'ssh-key-test@example.com'
 const USER_NAME = 'SSH Key Test User'
-
-function wait(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function waitForServer(url: string, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url)
-      if (res.ok) return
-    }
-    catch {}
-    await wait(250)
-  }
-  throw new Error(`Timed out waiting for server: ${url}`)
-}
 
 function sshEd25519Line(rawPublicKey: Buffer, comment: string): string {
   const keyType = Buffer.from('ssh-ed25519')
@@ -39,20 +23,20 @@ function sshEd25519Line(rawPublicKey: Buffer, comment: string): string {
 }
 
 describe('SSH-key login for humans', () => {
-  const port = 3401 + Math.floor(Math.random() * 200)
-  const baseUrl = `http://127.0.0.1:${port}`
-  let server: ReturnType<typeof spawn> | null = null
-  let serverLogs = ''
+  let baseUrl = ''
+  let server: RunningServer | null = null
 
   beforeAll(async () => {
-    server = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
+    // The lifecycle helper polls the ready URL and throws with the log tail on
+    // failure; 120s covers cold CI boots on shared runners (#991).
+    server = await startServer({
       cwd: appDir,
-      detached: true,
-      env: {
-        ...process.env,
+      readyPath: '/.well-known/openid-configuration',
+      timeoutMs: 120_000,
+      env: ({ url }) => ({
         OPENAPE_E2E: '1',
-        OPENAPE_ISSUER: baseUrl,
-        OPENAPE_RP_ORIGIN: baseUrl,
+        OPENAPE_ISSUER: url,
+        OPENAPE_RP_ORIGIN: url,
         OPENAPE_RP_ID: '127.0.0.1',
         OPENAPE_RP_HOST_ALLOWLIST: '127.0.0.1',
         OPENAPE_SESSION_SECRET: SESSION_SECRET,
@@ -60,29 +44,14 @@ describe('SSH-key login for humans', () => {
         OPENAPE_ADMIN_EMAILS: USER_EMAIL,
         NUXT_TURSO_URL: 'file::memory:',
         NUXT_TURSO_AUTH_TOKEN: '',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      }),
     })
-    server.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    server.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
-
-    try {
-      await waitForServer(`${baseUrl}/.well-known/openid-configuration`, 120_000) // cold CI boot on shared runners (#991)
-    }
-    catch (err) {
-      console.error('Server failed to start. Last logs:\n', serverLogs.slice(-4000))
-      throw err
-    }
+    baseUrl = server.url
   }, 150_000) // inline arg OVERRIDES config hookTimeout — must exceed the boot wait (#991)
 
   afterAll(async () => {
-    if (server?.pid) {
-      // Kill the process group so the nuxt child dies with the pnpm wrapper
-      try { process.kill(-server.pid, 'SIGKILL') }
-      catch { /* already gone */ }
-    }
+    await server?.stop()
     server = null
-    await wait(200)
   })
 
   it('issues a JWT with act:"human" after a successful SSH-key challenge/response', async () => {
