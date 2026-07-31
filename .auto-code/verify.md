@@ -14,6 +14,24 @@ pnpm turbo run test --filter=<pkg>         # Vitest
 
 **Definition of Done (from the monorepo CLAUDE.md):** `pnpm lint` and `pnpm typecheck` must be clean before any commit. For **app** changes also `pnpm turbo run build --filter=<app>` and check locally. For **Nuxt-module** changes, typecheck the playground too (`pnpm turbo run typecheck --filter=@openape/nuxt-auth-idp`). Never verify via workarounds; if the real flow can't run, escalate.
 
+## Proof rules — no claimed step without observed evidence
+- **Bugfix = RED proven, not asserted.** Write the failing test first and watch it
+  fail. If the fix is already in place, prove RED once: `git stash` the fix, run the
+  test, capture the failure message, `git stash pop`. A test that also passes
+  without the fix tests nothing. The captured RED output goes into the PR body.
+- **No RED possible** (dead-code removal, config, docs): substitute proof = a short
+  usage analysis (who consumed this, why it's safe) + the affected suite green
+  before and after.
+- **Every "done / green / pushed" claim needs the observed output that shows it**
+  (test summary line, `git ls-remote` SHA, `ape-tasks … --json` state). A report of
+  a step you didn't watch happen is a false report.
+
+## Review findings — severity calibration
+A blocker is only what breaks function or makes the change untraceable — style and
+convention are never blockers. Confirmed finding you caused → fix it here.
+Confirmed but pre-existing → its own follow-up ape-task, not scope creep in this
+PR. Not confirmed → one line saying why. Findings are checked, not believed.
+
 Code style is Composition API + `<script setup>` + @nuxt/ui + Tailwind (NOT iurio's Options API/Bootstrap-Vue) — match the surrounding code.
 
 ## DDISA protocol compliance (mandatory gate for protocol-relevant changes)
