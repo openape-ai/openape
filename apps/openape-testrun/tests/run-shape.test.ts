@@ -47,6 +47,15 @@ describe('validateManifest — happy path', () => {
     raw.tests[0]!.steps[0]!.shot = 'a/b/c-1.webp'
     expect(() => validateManifest(raw)).not.toThrow()
   })
+
+  it('accepts and trims an optional series key', () => {
+    const raw = { ...validManifest(), series: '  e2e-main  ' }
+    expect(validateManifest(raw).series).toBe('e2e-main')
+  })
+
+  it('leaves series undefined when absent', () => {
+    expect(validateManifest(validManifest()).series).toBeUndefined()
+  })
 })
 
 describe('validateManifest — rejections (400)', () => {
@@ -85,6 +94,11 @@ describe('validateManifest — rejections (400)', () => {
     const raw = validManifest()
     raw.title = 'x'.repeat(301)
     expectProblem(() => validateManifest(raw), 400, /exceeds 300/)
+  })
+
+  it('rejects a non-string or over-length series', () => {
+    expectProblem(() => validateManifest({ ...validManifest(), series: 42 }), 400, /"series" must be a string/)
+    expectProblem(() => validateManifest({ ...validManifest(), series: 'x'.repeat(201) }), 400, /exceeds 200/)
   })
 
   it('rejects a shot with a non-image extension', () => {

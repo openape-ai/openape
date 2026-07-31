@@ -1,13 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { defineEventHandler, setResponseStatus } from 'h3'
 import { useDb } from '../../database/drizzle'
-import { assets, runs } from '../../database/schema'
+import { assets, runVersions, runs } from '../../database/schema'
 import { loadOwnRun } from '../../utils/run-access'
 
 /**
  * DELETE /api/runs/:id — delete a run and its assets (uploader only).
- * The run row is soft-deleted (slug stops resolving); asset blobs are
- * removed immediately to free space.
+ * The run row is soft-deleted (slug stops resolving); asset blobs and
+ * archived series versions are removed immediately to free space.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   await db.update(runs).set({ deletedAt: now }).where(eq(runs.id, run.id))
   await db.delete(assets).where(eq(assets.runId, run.id))
+  await db.delete(runVersions).where(eq(runVersions.runId, run.id))
 
   setResponseStatus(event, 204)
   return null

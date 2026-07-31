@@ -20,7 +20,8 @@ const CONTENT_TYPES: Record<string, string> = {
  * PUT /api/runs/:id/assets/<path> — upload one screenshot (uploader only).
  * Raw binary body. The path must be referenced by the run's manifest
  * (`shot` field), which also guarantees it is a safe relative image path.
- * Re-uploading the same path replaces the previous bytes.
+ * Re-uploading the same path replaces the previous bytes of the run's
+ * CURRENT version; shots of archived series versions stay untouched.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
@@ -50,7 +51,7 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb()
   const now = Math.floor(Date.now() / 1000)
-  await db.delete(assets).where(and(eq(assets.runId, run.id), eq(assets.path, decoded)))
+  await db.delete(assets).where(and(eq(assets.runId, run.id), eq(assets.path, decoded), eq(assets.version, run.version)))
   await db.insert(assets).values({
     id: ulid(),
     runId: run.id,
@@ -59,6 +60,7 @@ export default defineEventHandler(async (event) => {
     size: body.length,
     bytes: body,
     createdAt: now,
+    version: run.version,
   })
 
   setResponseStatus(event, 201)

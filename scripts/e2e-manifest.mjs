@@ -4,7 +4,10 @@
 // downloadable artifact).
 //
 //   node scripts/e2e-manifest.mjs --out /tmp/e2e-run [--sha <sha>] [--run-url <url>] \
-//     core=/tmp/e2e-report-core.json testrun=/tmp/e2e-report-testrun.json …
+//     [--series <key>] core=/tmp/e2e-report-core.json testrun=/tmp/e2e-report-testrun.json …
+//
+// --series sets the manifest's stable series key (e.g. `e2e-<branch>`) so
+// re-runs update the same testrun.openape.ai link instead of minting new ones.
 //
 // Each positional is `<suite-name>=<vitest-json-report>`. A MISSING report
 // file is expected CI reality (a failed step aborts the later suites) and
@@ -113,7 +116,7 @@ function countByStatus(entries) {
  * `suites` is `[{ name, report }]` where `report` is the parsed vitest JSON
  * report or `null` when the suite wrote none (did not run / crashed).
  */
-export function buildManifest(suites, { sha, runUrl } = {}) {
+export function buildManifest(suites, { sha, runUrl, series } = {}) {
   if (!Array.isArray(suites) || suites.length === 0) {
     throw new Error('no suites given')
   }
@@ -167,6 +170,9 @@ export function buildManifest(suites, { sha, runUrl } = {}) {
   return {
     title: `E2E ${day} · ${sha ? sha.slice(0, 7) : 'local'}`,
     project: 'openape',
+    // Stable per-branch key: re-runs update the same proof link (version +1)
+    // instead of minting a new one per CI run.
+    ...(series ? { series: truncate(series, 200) } : {}),
     summary: truncate(summaryParts.join('\n\n'), MAX_TEXT),
     ...(startedAt ? { startedAt } : {}),
     ...(finishedAt ? { finishedAt } : {}),
@@ -175,7 +181,7 @@ export function buildManifest(suites, { sha, runUrl } = {}) {
 }
 
 function parseArgs(argv) {
-  const spec = { out: undefined, sha: undefined, runUrl: undefined, suites: [] }
+  const spec = { out: undefined, sha: undefined, runUrl: undefined, series: undefined, suites: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--out') {
@@ -186,6 +192,9 @@ function parseArgs(argv) {
     }
     else if (arg === '--run-url') {
       spec.runUrl = argv[++i]
+    }
+    else if (arg === '--series') {
+      spec.series = argv[++i]
     }
     else if (arg.startsWith('--')) {
       throw new Error(`unknown flag ${arg}`)
@@ -218,7 +227,7 @@ function main() {
     return { name, report }
   })
 
-  const manifest = buildManifest(suites, { sha: spec.sha, runUrl: spec.runUrl })
+  const manifest = buildManifest(suites, { sha: spec.sha, runUrl: spec.runUrl, series: spec.series })
   mkdirSync(spec.out, { recursive: true })
   const outFile = join(spec.out, 'testrun.json')
   writeFileSync(outFile, `${JSON.stringify(manifest, null, 2)}\n`)
