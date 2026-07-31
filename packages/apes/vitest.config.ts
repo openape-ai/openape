@@ -13,6 +13,9 @@ export default defineConfig({
     // three. The timeout bump gives headroom so retries are rarely needed.
     retry: 2,
     testTimeout: 15000,
+    // beforeAll in commands.test.ts spawns key setup; the 10s default tripped
+    // on the loaded CI runner with coverage on (run 3099: import phase 132s)
+    hookTimeout: 60000,
     coverage: {
       provider: 'istanbul',
       include: ['src/**/*.ts'],
