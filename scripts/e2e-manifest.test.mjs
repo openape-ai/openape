@@ -51,6 +51,12 @@ test('marks tests that passed only after retry as flaky', () => {
   assert.equal(manifest.tests[0].status, 'passed')
 })
 
+test('carries the series key into the manifest, omitting it when unset', () => {
+  const suites = [{ name: 'core', report: vitestReport([fileResult('/repo/t.test.ts', [passing])]) }]
+  assert.equal(buildManifest(suites, { series: 'e2e-main' }).series, 'e2e-main')
+  assert.equal(buildManifest(suites).series, undefined)
+})
+
 test('records a missing suite report as an explicit skipped entry', () => {
   const manifest = buildManifest([
     { name: 'core', report: vitestReport([fileResult('/repo/t.test.ts', [passing])]) },
