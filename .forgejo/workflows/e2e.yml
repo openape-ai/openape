@@ -75,11 +75,15 @@ jobs:
       # step allowed to fail the job — a broken manifest script must be loud.
       - name: Build testrun manifest
         if: always()
+        # --series is the per-branch stability key: re-runs on the same branch
+        # (or PR head branch) update ONE proof link, version-counted, instead
+        # of minting a new link per CI run.
         run: |
           node --test scripts/e2e-manifest.test.mjs
           node scripts/e2e-manifest.mjs --out /tmp/e2e-run \
             --sha "$GITHUB_SHA" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_NUMBER" \
+            --series "e2e-${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
             core=/tmp/e2e-report-core.json \
             testrun=/tmp/e2e-report-testrun.json \
             free-idp=/tmp/e2e-report-freeidp.json

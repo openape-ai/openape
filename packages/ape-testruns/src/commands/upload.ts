@@ -10,6 +10,7 @@ interface CreateRunResponse {
   slug: string
   url: string
   status: 'passed' | 'failed' | 'skipped'
+  version?: number
   expected_assets: string[]
 }
 
@@ -35,6 +36,7 @@ export const uploadCommand = defineCommand({
     title: { type: 'string', description: 'Override the manifest title.' },
     project: { type: 'string', description: 'Override the manifest project.' },
     summary: { type: 'string', description: 'Override the manifest summary (markdown).' },
+    series: { type: 'string', description: 'Stable series key — re-uploads with the same key update the same link (version +1).' },
     json: { type: 'boolean', description: 'Print the full result as JSON instead of just the URL.' },
     endpoint: { type: 'string', description: 'Override testrun endpoint.' },
   },
@@ -55,10 +57,12 @@ export const uploadCommand = defineCommand({
     if (args.title) manifest.title = args.title
     if (args.project) manifest.project = args.project
     if (args.summary) manifest.summary = args.summary
+    if (args.series) manifest.series = args.series
 
     const endpoint = resolveEndpoint(args.endpoint)
     const run = await apiCall<CreateRunResponse>('POST', '/api/runs', { body: manifest, endpoint })
-    info(`Run created (${run.status}) — uploading ${run.expected_assets.length} screenshot(s)…`)
+    const action = (run.version ?? 1) > 1 ? `updated to version ${run.version}` : 'created'
+    info(`Run ${action} (${run.status}) — uploading ${run.expected_assets.length} screenshot(s)…`)
 
     const missing: string[] = []
     let uploaded = 0
@@ -85,7 +89,7 @@ export const uploadCommand = defineCommand({
     info(`Uploaded ${uploaded}/${run.expected_assets.length} screenshot(s).`)
 
     if (args.json) {
-      printJson({ id: run.id, slug: run.slug, url: run.url, status: run.status, uploaded, missing })
+      printJson({ id: run.id, slug: run.slug, url: run.url, status: run.status, version: run.version ?? 1, uploaded, missing })
       return
     }
     printLine(run.url)

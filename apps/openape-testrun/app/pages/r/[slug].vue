@@ -15,6 +15,12 @@ interface PublicTest {
   steps: PublicStep[]
 }
 
+interface RunVersion {
+  version: number
+  status: 'passed' | 'failed' | 'skipped'
+  created_at: number
+}
+
 interface PublicRun {
   title: string
   project: string | null
@@ -28,11 +34,21 @@ interface PublicRun {
   created_by: string
   created_by_act: 'human' | 'agent'
   created_at: number
+  version: number
+  latest_version: number
+  versions: RunVersion[]
   tests: PublicTest[]
 }
 
 const route = useRoute()
-const { data: run, error } = await useFetch<PublicRun>(`/api/public/runs/${route.params.slug}`)
+const { data: run, error } = await useFetch<PublicRun>(
+  `/api/public/runs/${route.params.slug}`,
+  { query: computed(() => (route.query.v ? { v: route.query.v } : {})) },
+)
+
+function versionLink(version: number) {
+  return { path: route.path, query: version === run.value?.latest_version ? {} : { v: version } }
+}
 
 useSeoMeta({
   title: () => run.value ? `${run.value.title} — OpenApe Testrun` : 'OpenApe Testrun',
@@ -93,6 +109,24 @@ function fmtDuration(start: number | null, finish: number | null): string | null
             <span v-if="fmtDuration(run.started_at, run.finished_at)">⏱ {{ fmtDuration(run.started_at, run.finished_at) }}</span>
             <span>{{ fmtDate(run.created_at) }}</span>
             <span>by {{ run.created_by }}<template v-if="run.created_by_act === 'agent'"> 🤖</template></span>
+          </div>
+          <div v-if="run.versions.length > 1" class="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+            <span>
+              Version {{ run.version }} of {{ run.latest_version }}
+              <template v-if="run.version !== run.latest_version">(superseded)</template>
+            </span>
+            <span aria-hidden="true">·</span>
+            <NuxtLink
+              v-for="v in run.versions"
+              :key="v.version"
+              :to="versionLink(v.version)"
+              class="rounded px-1.5 py-0.5 border transition-colors"
+              :class="v.version === run.version
+                ? 'border-zinc-600 text-zinc-200 bg-zinc-800/60'
+                : 'border-zinc-800 hover:border-zinc-600 hover:text-zinc-200'"
+            >
+              v{{ v.version }}
+            </NuxtLink>
           </div>
           <!-- eslint-disable-next-line vue/no-v-html — server-rendered from escaped markdown -->
           <div v-if="run.summary_html" class="prose-report mt-5 text-zinc-300" v-html="run.summary_html" />
