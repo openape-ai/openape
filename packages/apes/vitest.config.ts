@@ -13,20 +13,27 @@ export default defineConfig({
     // three. The timeout bump gives headroom so retries are rarely needed.
     retry: 2,
     testTimeout: 15000,
+    // beforeAll in commands.test.ts spawns key setup; the 10s default tripped
+    // on the loaded CI runner with coverage on (run 3099: import phase 132s)
+    hookTimeout: 60000,
     coverage: {
       provider: 'istanbul',
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
+      // ratchet: raise as coverage improves
       thresholds: {
         // Agent-runtime cluster (agent-runtime.ts, agent-tools/, coding/)
         // was extracted into @openape/agent-runtime and its tests moved
         // there. Remaining apes code is mostly CLI command wrappers and
         // shell-out helpers that are integration-tested via dogfood, not
         // unit-tested here. Thresholds adjusted to reflect the new scope.
-        statements: 45,
-        functions: 45,
-        lines: 45,
+        // Floors follow the LOWER of mac/linux — platform branches (keychain
+        // vs linux paths) make CI-linux measure ~0.5pp below mac (run 3105:
+        // lines 53.49, functions 49.77).
+        statements: 52,
+        functions: 49,
+        lines: 53,
       },
     },
   },
