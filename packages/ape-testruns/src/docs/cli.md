@@ -4,7 +4,9 @@
 ape-testruns upload <dir>      Upload a run directory, print the share link.
   --manifest <file>            Manifest path (default <dir>/testrun.json)
   --title / --project / --summary   Override manifest fields
-  --json                       Print { id, slug, url, status, uploaded, missing }
+  --series <key>               Stable series key: re-uploads with the same
+                               key update the same link (version +1)
+  --json                       Print { id, slug, url, status, version, uploaded, missing }
 
 ape-testruns list              Your runs, newest first.
   --limit <n>                  Default 50, max 200
