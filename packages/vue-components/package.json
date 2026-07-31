@@ -13,14 +13,20 @@
     "src"
   ],
   "scripts": {
-    "typecheck": "vue-tsc --noEmit"
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openape/core": "workspace:*",
     "vue": "catalog:"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^18.0.1",
     "typescript": "catalog:",
+    "vitest": "catalog:",
     "vue-tsc": "^3.3.5"
   },
   "peerDependencies": {
