@@ -12,6 +12,13 @@
 # ist unmoeglich. Also: `start` kehrt sofort zurueck, der Operator resolved
 # deferred und fragt spaeter `status` ab.
 #
+# Die Abkopplung passiert ueber python3 Popen(start_new_session=True), also
+# eine ECHTE neue Session (setsid). nohup allein reichte nicht: endet der
+# Operator-Task, reisst der Worker dessen Prozessgruppe mit und der Runner
+# starb mitten im git clone — 7 stumme Fehlversuche am 30./31.07., failed.txt
+# blieb leer, weil nicht mal der fail()-Handler mehr lief. macOS hat kein
+# setsid-Binary, daher der Weg ueber python3.
+#
 #   code-task start <issue-nr> [owner/repo]   # default openape-ai/openape
 #   code-task status <issue-nr>               # RUNNING | DONE <pr-url> | FAILED
 set -euo pipefail
@@ -56,22 +63,41 @@ if [ -f "$JOB/pid.txt" ] && kill -0 "$(cat "$JOB/pid.txt")" 2>/dev/null; then
   echo "RUNNING — Lauf fuer Issue $NR existiert schon (code-task status $NR)"
   exit 0
 fi
-rm -rf "$JOB"; mkdir -p "$JOB"
 
-# Issue holen, BEVOR wir detachen — ein Tippfehler in der Nummer soll sofort
-# und sichtbar scheitern, nicht erst im Hintergrund-Log.
-api "$API/issues/$NR" | python3 -c '
+# Alt-Reste frueherer Versuche wegraeumen, BEVOR der neue Lauf startet — sonst
+# sammeln sich Teil-Clones in /tmp (Befund 31.07.: sieben Stueck fuer #1118).
+rm -rf "$JOB"; mkdir -p "$JOB"
+rm -rf /tmp/code-task-"$NR".* 2>/dev/null || true
+
+# Issue holen + Status pruefen, BEVOR wir detachen: ein Tippfehler oder ein
+# laengst geschlossenes Issue soll sofort und sichtbar enden, nicht im
+# Hintergrund-Log. Ein geschlossenes Issue ist KEIN Fehler — es gibt nur
+# nichts zu tun (der Dev-Loop soll das melden und weiterziehen).
+STATE=$(api "$API/issues/$NR" | python3 -c '
 import json, sys
 i = json.load(sys.stdin)
-print(i["title"])
-print()
-print(i.get("body") or "")' > "$JOB/issue.txt"
+open(sys.argv[1], "w").write(i["title"] + "\n\n" + (i.get("body") or ""))
+print(i["state"])' "$JOB/issue.txt")
+if [ "$STATE" != "open" ]; then
+  echo "NOTHING-TO-DO — Issue $NR ist '$STATE' (nicht offen). Kein Lauf gestartet."
+  rm -rf "$JOB"
+  exit 0
+fi
 
 TITLE_LINE=$(head -1 "$JOB/issue.txt")
 
-nohup bash -c '
+# Token in eine 600er-Datei — der Runner liest sie zur Laufzeit; weder das
+# Skript noch die Prozessliste tragen das Secret.
+umask 077
+printf '%s' "$TOK" > "$JOB/token"
+printf 'JOB=%q\nNR=%q\nREPO=%q\nAPI=%q\nEFFORT=%q\nBASE_URL=%q\n' \
+  "$JOB" "$NR" "$REPO" "$API" "$CODEX_EFFORT" "$BASE_URL" > "$JOB/env"
+
+cat > "$JOB/runner.sh" <<'RUNNER'
+#!/bin/bash
 set -uo pipefail
-JOB="$1"; NR="$2"; REPO="$3"; API="$4"; TOK="$5"; EFFORT="$6"; BASE_URL="$7"
+. "$(dirname "$0")/env"
+TOK=$(cat "$JOB/token")
 fail() { printf "%s" "$1" > "$JOB/failed.txt"; exit 1; }
 WT=$(mktemp -d "/tmp/code-task-$NR.XXXXXX")
 BRANCH="fix/issue-$NR-code-task"
@@ -89,8 +115,9 @@ noetig erst pnpm install --frozen-lockfile). Die Sandbox verbietet Schreibzugrif
 auf .git — committe und pushe daher NICHT. Schreibe stattdessen die
 Conventional-Commit-Message (EINE Zeile, max 80 Zeichen, kein Co-Author) in die
 Datei COMMIT_MSG.txt im Repo-Root; committen und pushen uebernimmt der Runner.
-Wenn das Issue nicht sauber umsetzbar ist (unklar, zu gross), aendere NICHTS,
-lege KEIN COMMIT_MSG.txt an und beende mit einer kurzen Begruendung.
+Wenn das Issue nicht sauber umsetzbar ist (unklar, zu gross, oder die Aenderung
+existiert schon), aendere NICHTS, lege KEIN COMMIT_MSG.txt an und beende mit
+einer kurzen Begruendung.
 
 --- Issue #$NR ---
 $(cat "$JOB/issue.txt")"
@@ -132,8 +159,21 @@ print(json.dumps({\"title\": sys.argv[1], \"head\": sys.argv[2], \"base\": \"mai
   || fail "PR anlegen (Branch $BRANCH ist gepusht)"
 
 rm -rf "$WT"
-' -- "$JOB" "$NR" "$REPO" "$API" "$TOK" "$CODEX_EFFORT" "$BASE_URL" >>"$JOB/run.log" 2>&1 &
+rm -f "$JOB/token"
+RUNNER
+chmod 700 "$JOB/runner.sh"
 
-echo "$!" > "$JOB/pid.txt"
+# Echte neue Session (setsid): der Runner ueberlebt das Ende des
+# Operator-Tasks und dessen Prozessgruppe.
+python3 - "$JOB" <<'PYEOF'
+import subprocess, sys
+job = sys.argv[1]
+with open(f"{job}/run.log", "ab") as log:
+    p = subprocess.Popen(["bash", f"{job}/runner.sh"],
+                         stdout=log, stderr=log,
+                         stdin=subprocess.DEVNULL, start_new_session=True)
+open(f"{job}/pid.txt", "w").write(str(p.pid))
+PYEOF
+
 echo "STARTED Issue $NR ($TITLE_LINE) — Ergebnis spaeter mit: code-task status $NR"
 echo "Empfohlen: resolve deferred (15-25 min), dann status abfragen und PR-URL melden."
