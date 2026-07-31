@@ -42,7 +42,9 @@ export function spawnDaemonAndWaitForBanner(
   args: string[],
   stdin: string,
   envOverrides: Record<string, string> = {},
-  timeoutMs = 5000,
+  // tsx child boot under loaded 4-core CI (coverage on) takes >5s; observed
+  // import phase alone at 37s on run 3086. Generous ceiling, error stays loud.
+  timeoutMs = 30000,
 ): Promise<DaemonHandle> {
   return new Promise((resolveHandle, rejectHandle) => {
     const child = spawn(process.execPath, ['--import', 'tsx', CLI, ...args], {

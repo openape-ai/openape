@@ -20,6 +20,7 @@
     },
     "test": {
       "dependsOn": ["^build", "nuxt-prepare"],
+      "outputs": ["coverage/**"],
       "cache": true
     },
     "test:e2e": {
