@@ -7,11 +7,16 @@
 // Owner sees, so write it plainly.
 //
 // Adding a new scope:
-//   1. Define it here
+//   1. Define it here, listing every route it authorizes under `grants`
 //   2. Gate the route handlers that should require it via
 //      requireOwnerWithScope (utils/auth.ts)
 //   3. No client/SP-side registration needed — Receivers discover
 //      via /.well-known/openape.json
+//
+// Adding a new ROUTE an existing delegation must reach: add it to that
+// scope's `grants`. Every auth helper now runs the same route-precise
+// check, so a route absent from the catalog is 403 for delegated tokens
+// (the yolo-sync incident, #1117).
 //
 // IDs use the convention `<sp-shortname>:<action>` from the spec.
 
@@ -19,9 +24,11 @@ export interface TroopScope {
   id: string
   description: string
   /**
-   * Informative — the routes this scope authorizes. Used in the
-   *  well-known doc + as documentation; not enforced from this list
-   *  (handlers do their own requireOwnerWithScope check).
+   * The routes this scope authorizes, as `METHOD /path` with `:param`
+   *  placeholders. ENFORCED: a scope-bounded token reaching any route not
+   *  named here gets a 403. A route missing from this list is therefore
+   *  closed to delegation, not open — add the grant when a delegation
+   *  should reach it.
    */
   grants: string[]
 }
