@@ -12,11 +12,12 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
+      // ratchet: raise as coverage improves
       thresholds: {
         statements: 93,
-        branches: 82,
-        functions: 83,
-        lines: 92,
+        branches: 86,
+        functions: 87,
+        lines: 95,
       },
     },
   },
