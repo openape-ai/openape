@@ -1,5 +1,31 @@
+import { readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { isKnownScope, scopesAreCovered, TROOP_SCOPES } from '../server/utils/scope-catalog'
+
+const API_DIR = fileURLToPath(new URL('../server/api', import.meta.url))
+
+/** Every handler as `METHOD /api/...`, with `[param]` normalized to `:param`. */
+function actualRoutes(): Set<string> {
+  const routes = new Set<string>()
+  const walk = (dir: string, prefix: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry)
+      if (statSync(full).isDirectory()) {
+        walk(full, `${prefix}/${entry}`)
+        continue
+      }
+      const m = /^(.*)\.(get|post|put|patch|delete)\.ts$/.exec(entry)
+      if (!m) continue
+      const segment = m[1] === 'index' ? '' : `/${m[1]}`
+      const path = `${prefix}${segment}`.replace(/\[(\w+)\]/g, ':$1')
+      routes.add(`${m[2]!.toUpperCase()} ${path}`)
+    }
+  }
+  walk(API_DIR, '/api')
+  return routes
+}
 
 describe('troop scope catalog', () => {
   it('publishes at least the spawn + destroy + read trio', () => {
@@ -31,6 +57,15 @@ describe('troop scope catalog', () => {
     expect(isKnownScope('troop:not-a-thing')).toBe(false)
     expect(isKnownScope('chat:read')).toBe(false)
     expect(isKnownScope('')).toBe(false)
+  })
+
+  // The grants are enforced (#1038), so a typo or a renamed route silently
+  // turns into a 403 for every delegate holding that scope.
+  it('every granted route exists as a handler', () => {
+    const actual = actualRoutes()
+    const missing = TROOP_SCOPES.flatMap(s =>
+      s.grants.filter(g => !actual.has(g)).map(g => `${s.id}: ${g}`))
+    expect(missing).toEqual([])
   })
 
   it('scopesAreCovered returns the full list of unknowns', () => {
