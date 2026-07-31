@@ -59,7 +59,13 @@ function problem(status: number, title: string): never {
  * Throws 401 if neither yields an owner.
  */
 export async function requireOwner(event: H3Event): Promise<string> {
-  return (await resolveOwnerContext(event)).owner
+  const ctx = await resolveOwnerContext(event)
+  // A scope-bounded caller gets the same route-precise catalog check the
+  // requireCaller-based routes already run (#1038). Without this, the 28
+  // requireOwner routes — agent secrets, skills, org creation — treated any
+  // delegation as an unrestricted owner.
+  if (ctx.scopes !== null) assertScopeCoversRequest(event, ctx.scopes)
+  return ctx.owner
 }
 
 /**
@@ -105,10 +111,14 @@ export async function resolveOwnerContext(event: H3Event): Promise<{
     if (cli) {
       // A first-party human token (the Owner's own apes-cli session,
       // exchanged to a troop token) is unbounded — same status as the
-      // session and IdP-human paths. Only delegated/agent tokens are
-      // scope-bounded to what their token carries; a human's exchanged
-      // token has scope=[] and must NOT collapse to "no scopes".
-      if (cli.act === 'human' && !cli.delegate) {
+      // session and IdP-human paths. Its scope is `[]`, which here means
+      // "no restriction requested", not "no scopes".
+      //
+      // A human who DID request scopes at /api/cli/exchange is bounded by
+      // them (#1038): self-restriction is the whole point of asking for a
+      // subset, and ignoring it made the same token bounded on cockpit
+      // routes but unbounded here.
+      if (cli.act === 'human' && !cli.delegate && !cli.scope?.length) {
         return { owner: cli.sub, scopes: null, delegate: null }
       }
       return { owner: cli.sub, scopes: cli.scope ?? [], delegate: cli.delegate ?? null }
@@ -160,7 +170,12 @@ export async function resolveCallerIdentity(event: H3Event): Promise<{ sub: stri
   if (auth?.toLowerCase().startsWith('bearer ')) {
     const token = auth.slice(7).trim()
     const cli = await verifyCliToken(token)
-    if (cli) return { sub: cli.sub, act: cli.act === 'agent' ? 'agent' : 'human' }
+    if (cli) {
+      // Same chokepoint as requireOwner — the org routes reach their auth
+      // through here and were equally scope-blind (#1038).
+      if (cli.scope?.length || cli.delegate) assertScopeCoversRequest(event, cli.scope ?? [])
+      return { sub: cli.sub, act: cli.act === 'agent' ? 'agent' : 'human' }
+    }
 
     const idpUrl = useRuntimeConfig().public.idpUrl as string
     try {
