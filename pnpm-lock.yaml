@@ -412,6 +412,9 @@ importers:
       h3:
         specifier: ^1.15.11
         version: 1.15.11
+      openape-e2e:
+        specifier: workspace:*
+        version: link:../../examples/e2e
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -701,6 +704,9 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
     devDependencies:
+      openape-e2e:
+        specifier: workspace:*
+        version: link:../../examples/e2e
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

@@ -39,6 +39,7 @@
     "@types/node": "^22.20.0",
     "@types/web-push": "^3.6.4",
     "h3": "^1.15.11",
+    "openape-e2e": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9",
     "vue-tsc": "^3.3.5"

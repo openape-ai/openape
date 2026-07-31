@@ -1,8 +1,9 @@
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { Buffer } from 'node:buffer'
-import { spawn } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { startServer } from 'openape-e2e/lifecycle'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 function sshEd25519Line(rawPublicKey: Buffer, comment: string): string {
@@ -32,79 +33,46 @@ const FREE_IDP_BOOT_TIMEOUT_MS = 120_000
 
 function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-async function waitForServer(url: string, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url)
-      if (res.ok) return
-    }
-    catch {}
-    await wait(250)
-  }
-  throw new Error(`Timed out waiting for server: ${url}`)
-}
-
 const managementHeader = { Authorization: `Bearer ${MANAGEMENT_TOKEN}` }
 
 describe('YOLO policy admin API', () => {
   let baseUrl = ''
-  let server: ReturnType<typeof spawn> | null = null
-  let serverLogs = ''
-
-  // One boot attempt on a fresh random port. vitest's `retry` re-runs tests but
-  // never a failed beforeAll, so the boot gets its own retry: a slow/crashed
-  // nuxt-dev under CI load (shared runners, #991) is absorbed here instead of
-  // failing the whole suite.
-  function spawnServer(port: number): ReturnType<typeof spawn> {
-    const url = `http://127.0.0.1:${port}`
-    const proc = spawn('pnpm', ['exec', 'nuxt', 'dev', '--port', String(port), '--host', '127.0.0.1'], {
-      cwd: appDir,
-      detached: true,
-      env: {
-        ...process.env,
-        OPENAPE_E2E: '1',
-        OPENAPE_ISSUER: url,
-        OPENAPE_RP_ORIGIN: url,
-        OPENAPE_RP_ID: '127.0.0.1',
-        OPENAPE_RP_HOST_ALLOWLIST: '127.0.0.1',
-        OPENAPE_SESSION_SECRET: SESSION_SECRET,
-        OPENAPE_MANAGEMENT_TOKEN: MANAGEMENT_TOKEN,
-        OPENAPE_ADMIN_EMAILS: OWNER_EMAIL,
-        NUXT_TURSO_URL: 'file::memory:',
-        NUXT_TURSO_AUTH_TOKEN: '',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    proc.stdout?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    proc.stderr?.on('data', (chunk) => { serverLogs += chunk.toString() })
-    return proc
-  }
-  function killServer(): void {
-    if (server?.pid) {
-      try { process.kill(-server.pid, 'SIGKILL') }
-      catch { /* already gone */ }
-    }
-    server = null
-  }
+  let server: RunningServer | null = null
 
   beforeAll(async () => {
+    // One boot attempt per fresh port. vitest's `retry` re-runs tests but
+    // never a failed beforeAll, so the boot gets its own retry: a slow/crashed
+    // nuxt-dev under CI load (shared runners, #991) is absorbed here instead of
+    // failing the whole suite. startServer kills its own child and reports the
+    // log tail when the boot fails.
     const BOOT_ATTEMPTS = 2
     let lastErr: unknown
     for (let attempt = 1; attempt <= BOOT_ATTEMPTS; attempt++) {
-      const port = 3601 + Math.floor(Math.random() * 200)
-      baseUrl = `http://127.0.0.1:${port}`
-      server = spawnServer(port)
       try {
-        await waitForServer(`${baseUrl}/.well-known/openid-configuration`, FREE_IDP_BOOT_TIMEOUT_MS)
+        server = await startServer({
+          cwd: appDir,
+          readyPath: '/.well-known/openid-configuration',
+          timeoutMs: FREE_IDP_BOOT_TIMEOUT_MS,
+          env: ({ url }) => ({
+            OPENAPE_E2E: '1',
+            OPENAPE_ISSUER: url,
+            OPENAPE_RP_ORIGIN: url,
+            OPENAPE_RP_ID: '127.0.0.1',
+            OPENAPE_RP_HOST_ALLOWLIST: '127.0.0.1',
+            OPENAPE_SESSION_SECRET: SESSION_SECRET,
+            OPENAPE_MANAGEMENT_TOKEN: MANAGEMENT_TOKEN,
+            OPENAPE_ADMIN_EMAILS: OWNER_EMAIL,
+            NUXT_TURSO_URL: 'file::memory:',
+            NUXT_TURSO_AUTH_TOKEN: '',
+          }),
+        })
+        baseUrl = server.url
         lastErr = undefined
         break
       }
       catch (err) {
         lastErr = err
-        console.error(`Server boot attempt ${attempt}/${BOOT_ATTEMPTS} failed. Last logs:\n`, serverLogs.slice(-4000))
-        killServer()
-        serverLogs = ''
+        console.error(`Server boot attempt ${attempt}/${BOOT_ATTEMPTS} failed:\n`, err)
         await wait(500)
       }
     }
@@ -141,10 +109,10 @@ describe('YOLO policy admin API', () => {
   }, 2 * FREE_IDP_BOOT_TIMEOUT_MS + 30_000)
 
   afterAll(async () => {
-    // Kill the whole process group (pnpm + nuxt child) so no orphans linger
-    killServer()
-    // Give the kernel a moment to release the bound port
-    await wait(200)
+    // stop() kills the whole process group (pnpm + nuxt child) so no orphans
+    // linger, and waits for the kernel to release the bound port.
+    await server?.stop()
+    server = null
   })
 
   it('GET returns null when no policy is set', async () => {
