@@ -4,6 +4,13 @@ packages:
   - apps/*
   - examples/*
 
+# Supply-chain quarantine: neu publizierte npm-Versionen erst nach 7 Tagen
+# installierbar (kompromittierte Frisch-Releases werden meist binnen Tagen
+# gezogen). Eigene Packages ausgenommen — Publish→Konsum bleibt sofort möglich.
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - '@openape/*'
+
 auditConfig:
   ignoreGhsas:
     # brace-expansion DoS: patch existiert nur in 5.0.8 (API-inkompatibel zu
