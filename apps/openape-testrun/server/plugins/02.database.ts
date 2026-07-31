@@ -37,6 +37,30 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_assets_run ON assets(run_id)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_assets_run_path ON assets(run_id, path)`)
+
+    // Series versioning (idempotent ALTERs — fail silently once applied).
+    await db.run(sql`ALTER TABLE runs ADD COLUMN series TEXT`).catch(() => {})
+    await db.run(sql`ALTER TABLE runs ADD COLUMN version INTEGER NOT NULL DEFAULT 1`).catch(() => {})
+    await db.run(sql`ALTER TABLE assets ADD COLUMN version INTEGER NOT NULL DEFAULT 1`).catch(() => {})
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_series ON runs(created_by, series)`)
+
+    await db.run(sql`CREATE TABLE IF NOT EXISTS run_versions (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      project TEXT,
+      summary TEXT,
+      status TEXT NOT NULL,
+      passed_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      manifest TEXT NOT NULL,
+      started_at INTEGER,
+      finished_at INTEGER,
+      created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_run_versions_run ON run_versions(run_id, version)`)
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)

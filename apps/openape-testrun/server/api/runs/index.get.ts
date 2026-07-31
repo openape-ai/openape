@@ -23,13 +23,12 @@ export default defineEventHandler(async (event) => {
     passedCount: runs.passedCount,
     failedCount: runs.failedCount,
     skippedCount: runs.skippedCount,
+    series: runs.series,
+    version: runs.version,
     createdBy: runs.createdBy,
     createdByAct: runs.createdByAct,
     createdAt: runs.createdAt,
-  }).from(runs)
-    .where(and(eq(runs.createdBy, caller.email), isNull(runs.deletedAt)))
-    .orderBy(desc(runs.createdAt))
-    .limit(limit)
+  }).from(runs).where(and(eq(runs.createdBy, caller.email), isNull(runs.deletedAt))).orderBy(desc(runs.createdAt)).limit(limit)
 
   return rows.map(row => ({
     id: row.id,
@@ -41,6 +40,8 @@ export default defineEventHandler(async (event) => {
     passed: row.passedCount,
     failed: row.failedCount,
     skipped: row.skippedCount,
+    series: row.series,
+    version: row.version,
     created_by: row.createdBy,
     created_by_act: row.createdByAct,
     created_at: row.createdAt,

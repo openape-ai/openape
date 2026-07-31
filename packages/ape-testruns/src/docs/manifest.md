@@ -51,6 +51,7 @@ every referenced screenshot from the same directory.
 | `title` | yes | Run headline (≤300 chars). |
 | `project` | no | Free-text project name shown above the title. |
 | `summary` | no | Markdown, shown under the header. |
+| `series` | no | Stable series key (≤200 chars): re-uploads with the same key update the same link. |
 | `startedAt` / `finishedAt` | no | ISO 8601; renders a duration when both present. |
 | `tests[]` | yes | 1–200 tests. |
 | `tests[].id` | yes | Unique per run (kebab-case recommended). |
@@ -72,8 +73,13 @@ every referenced screenshot from the same directory.
   Links must be `http(s)`.
 - Steps without `shot` are fine (text-only steps). A `shot` whose file is
   missing at upload time renders as text-only; re-upload to fix.
-- Screenshot bytes are stored by path; re-uploading the same run directory
-  creates a NEW run with a new link (runs are immutable evidence).
+- Without `series`, re-uploading the same run directory creates a NEW run
+  with a new link (runs are immutable evidence).
+- With `series` (or `--series`), a re-upload by the same uploader updates the
+  SAME link: the version counter increments, the report shows the latest
+  version, and every earlier version stays viewable via `?v=<n>` on the
+  report. The series key is scoped to the uploader — someone else using the
+  same key gets their own independent link.
 
 ## Writing style for captions
 

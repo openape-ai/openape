@@ -13,8 +13,7 @@ export default defineEventHandler(async (event) => {
   const run = await loadOwnRun(event, caller)
 
   const db = useDb()
-  const uploaded = await db.select({ path: assets.path, size: assets.size }).from(assets)
-    .where(eq(assets.runId, run.id))
+  const uploaded = await db.select({ path: assets.path, size: assets.size }).from(assets).where(eq(assets.runId, run.id))
 
   return {
     id: run.id,
@@ -27,6 +26,8 @@ export default defineEventHandler(async (event) => {
     passed: run.passedCount,
     failed: run.failedCount,
     skipped: run.skippedCount,
+    series: run.series,
+    version: run.version,
     manifest: JSON.parse(run.manifest),
     started_at: run.startedAt,
     finished_at: run.finishedAt,
