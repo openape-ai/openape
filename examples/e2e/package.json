@@ -2,6 +2,9 @@
   "name": "openape-e2e",
   "type": "module",
   "private": true,
+  "exports": {
+    "./lifecycle": "./helpers/lifecycle.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "test:e2e": "vitest run",
