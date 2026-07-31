@@ -18,22 +18,25 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       # The three test steps are teed to /tmp so the failure step below can
-      # post the failing step's log tail to the PR (#1050).
+      # post the failing step's log tail to the PR (#1050). Each suite also
+      # writes a vitest JSON report (turbo passes the extra flags through to
+      # vitest, only for the named task — dependency builds are unaffected)
+      # that the manifest step below turns into a testrun.openape.ai proof.
       - name: E2E (self-contained idp+sp, fresh, no prod)
         run: |
           set -o pipefail
-          pnpm turbo run test --filter=openape-e2e 2>&1 | tee /tmp/e2e-core.log
+          pnpm turbo run test --filter=openape-e2e -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-core.json 2>&1 | tee /tmp/e2e-core.log
       - name: E2E proof-link round-trip (testrun, dev-mode boot)
         run: |
           set -o pipefail
-          pnpm turbo run test:e2e --filter=@openape-testrun/app 2>&1 | tee /tmp/e2e-testrun.log
+          pnpm turbo run test:e2e --filter=@openape-testrun/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-testrun.json 2>&1 | tee /tmp/e2e-testrun.log
       - name: E2E free-idp admin/login flows (nuxt-dev boot)
         # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
         # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
         # so the per-PR `ci` job stays deterministic under load.
         run: |
           set -o pipefail
-          pnpm turbo run test:e2e --filter=openape-free-idp 2>&1 | tee /tmp/e2e-freeidp.log
+          pnpm turbo run test:e2e --filter=openape-free-idp -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-freeidp.json 2>&1 | tee /tmp/e2e-freeidp.log
       - name: Post failure log tail as PR comment (#1050)
         # The docker runner's logs are not reachable from outside, so on failure
         # the tail of the failing step's log is posted to the PR. The last log
@@ -64,3 +67,49 @@ jobs:
               headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'})
           print(urllib.request.urlopen(req).status)
           PYEOF
+      # ------------------------------------------------------------------
+      # Test reporting: one testrun.openape.ai manifest per run, built from
+      # the vitest JSON reports above. Suites that never ran (an earlier step
+      # failed) appear as explicit "skipped" entries; tests that passed only
+      # after a vitest retry are marked flaky. This step is the only reporting
+      # step allowed to fail the job — a broken manifest script must be loud.
+      - name: Build testrun manifest
+        if: always()
+        run: |
+          node --test scripts/e2e-manifest.test.mjs
+          node scripts/e2e-manifest.mjs --out /tmp/e2e-run \
+            --sha "$GITHUB_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_NUMBER" \
+            core=/tmp/e2e-report-core.json \
+            testrun=/tmp/e2e-report-testrun.json \
+            free-idp=/tmp/e2e-report-freeidp.json
+      - name: Attach manifest as workflow artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-testrun-manifest
+          path: /tmp/e2e-run/testrun.json
+      # Upload to testrun.openape.ai only when the CI agent credentials are
+      # configured (repo secrets): TESTRUN_CI_EMAIL is a key-based agent on
+      # the IdP, TESTRUN_CI_KEY its Ed25519 private key (OpenSSH format).
+      # `apes login --key` runs the headless challenge-response flow, then
+      # `ape-testruns upload` exchanges the IdP token for an SP token via
+      # /api/cli/exchange. Never fails the job (continue-on-error) — the
+      # proof link is a bonus, not a gate.
+      - name: Publish proof link to testrun.openape.ai
+        if: always()
+        continue-on-error: true
+        env:
+          TESTRUN_CI_EMAIL: ${{ secrets.TESTRUN_CI_EMAIL }}
+          TESTRUN_CI_KEY: ${{ secrets.TESTRUN_CI_KEY }}
+          TESTRUN_CI_IDP: ${{ secrets.TESTRUN_CI_IDP }}
+        run: |
+          if [ -z "$TESTRUN_CI_KEY" ] || [ -z "$TESTRUN_CI_EMAIL" ]; then
+            echo "TESTRUN_CI_KEY / TESTRUN_CI_EMAIL secrets not configured — skipping upload; the manifest is attached as a workflow artifact."
+            exit 0
+          fi
+          install -m 600 /dev/null /tmp/testrun-ci-key
+          printf '%s\n' "$TESTRUN_CI_KEY" > /tmp/testrun-ci-key
+          npx -y @openape/apes login "$TESTRUN_CI_EMAIL" --key /tmp/testrun-ci-key ${TESTRUN_CI_IDP:+--idp "$TESTRUN_CI_IDP"}
+          npx -y @openape/ape-testruns upload /tmp/e2e-run
