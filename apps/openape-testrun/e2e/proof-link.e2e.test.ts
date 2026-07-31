@@ -93,7 +93,7 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
   })
 
   it('without a series key every upload mints a fresh link', async () => {
-    const upload = async () => await (await fetch(`${BASE}/api/runs`, {
+    const upload = async () => await (await fetch(`${base}/api/runs`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${await cliToken()}`, 'content-type': 'application/json' },
       body: JSON.stringify(manifest),
@@ -108,7 +108,7 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
   it('re-upload with the same series keeps the link and increments the version', async () => {
     const seriesManifest = { ...manifest, series: 'e2e-feature-branch' }
     const upload = async (body: Record<string, unknown>, email?: string) => {
-      const res = await fetch(`${BASE}/api/runs`, {
+      const res = await fetch(`${base}/api/runs`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${await cliToken(email)}`, 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -130,7 +130,7 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
     expect(second.slug).toBe(first.slug)
     expect(second.version).toBe(2)
 
-    const latest = await (await fetch(`${BASE}/api/public/runs/${first.slug}`)).json() as {
+    const latest = await (await fetch(`${base}/api/public/runs/${first.slug}`)).json() as {
       title: string, status: string, version: number, latest_version: number, versions: { version: number, status: string }[]
     }
     expect(latest.title).toBe('Login flow (fixed)')
@@ -140,13 +140,13 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
     expect(latest.versions.map(v => v.version)).toEqual([2, 1])
 
     // The archived first version stays viewable via ?v=1.
-    const archived = await (await fetch(`${BASE}/api/public/runs/${first.slug}?v=1`)).json() as { title: string, status: string, version: number }
+    const archived = await (await fetch(`${base}/api/public/runs/${first.slug}?v=1`)).json() as { title: string, status: string, version: number }
     expect(archived.title).toBe('Login flow')
     expect(archived.status).toBe('failed')
     expect(archived.version).toBe(1)
 
     // Unknown versions 404 instead of leaking anything.
-    expect((await fetch(`${BASE}/api/public/runs/${first.slug}?v=3`)).status).toBe(404)
+    expect((await fetch(`${base}/api/public/runs/${first.slug}?v=3`)).status).toBe(404)
 
     // A DIFFERENT owner using the same series cannot touch this link — they
     // get their own independent run.
