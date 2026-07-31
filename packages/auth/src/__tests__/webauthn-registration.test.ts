@@ -17,12 +17,12 @@ describe('base64URL encoding', () => {
 
 // TODO: These need real integration tests against @simplewebauthn/server
 // (not mock-wiring tests). Requires a WebAuthn test harness.
-describe.skip('createRegistrationOptions', () => {
-  it.skip('generates registration options with RP config', () => {})
-  it.skip('excludes existing credentials', () => {})
+describe('createRegistrationOptions', () => {
+  it.todo('generates registration options with RP config')
+  it.todo('excludes existing credentials')
 })
 
-describe.skip('verifyRegistration', () => {
-  it.skip('verifies and returns credential on success', () => {})
-  it.skip('returns verified false on failure', () => {})
+describe('verifyRegistration', () => {
+  it.todo('verifies and returns credential on success')
+  it.todo('returns verified false on failure')
 })
