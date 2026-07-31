@@ -7,6 +7,18 @@ set -o pipefail
 #   Bypass (emergency / WIP):  SKIP_HOOKS=1 git push
 #   Auto-skipped under CI=…    (defensive — there is no CI runner anymore)
 
+# github.com/openape-ai/* is the MIRROR, written by Forgejo's push-mirror.
+# A push there forks the history and the next mirror run force-pushes over it,
+# so the work looks fine right up to the moment it silently disappears. This
+# repo sets its own core.hooksPath, so the global guard in ~/.config/git/hooks
+# never runs here — hence the duplicate. $1 = remote name, $2 = remote URL.
+if [[ "$2" =~ github\.com[:/]openape-ai/ ]] && [ "$ALLOW_GITHUB_PUSH" != "1" ]; then
+  echo "[pre-push] BLOCKED — $2" >&2
+  echo "           GitHub is the mirror; push to git.openape.ai and open the PR there." >&2
+  echo "           Deliberate override: ALLOW_GITHUB_PUSH=1 git push $1 <ref>" >&2
+  exit 1
+fi
+
 if [ -n "$CI" ]; then exit 0; fi
 if [ "$SKIP_HOOKS" = "1" ]; then
   echo "[pre-push] SKIP_HOOKS=1 — skipping local CI gate"
