@@ -67,7 +67,8 @@ jobs:
         # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
         # built above, so every `^build` here is a cache hit — no fresh dts writes
         # race the typechecks.
-        # Teed to /tmp so the failure step below can post the log tail (#1050).
+        # Preserve the tail for the failure step below so flaky runner failures
+        # leave actionable context on the PR instead of only "CI:failure".
         run: |
           set -o pipefail
           pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs' 2>&1 | tee /tmp/ci-checks.log
