@@ -41,9 +41,11 @@ describe('idpLoginForm', () => {
     const wrapper = mount(IdpLoginForm, { props: { loginHint: 'ape@example.com' } })
 
     await wrapper.get('form').trigger('submit')
-    await flushPromises()
+    // One flushPromises is not enough in a real browser: native
+    // Response.json() resolves through the streams machinery (own event-loop
+    // turns), so poll until the three-fetch chain has completed.
+    await vi.waitFor(() => expect(wrapper.emitted('success')).toHaveLength(1))
 
-    expect(wrapper.emitted('success')).toHaveLength(1)
     expect(fetchMock).toHaveBeenCalledWith('/api/me', expect.objectContaining({ credentials: 'include' }))
   })
 })
