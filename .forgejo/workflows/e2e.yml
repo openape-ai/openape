@@ -90,7 +90,8 @@ jobs:
       - name: Attach manifest as workflow artifact
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        # v4 refuses to run against Forgejo (GHES detection); v3 works.
+        uses: actions/upload-artifact@v3
         with:
           name: e2e-testrun-manifest
           path: /tmp/e2e-run/testrun.json
@@ -115,5 +116,10 @@ jobs:
           fi
           install -m 600 /dev/null /tmp/testrun-ci-key
           printf '%s\n' "$TESTRUN_CI_KEY" > /tmp/testrun-ci-key
+          # Run npx from an empty dir: inside the workspace it resolves
+          # @openape/apes to the LOCAL package whose bin link never exists
+          # (dist/ is unbuilt at install time) -> `apes: not found` (run 3142).
+          # From a clean cwd npx fetches the published CLIs instead.
+          cd "$(mktemp -d)"
           npx -y @openape/apes login "$TESTRUN_CI_EMAIL" --key /tmp/testrun-ci-key ${TESTRUN_CI_IDP:+--idp "$TESTRUN_CI_IDP"}
           npx -y @openape/ape-testruns upload /tmp/e2e-run
