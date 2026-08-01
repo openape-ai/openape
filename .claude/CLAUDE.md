@@ -179,7 +179,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 
 ## DDISA Protocol Compliance
 
-OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol`.
+OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol` auf **git.openape.ai** (lokal: `~/Companies/private/repos/openape/protocol`). Wie bei allen OpenApe-Repos ist Forgejo das Original und GitHub nur der Mirror — Spec-Änderungen gehen als PR nach git.openape.ai, nie nach GitHub.
 
 **Pflicht bei jeder Änderung an protokollrelevanten Dateien:**
 
