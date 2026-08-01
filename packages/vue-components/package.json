@@ -15,7 +15,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "vue-tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@openape/core": "workspace:*",
@@ -23,9 +24,12 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/browser-playwright": "4.1.9",
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^18.0.1",
+    "playwright": "1.62.0",
     "typescript": "catalog:",
+    "vite": "8.1.5",
     "vitest": "catalog:",
     "vue-tsc": "^3.3.5"
   },
