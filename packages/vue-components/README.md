@@ -31,6 +31,28 @@ In the OpenApe monorepo, use the workspace package:
 - `summarizeCliGrant`
 - `AuthUser` type
 
+## Testing
+
+Two ways to run the same suite:
+
+```bash
+pnpm run test           # happy-dom (fast, the CI gate)
+pnpm run test:browser   # real Chromium via Playwright (local only)
+```
+
+`test` runs everything except `test/*.browser.test.ts` in happy-dom.
+`test:browser` runs the full suite — including the layout tests that need a
+real rendering engine (`getBoundingClientRect`, `checkVisibility`) — in
+headless Chromium. One-time setup:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+The browser run is not a CI gate: the CI docker runner starts from a fresh
+`node:22-bookworm` container on every job, so Chromium's apt system
+dependencies would have to be reinstalled each run.
+
 ## Components
 
 ### `IdpLoginForm`
