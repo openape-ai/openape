@@ -10,6 +10,10 @@ packages:
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - '@openape/*'
+  # postcss 8.5.25 (Security-Override >=8.5.18) war beim Einführen der
+  # Quarantäne <7 Tage alt und blockte jede non-frozen Resolution.
+  # Ausnahme entfernen, sobald 8.5.25 gealtert ist (nach 2026-08-05).
+  - postcss
 
 auditConfig:
   ignoreGhsas:
