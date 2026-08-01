@@ -10,14 +10,14 @@ export default defineConfig({
     coverage: {
       provider: 'istanbul',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/types/**'],
+      exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/**/index.ts', 'src/types/**'],
       reporter: ['text', 'lcov'],
       // ratchet: raise as coverage improves
       thresholds: {
-        statements: 93,
-        branches: 86,
-        functions: 87,
-        lines: 95,
+        statements: 95,
+        branches: 91,
+        functions: 91,
+        lines: 96,
       },
     },
   },
