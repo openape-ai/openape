@@ -303,6 +303,30 @@ describe('handleRefreshGrant', () => {
     )).rejects.toThrow('expired')
   })
 
+  it('refuses a deactivated user and revokes the family', async () => {
+    // Deactivation must invalidate EXISTING refresh tokens (#1144
+    // follow-up). The optional isUserActive resolver lets the caller
+    // gate every refresh on current user state; a refusal revokes the
+    // whole family so the rotated successor token is dead too.
+    const keyStore = new InMemoryKeyStore()
+    const refreshStore = new InMemoryRefreshTokenStore()
+    const { token, familyId } = await refreshStore.create('alice@example.com', 'sp.example.com')
+
+    await expect(handleRefreshGrant(
+      token,
+      'sp.example.com',
+      refreshStore,
+      keyStore,
+      'https://idp.example.com',
+      undefined,
+      async () => false, // user is deactivated
+    )).rejects.toMatchObject({ name: 'InactiveUserError' })
+
+    // Family revoked — no live families remain for the user
+    const families = await refreshStore.listFamilies('alice@example.com')
+    expect(families.data.find(f => f.familyId === familyId)).toBeUndefined()
+  })
+
   it('rejects when client_id does not match the one the token was issued for (#274)', async () => {
     // Pin RFC 6749 §6 audience binding. Without this check, a refresh
     // token captured from SP-A could be redeemed at /token with

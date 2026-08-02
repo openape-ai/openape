@@ -20,6 +20,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
     codeStore: { find: vi.fn(), save: vi.fn(), delete: vi.fn() },
     // permissive default → resolve returns null which is allowed
     clientMetadataStore: { resolve: async () => null },
+    userStore: { findByEmail: async () => ({ email: 'patrick@hofmann.eco', isActive: true }) },
   })),
 }))
 

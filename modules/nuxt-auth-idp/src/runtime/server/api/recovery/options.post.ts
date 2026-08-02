@@ -34,6 +34,12 @@ export default defineEventHandler(async (event) => {
   // for a newly-created shell (e.g. enrolled by an owner). What matters
   // is that the token is real, aged, and not cancelled. The verify step
   // will create the user row if needed.
+  //
+  // A deactivated account however must NOT be recoverable — otherwise
+  // deactivation is undone by a mail link (#1144 follow-up).
+  if (user && !user.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
+  }
   const displayName = user?.name ?? recovery.email
 
   // Pass empty excludeCredentials. The verify step will optionally
