@@ -1,5 +1,13 @@
 # @openape/ape-agent
 
+## 2.11.12
+
+### Patch Changes
+
+- Updated dependencies [24e53aa]
+  - @openape/cli-auth@0.5.3
+  - @openape/apes@1.35.1
+
 ## 2.11.11
 
 ### Patch Changes

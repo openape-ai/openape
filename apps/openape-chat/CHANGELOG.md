@@ -1,5 +1,11 @@
 # @openape/chat
 
+## 0.2.26
+
+### Patch Changes
+
+- @openape/nuxt-auth-sp@0.15.2
+
 ## 0.2.25
 
 ### Patch Changes
