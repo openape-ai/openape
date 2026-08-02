@@ -22,9 +22,9 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       // ratchet: raise as coverage improves
       thresholds: {
-        statements: 51,
-        functions: 46,
-        lines: 52,
+        statements: 62,
+        functions: 58,
+        lines: 63,
       },
     },
   },
