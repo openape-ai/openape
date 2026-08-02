@@ -1,5 +1,33 @@
 # @openape/server
 
+## 0.3.19
+
+### Patch Changes
+
+- 47df201: Security: deactivating a user now also stops EXISTING sessions and refresh
+  tokens, not only future logins (#1144 follow-up). `/authorize` re-checks
+  `user.isActive` on every access for live browser sessions, bearer tokens and
+  delegation delegators (`403 User is inactive`). The refresh flow
+  (`grant_type=refresh_token`) refuses deactivated users with 403 AND revokes
+  the whole refresh-token family, so the rotated successor token dies with it —
+  `handleRefreshGrant` gained an optional `isUserActive` resolver and throws the
+  new `InactiveUserError`. Account recovery (`/api/recovery/options` and
+  `/api/recovery/verify`) refuses deactivated accounts with 403; the cancel
+  endpoint deliberately stays open (active-owner veto, can only kill a pending
+  recovery). Access tokens remain stateless JWTs and stay valid until expiry
+  (≤5 min for SP assertions, 1h for agent tokens).
+- 2305fa9: Security: enforce `user.isActive` on every IdP login path. A deactivated user
+  with SSH keys on file could still obtain challenges via `/api/auth/challenge`
+  (fallthrough to the direct SSH-key branch) and — in the Nuxt module — mint
+  tokens via `/api/auth/authenticate`, establish browser sessions via
+  `/api/session/login`, and log in via the WebAuthn routes. All of these now
+  refuse deactivated users with `403 User is inactive` (the legacy
+  `/api/agent/*` aliases keep their `404 User not found or inactive` shape).
+  The canonical `@openape/server` challenge handler no longer issues challenges
+  to deactivated users either.
+- Updated dependencies [47df201]
+  - @openape/auth@0.13.2
+
 ## 0.3.18
 
 ### Patch Changes

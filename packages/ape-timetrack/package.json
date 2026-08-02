@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-timetrack",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "CLI for timetrack.openape.ai — time tracking by company and project for humans and AI agents",
   "type": "module",
   "license": "MIT",
