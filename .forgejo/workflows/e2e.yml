@@ -30,6 +30,10 @@ jobs:
         run: |
           set -o pipefail
           pnpm turbo run test:e2e --filter=@openape-testrun/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-testrun.json 2>&1 | tee /tmp/e2e-testrun.log
+      - name: E2E proof-link round-trip (ape-pr, dev-mode boot)
+        run: |
+          set -o pipefail
+          pnpm turbo run test:e2e --filter=@openape-pr/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-apepr.json 2>&1 | tee /tmp/e2e-apepr.log
       - name: E2E free-idp admin/login flows (nuxt-dev boot)
         # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
         # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
@@ -51,6 +55,7 @@ jobs:
           import json, os, urllib.request
           logs = [
               ('E2E free-idp admin/login flows', '/tmp/e2e-freeidp.log'),
+              ('E2E proof-link round-trip (ape-pr)', '/tmp/e2e-apepr.log'),
               ('E2E proof-link round-trip (testrun)', '/tmp/e2e-testrun.log'),
               ('E2E idp+sp', '/tmp/e2e-core.log'),
           ]
@@ -86,6 +91,7 @@ jobs:
             --series "e2e-${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
             core=/tmp/e2e-report-core.json \
             testrun=/tmp/e2e-report-testrun.json \
+            apepr=/tmp/e2e-report-apepr.json \
             free-idp=/tmp/e2e-report-freeidp.json
       - name: Attach manifest as workflow artifact
         if: always()
