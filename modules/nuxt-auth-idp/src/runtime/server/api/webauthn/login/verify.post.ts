@@ -49,6 +49,9 @@ export default defineEventHandler(async (event) => {
   if (!user) {
     throw createProblemError({ status: 400, title: 'User not found' })
   }
+  if (!user.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
+  }
 
   // Account activity feeds the adaptive recovery cooldown (#462): a login
   // within the last 30 days stretches the recovery wait from 72h to 7d.

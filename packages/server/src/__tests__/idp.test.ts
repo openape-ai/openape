@@ -1913,14 +1913,12 @@ describe('idp server', () => {
         .toThrow('Expected 32-byte')
     })
 
-    it('challenge for inactive user falls through to SSH key check', async () => {
-      // Deactivate agent, but keys still exist
+    it('challenge refuses an inactive user even with SSH keys', async () => {
+      // Deactivate agent, keys still exist — must not fall through to SSH key check
       await stores.userStore.update('agent@example.com', { isActive: false })
 
       const res = await apiJson('/api/auth/challenge', { id: 'agent@example.com' })
-      expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(data.challenge).toBeDefined()
+      expect(res.status).toBe(403)
 
       await stores.userStore.update('agent@example.com', { isActive: true })
     })
