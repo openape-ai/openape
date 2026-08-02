@@ -1,5 +1,11 @@
 # @openape-testrun/app
 
+## 0.0.4
+
+### Patch Changes
+
+- @openape/nuxt-auth-sp@0.15.2
+
 ## 0.0.3
 
 ### Patch Changes

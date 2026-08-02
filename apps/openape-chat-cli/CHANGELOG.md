@@ -1,5 +1,12 @@
 # @openape/ape-chat
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [24e53aa]
+  - @openape/cli-auth@0.5.3
+
 ## 0.4.4
 
 ### Patch Changes
@@ -35,6 +42,7 @@
 - [#287](https://github.com/openape-ai/openape/pull/287) [`42787d3`](https://github.com/openape-ai/openape/commit/42787d3e6513802850396742e3101f0e9a48dac2) Thanks [@patrick-hofmann](https://github.com/patrick-hofmann)! - Remove the `kind:'channel'` rooms model and associated mutation endpoints (closes #276).
 
   Phase A already migrated the chat UI to a 1:1-DM-only model (rooms are auto-created by the contact-accept flow), but the server still exposed enough surface to attack:
+
   - `POST /api/rooms` (channel-creation) — any authenticated user could enrol arbitrary emails as members; the targets immediately saw the attacker-named "channel" plus Web Push notifications with arbitrary 140-char text. Perfect phishing channel routed via chat.openape.ai.
   - `POST /api/rooms/:id/members` — admins could add any email and promote them to admin without a contact relationship.
   - `PATCH/DELETE /api/rooms/:id/members/:email` — same blast radius for role changes / kicks.
