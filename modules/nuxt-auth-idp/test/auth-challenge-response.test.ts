@@ -95,6 +95,16 @@ describe('auth challenge-response flow', () => {
       const challenge = await requestChallenge('keys-only@example.com')
       expect(challenge).toMatch(/^[0-9a-f]{64}$/)
     })
+
+    it('refuses a challenge for a deactivated user even with SSH keys', async () => {
+      const key = generateSshEd25519Key()
+      await seedUser(USER, { isActive: false })
+      await seedSshKey(USER, key.publicKeySsh)
+      const { default: handler } = await import('../src/runtime/server/api/auth/challenge.post')
+      await expect(handler({ body: { id: USER } } as any))
+        .rejects
+        .toMatchObject({ statusCode: 403, statusMessage: 'User is inactive' })
+    })
   })
 
   describe('/api/auth/authenticate', () => {
@@ -113,6 +123,38 @@ describe('auth challenge-response flow', () => {
         challenge: 'f'.repeat(64),
         signature: key.sign('f'.repeat(64)).toString('base64'),
       })).rejects.toMatchObject({ statusCode: 401 })
+    })
+
+    it('refuses a token for a user deactivated after the challenge was issued', async () => {
+      const key = generateSshEd25519Key()
+      await seedUser(USER)
+      await seedSshKey(USER, key.publicKeySsh)
+
+      const challenge = await requestChallenge(USER)
+
+      const { createUserStore } = await import('../src/runtime/server/utils/user-store')
+      await createUserStore().update(USER, { isActive: false })
+
+      await expect(authenticate({
+        id: USER,
+        challenge,
+        signature: key.sign(challenge).toString('base64'),
+      })).rejects.toMatchObject({ statusCode: 403, statusMessage: 'User is inactive' })
+    })
+
+    it('refuses a token for a deactivated user even with a directly minted challenge', async () => {
+      const key = generateSshEd25519Key()
+      await seedUser(USER, { isActive: false })
+      await seedSshKey(USER, key.publicKeySsh)
+
+      const { useGrantStores } = await import('../src/runtime/server/utils/grant-stores')
+      const challenge = await useGrantStores().challengeStore.createChallenge(USER)
+
+      await expect(authenticate({
+        id: USER,
+        challenge,
+        signature: key.sign(challenge).toString('base64'),
+      })).rejects.toMatchObject({ statusCode: 403, statusMessage: 'User is inactive' })
     })
 
     it('rejects a public_key that belongs to another user', async () => {
