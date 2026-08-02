@@ -1,5 +1,13 @@
 # @openape/nest
 
+## 2.4.13
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+  - @openape/ape-agent@2.11.13
+
 ## 2.4.12
 
 ### Patch Changes
