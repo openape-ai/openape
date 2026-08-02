@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import type { TokenExchangeParams } from '@openape/auth'
 import { defineEventHandler, getRequestHeader, readRawBody, setResponseStatus } from 'h3'
-import { handleRefreshGrant, handleTokenExchange, issueAssertion, validateClientAssertion } from '@openape/auth'
+import { handleRefreshGrant, handleTokenExchange, InactiveUserError, issueAssertion, validateClientAssertion } from '@openape/auth'
 import { useGrant, validateDelegation } from '@openape/grants'
 import type { IdPConfig, IdPStores } from '../config.js'
 import { sshEd25519ToKeyObject } from '../utils/ed25519.js'
@@ -192,10 +192,20 @@ async function handleRefreshTokenGrant(
       stores.keyStore,
       config.issuer,
       resolveUserClaimsFactory(stores),
+      // Deactivation invalidates existing refresh tokens (#1144 follow-up).
+      // Unknown identities pass — only an existing user with
+      // isActive === false is refused.
+      async (userId) => {
+        const user = await stores.userStore.findByEmail(userId)
+        return !user || user.isActive
+      },
     )
     return result
   }
   catch (err: unknown) {
+    if (err instanceof InactiveUserError) {
+      return oauthError(event, 403, 'invalid_grant', err.message)
+    }
     const message = err instanceof Error ? err.message : 'Refresh token exchange failed'
     return oauthError(event, 400, 'invalid_grant', message)
   }

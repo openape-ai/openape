@@ -78,7 +78,7 @@ beforeEach(() => {
   readBodyMock.mockReset()
   consumeChallengeMock.mockReset()
   saveChallengeMock.mockReset()
-  findUserByEmailMock.mockReset().mockResolvedValue({ email: EMAIL, name: 'Owner' })
+  findUserByEmailMock.mockReset().mockResolvedValue({ email: EMAIL, name: 'Owner', isActive: true })
   createUserMock.mockReset()
   deleteAllForUserMock.mockReset()
   saveCredentialMock.mockReset()

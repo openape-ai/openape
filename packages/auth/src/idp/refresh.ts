@@ -18,6 +18,13 @@ export class RefreshClientMismatchError extends Error {
   }
 }
 
+export class InactiveUserError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InactiveUserError'
+  }
+}
+
 /**
  * Handle grant_type=refresh_token: rotate refresh token, issue new access/id tokens.
  *
@@ -27,6 +34,11 @@ export class RefreshClientMismatchError extends Error {
  * for SP-A could be presented at /token with `client_id=SP-B` to mint
  * a fresh assertion `aud=SP-B` — audience binding broken. See security
  * audit 2026-05-04 / GitHub issue #274.
+ *
+ * The optional `isUserActive` resolver gates every refresh on CURRENT
+ * user state: deactivation must invalidate existing refresh tokens,
+ * not only future logins. A refusal revokes the whole family so the
+ * just-rotated successor token is dead too.
  */
 export async function handleRefreshGrant(
   refreshToken: string,
@@ -35,13 +47,19 @@ export async function handleRefreshGrant(
   keyStore: KeyStore,
   issuer: string,
   resolveUserClaims?: UserClaimsResolver,
+  isUserActive?: (userId: string) => Promise<boolean>,
 ): Promise<RefreshGrantResult> {
-  const { newToken, userId, clientId: issuedClientId } = await refreshStore.consume(refreshToken)
+  const { newToken, userId, clientId: issuedClientId, familyId } = await refreshStore.consume(refreshToken)
 
   if (issuedClientId !== clientId) {
     throw new RefreshClientMismatchError(
       `Refresh token was issued for client_id=${issuedClientId}, cannot redeem for client_id=${clientId}`,
     )
+  }
+
+  if (isUserActive && !(await isUserActive(userId))) {
+    await refreshStore.revokeFamily(familyId)
+    throw new InactiveUserError('User is inactive')
   }
 
   // Resolve user claims (same as in authorization_code flow)
