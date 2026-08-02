@@ -9,6 +9,7 @@
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
@@ -25,6 +26,8 @@
     "ulid": "^2.4.0"
   },
   "devDependencies": {
+    "jose": "^5.10.0",
+    "openape-e2e": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "^3.2.6"
   }
