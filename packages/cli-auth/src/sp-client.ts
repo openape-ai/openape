@@ -120,7 +120,7 @@ export function createSpClient<TState extends SpClientState = SpClientState>(
   async function apiCall<T>(path: string, reqOpts: RequestOptions = {}): Promise<T> {
     const endpoint = resolveEndpoint(reqOpts.endpoint)
     const url = `${endpoint}${path}`
-    const bearer = await getAuthorizedBearer({ endpoint: resolveEndpoint(), aud: defaultAud })
+    const bearer = await getAuthorizedBearer({ endpoint, aud: defaultAud })
     const headers: Record<string, string> = { Authorization: bearer }
     try {
       return await ofetch<T>(url, {
