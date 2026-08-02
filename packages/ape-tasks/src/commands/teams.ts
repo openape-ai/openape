@@ -163,7 +163,7 @@ export const teamsCommand = defineCommand({
         const maxUsesRaw = args['max-uses']
         const body: Record<string, unknown> = {}
         if (typeof maxUsesRaw === 'string' && maxUsesRaw.length > 0) {
-          body.max_uses = parseInt(maxUsesRaw, 10)
+          body.max_uses = Number.parseInt(maxUsesRaw, 10)
         }
         if (args['expires-in']) body.expires_in = args['expires-in']
         if (args.note) body.note = args.note

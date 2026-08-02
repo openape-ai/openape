@@ -8,11 +8,10 @@ import { requireHuman } from '../../../utils/require-auth'
 import { loadPrById } from '../../../utils/pr-access'
 
 const VERDICTS = ['approve', 'request-changes', 'comment'] as const
-const SIDES = ['old', 'new'] as const
 const MAX_COMMENTS = 500
 
 type Verdict = typeof VERDICTS[number]
-type Side = typeof SIDES[number]
+type Side = 'old' | 'new'
 
 interface InlineComment {
   path: string

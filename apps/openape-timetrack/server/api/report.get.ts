@@ -89,8 +89,7 @@ export default defineEventHandler(async (event) => {
     total_minutes: total,
     billable_minutes: billable,
     break_minutes: breakTotal,
-    groups: [...buckets.entries()]
-      .map(([key, v]) => ({ key, label: labels.get(key) ?? key, ...v }))
+    groups: Array.from(buckets.entries(), ([key, v]) => ({ key, label: labels.get(key) ?? key, ...v }))
       .sort((a, b) => b.total_minutes - a.total_minutes),
   }
 })

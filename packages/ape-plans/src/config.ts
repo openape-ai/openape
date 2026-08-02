@@ -14,18 +14,18 @@
  * new file is written and the old one is superseded. Users can safely delete
  * ~/.openape/auth-plans.json once they have run `apes login` on this device.
  */
-import { resolveEndpoint, loadConfig, saveConfig } from './client.ts'
+import { loadConfig, saveConfig } from './client.ts'
 import type { PlansState } from './client.ts'
 import { ApiError } from '@openape/cli-auth'
 
 export { resolveEndpoint } from './client.ts'
 
 /** Per-endpoint active team, set via `teams use <id>`. */
-export function getActiveTeamId(endpointOverride?: unknown): string | undefined {
+export function getActiveTeamId(_endpointOverride?: unknown): string | undefined {
   return (loadConfig() as PlansState).activeTeamId
 }
 
-export function setActiveTeamId(teamId: unknown, endpointOverride?: unknown): void {
+export function setActiveTeamId(teamId: unknown, _endpointOverride?: unknown): void {
   const state = loadConfig() as PlansState
   if (typeof teamId === 'string' && teamId.length > 0) state.activeTeamId = teamId
   else delete state.activeTeamId

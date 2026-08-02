@@ -61,7 +61,9 @@ export const meCommand = defineCommand({
         curDay = e.entry_date
         printLine(`\n${curDay}`)
       }
-      if (e.is_break) brk += e.duration_minutes
+      if (e.is_break) {
+        brk += e.duration_minutes
+      }
       else { work += e.duration_minutes; if (e.billable) billable += e.duration_minutes }
       if (e.overlap) overlaps++
       const tag = e.is_break ? 'PAUSE' : e.type

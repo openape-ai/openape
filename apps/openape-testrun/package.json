@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
     "postinstall": "nuxt prepare",
     "guide": "tsx scripts/capture-guide.ts"
   },

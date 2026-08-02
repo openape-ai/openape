@@ -8,6 +8,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "postinstall": "nuxt prepare"
