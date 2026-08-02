@@ -42,7 +42,7 @@ export const listCommand = defineCommand({
     if (args.json) return printJson(prs)
     if (prs.length === 0) return info('No pull requests. Upload one: ape-pr upload ./out')
     for (const pr of prs) {
-      printLine(`${STATUS_GLYPH[pr.status]} ${pr.id}  ${pr.title.padEnd(40).slice(0, 40)}  +${pr.additions}/-${pr.deletions}`.padEnd(72) + `  ${fmtTime(pr.created_at)}`)
+      printLine(`${`${STATUS_GLYPH[pr.status]} ${pr.id}  ${pr.title.padEnd(40).slice(0, 40)}  +${pr.additions}/-${pr.deletions}`.padEnd(72)}  ${fmtTime(pr.created_at)}`)
     }
   },
 })

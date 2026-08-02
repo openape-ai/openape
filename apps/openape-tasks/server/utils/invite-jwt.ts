@@ -54,9 +54,9 @@ export async function verifyInviteToken(token: string): Promise<InvitePayload | 
 export function parseDuration(input: string | undefined, defaultHours: number): number {
   const fallback = defaultHours * 3600
   if (!input) return fallback
-  const m = /^(\d+)(d|h|m)?$/.exec(input.trim())
+  const m = /^(\d+)([dhm])?$/.exec(input.trim())
   if (!m) return fallback
-  const n = parseInt(m[1]!, 10)
+  const n = Number.parseInt(m[1]!, 10)
   const unit = m[2] ?? 'h'
   if (unit === 'd') return n * 86400
   if (unit === 'h') return n * 3600

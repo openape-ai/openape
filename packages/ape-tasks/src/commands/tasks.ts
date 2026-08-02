@@ -71,7 +71,7 @@ function parseDue(v: unknown): number | null | undefined {
   if (v === undefined) return undefined
   const s = String(v).trim()
   if (s === '' || s === 'none' || s === 'clear') return null
-  const rel = s.match(/^\+(\d+)(m|h|d|w)$/i)
+  const rel = s.match(/^\+(\d+)([mhdw])$/i)
   if (rel) {
     const n = Number(rel[1])
     const unit = rel[2]!.toLowerCase()
@@ -114,7 +114,7 @@ function parseRemindAt(v: unknown): number | null | undefined {
   if (v === undefined) return undefined
   const s = String(v).trim()
   if (s === '' || s === 'none' || s === 'clear') return null
-  const rel = s.match(/^\+(\d+)(m|h|d|w)$/i)
+  const rel = s.match(/^\+(\d+)([mhdw])$/i)
   if (rel) {
     const n = Number(rel[1])
     const unit = rel[2]!.toLowerCase()

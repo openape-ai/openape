@@ -9,9 +9,8 @@ import {
   serializeTask,
   VALID_PRIORITY,
   VALID_STATUS,
-  type TaskPriority,
-  type TaskStatus,
 } from '../../../utils/task-shape'
+import type { TaskPriority, TaskStatus } from '../../../utils/task-shape'
 
 interface CreateBody {
   title?: string
