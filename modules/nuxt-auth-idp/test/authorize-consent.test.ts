@@ -41,6 +41,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
       save: consentSave,
     },
     adminAllowlistStore: { isAllowed: async () => false },
+    userStore: { findByEmail: async () => ({ email: 'patrick@hofmann.eco', isActive: true }) },
   })),
 }))
 

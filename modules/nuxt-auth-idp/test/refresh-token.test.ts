@@ -76,6 +76,7 @@ describe('refresh_token grant', () => {
     mockUserStore.findByEmail.mockResolvedValue({
       email: 'alice@example.com',
       name: 'Alice',
+      isActive: true,
     })
 
     const { readRawBody } = await import('h3')
@@ -127,6 +128,44 @@ describe('refresh_token grant', () => {
 
     expect(result.error).toBe('invalid_request')
     expect(result.error_description).toContain('client_id')
+  })
+
+  it('refuses a deactivated user and revokes the token family (403)', async () => {
+    // Deactivation must invalidate EXISTING refresh tokens, not only
+    // future logins (#1144 follow-up). The whole family is revoked so
+    // the rotated successor token is dead too.
+    await setup()
+    mockKeyStore.getSigningKey.mockResolvedValue(idpSigningKey)
+    mockRefreshTokenStore.consume.mockResolvedValue({
+      newToken: 'new-refresh-token',
+      userId: 'alice@example.com',
+      clientId: 'sp.example.com',
+      familyId: 'fam-1',
+    })
+    mockRefreshTokenStore.revokeFamily.mockResolvedValue(undefined)
+    mockUserStore.findByEmail.mockResolvedValue({
+      email: 'alice@example.com',
+      name: 'Alice',
+      isActive: false,
+    })
+
+    const { readRawBody, setResponseStatus } = await import('h3')
+    ;(readRawBody as any).mockResolvedValue(JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: 'old-refresh-token',
+      client_id: 'sp.example.com',
+    }))
+    ;(setResponseStatus as any).mockClear()
+
+    const { default: handler } = await import('../src/runtime/server/routes/token.post')
+    const result = await handler({} as any)
+
+    expect(result.error).toBe('invalid_grant')
+    expect(result.error_description).toContain('inactive')
+    expect(result.access_token).toBeUndefined()
+    expect(result.refresh_token).toBeUndefined()
+    expect(setResponseStatus).toHaveBeenCalledWith(expect.anything(), 403)
+    expect(mockRefreshTokenStore.revokeFamily).toHaveBeenCalledWith('fam-1')
   })
 
   it('rejects invalid refresh token', async () => {

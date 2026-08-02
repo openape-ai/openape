@@ -981,6 +981,68 @@ describe('idp server', () => {
       expect(refreshData.refresh_token).toBeDefined()
     })
 
+    it('refuses refresh for a deactivated user and revokes the family', async () => {
+      // Deactivation must invalidate EXISTING refresh tokens, not only
+      // future logins (#1144 follow-up).
+      const token = await getAuthToken('agent@example.com', agentKey.privateKey)
+      const codeVerifier = generateCodeVerifier()
+      const codeChallenge = await generateCodeChallenge(codeVerifier)
+
+      const authorizeRes = await api(
+        `/authorize?response_type=code&client_id=sp.example.com&redirect_uri=${encodeURIComponent('http://sp.example.com/callback')}&state=s4&code_challenge=${codeChallenge}&code_challenge_method=S256&scope=openid+offline_access`,
+        { headers: { Authorization: `Bearer ${token}` }, redirect: 'manual' },
+      )
+      const code = new URL(authorizeRes.headers.get('location')!).searchParams.get('code')!
+
+      const tokenRes = await apiJson('/token', {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: codeVerifier,
+        redirect_uri: 'http://sp.example.com/callback',
+        client_id: 'sp.example.com',
+      })
+      const { refresh_token: refreshToken } = await tokenRes.json()
+      expect(refreshToken).toBeDefined()
+
+      await stores.userStore.update('agent@example.com', { isActive: false })
+
+      const refreshRes = await apiJson('/token', {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: 'sp.example.com',
+      })
+      expect(refreshRes.status).toBe(403)
+      const refreshData = await refreshRes.json()
+      expect(refreshData.error).toBe('invalid_grant')
+      expect(refreshData.error_description).toContain('inactive')
+
+      // Family is revoked — reactivation does NOT resurrect the token
+      await stores.userStore.update('agent@example.com', { isActive: true })
+      const retryRes = await apiJson('/token', {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: 'sp.example.com',
+      })
+      expect(retryRes.status).toBe(400)
+      const retryData = await retryRes.json()
+      expect(retryData.error).toBe('invalid_grant')
+    })
+
+    it('refuses /authorize for a deactivated user with a still-valid bearer token', async () => {
+      const token = await getAuthToken('agent@example.com', agentKey.privateKey)
+      await stores.userStore.update('agent@example.com', { isActive: false })
+
+      const codeVerifier = generateCodeVerifier()
+      const codeChallenge = await generateCodeChallenge(codeVerifier)
+      const res = await api(
+        `/authorize?response_type=code&client_id=sp.example.com&redirect_uri=${encodeURIComponent('http://sp.example.com/callback')}&state=s5&code_challenge=${codeChallenge}&code_challenge_method=S256`,
+        { headers: { Authorization: `Bearer ${token}` }, redirect: 'manual' },
+      )
+      expect(res.status).toBe(403)
+
+      await stores.userStore.update('agent@example.com', { isActive: true })
+    })
+
     it('rejects refresh_token missing token', async () => {
       const res = await apiJson('/token', { grant_type: 'refresh_token' })
       const data = await res.json()
