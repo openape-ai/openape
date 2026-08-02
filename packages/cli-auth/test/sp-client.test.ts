@@ -176,6 +176,14 @@ describe('apiCall', () => {
   })
 
   it('uses explicit endpoint override when provided', async () => {
+    // Cached token minted at the override endpoint — matches the request
+    // target, so no re-exchange is needed.
+    saveSpToken({
+      endpoint: 'https://override.openape.ai',
+      aud: 'test.openape.ai',
+      access_token: 'sp-tok',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    })
     const client = makeClient()
     let capturedUrl = ''
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -185,6 +193,79 @@ describe('apiCall', () => {
 
     await client.apiCall('/api/rooms', { endpoint: 'https://override.openape.ai' })
     expect(capturedUrl).toBe('https://override.openape.ai/api/rooms')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// apiCall — token exchange honors the per-request endpoint override
+// ---------------------------------------------------------------------------
+
+describe('apiCall token exchange endpoint', () => {
+  function mockFetchCapturingUrls(): string[] {
+    const urls: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      urls.push(String(url))
+      if (String(url).endsWith('/api/cli/exchange')) {
+        return new Response(
+          JSON.stringify({ access_token: 'exchanged-tok', token_type: 'Bearer', expires_at: Math.floor(Date.now() / 1000) + 3600 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    return urls
+  }
+
+  beforeEach(() => {
+    // Valid IdP auth but NO cached SP token → apiCall must run the exchange.
+    const now = Math.floor(Date.now() / 1000)
+    saveIdpAuth({ idp: 'https://id.openape.ai', access_token: 'idp-x', email: 'me@x', expires_at: now + 3600 })
+  })
+
+  it('runs the exchange against the per-request endpoint override', async () => {
+    const client = makeClient()
+    const urls = mockFetchCapturingUrls()
+
+    await client.apiCall('/api/ping', { endpoint: 'https://override.openape.ai' })
+
+    expect(urls).toContain('https://override.openape.ai/api/cli/exchange')
+    expect(urls).not.toContain('https://test.openape.ai/api/cli/exchange')
+    expect(urls).toContain('https://override.openape.ai/api/ping')
+  })
+
+  it('re-exchanges when the cached SP token was minted for a different endpoint', async () => {
+    // A valid cached token for the DEFAULT endpoint must not be reused when
+    // the request targets an override endpoint — the override SP could never
+    // have minted it.
+    const now = Math.floor(Date.now() / 1000)
+    saveSpToken({
+      endpoint: 'https://test.openape.ai',
+      aud: 'test.openape.ai',
+      access_token: 'prod-tok',
+      expires_at: now + 3600,
+    })
+    const client = makeClient()
+    const urls = mockFetchCapturingUrls()
+
+    await client.apiCall('/api/ping', { endpoint: 'https://override.openape.ai' })
+
+    expect(urls).toContain('https://override.openape.ai/api/cli/exchange')
+  })
+
+  it('still uses the cached SP token when the endpoint matches', async () => {
+    const now = Math.floor(Date.now() / 1000)
+    saveSpToken({
+      endpoint: 'https://test.openape.ai',
+      aud: 'test.openape.ai',
+      access_token: 'cached-tok',
+      expires_at: now + 3600,
+    })
+    const client = makeClient()
+    const urls = mockFetchCapturingUrls()
+
+    await client.apiCall('/api/ping')
+
+    expect(urls).toEqual(['https://test.openape.ai/api/ping'])
   })
 })
 

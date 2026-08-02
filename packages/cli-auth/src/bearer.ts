@@ -4,6 +4,16 @@ import { loadSpToken } from './storage.js'
 
 const SP_TOKEN_SKEW_SECONDS = 60
 
+/**
+ * A cached SP-token is only reusable for the endpoint it was minted at —
+ * a token exchanged at prod would never verify at a `--endpoint` override
+ * target (each SP signs with its own secret). Trailing slashes are
+ * insignificant.
+ */
+function sameEndpoint(a: string, b: string): boolean {
+  return a.replace(/\/$/, '') === b.replace(/\/$/, '')
+}
+
 export interface AuthorizedBearerOptions {
   /** SP endpoint (e.g. `https://plans.openape.ai`). */
   endpoint: string
@@ -33,7 +43,11 @@ export async function getAuthorizedBearer(opts: AuthorizedBearerOptions): Promis
 
   if (!opts.forceRefresh) {
     const cached = loadSpToken(opts.aud)
-    if (cached && cached.expires_at > now + SP_TOKEN_SKEW_SECONDS) {
+    if (
+      cached
+      && cached.expires_at > now + SP_TOKEN_SKEW_SECONDS
+      && sameEndpoint(cached.endpoint, opts.endpoint)
+    ) {
       return `Bearer ${cached.access_token}`
     }
   }
