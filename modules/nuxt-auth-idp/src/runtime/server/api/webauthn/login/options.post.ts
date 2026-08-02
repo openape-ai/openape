@@ -7,11 +7,15 @@ import { createProblemError } from '../../../utils/problem'
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string }>(event) ?? {}
 
-  const { credentialStore, challengeStore } = useIdpStores()
+  const { credentialStore, challengeStore, userStore } = useIdpStores()
   const rpConfig = getRPConfig()
 
   let credentials
   if (body.email) {
+    const user = await userStore.findByEmail(body.email)
+    if (user && !user.isActive) {
+      throw createProblemError({ status: 403, title: 'User is inactive' })
+    }
     credentials = credentialStore.findByUserAndRp
       ? await credentialStore.findByUserAndRp(body.email, rpConfig.rpID)
       : (await credentialStore.findByUser(body.email)).filter(c => !c.rpId || c.rpId === rpConfig.rpID)

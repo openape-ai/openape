@@ -11,10 +11,15 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Missing required field: agent_id' })
   }
 
-  const { sshKeyStore } = useIdpStores()
+  const { userStore, sshKeyStore } = useIdpStores()
   const { challengeStore } = useGrantStores()
 
   const id = body.agent_id
+  const user = await userStore.findByEmail(id)
+  if (user && !user.isActive) {
+    throw createProblemError({ status: 404, title: 'User not found or inactive' })
+  }
+
   const sshKeys = await sshKeyStore.findByUser(id)
   if (sshKeys.length === 0) {
     throw createProblemError({ status: 404, title: 'User not found or has no SSH keys' })
