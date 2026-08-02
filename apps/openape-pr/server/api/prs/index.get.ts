@@ -30,10 +30,7 @@ export default defineEventHandler(async (event) => {
     createdBy: prs.createdBy,
     createdByAct: prs.createdByAct,
     createdAt: prs.createdAt,
-  }).from(prs)
-    .where(isNull(prs.deletedAt))
-    .orderBy(desc(prs.createdAt))
-    .limit(limit)
+  }).from(prs).where(isNull(prs.deletedAt)).orderBy(desc(prs.createdAt)).limit(limit)
 
   if (statusFilter) rows = rows.filter(r => r.status === statusFilter)
 

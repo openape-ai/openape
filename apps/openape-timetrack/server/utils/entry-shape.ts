@@ -33,12 +33,12 @@ export function parseDurationMinutes(input: string | number | undefined | null):
   if (typeof input === 'number') return Number.isFinite(input) && input > 0 ? Math.floor(input) : null
   const s = input.trim()
   if (/^\d+$/.test(s)) {
-    const n = parseInt(s, 10)
+    const n = Number.parseInt(s, 10)
     return n > 0 ? n : null
   }
   const m = s.match(/^(?:(\d+)h)?(?:(\d+)m)?$/)
   if (!m || (!m[1] && !m[2])) return null
-  const total = (m[1] ? parseInt(m[1], 10) * 60 : 0) + (m[2] ? parseInt(m[2], 10) : 0)
+  const total = (m[1] ? Number.parseInt(m[1], 10) * 60 : 0) + (m[2] ? Number.parseInt(m[2], 10) : 0)
   return total > 0 ? total : null
 }
 

@@ -17,10 +17,7 @@ export default defineEventHandler(async (event) => {
   const assetBase = `/api/prs/${pr.id}/assets`
 
   const db = useDb()
-  const review = await db.select().from(reviews)
-    .where(eq(reviews.prId, pr.id))
-    .orderBy(desc(reviews.reviewedAt))
-    .get()
+  const review = await db.select().from(reviews).where(eq(reviews.prId, pr.id)).orderBy(desc(reviews.reviewedAt)).get()
   const commentRows = review
     ? await db.select().from(comments).where(eq(comments.reviewId, review.id))
     : []
