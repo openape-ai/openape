@@ -21,7 +21,7 @@
  * Users can safely delete ~/.openape/auth-timetrack.json once they have run
  * `apes login` on this device.
  */
-import { _resolveEndpoint, loadConfig, saveConfig } from './client.ts'
+import { loadConfig, saveConfig } from './client.ts'
 import type { TimerackState } from './client.ts'
 import { ApiError } from '@openape/cli-auth'
 

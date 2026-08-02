@@ -568,16 +568,6 @@ function localInputToUnix(s: string): number {
   return Math.floor(new Date(s).getTime() / 1000)
 }
 
-/** Bump the Remind input by a delta (seconds), starting from its current
- *  value if set, otherwise from now. Used by the +1h / +1d / +1w quick
- *  buttons in the edit sheet. */
-function snoozeRemind(deltaSeconds: number): void {
-  const baseUnix = editRemindLocal.value
-    ? localInputToUnix(editRemindLocal.value)
-    : Math.floor(Date.now() / 1000)
-  editRemindLocal.value = unixToLocalInput(baseUnix + deltaSeconds)
-}
-
 /**
  * Set the Remind input to a named preset, modeled after iOS Reminders'
  * date popover (Heute Abend / Morgen früh / Nächste Woche). All anchors

@@ -14,7 +14,7 @@ interface CreatePrResponse {
   deletions: number
 }
 
-const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i
+const IMAGE_RE = /\.(?:png|jpe?g|webp|gif)$/i
 
 function listImages(dir: string): string[] {
   const out: string[] = []

@@ -3,7 +3,8 @@ import { defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { useDb } from '../../../database/drizzle'
 import { tasks, teamMembers, teams } from '../../../database/schema'
 import { createProblemError } from '../../../utils/problem'
-import { serializeTask, VALID_STATUS, type TaskStatus } from '../../../utils/task-shape'
+import { serializeTask, VALID_STATUS } from '../../../utils/task-shape'
+import type { TaskStatus } from '../../../utils/task-shape'
 import { effectiveLaneId, laneById, resolveLanes } from '../../../utils/lanes'
 
 /**

@@ -42,7 +42,7 @@ export function renderMarkdownInline(src: string | undefined | null): string {
 export function renderMarkdownWithAssets(src: string | undefined | null, assetBase: string): string {
   const html = renderMarkdown(src)
   return html.replace(/<img([^>]*?)src="([^"]+)"/g, (match, attrs, url) => {
-    if (/^(https?:\/\/|\/)/i.test(url)) return match
+    if (/^(?:https?:\/\/|\/)/i.test(url)) return match
     return `<img${attrs}src="${assetBase}/${url}"`
   })
 }

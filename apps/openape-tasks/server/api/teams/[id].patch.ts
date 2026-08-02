@@ -3,7 +3,8 @@ import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { tasks, teamMembers, teams } from '../../database/schema'
 import { createProblemError } from '../../utils/problem'
-import { type Lane, effectiveLaneId, resolveLanes, validateLanes } from '../../utils/lanes'
+import { effectiveLaneId, resolveLanes, validateLanes } from '../../utils/lanes'
+import type { Lane } from '../../utils/lanes'
 
 /**
  * PATCH /api/teams/:id — rename, edit description, bind to an org, or set board
