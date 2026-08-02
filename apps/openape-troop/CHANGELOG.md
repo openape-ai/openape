@@ -1,5 +1,11 @@
 # @openape/troop
 
+## 0.1.14
+
+### Patch Changes
+
+- @openape/nuxt-auth-sp@0.15.2
+
 ## 0.1.13
 
 ### Patch Changes
