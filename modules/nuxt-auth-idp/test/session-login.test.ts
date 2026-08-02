@@ -127,6 +127,22 @@ describe('session login endpoint', () => {
       .toMatchObject({ statusCode: 401 })
   })
 
+  it('refuses a session for a user deactivated after the challenge was issued', async () => {
+    const key = generateSshEd25519Key()
+    await seed(key)
+    const challenge = await requestChallenge()
+
+    const { createUserStore } = await import('../src/runtime/server/utils/user-store')
+    await createUserStore().update(USER, { isActive: false })
+
+    await expect(login({
+      id: USER,
+      challenge,
+      signature: key.sign(challenge).toString('base64'),
+    })).rejects.toMatchObject({ statusCode: 403, statusMessage: 'User is inactive' })
+    expect(sessionUpdate).not.toHaveBeenCalled()
+  })
+
   it('does not establish a session on an invalid signature', async () => {
     const key = generateSshEd25519Key()
     const wrongKey = generateSshEd25519Key()
