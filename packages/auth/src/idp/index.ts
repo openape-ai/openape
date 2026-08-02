@@ -9,7 +9,7 @@ export {
   createClientMetadataResolver,
   validateRedirectUri,
 } from './client-metadata.js'
-export { handleRefreshGrant, RefreshClientMismatchError, type RefreshGrantResult } from './refresh.js'
+export { handleRefreshGrant, InactiveUserError, RefreshClientMismatchError, type RefreshGrantResult } from './refresh.js'
 export {
   type AdminAllowlistStore,
   type CodeEntry,

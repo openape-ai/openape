@@ -39,6 +39,14 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // A deactivated account must NOT be recoverable — otherwise
+  // deactivation is undone by a mail link (#1144 follow-up). Checked
+  // before the challenge is consumed or any credential is touched.
+  const accountUser = await userStore.findByEmail(recovery.email)
+  if (accountUser && !accountUser.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
+  }
+
   const challenge = await challengeStore.consume(body.challengeToken)
   if (!challenge) {
     throw createProblemError({ status: 400, title: 'Invalid or expired challenge' })
@@ -74,8 +82,7 @@ export default defineEventHandler(async (event) => {
 
   // Ensure the user row exists (a recovery may legitimately be the
   // first enrolment for a shell account).
-  const existingUser = await userStore.findByEmail(recovery.email)
-  if (!existingUser) {
+  if (!accountUser) {
     await userStore.create({
       email: recovery.email,
       name: recovery.email,

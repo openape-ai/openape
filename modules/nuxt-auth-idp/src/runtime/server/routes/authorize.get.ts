@@ -12,6 +12,18 @@ import { useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
 import { createProblemError } from '../utils/problem'
 
+// Deactivation must also stop PRE-EXISTING sessions and bearer tokens
+// (#1144 follow-up): every /authorize access re-checks current user
+// state. Unknown identities pass — only an existing user with
+// isActive === false is refused (same conservative shape as #1144).
+async function assertUserActive(userId: string): Promise<void> {
+  const { userStore } = useIdpStores()
+  const user = await userStore.findByEmail(userId)
+  if (user && !user.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
+  }
+}
+
 function parseAuthorizationDetails(raw: string | undefined): OpenApeAuthorizationDetail[] {
   if (!raw) return []
   try {
@@ -109,6 +121,7 @@ export default defineEventHandler(async (event) => {
   const delegationGrantParam = String(query.delegation_grant ?? '')
 
   if (bearerPayload) {
+    await assertUserActive(bearerPayload.sub)
     if (delegationGrantParam) {
       // Bearer token with explicit delegation grant
       const { grantStore } = useGrantStores()
@@ -151,6 +164,8 @@ export default defineEventHandler(async (event) => {
       return sendRedirect(event, loginUrl.pathname + loginUrl.search)
     }
 
+    await assertUserActive(session.data.userId)
+
     if (delegationGrantParam) {
       // Human with explicit delegation grant (e.g. Lisa acting as Patrick)
       const { grantStore } = useGrantStores()
@@ -168,6 +183,12 @@ export default defineEventHandler(async (event) => {
     else {
       userId = session.data.userId
     }
+  }
+
+  // Delegation resolves userId to the delegator — a deactivated
+  // delegator must not have codes minted in their name either.
+  if (delegationGrantParam) {
+    await assertUserActive(userId)
   }
 
   const userDomain = extractDomain(userId)
