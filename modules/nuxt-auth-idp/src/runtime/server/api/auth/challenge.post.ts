@@ -14,18 +14,13 @@ export default defineEventHandler(async (event) => {
   const { userStore, sshKeyStore } = useIdpStores()
   const { challengeStore } = useGrantStores()
 
-  // Look up user
+  // A deactivated user must not receive challenges, even with SSH keys on file
   const user = await userStore.findByEmail(body.id)
-  if (user && user.isActive) {
-    // Check if user has SSH keys
-    const sshKeys = await sshKeyStore.findByUser(body.id)
-    if (sshKeys.length > 0) {
-      const challenge = await challengeStore.createChallenge(body.id)
-      return { challenge }
-    }
+  if (user && !user.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
   }
 
-  // Try SSH keys directly (covers case where user exists in sshKeyStore but not userStore)
+  // SSH-key lookup also covers identities that exist in sshKeyStore but not userStore
   const sshKeys = await sshKeyStore.findByUser(body.id)
   if (sshKeys.length > 0) {
     const challenge = await challengeStore.createChallenge(body.id)

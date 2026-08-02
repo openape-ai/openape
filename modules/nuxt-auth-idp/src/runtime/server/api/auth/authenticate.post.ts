@@ -37,10 +37,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Verify user exists
+  // Verify user exists and is active
   const user = await userStore.findByEmail(body.id)
   if (!user) {
     throw createProblemError({ status: 404, title: 'User not found' })
+  }
+  if (!user.isActive) {
+    throw createProblemError({ status: 403, title: 'User is inactive' })
   }
 
   const valid = await challengeStore.consumeChallenge(body.challenge, body.id)

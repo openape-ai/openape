@@ -89,11 +89,23 @@ describe('legacy agent auth endpoints', () => {
       .toMatchObject({ statusCode: 400 })
   })
 
+  it('challenge rejects an inactive user even with SSH keys', async () => {
+    const key = generateSshEd25519Key()
+    await seedAgent({ isActive: false })
+    await seedKey(key)
+    const { default: handler } = await import('../src/runtime/server/api/agent/challenge.post')
+    await expect(handler({ body: { agent_id: AGENT } } as any))
+      .rejects
+      .toMatchObject({ statusCode: 404, statusMessage: 'User not found or inactive' })
+  })
+
   it('authenticate rejects an inactive user even with valid keys', async () => {
     const key = generateSshEd25519Key()
     await seedAgent({ isActive: false })
     await seedKey(key)
-    const challenge = await requestChallenge()
+    // Mint the challenge directly — the challenge route refuses inactive users
+    const { useGrantStores } = await import('../src/runtime/server/utils/grant-stores')
+    const challenge = await useGrantStores().challengeStore.createChallenge(AGENT)
     await expect(authenticate({
       agent_id: AGENT,
       challenge,
