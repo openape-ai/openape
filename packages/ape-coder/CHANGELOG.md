@@ -1,5 +1,12 @@
 # @openape/ape-coder
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+
 ## 0.0.2
 
 ### Patch Changes

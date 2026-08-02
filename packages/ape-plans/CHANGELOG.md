@@ -1,5 +1,13 @@
 # @openape/ape-plans
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+  - @openape/proof-cli@0.1.3
+
 ## 1.0.2
 
 ### Patch Changes
