@@ -1,5 +1,14 @@
 # @openape/apes
 
+## 1.35.2
+
+### Patch Changes
+
+- Delegation exchange uses the served /token endpoint with a short-lived Ed25519 client assertion (PR #1054, closes #1052)
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+  - @openape/agent-runtime@0.2.7
+
 ## 1.35.1
 
 ### Patch Changes

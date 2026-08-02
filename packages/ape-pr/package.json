@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-pr",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CLI for pr.openape.ai — upload a pull request, review it on a beautiful diff, pull the verdict back",
   "type": "module",
   "license": "MIT",
