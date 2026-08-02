@@ -114,10 +114,9 @@ function runCli(args: string[], home: string): Promise<CliResult> {
         ...process.env,
         HOME: home,
         OPENAPE_CLI_AUTH_HOME: join(home, '.config', 'apes'),
-        // The token exchange inside cli-auth resolves the endpoint WITHOUT the
-        // per-request --endpoint override, so only this env var keeps the
-        // exchange pointed at the booted server instead of prod.
-        APE_TESTRUNS_ENDPOINT: base,
+        // No APE_TESTRUNS_ENDPOINT here on purpose: every invocation passes
+        // `--endpoint`, and cli-auth routes the token exchange through that
+        // per-request override too — this run proves the flag path end to end.
       },
     }, (err, stdout, stderr) => {
       const code = (err as { code?: unknown } | null)?.code
