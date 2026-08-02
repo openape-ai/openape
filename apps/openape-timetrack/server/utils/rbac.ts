@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { useDb } from '../database/drizzle'
+import type { useDb } from '../database/drizzle'
 import { companyMembers, projectMembers, projects } from '../database/schema'
 import type { CompanyRole, ProjectRole } from './visibility'
 

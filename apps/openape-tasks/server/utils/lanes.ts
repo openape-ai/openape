@@ -136,7 +136,7 @@ export function effectiveLaneId(lanes: Lane[], status: TaskStatus, laneId: strin
 /** The lane the `done` shortcut moves a task to: the rightmost `done` lane. */
 export function doneLaneId(lanes: Lane[]): string {
   const done = [...lanes].reverse().find(l => l.status === 'done')
-  const fallback = lanes[lanes.length - 1]
+  const fallback = lanes.at(-1)
   return (done ?? fallback)?.id ?? DEFAULT_LANES[2]!.id
 }
 

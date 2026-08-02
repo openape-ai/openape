@@ -18,9 +18,7 @@ export default defineEventHandler(async (event) => {
   const decoded = path ? decodeURIComponent(path) : ''
 
   const db = useDb()
-  const asset = await db.select().from(assets)
-    .where(and(eq(assets.prId, pr.id), eq(assets.path, decoded)))
-    .get()
+  const asset = await db.select().from(assets).where(and(eq(assets.prId, pr.id), eq(assets.path, decoded))).get()
   if (!asset) throw createProblemError({ status: 404, title: 'Asset not found' })
 
   setResponseHeader(event, 'content-type', asset.contentType)
