@@ -1,5 +1,13 @@
 # @openape/ape-pr
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+  - @openape/proof-cli@0.1.3
+
 ## 0.1.2
 
 ### Patch Changes

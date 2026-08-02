@@ -1,5 +1,13 @@
 # @openape/ape-timetrack
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/cli-auth@0.5.4
+  - @openape/proof-cli@0.1.3
+
 ## 0.1.6
 
 ### Patch Changes
