@@ -12,13 +12,17 @@ export function createChallengeHandler(stores: IdPStores, _config: IdPConfig) {
       throw createProblemError({ status: 400, title: 'Missing required field: id' })
     }
 
+    // A deactivated user must not receive challenges, even with SSH keys on file
     const user = await stores.userStore.findByEmail(body.id)
-    if (user && user.isActive) {
+    if (user && !user.isActive) {
+      throw createProblemError({ status: 403, title: 'User is inactive' })
+    }
+    if (user) {
       const challenge = await stores.challengeStore.createChallenge(user.email)
       return { challenge }
     }
 
-    // Try user with SSH keys
+    // Identities known only by SSH key (no userStore record)
     const sshKeys = await stores.sshKeyStore.findByUser(body.id)
     if (sshKeys.length > 0) {
       const challenge = await stores.challengeStore.createChallenge(body.id)
