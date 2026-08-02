@@ -71,6 +71,13 @@ export function createAuthorizeHandler(stores: IdPStores, config: IdPConfig) {
     const delegationGrantParam = String(query.delegation_grant ?? '')
 
     if (bearerPayload) {
+      // Deactivation must also stop still-valid bearer tokens (#1144
+      // follow-up). Unknown identities pass — only an existing user
+      // with isActive === false is refused.
+      const bearerUser = await stores.userStore.findByEmail(bearerPayload.sub)
+      if (bearerUser && !bearerUser.isActive) {
+        throw createProblemError({ status: 403, title: 'User is inactive' })
+      }
       if (delegationGrantParam) {
         const grant = await validateDelegation(
           delegationGrantParam,
@@ -119,6 +126,15 @@ export function createAuthorizeHandler(stores: IdPStores, config: IdPConfig) {
       else {
         userId = sessionUserId
         actorType = user.type ?? (user.owner ? 'agent' : undefined)
+      }
+    }
+
+    // Delegation resolves userId to the delegator — a deactivated
+    // delegator must not have codes minted in their name either.
+    if (delegationGrantParam) {
+      const delegator = await stores.userStore.findByEmail(userId)
+      if (delegator && !delegator.isActive) {
+        throw createProblemError({ status: 403, title: 'User is inactive' })
       }
     }
 
