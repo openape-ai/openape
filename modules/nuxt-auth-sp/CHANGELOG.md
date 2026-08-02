@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.2
+
+### Patch Changes
+
+- Updated dependencies [47df201]
+  - @openape/auth@0.13.2
+
 ## 0.15.1
 
 ### Patch Changes
