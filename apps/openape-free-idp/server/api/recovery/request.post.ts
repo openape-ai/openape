@@ -70,6 +70,14 @@ export default defineEventHandler(async (event) => {
     return { ok: true }
   }
 
+  if (!user.isActive) {
+    // Deactivated accounts are not recoverable (module-side #1146), so
+    // the mailed link would be useless — send nothing. Same neutral
+    // response as for unknown emails: a 403 here would leak that the
+    // account exists AND is deactivated.
+    return { ok: true }
+  }
+
   const now = Date.now()
   const token: string = randomUUID()
   const usableAt = now + recoveryCooldownMs(user, now)
