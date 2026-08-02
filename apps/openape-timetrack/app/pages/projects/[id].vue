@@ -207,7 +207,9 @@ async function remove(id: string) {
               </div>
               <div class="text-xs text-zinc-500">
                 <span v-if="e.is_break" class="text-amber-500 font-medium">Pause</span>
-                <template v-else>{{ e.type }}<span v-if="e.billable"> · billable</span></template>
+                <template v-else>
+                  {{ e.type }}<span v-if="e.billable"> · billable</span>
+                </template>
                 · {{ e.user_email }}
               </div>
             </div>

@@ -21,10 +21,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = useDb()
-  const review = await db.select().from(reviews)
-    .where(eq(reviews.prId, pr.id))
-    .orderBy(desc(reviews.reviewedAt))
-    .get()
+  const review = await db.select().from(reviews).where(eq(reviews.prId, pr.id)).orderBy(desc(reviews.reviewedAt)).get()
   if (!review) return { state: 'pending' as const, pr_id: pr.id, title: pr.title }
 
   const commentRows = await db.select().from(comments).where(eq(comments.reviewId, review.id))

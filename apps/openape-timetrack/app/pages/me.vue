@@ -88,7 +88,7 @@ const companyOptions = computed(() => {
   const m = new Map<string, string>()
   for (const p of projectsList.value) m.set(p.company_id, p.company_name)
   for (const e of entries.value) m.set(e.company_id, e.company_name)
-  return [{ label: 'Alle Firmen', value: ALL }, ...[...m].map(([value, label]) => ({ label, value }))]
+  return [{ label: 'Alle Firmen', value: ALL }, ...Array.from(m, ([value, label]) => ({ label, value }))]
 })
 const projectOptions = computed(() => {
   const m = new Map<string, string>()
@@ -98,7 +98,7 @@ const projectOptions = computed(() => {
   for (const e of entries.value) {
     if (filterCompany.value === ALL || e.company_id === filterCompany.value) m.set(e.project_id, e.project_name)
   }
-  return [{ label: 'Alle Projekte', value: ALL }, ...[...m].map(([value, label]) => ({ label, value }))]
+  return [{ label: 'Alle Projekte', value: ALL }, ...Array.from(m, ([value, label]) => ({ label, value }))]
 })
 
 const visibleEntries = computed(() => entries.value.filter(e =>
@@ -364,7 +364,9 @@ async function remove(id: string) {
             </div>
             <div class="truncate text-xs text-zinc-500">
               <span v-if="e.is_break" class="text-amber-500 font-medium">Pause</span>
-              <template v-else>{{ e.type }}<span v-if="e.billable"> · billable</span></template>
+              <template v-else>
+                {{ e.type }}<span v-if="e.billable"> · billable</span>
+              </template>
               <span v-if="e.description"> · {{ e.description }}</span>
             </div>
             <div v-if="e.overlap" class="text-xs text-amber-500 mt-0.5">

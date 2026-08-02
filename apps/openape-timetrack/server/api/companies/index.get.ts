@@ -1,4 +1,4 @@
-import { inArray, isNull } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { companies } from '../../database/schema'

@@ -8,8 +8,8 @@ import {
   laneForStatus,
   resolveLanes,
   validateLanes,
-  type Lane,
 } from './lanes'
+import type { Lane } from './lanes'
 
 const dev: Lane[] = validateLanes(DEV_WORKFLOW_LANES)
 const [backlog, ready, doing, review, done] = dev
