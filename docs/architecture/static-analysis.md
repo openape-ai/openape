@@ -7,13 +7,20 @@ package's `package.json` so it can never drift from the code.
 
 ## knip (dead code / unused deps) — advisory
 
-`pnpm knip` reports unused files, exports, types and dependencies across the
-workspace. It is **advisory only** (not wired into CI) until its baseline is
-triaged: the first run is noise-dominated (publishable packages export public
-API that knip can't see is consumed by external npm users; Nuxt auto-imports and
-server routes need per-app config). Treat the first run as a worklist, not a
-failure — tune `knip.json` per workspace, then consider a non-blocking CI job.
+`pnpm knip` reports unused files, exports, types and dependencies. Run it
+locally before merging anything that removes or rewires code; it stays out of CI
+on purpose. The target state is a real zero — no findings because there is no
+dead code, not because the config looks away — so a new finding is either dead
+code to delete or a gap in `knip.jsonc` that needs a commented rule, never a
+line added to `ignore` without a reason.
 
-First-run baseline (2026-06-27): 163 unused files, 138 unused exports, 59 unused
-deps, 22 unused devDeps, 91 unlisted deps — the bulk are config-tuning false
-positives, NOT confirmed dead code. Do not bulk-delete from this list.
+`pnpm knip` runs `scripts/knip-workspaces.mjs`, which analyses one workspace per
+process. A single whole-repo pass is not trustworthy: knip's Nuxt plugin
+registers its auto-import compiler globally and the first Nuxt workspace wins,
+so every other app's components and composables read as unreferenced (~50 false
+positives). Pass extra flags through as usual, e.g. `pnpm knip --production`.
+
+Status (2026-08-03): clean across all 41 workspaces after narrowing the `entry`
+patterns to real framework entry points. The earlier "1 finding" green was an
+artefact — `apps/*/{app,server,shared}/**` and `modules/*/src/runtime/**` were
+declared as entry, which exempted ~41% of the code from export analysis.
