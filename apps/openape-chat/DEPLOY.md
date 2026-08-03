@@ -1,12 +1,26 @@
 # Deploying chat.openape.ai
 
-> One-time bootstrap + recurring deploy via `scripts/deploy-chat.sh`. Mirrors the layout of the other hosted services (see `scripts/deploy-free-idp.sh` for `id.openape.ai`).
+Chat runs on chatty as a container from `registry.openape.ai`, deployed from your machine:
+
+```sh
+pnpm run deploy:image chat
+```
+
+That builds the app locally, packages `.output` into an amd64 image, smoke-tests `/api/health` against it, pushes it, and lets chatty pull and swap the container — then an external health gate, with automatic rollback to the previous tag if it fails. The compose service and its volume/env wiring live in `compose/chatty.yml`; the orchestration is `scripts/deploy-image.mjs`.
+
+Prerequisites: SSH access as `openape@chatty.delta-mind.at` and a `docker login registry.openape.ai`.
+
+The container reuses the host state described below — `/home/openape/projects/openape-chat/shared` is mounted at the identical path, so the `.env`, the VAPID keys and the SQLite file stay where they are.
+
+## Emergency fallback: the systemd unit
+
+The pre-container path is still installed and intact, just disabled. Bring it back with `sudo systemctl start openape-chat` (as `ubuntu`) after stopping the container — both bind port 3007. `./scripts/deploy-chat.sh` is the deploy that feeds it; see [Recurring deploy](#recurring-deploy) for what it does.
 
 ---
 
-## One-time bootstrap
+## Host bootstrap
 
-These steps only run once per host. After this, `./scripts/deploy-chat.sh` from the monorepo root handles every subsequent deploy.
+These steps only run once per host. They set up the state the container mounts, plus the systemd unit and nginx vhost the fallback runs on.
 
 ### 1. Release directory + persistent shared state
 
@@ -155,7 +169,9 @@ A/AAAA record for `chat.openape.ai` → the host's IP. The nginx vhost handles t
 
 ## Recurring deploy
 
-Once the bootstrap is done, every release is just:
+Every release is `pnpm run deploy:image chat` — see the top of this file.
+
+The rsync path that feeds the dormant systemd unit is still there for the fallback case:
 
 ```sh
 ./scripts/deploy-chat.sh
@@ -172,6 +188,10 @@ That script:
 7. Prunes old releases, keeping the last 3 for rollback.
 
 ### Rollback
+
+`pnpm run deploy:image chat` rolls back on its own when the health gate fails: it re-pins `CHAT_TAG` to `CHAT_TAG_PREV` in `/home/openape/prod/.env` and brings the service back up. To do it by hand, set `CHAT_TAG` there to any tag in the registry and run `docker compose --env-file .env -f docker-compose.yml up -d chat`.
+
+For a release deployed the rsync way:
 
 ```sh
 ssh chatty
@@ -211,9 +231,12 @@ icons: [
 
 ```sh
 ssh chatty
-sudo systemctl status openape-chat.service
-sudo journalctl -u openape-chat -f
+cd /home/openape/prod
+docker compose --env-file .env -f docker-compose.yml ps chat
+docker compose --env-file .env -f docker-compose.yml logs -f chat
 curl -i http://127.0.0.1:3007/api/me   # 401 expected when no session
 ```
+
+Running from the systemd unit instead: `sudo systemctl status openape-chat.service`, `sudo journalctl -u openape-chat -f`.
 
 Database lives at `shared/openape-chat.db` (SQLite). Back it up alongside the other SQLite files (`/home/openape/projects/*/shared/*.db`).

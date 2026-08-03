@@ -4,11 +4,14 @@ name: deploy
 # amd64 image → local smoke test → push → chatty pulls + compose up → health
 # gate → auto-rollback) — only the trigger moves into CI: the `mac` runner's
 # LaunchAgent session has keychain/registry access that headless shells lack.
+#
+# docs.openape.ai is not a target here: the docs site has its own deploy
+# (scripts/deploy-docs-site.mjs, `pnpm run deploy:docs-site`).
 on:
   workflow_dispatch:
     inputs:
       targets:
-        description: 'free-idp | troop | chat | org | --all (space-separated)'
+        description: 'free-idp | troop | chat | tasks | plans | testrun | timetrack | pr | monitor | question-service | --all (space-separated)'
         required: true
 
 concurrency:
