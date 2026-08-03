@@ -3,7 +3,6 @@ import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
 import { prs } from '../../database/schema'
-import { emitToTroop, verdictRequestedEvents } from '../../utils/attention-emit'
 import { reviewUrl } from '../../utils/pr-access'
 import { diffStats, validatePrManifest } from '../../utils/pr-shape'
 
@@ -45,19 +44,11 @@ export default defineEventHandler(async (event) => {
     createdAt: now,
   })
 
-  const url = reviewUrl(event, id)
-  await emitToTroop(event, verdictRequestedEvents({
-    actor: caller.email,
-    actorKind: caller.act === 'human' ? 'human' : 'agent',
-    taskRef: manifest.taskRef ?? `ape-pr:${id}`,
-    reviewUrl: url,
-  }, now))
-
   setResponseStatus(event, 201)
   return {
     id,
     slug,
-    review_url: url,
+    review_url: reviewUrl(event, id),
     files,
     additions,
     deletions,

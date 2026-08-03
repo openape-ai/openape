@@ -24,8 +24,6 @@ export default defineNuxtConfig({
     // Empty default → public URLs derive from the request origin. Production
     // sets NUXT_PUBLIC_URL=https://pr.openape.ai explicitly.
     publicUrl: '',
-    // troop's attention inbox. Empty disables emission (tests, offline dev).
-    troopUrl: 'https://troop.openape.ai',
     public: {
       siteName: 'OpenApe PR',
     },
