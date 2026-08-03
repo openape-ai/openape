@@ -117,7 +117,7 @@
     },
     {
       "name": "troop.company.read",
-      "description": "Read your troop company (objectives | reports | members | cost-snapshots | overview). Authenticated as the agent; read-only.",
+      "description": "Read your troop company (objectives | reports | members | overview). Authenticated as the agent; read-only.",
       "inputs": "{ resource: string, org_id: string }",
       "risk": "low"
     },
