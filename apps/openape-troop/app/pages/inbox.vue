@@ -62,11 +62,7 @@ const badge: Record<string, { label: string, class: string }> = {
           Inbox Zero — nichts wartet auf dich.
         </p>
       </template>
-      <p v-else class="text-zinc-400 py-16 text-center">
-        Bitte zuerst <NuxtLink to="/" class="underline">
-          einloggen
-        </NuxtLink>.
-      </p>
+      <InlineLogin v-else hint="Melde dich an, um deine offenen Entscheidungen zu sehen." />
     </main>
   </div>
 </template>

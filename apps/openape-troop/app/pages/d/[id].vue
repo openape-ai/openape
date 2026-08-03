@@ -55,11 +55,7 @@ async function resolve(body: { choice?: string, verdict?: string }) {
     </header>
 
     <main class="max-w-2xl mx-auto px-4 sm:px-8 py-8">
-      <p v-if="!user" class="text-zinc-400 py-16 text-center">
-        Bitte zuerst <NuxtLink to="/" class="underline">
-          einloggen
-        </NuxtLink>.
-      </p>
+      <InlineLogin v-if="!user" />
       <UAlert v-else-if="error" color="error" variant="subtle" title="Karte nicht gefunden oder kein Zugriff." />
       <div v-else-if="e" class="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
         <div class="flex items-center gap-2 mb-3">
