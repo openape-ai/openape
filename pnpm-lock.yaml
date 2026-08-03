@@ -792,12 +792,12 @@ importers:
 
   examples/e2e:
     dependencies:
-      '@openape/server':
+      '@openape/nuxt-auth-idp':
         specifier: workspace:*
-        version: link:../../packages/server
-      h3:
-        specifier: ^1.15.11
-        version: 1.15.11
+        version: link:../../modules/nuxt-auth-idp
+      '@openape/nuxt-auth-sp':
+        specifier: workspace:*
+        version: link:../../modules/nuxt-auth-sp
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -1195,9 +1195,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@openape/server':
-        specifier: workspace:*
-        version: link:../server
       '@types/node':
         specifier: ^25.9.4
         version: 25.9.4
@@ -1207,12 +1204,9 @@ importers:
       '@vitest/coverage-istanbul':
         specifier: ^4.1.9
         version: 4.1.9(vitest@4.1.9)
-      h3:
-        specifier: ^1.15.11
-        version: 1.15.11
-      jose:
-        specifier: ^5.10.0
-        version: 5.10.0
+      openape-e2e:
+        specifier: workspace:*
+        version: link:../../examples/e2e
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
@@ -1449,40 +1443,6 @@ importers:
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.9
-        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.9)(@vitest/coverage-istanbul@4.1.9)(happy-dom@18.0.1)(vite@8.1.5(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
-
-  packages/server:
-    dependencies:
-      '@openape/auth':
-        specifier: workspace:*
-        version: link:../auth
-      '@openape/core':
-        specifier: workspace:*
-        version: link:../core
-      '@openape/grants':
-        specifier: workspace:*
-        version: link:../grants
-      h3:
-        specifier: ^1.15.11
-        version: 1.15.11
-      jose:
-        specifier: ^5.10.0
-        version: 5.10.0
-    devDependencies:
-      '@types/node':
-        specifier: ^22.20.0
-        version: 22.20.0
-      '@vitest/coverage-istanbul':
-        specifier: ^4.1.9
-        version: 4.1.9(vitest@4.1.9)
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -18940,7 +18900,7 @@ snapshots:
       magicast: 0.5.3
       obug: 2.1.3
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@26.0.1)(@vitest/browser-playwright@4.1.9)(@vitest/coverage-istanbul@4.1.9)(happy-dom@18.0.1)(vite@8.1.5(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.9)(@vitest/coverage-istanbul@4.1.9)(happy-dom@18.0.1)(vite@8.1.5(@types/node@22.20.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
     transitivePeerDependencies:
       - supports-color
 

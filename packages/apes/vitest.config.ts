@@ -1,24 +1,50 @@
 import { defineConfig } from 'vitest/config'
 
+// Files that boot a real IdP (`examples/idp` via `nuxt dev`). They run as their
+// own project so they go one at a time — nine parallel Nuxt boots starve each
+// other and the box. Everything else keeps the default parallelism.
+const IDP_BACKED_TESTS = [
+  'test/additional.test.ts',
+  'test/admin.test.ts',
+  'test/commands.test.ts',
+  'test/dns-check.test.ts',
+  'test/grants-edge.test.ts',
+  'test/http.test.ts',
+  'test/inprocess.test.ts',
+  'test/shapes-adapter-grants.test.ts',
+  'test/workflows.test.ts',
+]
+
+const shared = {
+  environment: 'node' as const,
+  // The local pre-push gate runs the whole monorepo via `turbo ... --concurrency=4`,
+  // so four package suites saturate the CPU at once. A handful of tests here do real
+  // HTTP round-trips to an IdP plus RSA keygen; under that contention a
+  // single one can occasionally blow the default 5s budget and fail in isolation
+  // (observed: "1 failed / 748 passed", a lone test-body failure — not a hook). retry
+  // re-runs only the failing test body (suite hooks are untouched), so a transient
+  // timeout passes on the second attempt while a genuinely broken test still fails all
+  // three. The timeout bump gives headroom so retries are rarely needed.
+  retry: 2,
+  // 15s still tripped on the loaded CI runner: tests whose vi.mock factory
+  // dynamically imports workspace packages (commands-run-async) timed out at
+  // exactly 15s while passing locally (run 3222). Same class as hookTimeout.
+  testTimeout: 45000,
+  // beforeAll in commands.test.ts spawns key setup; the 10s default tripped
+  // on the loaded CI runner with coverage on (run 3099: import phase 132s)
+  hookTimeout: 180000,
+}
+
 export default defineConfig({
   test: {
-    environment: 'node',
-    // The local pre-push gate runs the whole monorepo via `turbo ... --concurrency=4`,
-    // so four package suites saturate the CPU at once. A handful of tests here do real
-    // HTTP round-trips to an in-process IdP plus RSA keygen; under that contention a
-    // single one can occasionally blow the default 5s budget and fail in isolation
-    // (observed: "1 failed / 748 passed", a lone test-body failure — not a hook). retry
-    // re-runs only the failing test body (suite hooks are untouched), so a transient
-    // timeout passes on the second attempt while a genuinely broken test still fails all
-    // three. The timeout bump gives headroom so retries are rarely needed.
-    retry: 2,
-    // 15s still tripped on the loaded CI runner: tests whose vi.mock factory
-    // dynamically imports workspace packages (commands-run-async) timed out at
-    // exactly 15s while passing locally (run 3222). Same class as hookTimeout.
-    testTimeout: 45000,
-    // beforeAll in commands.test.ts spawns key setup; the 10s default tripped
-    // on the loaded CI runner with coverage on (run 3099: import phase 132s)
-    hookTimeout: 60000,
+    projects: [
+      {
+        test: { ...shared, name: 'unit', include: ['test/**/*.test.ts'], exclude: IDP_BACKED_TESTS },
+      },
+      {
+        test: { ...shared, name: 'idp', include: IDP_BACKED_TESTS, fileParallelism: false },
+      },
+    ],
     coverage: {
       provider: 'istanbul',
       include: ['src/**/*.ts'],

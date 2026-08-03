@@ -1,35 +1,59 @@
-import type { RunningAppServer } from './lifecycle.js'
-import { createIdPApp, createSPApp } from '@openape/server'
-import { toNodeListener } from 'h3'
-import { IDP_PORT, IDP_URL, IS_PROD, MANAGEMENT_TOKEN, SP_ID, SP_PORT, SP_URL } from './constants.js'
-import { startAppServer } from './lifecycle.js'
+import type { RunningServer } from './lifecycle.js'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { IDP_PORT, IDP_URL, IS_PROD, MANAGEMENT_TOKEN, SP_ID, SP_PORT } from './constants.js'
+import { startIdp } from './idp-fixture.js'
+import { startServer } from './lifecycle.js'
 
-let idpServer: RunningAppServer | null = null
-let spServer: RunningAppServer | null = null
+// The suite drives the shipped apps — `examples/idp` (@openape/nuxt-auth-idp)
+// and `examples/sp` (@openape/nuxt-auth-sp), booted as `nuxt dev` servers.
+// Those are the same code paths that serve production traffic.
 
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+const SP_DIR = join(repoRoot, 'examples', 'sp')
+
+const SESSION_SECRET = 'e2e-session-secret-at-least-32-characters-long'
+const ADMIN_EMAIL = 'admin@example.com'
+const BOOT_TIMEOUT_MS = 120_000
+
+/**
+ * DDISA record for the test domain, resolved instead of real DNS. Both sides
+ * need it: the SP to discover the IdP, the IdP to read `mode=open` — the
+ * domain's declaration that its users need no per-SP consent prompt.
+ */
 const DDISA_MOCK_RECORDS = {
-  'example.com': { version: 'ddisa1' as const, idp: IDP_URL, mode: 'open' as const },
+  'example.com': { version: 'ddisa1', idp: IDP_URL, mode: 'open' },
 }
 
+let idpServer: RunningServer | null = null
+let spServer: RunningServer | null = null
+
 export async function startServers(): Promise<void> {
-  if (IS_PROD) return
-
-  const { app: idpApp } = createIdPApp({
-    issuer: IDP_URL,
-    managementToken: MANAGEMENT_TOKEN,
-    adminEmails: ['admin@example.com'],
-  })
-
-  const { app: spApp } = createSPApp({
-    clientId: SP_ID,
-    redirectUri: `${SP_URL}/api/callback`,
-    idpUrl: IDP_URL,
-    resolverOptions: { mockRecords: DDISA_MOCK_RECORDS },
-  })
+  if (IS_PROD) {
+    return
+  }
 
   ;[idpServer, spServer] = await Promise.all([
-    startAppServer(toNodeListener(idpApp), { port: IDP_PORT }),
-    startAppServer(toNodeListener(spApp), { port: SP_PORT }),
+    startIdp({
+      host: 'localhost',
+      port: IDP_PORT,
+      managementToken: MANAGEMENT_TOKEN,
+      adminEmails: [ADMIN_EMAIL],
+      ddisaMockRecords: DDISA_MOCK_RECORDS,
+    }),
+    startServer({
+      cwd: SP_DIR,
+      host: 'localhost',
+      port: SP_PORT,
+      readyPath: '/.well-known/openape.json',
+      timeoutMs: BOOT_TIMEOUT_MS,
+      env: {
+        NUXT_OPENAPE_CLIENT_ID: SP_ID,
+        NUXT_OPENAPE_URL: IDP_URL,
+        NUXT_OPENAPE_SP_SESSION_SECRET: SESSION_SECRET,
+        DDISA_MOCK_RECORDS: JSON.stringify(DDISA_MOCK_RECORDS),
+      },
+    }),
   ])
 }
 
