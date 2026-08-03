@@ -27,7 +27,6 @@ graph LR
     _openape_shapes["@openape/shapes"]
     _openape_sp_tasks["@openape/sp-tasks"]
     _openape_unstorage_s3_driver["@openape/unstorage-s3-driver"]
-    _openape_vue_components["@openape/vue-components"]
   end
   subgraph modules
     _openape_nuxt_auth_idp["@openape/nuxt-auth-idp"]
@@ -107,7 +106,6 @@ graph LR
   _openape_troop --> _openape_core
   _openape_troop --> _openape_nuxt_auth_sp
   _openape_troop --> _openape_prompt_injection_detector
-  _openape_vue_components --> _openape_core
   openape_free_idp --> _openape_auth
   openape_free_idp --> _openape_core
   openape_free_idp --> _openape_nuxt_auth_idp

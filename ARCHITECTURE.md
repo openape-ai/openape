@@ -44,7 +44,7 @@ shared:
 - Plus supporting libs: `proxy` (grant-gated HTTP gateway), `shapes` (adapter
   parsing, registry, installer), `sp-tasks` (the A2A-shaped task queue the
   service-agents poll), `codex-proxy`, `prompt-injection-detector`,
-  `s3-driver`, `vue-components`, `proof-cli` (shared CLI core behind
+  `s3-driver`, `proof-cli` (shared CLI core behind
   `ape-tasks`, `ape-plans`, `ape-testruns`, `ape-pr`, `ape-timetrack`), and the
   private `protocol-conformance` suite.
 

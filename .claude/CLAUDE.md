@@ -25,7 +25,6 @@ packages/         # Publishable libraries
   proof-cli/      # @openape/proof-cli — shared CLI core for the proof-link apps
   server/         # @openape/server — shared server utilities
   prompt-injection-detector/  # @openape/prompt-injection-detector
-  vue-components/ # @openape/vue-components — shared Vue components
   agent-runtime/  # @openape/agent-runtime — in-process agent run loop + tools
   shapes/         # @openape/shapes — adapter parsing, registry, installer
   sp-tasks/       # @openape/sp-tasks — A2A-shaped task queue for service-agents
