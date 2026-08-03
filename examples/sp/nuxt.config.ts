@@ -1,4 +1,7 @@
 export default defineNuxtConfig({
+  // E2E boots two nuxt dev servers at once; both would grab the same
+  // vite HMR port (24678) and the loser never becomes ready.
+  vite: { server: { hmr: process.env.E2E_NO_HMR ? false : undefined } },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-sp'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
