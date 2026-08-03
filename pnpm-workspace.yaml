@@ -14,6 +14,11 @@ minimumReleaseAgeExclude:
   # Quarantäne <7 Tage alt und blockte jede non-frozen Resolution.
   # Ausnahme entfernen, sobald 8.5.25 gealtert ist (nach 2026-08-05).
   - postcss
+  # brace-expansion 1.1.18/2.1.4/5.0.9 (Security-Override gegen
+  # GHSA-rgw5-rvv9-x895) war beim Bump <7 Tage alt und blockte jede
+  # non-frozen Resolution. Ausnahme entfernen, sobald gealtert (nach
+  # 2026-08-09).
+  - brace-expansion
 
 auditConfig:
   ignoreGhsas:
@@ -49,9 +54,9 @@ overrides:
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
   '@hono/node-server': '>=2.0.5'
   'tar@>=7 <7.5.21': '>=7.5.21'
-  'brace-expansion@1': '>=1.1.16 <2'
-  'brace-expansion@2': '>=2.1.2 <3'
-  'brace-expansion@5': '>=5.0.8'
+  'brace-expansion@1': '>=1.1.18 <2'
+  'brace-expansion@2': '>=2.1.4 <3'
+  'brace-expansion@5': '>=5.0.9'
   defu: '>=6.1.5'
   devalue: '>=5.8.1'
   drizzle-orm: '>=0.45.2'

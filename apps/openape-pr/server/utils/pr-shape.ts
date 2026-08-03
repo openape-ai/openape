@@ -11,11 +11,6 @@ export interface PrManifest {
   headSha?: string
   /** Raw unified diff (git diff output). */
   diff: string
-  /**
-   * Opaque reference to the work this PR belongs to ("ape-tasks:<id>"), used
-   * to group attention events. Defaults to the PR itself when absent.
-   */
-  taskRef?: string
 }
 
 const MAX_TEXT = 50_000
@@ -54,7 +49,6 @@ export function validatePrManifest(raw: unknown): PrManifest {
   const baseSha = asTrimmedString(m.baseSha, 'baseSha', { max: 64 })
   const headSha = asTrimmedString(m.headSha, 'headSha', { max: 64 })
   const diff = asTrimmedString(m.diff, 'diff', { required: true, max: MAX_DIFF })!
-  const taskRef = asTrimmedString(m.taskRef, 'taskRef', { max: 200 })
 
   let authorAct: 'human' | 'agent' = 'agent'
   if (m.authorAct !== undefined) {
@@ -64,7 +58,7 @@ export function validatePrManifest(raw: unknown): PrManifest {
     authorAct = m.authorAct
   }
 
-  return { title, description, author, authorAct, branch, baseSha, headSha, diff, taskRef }
+  return { title, description, author, authorAct, branch, baseSha, headSha, diff }
 }
 
 export interface DiffStats {
