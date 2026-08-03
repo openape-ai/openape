@@ -1,12 +1,10 @@
-import type { Server } from 'node:http'
-import { createServer } from 'node:http'
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generateKeyPairSync } from 'node:crypto'
-import { toNodeListener } from 'h3'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createIdPApp } from '@openape/server'
+import { startIdp } from 'openape-e2e/idp-fixture'
 import consola from 'consola'
 
 // ---------------------------------------------------------------------------
@@ -45,27 +43,12 @@ function generateTestKeyPair() {
   return { publicKeySsh, privateKeyPem }
 }
 
-function listenOnFreePort(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      if (addr && typeof addr === 'object') resolve(addr.port)
-      else reject(new Error('Failed to get server address'))
-    })
-  })
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise(resolve => server.close(() => resolve()))
-}
-
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe('apes CLI in-process tests', () => {
-  let server: Server
-  let port: number
+  let server: RunningServer
   let idpBase: string
   const MGMT_TOKEN = 'test-mgmt-token-123'
   const AGENT_EMAIL = 'agent+test@example.com'
@@ -80,31 +63,11 @@ describe('apes CLI in-process tests', () => {
     // Write the test private key
     writeFileSync(join(testHome, 'test_key'), keyPair.privateKeyPem, { mode: 0o600 })
 
-    // Set APES_IDP so commands discover it
-    process.env.APES_IDP = '' // Will be set after server starts
-
     // ---- start IdP ----
-    const tempIdp = createIdPApp({ issuer: 'http://placeholder', managementToken: MGMT_TOKEN })
-    const tempServer = createServer(toNodeListener(tempIdp.app))
-    port = await listenOnFreePort(tempServer)
-    await closeServer(tempServer)
-
-    idpBase = `http://127.0.0.1:${port}`
+    server = await startIdp({ managementToken: MGMT_TOKEN, adminEmails: [OWNER_EMAIL] })
+    idpBase = server.url
+    // Set APES_IDP so commands discover it
     process.env.APES_IDP = idpBase
-
-    const idp = createIdPApp({
-      issuer: idpBase,
-      managementToken: MGMT_TOKEN,
-      adminEmails: [OWNER_EMAIL],
-    })
-
-    // The real IdP app serves /api/auth/challenge and /api/auth/authenticate natively.
-    // Client now sends canonical `id` field (not legacy `agent_id`), so no compat routes needed.
-    server = createServer(toNodeListener(idp.app))
-    await new Promise<void>((resolve, reject) => {
-      server.listen(port, '127.0.0.1', () => resolve())
-      server.on('error', reject)
-    })
 
     // ---- enroll agent user with SSH key ----
     const enrollRes = await fetch(`${idpBase}/api/auth/enroll`, {
@@ -143,7 +106,7 @@ describe('apes CLI in-process tests', () => {
 
   afterAll(async () => {
     delete process.env.APES_IDP
-    await closeServer(server)
+    await server.stop()
     rmSync(testHome, { recursive: true, force: true })
   })
 
