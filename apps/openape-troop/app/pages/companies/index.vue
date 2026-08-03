@@ -80,7 +80,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         Firmen
       </h2>
       <p class="text-zinc-400 mb-6">
-        Ihre Firmen — klicken Sie eine an, um Hierarchie, Ziele und Kosten zu sehen.
+        Ihre Firmen — klicken Sie eine an, um Hierarchie und Ziele zu sehen.
       </p>
 
       <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
