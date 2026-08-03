@@ -1,0 +1,147 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // Run knip with `pnpm knip` — it drives scripts/knip-workspaces.mjs, which
+  // analyses one workspace per process. A single whole-repo pass is NOT
+  // trustworthy here; see the comment at the top of that script.
+  //
+  // Target state is a real zero: no findings because there is no dead code, not
+  // because the config looks away. Every `ignore*` entry below therefore states
+  // why the thing it hides is invisible to static analysis.
+
+  // pnpm catalog entries are shared by the whole workspace, so a per-workspace
+  // pass can never see who consumes them. Nothing else in the report depends on
+  // whole-repo scope.
+  "exclude": ["catalog"],
+
+  "ignore": [
+    // Docker/compose assets — no TypeScript, nothing to resolve.
+    "compose/**"
+  ],
+  "ignoreWorkspaces": [
+    // Sample code for external readers; intentionally not wired into the graph.
+    "examples/*"
+  ],
+  "ignoreBinaries": [
+    // Operator tooling invoked from package.json scripts and agent recipes; it
+    // is installed on the host (or globally via npm), never a workspace dep.
+    "o365-cli",
+    "ape-tasks",
+    "apes",
+    "systemctl",
+    "getent",
+    "which",
+    "ssh-keygen"
+  ],
+  "ignoreDependencies": [
+    // Icon collections read by @nuxt/ui at build time from the package name in
+    // `app.config.ts`/class strings — never imported.
+    "@iconify-json/.*",
+    // Ambient type packages: no runtime import, so knip cannot see the link.
+    "@types/.*",
+    // Peer requirement of `nuxt typecheck` (nuxi shells out to vue-tsc); every
+    // app that has a typecheck script needs it declared even though no source
+    // file imports it.
+    "vue-tsc",
+    // Flat-config preset consumed by the root eslint.config.mjs on behalf of
+    // every workspace; knip resolves eslint config per workspace only.
+    "@antfu/eslint-config",
+    // Loaded through CSS (`@import "tailwindcss"`), not through the module graph.
+    "tailwindcss",
+    // Registered as Nuxt modules in nuxt.config.ts; in modules/* they back the
+    // playground app, which is not part of the published module graph.
+    "@nuxt/ui",
+    "@nuxtjs/mdc",
+    // Named as a string in .changeset/config.json.
+    "@changesets/changelog-github",
+    // Coverage provider selected by name in vitest config, never imported.
+    "@vitest/coverage-istanbul",
+    // Browser binary host for the docs/screenshot pipeline, resolved at runtime.
+    "playwright-core",
+    // CLI used from package.json scripts and imported by drizzle.config.ts,
+    // which is hoisted to the root devDependencies.
+    "drizzle-kit",
+    // Service-worker-only imports in sw.ts; bundled by the PWA build, hoisted
+    // rather than declared per app.
+    "workbox-.*",
+    // Ships with nuxt: apps import `vue` and `nitropack/runtime` directly but
+    // declare only `nuxt`, which is the framework's own convention.
+    "vue",
+    "nitropack",
+    // Re-exported by nitropack's storage layer; imported directly in the IdP
+    // module's store implementations and their tests.
+    "unstorage"
+  ],
+  "ignoreUnresolved": [
+    // Nuxt's virtual auto-import module. The nuxt plugin already ignores it for
+    // apps; this covers modules/*, which have no .nuxt of their own.
+    "#imports"
+  ],
+
+  "workspaces": {
+    ".": {
+      // Operator and pipeline scripts are started as `node scripts/<x>.mjs` from
+      // package.json, Forgejo workflows, compose/demo/run.sh or by hand. Listing
+      // them as entry (instead of ignoring the directory) keeps their own
+      // unused exports and dependencies in the report.
+      "entry": ["scripts/**/*.{mjs,ts}"]
+    },
+    "packages/*": {
+      // Public API entry comes from package.json exports/main. Tests live in
+      // test/, tests/ or src/__tests__/ depending on the package; adding them as
+      // entry keeps test-only helpers from reading as dead.
+      "entry": ["**/*.{test,spec}.ts!"],
+      "project": "src/**/*.ts"
+    },
+    "packages/protocol-conformance": {
+      // No src/: the package IS the conformance suite.
+      "entry": ["test/**/*.test.ts"],
+      "project": "test/**/*.ts"
+    },
+    "modules/*": {
+      // Runtime files are entry points by construction — module.ts registers
+      // them by path string (addPlugin/addComponent/addServerHandler), which
+      // static analysis cannot follow.
+      "entry": ["src/module.ts!", "src/runtime/**/*.{ts,vue}!"],
+      "project": "src/**/*.{ts,vue}"
+    },
+    // Nuxt apps. Framework entry points (app.vue, pages, layouts, middleware,
+    // plugins, server/{api,routes,plugins,middleware,tasks}) come from knip's
+    // Nuxt plugin, so `app/components`, `app/composables`, `app/utils`,
+    // `server/utils` and `shared` stay ordinary project files whose unused
+    // exports get reported. Only what the plugin cannot know is listed here.
+    "apps/*": {
+      "entry": ["*.config.ts", "**/*.{test,spec}.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
+      "project": "**/*.{ts,vue}"
+    },
+    "apps/openape-chat": {
+      "entry": ["*.config.ts", "sw.ts", "**/*.{test,spec}.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
+      "project": "**/*.{ts,vue}"
+    },
+    "apps/openape-free-idp": {
+      "entry": ["*.config.ts", "sw.ts", "**/*.{test,spec}.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
+      "project": "**/*.{ts,vue}"
+    },
+    "apps/openape-question-service": {
+      // Nuxt-plugin entry points only — no scripts, tests or service worker.
+      "entry": ["*.config.ts"],
+      "project": "**/*.{ts,vue}"
+    },
+    "apps/docs": {
+      // @nuxtjs/mcp-toolkit registers server/mcp/tools/** by directory
+      // convention, the same way Nitro picks up server/api.
+      "entry": ["*.config.ts", "server/mcp/**/*.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
+      "project": "**/*.{ts,vue}"
+    },
+    // CLI/daemon apps: bundler config supplies the entry points.
+    "apps/openape-nest": {
+      "project": "src/**/*.ts"
+    },
+    "apps/openape-ape-agent": {
+      "project": "src/**/*.ts"
+    },
+    "apps/openape-chat-cli": {
+      "project": "src/**/*.ts"
+    }
+  }
+}
