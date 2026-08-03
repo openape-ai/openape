@@ -30,3 +30,7 @@ apps/openape-troop/openape-troop.db
 # apps/<app>/docs/stories.json + apps/<app>/public/docs/screenshots/.
 docs/local-stack/screenshots/
 docs/local-stack/manifest-*.json
+
+# CI caches (see .forgejo/workflows)
+.turbo-cache/
+.pnpm-store/

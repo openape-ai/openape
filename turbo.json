@@ -1,34 +1,63 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "package.json",
+    "eslint.config.mjs"
+  ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".output/**", ".vercel/output/**"],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".output/**",
+        ".vercel/output/**"
+      ],
       "cache": true
     },
     "nuxt-prepare": {
-      "dependsOn": ["^build"],
-      "outputs": [".nuxt/**"],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".nuxt/**"
+      ],
       "cache": true
     },
     "typecheck": {
-      "dependsOn": ["^build", "nuxt-prepare"],
+      "dependsOn": [
+        "^build",
+        "nuxt-prepare"
+      ],
       "cache": true
     },
     "lint": {
       "cache": true
     },
     "test": {
-      "dependsOn": ["^build", "nuxt-prepare"],
-      "outputs": ["coverage/**"],
+      "dependsOn": [
+        "^build",
+        "nuxt-prepare"
+      ],
+      "outputs": [
+        "coverage/**"
+      ],
       "cache": true
     },
     "test:e2e": {
-      "dependsOn": ["^build", "nuxt-prepare"],
+      "dependsOn": [
+        "^build",
+        "nuxt-prepare"
+      ],
       "cache": false
     },
     "dev": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "persistent": true,
       "cache": false
     }
