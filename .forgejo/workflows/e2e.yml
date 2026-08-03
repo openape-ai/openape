@@ -11,10 +11,40 @@ concurrency:
 jobs:
   e2e:
     runs-on: docker
+    # `--affected` (like ci.yml): a PR that touches no app skips that app's
+    # dev-boot suite entirely. Each suite boots a real Nuxt server, so skipping
+    # the untouched ones is where the minutes are — this job ran ~15 min while
+    # `ci` ran ~5 on the same commit. TURBO_SCM_BASE + fetch-depth:0 give turbo
+    # the base ref to diff against; e2e-manifest.mjs records a suite whose
+    # report file is missing as "skipped", so the proof link stays honest.
+    env:
+      TURBO_SCM_BASE: origin/main
+      TURBO_CACHE_DIR: .turbo-cache
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure base ref for --affected
+        run: git fetch --no-tags origin main
       - name: Enable pnpm
         run: corepack enable
+      - name: Cache pnpm store + turbo artifacts
+        # The docker runner starts from a clean container every run, so without
+        # this both jobs re-download every dependency and rebuild every package
+        # from cold. continue-on-error: a cache miss (or an unreachable cache
+        # server) must slow CI down, never fail it.
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pnpm-store
+            .turbo-cache
+          key: openape-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            openape-${{ hashFiles('pnpm-lock.yaml') }}-
+            openape-
+      - name: Keep the pnpm store inside the cached workspace
+        run: pnpm config set store-dir "$GITHUB_WORKSPACE/.pnpm-store"
       - name: Install
         run: pnpm install --frozen-lockfile
       # The three test steps are teed to /tmp so the failure step below can
@@ -33,22 +63,22 @@ jobs:
       - name: E2E (self-contained idp+sp, fresh, no prod)
         run: |
           set -o pipefail
-          pnpm turbo run test --filter=openape-e2e -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-core.json 2>&1 | tee /tmp/e2e-core.log
+          pnpm turbo run test --affected --filter=openape-e2e -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-core.json 2>&1 | tee /tmp/e2e-core.log
       - name: E2E proof-link round-trip (testrun, dev-mode boot)
         run: |
           set -o pipefail
-          pnpm turbo run test:e2e --filter=@openape-testrun/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-testrun.json 2>&1 | tee /tmp/e2e-testrun.log
+          pnpm turbo run test:e2e --affected --filter=@openape-testrun/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-testrun.json 2>&1 | tee /tmp/e2e-testrun.log
       - name: E2E proof-link round-trip (ape-pr, dev-mode boot)
         run: |
           set -o pipefail
-          pnpm turbo run test:e2e --filter=@openape-pr/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-apepr.json 2>&1 | tee /tmp/e2e-apepr.log
+          pnpm turbo run test:e2e --affected --filter=@openape-pr/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-apepr.json 2>&1 | tee /tmp/e2e-apepr.log
       - name: E2E free-idp admin/login flows (nuxt-dev boot)
         # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
         # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
         # so the per-PR `ci` job stays deterministic under load.
         run: |
           set -o pipefail
-          pnpm turbo run test:e2e --filter=openape-free-idp -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-freeidp.json 2>&1 | tee /tmp/e2e-freeidp.log
+          pnpm turbo run test:e2e --affected --filter=openape-free-idp -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-freeidp.json 2>&1 | tee /tmp/e2e-freeidp.log
       - name: Post failure log tail as PR comment (#1050)
         # The docker runner's logs are not reachable from outside, so on failure
         # the tail of the failing step's log is posted to the PR. The last log
