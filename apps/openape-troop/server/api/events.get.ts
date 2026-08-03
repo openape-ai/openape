@@ -1,7 +1,7 @@
 import { and, asc, eq, gte } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { attentionEvents } from '../database/schema'
-import { parseSince, resolveEventOwner } from '../utils/attention-events'
+import { parseSince, resolveEventOwner, toWire } from '../utils/attention-events'
 
 const MAX_EVENTS = 500
 
@@ -27,17 +27,7 @@ export default defineEventHandler(async (event) => {
   const rows = await useDb().select().from(attentionEvents).where(and(...filters)).orderBy(asc(attentionEvents.ts), asc(attentionEvents.id)).limit(MAX_EVENTS)
 
   return {
-    events: rows.map(row => ({
-      id: row.id,
-      ts: row.ts,
-      actor: row.actor,
-      actor_kind: row.actorKind,
-      task_ref: row.taskRef,
-      ...(row.goalRef ? { goal_ref: row.goalRef } : {}),
-      ...(row.orgId ? { org_id: row.orgId } : {}),
-      type: row.type,
-      payload: row.payload,
-    })),
+    events: rows.map(toWire),
     truncated: rows.length === MAX_EVENTS,
   }
 })
