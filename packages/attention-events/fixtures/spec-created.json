@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000SPEC1",
+  "ts": 1785758200,
+  "actor": "agent:frontend@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "spec.created",
+  "payload": { "title": "Reminder-Eskalation auf Telegram", "spec_url": "https://plans.openape.ai/plans/01KZ3QPW5EC0JRXN5TB60R54TQ" }
+}

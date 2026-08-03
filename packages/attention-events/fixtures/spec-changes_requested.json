@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000SPEC3",
+  "ts": 1785758261,
+  "actor": "patrick@hofmann.eco",
+  "actor_kind": "human",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "spec.changes_requested",
+  "payload": { "reason": "Akzeptanzkriterium 2 ist nicht beobachtbar formuliert" }
+}

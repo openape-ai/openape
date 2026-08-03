@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000DEC02",
+  "ts": 1785758500,
+  "actor": "patrick@hofmann.eco",
+  "actor_kind": "human",
+  "task_ref": "ape-plans:01KZ3QPW5EC0JRXN5TB60R54TQ",
+  "type": "decision.made",
+  "payload": { "decision": "nach M3", "request_id": "01KZ3S0000F1XTVRE0000DEC01" }
+}
