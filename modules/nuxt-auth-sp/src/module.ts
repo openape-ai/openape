@@ -103,9 +103,9 @@ export default defineNuxtModule<ModuleOptions>({
 
     // Inject runtime config (app values override module defaults)
     nuxt.options.runtimeConfig.openapeSp = defu(
-      nuxt.options.runtimeConfig.openapeSp as Record<string, unknown> || {},
+      nuxt.options.runtimeConfig.openapeSp,
       options,
-    ) as typeof options
+    )
 
     // Dev-mode auto-defaults
     if (nuxt.options.dev) {
