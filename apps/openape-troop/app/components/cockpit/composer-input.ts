@@ -1,4 +1,4 @@
-export function isMobileComposer(): boolean {
+function isMobileComposer(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
     && window.matchMedia('(max-width: 767px)').matches

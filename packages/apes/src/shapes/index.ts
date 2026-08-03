@@ -23,8 +23,7 @@ export {
 export type {
   ParsedShellCommand,
   ResolvedCommand,
-  ResolvedCompound,
   ShapesOperation,
 } from '@openape/shapes'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
-export { compoundCoveredByDetails, createCompoundGrant, createShapesGrant, fetchGrantToken, findExistingCompoundGrant, findExistingGrant, isAutoApproved, resolveFromGrant, verifyAndConsume, verifyAndConsumeCompound, verifyAndExecute, waitForGrantStatus } from './grants.js'
+export { createCompoundGrant, createShapesGrant, fetchGrantToken, findExistingCompoundGrant, findExistingGrant, isAutoApproved, resolveFromGrant, verifyAndConsume, verifyAndConsumeCompound, verifyAndExecute, waitForGrantStatus } from './grants.js'

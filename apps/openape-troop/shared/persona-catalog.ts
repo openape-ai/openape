@@ -361,7 +361,7 @@ export const PERSONAS: Persona[] = [
   },
 ]
 
-export const PERSONA_BY_KEY: Record<string, Persona>
+const PERSONA_BY_KEY: Record<string, Persona>
   = Object.fromEntries(PERSONAS.map(p => [p.key, p]))
 
 export function getPersona(key: string | null | undefined): Persona | undefined {

@@ -22,7 +22,6 @@
     "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
-    "@vue/language-core": "^3.3.5",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.3.5"
   }

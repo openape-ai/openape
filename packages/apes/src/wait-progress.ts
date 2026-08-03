@@ -10,7 +10,7 @@
  * callers parse.
  */
 
-export const WAIT_PROGRESS_INTERVAL_MS = 15_000
+const WAIT_PROGRESS_INTERVAL_MS = 15_000
 
 /**
  * Create a progress reporter for one wait loop. Call the returned
