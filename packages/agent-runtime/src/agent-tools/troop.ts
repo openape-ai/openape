@@ -2,12 +2,12 @@ import type { ToolDefinition } from './index.js'
 import { getAuthorizedBearer } from '@openape/cli-auth'
 
 // Read-only access to the agent's troop company (objectives, reports, members,
-// cost-snapshots, overview). Unlike http.get (which strips Authorization), this
+// overview). Unlike http.get (which strips Authorization), this
 // tool authenticates as the agent itself via its own DDISA token — the gateway
 // authorizes a member agent to read its owner's company.
 
 const TROOP = 'https://troop.openape.ai'
-const RESOURCES = ['objectives', 'reports', 'members', 'cost-snapshots', 'overview'] as const
+const RESOURCES = ['objectives', 'reports', 'members', 'overview'] as const
 type Resource = (typeof RESOURCES)[number]
 
 function pathFor(resource: Resource, orgId: string): string {
@@ -21,7 +21,7 @@ export const troopTools: ToolDefinition[] = [
   {
     name: 'troop.company.read',
     description:
-      'Read your troop company data on troop.openape.ai. resource: objectives | reports | members | cost-snapshots | overview (vision+budget). Read-only.',
+      'Read your troop company data on troop.openape.ai. resource: objectives | reports | members | overview (vision+budget). Read-only.',
     parameters: {
       type: 'object',
       properties: {
