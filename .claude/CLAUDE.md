@@ -26,12 +26,18 @@ packages/         # Publishable libraries
   server/         # @openape/server — shared server utilities
   prompt-injection-detector/  # @openape/prompt-injection-detector
   vue-components/ # @openape/vue-components — shared Vue components
+  agent-runtime/  # @openape/agent-runtime — in-process agent run loop + tools
+  shapes/         # @openape/shapes — adapter parsing, registry, installer
+  sp-tasks/       # @openape/sp-tasks — A2A-shaped task queue for service-agents
+  codex-proxy/    # @openape/codex-proxy — OpenAI-compatible proxy over Codex
+  protocol-conformance/  # @openape/protocol-conformance — DDISA conformance suite (private)
   ape-troop/      # @openape/ape-troop — owner CLI for troop.openape.ai (nests + agents)
   ape-tasks/      # @openape/ape-tasks — CLI for tasks.openape.ai
   ape-testruns/   # @openape/ape-testruns — CLI for testrun.openape.ai
   ape-pr/         # @openape/ape-pr — CLI for pr.openape.ai
   ape-plans/      # @openape/ape-plans — CLI for plans.openape.ai
   ape-timetrack/  # @openape/ape-timetrack — CLI for timetrack.openape.ai
+  ape-coder/      # @openape/ape-coder — CLI for the coder app
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
@@ -49,11 +55,12 @@ apps/             # Deployable applications (private, not published)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
   openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
+  openape-coder/      # project + user-story app → local stack only (compose/local-stack.yml)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
   openape-llm/        # LLM proxy container (Dockerfile only)
-  docs/               # Documentation site → self-hosted (chatty)
+  docs/               # docs.openape.ai → self-hosted (chatty, `pnpm run deploy:docs-site`)
 
 examples/         # Example apps + E2E tests
   idp/            # IdP example app
@@ -122,7 +129,9 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `question-service` | 3017 | openape-question-service |
 | `pr`         | 3014 | openape-pr             |
 
-**Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Das alte rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) bleibt für `docs` (statisches Site-Deploy) und als Legacy-Pfad erhalten.
+**Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
+
+**Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Der dazugehörige rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) ist der Notfallpfad auf genau diese Units und kennt nur drei Targets: `troop`, `chat`, `free-idp` (je `scripts/deploy-<t>.sh`: build → rsync nach `releases/<TS>` → `current`-Symlink → `systemctl restart` → Health-Check). `docs` ist dort **kein** Target.
 
 ## Workflow: Definition of Done
 
