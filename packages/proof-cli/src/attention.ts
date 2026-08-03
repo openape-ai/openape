@@ -19,10 +19,9 @@ export function ulid(nowMs = Date.now()): string {
   for (let i = 0, t = nowMs; i < 10; i++, t = Math.floor(t / 32)) {
     time = CROCKFORD[t % 32] + time
   }
-  let rand = ''
-  for (let bits = BigInt(`0x${randomBytes(10).toString('hex')}`), i = 0; i < 16; i++, bits >>= 5n) {
-    rand = CROCKFORD[Number(bits & 31n)] + rand
-  }
+  // 16 chars of randomness, one Crockford symbol per byte (5 of 8 bits used —
+  // wasteful but BigInt-free, which the es2019 build target requires).
+  const rand = Array.from(randomBytes(16), byte => CROCKFORD[byte % 32]).join('')
   return time + rand
 }
 

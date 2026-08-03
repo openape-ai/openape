@@ -2,6 +2,7 @@ import { AttentionEventSchema } from '@openape/attention-events'
 import { useDb } from '../database/drizzle'
 import { attentionEvents } from '../database/schema'
 import { resolveEventOwner } from '../utils/attention-events'
+import { notifyCardRaised } from '../utils/attention-notify'
 
 // Drizzle wraps the LibsqlError, so the UNIQUE hint only appears in the
 // cause chain — walk it (bounded) instead of String(err) on the wrapper.
@@ -52,6 +53,9 @@ export default defineEventHandler(async (event) => {
     }
     throw err
   }
+
+  void notifyCardRaised(ownerEmail, { id: e.id, type: e.type, ts: e.ts, payload: e.payload })
+    .catch(err => console.error('[troop/attention] notify failed:', String(err)))
 
   setResponseStatus(event, 201)
   return { id: e.id }
