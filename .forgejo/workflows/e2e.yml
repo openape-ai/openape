@@ -22,6 +22,14 @@ jobs:
       # writes a vitest JSON report (turbo passes the extra flags through to
       # vitest, only for the named task — dependency builds are unaffected)
       # that the manifest step below turns into a testrun.openape.ai proof.
+      - name: Build consumed workspaces (serial)
+        # The suites boot `nuxt dev` in examples/idp and examples/sp, which need
+        # the module dists. ci.yml pre-builds for the same reason (#934 dts race)
+        # — without it here the dev server hung silently for 300s and every
+        # boot timed out with an empty log (run 3258).
+        run: |
+          set -o pipefail
+          pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=1 2>&1 | tee /tmp/e2e-build.log
       - name: E2E (self-contained idp+sp, fresh, no prod)
         run: |
           set -o pipefail

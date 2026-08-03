@@ -7,8 +7,11 @@ export const IS_PROD = !!process.env.E2E_IDP_URL
 export const IDP_PORT = 3000
 export const SP_PORT = 3001
 
-export const IDP_URL = process.env.E2E_IDP_URL || `http://localhost:${IDP_PORT}`
-export const SP_URL = process.env.E2E_SP_URL || `http://localhost:${SP_PORT}`
+// 127.0.0.1, not `localhost`: in the CI container localhost resolves to ::1
+// first while nuxt dev listens on IPv4 — the readiness poll then never
+// connects and the boot times out with a perfectly healthy server (run 3267).
+export const IDP_URL = process.env.E2E_IDP_URL || `http://127.0.0.1:${IDP_PORT}`
+export const SP_URL = process.env.E2E_SP_URL || `http://127.0.0.1:${SP_PORT}`
 
 export const MANAGEMENT_TOKEN = process.env.E2E_MANAGEMENT_TOKEN || 'test-mgmt-token'
 

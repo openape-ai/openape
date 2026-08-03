@@ -23,7 +23,6 @@ graph LR
     _openape_proof_cli["@openape/proof-cli"]
     _openape_protocol_conformance["@openape/protocol-conformance"]
     _openape_proxy["@openape/proxy"]
-    _openape_server["@openape/server"]
     _openape_shapes["@openape/shapes"]
     _openape_sp_tasks["@openape/sp-tasks"]
     _openape_unstorage_s3_driver["@openape/unstorage-s3-driver"]
@@ -81,7 +80,6 @@ graph LR
   _openape_apes --> _openape_core
   _openape_apes --> _openape_grants
   _openape_apes --> _openape_proxy
-  _openape_apes --> _openape_server
   _openape_apes --> _openape_shapes
   _openape_auth --> _openape_core
   _openape_chat --> _openape_core
@@ -98,9 +96,6 @@ graph LR
   _openape_protocol_conformance --> _openape_core
   _openape_protocol_conformance --> _openape_grants
   _openape_proxy --> _openape_core
-  _openape_server --> _openape_auth
-  _openape_server --> _openape_core
-  _openape_server --> _openape_grants
   _openape_shapes --> _openape_core
   _openape_shapes --> _openape_grants
   _openape_troop --> _openape_core

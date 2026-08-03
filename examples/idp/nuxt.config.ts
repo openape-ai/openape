@@ -1,4 +1,14 @@
+// Filesystem storage root. Point it at a throwaway directory to run the app
+// with a clean identity/grant store (the E2E suite does this per test file).
+const dataDir = process.env.NUXT_OPENAPE_DATA_DIR || './.data'
+
 export default defineNuxtConfig({
+  // E2E boots two nuxt dev servers at once; both would grab the same
+  // vite HMR port (24678) and the loser never becomes ready.
+  // Vite's HMR websocket port is fixed at 24678; the E2E harness boots
+  // several dev servers at once, so each gets its own port derived from
+  // its app port (run 3255: the loser died on 'Port 24678 already in use').
+  vite: { server: { hmr: process.env.E2E_HMR_PORT ? { port: Number(process.env.E2E_HMR_PORT) } : undefined } },
   modules: ['@nuxt/ui', '@openape/nuxt-auth-idp'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
@@ -33,7 +43,7 @@ export default defineNuxtConfig({
           }
         : {
             driver: 'fsLite',
-            base: './.data/openape-idp',
+            base: `${dataDir}/openape-idp`,
           },
       'openape-grants': process.env.NUXT_OPENAPE_S3_ACCESS_KEY
         ? {
@@ -47,7 +57,7 @@ export default defineNuxtConfig({
           }
         : {
             driver: 'fsLite',
-            base: './.data/openape-grants',
+            base: `${dataDir}/openape-grants`,
           },
     },
   },
