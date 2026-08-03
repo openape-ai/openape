@@ -1,5 +1,7 @@
 export type { ProofCliDescriptor } from './descriptor'
 export { createProofClient } from './client'
+export { emitAttentionEvents, ulid, verdictRequestedEvents } from './attention'
+export type { AttentionActor } from './attention'
 export { makeLoginCommand } from './commands/login'
 export { makeLogoutCommand } from './commands/logout'
 export { makeWhoamiCommand } from './commands/whoami'

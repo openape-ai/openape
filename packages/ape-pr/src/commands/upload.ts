@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { emitAttentionEvents, verdictRequestedEvents } from '@openape/proof-cli'
 import { apiCall } from '../api.ts'
 import { resolveEndpoint } from '../client.ts'
 import { error, info, printJson, printLine } from '../output.ts'
@@ -52,6 +53,7 @@ export const uploadCommand = defineCommand({
     title: { type: 'string', description: 'Override the manifest title.' },
     json: { type: 'boolean', description: 'Print the full result as JSON instead of just the URL.' },
     endpoint: { type: 'string', description: 'Override pr endpoint.' },
+    'task-ref': { type: 'string', description: 'Work this PR belongs to ("ape-tasks:<id>"); raises a verdict card in troop.' },
   },
   async run({ args }) {
     const dir = resolve(args.dir ?? '.')
@@ -95,6 +97,18 @@ export const uploadCommand = defineCommand({
       uploaded++
     }
     if (uploaded) info(`Uploaded ${uploaded} image(s).`)
+
+    const taskRef = args['task-ref']
+    if (taskRef) {
+      const me = await apiCall<{ email: string, act: 'human' | 'agent' }>('GET', '/api/cli/me', { endpoint })
+      const events = verdictRequestedEvents(
+        { actor: me.email, actorKind: me.act === 'human' ? 'human' : 'agent', taskRef },
+        pr.review_url,
+        Math.floor(Date.now() / 1000),
+      )
+      const sent = await emitAttentionEvents(events, msg => info(msg))
+      if (sent) info('Verdict card raised in troop inbox.')
+    }
 
     if (args.json) {
       printJson({ ...pr, images_uploaded: uploaded })
