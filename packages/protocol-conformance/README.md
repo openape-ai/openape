@@ -8,7 +8,7 @@ This package currently contains:
 
 - JSON Schema files for OpenAPE and DDISA protocol documents
 - a shared test harness that loads those schemas into Ajv 2020-12
-- Vitest suites that validate real objects and token claims produced by `@openape/core`, `@openape/grants`, and `@openape/server`
+- Vitest suites that validate real objects and token claims produced by `@openape/core` and `@openape/grants`
 - a schema sync script exposed as `pnpm --filter @openape/protocol-conformance sync-schemas`
 
 It does not currently export a runtime API from `src/index.ts`. The package is exercised through its test suite.

@@ -264,7 +264,10 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     cwd: opts.cwd,
     detached: true, // own process group → the whole tree dies on stop()
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ...extraEnv },
+    // Concurrent `nuxt dev` servers would fight over vite's fixed HMR port
+    // 24678 and the loser never becomes ready (runs 3253/3255). Derive a
+    // unique HMR port from the app port, which is already unique per server.
+    env: { ...process.env, E2E_HMR_PORT: String(port + 10_000), ...extraEnv },
   })
 
   let logBuffer = ''
@@ -338,7 +341,9 @@ export async function startAppServer(listener: RequestListener, opts: { port?: n
     server.listen(port, resolve)
   })
   return {
-    url: `http://localhost:${port}`,
+    // 127.0.0.1, not `localhost` — see constants.ts: localhost prefers ::1 in
+    // the CI container while the listener is IPv4.
+    url: `http://127.0.0.1:${port}`,
     port,
     server,
     stop: () => new Promise<void>(resolve => server.close(() => resolve())),
