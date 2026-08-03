@@ -37,11 +37,11 @@ PROXY_IP=$(docker inspect "$PROXY_ID" --format '{{range .NetworkSettings.Network
 export OPENAPE_RATE_LIMIT_TRUSTED_PROXIES="$PROXY_IP"
 echo "  (trusting proxy $PROXY_IP for X-Forwarded-For rate-limit keying)"
 
-# Reset the IdP + coder to a clean slate (their file DBs are ephemeral;
-# recreating the containers wipes them) — reproducible stories: a real
-# first-time passkey sign-up and first-time consent.
-echo "→ Resetting idp + coder to a clean slate…"
-"${COMPOSE[@]}" up -d --force-recreate idp coder >/dev/null
+# Reset the IdP to a clean slate (its file DB is ephemeral; recreating the
+# container wipes it) — reproducible stories: a real first-time passkey
+# sign-up and first-time consent.
+echo "→ Resetting idp to a clean slate…"
+"${COMPOSE[@]}" up -d --force-recreate idp >/dev/null
 printf "  waiting for idp…"
 for _ in $(seq 1 30); do
   [ "$("${COMPOSE[@]}" ps idp --format '{{.Health}}' 2>/dev/null)" = "healthy" ] && break

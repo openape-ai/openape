@@ -13,6 +13,7 @@ tagged deferral points.
 **Files changed:**
 - `apps/openape-troop/server/api/nest/hatch.post.ts` — `buildNestComposeYaml`
 - `apps/openape-troop/server/api/pod/hatch.post.ts` — `buildComposeYaml`
+  (endpoint removed 2026-08-03, see below)
 
 **What:** Both hatch endpoints now emit `OPENAPE_BRIDGE_TARGET: troop` in the
 `openape-nest` service `environment:` block of the generated docker-compose YAML.
@@ -41,6 +42,13 @@ The old message looked like an internal bug; the 501 is an intentional
 
 **Test:** `apps/openape-troop/tests/cloud-exoscale.test.ts` — added test that
 with credentials set, `createInstance` rejects with `statusCode: 501`.
+
+**Superseded 2026-08-03:** the whole cloud-provisioning branch —
+`server/api/pod/hatch.post.ts`, `server/utils/cloud/**` and their test — was
+removed. It never left the scaffold state, had no callers, and
+`EXOSCALE_API_KEY`/`EXOSCALE_API_SECRET` were never provisioned anywhere.
+Hatching a nest goes through `POST /api/nest/hatch` (BYO Docker host), which
+is unaffected.
 
 ### 3. Cron comment cleanup (launchd → container cron runner)
 
