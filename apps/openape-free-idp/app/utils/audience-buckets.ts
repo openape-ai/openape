@@ -1,31 +1,12 @@
 /**
- * Client-side mirror of `server/utils/audience-buckets.ts`. Kept duplicated
- * (small, stable map) so client code doesn't need to cross the server boundary.
- * If the server-side registry grows, mirror the change here. The pre-approval
- * hook + grant evaluation never read from this file — only the UI does.
+ * Bucket display metadata for the agent detail page. The bucket registry
+ * itself lives in `server/utils/audience-buckets.ts`; the pre-approval hook
+ * and grant evaluation read it from there, this file only drives the UI.
  */
 
-export type AudienceBucket = 'commands' | 'web' | 'root' | 'other'
+type AudienceBucket = 'commands' | 'web' | 'root' | 'other'
 
-export const KNOWN_BUCKETS: Record<string, AudienceBucket> = {
-  'ape-shell': 'commands',
-  'claude-code': 'commands',
-  'shapes': 'commands',
-  'ape-proxy': 'web',
-  'escapes': 'root',
-}
-
-export const AUDIENCE_WILDCARD = '*'
-
-export function bucketFor(audience: string): AudienceBucket {
-  return KNOWN_BUCKETS[audience] ?? 'other'
-}
-
-export function audiencesInBucket(bucket: AudienceBucket): string[] {
-  return Object.entries(KNOWN_BUCKETS)
-    .filter(([, b]) => b === bucket)
-    .map(([a]) => a)
-}
+const AUDIENCE_WILDCARD = '*'
 
 /**
  * Display metadata for the four sections rendered on the agent detail page.
