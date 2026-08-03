@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000VRD02",
+  "ts": 1785758800,
+  "actor": "patrick@hofmann.eco",
+  "actor_kind": "human",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "verdict.given",
+  "payload": { "verdict": "merge", "request_id": "01KZ3S0000F1XTVRE0000VRD01" }
+}

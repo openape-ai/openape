@@ -1,0 +1,13 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000WRKA2",
+  "ts": 1785758400,
+  "actor": "agent:auth@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK02",
+  "type": "work.blocked",
+  "payload": {
+    "question": "SP-Token-Cache pro Gerät oder pro User?",
+    "options": ["pro Gerät", "pro User"],
+    "recommendation": "pro Gerät"
+  }
+}

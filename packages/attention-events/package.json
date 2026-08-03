@@ -1,0 +1,46 @@
+{
+  "name": "@openape/attention-events",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Append-only attention event schema (v1): envelope plus 12 event types, zod-validated",
+  "author": "Delta Mind GmbH",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "fixtures"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitest/coverage-istanbul": "^4.1.9",
+    "tsup": "catalog:",
+    "typescript": "^5.9.3",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openape-ai/openape.git",
+    "directory": "packages/attention-events"
+  }
+}

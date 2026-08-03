@@ -1,0 +1,14 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000DEC01",
+  "ts": 1785758401,
+  "actor": "agent:auth@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-plans:01KZ3QPW5EC0JRXN5TB60R54TQ",
+  "type": "decision.requested",
+  "payload": {
+    "question": "Telegram-Push für Eskalationen?",
+    "options": ["nach M3", "direkt in M3", "gar nicht"],
+    "recommendation": "nach M3",
+    "blocks": "M0"
+  }
+}
