@@ -71,6 +71,28 @@ starts `examples/idp` as a `nuxt dev` server on a free port with a throwaway
 store; `packages/apes`' IdP-backed suites use it too (they run in the `idp`
 vitest project, one Nuxt boot at a time).
 
+**Wenn du eine Suite auf einen echten Server umstellst**, gelten vier Regeln —
+jede davon hat in PR #1158 einen eigenen roten CI-Lauf gekostet, obwohl lokal
+alles grün war:
+
+1. **`127.0.0.1`, nie `localhost`.** Im CI-Container löst `localhost` zuerst auf
+   `::1` auf, während `nuxt dev` auf IPv4 lauscht. Der Server ist gesund, der
+   Readiness-Poll erreicht ihn nur nie — Symptom: Timeout mit **leerem** Log.
+2. **Eigener HMR-Port pro Server.** Vites HMR-Port ist fest 24678; zwei
+   gleichzeitige Dev-Server kollidieren, der Verlierer wird nie ready. Der
+   Lifecycle-Helper leitet ihn aus dem App-Port ab (`E2E_HMR_PORT`).
+3. **Vor dev-Boot-Suiten die Workspaces bauen.** `ci.yml` und `e2e.yml` haben
+   beide einen seriellen Pre-Build; ohne ihn fehlen den Beispiel-Apps die
+   Module-Dists.
+4. **Timeouts am geteilten Runner bemessen**, nicht am Mac: Boot 300 s,
+   `hookTimeout` darüber. Coverage-Floors folgen dem **niedrigeren** Wert von
+   mac/linux (linux misst ~0,5 pp darunter).
+
+**Diagnose vor Reparatur.** Fünf begründete Fix-Versuche an #1158 lagen daneben;
+gefunden hat es erst ein Wegwerf-Schritt, der den Boot isoliert ausführt und
+alles ausgibt. Schweigt ein Prozess, ist die Frage nicht „wie lange warten wir",
+sondern „reden wir überhaupt mit ihm".
+
 ## Dependency Graph (Publish Order)
 
 `packages/core` ist die Wurzel (keine internen Deps); alles andere hängt direkt
