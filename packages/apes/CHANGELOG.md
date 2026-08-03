@@ -1,5 +1,12 @@
 # @openape/apes
 
+## 1.35.3
+
+### Patch Changes
+
+- Updated dependencies [ee87618]
+  - @openape/agent-runtime@0.2.8
+
 ## 1.35.2
 
 ### Patch Changes
