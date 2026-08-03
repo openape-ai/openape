@@ -67,3 +67,15 @@ describe('resolveEventOwner', () => {
     await expect(resolveEventOwner(event)).rejects.toMatchObject({ statusCode: 403 })
   })
 })
+
+describe('newUlid', () => {
+  it('emits 26 Crockford chars with monotonic time prefix', async () => {
+    const { newUlid } = await import('../server/utils/attention-events')
+    const a = newUlid(1_785_758_183_000)
+    const b = newUlid(1_785_758_184_000)
+    expect(a).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(b).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(a.slice(0, 10) < b.slice(0, 10)).toBe(true)
+    expect(newUlid()).not.toBe(newUlid())
+  })
+})
