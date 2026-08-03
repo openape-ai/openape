@@ -91,3 +91,34 @@ export function findResolution(rows: AttentionEventRow[], requestId: string): At
     && (row.payload as { request_id?: string }).request_id === requestId,
   ) ?? null
 }
+
+/**
+ * Timeout policy of a request card. `deadline` past + `on_timeout` decides
+ * what a waiter sees: 'recommendation' turns the recommended option into a
+ * real (auto-flagged) resolution; 'fail' just marks the card expired so the
+ * caller can stop waiting. No cron — the policy applies when someone reads.
+ */
+export function timeoutOutcome(row: AttentionEventRow, nowSeconds: number): 'none' | 'apply' | 'expire' {
+  const payload = row.payload as { deadline?: number, on_timeout?: string, recommendation?: string }
+  if (!payload.deadline || payload.deadline > nowSeconds) return 'none'
+  if (payload.on_timeout === 'recommendation' && payload.recommendation) return 'apply'
+  return payload.on_timeout ? 'expire' : 'none'
+}
+
+/** The auto-resolution row for a card whose deadline passed. */
+export function autoResolutionValues(row: AttentionEventRow, ownerEmail: string, nowSeconds: number) {
+  const payload = row.payload as { recommendation?: string }
+  return {
+    id: newUlid(),
+    ownerEmail,
+    ts: nowSeconds,
+    actor: 'troop',
+    actorKind: 'agent' as const,
+    taskRef: row.taskRef,
+    goalRef: row.goalRef,
+    orgId: row.orgId,
+    type: 'decision.made',
+    payload: { decision: payload.recommendation!, request_id: row.id, auto: true },
+    receivedAt: nowSeconds,
+  }
+}
