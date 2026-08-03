@@ -79,3 +79,48 @@ describe('newUlid', () => {
     expect(newUlid()).not.toBe(newUlid())
   })
 })
+
+describe('timeoutOutcome', () => {
+  const card = (payload: Record<string, unknown>) => ({
+    id: 'X', ownerEmail: 'p@h', ts: 100, actor: 'a', actorKind: 'agent',
+    taskRef: 'T', goalRef: null, orgId: null, type: 'decision.requested',
+    payload, receivedAt: 100,
+  } as never)
+
+  it('waits forever without a deadline', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ question: 'q' }), 9999)).toBe('none')
+  })
+
+  it('waits while the deadline is in the future', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ deadline: 500, on_timeout: 'fail' }), 400)).toBe('none')
+  })
+
+  it('applies the recommendation when policy says so', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ deadline: 100, on_timeout: 'recommendation', recommendation: 'A' }), 200)).toBe('apply')
+  })
+
+  it('expires instead of inventing a decision when there is no recommendation', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ deadline: 100, on_timeout: 'recommendation' }), 200)).toBe('expire')
+  })
+
+  it('expires on the fail policy', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ deadline: 100, on_timeout: 'fail', recommendation: 'A' }), 200)).toBe('expire')
+  })
+
+  it('ignores a past deadline without a policy', async () => {
+    const { timeoutOutcome } = await import('../server/utils/attention-events')
+    expect(timeoutOutcome(card({ deadline: 100 }), 200)).toBe('none')
+  })
+
+  it('marks the auto resolution as auto and links the request', async () => {
+    const { autoResolutionValues } = await import('../server/utils/attention-events')
+    const values = autoResolutionValues(card({ recommendation: 'A' }), 'p@h', 500)
+    expect(values.payload).toMatchObject({ decision: 'A', request_id: 'X', auto: true })
+    expect(values.actor).toBe('troop')
+  })
+})

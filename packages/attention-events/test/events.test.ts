@@ -85,3 +85,44 @@ describe('payload validation', () => {
     expect(() => parseAttentionEvent({})).toThrow()
   })
 })
+
+describe('waiting fields (v0.2)', () => {
+  const base = loadFixture('decision-requested.json') as { payload: Record<string, unknown> }
+
+  it('accepts deadline + on_timeout on decision.requested', () => {
+    const event = { ...base, payload: { ...base.payload, deadline: 1785759000, on_timeout: 'recommendation' } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(true)
+  })
+
+  it('accepts them on work.blocked too', () => {
+    const blocked = loadFixture('work-blocked.json') as { payload: Record<string, unknown> }
+    const event = { ...blocked, payload: { ...blocked.payload, deadline: 1785759000, on_timeout: 'fail' } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(true)
+  })
+
+  it('rejects an unknown on_timeout policy', () => {
+    const event = { ...base, payload: { ...base.payload, on_timeout: 'ignore' } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(false)
+  })
+
+  it('rejects a non-integer deadline', () => {
+    const event = { ...base, payload: { ...base.payload, deadline: 1785759000.5 } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(false)
+  })
+
+  it('stays valid without them (they are optional)', () => {
+    expect(AttentionEventSchema.safeParse(base).success).toBe(true)
+  })
+})
+
+describe('auto flag on resolutions', () => {
+  it('marks a timeout-applied decision as auto', () => {
+    const made = loadFixture('decision-made.json') as { payload: Record<string, unknown> }
+    expect(AttentionEventSchema.safeParse({ ...made, payload: { ...made.payload, auto: true } }).success).toBe(true)
+  })
+
+  it('rejects a non-boolean auto', () => {
+    const made = loadFixture('decision-made.json') as { payload: Record<string, unknown> }
+    expect(AttentionEventSchema.safeParse({ ...made, payload: { ...made.payload, auto: 'yes' } }).success).toBe(false)
+  })
+})
