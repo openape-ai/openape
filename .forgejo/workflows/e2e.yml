@@ -30,18 +30,6 @@ jobs:
         run: |
           set -o pipefail
           pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=1 2>&1 | tee /tmp/e2e-build.log
-      - name: DIAGNOSTIC — boot examples/idp directly (temporary)
-        # Five fix attempts failed with a 300s timeout and an EMPTY captured log:
-        # the dev server prints nothing at all. This step reproduces the boot in
-        # isolation and shows what the harness cannot see. Remove once resolved.
-        continue-on-error: true
-        run: |
-          node -v; pnpm -v; echo "--- module dists:"
-          ls -la modules/nuxt-auth-idp/dist 2>&1 | head -5
-          ls -la examples/idp/node_modules/.bin/nuxt 2>&1 | head -3
-          echo "--- booting for 90s:"
-          cd examples/idp
-          timeout 90 pnpm exec nuxt dev --port 3999 --host 127.0.0.1 2>&1 | head -60 || echo "exit=$? (124 = still running at timeout)"
       - name: E2E (self-contained idp+sp, fresh, no prod)
         run: |
           set -o pipefail

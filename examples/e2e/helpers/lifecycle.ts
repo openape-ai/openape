@@ -341,7 +341,9 @@ export async function startAppServer(listener: RequestListener, opts: { port?: n
     server.listen(port, resolve)
   })
   return {
-    url: `http://localhost:${port}`,
+    // 127.0.0.1, not `localhost` — see constants.ts: localhost prefers ::1 in
+    // the CI container while the listener is IPv4.
+    url: `http://127.0.0.1:${port}`,
     port,
     server,
     stop: () => new Promise<void>(resolve => server.close(() => resolve())),
