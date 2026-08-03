@@ -432,6 +432,24 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reports_org ON reports(org_id, created_at)`)
+
+    // Append-only attention events (@openape/attention-events); rows are
+    // never updated or deleted — projections (inbox, metrics) fold over them.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS attention_events (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      ts INTEGER NOT NULL,
+      actor TEXT NOT NULL,
+      actor_kind TEXT NOT NULL,
+      task_ref TEXT NOT NULL,
+      goal_ref TEXT,
+      org_id TEXT,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      received_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_attention_events_owner ON attention_events(owner_email, ts)`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_attention_events_task ON attention_events(task_ref)`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)

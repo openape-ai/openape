@@ -569,3 +569,26 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   auth: text('auth').notNull(),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_push_subs_owner').on(table.ownerEmail)])
+
+// attention_events — append-only event log for the attention queue
+// (@openape/attention-events, plan 01KZ3QPW5EC0JRXN5TB60R54TQ). Rows are
+// never updated or deleted; inbox/metrics/track-record views fold over them.
+// `taskRef` is a deliberately opaque string ("ape-tasks:<id>") — no FK, so
+// task stores stay swappable. `ownerEmail` scopes reads: the owner on whose
+// behalf the event was written (the agent's owner for agent writers).
+export const attentionEvents = sqliteTable('attention_events', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull(),
+  ts: integer('ts').notNull(),
+  actor: text('actor').notNull(),
+  actorKind: text('actor_kind').notNull(),
+  taskRef: text('task_ref').notNull(),
+  goalRef: text('goal_ref'),
+  orgId: text('org_id'),
+  type: text('type').notNull(),
+  payload: text('payload', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+  receivedAt: integer('received_at').notNull(),
+}, table => [
+  index('idx_attention_events_owner').on(table.ownerEmail, table.ts),
+  index('idx_attention_events_task').on(table.taskRef),
+])
