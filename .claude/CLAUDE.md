@@ -37,7 +37,6 @@ packages/         # Publishable libraries
   ape-pr/         # @openape/ape-pr — CLI for pr.openape.ai
   ape-plans/      # @openape/ape-plans — CLI for plans.openape.ai
   ape-timetrack/  # @openape/ape-timetrack — CLI for timetrack.openape.ai
-  ape-coder/      # @openape/ape-coder — CLI for the coder app
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
@@ -55,7 +54,6 @@ apps/             # Deployable applications (private, not published)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
   openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
-  openape-coder/      # project + user-story app → local stack only (compose/local-stack.yml)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon

@@ -25,7 +25,6 @@ const APPS = [
   { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
   { dir: 'openape-troop', slug: 'troop', title: 'Troop' },
   { dir: 'openape-chat', slug: 'chat', title: 'Chat' },
-  { dir: 'openape-coder', slug: 'coder', title: 'Coder' },
   { dir: 'openape-tasks', slug: 'tasks', title: 'Tasks' },
   { dir: 'openape-plans', slug: 'plans', title: 'Plans' },
   { dir: 'openape-testrun', slug: 'testrun', title: 'Testrun' },

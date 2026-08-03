@@ -38,14 +38,6 @@ chat.openape.test {
 	}
 }
 
-coder.openape.test {
-	tls internal
-	reverse_proxy coder:3030 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
-	}
-}
-
 tasks.openape.test {
 	tls internal
 	reverse_proxy tasks:3005 {
