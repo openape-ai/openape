@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000CST01",
+  "ts": 1785758900,
+  "actor": "agent:frontend@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "cost.recorded",
+  "payload": { "amount_eur": 1.37, "note": "auto-code Lauf inkl. Verifikation" }
+}

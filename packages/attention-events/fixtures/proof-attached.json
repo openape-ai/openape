@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000PRF01",
+  "ts": 1785758600,
+  "actor": "agent:frontend@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "proof.attached",
+  "payload": { "url": "https://testrun.openape.ai/r/kx3f", "kind": "testrun" }
+}
