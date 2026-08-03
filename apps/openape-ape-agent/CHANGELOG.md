@@ -1,5 +1,11 @@
 # @openape/ape-agent
 
+## 2.11.14
+
+### Patch Changes
+
+- @openape/apes@1.35.3
+
 ## 2.11.13
 
 ### Patch Changes
