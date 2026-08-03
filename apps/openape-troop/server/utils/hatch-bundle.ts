@@ -70,49 +70,6 @@ networks:
 }
 
 /**
- * Build the docker-compose YAML for a cloud-provisioned pod bundle.
- * Used by POST /api/pod/hatch (Exoscale and future cloud providers).
- */
-export function buildPodComposeYaml(opts: { troopUrl: string, ownerEmail: string, hatchToken: string }): string {
-  return `services:
-  openape-nest:
-    image: ${NEST_IMAGE}
-    container_name: openape-nest
-    restart: unless-stopped
-    networks: [openape-pod]
-    ports: ["127.0.0.1:9091:9091"]
-    volumes:
-      - openape-nest-data:/var/lib/openape/nest
-      - openape-homes:/var/lib/openape/homes
-    environment:
-      OPENAPE_NEST_PORT: "9091"
-      OPENAPE_TROOP_URL: ${opts.troopUrl}
-      OPENAPE_HATCH_TOKEN: ${opts.hatchToken}
-      OPENAPE_HATCH_OWNER: ${opts.ownerEmail}
-      LITELLM_BASE_URL: ${CODEX_PROXY_BASE_URL}
-      LITELLM_API_KEY: ${CODEX_PROXY_API_KEY}
-      APE_CHAT_BRIDGE_MODEL: \${APE_CHAT_BRIDGE_MODEL:-${DEFAULT_BRIDGE_MODEL}}
-
-volumes:
-  openape-nest-data:
-  openape-homes:
-networks:
-  openape-pod:
-    driver: bridge
-`
-}
-
-/**
- * Build the .env file for a pod bundle. Subscription-only: the model is the
- * only knob — no provider API keys (agents run on the ChatGPT subscription via
- * the in-nest codex-proxy). OPENAPE_* vars belong in the compose environment:
- * block (not .env) so they can't be accidentally overridden.
- */
-export function buildPodEnvFile(secrets: Record<string, string>): string {
-  return `APE_CHAT_BRIDGE_MODEL=${secrets.APE_CHAT_BRIDGE_MODEL ?? DEFAULT_BRIDGE_MODEL}\n`
-}
-
-/**
  * Build the .env file for the BYO nest bundle. Subscription-only — the only
  * knob is the model; override it before `docker compose up` if you like.
  */

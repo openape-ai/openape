@@ -44,7 +44,7 @@ shared:
 - Plus supporting libs: `proxy` (grant-gated HTTP gateway), `shapes` (adapter
   parsing, registry, installer), `sp-tasks` (the A2A-shaped task queue the
   service-agents poll), `codex-proxy`, `prompt-injection-detector`,
-  `s3-driver`, `vue-components`, `proof-cli` (shared CLI core behind
+  `s3-driver`, `proof-cli` (shared CLI core behind
   `ape-tasks`, `ape-plans`, `ape-testruns`, `ape-pr`, `ape-timetrack`), and the
   private `protocol-conformance` suite.
 
@@ -61,9 +61,8 @@ thin shells around exactly these modules (see their `nuxt.config.ts`).
 `apps/openape-chat` (human↔agent chat), and the proof-link services
 `openape-tasks`, `openape-plans`, `openape-testrun`, `openape-timetrack`,
 `openape-pr`, `openape-monitor` (uptime checks + mail alerts) and
-`openape-question-service` (the sp-tasks Q&A surface). `apps/openape-coder`
-(projects and user stories) runs on the local stack; it has no prod deploy
-target. Beside them: `apps/openape-nest` (local daemon supervising agents on a
+`openape-question-service` (the sp-tasks Q&A surface).
+Beside them: `apps/openape-nest` (local daemon supervising agents on a
 machine), `apps/openape-ape-agent` (one runtime process per agent),
 `apps/openape-llm` (LLM proxy container), `apps/docs` (documentation site,
 statically prerendered, deployed on its own path).
@@ -122,7 +121,7 @@ packages nest + llm as a two-container pod for any Docker host.
 under real `https://*.openape.test` hostnames: a dnsmasq container serves the
 DDISA discovery TXT record, Caddy terminates TLS with a local CA, and the apps
 run exactly as in prod — `idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`,
-`timetrack`, `pr`, `coder` and the docs site. Two opt-in profiles extend it: `demo` (a
+`timetrack`, `pr` and the docs site. Two opt-in profiles extend it: `demo` (a
 Playwright runner that captures the user-story guides, `compose/demo/run.sh`)
 and `agent-lifecycle` (a mock LLM + a containerized nest for full
 spawn→run→destroy tests, `compose/agent/run.sh`).

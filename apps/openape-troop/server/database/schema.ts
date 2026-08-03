@@ -350,20 +350,6 @@ export const reports = sqliteTable('reports', {
   index('idx_reports_org').on(table.orgId, table.createdAt),
 ])
 
-// cost_snapshots — one row per (org, day). Rolling 30 days feeds the budget check.
-export const costSnapshots = sqliteTable('cost_snapshots', {
-  orgId: text('org_id').notNull(),
-  day: text('day').notNull(),
-  tokensIn: integer('tokens_in').notNull().default(0),
-  tokensOut: integer('tokens_out').notNull().default(0),
-  inferenceCostCents: integer('inference_cost_cents').notNull().default(0),
-  infraCostCents: integer('infra_cost_cents').notNull().default(0),
-  outputArtifactsCount: integer('output_artifacts_count').notNull().default(0),
-  updatedAt: integer('updated_at').notNull(),
-}, table => [
-  primaryKey({ columns: [table.orgId, table.day] }),
-])
-
 export type Organization = typeof organizations.$inferSelect
 export type NewOrganization = typeof organizations.$inferInsert
 export type OrgMember = typeof orgMembers.$inferSelect
@@ -372,8 +358,6 @@ export type Objective = typeof objectives.$inferSelect
 export type NewObjective = typeof objectives.$inferInsert
 export type Report = typeof reports.$inferSelect
 export type NewReport = typeof reports.$inferInsert
-export type CostSnapshot = typeof costSnapshots.$inferSelect
-export type NewCostSnapshot = typeof costSnapshots.$inferInsert
 
 // cockpit_services — external sp-tasks services the owner's reactive loop co-tends
 // (in addition to troop's own cockpit queue). Owner-scoped; the loop reads this

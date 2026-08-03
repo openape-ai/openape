@@ -90,6 +90,15 @@ von 5 der 6 CLIs konsumiert, aber nur an drei Stellen (`cli.ts`, `client.ts`,
 | `SpawnAgentDialog.vue` | 595 LOC | null Konsumenten (Spawning läuft über CLIs) |
 | `apps/openape-llm` | Dockerfile | kein Workspace-Inhalt, kein Deploy-Target |
 
+**Korrektur zu troop Web-Push (Maßnahme 4):** Der Befund war falsch. Der Pfad ist
+vollständig verdrahtet und live: `app/pages/chat.vue` registriert den
+handgeschriebenen Service-Worker `public/sw.js`, holt die Berechtigung, abonniert
+und postet an `/api/push/subscribe`; `server/utils/cockpit/chat-store.ts` ruft bei
+jeder Operator-Antwort `pushToOwner()`. `NUXT_VAPID_PRIVATE_KEY` ist auf chatty in
+`projects/openape-troop/shared/.env` gesetzt. Richtig an der Beobachtung war nur,
+dass kein PWA-*Modul* eingebunden ist — der Service-Worker liegt von Hand in
+`public/`. Web-Push bleibt daher stehen.
+
 ## Der Test-Doppelgänger (eigener Punkt, verifiziert)
 
 `packages/server` (2.650 LOC src + 4.382 LOC Tests) hat **null Produktions-Konsumenten**.
@@ -122,6 +131,16 @@ Public API, bewusst behalten).
 Deshalb stand `SpawnAgentDialog.vue` monatelang tot da, ohne dass knip anschlug.
 `entry` für `apps/*` auf echte Einstiegspunkte verengen, `app/utils` und `server/utils`
 nach `project` — das ist der billigste Einzelschritt des ganzen Audits.
+
+**Korrektur (PR #1155, umgesetzte Maßnahme 3):** Die Zahl „44 echt unreferenzierte
+Exports" hielt der Umsetzung nicht stand. Ein Teil davon waren Artefakte eines
+knip-Bugs: knip teilt die Auto-Import-Map über Workspace-Grenzen hinweg, und bei
+gleichnamigen Symbolen in mehreren Apps gewinnt der erste Registrant — die
+Zwillinge in den anderen Apps melden sich dann als tot. Nachweislich **live** und
+fälschlich gelistet waren `redeemHatchToken`, `resolveOwnerContext`,
+`tryResolveCaller` und `createDrizzleYoloPolicyStore`. Der geschärfte Lauf steht
+inzwischen auf 0 Items; jede verbleibende `ignore*`-Zeile in `knip.jsonc` begründet,
+warum das Verdeckte für statische Analyse unsichtbar ist.
 
 ## Prozess-Befunde
 

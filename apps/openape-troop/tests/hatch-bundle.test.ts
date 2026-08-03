@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildNestComposeYaml, buildPodComposeYaml, buildPodEnvFile } from '../server/utils/hatch-bundle'
+import { buildNestComposeYaml } from '../server/utils/hatch-bundle'
 
 // These tests verify the hatch bundles that ship to a new Docker nest:
 // (1) the bridge targets troop (not chat), and (2) the bundle is
@@ -56,63 +56,5 @@ describe('nest/hatch bundle (BYO Docker path)', () => {
   it('pulls the nest image from the self-hosted registry (not ghcr)', () => {
     expect(yaml).toContain('image: registry.openape.ai/openape-nest:latest')
     expect(yaml).not.toContain('ghcr.io')
-  })
-})
-
-describe('pod/hatch bundle (cloud-provisioned Docker path)', () => {
-  const yaml = buildPodComposeYaml({
-    troopUrl: 'https://troop.openape.ai',
-    ownerEmail: 'owner@example.com',
-    hatchToken: 'nest-hatch-pod-test',
-  })
-
-  it('does not set the removed OPENAPE_BRIDGE_TARGET var', () => {
-    expect(yaml).not.toContain('OPENAPE_BRIDGE_TARGET')
-  })
-
-  it('includes the troop URL', () => {
-    expect(yaml).toContain('OPENAPE_TROOP_URL: https://troop.openape.ai')
-  })
-
-  it('includes the hatch token', () => {
-    expect(yaml).toContain('OPENAPE_HATCH_TOKEN: nest-hatch-pod-test')
-  })
-
-  it('does not reference chat.openape.ai (bridge target is troop, not chat)', () => {
-    expect(yaml).not.toContain('chat.openape.ai')
-  })
-
-  it('does not provision a separate litellm container (codex-proxy is in-nest)', () => {
-    expect(yaml).not.toContain('openape-llm')
-    expect(yaml).not.toContain('litellm.yaml')
-  })
-
-  it('points the bridge at the in-nest codex-proxy on loopback', () => {
-    expect(yaml).toContain('LITELLM_BASE_URL: http://127.0.0.1:4000/v1')
-  })
-
-  it('pulls the nest image from the self-hosted registry (not ghcr)', () => {
-    expect(yaml).toContain('image: registry.openape.ai/openape-nest:latest')
-    expect(yaml).not.toContain('ghcr.io')
-  })
-})
-
-describe('pod/hatch env file', () => {
-  it('includes model key from secrets', () => {
-    const env = buildPodEnvFile({ APE_CHAT_BRIDGE_MODEL: 'gpt-5.4' })
-    expect(env).toContain('APE_CHAT_BRIDGE_MODEL=gpt-5.4')
-  })
-
-  it('defaults model to gpt-5 when not in secrets (no Claude)', () => {
-    const env = buildPodEnvFile({})
-    expect(env).toContain('APE_CHAT_BRIDGE_MODEL=gpt-5')
-    expect(env).not.toContain('claude-haiku')
-  })
-
-  it('embeds no keyed provider secrets (subscription-only)', () => {
-    const env = buildPodEnvFile({ ANTHROPIC_API_KEY: 'sk-ant-x', CHATGPT_OAUTH_TOKEN: 'tok-y' })
-    expect(env).not.toContain('ANTHROPIC_API_KEY')
-    expect(env).not.toContain('CHATGPT_OAUTH_TOKEN')
-    expect(env).not.toContain('sk-ant-x')
   })
 })

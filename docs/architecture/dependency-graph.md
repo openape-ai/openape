@@ -7,7 +7,6 @@
 graph LR
   subgraph packages
     _openape_agent_runtime["@openape/agent-runtime"]
-    _openape_ape_coder["@openape/ape-coder"]
     _openape_ape_plans["@openape/ape-plans"]
     _openape_ape_pr["@openape/ape-pr"]
     _openape_ape_tasks["@openape/ape-tasks"]
@@ -28,15 +27,16 @@ graph LR
     _openape_shapes["@openape/shapes"]
     _openape_sp_tasks["@openape/sp-tasks"]
     _openape_unstorage_s3_driver["@openape/unstorage-s3-driver"]
-    _openape_vue_components["@openape/vue-components"]
   end
   subgraph modules
     _openape_nuxt_auth_idp["@openape/nuxt-auth-idp"]
     _openape_nuxt_auth_sp["@openape/nuxt-auth-sp"]
   end
   subgraph apps
+    _openape_monitor_app["@openape-monitor/app"]
     _openape_plans_app["@openape-plans/app"]
     _openape_pr_app["@openape-pr/app"]
+    _openape_question_service_app["@openape-question-service/app"]
     _openape_tasks_app["@openape-tasks/app"]
     _openape_testrun_app["@openape-testrun/app"]
     _openape_timetrack_app["@openape-timetrack/app"]
@@ -46,23 +46,17 @@ graph LR
     _openape_nest["@openape/nest"]
     _openape_troop["@openape/troop"]
     docs["docs"]
-    openape_coder["openape-coder"]
     openape_free_idp["openape-free-idp"]
   end
-  _openape_plans_app --> _openape_core
-  _openape_plans_app --> _openape_grants
+  _openape_monitor_app --> _openape_core
+  _openape_monitor_app --> _openape_nuxt_auth_sp
+  _openape_plans_app --> _openape_ape_plans
   _openape_plans_app --> _openape_nuxt_auth_sp
-  _openape_pr_app --> _openape_core
-  _openape_pr_app --> _openape_grants
   _openape_pr_app --> _openape_nuxt_auth_sp
-  _openape_tasks_app --> _openape_core
-  _openape_tasks_app --> _openape_grants
+  _openape_question_service_app --> _openape_nuxt_auth_sp
+  _openape_question_service_app --> _openape_sp_tasks
   _openape_tasks_app --> _openape_nuxt_auth_sp
-  _openape_testrun_app --> _openape_core
-  _openape_testrun_app --> _openape_grants
   _openape_testrun_app --> _openape_nuxt_auth_sp
-  _openape_timetrack_app --> _openape_core
-  _openape_timetrack_app --> _openape_grants
   _openape_timetrack_app --> _openape_nuxt_auth_sp
   _openape_agent_runtime --> _openape_cli_auth
   _openape_agent_runtime --> _openape_core
@@ -71,21 +65,15 @@ graph LR
   _openape_ape_agent --> _openape_prompt_injection_detector
   _openape_ape_agent --> _openape_sp_tasks
   _openape_ape_chat --> _openape_cli_auth
-  _openape_ape_coder --> _openape_cli_auth
   _openape_ape_plans --> _openape_cli_auth
-  _openape_ape_plans --> _openape_core
   _openape_ape_plans --> _openape_proof_cli
   _openape_ape_pr --> _openape_cli_auth
-  _openape_ape_pr --> _openape_core
   _openape_ape_pr --> _openape_proof_cli
   _openape_ape_tasks --> _openape_cli_auth
-  _openape_ape_tasks --> _openape_core
   _openape_ape_tasks --> _openape_proof_cli
   _openape_ape_testruns --> _openape_cli_auth
-  _openape_ape_testruns --> _openape_core
   _openape_ape_testruns --> _openape_proof_cli
   _openape_ape_timetrack --> _openape_cli_auth
-  _openape_ape_timetrack --> _openape_core
   _openape_ape_timetrack --> _openape_proof_cli
   _openape_ape_troop --> _openape_cli_auth
   _openape_apes --> _openape_agent_runtime
@@ -96,38 +84,29 @@ graph LR
   _openape_apes --> _openape_server
   _openape_apes --> _openape_shapes
   _openape_auth --> _openape_core
-  _openape_chat --> _openape_auth
   _openape_chat --> _openape_core
   _openape_chat --> _openape_nuxt_auth_sp
   _openape_grants --> _openape_core
   _openape_nest --> _openape_ape_agent
   _openape_nest --> _openape_cli_auth
-  _openape_nest --> _openape_core
   _openape_nuxt_auth_idp --> _openape_auth
   _openape_nuxt_auth_idp --> _openape_core
   _openape_nuxt_auth_idp --> _openape_grants
-  _openape_nuxt_auth_idp --> _openape_server
   _openape_nuxt_auth_sp --> _openape_auth
   _openape_nuxt_auth_sp --> _openape_core
   _openape_proof_cli --> _openape_cli_auth
   _openape_protocol_conformance --> _openape_core
   _openape_protocol_conformance --> _openape_grants
-  _openape_protocol_conformance --> _openape_server
   _openape_proxy --> _openape_core
-  _openape_proxy --> _openape_grants
   _openape_server --> _openape_auth
   _openape_server --> _openape_core
   _openape_server --> _openape_grants
   _openape_shapes --> _openape_core
   _openape_shapes --> _openape_grants
-  _openape_shapes --> _openape_server
-  _openape_troop --> _openape_auth
   _openape_troop --> _openape_core
   _openape_troop --> _openape_nuxt_auth_sp
-  _openape_vue_components --> _openape_core
-  openape_coder --> _openape_nuxt_auth_sp
+  _openape_troop --> _openape_prompt_injection_detector
   openape_free_idp --> _openape_auth
   openape_free_idp --> _openape_core
   openape_free_idp --> _openape_nuxt_auth_idp
-  openape_free_idp --> _openape_vue_components
 ```
