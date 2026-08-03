@@ -101,4 +101,9 @@ worker-only (kein troop-Deploy); die troop-Änderungen (M3 Task-Payload) brauche
       optionaler 5. `sid`-Param für op-auto/op-agent). `~/.zsh_shared/commands/claude-log.zsh` delegiert dorthin
       (eine Impl). Getestet: Script direkt, headless (`env -i`, minimaler PATH), Funktions-Delegation, Quote-Escaping
       — alles gegen temp-HOME (echter Log unberührt).
-- [ ] M2 Org-Log-Identität · M3 Worker-Backbone (+troop-Deploy) · M4 Agent-Detail-Directive · M5 collect-activity.ts (a).
+- [x] `[2026-07-16]` **M2–M5 done** (Design vereinfacht: Log-Identität als Memory-Zeile statt org.vars+Task-Payload →
+      **kein troop-Deploy**, worker-only). M2: `ACTIVITY-LOG: project|company|type`-Memory in allen 4 Firmen.
+      M3: worker.sh `activity_backbone` greppt die Zeile aus sys.txt, loggt `op-auto` pro Cockpit-Task (PR #968,
+      worker gesynct+neu). M4: LOGGING-Block in der Directive (`op-agent`). M5: `collect-activity.ts` (linde-invoices,
+      lokaler Commit 8e2006d) dedupt op-auto gegen op-agent (Variante a).
+- [x] `[2026-07-16]` **E2E grün:** Cockpit-Task → `op-auto Delta Mind|general|admin` im heutigen Log. Feature komplett.

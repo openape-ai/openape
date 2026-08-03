@@ -145,6 +145,30 @@ async function main() {
   const sha = out('git', ['rev-parse', '--short', 'HEAD'])
   const targets = names.map(n => ({ name: n, ...TARGETS[n] }))
 
+  // Guard: the image is built from the WORKING TREE. Deploying from a checkout
+  // that lags origin/main silently rolls prod back to that older state — the
+  // health gate can't catch it (the app is healthy, just old). Incident
+  // 2026-07-21: a deploy from a 5-day-old feature branch removed the entire
+  // proactive-operators stack from prod overnight.
+  if (!args.includes('--force')) {
+    try {
+      out('git', ['fetch', '--quiet', 'origin', 'main'])
+    }
+    catch { /* offline — check against the last known origin/main below */ }
+    try {
+      out('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD'])
+    }
+    catch {
+      const behind = out('git', ['rev-list', '--count', 'HEAD..origin/main'])
+      throw new Error(
+        `HEAD does not contain origin/main (${behind} commit(s) behind) — deploying would roll prod back.\n`
+        + `Deploy from an up-to-date main (e.g. a worktree of origin/main), or override with --force.`,
+      )
+    }
+    const dirty = out('git', ['status', '--porcelain', '--', ...targets.map(t => t.dir), 'packages', 'modules'])
+    if (dirty) console.warn(`\n⚠ uncommitted changes will be baked into the image:\n${dirty}\n`)
+  }
+
   // 1. guard — all units inactive (single ssh)
   const active = ssh(targets.map(t => `echo "${t.name}:$(systemctl is-active ${t.unit} 2>/dev/null || echo inactive)"`).join('\n'))
     .split('\n')

@@ -4,11 +4,18 @@ import 'highlight.js/styles/github-dark.css'
 
 const { messages, isStreaming, companies, currentCompany, selectCompany, send, stop, clear } = useCockpitChat()
 const { mode, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence()
-// Deep link: opens Claude Code with a bootstrap that fetches + follows the worker
-// setup, so the user can bring their Operator online (headless or in-session) without typing.
-const workerDeepLink = `claude-cli://open?q=${encodeURIComponent(
-  'Set up the OpenApe worker on this machine: fetch https://troop.openape.ai/worker/setup.md and follow it. It asks whether to run in this session or install permanently, then makes my Operator live.',
-)}`
+// Bootstrap prompt that fetches + follows the worker setup, so the user can bring
+// their Operator online (headless or in-session) without typing. Shown as copyable
+// text in a popup (the claude-cli:// deep link only works with Claude Code installed).
+const workerPrompt = 'Set up the OpenApe worker on this machine: fetch https://troop.openape.ai/worker/setup.md and follow it. It asks whether to run in this session or install permanently, then makes my Operator live.'
+const workerDeepLink = `claude-cli://open?q=${encodeURIComponent(workerPrompt)}`
+const showWorkerDialog = ref(false)
+const promptCopied = ref(false)
+async function copyWorkerPrompt(): Promise<void> {
+  await navigator.clipboard.writeText(workerPrompt)
+  promptCopied.value = true
+  setTimeout(() => { promptCopied.value = false }, 2000)
+}
 const scroller = ref<HTMLElement | null>(null)
 const { showPill, onScroll, scrollToBottom, autoStick } = useCockpitScroll(scroller)
 useKeyboardInset()
@@ -51,13 +58,14 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
         </NuxtLink>
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
         <span class="conn-dot" :class="`m-${mode}`" :title="presenceTitle">{{ presenceLabel }}</span>
-        <a
+        <button
           v-if="mode === 'offline'"
           class="ceo-start"
-          :href="workerDeepLink"
-          title="Öffnet Claude Code und richtet den Operator-Worker ein — dann einmal Enter drücken"
-          style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);text-decoration:none;white-space:nowrap"
-        >▸ Operator starten</a>
+          type="button"
+          title="Zeigt den Setup-Prompt für Claude Code oder codex"
+          style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:transparent;white-space:nowrap"
+          @click="showWorkerDialog = true"
+        >▸ Operator starten</button>
         <div class="company-picker">
           <select
             class="company-select"
@@ -102,6 +110,27 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
       </Transition>
 
       <CockpitComposer :streaming="isStreaming" @send="onSend" @stop="stop" />
+
+      <div v-if="showWorkerDialog" class="worker-dialog-backdrop" @click.self="showWorkerDialog = false">
+        <div class="worker-dialog" role="dialog" aria-label="Operator starten">
+          <h3>Operator starten</h3>
+          <p>
+            Kopiere den Prompt und füge ihn in <strong>Claude Code</strong> oder <strong>codex</strong>
+            auf deiner Maschine ein. Wichtig: <a href="https://developers.openai.com/codex/cli" target="_blank" rel="noopener"><strong>codex muss installiert sein</strong></a> —
+            der Worker nutzt codex als Backend, auch wenn du das Setup mit Claude Code startest.
+          </p>
+          <pre class="worker-prompt">{{ workerPrompt }}</pre>
+          <div class="worker-dialog-actions">
+            <button type="button" class="primary" @click="copyWorkerPrompt">
+              {{ promptCopied ? '✓ Kopiert' : 'Prompt kopieren' }}
+            </button>
+            <a :href="workerDeepLink">In Claude Code öffnen</a>
+            <button type="button" class="ghost" @click="showWorkerDialog = false">
+              Schließen
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
