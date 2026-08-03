@@ -70,7 +70,9 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           title="Zeigt den Setup-Prompt für Claude Code oder codex"
           style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:transparent;white-space:nowrap"
           @click="showWorkerDialog = true"
-        >▸ Operator starten</button>
+        >
+          ▸ Operator starten
+        </button>
         <button class="company-title" type="button" aria-label="Firma wechseln" @click="showCompanies = true">
           {{ currentCompany?.name ?? 'Keine Firmen' }}
         </button>
