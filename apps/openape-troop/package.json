@@ -22,6 +22,7 @@
     "@libsql/client": "^0.17.4",
     "@nuxt/ui": "4.7.1",
     "@nuxtjs/i18n": "^10.4.0",
+    "@openape/attention-events": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
     "@openape/prompt-injection-detector": "workspace:*",
