@@ -1,4 +1,5 @@
-// OpenApe Coder user stories — the cloud home for software projects.
+// OpenApe Coder user stories — the home for software projects. Runs on the
+// local stack only; there is no prod deploy target for this app.
 // One sign-in carries through: create a project, give it a vision and repos,
 // add a user story, browse the board, and open the team panel.
 import { approveIfPrompted, click, fillEmail } from '../story-kit.mjs'
@@ -9,7 +10,7 @@ export default async function run({ kit, page, EMAIL, CODER }) {
     category: 'Getting started',
     id: 'sign-in',
     title: 'Sign in to Coder',
-    intro: 'Coder is where a software project lives: its vision, the repos it touches, its team and its user stories. Like every OpenApe app you sign in with your email domain and a passkey — no new account, no password.',
+    intro: 'Coder is where a software project lives: its vision, the repos it touches, its team and its user stories. Like every OpenApe app you sign in with your email domain and a passkey — no new account, no password. Coder runs on the local stack rather than as a hosted service: bring it up with `compose/local-stack.yml` and open https://coder.openape.test.',
   }, async (s) => {
     await s.step('Open Coder', {
       do: () => page.goto(CODER, { waitUntil: 'networkidle' }),
