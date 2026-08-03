@@ -432,18 +432,6 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_reports_org ON reports(org_id, created_at)`)
-
-    await db.run(sql`CREATE TABLE IF NOT EXISTS cost_snapshots (
-      org_id TEXT NOT NULL,
-      day TEXT NOT NULL,
-      tokens_in INTEGER NOT NULL DEFAULT 0,
-      tokens_out INTEGER NOT NULL DEFAULT 0,
-      inference_cost_cents INTEGER NOT NULL DEFAULT 0,
-      infra_cost_cents INTEGER NOT NULL DEFAULT 0,
-      output_artifacts_count INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (org_id, day)
-    )`)
   }
   catch (err) {
     console.error('[troop/database] table init failed:', err)
