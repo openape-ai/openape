@@ -14,7 +14,10 @@ const SP_DIR = join(repoRoot, 'examples', 'sp')
 
 const SESSION_SECRET = 'e2e-session-secret-at-least-32-characters-long'
 const ADMIN_EMAIL = 'admin@example.com'
-const BOOT_TIMEOUT_MS = 120_000
+// Local boots take ~4s; the shared docker CI runner needs far longer for the
+// first `nuxt dev` (cold vite dep-optimization, contended CPU) — 120s tripped
+// on 4 of 5 files in run 3243 while passing locally.
+const BOOT_TIMEOUT_MS = 300_000
 
 /**
  * DDISA record for the test domain, resolved instead of real DNS. Both sides
