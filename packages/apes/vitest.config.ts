@@ -12,7 +12,10 @@ export default defineConfig({
     // timeout passes on the second attempt while a genuinely broken test still fails all
     // three. The timeout bump gives headroom so retries are rarely needed.
     retry: 2,
-    testTimeout: 15000,
+    // 15s still tripped on the loaded CI runner: tests whose vi.mock factory
+    // dynamically imports workspace packages (commands-run-async) timed out at
+    // exactly 15s while passing locally (run 3222). Same class as hookTimeout.
+    testTimeout: 45000,
     // beforeAll in commands.test.ts spawns key setup; the 10s default tripped
     // on the loaded CI runner with coverage on (run 3099: import phase 132s)
     hookTimeout: 60000,
