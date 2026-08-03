@@ -23,7 +23,6 @@ packages/         # Publishable libraries
   apes/           # @openape/apes — CLI toolkit
   cli-auth/       # @openape/cli-auth — shared CLI auth lib
   proof-cli/      # @openape/proof-cli — shared CLI core for the proof-link apps
-  server/         # @openape/server — shared server utilities
   prompt-injection-detector/  # @openape/prompt-injection-detector
   agent-runtime/  # @openape/agent-runtime — in-process agent run loop + tools
   shapes/         # @openape/shapes — adapter parsing, registry, installer
@@ -60,11 +59,17 @@ apps/             # Deployable applications (private, not published)
   docs/               # docs.openape.ai → self-hosted (chatty, `pnpm run deploy:docs-site`)
 
 examples/         # Example apps + E2E tests
-  idp/            # IdP example app
-  sp/             # SP example app
-  e2e/            # E2E integration tests
+  idp/            # IdP example app — also the IdP every E2E suite boots
+  sp/             # SP example app — also the SP the OIDC E2E suites boot
+  e2e/            # E2E integration tests + the shared boot harness
+                  #   (`openape-e2e/lifecycle`, `openape-e2e/idp-fixture`)
   agent-recipes/  # Agent recipe examples
 ```
+
+**E2E fixtures:** tests never re-implement the protocol. `openape-e2e/idp-fixture`
+starts `examples/idp` as a `nuxt dev` server on a free port with a throwaway
+store; `packages/apes`' IdP-backed suites use it too (they run in the `idp`
+vitest project, one Nuxt boot at a time).
 
 ## Dependency Graph (Publish Order)
 
@@ -199,7 +204,9 @@ Keine stille Abweichung — jede Spec-Inkompatibilität muss explizit bestätigt
 
 ## Security Checklist
 
-Jedes sicherheitsrelevante Feature in `@openape/server` ist getestet. Bei Änderungen an Auth, Grants, Sessions oder Endpoints diese Liste prüfen:
+Die sicherheitsrelevanten IdP-Features leben in `modules/nuxt-auth-idp` (Handler,
+Plugins, Stores). Bei Änderungen an Auth, Grants, Sessions oder Endpoints diese
+Liste prüfen:
 
 **Transport & Headers:**
 - [x] Security Headers (X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy) auf allen Responses

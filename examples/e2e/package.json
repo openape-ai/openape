@@ -1,9 +1,11 @@
 {
   "name": "openape-e2e",
   "type": "module",
+  "version": "0.0.0",
   "private": true,
   "exports": {
-    "./lifecycle": "./helpers/lifecycle.ts"
+    "./lifecycle": "./helpers/lifecycle.ts",
+    "./idp-fixture": "./helpers/idp-fixture.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -11,8 +13,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@openape/server": "workspace:*",
-    "h3": "^1.15.11"
+    "@openape/nuxt-auth-idp": "workspace:*",
+    "@openape/nuxt-auth-sp": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

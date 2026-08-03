@@ -1,4 +1,3 @@
-// Canonical: @openape/server createEnrollHandler
 import { createHash } from 'node:crypto'
 import { defineEventHandler, readBody } from 'h3'
 import { useIdpStores } from '../../utils/stores'
