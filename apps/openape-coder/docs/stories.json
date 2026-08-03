@@ -5,7 +5,7 @@
       "category": "Getting started",
       "id": "sign-in",
       "title": "Sign in to Coder",
-      "intro": "Coder is where a software project lives: its vision, the repos it touches, its team and its user stories. Like every OpenApe app you sign in with your email domain and a passkey — no new account, no password.",
+      "intro": "Coder is where a software project lives: its vision, the repos it touches, its team and its user stories. Like every OpenApe app you sign in with your email domain and a passkey — no new account, no password. Coder runs on the local stack rather than as a hosted service: bring it up with `compose/local-stack.yml` and open https://coder.openape.test.",
       "order": 8,
       "steps": [
         {
