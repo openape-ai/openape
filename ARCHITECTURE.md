@@ -41,10 +41,12 @@ shared:
   (`apes login`, `apes agents spawn`, …); `packages/cli-auth` is the shared
   SSO store all OpenApe CLIs read.
 - `packages/agent-runtime` — the in-process LLM run loop and agent tools.
-- Plus supporting libs: `proxy` (grant-gated HTTP gateway), `browser`
-  (grant-aware Playwright), `shapes`, `sp-tasks`, `codex-proxy`,
-  `prompt-injection-detector`, `s3-driver`, `vue-components`, and private
-  test suites (`idp-test-suite`, `protocol-conformance`).
+- Plus supporting libs: `proxy` (grant-gated HTTP gateway), `shapes` (adapter
+  parsing, registry, installer), `sp-tasks` (the A2A-shaped task queue the
+  service-agents poll), `codex-proxy`, `prompt-injection-detector`,
+  `s3-driver`, `vue-components`, `proof-cli` (shared CLI core behind
+  `ape-tasks`, `ape-plans`, `ape-testruns`, `ape-pr`, `ape-timetrack`), and the
+  private `protocol-conformance` suite.
 
 **`modules/` — the two DDISA roles as Nuxt modules.** Any Nuxt app becomes an
 IdP by adding `modules/nuxt-auth-idp` (passkey auth, OAuth endpoints, account
@@ -52,14 +54,19 @@ management, admin) or an SP by adding `modules/nuxt-auth-sp` (login via DNS
 discovery, callback, session, well-known endpoints). The web apps below are
 thin shells around exactly these modules (see their `nuxt.config.ts`).
 
-**`apps/` — deployables.** Three self-hosted Nuxt web apps:
-`apps/openape-free-idp` (the free IdP, id.openape.ai — uses `nuxt-auth-idp`),
-`apps/openape-troop` (agent control plane, includes the company/org view) and
-`apps/openape-chat` (human↔agent chat) — the latter two are SPs using
-`nuxt-auth-sp`. Beside them: `apps/openape-nest` (local daemon supervising
-agents on a machine), `apps/openape-ape-agent` (one runtime process per
-agent), `apps/openape-llm` (LiteLLM proxy container), `apps/docs`
-(documentation site, statically prerendered).
+**`apps/` — deployables.** Ten self-hosted Nuxt web apps.
+`apps/openape-free-idp` is the free IdP (id.openape.ai) and uses
+`nuxt-auth-idp`; the other nine are SPs on `nuxt-auth-sp`:
+`apps/openape-troop` (agent control plane, includes the company/org view),
+`apps/openape-chat` (human↔agent chat), and the proof-link services
+`openape-tasks`, `openape-plans`, `openape-testrun`, `openape-timetrack`,
+`openape-pr`, `openape-monitor` (uptime checks + mail alerts) and
+`openape-question-service` (the sp-tasks Q&A surface). `apps/openape-coder`
+(projects and user stories) runs on the local stack; it has no prod deploy
+target. Beside them: `apps/openape-nest` (local daemon supervising agents on a
+machine), `apps/openape-ape-agent` (one runtime process per agent),
+`apps/openape-llm` (LLM proxy container), `apps/docs` (documentation site,
+statically prerendered, deployed on its own path).
 
 **`examples/`** — minimal IdP/SP apps, the `examples/e2e` integration tests,
 and `examples/agent-recipes`.
@@ -71,20 +78,33 @@ publishes the `@openape/*` packages to npm in dependency order.
 
 ### Production (host "chatty")
 
-The three web apps run as Docker containers from `registry.openape.ai`,
-orchestrated by `compose/chatty.yml`, each publishing on `127.0.0.1:<port>`
-behind nginx:
+The web apps run as Docker containers from `registry.openape.ai`, orchestrated
+by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
+`127.0.0.1:<port>` behind nginx. The deploy target names are the ones
+`pnpm run deploy:image` takes:
 
-| Service | App | Port | Domain |
-|---|---|---|---|
-| `idp` | openape-free-idp | 3003 | id.openape.ai |
-| `troop` | openape-troop | 3010 | troop.openape.ai |
-| `chat` | openape-chat | 3007 | chat.openape.ai |
+| Target | Compose service | App | Port | Domain |
+|---|---|---|---|---|
+| `free-idp` | `idp` | openape-free-idp | 3003 | id.openape.ai |
+| `troop` | `troop` | openape-troop | 3010 | troop.openape.ai |
+| `chat` | `chat` | openape-chat | 3007 | chat.openape.ai |
+| `plans` | `plans` | openape-plans | 3004 | plans.openape.ai |
+| `tasks` | `tasks` | openape-tasks | 3005 | tasks.openape.ai |
+| `testrun` | `testrun` | openape-testrun | 3006 | testrun.openape.ai |
+| `timetrack` | `timetrack` | openape-timetrack | 3011 | timetrack.openape.ai |
+| `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
+| `question-service` | `question-service` | openape-question-service | 3017 | question-service.openape.ai |
+| `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
-never move. `apps/docs` is deployed separately as static files
-(`scripts/deploy-docs.sh`).
+never move.
+
+`apps/docs` has its own deploy path: `pnpm run deploy:docs-site`
+(`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`) packages the
+prerendered `apps/docs/.output/public` into a Caddy image (`site-docs`) and
+runs it on the `coolify` network behind Traefik at docs.openape.ai — no
+published port, its own compose project under `/home/openape/prod-site-docs`.
 
 ### Agent runtime (user machines)
 
@@ -100,8 +120,9 @@ packages nest + llm as a two-container pod for any Docker host.
 
 `compose/local-stack.yml` reproduces the whole web topology in containers
 under real `https://*.openape.test` hostnames: a dnsmasq container serves the
-DDISA discovery TXT record, Caddy terminates TLS with a local CA, and the four
-apps run exactly as in prod. Two opt-in profiles extend it: `demo` (a
+DDISA discovery TXT record, Caddy terminates TLS with a local CA, and the apps
+run exactly as in prod — `idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`,
+`timetrack`, `pr`, `coder` and the docs site. Two opt-in profiles extend it: `demo` (a
 Playwright runner that captures the user-story guides, `compose/demo/run.sh`)
 and `agent-lifecycle` (a mock LLM + a containerized nest for full
 spawn→run→destroy tests, `compose/agent/run.sh`).
@@ -132,8 +153,8 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 
 ## How code gets to production
 
-1. **Issue-first development** (`CONTRIBUTING.md`): every change starts from a
-   GitHub issue, on a `<type>/issue-<nr>-…` branch, lands via PR. Git hooks
+1. **Issue-first development** (`CONTRIBUTING.md`): every change starts from an
+   issue on git.openape.ai, on a `<type>/issue-<nr>-…` branch, lands via PR. Git hooks
    (`.githooks/`) and a Claude hook block source edits directly on `main`.
 2. **CI on git.openape.ai** (Forgejo — the canonical remote; GitHub is a
    read-only mirror. Workflows in `.forgejo/workflows/`): `ci.yml` runs
@@ -153,12 +174,12 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 
 ## Non-obvious decisions (read before changing things)
 
-- **Story canon as the only hand input.** Product work starts as a user story
-  in `stories/` with a `draft → consistent → approved → red → green →
-  documented` lifecycle (`stories/README.md`); acceptance criteria, tests,
-  code and guides are derived by the agents in `.claude/agents/`. The single
-  hard human gate is story approval; `stories/VISION.md` is the compressed
-  product canon with a single writer (the consistency agent).
+- **Work enters as an issue and a plan.** Every change starts from an issue on
+  git.openape.ai and lands via PR (`CONTRIBUTING.md`); anything larger than a
+  session is written up first as a plan in `.claude/plans/` (mirrored on
+  plans.openape.ai) and kept current while the work runs. `stories/` and the
+  story agents in `.claude/agents/` are a frozen experiment from June 2026 —
+  read `stories/README.md` before assuming they are live.
 - **User guides are generated from E2E tests.** A "story" in
   `compose/demo/story-kit.mjs` is a real Playwright test whose step captions
   *are* the guide text; if the test fails, the guide entry does not exist, so

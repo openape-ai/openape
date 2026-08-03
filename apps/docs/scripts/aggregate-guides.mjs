@@ -5,7 +5,9 @@
 //
 //   node scripts/aggregate-guides.mjs
 //
-// Committed output, so the docs build never depends on a capture run.
+// Committed output, so the docs build never depends on a capture run. This
+// script wipes and rewrites content/5.apps/ + public/guides/ — edit the story
+// captions in compose/demo/stories/, not the generated pages.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +16,11 @@ const docsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const monorepoRoot = join(docsRoot, '..', '..')
 
 // dir under apps/ → { slug, title } for the guide page + screenshot folder.
+// An app only appears here once it has captured guides (apps/<app>/docs/
+// stories.json). openape-monitor and openape-question-service run in prod but
+// have no story-kit story and no local-stack service yet, so they have no page
+// in this section — add compose/demo/stories/<app>.mjs and a local-stack
+// service first, then list them here.
 const APPS = [
   { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
   { dir: 'openape-troop', slug: 'troop', title: 'Troop' },

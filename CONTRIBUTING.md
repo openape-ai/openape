@@ -39,7 +39,7 @@ git fetch origin main
 git checkout -b fix/issue-8-adapter-install origin/main
 ```
 
-Claude Code users: `/issue 8` automates this.
+Claude Code users: `/issue-start 8` automates this.
 
 ### 3. Make Changes
 
@@ -85,20 +85,23 @@ This script (`scripts/release-local.mjs`) consumes pending changesets, bumps ver
 
 ### 7. Deploy
 
-Deploys also run locally. Each app has a `scripts/deploy-<app>.sh` (build → rsync to chatty → swap `current` → restart service → health-check); `scripts/deploy.mjs` wraps them with target selection and rollback-on-failure:
+Deploys run locally, as tested container images. `scripts/deploy-image.mjs` builds the app on your machine, packages the `.output` into an amd64 image, smoke-tests `/api/health` against that image, pushes it to `registry.openape.ai`, and only then lets chatty pull and swap the container — with an external health gate and automatic rollback to the previous tag:
 
 ```bash
-pnpm deploy troop            # deploy a specific app
-pnpm deploy --changed        # deploy whatever changed vs origin/main
-pnpm deploy --all            # deploy everything
-pnpm deploy --dry-run troop  # show the plan, touch nothing
+pnpm run deploy:image troop                 # one target
+pnpm run deploy:image tasks plans           # several at once
+pnpm run deploy:image --all                 # every target
 ```
 
-Requires local SSH access to chatty (`openape@chatty.delta-mind.at`) with passwordless sudo for `systemctl restart openape-*.service`.
+Targets: `free-idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`, `timetrack`, `pr`, `monitor`, `question-service`. The documentation site has its own equivalent path, `pnpm run deploy:docs-site`.
+
+Requires local SSH access to chatty (`openape@chatty.delta-mind.at`) and a `docker login` against `registry.openape.ai`.
+
+**Emergency fallback.** The pre-container systemd units (`openape-<app>.service`) are still installed but disabled. `pnpm deploy <troop|chat|free-idp>` (`scripts/deploy.mjs`) is the path that feeds them — build → rsync to `releases/<TS>` → swap `current` → `systemctl restart` → health-check, with rollback on failure. Use it only when the container path is unavailable, and stop the container first: both bind the same port.
 
 ## Branch Policy
 
-- **`main` is protected** — work on feature branches, open PRs; the local pre-push gate stands in for server-side CI
+- **`main` is protected** — work on feature branches, open PRs; the `CI / ci` check on git.openape.ai must be green before merge, and the local pre-push gate catches most failures before the push
 - **Source changes on `main` are blocked** by pre-commit hook
 - **Infrastructure exceptions** (direct-to-main OK): `.claude/`, `.github/`, `.githooks/`, `scripts/`, config files, docs
 - **Emergency bypass:** `SKIP_HOOKS=1 git commit ...`

@@ -1,10 +1,24 @@
 # Deploying troop.openape.ai
 
-> One-time bootstrap, then deploy locally with `pnpm deploy troop` (wraps `scripts/deploy-troop.sh`).
+Troop runs on chatty as a container from `registry.openape.ai`, deployed from your machine:
 
-Mirrors the layout of the other `apps/openape-*` services on the deploy host.
+```bash
+pnpm run deploy:image troop
+```
 
-## One-time bootstrap
+That builds the app locally, packages `.output` into an amd64 image, smoke-tests `/api/health` against it, pushes it, and lets chatty pull and swap the container — then an external health gate, with automatic rollback to the previous tag if it fails. The compose service and its volume/env wiring live in `compose/chatty.yml`; the orchestration is `scripts/deploy-image.mjs`.
+
+Prerequisites: SSH access as `openape@chatty.delta-mind.at` and a `docker login registry.openape.ai`.
+
+The container reuses the host state described below — `/home/openape/projects/openape-troop/shared` is mounted at the identical path, so the `.env` and the SQLite files stay where they are.
+
+## Emergency fallback: the systemd unit
+
+The pre-container path is still installed and intact, just disabled. Bring it back with `sudo systemctl start openape-troop` (as `ubuntu`) after stopping the container — both bind port 3010. `pnpm deploy troop` (`scripts/deploy-troop.sh`) is the deploy that feeds it: build → rsync to `releases/<TS>` → swap `current` → restart the unit → health-check, with rollback on failure. Requires passwordless sudo for `systemctl restart openape-troop.service`.
+
+## Host bootstrap (once per host)
+
+The systemd unit, nginx vhost and sudoers fragment below are what a fresh host needs; they are also what the dormant fallback runs on.
 
 ```bash
 ssh ubuntu@chatty.delta-mind.at sudo bash -s <<'EOF'
@@ -77,7 +91,9 @@ NUXT_TURSO_AUTH_TOKEN=<turso token>
 NITRO_PORT=3010
 ```
 
-Then start it once:
+This file is what the container reads too — `compose/chatty.yml` passes it as `env_file`, so it stays the single place secrets live.
+
+To run the app from the systemd unit instead of the container:
 
 ```bash
 sudo systemctl daemon-reload
@@ -98,4 +114,4 @@ exo dns add A openape.ai -n troop -a 85.217.175.26 -t 300
 
 ## Recurring deploys
 
-Run `pnpm deploy troop` from the monorepo root (or `pnpm deploy --changed` to let it pick targets from the diff vs `origin/main`). It builds, rsyncs to chatty, swaps `current`, restarts the service, health-checks, and rolls back on failure. Requires SSH access to `openape@chatty.delta-mind.at` with passwordless sudo for `systemctl restart openape-troop.service`.
+`pnpm run deploy:image troop` from the monorepo root — see the top of this file.
