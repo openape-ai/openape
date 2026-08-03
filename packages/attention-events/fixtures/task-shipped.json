@@ -1,0 +1,9 @@
+{
+  "id": "01KZ3S0000F1XTVRE0000SHP01",
+  "ts": 1785759000,
+  "actor": "agent:frontend@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "task.shipped",
+  "payload": {}
+}
