@@ -38,7 +38,7 @@ export async function startServers(): Promise<void> {
 
   ;[idpServer, spServer] = await Promise.all([
     startIdp({
-      host: 'localhost',
+      host: '127.0.0.1',
       port: IDP_PORT,
       managementToken: MANAGEMENT_TOKEN,
       adminEmails: [ADMIN_EMAIL],
@@ -46,7 +46,7 @@ export async function startServers(): Promise<void> {
     }),
     startServer({
       cwd: SP_DIR,
-      host: 'localhost',
+      host: '127.0.0.1',
       port: SP_PORT,
       readyPath: '/.well-known/openape.json',
       timeoutMs: BOOT_TIMEOUT_MS,
