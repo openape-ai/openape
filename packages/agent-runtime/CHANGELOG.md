@@ -1,5 +1,13 @@
 # @openape/agent-runtime
 
+## 0.2.8
+
+### Patch Changes
+
+- ee87618: Drop `cost-snapshots` from the `troop.company.read` resource list. The
+  endpoint it called has been removed from troop; the remaining resources
+  (`objectives`, `reports`, `members`, `overview`) are unchanged.
+
 ## 0.2.7
 
 ### Patch Changes
