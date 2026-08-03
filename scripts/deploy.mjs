@@ -1,18 +1,22 @@
 #!/usr/bin/env node
 
 /**
- * Local deploy orchestrator — replaces the per-app GitHub deploy workflows
- * (deploy-{org,troop,chat,docs,free-idp}.yml). Deploys run from the
- * maintainer's machine now: each target's scripts/deploy-<t>.sh already
- * builds locally, rsyncs to chatty, swaps the `current` symlink, restarts
- * the systemd service and health-checks. This wrapper adds the two things
- * that previously lived only in the workflow YAML:
+ * rsync/systemd deploy orchestrator — the emergency path onto the dormant
+ * `openape-<app>.service` units. Prod itself runs tested container images
+ * (scripts/deploy-image.mjs, `pnpm run deploy:image`); use this one only when
+ * the container path is unavailable, and stop the container first — both bind
+ * the same port. docs.openape.ai is not a target here: it has its own image
+ * deploy (scripts/deploy-docs-site.mjs).
+ *
+ * Each target's scripts/deploy-<t>.sh builds locally, rsyncs to chatty, swaps
+ * the `current` symlink, restarts the systemd service and health-checks. This
+ * wrapper adds two things on top:
  *
  *   1. target selection from changed paths (the workflow `paths:` filters)
  *   2. capture-previous-release + rollback when the deploy script fails
  *
  * Usage:
- *   pnpm deploy <target...>      # deploy named targets (e.g. troop org)
+ *   pnpm deploy <target...>      # deploy named targets (e.g. troop chat)
  *   pnpm deploy --all            # deploy every target
  *   pnpm deploy --changed[=ref]  # deploy targets whose paths changed vs ref
  *                                #   (ref defaults to origin/main)
@@ -34,8 +38,8 @@ const SSH_HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
 // One entry per app. `paths` mirrors the `on.push.paths` filter of the
 // retired deploy-<name>.yml. `service`/`base` are read from the matching
 // scripts/deploy-<name>.sh — keep them in sync if those scripts move.
-// `service: null` = static deploy (docs): symlink swap only, no restart,
-// so there is nothing to roll back to.
+// `service: null` would mark a static target (symlink swap only, no restart
+// and nothing to roll back to); no current target uses it.
 const TARGETS = {
   troop: {
     script: 'deploy-troop.sh',

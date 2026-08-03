@@ -1,8 +1,22 @@
-# Story-Kanon
+# Story-Kanon (eingefroren)
 
-User-Stories sind hier die **einzige Hand-Eingabe** für Produktarbeit; Akzeptanzkriterien,
-Tests, Code, Architektur-Doku und User-Guides werden daraus abgeleitet. Konzept + Regeln:
-Plan „Story-Kanon-Workflow" auf plans.openape.ai (01KTS4717QTACGFCWD3SFWP0W0).
+> **Status: eingefrorenes Experiment.** Letzte Änderung an `stories/` und den Story-Agents
+> in `.claude/agents/` war der 2026-06-12; seither ist keine Zeile Produktarbeit über diesen
+> Weg gelaufen. Der Ordner bleibt als Referenz stehen — er beschreibt nicht, wie heute
+> gearbeitet wird.
+>
+> **Der tatsächliche Weg:** Arbeit startet als Issue auf git.openape.ai und landet per PR
+> (`CONTRIBUTING.md`); alles, was länger als eine Session dauert, wird vorher als Plan in
+> `.claude/plans/` geschrieben (gespiegelt auf plans.openape.ai) und während der Arbeit
+> aktuell gehalten.
+>
+> Lebendig geblieben ist nur ein Teil davon: die User-Guides auf docs.openape.ai entstehen
+> weiterhin aus den E2E-Captures (`compose/demo/`, `compose/distribute-docs.mjs`).
+
+Das Konzept, das dieser Ordner beschreibt: User-Stories als einzige Hand-Eingabe für
+Produktarbeit, aus der Akzeptanzkriterien, Tests, Code, Architektur-Doku und User-Guides
+abgeleitet werden. Konzept + Regeln: Plan „Story-Kanon-Workflow" auf plans.openape.ai
+(01KTS4717QTACGFCWD3SFWP0W0).
 
 ## Lebenszyklus einer Story
 
