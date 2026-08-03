@@ -1,13 +1,10 @@
-import type { Server } from 'node:http'
-import { createServer } from 'node:http'
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createPublicKey, generateKeyPairSync, verify } from 'node:crypto'
-import { createRouter, defineEventHandler, readBody, setResponseStatus, toNodeListener } from 'h3'
+import { generateKeyPairSync } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createIdPApp } from '@openape/server'
-import { SignJWT } from 'jose'
+import { startIdp } from 'openape-e2e/idp-fixture'
 import consola from 'consola'
 
 // ---------------------------------------------------------------------------
@@ -46,27 +43,12 @@ function generateTestKeyPair() {
   return { publicKeySsh, privateKeyPem }
 }
 
-function listenOnFreePort(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      if (addr && typeof addr === 'object') resolve(addr.port)
-      else reject(new Error('Failed to get server address'))
-    })
-  })
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise(resolve => server.close(() => resolve()))
-}
-
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe('apes command tests', () => {
-  let server: Server
-  let port: number
+  let server: RunningServer
   let idpBase: string
   const MGMT_TOKEN = 'test-mgmt-token-456'
   const AGENT_EMAIL = 'agent+cmd-test@example.com'
@@ -82,122 +64,9 @@ describe('apes command tests', () => {
     writeFileSync(join(testHome, 'test_key'), keyPair.privateKeyPem, { mode: 0o600 })
 
     // ---- start IdP ----
-    const tempIdp = createIdPApp({ issuer: 'http://placeholder', managementToken: MGMT_TOKEN })
-    const tempServer = createServer(toNodeListener(tempIdp.app))
-    port = await listenOnFreePort(tempServer)
-    await closeServer(tempServer)
-
-    idpBase = `http://127.0.0.1:${port}`
+    server = await startIdp({ managementToken: MGMT_TOKEN, adminEmails: [OWNER_EMAIL] })
+    idpBase = server.url
     process.env.APES_IDP = idpBase
-
-    const idp = createIdPApp({
-      issuer: idpBase,
-      managementToken: MGMT_TOKEN,
-      adminEmails: [OWNER_EMAIL],
-    })
-
-    // ---- compat routes for agent_id -> id field mapping ----
-    const { stores } = idp
-    const compatRouter = createRouter()
-
-    compatRouter.post('/api/agent/challenge', defineEventHandler(async (event) => {
-      const body = await readBody<{ agent_id: string }>(event)
-      if (!body.agent_id) {
-        setResponseStatus(event, 400)
-        return { error: 'Missing agent_id' }
-      }
-
-      const user = await stores.userStore.findByEmail(body.agent_id)
-      if (!user || !user.isActive) {
-        setResponseStatus(event, 404)
-        return { error: 'User not found' }
-      }
-
-      const challenge = await stores.challengeStore.createChallenge(user.email)
-      return { challenge }
-    }))
-
-    compatRouter.post('/api/agent/authenticate', defineEventHandler(async (event) => {
-      const body = await readBody<{ agent_id: string, challenge: string, signature: string }>(event)
-      if (!body.agent_id || !body.challenge || !body.signature) {
-        setResponseStatus(event, 400)
-        return { error: 'Missing required fields' }
-      }
-
-      const user = await stores.userStore.findByEmail(body.agent_id)
-      if (!user || !user.isActive) {
-        setResponseStatus(event, 404)
-        return { error: 'User not found' }
-      }
-
-      const valid = await stores.challengeStore.consumeChallenge(body.challenge, body.agent_id)
-      if (!valid) {
-        setResponseStatus(event, 401)
-        return { error: 'Invalid or expired challenge' }
-      }
-
-      const keys = await stores.sshKeyStore.findByUser(body.agent_id)
-      if (keys.length === 0) {
-        setResponseStatus(event, 404)
-        return { error: 'No SSH keys found' }
-      }
-
-      let verified = false
-      for (const sshKey of keys) {
-        try {
-          const parts = sshKey.publicKey.trim().split(/\s+/)
-          const keyData = Buffer.from(parts[1]!, 'base64')
-          const typeLen = keyData.readUInt32BE(0)
-          const rawKey = keyData.subarray(4 + typeLen + 4)
-
-          const pubKeyObj = createPublicKey({
-            key: {
-              kty: 'OKP',
-              crv: 'Ed25519',
-              x: rawKey.toString('base64url'),
-            },
-            format: 'jwk',
-          })
-
-          const signatureBuffer = Buffer.from(body.signature, 'base64')
-          verified = verify(null, Buffer.from(body.challenge), pubKeyObj, signatureBuffer)
-          if (verified) break
-        }
-        catch { /* try next key */ }
-      }
-
-      if (!verified) {
-        setResponseStatus(event, 401)
-        return { error: 'Invalid signature' }
-      }
-
-      const signingKey = await stores.keyStore.getSigningKey()
-      const token = await new SignJWT({
-        sub: user.email,
-        act: user.owner ? 'agent' : 'human',
-      })
-        .setProtectedHeader({ alg: 'EdDSA', kid: signingKey.kid })
-        .setIssuer(idpBase)
-        .setIssuedAt()
-        .setExpirationTime('1h')
-        .sign(signingKey.privateKey)
-
-      return {
-        token,
-        id: user.email,
-        email: user.email,
-        name: user.name,
-        expires_in: 3600,
-      }
-    }))
-
-    idp.app.use(compatRouter)
-
-    server = createServer(toNodeListener(idp.app))
-    await new Promise<void>((resolve, reject) => {
-      server.listen(port, '127.0.0.1', () => resolve())
-      server.on('error', reject)
-    })
 
     // ---- enroll agent user with SSH key ----
     const enrollRes = await fetch(`${idpBase}/api/auth/enroll`, {
@@ -244,7 +113,7 @@ describe('apes command tests', () => {
 
   afterAll(async () => {
     delete process.env.APES_IDP
-    await closeServer(server)
+    await server.stop()
     rmSync(testHome, { recursive: true, force: true })
   })
 

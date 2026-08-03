@@ -35,8 +35,6 @@ shared:
 - `packages/auth` — the IdP and SP halves of the OIDC protocol logic
   (`src/idp/`, `src/sp/`), framework-free.
 - `packages/grants` — grant issuance, revocation, introspection.
-- `packages/server` — programmatic DDISA IdP/SP on h3; security hardening
-  (rate limits, headers, timing-safe comparisons) lives and is tested here.
 - `packages/apes` — the `apes` CLI + MCP server, the user-facing entry point
   (`apes login`, `apes agents spawn`, …); `packages/cli-auth` is the shared
   SSO store all OpenApe CLIs read.
@@ -68,7 +66,11 @@ machine), `apps/openape-ape-agent` (one runtime process per agent),
 statically prerendered, deployed on its own path).
 
 **`examples/`** — minimal IdP/SP apps, the `examples/e2e` integration tests,
-and `examples/agent-recipes`.
+and `examples/agent-recipes`. `examples/idp` and `examples/sp` are also the
+fixtures the E2E suites boot: `openape-e2e` drives both over HTTP, and
+`packages/apes`' IdP-backed suites start `examples/idp` through the shared
+`openape-e2e/idp-fixture` helper. Every test therefore exercises the shipped
+Nuxt modules rather than a second implementation of the protocol.
 
 Publishing is Changesets-based; `scripts/publish-chain.mjs` (`pnpm release`)
 publishes the `@openape/*` packages to npm in dependency order.

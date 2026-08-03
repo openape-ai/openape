@@ -1,11 +1,9 @@
-import type { Server } from 'node:http'
-import { createServer } from 'node:http'
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { toNodeListener } from 'h3'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { createIdPApp } from '@openape/server'
+import { startIdp } from 'openape-e2e/idp-fixture'
 
 // ---------------------------------------------------------------------------
 // Isolate HOME
@@ -20,58 +18,22 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function listenOnFreePort(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      if (addr && typeof addr === 'object') resolve(addr.port)
-      else reject(new Error('Failed to get server address'))
-    })
-  })
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise(resolve => server.close(() => resolve()))
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('http module', () => {
-  let server: Server
+  let server: RunningServer
   let idpBase: string
 
   beforeAll(async () => {
-    const idp = createIdPApp({
-      issuer: 'http://placeholder',
-      managementToken: 'test-http-token',
-    })
-    const tempServer = createServer(toNodeListener(idp.app))
-    const port = await listenOnFreePort(tempServer)
-    await closeServer(tempServer)
-
-    idpBase = `http://127.0.0.1:${port}`
-
-    const idp2 = createIdPApp({
-      issuer: idpBase,
-      managementToken: 'test-http-token',
-    })
-    server = createServer(toNodeListener(idp2.app))
-    await new Promise<void>((resolve, reject) => {
-      server.listen(port, '127.0.0.1', () => resolve())
-      server.on('error', reject)
-    })
-
+    server = await startIdp({ managementToken: 'test-http-token' })
+    idpBase = server.url
     process.env.APES_IDP = idpBase
   })
 
   afterAll(async () => {
     delete process.env.APES_IDP
-    await closeServer(server)
+    await server.stop()
     rmSync(testHome, { recursive: true, force: true })
   })
 

@@ -36,7 +36,6 @@ const PACKAGES = [
   { name: '@openape/cli-auth', dir: 'packages/cli-auth' },
   { name: '@openape/proof-cli', dir: 'packages/proof-cli' },
   { name: '@openape/proxy', dir: 'packages/proxy' },
-  { name: '@openape/server', dir: 'packages/server' },
   { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/agent-runtime', dir: 'packages/agent-runtime' },
   { name: '@openape/apes', dir: 'packages/apes' },

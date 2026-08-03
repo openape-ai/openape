@@ -45,12 +45,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@openape/server": "workspace:*",
     "@types/node": "^25.9.4",
     "@types/shell-quote": "^1.7.5",
     "@vitest/coverage-istanbul": "^4.1.9",
-    "h3": "^1.15.11",
-    "jose": "^5.10.0",
+    "openape-e2e": "workspace:*",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"

@@ -1,11 +1,9 @@
-import type { Server } from 'node:http'
-import { createServer } from 'node:http'
+import type { RunningServer } from 'openape-e2e/lifecycle'
 import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { toNodeListener } from 'h3'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createIdPApp } from '@openape/server'
+import { startIdp } from 'openape-e2e/idp-fixture'
 import consola from 'consola'
 
 // ---------------------------------------------------------------------------
@@ -21,57 +19,20 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function listenOnFreePort(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server.address()
-      if (addr && typeof addr === 'object') resolve(addr.port)
-      else reject(new Error('Failed to get server address'))
-    })
-  })
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise(resolve => server.close(() => resolve()))
-}
-
-// ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe('dns-check command', () => {
-  let server: Server
-  let port: number
+  let server: RunningServer
   let idpBase: string
 
   let logOutput: string[]
   let stdoutOutput: string[]
 
   beforeAll(async () => {
-    // Start a real IdP to test OIDC discovery
-    const idp = createIdPApp({
-      issuer: 'http://placeholder',
-      managementToken: 'test-token',
-    })
-
-    server = createServer(toNodeListener(idp.app))
-    port = await listenOnFreePort(server)
-    idpBase = `http://127.0.0.1:${port}`
-
-    // Re-create with correct issuer
-    await closeServer(server)
-    const idp2 = createIdPApp({
-      issuer: idpBase,
-      managementToken: 'test-token',
-    })
-    server = createServer(toNodeListener(idp2.app))
-    await new Promise<void>((resolve, reject) => {
-      server.listen(port, '127.0.0.1', () => resolve())
-      server.on('error', reject)
-    })
+    // A real IdP, so OIDC discovery has something to discover.
+    server = await startIdp({ managementToken: 'test-token' })
+    idpBase = server.url
   })
 
   beforeEach(() => {
@@ -92,7 +53,7 @@ describe('dns-check command', () => {
   })
 
   afterAll(async () => {
-    await closeServer(server)
+    await server.stop()
     rmSync(testHome, { recursive: true, force: true })
   })
 
