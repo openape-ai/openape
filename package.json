@@ -14,7 +14,7 @@
     "test": "turbo run test",
     "dev": "turbo run dev",
     "graph": "node scripts/dependency-graph.mjs",
-    "knip": "knip",
+    "knip": "node scripts/knip-workspaces.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "node scripts/publish-chain.mjs",

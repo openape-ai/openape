@@ -25,7 +25,6 @@
     "ulid": "^2.4.0"
   },
   "devDependencies": {
-    "@vue/language-core": "^3.3.5",
     "typescript": "^5.9.3",
     "vitest": "^3.2.6",
     "vue-tsc": "^3.3.5"

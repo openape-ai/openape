@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { shouldSubmitComposerKey } from './composer-input'
 
-export interface PendingFile { id: string, mime: string, name: string }
+interface PendingFile { id: string, mime: string, name: string }
 
 const props = defineProps<{ streaming: boolean, company: string }>()
 const emit = defineEmits<{ send: [text: string, files: PendingFile[]]; stop: [] }>()
