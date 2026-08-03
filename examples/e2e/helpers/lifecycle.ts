@@ -264,10 +264,10 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     cwd: opts.cwd,
     detached: true, // own process group → the whole tree dies on stop()
     stdio: ['ignore', 'pipe', 'pipe'],
-    // Tests never use HMR, and two concurrent `nuxt dev` servers would fight
-    // over vite's fixed HMR port 24678 — the loser never becomes ready
-    // (run 3253: "WebSocket server error: Port 24678 is already in use").
-    env: { E2E_NO_HMR: '1', ...process.env, ...extraEnv },
+    // Concurrent `nuxt dev` servers would fight over vite's fixed HMR port
+    // 24678 and the loser never becomes ready (runs 3253/3255). Derive a
+    // unique HMR port from the app port, which is already unique per server.
+    env: { ...process.env, E2E_HMR_PORT: String(port + 10_000), ...extraEnv },
   })
 
   let logBuffer = ''
