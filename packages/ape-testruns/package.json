@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-testruns",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI for testrun.openape.ai — upload a test run, share one link that proves it works",
   "type": "module",
   "license": "MIT",
