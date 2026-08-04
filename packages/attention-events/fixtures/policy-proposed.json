@@ -1,0 +1,13 @@
+{
+  "id": "01KZ5P0000F1XTVRE0000PCY02",
+  "ts": 1785827000,
+  "actor": "claude@session",
+  "actor_kind": "agent",
+  "task_ref": "ape-plans:01KZ3QPW5EC0JRXN5TB60R54TQ",
+  "type": "policy.proposed",
+  "payload": {
+    "rule": "Geänderte .vue-Dateien ohne Test werden in der CI gemeldet.",
+    "rationale": "Erst als Hinweis, damit Fehlalarme bei Darstellungs-Komponenten nicht zum Umgehen erziehen.",
+    "source_id": "01KZ5NT798X8WJGPBHSMQKC041"
+  }
+}
