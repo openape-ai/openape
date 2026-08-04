@@ -3,7 +3,7 @@
     "title": "Troop"
   },
   "common": {
-    "loading": "Lädt…",
+    "loading": "Lädt …",
     "save": "Speichern",
     "cancel": "Abbrechen",
     "close": "Schließen",
@@ -17,7 +17,28 @@
       "set": "gesetzt",
       "empty": "leer",
       "unsaved": "ungespeichert",
-      "disabled": "deaktiviert"
+      "disabled": "deaktiviert",
+      "paused": "pausiert"
+    },
+    "add": "Hinzufügen",
+    "edit": "Bearbeiten",
+    "remove": "Entfernen",
+    "done": "Fertig",
+    "unnamed": "(ohne Name)",
+    "unassigned": "niemandem zugeordnet",
+    "required": "{field} nötig.",
+    "loginHint": "Melde dich an, um {what} zu sehen.",
+    "lastFired": "zuletzt gefeuert:",
+    "role": {
+      "ceo": "Operator",
+      "teamlead": "Team-Lead",
+      "specialist": "Specialist",
+      "sanierer": "Controlling",
+      "other": "Mitarbeiter"
+    },
+    "field": {
+      "shortIdHint": "Kurzer Bezeichner.",
+      "promptLabel": "Anweisung (prompt)"
     }
   },
   "locale": {
@@ -412,5 +433,22 @@
       "expectFiveFields": "5 leerzeichengetrennte Felder erwartet",
       "invalidField": "Ungültiges Feld — siehe Hilfe"
     }
-  }
+  },
+  "nav": {},
+  "header": {},
+  "inbox": {},
+  "decisionCard": {},
+  "callDetail": {},
+  "policies": {},
+  "records": {},
+  "cockpit": {},
+  "companiesIndex": {},
+  "companyDetail": {},
+  "companyPanels": {},
+  "orgChart": {},
+  "nestsIndex": {},
+  "nestDetail": {},
+  "servicesIndex": {},
+  "skillsLibrary": {},
+  "docs": {}
 }
