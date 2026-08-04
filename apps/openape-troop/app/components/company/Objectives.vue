@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Objectives board (B0 merge). Owner authors what the company works on; the Operator
 // reads + drives against it. Flat list grouped by status — no nesting yet.
@@ -13,57 +13,30 @@ const COLUMNS = [
   { key: 'done', label: 'Erledigt' },
 ] as const
 
-const items = ref<Objective[]>([])
-const loading = ref(true)
-const newTitle = ref('')
-const adding = ref(false)
-const busy = reactive<Record<string, boolean>>({})
+const { items, loading, error, busy, saving, formError, form, submit, patch, remove } = useOrgCrud<Objective, { title: string }>({
+  collection: () => `/api/orgs/${props.orgId}/objectives`,
+  emptyForm: () => ({ title: '' }),
+})
 
-async function load() {
-  loading.value = true
-  items.value = await ($fetch as any)(`/api/orgs/${props.orgId}/objectives`)
-  loading.value = false
-}
 function byStatus(s: string) { return items.value.filter(o => o.status === s) }
 
 async function add() {
-  if (!newTitle.value.trim()) return
-  adding.value = true
-  try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives`, { method: 'POST', body: { title: newTitle.value.trim() } })
-    newTitle.value = ''
-    await load()
-  }
-  finally { adding.value = false }
+  if (!form.title.trim()) return
+  const created = await submit({ title: form.title.trim() })
+  if (created) form.title = ''
 }
-async function setStatus(o: Objective, status: string) {
-  busy[o.id] = true
-  try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'PATCH', body: { status } })
-    await load()
-  }
-  finally { busy[o.id] = false }
-}
-async function remove(o: Objective) {
-  busy[o.id] = true
-  try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'DELETE' })
-    await load()
-  }
-  finally { busy[o.id] = false }
-}
-
-watch(() => props.orgId, load, { immediate: true })
 </script>
 
 <template>
   <div>
     <div class="flex gap-2 mb-6">
-      <UInput v-model="newTitle" placeholder="Neues Ziel …" class="flex-1" :ui="{ base: 'w-full' }" @keydown.enter="add" />
-      <UButton color="primary" icon="i-lucide-plus" :loading="adding" :disabled="!newTitle.trim()" @click="add">
+      <UInput v-model="form.title" placeholder="Neues Ziel …" class="flex-1" :ui="{ base: 'w-full' }" @keydown.enter="add" />
+      <UButton color="primary" icon="i-lucide-plus" :loading="saving" :disabled="!form.title.trim()" @click="add">
         Ziel
       </UButton>
     </div>
+
+    <UAlert v-if="error || formError" color="error" variant="subtle" :title="error || formError" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
       Lädt …
@@ -81,11 +54,11 @@ watch(() => props.orgId, load, { immediate: true })
           >
             <div class="flex items-start justify-between gap-2">
               <span class="text-sm">{{ o.title }}</span>
-              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[o.id]" @click="remove(o)" />
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[o.id]" @click="remove(o.id)" />
             </div>
             <div class="flex gap-1 mt-2">
-              <UButton v-if="col.key !== 'planned'" color="neutral" variant="soft" size="xs" icon="i-lucide-chevron-left" :loading="busy[o.id]" @click="setStatus(o, col.key === 'done' ? 'in_progress' : 'planned')" />
-              <UButton v-if="col.key !== 'done'" color="neutral" variant="soft" size="xs" icon="i-lucide-chevron-right" :loading="busy[o.id]" @click="setStatus(o, col.key === 'planned' ? 'in_progress' : 'done')" />
+              <UButton v-if="col.key !== 'planned'" color="neutral" variant="soft" size="xs" icon="i-lucide-chevron-left" :loading="busy[o.id]" @click="patch(o.id, { status: col.key === 'done' ? 'in_progress' : 'planned' })" />
+              <UButton v-if="col.key !== 'done'" color="neutral" variant="soft" size="xs" icon="i-lucide-chevron-right" :loading="busy[o.id]" @click="patch(o.id, { status: col.key === 'planned' ? 'in_progress' : 'done' })" />
             </div>
           </div>
           <p v-if="!byStatus(col.key).length" class="text-xs text-zinc-600 italic px-1">
