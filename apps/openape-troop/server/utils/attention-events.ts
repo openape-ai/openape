@@ -67,7 +67,7 @@ export function toWire(row: AttentionEventRow) {
     id: row.id,
     ts: row.ts,
     actor: row.actor,
-    actor_kind: row.actorKind,
+    actor_kind: row.actorKind as 'human' | 'agent',
     task_ref: row.taskRef,
     ...(row.goalRef ? { goal_ref: row.goalRef } : {}),
     ...(row.orgId ? { org_id: row.orgId } : {}),

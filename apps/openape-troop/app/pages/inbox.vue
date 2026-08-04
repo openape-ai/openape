@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WireEvent } from '../utils/attention-inbox'
+import type { Metrics } from '../utils/attention-metrics'
 import { computed } from 'vue'
 import { useOpenApeAuth } from '#imports'
 import { cardTitle, openRequests, waitingLabel } from '../utils/attention-inbox'
@@ -13,6 +14,10 @@ await fetchUser()
 const { data, refresh } = await useFetch<{ events: WireEvent[] }>('/api/events', {
   server: true,
   default: () => ({ events: [] }),
+})
+const { data: stats } = await useFetch<{ metrics: Metrics }>('/api/inbox/metrics', {
+  server: true,
+  default: () => ({ metrics: { medianWaitSeconds: null, autonomyRate: null, reworkRate: null, answered: 0, openNow: 0 } }),
 })
 const now = Math.floor(Date.now() / 1000)
 const open = computed(() => openRequests(data.value.events))
@@ -38,11 +43,18 @@ const badge: Record<string, { label: string, class: string }> = {
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
       <template v-if="user">
+        <MetricTiles :metrics="stats.metrics" class="mb-6" />
+
         <div class="flex items-baseline justify-between mb-6">
           <p class="text-zinc-400">
             {{ open.length }} Entscheidung{{ open.length === 1 ? '' : 'en' }} warten auf dich — älteste zuerst.
           </p>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" @click="refresh()" />
+          <div class="flex items-center gap-2">
+            <NuxtLink to="/inbox/agents" class="text-xs text-zinc-400 hover:text-zinc-200 underline">
+              Track-Records
+            </NuxtLink>
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" @click="refresh()" />
+          </div>
         </div>
 
         <div v-if="open.length" class="space-y-2">
