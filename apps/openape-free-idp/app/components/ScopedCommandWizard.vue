@@ -97,7 +97,7 @@ async function submit() {
     if (policy.value.grant_type === 'timed' && policy.value.duration) body.duration = policy.value.duration
     if (policy.value.reason.trim()) body.reason = policy.value.reason.trim()
 
-    await ($fetch as any)('/api/standing-grants', { method: 'POST', body })
+    await apiFetch('/api/standing-grants', { method: 'POST', body })
     emit('created')
     emit('update:open', false)
   }

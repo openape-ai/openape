@@ -64,7 +64,7 @@ useSeoMeta({ title: computed(() => agent.value ? `Agent: ${agent.value.name}` : 
 async function loadAgent() {
   loading.value = true
   try {
-    agent.value = await ($fetch as any)(`/api/my-agents/${encodeURIComponent(String(route.params.id))}`)
+    agent.value = await apiFetch(`/api/my-agents/${encodeURIComponent(String(route.params.id))}`)
   }
   catch {
     agent.value = null
@@ -77,7 +77,7 @@ async function loadAgent() {
 async function loadStandingGrants() {
   if (!agent.value) return
   try {
-    const all = await ($fetch as any)('/api/standing-grants') as StandingGrant[]
+    const all = await apiFetch('/api/standing-grants') as StandingGrant[]
     standingGrants.value = all.filter(g => g.request?.delegate === agent.value!.email && g.status === 'approved')
   }
   catch {
