@@ -456,11 +456,103 @@
       "failed": "Login failed."
     }
   },
-  "inbox": {},
-  "decisionCard": {},
-  "callDetail": {},
-  "policies": {},
-  "records": {},
+  "inbox": {
+    "tabTitle": "Inbox",
+    "waiting": "Nothing is waiting on you. | 1 call is waiting on you. | {count} calls are waiting on you — oldest first.",
+    "trackRecordsLink": "Track records",
+    "policiesLink": "Rules",
+    "refresh": "Reload",
+    "empty": "Inbox zero — nothing is waiting on you.",
+    "loginWhat": "your open calls",
+    "kind": {
+      "decision": "Decision",
+      "escalation": "Escalation",
+      "verdict": "Verdict"
+    },
+    "cardTitle": {
+      "plain": "{text}",
+      "verdict": "Verdict: {ref}"
+    },
+    "waitingFor": {
+      "minutes": "waiting {count} min",
+      "hours": "waiting {count} h",
+      "days": "waiting {count} d"
+    },
+    "percent": "{value}%",
+    "duration": {
+      "seconds": "{value} s",
+      "minutes": "{value} min",
+      "hours": "{value} h",
+      "days": "{value} d"
+    },
+    "metrics": {
+      "wait": {
+        "label": "Waiting on you",
+        "hint": "Median, expired calls excluded"
+      },
+      "autonomy": {
+        "label": "Autonomy rate",
+        "hint": "shipped without asking"
+      },
+      "rework": {
+        "label": "Rework rate",
+        "hint": "verdicts that went back"
+      },
+      "answered": {
+        "label": "Answered",
+        "hint": "{count} open"
+      }
+    }
+  },
+  "decisionCard": {
+    "blocks": "blocks {task}",
+    "decided": "answered",
+    "viewPr": "View PR",
+    "proof": "Proof: {kind}",
+    "chooseVerdict": "Choose a verdict",
+    "chooseOption": "Choose an option",
+    "recommended": "Recommended",
+    "verdict": {
+      "merge": "Merge",
+      "rework": "Rework",
+      "reject": "Reject"
+    },
+    "why": "Why this recommendation",
+    "confirm": {
+      "verdict": "Give verdict: {choice}",
+      "decision": "Answer: {choice}"
+    },
+    "resolved": "Answered: {decision}",
+    "resolvedBy": "{actor} · event {id}"
+  },
+  "callDetail": {
+    "tabTitle": "Call",
+    "backToInbox": "Inbox",
+    "notFound": "Card not found, or you have no access to it."
+  },
+  "policies": {
+    "tabTitle": "Rules",
+    "loginWhat": "the rules in force",
+    "intro": "What your calls left behind — with the origin, the date and the place where the rule actually binds.",
+    "badge": {
+      "adopted": "in force",
+      "proposed": "proposal"
+    },
+    "source": "from this call",
+    "empty": "No rules yet. They grow out of calls that reach beyond the single case."
+  },
+  "records": {
+    "tabTitle": "Track records",
+    "loginWhat": "the history of your agents",
+    "fromEvents": "From {count} event. The sampling rate is a suggestion — every PR still goes through the inbox. | From {count} events. The sampling rate is a suggestion — every PR still goes through the inbox.",
+    "summary": "{count} review · {rate} without rework | {count} reviews · {rate} without rework",
+    "sampling": "Sampling {rate}",
+    "samplingTitle": {
+      "fresh": "Below 20 reviews there is no history worth trusting",
+      "suggestion": "A suggestion, not a rule"
+    },
+    "empty": "No reviews yet. Once agents put PRs up for a call, their history builds up here."
+  },
   "cockpit": {
     "tabTitle": "Troop Chat",
     "enableNotifications": "🔔 Turn on notifications",

@@ -1,12 +1,20 @@
 // @vitest-environment happy-dom
 import type { WireEvent } from '../app/utils/attention-inbox'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import DecisionCard from '../app/components/DecisionCard.vue'
+import de from '../i18n/locales/de.json'
+
+// The card renders the shipped German catalog, so every assertion below is on
+// a string a user actually sees — a renamed or missing key fails the test.
+const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
+vi.stubGlobal('useI18n', () => i18n.global)
 
 // Nuxt UI components are globally auto-imported in the app; here they are
 // stubbed to plain elements so assertions read the text, not the design system.
 const global = {
+  plugins: [i18n],
   stubs: {
     UButton: { template: '<button><slot /></button>' },
     UAlert: { template: '<div><slot /></div>' },
