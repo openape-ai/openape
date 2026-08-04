@@ -1,0 +1,14 @@
+{
+  "id": "01KZ5P0000F1XTVRE0000PCY01",
+  "ts": 1785828000,
+  "actor": "patrick@hofmann.eco",
+  "actor_kind": "human",
+  "task_ref": "ape-plans:01KZ3QPW5EC0JRXN5TB60R54TQ",
+  "type": "policy.adopted",
+  "payload": {
+    "rule": "Vue-Komponenten mit sichtbarer Logik bekommen einen Komponenten-Test.",
+    "rationale": "Ein Screenshot ist ein Blick, kein Test — der erste Testlauf fand einen Defekt, den kein Screenshot zeigt.",
+    "source_id": "01KZ5NT798X8WJGPBHSMQKC041",
+    "enforced_in": ".claude/CLAUDE.md"
+  }
+}
