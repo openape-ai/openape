@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Memory panel: owner-authored facts the Operator reads. company-scope reaches every
 // employee; role/agent-scope is surfaced when a topic matches. Small docs ride
@@ -19,62 +19,25 @@ const MODES = [
   { label: 'Referenz (bei Bedarf)', value: 'reference' },
 ]
 
-const items = ref<Doc[]>([])
-const loading = ref(true)
-const busy = reactive<Record<string, boolean>>({})
+interface DocForm { scope: string, targetId: string, title: string, body: string, mode: string }
 
-async function load() {
-  loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory`)
-  loading.value = false
-}
-
-const showForm = ref(false)
-const editingId = ref('')
-const saving = ref(false)
-const formError = ref('')
-const form = reactive({ scope: 'company', targetId: '', title: '', body: '', mode: 'auto' })
-
-function openAdd() {
-  editingId.value = ''
-  Object.assign(form, { scope: 'company', targetId: '', title: '', body: '', mode: 'auto' })
-  formError.value = ''
-  showForm.value = true
-}
-function openEdit(d: Doc) {
-  editingId.value = d.id
-  Object.assign(form, { scope: d.scope, targetId: d.targetId, title: d.title, body: d.body, mode: d.mode })
-  formError.value = ''
-  showForm.value = true
-}
+const { items, loading, error, busy, showForm, editingId, saving, formError, form, openAdd, openEdit, submit, remove } = useOrgCrud<Doc, DocForm>({
+  collection: () => `/api/cockpit/orgs/${props.orgId}/memory`,
+  emptyForm: () => ({ scope: 'company', targetId: '', title: '', body: '', mode: 'auto' }),
+})
 
 const scopeLabel = (s: string) => SCOPES.find(x => x.value === s)?.label ?? s
 
-async function submit() {
-  if (!form.title.trim() && !form.body.trim()) { formError.value = 'Titel oder Inhalt nötig.'; return }
-  saving.value = true
-  formError.value = ''
-  const body: Record<string, unknown> = { scope: form.scope, targetId: form.targetId.trim(), title: form.title.trim(), body: form.body }
-  if (form.mode !== 'auto') body.mode = form.mode
-  try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory`, { method: 'POST', body })
-    showForm.value = false
-    await load()
-  }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
-  finally { saving.value = false }
-}
-async function remove(d: Doc) {
-  busy[d.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory/${d.id}`, { method: 'DELETE' })
-    await load()
-  }
-  finally { busy[d.id] = false }
+function edit(d: Doc) {
+  openEdit(d.id, { scope: d.scope, targetId: d.targetId, title: d.title, body: d.body, mode: d.mode })
 }
 
-watch(() => props.orgId, load, { immediate: true })
+async function save() {
+  if (!form.title.trim() && !form.body.trim()) { formError.value = 'Titel oder Inhalt nötig.'; return }
+  const body: Record<string, unknown> = { scope: form.scope, targetId: form.targetId.trim(), title: form.title.trim(), body: form.body }
+  if (form.mode !== 'auto') body.mode = form.mode
+  await submit(body)
+}
 </script>
 
 <template>
@@ -88,6 +51,8 @@ watch(() => props.orgId, load, { immediate: true })
       </UButton>
     </div>
 
+    <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
       Lädt …
     </div>
@@ -99,7 +64,7 @@ watch(() => props.orgId, load, { immediate: true })
         v-for="d in items"
         :key="d.id"
         class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
-        @click="openEdit(d)"
+        @click="edit(d)"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
@@ -116,7 +81,7 @@ watch(() => props.orgId, load, { immediate: true })
               {{ d.body }}
             </p>
           </div>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[d.id]" @click.stop="remove(d)" />
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[d.id]" @click.stop="remove(d.id)" />
         </div>
       </div>
     </div>
@@ -152,7 +117,7 @@ watch(() => props.orgId, load, { immediate: true })
             <UButton color="neutral" variant="ghost" @click="showForm = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="saving" @click="submit">
+            <UButton color="primary" :loading="saving" @click="save">
               {{ editingId ? 'Speichern' : 'Hinzufügen' }}
             </UButton>
           </div>

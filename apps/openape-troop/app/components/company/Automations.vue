@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Automations panel: proactive triggers. Each row is a schedule (cron daily /
 // periodic, or a one-shot timer) whose `prompt` the Operator runs when due —
@@ -19,16 +20,6 @@ interface Trigger {
   lastRunAt: number | null
 }
 
-const items = ref<Trigger[]>([])
-const loading = ref(true)
-const busy = reactive<Record<string, boolean>>({})
-
-async function load() {
-  loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules`)
-  loading.value = false
-}
-
 const fmt = (ms: number) => new Date(ms).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' })
 function scheduleLabel(t: Trigger): string {
   if (t.cronExpr) return `cron · ${t.cronExpr}`
@@ -46,11 +37,12 @@ const modeOptions = [
   { value: 'cron', label: 'Cron-Ausdruck' },
 ]
 
-const showForm = ref(false)
-const editingId = ref('')
-const saving = ref(false)
-const formError = ref('')
-const form = reactive({ kind: '', prompt: '', mode: 'daily' as Mode, atHour: 7, everyMinutes: 60, fireAtLocal: '', cronExpr: '' })
+interface TriggerForm { kind: string, prompt: string, mode: Mode, atHour: number, everyMinutes: number, fireAtLocal: string, cronExpr: string }
+
+const { items, loading, error, busy, showForm, editingId, saving, formError, form, openAdd, openEdit, submit, patch, remove } = useOrgCrud<Trigger, TriggerForm>({
+  collection: () => `/api/cockpit/orgs/${props.orgId}/schedules`,
+  emptyForm: () => ({ kind: '', prompt: '', mode: 'daily', atHour: 7, everyMinutes: 60, fireAtLocal: '', cronExpr: '' }),
+})
 
 function toLocalInput(ms: number): string {
   const d = new Date(ms)
@@ -58,16 +50,9 @@ function toLocalInput(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-function openAdd() {
-  editingId.value = ''
-  Object.assign(form, { kind: '', prompt: '', mode: 'daily', atHour: 7, everyMinutes: 60, fireAtLocal: '', cronExpr: '' })
-  formError.value = ''
-  showForm.value = true
-}
-function openEdit(t: Trigger) {
-  editingId.value = t.id
+function edit(t: Trigger) {
   const mode: Mode = t.cronExpr ? 'cron' : t.fireAt != null ? 'timer' : t.everyMinutes != null ? 'periodic' : 'daily'
-  Object.assign(form, {
+  openEdit(t.id, {
     kind: t.kind,
     prompt: t.prompt,
     mode,
@@ -76,11 +61,9 @@ function openEdit(t: Trigger) {
     fireAtLocal: t.fireAt != null ? toLocalInput(t.fireAt) : '',
     cronExpr: t.cronExpr ?? '',
   })
-  formError.value = ''
-  showForm.value = true
 }
 
-async function submit() {
+async function save() {
   if (!form.kind.trim()) { formError.value = 'Name nötig.'; return }
   if (!form.prompt.trim()) { formError.value = 'Anweisung nötig.'; return }
   const body: Record<string, unknown> = { kind: form.kind.trim(), prompt: form.prompt.trim(), atHour: null, everyMinutes: null, fireAt: null, cronExpr: null }
@@ -99,32 +82,7 @@ async function submit() {
     if (!Number.isFinite(ms)) { formError.value = 'Zeitpunkt nötig.'; return }
     body.fireAt = ms
   }
-  saving.value = true
-  formError.value = ''
-  try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules`, { method: 'POST', body })
-    showForm.value = false
-    await load()
-  }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
-  finally { saving.value = false }
-}
-async function toggleEnabled(t: Trigger) {
-  busy[t.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'PATCH', body: { enabled: !t.enabled } })
-    await load()
-  }
-  finally { busy[t.id] = false }
-}
-async function remove(t: Trigger) {
-  busy[t.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'DELETE' })
-    await load()
-  }
-  finally { busy[t.id] = false }
+  await submit(body)
 }
 
 const timerPreview = computed(() => {
@@ -132,8 +90,6 @@ const timerPreview = computed(() => {
   const ms = new Date(form.fireAtLocal).getTime()
   return Number.isFinite(ms) ? fmt(ms) : ''
 })
-
-watch(() => props.orgId, load, { immediate: true })
 </script>
 
 <template>
@@ -147,6 +103,8 @@ watch(() => props.orgId, load, { immediate: true })
       </UButton>
     </div>
 
+    <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
       Lädt …
     </div>
@@ -158,7 +116,7 @@ watch(() => props.orgId, load, { immediate: true })
         v-for="t in items"
         :key="t.id"
         class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
-        @click="openEdit(t)"
+        @click="edit(t)"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
@@ -182,8 +140,8 @@ watch(() => props.orgId, load, { immediate: true })
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0" @click.stop>
-            <USwitch :model-value="t.enabled" :disabled="busy[t.id]" @update:model-value="toggleEnabled(t)" />
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[t.id]" @click="remove(t)" />
+            <USwitch :model-value="t.enabled" :disabled="busy[t.id]" @update:model-value="patch(t.id, { enabled: !t.enabled })" />
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[t.id]" @click="remove(t.id)" />
           </div>
         </div>
       </div>
@@ -234,7 +192,7 @@ watch(() => props.orgId, load, { immediate: true })
             <UButton color="neutral" variant="ghost" @click="showForm = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="saving" @click="submit">
+            <UButton color="primary" :loading="saving" @click="save">
               {{ editingId ? 'Speichern' : 'Hinzufügen' }}
             </UButton>
           </div>
