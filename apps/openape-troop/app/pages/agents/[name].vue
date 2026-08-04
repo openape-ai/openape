@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Detail, NestHost, Task } from '../../types/agent'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
@@ -6,58 +7,10 @@ const route = useRoute()
 const agentName = computed(() => String(route.params.name))
 
 const { t } = useI18n()
-const { fmtDate } = useDateFormat()
-const { fmtRelative } = useRelativeTime()
 useSeoMeta({ title: () => t('agentDetail.tabTitle', { name: agentName.value }) })
 
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
-
-interface Agent {
-  email: string
-  ownerEmail: string
-  agentName: string
-  hostId: string | null
-  hostname: string | null
-  pubkeySsh: string | null
-  systemPrompt: string
-  /** Tool-name whitelist — drives which tools the chat-bridge exposes
-   *  to the LLM during live thread turns. Defaults to all known tools
-   *  on first sync; owner narrows here. */
-  tools: string[]
-  paused: boolean
-  firstSeenAt: number | null
-  lastSeenAt: number | null
-  createdAt: number
-}
-interface Task {
-  agentEmail: string
-  taskId: string
-  name: string
-  cron: string
-  userPrompt: string
-  tools: string[]
-  maxSteps: number
-  enabled: boolean
-  createdAt: number
-  updatedAt: number
-}
-interface Run {
-  id: string
-  agentEmail: string
-  taskId: string
-  startedAt: number
-  finishedAt: number | null
-  status: 'running' | 'ok' | 'error'
-  finalMessage: string | null
-  stepCount: number | null
-  trace: unknown
-}
-interface Detail {
-  agent: Agent
-  tasks: Task[]
-  recentRuns: Run[]
-}
 
 const detail = ref<Detail | null>(null)
 const loading = ref(true)
@@ -85,7 +38,6 @@ onMounted(() => { if (!user.value) navigateTo('/login') })
 // connected nest covers this owner's hosts, the agent is on a
 // host that propagates config-updates over WS instead of the 5min
 // poll. Pure UX surface — never gates any action.
-interface NestHost { host_id: string, hostname: string, version: string, last_seen_at: number }
 const nestHosts = ref<NestHost[]>([])
 let nestHostsTimer: ReturnType<typeof setInterval> | null = null
 async function loadNestHosts() {
@@ -227,132 +179,6 @@ async function saveTools() {
   }
 }
 
-// Skills — per-agent SKILL.md catalog. Each row → one
-// `<name>/SKILL.md` on the agent host after sync. CRUD via dedicated
-// endpoints under /api/agents/[name]/skills/.
-interface Skill {
-  agentEmail: string
-  name: string
-  description: string
-  body: string
-  enabled: boolean
-  createdAt: number
-  updatedAt: number
-}
-const skills = ref<Skill[]>([])
-const skillsError = ref('')
-const skillEditor = ref<{ open: boolean, isNew: boolean, name: string, description: string, body: string, enabled: boolean }>({
-  open: false,
-  isNew: true,
-  name: '',
-  description: '',
-  body: '',
-  enabled: true,
-})
-const skillSaving = ref(false)
-
-async function loadSkills() {
-  if (!agentName.value) return
-  skillsError.value = ''
-  try { skills.value = await ($fetch as any)(`/api/agents/${agentName.value}/skills`); skillsError.value = '' }
-  catch (err: any) { skillsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.skills.error.loadFailed') }
-}
-watch(detail, (d) => { if (d) loadSkills() })
-
-function openCreateSkill() {
-  skillEditor.value = { open: true, isNew: true, name: '', description: '', body: '', enabled: true }
-}
-function openEditSkill(s: Skill) {
-  skillEditor.value = { open: true, isNew: false, name: s.name, description: s.description, body: s.body, enabled: s.enabled }
-}
-async function saveSkill() {
-  if (!agentName.value) return
-  skillSaving.value = true
-  skillsError.value = ''
-  try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/skills`, {
-      method: 'PUT',
-      body: {
-        name: skillEditor.value.name,
-        description: skillEditor.value.description,
-        body: skillEditor.value.body,
-        enabled: skillEditor.value.enabled,
-      },
-    })
-    skillEditor.value.open = false
-    await loadSkills()
-  }
-  catch (err: any) {
-    skillsError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
-  }
-  finally {
-    skillSaving.value = false
-  }
-}
-async function deleteSkill(name: string) {
-  if (!agentName.value) return
-  if (!confirm(t('agentDetail.skills.confirmDelete', { name }))) return
-  try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
-    await loadSkills()
-  }
-  catch (err: any) {
-    skillsError.value = err?.data?.statusMessage || err?.message || t('common.error.deleteFailed')
-  }
-}
-
-// Secrets — capability values bound to this agent. Listed by env name
-// + status only; troop never returns the value (it's sealed to the
-// agent). Add/rotate = PUT, revoke = DELETE (M2c endpoints).
-interface SecretRow { env: string, status: 'active' | 'revoked', created_at: number, updated_at: number, revoked_at: number | null }
-const secrets = ref<SecretRow[]>([])
-const secretsError = ref('')
-const newSecret = ref({ env: '', value: '' })
-const secretSaving = ref(false)
-
-async function loadSecrets() {
-  if (!agentName.value) return
-  secretsError.value = ''
-  try {
-    const res: { secrets: SecretRow[] } = await ($fetch as any)(`/api/agents/${agentName.value}/secrets`)
-    secrets.value = res.secrets
-  }
-  catch (err: any) { secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.loadFailed') }
-}
-watch(detail, (d) => { if (d) loadSecrets() })
-
-async function saveSecret() {
-  if (!agentName.value || !newSecret.value.env || !newSecret.value.value) return
-  secretSaving.value = true
-  secretsError.value = ''
-  try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/secrets/${encodeURIComponent(newSecret.value.env)}`, {
-      method: 'PUT',
-      body: { value: newSecret.value.value },
-    })
-    newSecret.value = { env: '', value: '' }
-    await loadSecrets()
-  }
-  catch (err: any) {
-    secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.saveFailed')
-  }
-  finally {
-    secretSaving.value = false
-  }
-}
-
-async function revokeSecret(env: string) {
-  if (!agentName.value) return
-  if (!confirm(t('agentDetail.secrets.confirmRevoke', { env }))) return
-  try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/secrets/${encodeURIComponent(env)}`, { method: 'DELETE' })
-    await loadSecrets()
-  }
-  catch (err: any) {
-    secretsError.value = err?.data?.statusMessage || err?.message || t('agentDetail.secrets.error.revokeFailed')
-  }
-}
-
 // Task editor state
 const showEditor = ref(false)
 const editing = ref<{ taskId: string, isNew: boolean }>({ taskId: '', isNew: true })
@@ -442,8 +268,6 @@ async function remove(task: Task) {
     error.value = err?.data?.statusMessage || err?.message || t('common.error.deleteFailed')
   }
 }
-
-const statusColor: Record<Run['status'], string> = { running: 'info', ok: 'success', error: 'error' }
 
 // Destroy-agent state. Two-step UX: button on the page reveals a
 // modal asking for typed confirmation (must enter agent name), then
@@ -568,74 +392,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
           <AgentChat :agent-name="detail.agent.agentName" />
         </UCard>
 
-        <!-- Agent metadata. Collapsed by default on mobile because the
-             SSH key + email are long strings that crowd out the tasks
-             section, which is what the user actually came here to edit. -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-info" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.details.title') }}</span>
-                <span class="text-xs text-muted">·</span>
-                <span class="text-xs text-muted">{{ $t('agentDetail.details.lastSyncShort', { value: fmtRelative(detail.agent.lastSeenAt) }) }}</span>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <dl class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-(--ui-border)">
-              <div>
-                <dt class="text-xs text-muted mb-0.5">
-                  {{ $t('agentDetail.details.email') }}
-                </dt>
-                <dd class="font-mono text-xs break-all">
-                  {{ detail.agent.email }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs text-muted mb-0.5">
-                  {{ $t('agentDetail.details.hostname') }}
-                </dt>
-                <dd class="font-mono">
-                  {{ detail.agent.hostname || '—' }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs text-muted mb-0.5">
-                  {{ $t('agentDetail.details.hostId') }}
-                </dt>
-                <dd class="font-mono text-xs break-all">
-                  {{ detail.agent.hostId || '—' }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs text-muted mb-0.5">
-                  {{ $t('agentDetail.details.pubkey') }}
-                </dt>
-                <dd class="font-mono text-xs break-all">
-                  {{ detail.agent.pubkeySsh || '—' }}
-                </dd>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <dt class="text-xs text-muted mb-0.5">
-                    {{ $t('agentDetail.details.firstSync') }}
-                  </dt>
-                  <dd class="text-sm">
-                    {{ fmtDate(detail.agent.firstSeenAt) }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-xs text-muted mb-0.5">
-                    {{ $t('agentDetail.details.lastSync') }}
-                  </dt>
-                  <dd class="text-sm">
-                    {{ fmtDate(detail.agent.lastSeenAt) }}
-                  </dd>
-                </div>
-              </div>
-            </dl>
-          </details>
-        </UCard>
+        <AgentMetaCard :agent="detail.agent" />
 
         <!-- Agent-level system prompt — applies to every chat message
              AND every cron task run. Tasks supply the user-prompt
@@ -754,171 +511,9 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
           </details>
         </UCard>
 
-        <!-- Skills — lazy-load SKILL.md catalog -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-book-open" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.skills.title') }}</span>
-                <UBadge color="neutral" variant="subtle" size="xs">
-                  {{ skills.length }}
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="border-t border-(--ui-border)">
-              <div class="flex items-start justify-between gap-3 px-4 py-3">
-                <p class="text-xs text-muted">
-                  {{ $t('agentDetail.skills.hint') }}
-                </p>
-                <UButton color="primary" size="sm" icon="i-lucide-plus" :ui="{ base: 'shrink-0' }" @click="openCreateSkill">
-                  {{ $t('agentDetail.skills.newButton') }}
-                </UButton>
-              </div>
-              <UAlert v-if="skillsError" color="error" :title="skillsError" class="m-4" />
-              <i18n-t v-if="skills.length === 0" keypath="agentDetail.skills.empty" tag="div" class="px-4 pb-6 pt-2 text-center text-muted text-sm">
-                <template #pkg>
-                  <code class="text-zinc-300">@openape/ape-agent</code>
-                </template>
-              </i18n-t>
-              <ul v-else class="divide-y divide-(--ui-border)">
-                <li v-for="s in skills" :key="s.name">
-                  <button
-                    type="button"
-                    class="w-full text-left px-4 py-3 active:bg-zinc-900 transition-colors flex items-start gap-3"
-                    @click="openEditSkill(s)"
-                  >
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 flex-wrap mb-1">
-                        <span class="font-medium text-base">{{ s.name }}</span>
-                        <UBadge v-if="!s.enabled" color="neutral" variant="subtle" size="xs">
-                          {{ $t('common.badge.disabled') }}
-                        </UBadge>
-                      </div>
-                      <div class="text-xs text-muted line-clamp-2">
-                        {{ s.description }}
-                      </div>
-                    </div>
-                    <UButton
-                      size="sm"
-                      color="error"
-                      variant="ghost"
-                      icon="i-lucide-trash-2"
-                      :aria-label="$t('agentDetail.skills.deleteAria')"
-                      @click.stop="deleteSkill(s.name)"
-                    />
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </details>
-        </UCard>
+        <AgentSkillsCard :agent-name="agentName" />
 
-        <!-- Skill editor modal -->
-        <UModal v-model:open="skillEditor.open">
-          <template #content>
-            <div class="p-5 space-y-4">
-              <h3 class="text-lg font-semibold">
-                {{ skillEditor.isNew ? $t('agentDetail.skills.editor.titleNew') : $t('agentDetail.skills.editor.titleEdit', { name: skillEditor.name }) }}
-              </h3>
-              <UFormField :label="$t('agentDetail.skills.editor.name.label')" :description="skillEditor.isNew ? $t('agentDetail.skills.editor.name.descriptionNew') : $t('agentDetail.skills.editor.name.descriptionImmutable')">
-                <UInput v-model="skillEditor.name" :disabled="!skillEditor.isNew || skillSaving" placeholder="iurio" />
-              </UFormField>
-              <UFormField :label="$t('agentDetail.skills.editor.description.label')" :description="$t('agentDetail.skills.editor.description.description')">
-                <UInput v-model="skillEditor.description" :disabled="skillSaving" :placeholder="$t('agentDetail.skills.editor.description.placeholder')" />
-              </UFormField>
-              <UFormField :label="$t('agentDetail.skills.editor.body.label')" :description="$t('agentDetail.skills.editor.body.description')">
-                <UTextarea v-model="skillEditor.body" :rows="14" :disabled="skillSaving" :placeholder="$t('agentDetail.skills.editor.body.placeholder')" />
-              </UFormField>
-              <UFormField :label="$t('agentDetail.skills.editor.enabled.label')" :description="$t('agentDetail.skills.editor.enabled.description')">
-                <USwitch v-model="skillEditor.enabled" :disabled="skillSaving" />
-              </UFormField>
-              <div class="flex justify-end gap-2">
-                <UButton variant="ghost" :disabled="skillSaving" @click="skillEditor.open = false">
-                  {{ $t('common.cancel') }}
-                </UButton>
-                <UButton color="primary" :loading="skillSaving" @click="saveSkill">
-                  {{ $t('common.save') }}
-                </UButton>
-              </div>
-            </div>
-          </template>
-        </UModal>
-
-        <!-- Secrets — capability values, sealed to the agent -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-key-round" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.secrets.title') }}</span>
-                <UBadge color="neutral" variant="subtle" size="xs">
-                  {{ secrets.filter(s => s.status === 'active').length }}
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="border-t border-(--ui-border)">
-              <p class="text-xs text-muted px-4 py-3">
-                {{ $t('agentDetail.secrets.hint') }}
-              </p>
-              <ChatgptConnect :agent-name="agentName" @connected="loadSecrets" />
-              <UAlert v-if="secretsError" color="error" :title="secretsError" class="m-4" />
-              <ul v-if="secrets.length > 0" class="divide-y divide-(--ui-border)">
-                <li v-for="s in secrets" :key="s.env" class="px-4 py-3 flex items-center gap-3">
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                      <code class="font-medium">{{ s.env }}</code>
-                      <UBadge :color="s.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
-                        {{ $t(`agentDetail.secrets.status.${s.status}`) }}
-                      </UBadge>
-                    </div>
-                  </div>
-                  <UButton
-                    v-if="s.status === 'active'"
-                    size="sm"
-                    color="error"
-                    variant="ghost"
-                    icon="i-lucide-trash-2"
-                    :aria-label="$t('agentDetail.secrets.revokeAria')"
-                    @click="revokeSecret(s.env)"
-                  />
-                </li>
-              </ul>
-              <div class="px-4 py-3 border-t border-(--ui-border) space-y-2">
-                <div class="flex items-stretch gap-2">
-                  <UInput
-                    v-model="newSecret.env"
-                    :placeholder="$t('agentDetail.secrets.envPlaceholder')"
-                    class="flex-1"
-                    :ui="{ base: 'w-full' }"
-                    :disabled="secretSaving"
-                  />
-                  <UInput
-                    v-model="newSecret.value"
-                    type="password"
-                    :placeholder="$t('agentDetail.secrets.valuePlaceholder')"
-                    class="flex-1"
-                    :ui="{ base: 'w-full' }"
-                    :disabled="secretSaving"
-                  />
-                  <UButton
-                    color="primary"
-                    :loading="secretSaving"
-                    :disabled="!newSecret.env || !newSecret.value"
-                    @click="saveSecret"
-                  >
-                    {{ $t('agentDetail.secrets.setButton') }}
-                  </UButton>
-                </div>
-                <p class="text-[11px] text-muted">
-                  {{ $t('agentDetail.secrets.casingHint') }}
-                </p>
-              </div>
-            </div>
-          </details>
-        </UCard>
+        <AgentSecretsCard :agent-name="agentName" />
 
         <!-- Tasks -->
         <UCard :ui="{ body: 'p-0' }">
@@ -989,53 +584,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
           </details>
         </UCard>
 
-        <!-- Recent runs -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-history" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.runs.title') }}</span>
-                <UBadge color="neutral" variant="subtle" size="xs">
-                  {{ detail.recentRuns.length }}
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="border-t border-(--ui-border)">
-              <div v-if="detail.recentRuns.length === 0" class="px-4 py-6 text-center text-muted text-sm">
-                {{ $t('agentDetail.runs.empty') }}
-              </div>
-              <ul v-else class="divide-y divide-(--ui-border)">
-                <li v-for="r in detail.recentRuns" :key="r.id" class="px-4 py-3">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2">
-                        <UBadge :color="(statusColor[r.status] as any)" variant="subtle" size="xs">
-                          {{ $t(`agentDetail.runs.status.${r.status}`) }}
-                        </UBadge>
-                        <code class="font-mono text-xs">{{ r.taskId }}</code>
-                        <span class="text-xs text-muted">
-                          {{ fmtDate(r.startedAt) }}
-                          <span v-if="r.finishedAt"> · {{ $t('agentDetail.runs.elapsedSec', { n: (r.finishedAt - r.startedAt).toFixed(0) }) }}</span>
-                        </span>
-                      </div>
-                      <p v-if="r.finalMessage" class="text-sm mt-1 break-words">
-                        {{ r.finalMessage }}
-                      </p>
-                      <details v-if="r.trace" class="mt-1">
-                        <summary class="cursor-pointer text-xs text-muted">
-                          {{ $t('agentDetail.runs.trace') }}
-                        </summary>
-                        <pre class="text-xs mt-1 p-2 bg-(--ui-bg-elevated) rounded overflow-auto max-h-72">{{ JSON.stringify(r.trace, null, 2) }}</pre>
-                      </details>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </details>
-        </UCard>
+        <AgentRunsCard :runs="detail.recentRuns" />
       </template>
 
       <!-- Danger zone — separated visually so it doesn't sit next to
