@@ -4,15 +4,16 @@ import { docsGuide } from '../../docs.generated'
 // A single user story: numbered steps, each with its caption and the
 // screenshot captured by the E2E run. Content is our own committed HTML.
 const route = useRoute()
+const { t } = useI18n()
 const all = docsGuide.categories.flatMap(c => c.stories.map(s => ({ ...s, category: c.title })))
 const idx = computed(() => all.findIndex(s => s.id === route.params.story))
 if (idx.value === -1)
-  throw createError({ statusCode: 404, statusMessage: 'Story not found' })
+  throw createError({ statusCode: 404, statusMessage: t('docs.story.notFound') })
 const story = computed(() => all[idx.value]!)
 const prev = computed(() => all[idx.value - 1])
 const next = computed(() => all[idx.value + 1])
 
-useSeoMeta({ title: () => `${story.value.title} — Troop Guide` })
+useSeoMeta({ title: () => t('docs.story.tabTitle', { title: story.value.title }) })
 </script>
 
 <template>

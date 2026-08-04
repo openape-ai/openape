@@ -190,7 +190,12 @@
       "hint": "Einmal anmelden — der Agent nutzt dann dein ChatGPT-Abo.",
       "enterCode": "Öffne und gib den Code ein:",
       "waiting": "Warte auf Bestätigung im Browser …",
-      "connected": "ChatGPT verbunden (Account {account})"
+      "connected": "ChatGPT verbunden (Account {account})",
+      "error": {
+        "start": "Verbindung konnte nicht gestartet werden.",
+        "denied": "ChatGPT hat die Verbindung abgelehnt.",
+        "poll": "Status konnte nicht abgefragt werden."
+      }
     },
     "secrets": {
       "title": "Secrets",
@@ -434,8 +439,23 @@
       "invalidField": "Ungültiges Feld — siehe Hilfe"
     }
   },
-  "nav": {},
-  "header": {},
+  "nav": {
+    "inbox": "Inbox",
+    "companies": "Firmen",
+    "services": "Services",
+    "skills": "Skills",
+    "nests": "Nests",
+    "chat": "Chat"
+  },
+  "header": {
+    "login": {
+      "what": "diese Entscheidung",
+      "emailPlaceholder": "du{'@'}firma.at",
+      "submit": "Anmelden",
+      "invalidEmail": "Bitte eine gültige Email-Adresse eingeben.",
+      "failed": "Login fehlgeschlagen."
+    }
+  },
   "inbox": {},
   "decisionCard": {},
   "callDetail": {},
@@ -531,5 +551,39 @@
   "nestDetail": {},
   "servicesIndex": {},
   "skillsLibrary": {},
-  "docs": {}
+  "docs": {
+    "shell": {
+      "badge": "Guide",
+      "openApp": "Troop öffnen",
+      "navLabel": "Guide",
+      "overview": "Überblick"
+    },
+    "index": {
+      "tabTitle": "Guide",
+      "description": "Wie Troop benutzt wird, Story für Story — erzeugt aus echten End-to-End-Testläufen.",
+      "heading": "Troop Guide",
+      "intro": "Jede Story hier stammt aus einem echten End-to-End-Testlauf. Screenshots und Schritte entstehen bei jedem Lauf neu, dieser Guide kann also nicht vom Produkt abweichen.",
+      "catalogLink": "Agent-Katalog ansehen →",
+      "stepCount": "{count} Schritt | {count} Schritte",
+      "footer": "Live aus dem containerisierten E2E-Test-Stack aufgenommen — jeder Screenshot entsteht bei jedem Lauf neu."
+    },
+    "story": {
+      "tabTitle": "{title} — Guide",
+      "notFound": "Story nicht gefunden"
+    },
+    "catalog": {
+      "tabTitle": "Agent-Katalog",
+      "description": "Alle Personas, aus denen du deine Firma zusammenstellen kannst — erzeugt aus dem Agent-Katalog selbst.",
+      "heading": "Agent-Katalog",
+      "intro": "Der Agent-Katalog beschreibt alle {count} Personas, aus denen du deine Firma zusammenstellen kannst. Jede Persona zeigt auf ein gepinntes Recipe aus {link} und besetzt eine Rolle in deinem Organigramm.",
+      "compose": {
+        "title": "So stellst du eine Firma zusammen",
+        "spawn": "Du stellst eine Firma zusammen, indem du Agents aus dem Katalog spawnst und ihre Persona im Picker auswählst. Jede Persona bringt eine {role} mit (ceo, teamlead, specialist, sanierer), die ihren Platz im Organigramm bestimmt.",
+        "scale": "Dieselbe Persona lässt sich mehrfach spawnen, wenn du mehr Kapazität brauchst — etwa mehrere Backend Engineers."
+      },
+      "codesBadge": "Programmiert",
+      "recipeLabel": "Recipe:",
+      "footer": "Diese Seite entsteht aus {file} — der einzigen Quelle der Wahrheit für alle Personas."
+    }
+  }
 }
