@@ -76,72 +76,75 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     </header>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
-      <h2 class="text-2xl font-bold mb-1">
-        Firmen
-      </h2>
-      <p class="text-zinc-400 mb-6">
-        Ihre Firmen — klicken Sie eine an, um Hierarchie und Ziele zu sehen.
-      </p>
-
-      <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
-
-      <p v-if="loading" class="text-zinc-500 py-12 text-center">
-        Lädt …
-      </p>
-
-      <div v-else-if="!orgs.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
-        <div class="text-5xl">
-          🏢
-        </div>
-        <h3 class="text-lg font-medium">
-          Noch keine Firma
-        </h3>
-        <p class="text-sm text-zinc-400 max-w-md mx-auto">
-          Legen Sie Ihre erste Firma an — der Operator richtet sich nach ihrer Vision.
+      <InlineLogin v-if="!user" hint="Melde dich an, um deine Firmen zu sehen." />
+      <template v-else>
+        <h2 class="text-2xl font-bold mb-1">
+          Firmen
+        </h2>
+        <p class="text-zinc-400 mb-6">
+          Ihre Firmen — klicken Sie eine an, um Hierarchie und Ziele zu sehen.
         </p>
-        <UButton color="primary" icon="i-lucide-plus" @click="showCreate = true">
-          Firma anlegen
-        </UButton>
-      </div>
 
-      <ul v-else class="space-y-3">
-        <li v-for="o in orgs" :key="o.id">
-          <NuxtLink
-            :to="`/companies/${o.id}`"
-            class="block rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 hover:bg-zinc-900 transition-colors"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex-1 min-w-0">
-                <h3 class="text-lg font-semibold truncate">
-                  {{ o.name }}
-                </h3>
-                <p v-if="o.visionMd" class="text-xs text-zinc-500 mt-1 line-clamp-2">
-                  {{ preview(o.visionMd) }}
-                </p>
+        <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+
+        <p v-if="loading" class="text-zinc-500 py-12 text-center">
+          Lädt …
+        </p>
+
+        <div v-else-if="!orgs.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
+          <div class="text-5xl">
+            🏢
+          </div>
+          <h3 class="text-lg font-medium">
+            Noch keine Firma
+          </h3>
+          <p class="text-sm text-zinc-400 max-w-md mx-auto">
+            Legen Sie Ihre erste Firma an — der Operator richtet sich nach ihrer Vision.
+          </p>
+          <UButton color="primary" icon="i-lucide-plus" @click="showCreate = true">
+            Firma anlegen
+          </UButton>
+        </div>
+
+        <ul v-else class="space-y-3">
+          <li v-for="o in orgs" :key="o.id">
+            <NuxtLink
+              :to="`/companies/${o.id}`"
+              class="block rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 hover:bg-zinc-900 transition-colors"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-lg font-semibold truncate">
+                    {{ o.name }}
+                  </h3>
+                  <p v-if="o.visionMd" class="text-xs text-zinc-500 mt-1 line-clamp-2">
+                    {{ preview(o.visionMd) }}
+                  </p>
+                </div>
+                <UIcon name="i-lucide-chevron-right" class="text-zinc-500 shrink-0 size-5 mt-1" />
               </div>
-              <UIcon name="i-lucide-chevron-right" class="text-zinc-500 shrink-0 size-5 mt-1" />
-            </div>
-            <dl class="mt-3 grid grid-cols-2 gap-x-4 text-xs max-w-xs">
-              <div>
-                <dt class="text-zinc-500">
-                  Mitglieder
-                </dt>
-                <dd class="font-medium">
-                  {{ o.memberCount }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-zinc-500">
-                  Budget
-                </dt>
-                <dd class="font-medium">
-                  {{ o.budgetMonthlyEur }} €/Mo
-                </dd>
-              </div>
-            </dl>
-          </NuxtLink>
-        </li>
-      </ul>
+              <dl class="mt-3 grid grid-cols-2 gap-x-4 text-xs max-w-xs">
+                <div>
+                  <dt class="text-zinc-500">
+                    Mitglieder
+                  </dt>
+                  <dd class="font-medium">
+                    {{ o.memberCount }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-zinc-500">
+                    Budget
+                  </dt>
+                  <dd class="font-medium">
+                    {{ o.budgetMonthlyEur }} €/Mo
+                  </dd>
+                </div>
+              </dl>
+            </NuxtLink>
+          </li>
+        </ul>
+      </template>
     </main>
 
     <UModal v-model:open="showCreate" :ui="{ content: 'sm:max-w-lg' }">

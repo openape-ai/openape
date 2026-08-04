@@ -1,4 +1,4 @@
-import { and, asc, eq, gte } from 'drizzle-orm'
+import { and, desc, eq, gte } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { attentionEvents } from '../database/schema'
 import { parseSince, resolveEventOwner, toWire } from '../utils/attention-events'
@@ -8,6 +8,11 @@ const MAX_EVENTS = 500
 // Query the caller's attention events, oldest first. Owner-scoped: an agent
 // bearer reads its owner's log (same resolution as the write path). Filters:
 // ?task_ref= exact match, ?type= exact match, ?since= unix seconds or -1h/-30m/-2d.
+//
+// The limit is applied to the NEWEST events, then flipped back to chronological
+// order. Taking the oldest 500 would have quietly hidden every new decision as
+// soon as the log passed the limit — the inbox would look empty while cards
+// piled up.
 export default defineEventHandler(async (event) => {
   const ownerEmail = await resolveEventOwner(event)
   const query = getQuery(event)
@@ -24,7 +29,8 @@ export default defineEventHandler(async (event) => {
     filters.push(gte(attentionEvents.ts, since))
   }
 
-  const rows = await useDb().select().from(attentionEvents).where(and(...filters)).orderBy(asc(attentionEvents.ts), asc(attentionEvents.id)).limit(MAX_EVENTS)
+  const newestFirst = await useDb().select().from(attentionEvents).where(and(...filters)).orderBy(desc(attentionEvents.ts), desc(attentionEvents.id)).limit(MAX_EVENTS)
+  const rows = newestFirst.reverse()
 
   return {
     events: rows.map(toWire),

@@ -11,9 +11,9 @@ useSeoMeta({ title: () => 'Inbox' })
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
-const { data, refresh } = await useFetch<{ events: WireEvent[] }>('/api/events', {
+const { data, refresh, status } = await useFetch<{ events: WireEvent[], truncated: boolean }>('/api/events', {
   server: true,
-  default: () => ({ events: [] }),
+  default: () => ({ events: [], truncated: false }),
 })
 const { data: stats } = await useFetch<{ metrics: Metrics }>('/api/inbox/metrics', {
   server: true,
@@ -34,11 +34,9 @@ const badge: Record<string, { label: string, class: string }> = {
     <header class="app-header">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <h1 class="font-semibold">
-          Inbox
-        </h1>
+        <ViewToggle active="inbox" />
       </div>
-      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout" />
+      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" aria-label="Abmelden" @click="logout" />
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
@@ -50,27 +48,30 @@ const badge: Record<string, { label: string, class: string }> = {
             {{ open.length }} Entscheidung{{ open.length === 1 ? '' : 'en' }} warten auf dich — älteste zuerst.
           </p>
           <div class="flex items-center gap-2">
-            <NuxtLink to="/inbox/agents" class="text-xs text-zinc-400 hover:text-zinc-200 underline">
+            <NuxtLink to="/inbox-agents" class="text-xs text-zinc-400 hover:text-zinc-200 underline">
               Track-Records
             </NuxtLink>
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" @click="refresh()" />
+            <NuxtLink to="/policies" class="text-xs text-zinc-400 hover:text-zinc-200 underline">
+              Regeln
+            </NuxtLink>
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" aria-label="Neu laden" :loading="status === 'pending'" @click="refresh()" />
           </div>
         </div>
 
         <div v-if="open.length" class="space-y-2">
           <NuxtLink
             v-for="e in open" :key="e.id" :to="`/d/${e.id}`"
-            class="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 hover:border-zinc-600 transition-colors"
+            class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 hover:border-zinc-600 transition-colors"
           >
             <span class="text-xs px-2 py-0.5 rounded shrink-0" :class="badge[e.type]?.class">
               {{ badge[e.type]?.label ?? e.type }}
             </span>
-            <span class="min-w-0 flex-1 truncate font-medium">{{ cardTitle(e) }}</span>
-            <span class="text-xs text-zinc-500 shrink-0">{{ waitingLabel(e, now) }}</span>
+            <span class="min-w-0 flex-1 basis-full sm:basis-auto font-medium">{{ cardTitle(e) }}</span>
+            <span class="text-xs text-zinc-400 shrink-0">{{ waitingLabel(e, now) }}</span>
             <UIcon name="i-lucide-chevron-right" class="text-zinc-600 shrink-0" />
           </NuxtLink>
         </div>
-        <p v-else class="text-zinc-500 py-16 text-center">
+        <p v-else class="text-zinc-400 py-16 text-center">
           Inbox Zero — nichts wartet auf dich.
         </p>
       </template>

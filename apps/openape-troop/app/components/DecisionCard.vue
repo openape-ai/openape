@@ -48,13 +48,13 @@ const verdictOptions = [
         {{ isVerdict ? 'Verdict' : (e.type === 'work.blocked' ? 'Eskalation' : 'Entscheidung') }}
       </span>
       <span v-if="blocks" class="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">blockiert {{ blocks }}</span>
-      <span class="ml-auto text-xs text-zinc-500">{{ resolution ? 'entschieden' : waitingLabel(e, props.now) }}</span>
+      <span class="ml-auto text-xs text-zinc-400">{{ resolution ? 'entschieden' : waitingLabel(e, props.now) }}</span>
     </div>
 
     <h2 class="text-lg font-semibold mb-1">
       {{ headline }}
     </h2>
-    <p class="text-xs text-zinc-500 font-mono mb-3">
+    <p class="text-xs text-zinc-400 font-mono mb-3">
       {{ e.actor }} · {{ e.task_ref }}
     </p>
 
@@ -136,7 +136,7 @@ const verdictOptions = [
       <p class="text-sm text-emerald-300">
         Entschieden: <strong>{{ resolution.payload.decision ?? resolution.payload.verdict }}</strong>
       </p>
-      <p class="text-xs text-zinc-500 mt-1">
+      <p class="text-xs text-zinc-400 mt-1">
         {{ resolution.actor }} · Event {{ resolution.id }}
       </p>
     </div>

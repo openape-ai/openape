@@ -26,7 +26,7 @@ defineProps<{ policies: Policy[] }>()
       <p v-if="p.rationale" class="text-xs text-zinc-400 mt-2 leading-relaxed">
         {{ p.rationale }}
       </p>
-      <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-zinc-500">
+      <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-zinc-400">
         <span>{{ p.actor }}</span>
         <span v-if="p.enforcedIn" class="font-mono">{{ p.enforcedIn }}</span>
         <NuxtLink v-if="p.sourceId" :to="`/d/${p.sourceId}`" class="underline hover:text-zinc-300">
@@ -35,7 +35,7 @@ defineProps<{ policies: Policy[] }>()
       </div>
     </div>
   </div>
-  <p v-else class="text-zinc-500 py-8 text-center">
+  <p v-else class="text-zinc-400 py-8 text-center">
     Noch keine Regeln. Sie entstehen aus Entscheidungen, die über den Einzelfall hinausgehen.
   </p>
 </template>

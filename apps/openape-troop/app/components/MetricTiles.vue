@@ -22,46 +22,46 @@ function percent(rate: number | null): string {
 <template>
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
     <div class="rounded-lg bg-zinc-900/60 px-4 py-3">
-      <div class="text-xs text-zinc-500">
+      <div class="text-xs text-zinc-400">
         Wartezeit auf dich
       </div>
       <div class="text-xl font-medium mt-1">
         {{ duration(metrics.medianWaitSeconds) }}
       </div>
-      <div class="text-[11px] text-zinc-600 mt-0.5">
+      <div class="text-[11px] text-zinc-400 mt-0.5">
         Median, ohne Fristablauf
       </div>
     </div>
     <div class="rounded-lg bg-zinc-900/60 px-4 py-3">
-      <div class="text-xs text-zinc-500">
+      <div class="text-xs text-zinc-400">
         Autonomie-Quote
       </div>
       <div class="text-xl font-medium mt-1">
         {{ percent(metrics.autonomyRate) }}
       </div>
-      <div class="text-[11px] text-zinc-600 mt-0.5">
+      <div class="text-[11px] text-zinc-400 mt-0.5">
         geliefert ohne Rückfrage
       </div>
     </div>
     <div class="rounded-lg bg-zinc-900/60 px-4 py-3">
-      <div class="text-xs text-zinc-500">
+      <div class="text-xs text-zinc-400">
         Nacharbeit-Rate
       </div>
       <div class="text-xl font-medium mt-1">
         {{ percent(metrics.reworkRate) }}
       </div>
-      <div class="text-[11px] text-zinc-600 mt-0.5">
+      <div class="text-[11px] text-zinc-400 mt-0.5">
         Verdicts, die zurückgingen
       </div>
     </div>
     <div class="rounded-lg bg-zinc-900/60 px-4 py-3">
-      <div class="text-xs text-zinc-500">
+      <div class="text-xs text-zinc-400">
         Entschieden
       </div>
       <div class="text-xl font-medium mt-1">
         {{ metrics.answered }}
       </div>
-      <div class="text-[11px] text-zinc-600 mt-0.5">
+      <div class="text-[11px] text-zinc-400 mt-0.5">
         {{ metrics.openNow }} offen
       </div>
     </div>
