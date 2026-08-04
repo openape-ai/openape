@@ -3,12 +3,13 @@ import { ref } from 'vue'
 export interface CockpitService { id: string, baseUrl: string, tasksPath: string, label: string, enabled: boolean }
 
 export function useCockpitServices() {
+  const { t } = useI18n()
   const services = ref<CockpitService[]>([])
   const error = ref('')
 
   async function load(): Promise<void> {
     try { services.value = await $fetch<CockpitService[]>('/api/cockpit/services') }
-    catch { error.value = 'Konnte Services nicht laden.' }
+    catch { error.value = t('cockpit.services.error.loadFailed') }
   }
   async function add(baseUrl: string, label?: string): Promise<void> {
     error.value = ''
@@ -17,7 +18,7 @@ export function useCockpitServices() {
       services.value.push(s)
     }
     catch (e) {
-      error.value = (e as { data?: { statusMessage?: string } })?.data?.statusMessage ?? 'Ungültige URL.'
+      error.value = (e as { data?: { statusMessage?: string } })?.data?.statusMessage ?? t('cockpit.services.error.invalidUrl')
     }
   }
   async function remove(id: string): Promise<void> {

@@ -441,7 +441,88 @@
   "callDetail": {},
   "policies": {},
   "records": {},
-  "cockpit": {},
+  "cockpit": {
+    "tabTitle": "Troop Chat",
+    "enableNotifications": "🔔 Turn on notifications",
+    "header": {
+      "switchCompany": "Switch company",
+      "noCompanies": "No companies",
+      "newChat": "New",
+      "startOperator": "▸ Start Operator",
+      "startOperatorHint": "Shows the setup prompt for Claude Code or codex"
+    },
+    "notice": {
+      "missingTools": "⚠ Your Operator is missing tools: {tools} — not found on the worker's PATH.",
+      "sessionExpired": "Session expired — sign in again"
+    },
+    "empty": {
+      "noCompanies": "No companies found — are you signed in?",
+      "askSomething": "Ask {name} anything – the answer streams in live."
+    },
+    "scrollToLatest": "↓ Latest",
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "companies": {
+      "title": "Companies",
+      "controlLink": "Troop controls ›"
+    },
+    "worker": {
+      "title": "Start Operator",
+      "body": "Copy the prompt and paste it into {claudeCode} or {codex} on your machine. Important: {codexRequired} — the worker runs on codex as its backend, even when you kick off the setup from Claude Code.",
+      "codexRequired": "codex must be installed",
+      "copy": "Copy prompt",
+      "copied": "✓ Copied",
+      "openInClaudeCode": "Open in Claude Code"
+    },
+    "bubble": {
+      "progress": "Progress update",
+      "typing": "typing",
+      "copyCode": "Copy",
+      "codeCopied": "Copied"
+    },
+    "composer": {
+      "placeholder": "Message…",
+      "attach": "Attach file",
+      "removeAttachment": "Remove {name}",
+      "send": "Send",
+      "stop": "Stop",
+      "uploadFailed": "Upload failed: {name}"
+    },
+    "chat": {
+      "attachmentOnly": "(Attachment)",
+      "reconnecting": "Connection lost — reconnecting …",
+      "answerPending": "The answer arrives as soon as the Operator is done — it will be waiting the next time you open the chat.",
+      "answerFallback": "Answering “{question}”: {choice}",
+      "waitSeconds": "{text} · answer in ~{sec}s"
+    },
+    "presence": {
+      "label": {
+        "active": "Operator live",
+        "working": "Operator working",
+        "idle": "Idle",
+        "idleCountdown": "Idle · {seconds}s",
+        "unauthenticated": "Sign in again",
+        "disconnected": "No connection",
+        "offline": "Operator offline"
+      },
+      "title": {
+        "active": "Operator connected and awake — answers come through immediately",
+        "working": "Operator is busy with a task right now",
+        "idle": "Operator is idle — your question gets answered at the next check-in",
+        "unauthenticated": "Your session has expired — please sign in again",
+        "disconnected": "The connection to the cockpit is down",
+        "offline": "No Operator loop connected — questions stay unanswered until one is running"
+      }
+    },
+    "services": {
+      "error": {
+        "loadFailed": "Could not load services.",
+        "invalidUrl": "Invalid URL."
+      }
+    }
+  },
   "companiesIndex": {},
   "companyDetail": {},
   "companyPanels": {},
