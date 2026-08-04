@@ -21,7 +21,7 @@ const busy = reactive<Record<string, boolean>>({})
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills`)
+  items.value = await apiFetch(`/api/cockpit/orgs/${props.orgId}/skills`)
   loading.value = false
 }
 
@@ -55,8 +55,8 @@ async function submit() {
   formError.value = ''
   const body = { name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo }
   try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills`, { method: 'POST', body })
+    if (editingId.value) await apiFetch(`/api/cockpit/orgs/${props.orgId}/skills/${editingId.value}`, { method: 'PATCH', body })
+    else await apiFetch(`/api/cockpit/orgs/${props.orgId}/skills`, { method: 'POST', body })
     showForm.value = false
     await load()
   }
@@ -66,7 +66,7 @@ async function submit() {
 async function remove(s: Skill) {
   busy[s.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills/${s.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/skills/${s.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[s.id] = false }

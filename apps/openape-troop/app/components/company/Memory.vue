@@ -25,7 +25,7 @@ const busy = reactive<Record<string, boolean>>({})
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory`)
+  items.value = await apiFetch(`/api/cockpit/orgs/${props.orgId}/memory`)
   loading.value = false
 }
 
@@ -57,8 +57,8 @@ async function submit() {
   const body: Record<string, unknown> = { scope: form.scope, targetId: form.targetId.trim(), title: form.title.trim(), body: form.body }
   if (form.mode !== 'auto') body.mode = form.mode
   try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory`, { method: 'POST', body })
+    if (editingId.value) await apiFetch(`/api/cockpit/orgs/${props.orgId}/memory/${editingId.value}`, { method: 'PATCH', body })
+    else await apiFetch(`/api/cockpit/orgs/${props.orgId}/memory`, { method: 'POST', body })
     showForm.value = false
     await load()
   }
@@ -68,7 +68,7 @@ async function submit() {
 async function remove(d: Doc) {
   busy[d.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/memory/${d.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/memory/${d.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[d.id] = false }

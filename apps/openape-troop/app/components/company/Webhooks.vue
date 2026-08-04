@@ -38,7 +38,7 @@ async function copy(text: string, tag: string) {
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks`)
+  items.value = await apiFetch(`/api/cockpit/orgs/${props.orgId}/hooks`)
   loading.value = false
 }
 
@@ -60,7 +60,7 @@ async function submit() {
   saving.value = true
   formError.value = ''
   try {
-    const res = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks`, { method: 'POST', body: { ...form } })
+    const res = await apiFetch<{ token: string, secret: string }>(`/api/cockpit/orgs/${props.orgId}/hooks`, { method: 'POST', body: { ...form } })
     created.value = { url: hookUrl(res.token), secret: res.secret }
     await load()
   }
@@ -70,7 +70,7 @@ async function submit() {
 async function toggleEnabled(h: Hook) {
   busy[h.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'PATCH', body: { enabled: !h.enabled } })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'PATCH', body: { enabled: !h.enabled } })
     await load()
   }
   finally { busy[h.id] = false }
@@ -78,7 +78,7 @@ async function toggleEnabled(h: Hook) {
 async function remove(h: Hook) {
   busy[h.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[h.id] = false }

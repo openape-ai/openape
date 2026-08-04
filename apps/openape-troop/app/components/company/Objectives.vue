@@ -21,7 +21,7 @@ const busy = reactive<Record<string, boolean>>({})
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/orgs/${props.orgId}/objectives`)
+  items.value = await apiFetch(`/api/orgs/${props.orgId}/objectives`)
   loading.value = false
 }
 function byStatus(s: string) { return items.value.filter(o => o.status === s) }
@@ -30,7 +30,7 @@ async function add() {
   if (!newTitle.value.trim()) return
   adding.value = true
   try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives`, { method: 'POST', body: { title: newTitle.value.trim() } })
+    await apiFetch(`/api/orgs/${props.orgId}/objectives`, { method: 'POST', body: { title: newTitle.value.trim() } })
     newTitle.value = ''
     await load()
   }
@@ -39,7 +39,7 @@ async function add() {
 async function setStatus(o: Objective, status: string) {
   busy[o.id] = true
   try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'PATCH', body: { status } })
+    await apiFetch(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'PATCH', body: { status } })
     await load()
   }
   finally { busy[o.id] = false }
@@ -47,7 +47,7 @@ async function setStatus(o: Objective, status: string) {
 async function remove(o: Objective) {
   busy[o.id] = true
   try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/orgs/${props.orgId}/objectives/${o.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[o.id] = false }

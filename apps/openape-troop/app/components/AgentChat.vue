@@ -44,7 +44,7 @@ const empty = computed(() => !loading.value && messages.value.length === 0)
 
 async function load(): Promise<void> {
   try {
-    const data = await ($fetch as any)(`/api/agents/${props.agentName}/chat`)
+    const data = await apiFetch<{ chat: Chat, messages: ChatMessage[] }>(`/api/agents/${props.agentName}/chat`)
     chat.value = data.chat
     messages.value = data.messages
     error.value = null
@@ -100,7 +100,7 @@ async function send(): Promise<void> {
   await nextTick()
   scrollToBottom()
   try {
-    await ($fetch as any)(`/api/agents/${props.agentName}/chat/messages`, {
+    await apiFetch(`/api/agents/${props.agentName}/chat/messages`, {
       method: 'POST',
       body: { body },
     })

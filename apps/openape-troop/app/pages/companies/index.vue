@@ -37,7 +37,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    orgs.value = await ($fetch as any)('/api/orgs')
+    orgs.value = await apiFetch('/api/orgs')
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
@@ -50,7 +50,7 @@ async function createCompany() {
   if (!createForm.name.trim()) return
   creating.value = true
   try {
-    const r = await ($fetch as any)('/api/orgs', { method: 'POST', body: { name: createForm.name.trim(), vision_md: createForm.vision.trim() } })
+    const r = await apiFetch<{ id: string }>('/api/orgs', { method: 'POST', body: { name: createForm.name.trim(), vision_md: createForm.vision.trim() } })
     await navigateTo(`/companies/${r.id}`)
   }
   catch (err: any) { error.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }

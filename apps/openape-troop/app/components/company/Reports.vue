@@ -27,14 +27,14 @@ function fmtDate(s: number) { return new Date(s * 1000).toLocaleDateString('de-A
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/orgs/${props.orgId}/reports`)
+  items.value = await apiFetch(`/api/orgs/${props.orgId}/reports`)
   loading.value = false
 }
 async function save() {
   if (!form.title.trim() || !form.body.trim()) return
   saving.value = true
   try {
-    await ($fetch as any)(`/api/orgs/${props.orgId}/reports`, { method: 'POST', body: { kind: form.kind, title: form.title.trim(), body_md: form.body.trim() } })
+    await apiFetch(`/api/orgs/${props.orgId}/reports`, { method: 'POST', body: { kind: form.kind, title: form.title.trim(), body_md: form.body.trim() } })
     form.title = ''
     form.body = ''
     showNew.value = false

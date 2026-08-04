@@ -25,7 +25,7 @@ const busy = reactive<Record<string, boolean>>({})
 
 async function load() {
   loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules`)
+  items.value = await apiFetch(`/api/cockpit/orgs/${props.orgId}/schedules`)
   loading.value = false
 }
 
@@ -102,8 +102,8 @@ async function submit() {
   saving.value = true
   formError.value = ''
   try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules`, { method: 'POST', body })
+    if (editingId.value) await apiFetch(`/api/cockpit/orgs/${props.orgId}/schedules/${editingId.value}`, { method: 'PATCH', body })
+    else await apiFetch(`/api/cockpit/orgs/${props.orgId}/schedules`, { method: 'POST', body })
     showForm.value = false
     await load()
   }
@@ -113,7 +113,7 @@ async function submit() {
 async function toggleEnabled(t: Trigger) {
   busy[t.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'PATCH', body: { enabled: !t.enabled } })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'PATCH', body: { enabled: !t.enabled } })
     await load()
   }
   finally { busy[t.id] = false }
@@ -121,7 +121,7 @@ async function toggleEnabled(t: Trigger) {
 async function remove(t: Trigger) {
   busy[t.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/cockpit/orgs/${props.orgId}/schedules/${t.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[t.id] = false }
