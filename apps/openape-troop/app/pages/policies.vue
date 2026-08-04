@@ -22,11 +22,9 @@ const policies = computed(() => policiesFromEvents(data.value.events))
     <header class="app-header">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <NuxtLink to="/inbox" class="font-semibold hover:underline">
-          Inbox
-        </NuxtLink>
-        <span class="text-zinc-600">/</span>
-        <h1 class="font-semibold">
+        <ViewToggle active="inbox" />
+        <span class="text-zinc-500 hidden sm:inline">/</span>
+        <h1 class="font-semibold truncate hidden sm:block">
           Regeln
         </h1>
       </div>

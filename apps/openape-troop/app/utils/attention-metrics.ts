@@ -1,7 +1,7 @@
 import type { WireEvent } from './attention-inbox'
 
-const REQUEST_TYPES = ['decision.requested', 'work.blocked', 'verdict.requested']
-const RESOLUTION_TYPES = ['decision.made', 'verdict.given']
+const REQUEST_TYPES = ['call.raised', 'decision.requested', 'work.blocked', 'verdict.requested']
+const RESOLUTION_TYPES = ['call.answered', 'decision.made', 'verdict.given']
 
 export interface Metrics {
   /** How long the machine waits for a human, in seconds. The scarce resource. */
@@ -49,14 +49,19 @@ export function metricsFromEvents(events: WireEvent[]): Metrics {
     .filter(({ resolution }) => resolution.payload.auto !== true)
     .map(({ request, resolution }) => Math.max(0, resolution.ts - request.ts))
 
-  const verdicts = events.filter(e => e.type === 'verdict.given')
-  const reworks = verdicts.filter(e => e.payload.verdict === 'rework')
+  const verdicts = events.filter(e =>
+    e.type === 'verdict.given' || (e.type === 'call.answered' && ['merge', 'rework', 'reject'].includes(String(e.payload.answer))),
+  )
+  const reworks = verdicts.filter(e => (e.payload.verdict ?? e.payload.answer) === 'rework')
 
   // A task is autonomous when it shipped without ever blocking on a human
   // question. Verdicts do not count — reviewing is the point, interrupting is not.
   const shippedTasks = new Set(events.filter(e => e.type === 'task.shipped').map(e => e.task_ref))
   const blockedTasks = new Set(
-    events.filter(e => e.type === 'work.blocked' || e.type === 'decision.requested').map(e => e.task_ref),
+    events
+      .filter(e => e.type === 'work.blocked' || e.type === 'decision.requested'
+        || (e.type === 'call.raised' && e.payload.kind !== 'verdict'))
+      .map(e => e.task_ref),
   )
   const autonomous = [...shippedTasks].filter(ref => !blockedTasks.has(ref))
 
@@ -101,19 +106,22 @@ export function suggestedSampling(reviews: number, cleanRate: number): number {
 export function agentRecords(events: WireEvent[]): AgentRecord[] {
   const requests = new Map<string, string>()
   for (const event of events) {
-    if (event.type === 'verdict.requested') requests.set(event.id, event.actor)
+    const isVerdictCall = event.type === 'verdict.requested'
+      || (event.type === 'call.raised' && event.payload.kind === 'verdict')
+    if (isVerdictCall) requests.set(event.id, event.actor)
   }
 
   const counts = new Map<string, { reviews: number, merged: number, reworked: number }>()
   for (const event of events) {
-    if (event.type !== 'verdict.given') continue
+    if (event.type !== 'verdict.given' && event.type !== 'call.answered') continue
     const requestId = event.payload.request_id as string | undefined
     const agent = requestId ? requests.get(requestId) : undefined
     if (!agent) continue
     const entry = counts.get(agent) ?? { reviews: 0, merged: 0, reworked: 0 }
     entry.reviews++
-    if (event.payload.verdict === 'merge') entry.merged++
-    if (event.payload.verdict === 'rework') entry.reworked++
+    const verdict = event.payload.verdict ?? event.payload.answer
+    if (verdict === 'merge') entry.merged++
+    if (verdict === 'rework') entry.reworked++
     counts.set(agent, entry)
   }
 

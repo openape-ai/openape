@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { WireEvent } from '../utils/attention-inbox'
 import { computed } from 'vue'
-import { waitingLabel } from '../utils/attention-inbox'
+import { callKind, waitingLabel } from '../utils/attention-inbox'
 
 // The card has to stand on its own: opened days later, on a phone, by someone
 // who never saw the conversation. So the briefing (summary, per-option
@@ -17,7 +17,8 @@ const props = defineProps<{
 defineEmits<{ resolve: [{ choice?: string, verdict?: string }] }>()
 
 const e = computed(() => props.event)
-const isVerdict = computed(() => e.value.type === 'verdict.requested')
+const kind = computed(() => callKind(e.value))
+const isVerdict = computed(() => kind.value === 'verdict')
 const question = computed(() => String(e.value.payload.question ?? ''))
 const options = computed(() => (e.value.payload.options as string[] | undefined) ?? [])
 const recommendation = computed(() => e.value.payload.recommendation as string | undefined)
