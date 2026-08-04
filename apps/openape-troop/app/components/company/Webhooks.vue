@@ -7,6 +7,9 @@ import { useOrgCrud } from '../../composables/useOrgCrud'
 // time triggers → cockpit chat + Web-Push.
 const props = defineProps<{ orgId: string }>()
 
+const { t } = useI18n()
+const { fmtDate } = useDateFormat()
+
 interface Hook {
   id: string
   label: string
@@ -30,7 +33,8 @@ const { items, loading, error, busy, showForm, saving, formError, form, openAdd,
 const origin = ref('')
 
 const hookUrl = (token: string) => `${origin.value}/api/hooks/${token}`
-const fmt = (ms: number) => new Date(ms).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' })
+// The API keeps this timestamp in milliseconds; the shared formatter takes seconds.
+const fmt = (ms: number) => fmtDate(ms / 1000)
 const copied = ref('')
 async function copy(text: string, tag: string) {
   try {
@@ -51,7 +55,10 @@ function startAdd() {
 // The form stays open after saving: the URL (and with it the one-time HMAC secret)
 // is only ever shown here.
 async function save() {
-  if (!form.prompt.trim()) { formError.value = 'Anweisung nötig.'; return }
+  if (!form.prompt.trim()) {
+    formError.value = t('common.required', { field: t('companyPanels.field.instruction') })
+    return
+  }
   const hook = await submit<{ token: string, secret: string | null }>({ ...form }, { closeForm: false })
   if (hook) created.value = { url: hookUrl(hook.token), secret: hook.secret }
 }
@@ -63,41 +70,41 @@ if (import.meta.client) origin.value = window.location.origin
   <div>
     <div class="flex justify-between items-center mb-6">
       <p class="text-sm text-zinc-500">
-        Webhooks — ein externes Ereignis (POST auf die Hook-URL) lässt den Operator sich melden.
+        {{ t('companyPanels.webhooks.intro') }}
       </p>
       <UButton color="primary" variant="soft" icon="i-lucide-webhook" @click="startAdd">
-        Webhook
+        {{ t('companyPanels.webhooks.addButton') }}
       </UButton>
     </div>
 
     <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-6 text-center">
-      Lädt …
+      {{ t('common.loading') }}
     </div>
     <div v-else-if="!items.length" class="text-zinc-600 italic py-6 text-center">
-      Noch kein Webhook. Leg einen an — z. B. „CI failed: melde den fehlgeschlagenen Build".
+      {{ t('companyPanels.webhooks.empty') }}
     </div>
     <div v-else class="space-y-2">
       <div v-for="h in items" :key="h.id" class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm font-medium truncate">{{ h.label || '(ohne Name)' }}</span>
+              <span class="text-sm font-medium truncate">{{ h.label || t('common.unnamed') }}</span>
               <UBadge v-if="h.createdBy === 'operator'" color="info" variant="subtle" size="xs" icon="i-lucide-bot">
-                vom Operator
+                {{ t('companyPanels.badge.fromOperator') }}
               </UBadge>
               <UBadge v-if="h.secret" color="primary" variant="subtle" size="xs" icon="i-lucide-shield-check">
-                HMAC
+                {{ t('companyPanels.webhooks.badge.hmac') }}
               </UBadge>
               <UBadge v-if="h.eventFilter" color="neutral" variant="subtle" size="xs" icon="i-lucide-filter">
                 {{ h.eventFilter }}
               </UBadge>
               <UBadge v-if="h.includePayload" color="neutral" variant="subtle" size="xs">
-                Payload
+                {{ t('companyPanels.webhooks.badge.payload') }}
               </UBadge>
               <UBadge v-if="!h.enabled" color="warning" variant="subtle" size="xs">
-                pausiert
+                {{ t('common.badge.paused') }}
               </UBadge>
             </div>
             <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
@@ -108,16 +115,17 @@ if (import.meta.client) origin.value = window.location.origin
               <UButton
                 color="neutral" variant="ghost" size="xs"
                 :icon="copied === h.id ? 'i-lucide-check' : 'i-lucide-copy'"
+                :aria-label="t('companyPanels.webhooks.copyUrlAria')"
                 @click="copy(hookUrl(h.token), h.id)"
               />
             </div>
             <p class="text-[11px] text-zinc-600 mt-1">
-              zuletzt gefeuert: {{ h.lastFiredAt ? fmt(h.lastFiredAt) : 'noch nie' }}
+              {{ t('common.lastFired') }} {{ h.lastFiredAt ? fmt(h.lastFiredAt) : t('time.never') }}
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <USwitch :model-value="h.enabled" :disabled="busy[h.id]" @update:model-value="patch(h.id, { enabled: !h.enabled })" />
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[h.id]" @click="remove(h.id)" />
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :aria-label="t('common.remove')" :loading="busy[h.id]" @click="remove(h.id)" />
           </div>
         </div>
       </div>
@@ -128,57 +136,57 @@ if (import.meta.client) origin.value = window.location.origin
         <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Webhook hinzufügen
+              {{ t('companyPanels.webhooks.form.title') }}
             </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" :aria-label="t('common.close')" @click="showForm = false" />
           </div>
 
           <template v-if="!created">
-            <UFormField label="Name" description="Kurzer Bezeichner.">
-              <UInput v-model="form.label" placeholder="ci-failed" class="w-full" :ui="{ base: 'w-full' }" />
+            <UFormField :label="t('companyPanels.field.name')" :description="t('common.field.shortIdHint')">
+              <UInput v-model="form.label" :placeholder="t('companyPanels.webhooks.field.name.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
             </UFormField>
-            <UFormField label="Anweisung (prompt)" description="Was der Operator tut, wenn das Ereignis eintrifft.">
-              <UTextarea v-model="form.prompt" :rows="6" placeholder="Ein CI-Build ist fehlgeschlagen — melde welcher und was zu tun ist." class="w-full text-xs" :ui="{ base: 'w-full' }" />
+            <UFormField :label="t('common.field.promptLabel')" :description="t('companyPanels.webhooks.field.prompt.description')">
+              <UTextarea v-model="form.prompt" :rows="6" :placeholder="t('companyPanels.webhooks.field.prompt.placeholder')" class="w-full text-xs" :ui="{ base: 'w-full' }" />
             </UFormField>
-            <UFormField label="Nur diese Ereignisse" description="Kommagetrennt, z. B. „issues, pull_request“. Leer = jedes Ereignis. Gilt für Sender, die den Ereignistyp im Header nennen (Forgejo, Gitea, GitHub).">
-              <UInput v-model="form.eventFilter" placeholder="issues" class="w-full" :ui="{ base: 'w-full' }" />
+            <UFormField :label="t('companyPanels.webhooks.field.eventFilter.label')" :description="t('companyPanels.webhooks.field.eventFilter.description')">
+              <UInput v-model="form.eventFilter" :placeholder="t('companyPanels.webhooks.field.eventFilter.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
             </UFormField>
             <label class="flex items-center gap-2 cursor-pointer text-sm">
               <UCheckbox v-model="form.includePayload" />
-              Payload an den Operator übergeben (als Daten)
+              {{ t('companyPanels.webhooks.field.includePayload') }}
             </label>
             <label class="flex items-center gap-2 cursor-pointer text-sm">
               <UCheckbox v-model="form.useSecret" />
-              HMAC-Secret erzeugen (Signatur des Bodys prüfen)
+              {{ t('companyPanels.webhooks.field.useSecret') }}
             </label>
             <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
             <div class="flex justify-end gap-2 pt-2">
               <UButton color="neutral" variant="ghost" @click="showForm = false">
-                Abbrechen
+                {{ t('common.cancel') }}
               </UButton>
               <UButton color="primary" :loading="saving" @click="save">
-                Erzeugen
+                {{ t('companyPanels.webhooks.createButton') }}
               </UButton>
             </div>
           </template>
 
           <template v-else>
-            <UAlert color="success" variant="subtle" title="Webhook erstellt" description="URL jetzt kopieren — beim HMAC-Secret ist dies die einzige Anzeige." />
-            <UFormField label="Hook-URL">
+            <UAlert color="success" variant="subtle" :title="t('companyPanels.webhooks.created.title')" :description="t('companyPanels.webhooks.created.description')" />
+            <UFormField :label="t('companyPanels.webhooks.created.urlLabel')">
               <div class="flex items-center gap-2">
                 <UInput :model-value="created.url" readonly class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
-                <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-copy" @click="copy(created.url, 'new-url')" />
+                <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-copy" :aria-label="t('companyPanels.webhooks.copyUrlAria')" @click="copy(created.url, 'new-url')" />
               </div>
             </UFormField>
-            <UFormField v-if="created.secret" label="HMAC-Secret" description="X-Signature: sha256=HMAC-SHA256(secret, body)">
+            <UFormField v-if="created.secret" :label="t('companyPanels.webhooks.created.secretLabel')" :description="t('companyPanels.webhooks.created.secretDescription')">
               <div class="flex items-center gap-2">
                 <UInput :model-value="created.secret" readonly class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
-                <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-copy" @click="copy(created.secret, 'new-secret')" />
+                <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-copy" :aria-label="t('companyPanels.webhooks.copySecretAria')" @click="copy(created.secret, 'new-secret')" />
               </div>
             </UFormField>
             <div class="flex justify-end pt-2">
               <UButton color="primary" @click="showForm = false">
-                Fertig
+                {{ t('common.done') }}
               </UButton>
             </div>
           </template>
