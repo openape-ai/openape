@@ -28,8 +28,10 @@ export function openRequests(events: WireEvent[]): WireEvent[] {
     .sort((a, b) => a.ts - b.ts)
 }
 
-/** Human card title per request type. */
+/** Human card title: the author's headline if there is one, else the question. */
 export function cardTitle(event: WireEvent): string {
+  const title = event.payload.title as string | undefined
+  if (title) return title
   if (event.type === 'verdict.requested') return `Verdict: ${event.task_ref}`
   return String(event.payload.question ?? event.task_ref)
 }

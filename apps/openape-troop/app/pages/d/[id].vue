@@ -24,6 +24,19 @@ const options = computed(() => (e.value?.payload.options as string[] | undefined
 const recommendation = computed(() => e.value?.payload.recommendation as string | undefined)
 const blocks = computed(() => e.value?.payload.blocks as string | undefined)
 const prUrl = computed(() => e.value?.payload.pr_url as string | undefined)
+const headline = computed(() => (e.value?.payload.title as string | undefined) ?? (isVerdict.value ? e.value?.task_ref : question.value))
+const summary = computed(() => e.value?.payload.summary as string | undefined)
+const why = computed(() => e.value?.payload.recommendation_why as string | undefined)
+const highlights = computed(() => (e.value?.payload.highlights as string[] | undefined) ?? [])
+const optionSummaries = computed(() => {
+  const list = (e.value?.payload.option_summaries as { option: string, summary: string }[] | undefined) ?? []
+  return Object.fromEntries(list.map(o => [o.option, o.summary]))
+})
+const verdictOptions = [
+  { value: 'merge', label: 'Merge' },
+  { value: 'rework', label: 'Nacharbeit' },
+  { value: 'reject', label: 'Ablehnen' },
+]
 const now = Math.floor(Date.now() / 1000)
 
 const submitting = ref(false)
@@ -70,10 +83,22 @@ async function resolve(body: { choice?: string, verdict?: string }) {
         </div>
 
         <h2 class="text-lg font-semibold mb-1">
-          {{ isVerdict ? e.task_ref : question }}
+          {{ headline }}
         </h2>
-        <p class="text-xs text-zinc-500 font-mono mb-4">
+        <p class="text-xs text-zinc-500 font-mono mb-3">
           {{ e.actor }} · {{ e.task_ref }}
+        </p>
+
+        <p v-if="summary" class="text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-3">
+          {{ summary }}
+        </p>
+        <ul v-if="highlights.length" class="text-sm text-zinc-400 mb-3 space-y-1">
+          <li v-for="h in highlights" :key="h" class="flex gap-2">
+            <span class="text-zinc-600">·</span>{{ h }}
+          </li>
+        </ul>
+        <p v-if="isVerdict && question" class="text-sm text-zinc-300 mb-3">
+          {{ question }}
         </p>
 
         <div v-if="isVerdict && (prUrl || data?.proofs.length)" class="flex flex-wrap gap-2 mb-4">
@@ -88,25 +113,41 @@ async function resolve(body: { choice?: string, verdict?: string }) {
           </a>
         </div>
 
-        <div v-if="data?.resolution" class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3">
-          <p class="text-sm text-emerald-300">
-            Entschieden: <strong>{{ data.resolution.payload.decision ?? data.resolution.payload.verdict }}</strong>
+        <div v-if="!isVerdict && options.length" class="space-y-2 mb-4">
+          <div
+            v-for="option in options" :key="option"
+            class="rounded-lg border px-3 py-2"
+            :class="option === recommendation ? 'border-primary-600/60 bg-primary-500/5' : 'border-zinc-800'"
+          >
+            <div class="flex items-center gap-2 text-sm font-medium">
+              {{ option }}
+              <span v-if="option === recommendation" class="text-[10px] uppercase tracking-wide text-primary-400">Empfehlung</span>
+            </div>
+            <p v-if="optionSummaries[option]" class="text-xs text-zinc-400 mt-1 leading-relaxed">
+              {{ optionSummaries[option] }}
+            </p>
+          </div>
+        </div>
+
+        <div v-if="why" class="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 mb-4">
+          <p class="text-xs uppercase tracking-wide text-zinc-500 mb-1">
+            Warum diese Empfehlung
           </p>
-          <p class="text-xs text-zinc-500 mt-1">
-            {{ data.resolution.actor }} · Event {{ data.resolution.id }}
+          <p class="text-sm text-zinc-300 leading-relaxed">
+            {{ why }}
           </p>
         </div>
 
-        <template v-else>
+        <template v-if="!data?.resolution">
           <div v-if="isVerdict" class="flex flex-wrap gap-2">
-            <UButton color="primary" :loading="submitting" @click="resolve({ verdict: 'merge' })">
-              Merge
-            </UButton>
-            <UButton color="neutral" variant="outline" :loading="submitting" @click="resolve({ verdict: 'rework' })">
-              Nacharbeit
-            </UButton>
-            <UButton color="error" variant="outline" :loading="submitting" @click="resolve({ verdict: 'reject' })">
-              Ablehnen
+            <UButton
+              v-for="v in verdictOptions" :key="v.value"
+              :color="v.value === 'reject' ? 'error' : 'primary'"
+              :variant="recommendation ? (v.value === recommendation ? 'solid' : 'outline') : (v.value === 'merge' ? 'solid' : 'outline')"
+              :loading="submitting"
+              @click="resolve({ verdict: v.value })"
+            >
+              {{ v.label }}<span v-if="v.value === recommendation" class="ml-1 opacity-70">(Empfehlung)</span>
             </UButton>
           </div>
           <div v-else class="flex flex-wrap gap-2">
@@ -122,6 +163,15 @@ async function resolve(body: { choice?: string, verdict?: string }) {
           </div>
           <UAlert v-if="submitError" color="error" variant="subtle" :title="submitError" class="mt-3" />
         </template>
+
+        <div v-if="data?.resolution" class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3">
+          <p class="text-sm text-emerald-300">
+            Entschieden: <strong>{{ data.resolution.payload.decision ?? data.resolution.payload.verdict }}</strong>
+          </p>
+          <p class="text-xs text-zinc-500 mt-1">
+            {{ data.resolution.actor }} · Event {{ data.resolution.id }}
+          </p>
+        </div>
       </div>
     </main>
   </div>

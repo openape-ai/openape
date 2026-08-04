@@ -29,3 +29,24 @@ describe('ulid', () => {
     expect(ulid(1_785_758_183_000).slice(0, 10) < ulid(1_785_758_184_000).slice(0, 10)).toBe(true)
   })
 })
+
+describe('verdict briefing', () => {
+  it('carries headline, summary and highlights onto the card', () => {
+    const [card] = verdictRequestedEvents(who, 'https://pr.openape.ai/prs/abc', 1, {
+      title: 'CLI-Emitter statt App-Emitter',
+      summary: 'Bearer sind audience-scoped.',
+      highlights: ['8 Dateien, +260/-1'],
+    })
+    expect(card!.payload).toMatchObject({
+      pr_url: 'https://pr.openape.ai/prs/abc',
+      title: 'CLI-Emitter statt App-Emitter',
+      summary: 'Bearer sind audience-scoped.',
+      highlights: ['8 Dateien, +260/-1'],
+    })
+  })
+
+  it('omits empty briefing fields instead of sending blanks', () => {
+    const [card] = verdictRequestedEvents(who, 'https://pr.openape.ai/prs/abc', 1, { title: '', highlights: [] })
+    expect(card!.payload).toEqual({ pr_url: 'https://pr.openape.ai/prs/abc' })
+  })
+})
