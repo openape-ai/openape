@@ -3,7 +3,7 @@
     "title": "Troop"
   },
   "common": {
-    "loading": "Loading…",
+    "loading": "Loading …",
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",
@@ -17,7 +17,28 @@
       "set": "set",
       "empty": "empty",
       "unsaved": "unsaved",
-      "disabled": "disabled"
+      "disabled": "disabled",
+      "paused": "paused"
+    },
+    "add": "Add",
+    "edit": "Edit",
+    "remove": "Remove",
+    "done": "Done",
+    "unnamed": "(unnamed)",
+    "unassigned": "assigned to nobody",
+    "required": "{field} is required.",
+    "loginHint": "Sign in to see {what}.",
+    "lastFired": "last fired:",
+    "role": {
+      "ceo": "Operator",
+      "teamlead": "Team lead",
+      "specialist": "Specialist",
+      "sanierer": "Controlling",
+      "other": "Employee"
+    },
+    "field": {
+      "shortIdHint": "A short identifier.",
+      "promptLabel": "Instruction (prompt)"
     }
   },
   "locale": {
@@ -412,5 +433,22 @@
       "expectFiveFields": "Expected 5 space-separated fields",
       "invalidField": "Invalid field — see help"
     }
-  }
+  },
+  "nav": {},
+  "header": {},
+  "inbox": {},
+  "decisionCard": {},
+  "callDetail": {},
+  "policies": {},
+  "records": {},
+  "cockpit": {},
+  "companiesIndex": {},
+  "companyDetail": {},
+  "companyPanels": {},
+  "orgChart": {},
+  "nestsIndex": {},
+  "nestDetail": {},
+  "servicesIndex": {},
+  "skillsLibrary": {},
+  "docs": {}
 }
