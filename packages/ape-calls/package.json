@@ -1,0 +1,43 @@
+{
+  "name": "@openape/ape-calls",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Wait for the decisions a human still owes you \u2014 OpenApe calls.",
+  "author": null,
+  "license": "MIT",
+  "bin": {
+    "ape-calls": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/testrun.git",
+    "directory": "packages/ape-calls"
+  }
+}
