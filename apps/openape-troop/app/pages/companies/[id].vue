@@ -230,12 +230,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <UButton to="/companies" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
-        Firmen
-      </UButton>
-      <ViewToggle active="companies" />
-    </header>
+    <AppHeader :back="{ to: '/companies', label: 'Firmen' }" active="companies" :show-logout="false" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <div v-if="loading" class="text-zinc-500 py-20 text-center">

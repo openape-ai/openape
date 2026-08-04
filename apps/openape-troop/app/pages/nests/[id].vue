@@ -74,12 +74,7 @@ async function fleetPause(pause: boolean) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <UButton to="/nests" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left">
-        Nests
-      </UButton>
-      <ViewToggle active="nests" />
-    </header>
+    <AppHeader :back="{ to: '/nests', label: 'Nests' }" active="nests" :show-logout="false" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <div v-if="loading" class="text-zinc-500 py-20 text-center">

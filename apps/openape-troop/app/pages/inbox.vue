@@ -31,13 +31,7 @@ const badge: Record<string, { label: string, class: string }> = {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <ViewToggle active="inbox" />
-      </div>
-      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" aria-label="Abmelden" @click="logout" />
-    </header>
+    <AppHeader active="inbox" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
       <template v-if="user">
