@@ -92,7 +92,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           Nests
         </h2>
         <p class="text-zinc-400 mb-6">
-          Ihre Geräte — klicken Sie ein Nest an, um Infos und die dort laufenden Agents zu sehen.
+          Deine Geräte — klick ein Nest an, um Infos und die dort laufenden Agents zu sehen.
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
@@ -109,7 +109,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             Noch kein Nest verbunden
           </h3>
           <p class="text-sm text-zinc-400 max-w-md mx-auto">
-            Starten Sie den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen.
+            Starte den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen.
           </p>
         </div>
 
