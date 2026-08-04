@@ -14,7 +14,8 @@ const { data, error, refresh } = await useFetch<{
   proofs: WireEvent[]
 }>(`/api/events/${route.params.id}`, { server: true })
 
-useSeoMeta({ title: () => 'Entscheidung' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('callDetail.tabTitle') })
 
 const e = computed(() => data.value?.event)
 const now = Math.floor(Date.now() / 1000)
@@ -38,11 +39,11 @@ async function resolve(body: { choice?: string, verdict?: string }) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <AppHeader :back="{ to: '/inbox', label: 'Inbox' }" :show-logout="false" />
+    <AppHeader :back="{ to: '/inbox', label: t('callDetail.backToInbox') }" :show-logout="false" />
 
     <main class="max-w-2xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" />
-      <UAlert v-else-if="error" color="error" variant="subtle" title="Karte nicht gefunden oder kein Zugriff." />
+      <UAlert v-else-if="error" color="error" variant="subtle" :title="t('callDetail.notFound')" />
       <template v-else-if="e">
         <DecisionCard
           :event="e" :resolution="data?.resolution" :proofs="data?.proofs" :now="now" :submitting="submitting"

@@ -18,7 +18,7 @@ defineProps<{ policies: Policy[] }>()
         <span
           class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0 mt-0.5"
           :class="p.adopted ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-400'"
-        >{{ p.adopted ? 'in Kraft' : 'Vorschlag' }}</span>
+        >{{ p.adopted ? $t('policies.badge.adopted') : $t('policies.badge.proposed') }}</span>
         <p class="text-sm font-medium leading-relaxed">
           {{ p.rule }}
         </p>
@@ -30,12 +30,12 @@ defineProps<{ policies: Policy[] }>()
         <span>{{ p.actor }}</span>
         <span v-if="p.enforcedIn" class="font-mono">{{ p.enforcedIn }}</span>
         <NuxtLink v-if="p.sourceId" :to="`/c/${p.sourceId}`" class="underline hover:text-zinc-300">
-          aus dieser Entscheidung
+          {{ $t('policies.source') }}
         </NuxtLink>
       </div>
     </div>
   </div>
   <p v-else class="text-zinc-400 py-8 text-center">
-    Noch keine Regeln. Sie entstehen aus Entscheidungen, die über den Einzelfall hinausgehen.
+    {{ $t('policies.empty') }}
   </p>
 </template>

@@ -1,6 +1,7 @@
-import type { WireEvent } from '../app/utils/attention-inbox'
+import type { Translatable, WireEvent } from '../app/utils/attention-inbox'
 import { describe, expect, it } from 'vitest'
 import { cardTitle, openRequests, waitingLabel } from '../app/utils/attention-inbox'
+import de from '../i18n/locales/de.json'
 
 function event(partial: Partial<WireEvent> & Pick<WireEvent, 'id' | 'type'>): WireEvent {
   return {
@@ -43,18 +44,40 @@ describe('openRequests', () => {
 
 describe('cardTitle', () => {
   it('uses the question for decisions and the task_ref for verdicts', () => {
-    expect(cardTitle(event({ id: 'A', type: 'decision.requested', payload: { question: 'Wohin?' } }))).toBe('Wohin?')
-    expect(cardTitle(event({ id: 'B', type: 'verdict.requested' }))).toBe('Verdict: ape-tasks:T1')
+    expect(cardTitle(event({ id: 'A', type: 'decision.requested', payload: { question: 'Wohin?' } })))
+      .toEqual({ key: 'inbox.cardTitle.plain', params: { text: 'Wohin?' } })
+    expect(cardTitle(event({ id: 'B', type: 'verdict.requested' })))
+      .toEqual({ key: 'inbox.cardTitle.verdict', params: { ref: 'ape-tasks:T1' } })
   })
 })
 
 describe('waitingLabel', () => {
   it.each([
-    [120, 'wartet 2 min'],
-    [7200, 'wartet 2 h'],
-    [172800, 'wartet 2 d'],
-  ])('renders %ss as "%s"', (age, label) => {
-    expect(waitingLabel(event({ id: 'A', type: 'decision.requested', ts: 1000 }), 1000 + age)).toBe(label)
+    [120, 'inbox.waitingFor.minutes', 2],
+    [7200, 'inbox.waitingFor.hours', 2],
+    [172800, 'inbox.waitingFor.days', 2],
+  ])('renders %ss as %s with count %i', (age, key, count) => {
+    expect(waitingLabel(event({ id: 'A', type: 'decision.requested', ts: 1000 }), 1000 + age))
+      .toEqual({ key, params: { count } })
+  })
+})
+
+// Both folds hand the component a key instead of a sentence, so a typo would
+// otherwise reach the screen as the key itself. These are the keys they name.
+describe('the keys these folds name', () => {
+  const message = (key: string): unknown =>
+    key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], de)
+
+  it.each<Translatable>([
+    cardTitle(event({ id: 'A', type: 'decision.requested', payload: { question: 'Wohin?' } })),
+    cardTitle(event({ id: 'B', type: 'verdict.requested' })),
+    waitingLabel(event({ id: 'C', type: 'decision.requested', ts: 1000 }), 1120),
+    waitingLabel(event({ id: 'D', type: 'decision.requested', ts: 1000 }), 8200),
+    waitingLabel(event({ id: 'E', type: 'decision.requested', ts: 1000 }), 173800),
+  ])('exist in the shipped catalog: $key', ({ key, params }) => {
+    const text = message(key)
+    expect(typeof text, `${key} is missing from de.json`).toBe('string')
+    for (const name of Object.keys(params)) expect(text).toContain(`{${name}}`)
   })
 })
 
