@@ -66,8 +66,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    project.value = await ($fetch as any)(`/api/projects/${projectId}`) as Project
-    entries.value = await ($fetch as any)('/api/entries', { query: { project: projectId } }) as Entry[]
+    project.value = await apiFetch(`/api/projects/${projectId}`) as Project
+    entries.value = await apiFetch('/api/entries', { query: { project: projectId } }) as Entry[]
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Failed to load project'
@@ -106,7 +106,7 @@ async function logTime() {
     else {
       body.duration = form.value.duration
     }
-    await ($fetch as any)('/api/entries', { method: 'POST', body })
+    await apiFetch('/api/entries', { method: 'POST', body })
     form.value.from = ''
     form.value.to = ''
     form.value.duration = ''
@@ -124,7 +124,7 @@ async function logTime() {
 
 async function remove(id: string) {
   try {
-    await ($fetch as any)(`/api/entries/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/entries/${id}`, { method: 'DELETE' })
     await load()
   }
   catch (err: unknown) {

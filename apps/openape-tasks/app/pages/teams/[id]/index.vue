@@ -190,7 +190,7 @@ onMounted(async () => {
 
 async function loadDetail() {
   try {
-    detail.value = await ($fetch as any)(`/api/teams/${teamId.value}`) as TeamDetail
+    detail.value = await apiFetch(`/api/teams/${teamId.value}`) as TeamDetail
     // Keep the active lane valid: default to the first lane, preserve a still-
     // existing selection across reloads (e.g. after editing lanes).
     if (!lanes.value.some(l => l.id === activeLaneId.value)) {
@@ -206,7 +206,7 @@ async function loadDetail() {
 
 async function loadTasks() {
   try {
-    tasks.value = await ($fetch as any)(`/api/teams/${teamId.value}/tasks?status=open,doing,done`) as Task[]
+    tasks.value = await apiFetch(`/api/teams/${teamId.value}/tasks?status=open,doing,done`) as Task[]
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -220,7 +220,7 @@ async function addTask() {
   adding.value = true
   addError.value = ''
   try {
-    const created = await ($fetch as any)(`/api/teams/${teamId.value}/tasks`, {
+    const created = await apiFetch(`/api/teams/${teamId.value}/tasks`, {
       method: 'POST',
       body: { title, lane_id: activeLaneId.value || undefined },
     }) as Task
@@ -244,7 +244,7 @@ async function toggleDone(t: Task) {
   t.status = next
   t.completed_at = next === 'done' ? Math.floor(Date.now() / 1000) : null
   try {
-    const updated = await ($fetch as any)(`/api/tasks/${t.id}`, {
+    const updated = await apiFetch(`/api/tasks/${t.id}`, {
       method: 'PATCH',
       body: { status: next },
     }) as Task
@@ -263,7 +263,7 @@ async function deleteTaskQuick(id: string) {
   const before = tasks.value
   tasks.value = tasks.value.filter(t => t.id !== id)
   try {
-    await ($fetch as any)(`/api/tasks/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
   }
   catch (err: unknown) {
     tasks.value = before
@@ -313,7 +313,7 @@ async function saveEdit() {
   const contextUrl = editContextUrl.value.trim() || null
   const contextSummary = editContextSummary.value.trim() || null
   try {
-    const updated = await ($fetch as any)(`/api/tasks/${t.id}`, {
+    const updated = await apiFetch(`/api/tasks/${t.id}`, {
       method: 'PATCH',
       body: {
         title,
@@ -350,7 +350,7 @@ async function deleteFromSheet() {
   if (!confirm(`Delete "${t.title}"?`)) return
   saving.value = true
   try {
-    await ($fetch as any)(`/api/tasks/${t.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/tasks/${t.id}`, { method: 'DELETE' })
     tasks.value = tasks.value.filter(x => x.id !== t.id)
     closeEdit()
   }
@@ -389,7 +389,7 @@ async function saveListSettings() {
   settingsSaving.value = true
   settingsError.value = ''
   try {
-    await ($fetch as any)(`/api/teams/${teamId.value}`, {
+    await apiFetch(`/api/teams/${teamId.value}`, {
       method: 'PATCH',
       body: {
         name,
@@ -419,7 +419,7 @@ async function deleteList() {
   settingsDeleting.value = true
   settingsError.value = ''
   try {
-    await ($fetch as any)(`/api/teams/${teamId.value}?force=true`, { method: 'DELETE' })
+    await apiFetch(`/api/teams/${teamId.value}?force=true`, { method: 'DELETE' })
     await navigateTo('/teams')
   }
   catch (err: unknown) {
@@ -432,7 +432,7 @@ async function deleteList() {
 async function removeMember(email: string) {
   if (!confirm(`Remove ${email} from this team?`)) return
   try {
-    await ($fetch as any)(`/api/teams/${teamId.value}/members/${encodeURIComponent(email)}`, { method: 'DELETE' })
+    await apiFetch(`/api/teams/${teamId.value}/members/${encodeURIComponent(email)}`, { method: 'DELETE' })
     await loadDetail()
   }
   catch (err: unknown) {
@@ -450,7 +450,7 @@ async function loadInvites() {
   invitesLoading.value = true
   invitesError.value = ''
   try {
-    invites.value = await ($fetch as any)(`/api/teams/${teamId.value}/invites`) as InviteSummary[]
+    invites.value = await apiFetch(`/api/teams/${teamId.value}/invites`) as InviteSummary[]
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -477,7 +477,7 @@ async function createInvite() {
   creating.value = true
   createError.value = ''
   try {
-    const result = await ($fetch as any)(`/api/teams/${teamId.value}/invites`, {
+    const result = await apiFetch(`/api/teams/${teamId.value}/invites`, {
       method: 'POST',
       body: {
         max_uses: inviteMaxUses.value,
@@ -512,7 +512,7 @@ async function copyUrl() {
 async function revokeInvite(id: string) {
   if (!confirm('Revoke this invite? Anyone with the URL will no longer be able to join.')) return
   try {
-    await ($fetch as any)(`/api/invites/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/invites/${id}`, { method: 'DELETE' })
     await loadInvites()
   }
   catch (err: unknown) {

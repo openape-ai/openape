@@ -38,7 +38,7 @@ async function load() {
     const query: Record<string, string> = { by: by.value }
     if (from.value) query.from = from.value
     if (to.value) query.to = to.value
-    data.value = await ($fetch as any)('/api/report', { query }) as Report
+    data.value = await apiFetch('/api/report', { query }) as Report
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Failed to load report'
