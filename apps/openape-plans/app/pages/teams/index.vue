@@ -32,7 +32,7 @@ async function loadTeams() {
   loading.value = true
   error.value = ''
   try {
-    teams.value = await ($fetch as any)('/api/teams') as TeamListItem[]
+    teams.value = await apiFetch('/api/teams') as TeamListItem[]
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }

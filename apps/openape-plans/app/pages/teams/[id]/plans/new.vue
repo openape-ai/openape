@@ -22,7 +22,7 @@ async function onSubmit() {
   submitting.value = true
   error.value = ''
   try {
-    const plan = await ($fetch as any)(`/api/teams/${teamId.value}/plans`, {
+    const plan = await apiFetch(`/api/teams/${teamId.value}/plans`, {
       method: 'POST',
       body: { title: title.value.trim(), body_md: bodyMd.value, status: status.value },
     }) as { id: string }
