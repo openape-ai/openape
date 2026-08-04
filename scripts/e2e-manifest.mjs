@@ -121,6 +121,10 @@ export function buildManifest(suites, { sha, runUrl, series } = {}) {
     throw new Error('no suites given')
   }
   if (suites.every(s => s.report === null)) {
+    // Since e2e runs `--affected`, "no suite ran" is the normal outcome for a
+    // PR that touches no app — not a failure. The caller decides: without
+    // --allow-empty this still throws (a suite that crashed before vitest
+    // wrote its report must not pass silently).
     throw new Error('no suite produced a JSON report — nothing to publish (did every step fail before vitest ran?)')
   }
 
@@ -181,7 +185,7 @@ export function buildManifest(suites, { sha, runUrl, series } = {}) {
 }
 
 function parseArgs(argv) {
-  const spec = { out: undefined, sha: undefined, runUrl: undefined, series: undefined, suites: [] }
+  const spec = { out: undefined, sha: undefined, runUrl: undefined, series: undefined, allowEmpty: false, suites: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--out') {
@@ -195,6 +199,11 @@ function parseArgs(argv) {
     }
     else if (arg === '--series') {
       spec.series = argv[++i]
+    }
+    else if (arg === '--allow-empty') {
+      // `--affected` may legitimately run no suite at all; then there is
+      // nothing to publish and that is not an error.
+      spec.allowEmpty = true
     }
     else if (arg.startsWith('--')) {
       throw new Error(`unknown flag ${arg}`)
@@ -226,6 +235,11 @@ function main() {
     }
     return { name, report }
   })
+
+  if (spec.allowEmpty && suites.every(s => s.report === null)) {
+    console.error('[e2e-manifest] no suite was affected by this change — nothing to publish')
+    return
+  }
 
   const manifest = buildManifest(suites, { sha: spec.sha, runUrl: spec.runUrl, series: spec.series })
   mkdirSync(spec.out, { recursive: true })

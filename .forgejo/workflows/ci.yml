@@ -17,7 +17,6 @@ jobs:
     # + fetch-depth:0 give turbo the base ref to diff against.
     env:
       TURBO_SCM_BASE: origin/main
-      TURBO_CACHE_DIR: .turbo-cache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,23 +27,6 @@ jobs:
         run: git fetch --no-tags origin main
       - name: Enable pnpm
         run: corepack enable
-      - name: Cache pnpm store + turbo artifacts
-        # The docker runner starts from a clean container every run, so without
-        # this both jobs re-download every dependency and rebuild every package
-        # from cold. continue-on-error: a cache miss (or an unreachable cache
-        # server) must slow CI down, never fail it.
-        continue-on-error: true
-        uses: actions/cache@v4
-        with:
-          path: |
-            .pnpm-store
-            .turbo-cache
-          key: openape-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            openape-${{ hashFiles('pnpm-lock.yaml') }}-
-            openape-
-      - name: Keep the pnpm store inside the cached workspace
-        run: pnpm config set store-dir "$GITHUB_WORKSPACE/.pnpm-store"
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Build consumed workspaces (serial — deterministic .d.ts before the checks)
