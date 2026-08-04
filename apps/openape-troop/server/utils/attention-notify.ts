@@ -35,6 +35,8 @@ export function cardMessage(type: string, payload: Record<string, unknown>, open
 }
 
 function describe(type: string, payload: Record<string, unknown>): string {
+  const title = payload.title as string | undefined
+  if (title) return title
   const question = payload.question as string | undefined
   if (question) return question
   const prUrl = payload.pr_url as string | undefined

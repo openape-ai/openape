@@ -19,6 +19,12 @@ minimumReleaseAgeExclude:
   # non-frozen Resolution. Ausnahme entfernen, sobald gealtert (nach
   # 2026-08-09).
   - brace-expansion
+  # fast-uri 4.1.2 / ip-address 10.3.1 / socket.io-parser 4.2.7 (Security-
+  # Overrides gegen die Advisories vom 2026-08-04) waren beim Bump <7 Tage alt.
+  # Ausnahmen entfernen, sobald gealtert (nach 2026-08-11).
+  - fast-uri
+  - ip-address
+  - socket.io-parser
 
 auditConfig:
   ignoreGhsas:
@@ -60,7 +66,8 @@ overrides:
   defu: '>=6.1.5'
   devalue: '>=5.8.1'
   drizzle-orm: '>=0.45.2'
-  fast-uri: '>=4.1.1'
+  fast-uri: '>=4.1.2'
+  ip-address: '>=10.3.1'
   flatted: '>=3.4.2'
   hono: '>=4.12.21'
   lodash: ^4.17.21
@@ -72,6 +79,6 @@ overrides:
   sharp: '>=0.35.0'
   shell-quote: '>=1.8.4'
   simple-git: '>=3.36.0'
-  socket.io-parser: '>=4.2.6'
+  socket.io-parser: '>=4.2.7'
   svgo: '>=4.0.2'
   ws: '>=8.21.0'

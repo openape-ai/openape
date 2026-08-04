@@ -126,3 +126,55 @@ describe('auto flag on resolutions', () => {
     expect(AttentionEventSchema.safeParse({ ...made, payload: { ...made.payload, auto: 'yes' } }).success).toBe(false)
   })
 })
+
+describe('briefing fields (v0.3)', () => {
+  const decision = loadFixture('decision-requested.json') as { payload: Record<string, unknown> }
+  const verdict = loadFixture('verdict-requested.json') as { payload: Record<string, unknown> }
+
+  it('accepts a headline, an executive summary and per-option summaries', () => {
+    const event = {
+      ...decision,
+      payload: {
+        ...decision.payload,
+        title: 'Telegram-Push für Eskalationen',
+        summary: 'Der Kanal existiert bereits; offen ist nur, ob er Teil von M3 wird.',
+        option_summaries: [
+          { option: 'nach M3', summary: 'Web-Inbox bleibt v1; Push kommt als eigener Schritt.' },
+          { option: 'direkt in M3', summary: 'Erreicht dich sofort, macht M3 aber größer.' },
+        ],
+        recommendation_why: 'Kleinere erste Auslieferung, der Kanal ist unabhängig nachrüstbar.',
+      },
+    }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(true)
+  })
+
+  it('accepts highlights and a recommended verdict on a review card', () => {
+    const event = {
+      ...verdict,
+      payload: {
+        ...verdict.payload,
+        title: 'CLI-Emitter statt App-Emitter',
+        summary: 'Bearer sind audience-scoped, die App konnte nicht für troop schreiben.',
+        highlights: ['+260/-1 in 8 Dateien', 'auf prod bewiesen'],
+        recommendation: 'merge',
+        recommendation_why: 'Der Fehler war reproduzierbar und der Fix ist auf prod belegt.',
+      },
+    }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(true)
+  })
+
+  it('rejects a recommended verdict outside merge|rework|reject', () => {
+    const event = { ...verdict, payload: { ...verdict.payload, recommendation: 'ship it' } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(false)
+  })
+
+  it('rejects an option summary without its option', () => {
+    const event = { ...decision, payload: { ...decision.payload, option_summaries: [{ summary: 'ohne Option' }] } }
+    expect(AttentionEventSchema.safeParse(event).success).toBe(false)
+  })
+
+  it('stays valid without any of them', () => {
+    expect(AttentionEventSchema.safeParse(decision).success).toBe(true)
+    expect(AttentionEventSchema.safeParse(verdict).success).toBe(true)
+  })
+})
