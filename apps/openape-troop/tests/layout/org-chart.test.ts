@@ -1,5 +1,6 @@
 import type { Employee } from '../../app/components/company/OrgNode.vue'
 import { mount } from '@vue/test-utils'
+import { h } from 'vue'
 import { describe, expect, it } from 'vitest'
 // Import order is load-bearing: Vite injects SFC styles in the order the test
 // imports them, and both components style `.org-tree` at equal specificity.
@@ -10,8 +11,16 @@ import Chart from '../../app/components/company/Chart.vue'
 
 // A phone viewport (390px) is set in vitest.browser.config.ts. Nuxt UI is
 // stubbed; the styles under test ship with the two components themselves.
+//
+// Stubs must be render functions, not `template` strings: the browser build of
+// Vue ships without the compiler, so a string template renders NOTHING. A chart
+// of empty boxes passes every width assertion — the test would measure its own
+// blind spot. `renders every stub it declares` guards exactly that.
 const global = {
-  stubs: { UButton: { template: '<button><slot /></button>' }, UIcon: true },
+  stubs: {
+    UButton: { render: () => h('button', { class: 'stub-button' }, 'x') },
+    UIcon: { render: () => h('span', { class: 'stub-icon' }, '·') },
+  },
   components: { CompanyOrgNode: OrgNode },
 }
 
@@ -42,6 +51,21 @@ const EMPLOYEES: Employee[] = [
 ]
 
 describe('org chart on a phone', () => {
+  it('renders every stub it declares', () => {
+    const wrapper = mount(Chart, {
+      props: { employees: EMPLOYEES, ownerEmail: 'patrick@hofmann.eco' },
+      global,
+      attachTo: document.body,
+    })
+
+    // If this drops to 0 the widths below are measuring empty boxes.
+    expect(wrapper.findAll('.stub-button').length).toBeGreaterThan(0)
+    expect(wrapper.findAll('.stub-icon').length).toBeGreaterThan(0)
+    expect((wrapper.find('.org-card').element as HTMLElement).offsetWidth).toBeGreaterThan(0)
+
+    wrapper.unmount()
+  })
+
   it('keeps every card inside the scroller', () => {
     const wrapper = mount(Chart, {
       props: { employees: EMPLOYEES, ownerEmail: 'patrick@hofmann.eco' },
