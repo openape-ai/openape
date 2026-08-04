@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 // The canonical employee shape, shared with the company page's editor. The card
 // only renders label/tools/duties; `procedure` and `vars` travel through it to
 // the edit form, so they live here instead of in a second copy of this type.
@@ -7,7 +9,15 @@ export interface TreeNode { e: Employee, children: TreeNode[] }
 
 defineProps<{ node: TreeNode }>()
 const emit = defineEmits<{ edit: [e: Employee], delete: [e: Employee], toggle: [e: Employee] }>()
-const roleLabel: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+
+// Imported rather than auto-imported: the layout test mounts this component
+// outside Nuxt, where only a real vue-i18n plugin is in play.
+const { t, te } = useI18n()
+// A role the catalog does not know still has to name itself on the card.
+function roleLabel(role: string): string {
+  const key = `common.role.${role}`
+  return te(key) ? t(key) : role
+}
 </script>
 
 <template>
@@ -18,19 +28,19 @@ const roleLabel: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lea
         <span class="org-name">{{ node.e.label }}</span>
       </div>
       <div class="org-role">
-        {{ roleLabel[node.e.role] ?? node.e.role }}
+        {{ roleLabel(node.e.role) }}
       </div>
       <div v-if="node.e.tools.length" class="org-tools">
         {{ node.e.tools.join(' · ') }}
       </div>
       <div class="org-actions">
-        <button type="button" title="Bearbeiten" @click="emit('edit', node.e)">
+        <button type="button" :title="$t('common.edit')" @click="emit('edit', node.e)">
           <UIcon name="i-lucide-pencil" class="size-3.5" />
         </button>
-        <button type="button" :title="node.e.enabled ? 'Pausieren' : 'Aktivieren'" @click="emit('toggle', node.e)">
+        <button type="button" :title="node.e.enabled ? $t('orgChart.action.pause') : $t('orgChart.action.activate')" @click="emit('toggle', node.e)">
           <UIcon :name="node.e.enabled ? 'i-lucide-pause' : 'i-lucide-play'" class="size-3.5" />
         </button>
-        <button type="button" title="Entfernen" class="danger" @click="emit('delete', node.e)">
+        <button type="button" :title="$t('common.remove')" class="danger" @click="emit('delete', node.e)">
           <UIcon name="i-lucide-trash-2" class="size-3.5" />
         </button>
       </div>

@@ -543,10 +543,143 @@
       }
     }
   },
-  "companiesIndex": {},
-  "companyDetail": {},
+  "companiesIndex": {
+    "tabTitle": "Firmen",
+    "heading": "Firmen",
+    "subheading": "Deine Firmen — klick eine an, um Hierarchie und Ziele zu sehen.",
+    "newButton": "Firma",
+    "loginWhat": "deine Firmen",
+    "empty": {
+      "title": "Noch keine Firma",
+      "hint": "Leg deine erste Firma an — der Operator richtet sich nach ihrer Vision.",
+      "button": "Firma anlegen"
+    },
+    "card": {
+      "members": "Mitglieder",
+      "budget": "Budget",
+      "budgetPerMonth": "{amount} €/Mo"
+    },
+    "create": {
+      "title": "Firma anlegen",
+      "nameLabel": "Name",
+      "namePlaceholder": "Firmenname",
+      "visionLabel": "Vision",
+      "visionDescription": "Der Operator liest das bei jeder Interaktion.",
+      "visionPlaceholder": "Was soll die Firma erreichen?",
+      "submit": "Anlegen"
+    },
+    "error": {
+      "loadFailed": "Konnte die Firmen nicht laden.",
+      "createFailed": "Anlegen fehlgeschlagen."
+    }
+  },
+  "companyDetail": {
+    "tabTitle": "Firma",
+    "backToCompanies": "Firmen",
+    "provider": {
+      "session": "Claude Session",
+      "active": "Aktiv",
+      "idle": "Ruhend",
+      "working": "Arbeitet",
+      "offline": "Offline"
+    },
+    "tab": {
+      "company": "Firma",
+      "objectives": "Ziele",
+      "memory": "Memory",
+      "skills": "Skills",
+      "automation": "Automatik",
+      "reports": "Reports"
+    },
+    "policySync": {
+      "failedTitle": "Policy-Sync fehlgeschlagen",
+      "failedDescription": "Letzter Versuch {when} — Rollen-Änderungen wirken nicht. {error}",
+      "driftTitle": "Rollen-Werkzeuge geändert seit dem letzten Policy-Sync",
+      "driftDescription": "Policy zuletzt bestätigt {when}. Wirkt erst nach dem nächsten Sync: {changes}",
+      "upToDate": "Operator-Policy aktuell ({mode}, {patterns} Muster) · bestätigt {when}"
+    },
+    "template": {
+      "none": "Keine Vorlage (leer)",
+      "programmierer": "Programmierer",
+      "ceo": "Operator",
+      "pm": "Projektmanager",
+      "mail-m365": "Mail-Assistent · Microsoft 365",
+      "mail-gmail": "Mail-Assistent · Gmail",
+      "buchhaltung": "Buchhaltung",
+      "social": "Social Media",
+      "docs": "Dokument-Leser"
+    },
+    "employee": {
+      "titleAdd": "Mitarbeiter hinzufügen",
+      "titleEdit": "Mitarbeiter bearbeiten",
+      "template": {
+        "label": "Vorlage",
+        "description": "Optional — füllt die Felder vor. Danach frei editierbar.",
+        "placeholder": "Keine Vorlage"
+      },
+      "name": {
+        "label": "Name",
+        "placeholder": "Mail-Assistent"
+      },
+      "role": {
+        "label": "Rolle"
+      },
+      "supervisor": {
+        "label": "Vorgesetzter",
+        "description": "Wem berichtet dieser Mitarbeiter? Bildet die Hierarchie.",
+        "placeholder": "Vorgesetzten wählen",
+        "owner": "— Owner (kein Vorgesetzter)"
+      },
+      "tools": {
+        "label": "Werkzeuge",
+        "description": "Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *"
+      },
+      "duties": {
+        "label": "Kurzfassung",
+        "description": "Erscheint im Organigramm. Ein Satz — wofür ist die Rolle da?",
+        "placeholder": "Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails."
+      },
+      "procedure": {
+        "label": "Arbeitsanweisung",
+        "description": "Der Agent bekommt genau diesen Text. Leer lassen, wenn die Rolle nur berichten soll.",
+        "placeholder": "## 1. Aufgabe holen\n…"
+      },
+      "risk": {
+        "badge": "Injection-Score {score}",
+        "badgeWithReason": "Injection-Score {score} · {reason}",
+        "none": "keine Injection-Muster erkannt"
+      },
+      "vars": {
+        "label": "Kenndaten (vars)",
+        "description": "JSON. Die eigenen Fakten der Rolle — die Firmen-Fakten kommen automatisch dazu."
+      }
+    },
+    "editOrg": {
+      "title": "Firma bearbeiten",
+      "nameLabel": "Name",
+      "visionLabel": "Vision",
+      "visionDescription": "Der Operator liest das bei jeder Interaktion.",
+      "budgetLabel": "Monatsbudget (EUR)",
+      "varsLabel": "Firmen-Kenndaten (vars)",
+      "varsDescription": "JSON. Jeder Mitarbeiter erbt diese Fakten — eigene Kenndaten überschreiben sie."
+    },
+    "error": {
+      "loadFailed": "Konnte die Firma nicht laden.",
+      "invalidJson": "Kein gültiges JSON: {message}",
+      "varsNotObject": "vars muss ein JSON-Objekt sein, kein Array oder Wert."
+    }
+  },
   "companyPanels": {},
-  "orgChart": {},
+  "orgChart": {
+    "title": "Organigramm",
+    "addButton": "Mitarbeiter",
+    "ownerRole": "Owner",
+    "empty": "Noch keine Mitarbeiter — leg den Operator und sein Team an.",
+    "action": {
+      "pause": "Pausieren",
+      "activate": "Aktivieren"
+    }
+  },
   "nestsIndex": {},
   "nestDetail": {},
   "servicesIndex": {},
