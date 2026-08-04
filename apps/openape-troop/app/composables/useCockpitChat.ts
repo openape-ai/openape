@@ -173,6 +173,10 @@ export function useCockpitChat() {
         }
       }
     }
+    catch (error) {
+      console.error('[cockpit] send failed', error)
+      assistant.system = t('cockpit.chat.sendFailed')
+    }
     finally {
       assistant.streaming = false
       isStreaming.value = false
@@ -206,6 +210,10 @@ export function useCockpitChat() {
         if (ans) assistant.content = ans
         else if (!assistant.system) assistant.system = t('cockpit.chat.answerPending')
       }
+    }
+    catch (error) {
+      console.error('[cockpit] answering the question failed', error)
+      assistant.system = t('cockpit.chat.choiceFailed')
     }
     finally {
       assistant.streaming = false

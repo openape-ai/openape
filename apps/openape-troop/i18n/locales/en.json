@@ -556,6 +556,7 @@
   "cockpit": {
     "tabTitle": "Troop Chat",
     "enableNotifications": "🔔 Turn on notifications",
+    "notificationsFailed": "Notifications could not be turned on — details are in the browser console.",
     "header": {
       "switchCompany": "Switch company",
       "noCompanies": "No companies",
@@ -607,7 +608,9 @@
       "reconnecting": "Connection lost — reconnecting …",
       "answerPending": "The answer arrives as soon as the Operator is done — it will be waiting the next time you open the chat.",
       "answerFallback": "Answering “{question}”: {choice}",
-      "waitSeconds": "{text} · answer in ~{sec}s"
+      "waitSeconds": "{text} · answer in ~{sec}s",
+      "sendFailed": "The message could not be processed to the end — details are in the browser console.",
+      "choiceFailed": "Your choice could not be processed to the end — details are in the browser console."
     },
     "presence": {
       "label": {
