@@ -35,6 +35,13 @@ describe('openCalls', () => {
     const noise = [event('proof.attached', 1, { url: 'https://x', kind: 'pr' }), event('task.shipped', 2)]
     expect(openCalls(noise)).toEqual([])
   })
+
+  it('speaks the call vocabulary: a raised call is open until it is answered', () => {
+    const raised = event('call.raised', 100, { kind: 'verdict', pr_url: 'https://x' })
+    expect(openCalls([raised])).toEqual([raised])
+    const answered = event('call.answered', 150, { answer: 'merge', request_id: raised.id })
+    expect(openCalls([raised, answered])).toEqual([])
+  })
 })
 
 describe('answerOf', () => {
@@ -44,6 +51,10 @@ describe('answerOf', () => {
 
   it('reads a decision', () => {
     expect(answerOf({ payload: { decision: 'pro Gerät' } })).toBe('pro Gerät')
+  })
+
+  it('reads a call.answered answer', () => {
+    expect(answerOf({ payload: { answer: 'merge' } })).toBe('merge')
   })
 
   it('has no answer for an unresolved call', () => {
