@@ -5,12 +5,11 @@ name: layout
 # Playwright build into it would cost a ~150 MB download per run.
 #
 # If the mac runner is offline the job queues — ci/e2e are unaffected.
+# Runs on every PR, not just UI ones: a required check that is path-filtered
+# never reports on the PRs it skips, and a missing required check blocks the
+# merge forever. The whole job costs ~13 s (10 s install, 3 s tests).
 on:
   pull_request:
-    paths:
-      - 'apps/openape-troop/app/**'
-      - 'apps/openape-troop/tests/layout/**'
-      - 'apps/openape-troop/vitest.browser.config.ts'
 
 concurrency:
   group: layout-${{ github.ref }}
