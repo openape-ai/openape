@@ -1,13 +1,15 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
+const { t } = useI18n()
+const tabTitle = computed(() => t('cockpit.tabTitle'))
 useHead({
-  title: 'Troop-Chat',
+  title: tabTitle,
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
     { name: 'apple-mobile-web-app-capable', content: 'yes' },
     { name: 'mobile-web-app-capable', content: 'yes' },
     { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-    { name: 'apple-mobile-web-app-title', content: 'Troop-Chat' },
+    { name: 'apple-mobile-web-app-title', content: tabTitle },
     { name: 'theme-color', content: '#0b0b0f' },
   ],
   link: [
@@ -65,7 +67,7 @@ onMounted(async () => {
 <template>
   <CockpitChat />
   <button v-if="showEnable" class="push-enable" :disabled="busy" @click="enable">
-    🔔 Benachrichtigungen aktivieren
+    {{ $t('cockpit.enableNotifications') }}
   </button>
 </template>
 
