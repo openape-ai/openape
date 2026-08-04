@@ -14,6 +14,7 @@ let seq = 0
 function makeId(): string { seq += 1; return `${Date.now()}-${seq}` }
 
 export function useCockpitChat() {
+  const { t } = useI18n()
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
   const companies = ref<Company[]>([])
@@ -93,13 +94,13 @@ export function useCockpitChat() {
     const deadline = Date.now() + POLL_MAX_MS
     // eslint-disable-next-line no-unmodified-loop-condition -- pollAbort is flipped by stop()/selectCompany
     while (Date.now() < deadline && !pollAbort) {
-      let t: { state: string, progress: string[], answer: string }
-      try { t = await apiFetch(`/api/cockpit/tasks/${taskId}/progress`) }
+      let task: { state: string, progress: string[], answer: string }
+      try { task = await apiFetch(`/api/cockpit/tasks/${taskId}/progress`) }
       catch { return } // 404 (task gone) or transient → caller falls back to messages poll
-      assistant.thoughts = [...t.progress]
-      assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — verbinde neu …'
-      if (t.state === 'completed' || t.state === 'failed') {
-        if (t.answer.trim()) { assistant.content = t.answer; assistant.system = undefined; assistant.waiting = undefined }
+      assistant.thoughts = [...task.progress]
+      assistant.waiting = assistant.waiting ?? t('cockpit.chat.reconnecting')
+      if (task.state === 'completed' || task.state === 'failed') {
+        if (task.answer.trim()) { assistant.content = task.answer; assistant.system = undefined; assistant.waiting = undefined }
         return
       }
       await sleep(POLL_EVERY_MS)
@@ -107,7 +108,7 @@ export function useCockpitChat() {
   }
 
   async function send(text: string, files: { id: string, mime: string, name: string }[] = []): Promise<void> {
-    const content = text.trim() || (files.length ? '(Anhang)' : '')
+    const content = text.trim() || (files.length ? t('cockpit.chat.attachmentOnly') : '')
     if (!content || isStreaming.value || !currentCompanyId.value) return
     const companyId = currentCompanyId.value
     const sinceMs = Date.now() - 1000
@@ -145,7 +146,7 @@ export function useCockpitChat() {
             if (ev.k === 'id' && ev.id) { taskId = ev.id }
             else if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
             else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
-            else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? `${ev.text} · Antwort in ~${ev.sec}s` : ev.text }
+            else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? t('cockpit.chat.waitSeconds', { text: ev.text, sec: ev.sec }) : ev.text }
             else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
             // The Operator paused on a question — the bubble settles into chips.
             else if (ev.k === 'ask' && ev.text) { assistant.content = ev.text; assistant.ask = { taskId: ev.taskId ?? taskId, options: ev.options ?? [] }; assistant.waiting = undefined; assistant.system = undefined }
@@ -161,13 +162,13 @@ export function useCockpitChat() {
       // to the live task (restores progress + the answer while it still runs); only
       // if it's gone from memory fall back to the persisted-answer poll.
       if (!assistant.content.trim() && !pollAbort) {
-        if (!assistant.system) assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — verbinde neu …'
+        if (!assistant.system) assistant.waiting = assistant.waiting ?? t('cockpit.chat.reconnecting')
         if (taskId) await reattachProgress(taskId, assistant)
         if (!assistant.content.trim() && !pollAbort) {
           const ans = await pollForAnswer(companyId, sinceMs)
           if (ans) { assistant.content = ans; assistant.system = undefined; assistant.waiting = undefined }
           else if (!assistant.system) {
-            assistant.system = 'Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.'
+            assistant.system = t('cockpit.chat.answerPending')
           }
         }
       }
@@ -190,7 +191,7 @@ export function useCockpitChat() {
       await $fetch(`/api/cockpit/tasks/${ask.taskId}/answer`, { method: 'POST', body: { choice } })
     }
     catch {
-      await send(`Zu deiner Frage „${msg.content}": ${choice}`)
+      await send(t('cockpit.chat.answerFallback', { question: msg.content, choice }))
       return
     }
     messages.value.push({ id: makeId(), role: 'user', content: choice, createdAt: Date.now() })
@@ -203,7 +204,7 @@ export function useCockpitChat() {
       if (!assistant.content.trim() && !pollAbort) {
         const ans = await pollForAnswer(currentCompanyId.value, Date.now() - 1000)
         if (ans) assistant.content = ans
-        else if (!assistant.system) assistant.system = 'Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.'
+        else if (!assistant.system) assistant.system = t('cockpit.chat.answerPending')
       }
     }
     finally {
