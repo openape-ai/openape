@@ -11,6 +11,11 @@ import { apiFetch } from '../app/utils/api'
 vi.mock('../app/utils/api', () => ({ apiFetch: vi.fn() }))
 const fetched = apiFetch as unknown as Mock
 
+// The composable resolves its fallback texts through Nuxt's auto-imported
+// useI18n. Here it echoes the key, so the assertions name the message the user
+// would see without pinning this test to one language.
+vi.stubGlobal('useI18n', () => ({ t: (key: string) => key }))
+
 interface Item { id: string, title: string }
 interface ItemForm { title: string }
 
@@ -68,7 +73,7 @@ describe('useOrgCrud', () => {
     const { error } = panel()
     await flushPromises()
 
-    expect(error.value).toBe('Laden fehlgeschlagen.')
+    expect(error.value).toBe('companyPanels.crud.loadFailed')
   })
 
   it('posts a new row and closes the form', async () => {
@@ -127,7 +132,7 @@ describe('useOrgCrud', () => {
 
     await remove('a')
 
-    expect(error.value).toBe('Löschen fehlgeschlagen.')
+    expect(error.value).toBe('common.error.deleteFailed')
     expect(busy.a).toBe(false)
   })
 
@@ -147,6 +152,6 @@ describe('useOrgCrud', () => {
 
     await patch('a', { status: 'done' })
 
-    expect(error.value).toBe('Ändern fehlgeschlagen.')
+    expect(error.value).toBe('companyPanels.crud.patchFailed')
   })
 })

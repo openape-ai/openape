@@ -8,6 +8,10 @@ import { apiFetch } from '../app/utils/api'
 vi.mock('../app/utils/api', () => ({ apiFetch: vi.fn() }))
 const fetched = apiFetch as unknown as Mock
 
+// The panel translates through Nuxt's auto-imported useI18n; here it echoes the
+// key so the assertions stay on the board's data, not on the copy around it.
+vi.stubGlobal('useI18n', () => ({ t: (key: string) => key }))
+
 // Nuxt UI components are globally auto-imported in the app; stubbed here so the
 // assertions read rendered text.
 const global = {
