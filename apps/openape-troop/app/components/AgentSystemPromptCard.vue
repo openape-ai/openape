@@ -9,10 +9,13 @@ import { computed, ref, watch } from 'vue'
 // reads it at run start, so edits propagate within one sync cycle (~5min)
 // without restart.
 //
-// The draft is seeded from the `agent` object, not from `agent.systemPrompt`:
-// it is re-seeded when the page hands over a freshly loaded agent, and left
-// alone while the same agent is edited in place — including by the recipe card,
-// whose result the page writes back into the very same field.
+// The draft re-seeds on two events, and it needs both: a freshly loaded agent
+// (new object, e.g. after a reload) and a new authoritative prompt on the agent
+// already shown. The second one is the recipe: applying it rewrites the prompt
+// server-side and the page writes the result into the object it already holds,
+// so the identity never changes. Watching only the identity left the operator's
+// stale draft in the textarea, and the next save PATCHed it back over what the
+// recipe had just written.
 const props = defineProps<{ agentName: string, agent: Agent }>()
 const emit = defineEmits<{ saved: [systemPrompt: string] }>()
 
@@ -23,7 +26,9 @@ const saving = ref(false)
 const error = ref('')
 const dirty = computed(() => draft.value !== (props.agent.systemPrompt ?? ''))
 
-watch(() => props.agent, (a) => { draft.value = a.systemPrompt ?? '' }, { immediate: true })
+function seed() { draft.value = props.agent.systemPrompt ?? '' }
+watch(() => props.agent, seed, { immediate: true })
+watch(() => props.agent.systemPrompt, seed)
 
 async function save() {
   if (!dirty.value) return
