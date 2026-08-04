@@ -24,7 +24,7 @@ watch(user, async (u) => {
   if (u?.email) {
     checkingAgents.value = true
     try {
-      const agents = await ($fetch as any)('/api/my-agents') as unknown[]
+      const agents = await apiFetch('/api/my-agents') as unknown[]
       agentCount.value = agents.length
     }
     catch {

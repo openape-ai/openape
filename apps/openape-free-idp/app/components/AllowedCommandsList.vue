@@ -76,10 +76,10 @@ async function toggleDefault(cliId: string, action: 'read' | 'exec') {
   try {
     const existing = safeCommandByCliId.value.get(cliId)
     if (existing) {
-      await ($fetch as any)(`/api/standing-grants/${encodeURIComponent(existing.id)}`, { method: 'DELETE' })
+      await apiFetch(`/api/standing-grants/${encodeURIComponent(existing.id)}`, { method: 'DELETE' })
     }
     else {
-      await ($fetch as any)('/api/standing-grants', {
+      await apiFetch('/api/standing-grants', {
         method: 'POST',
         body: {
           delegate: props.agentEmail,
@@ -110,7 +110,7 @@ async function revoke(g: StandingGrant) {
   const id = g.request?.cli_id || g.id
   busy.value = id
   try {
-    await ($fetch as any)(`/api/standing-grants/${encodeURIComponent(g.id)}`, { method: 'DELETE' })
+    await apiFetch(`/api/standing-grants/${encodeURIComponent(g.id)}`, { method: 'DELETE' })
     emit('refresh')
   }
   catch (e: unknown) {
