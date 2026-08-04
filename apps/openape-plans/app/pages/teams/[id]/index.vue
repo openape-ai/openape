@@ -76,7 +76,7 @@ async function loadDetail() {
   loading.value = true
   error.value = ''
   try {
-    detail.value = await ($fetch as any)(`/api/teams/${teamId.value}`) as TeamDetail
+    detail.value = await apiFetch(`/api/teams/${teamId.value}`) as TeamDetail
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string }, statusCode?: number }
@@ -91,7 +91,7 @@ async function loadDetail() {
 async function removeMember(email: string) {
   if (!confirm(`Remove ${email} from this team?`)) return
   try {
-    await ($fetch as any)(`/api/teams/${teamId.value}/members/${encodeURIComponent(email)}`, { method: 'DELETE' })
+    await apiFetch(`/api/teams/${teamId.value}/members/${encodeURIComponent(email)}`, { method: 'DELETE' })
     await loadDetail()
   }
   catch (err: unknown) {
@@ -109,7 +109,7 @@ async function loadInvites() {
   invitesLoading.value = true
   invitesError.value = ''
   try {
-    invites.value = await ($fetch as any)(`/api/teams/${teamId.value}/invites`) as InviteSummary[]
+    invites.value = await apiFetch(`/api/teams/${teamId.value}/invites`) as InviteSummary[]
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -136,7 +136,7 @@ async function createInvite() {
   creating.value = true
   createError.value = ''
   try {
-    const result = await ($fetch as any)(`/api/teams/${teamId.value}/invites`, {
+    const result = await apiFetch(`/api/teams/${teamId.value}/invites`, {
       method: 'POST',
       body: {
         max_uses: inviteMaxUses.value,
@@ -171,7 +171,7 @@ async function copyUrl() {
 async function revokeInvite(id: string) {
   if (!confirm('Revoke this invite? Anyone with the URL will no longer be able to join.')) return
   try {
-    await ($fetch as any)(`/api/invites/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/invites/${id}`, { method: 'DELETE' })
     await loadInvites()
   }
   catch (err: unknown) {

@@ -40,7 +40,7 @@ async function loadPreview() {
   loading.value = true
   error.value = ''
   try {
-    preview.value = await ($fetch as any)(`/api/invites/${encodeURIComponent(token.value)}`) as InvitePreview
+    preview.value = await apiFetch(`/api/invites/${encodeURIComponent(token.value)}`) as InvitePreview
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string }, statusCode?: number }
@@ -79,7 +79,7 @@ async function onAccept() {
   accepting.value = true
   error.value = ''
   try {
-    const result = await ($fetch as any)('/api/invites/accept', {
+    const result = await apiFetch('/api/invites/accept', {
       method: 'POST',
       body: { token: token.value },
     }) as { team_id: string }

@@ -51,7 +51,7 @@ onMounted(async () => {
 
 async function loadTemplates() {
   try {
-    templates.value = await ($fetch as any)('/api/templates') as Template[]
+    templates.value = await apiFetch('/api/templates') as Template[]
   }
   catch (err) {
     // Non-fatal: the dropdown just stays hidden if templates can't load.
@@ -63,7 +63,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const plan = await ($fetch as any)(`/api/plans/${planId.value}`) as Plan
+    const plan = await apiFetch(`/api/plans/${planId.value}`) as Plan
     if (plan.caller_role === 'viewer') {
       error.value = 'Viewers cannot edit plans'
       return
@@ -86,7 +86,7 @@ async function onSave() {
   saving.value = true
   error.value = ''
   try {
-    await ($fetch as any)(`/api/plans/${planId.value}`, {
+    await apiFetch(`/api/plans/${planId.value}`, {
       method: 'PATCH',
       body: { title: title.value.trim(), body_md: bodyMd.value, status: status.value },
     })

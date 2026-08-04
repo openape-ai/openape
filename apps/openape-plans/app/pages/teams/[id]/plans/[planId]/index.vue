@@ -47,7 +47,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    plan.value = await ($fetch as any)(`/api/plans/${planId.value}`) as Plan
+    plan.value = await apiFetch(`/api/plans/${planId.value}`) as Plan
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
@@ -62,7 +62,7 @@ async function load() {
 async function changeStatus(next: Plan['status']) {
   if (!plan.value || plan.value.status === next) return
   try {
-    plan.value = await ($fetch as any)(`/api/plans/${planId.value}`, {
+    plan.value = await apiFetch(`/api/plans/${planId.value}`, {
       method: 'PATCH',
       body: { status: next },
     }) as Plan
@@ -77,7 +77,7 @@ async function deletePlan() {
   if (!plan.value) return
   if (!confirm(`Delete "${plan.value.title}"? This can only be undone from the DB.`)) return
   try {
-    await ($fetch as any)(`/api/plans/${planId.value}`, { method: 'DELETE' })
+    await apiFetch(`/api/plans/${planId.value}`, { method: 'DELETE' })
     await navigateTo(`/teams/${teamId.value}`)
   }
   catch (err: unknown) {
