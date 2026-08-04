@@ -1,1 +1,3 @@
 apps/openape-troop/openape-troop.db
+.vitest-attachments/
+tests/layout/__screenshots__/

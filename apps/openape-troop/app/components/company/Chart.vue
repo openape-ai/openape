@@ -79,10 +79,8 @@ watch(() => props.employees, () => nextTick(centerOnOwner))
   -webkit-overflow-scrolling: touch;
 }
 
-/* Keep the chart's geometry intact on narrow screens and let the containing
- * scroller expose the complete hierarchy instead of squeezing cards together. */
-.org-tree {
-  width: max-content;
-  min-width: 100%;
-}
+/* The tree's own geometry lives in OrgNode.vue — including the phone layout,
+ * which overrides `width: max-content`. A copy of the wide-screen rule here
+ * won a specificity tie against that media query, so phones kept the desktop
+ * width and every card grew past the screen. */
 </style>
