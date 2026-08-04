@@ -5,6 +5,8 @@ import { renderMarkdown } from '../../utils/cockpit/markdown'
 
 const props = defineProps<{ message: ChatMessage }>()
 const emit = defineEmits<{ answer: [choice: string] }>()
+const { t } = useI18n()
+const { fmtTime } = useDateFormat()
 const html = computed(() => props.message.role === 'assistant' ? renderMarkdown(props.message.content) : '')
 const showWaiting = computed(() => props.message.streaming && !props.message.content && !!props.message.waiting)
 const showThoughts = computed(() => props.message.streaming && !props.message.content && !props.message.waiting && (props.message.thoughts?.length ?? 0) > 0)
@@ -13,7 +15,7 @@ const latestThought = computed(() => props.message.thoughts?.at(-1) ?? '')
 const timeLabel = computed(() => {
   const ms = props.message.createdAt
   if (!ms || (props.message.streaming && !props.message.content)) return ''
-  return new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return fmtTime(ms / 1000)
 })
 
 function onCopyClick(e: MouseEvent): void {
@@ -21,8 +23,8 @@ function onCopyClick(e: MouseEvent): void {
   if (!btn) return
   const code = btn.closest('.code-block')?.querySelector('code')?.textContent ?? ''
   void navigator.clipboard.writeText(code).then(() => {
-    btn.textContent = 'Kopiert'
-    setTimeout(() => { btn.textContent = 'Copy' }, 1200)
+    btn.textContent = t('cockpit.bubble.codeCopied')
+    setTimeout(() => { btn.textContent = t('cockpit.bubble.copyCode') }, 1200)
   })
 }
 </script>
@@ -32,7 +34,7 @@ function onCopyClick(e: MouseEvent): void {
     <template v-if="message.role === 'assistant'">
       <div v-if="message.content" class="md-wrap">
         <div v-if="message.progress" class="progress-label">
-          Zwischenstand
+          {{ $t('cockpit.bubble.progress') }}
         </div>
         <!-- eslint-disable-next-line vue/no-v-html -- assistant content is our own trusted mock/agent markdown -->
         <div class="md" @click="onCopyClick" v-html="html" />
@@ -60,7 +62,7 @@ function onCopyClick(e: MouseEvent): void {
         <span class="think-dot" />
         <span class="thought">{{ latestThought }}</span>
       </div>
-      <span v-else-if="message.streaming" class="typing" aria-label="tippt"><i /><i /><i /></span>
+      <span v-else-if="message.streaming" class="typing" :aria-label="$t('cockpit.bubble.typing')"><i /><i /><i /></span>
     </template>
     <div v-else class="plain">
       {{ message.content }}

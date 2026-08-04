@@ -6,6 +6,7 @@ interface PendingFile { id: string, mime: string, name: string }
 
 const props = defineProps<{ streaming: boolean, company: string }>()
 const emit = defineEmits<{ send: [text: string, files: PendingFile[]]; stop: [] }>()
+const { t } = useI18n()
 const text = ref('')
 const ta = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -37,7 +38,7 @@ async function onPickFiles(e: Event): Promise<void> {
         pending.value.push(await $fetch<PendingFile>('/api/cockpit/files', { method: 'POST', body: form }))
       }
       catch (err) {
-        uploadError.value = (err as { data?: { statusMessage?: string } })?.data?.statusMessage ?? `Upload fehlgeschlagen: ${f.name}`
+        uploadError.value = (err as { data?: { statusMessage?: string } })?.data?.statusMessage ?? t('cockpit.composer.uploadFailed', { name: f.name })
       }
     }
   }
@@ -69,7 +70,7 @@ function onKeydown(e: KeyboardEvent): void {
     <div v-if="pending.length || uploadError" class="attach-row">
       <span v-for="f in pending" :key="f.id" class="attach-chip">
         <span class="attach-name">{{ f.name }}</span>
-        <button type="button" class="attach-remove" :aria-label="`${f.name} entfernen`" @click="removePending(f.id)">✕</button>
+        <button type="button" class="attach-remove" :aria-label="$t('cockpit.composer.removeAttachment', { name: f.name })" @click="removePending(f.id)">✕</button>
       </span>
       <span v-if="uploadError" class="attach-error">{{ uploadError }}</span>
     </div>
@@ -86,7 +87,7 @@ function onKeydown(e: KeyboardEvent): void {
         type="button"
         class="icon-btn attach"
         :disabled="streaming || uploading || pending.length >= 4"
-        aria-label="Datei anhängen"
+        :aria-label="$t('cockpit.composer.attach')"
         @click="fileInput?.click()"
       >
         {{ uploading ? '…' : '📎' }}
@@ -96,7 +97,7 @@ function onKeydown(e: KeyboardEvent): void {
         v-model="text"
         class="composer-input"
         rows="1"
-        placeholder="Nachricht…"
+        :placeholder="$t('cockpit.composer.placeholder')"
         enterkeyhint="send"
         autocapitalize="sentences"
         autocomplete="off"
@@ -104,10 +105,10 @@ function onKeydown(e: KeyboardEvent): void {
         @input="autoGrow"
         @keydown="onKeydown"
       />
-      <button v-if="!streaming" class="icon-btn send" type="submit" :disabled="(!text.trim() && !pending.length) || uploading" aria-label="Senden">
+      <button v-if="!streaming" class="icon-btn send" type="submit" :disabled="(!text.trim() && !pending.length) || uploading" :aria-label="$t('cockpit.composer.send')">
         ↑
       </button>
-      <button v-else class="icon-btn stop" type="button" aria-label="Stopp" @click="emit('stop')">
+      <button v-else class="icon-btn stop" type="button" :aria-label="$t('cockpit.composer.stop')" @click="emit('stop')">
         ■
       </button>
     </div>

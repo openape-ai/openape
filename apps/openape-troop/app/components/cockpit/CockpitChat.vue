@@ -2,6 +2,7 @@
 import { onMounted, ref, watch, nextTick } from 'vue'
 import 'highlight.js/styles/github-dark.css'
 
+const { t, locale } = useI18n()
 const { messages, isStreaming, companies, currentCompany, authRequired, selectCompany, send, answer, stop, clear } = useCockpitChat()
 const { mode, missingTools, label: presenceLabel, title: presenceTitle, start: startPresence, refresh: refreshPresence } = useCockpitPresence(() => currentCompany.value?.id ?? '')
 // Bootstrap prompt that fetches + follows the worker setup, so the user can bring
@@ -26,9 +27,9 @@ function dayLabel(ms: number): string {
   const d = new Date(ms)
   const start = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const diff = Math.round((start(new Date()) - start(d)) / 86_400_000)
-  if (diff === 0) return 'Heute'
-  if (diff === 1) return 'Gestern'
-  return d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })
+  if (diff === 0) return t('cockpit.day.today')
+  if (diff === 1) return t('cockpit.day.yesterday')
+  return d.toLocaleDateString(locale.value, { day: 'numeric', month: 'long', year: 'numeric' })
 }
 function daySep(i: number): string {
   const ms = messages.value[i]?.createdAt
@@ -55,7 +56,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
   <div class="cockpit-root">
     <div class="chat" :style="{ '--accent': currentCompany?.accent ?? '#6d5efc' }">
       <header class="chat-header">
-        <button class="ghost nav-back" type="button" title="Firma wechseln" aria-label="Firma wechseln" @click="showCompanies = true">
+        <button class="ghost nav-back" type="button" :title="$t('cockpit.header.switchCompany')" :aria-label="$t('cockpit.header.switchCompany')" @click="showCompanies = true">
           ‹
         </button>
         <span class="avatar" :style="{ background: currentCompany?.accent ?? '#6d5efc' }">{{ currentCompany?.short ?? '··' }}</span>
@@ -67,36 +68,36 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
           v-if="mode === 'offline'"
           class="ceo-start"
           type="button"
-          title="Zeigt den Setup-Prompt für Claude Code oder codex"
+          :title="$t('cockpit.header.startOperatorHint')"
           style="font-size:12px;padding:2px 8px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:transparent;white-space:nowrap"
           @click="showWorkerDialog = true"
         >
-          ▸ Operator starten
+          {{ $t('cockpit.header.startOperator') }}
         </button>
-        <button class="company-title" type="button" aria-label="Firma wechseln" @click="showCompanies = true">
-          {{ currentCompany?.name ?? 'Keine Firmen' }}
+        <button class="company-title" type="button" :aria-label="$t('cockpit.header.switchCompany')" @click="showCompanies = true">
+          {{ currentCompany?.name ?? $t('cockpit.header.noCompanies') }}
         </button>
         <button v-if="messages.length" class="ghost" type="button" @click="clear">
-          Neu
+          {{ $t('cockpit.header.newChat') }}
         </button>
       </header>
 
       <p v-if="missingTools.length" class="sys-notice doctor-warn">
-        ⚠ Beim Operator fehlen Werkzeuge: {{ missingTools.join(', ') }} — im Worker-PATH nicht gefunden.
+        {{ $t('cockpit.notice.missingTools', { tools: missingTools.join(', ') }) }}
       </p>
       <p v-if="authRequired" class="sys-notice">
         <NuxtLink to="/login">
-          Sitzung abgelaufen — neu einloggen
+          {{ $t('cockpit.notice.sessionExpired') }}
         </NuxtLink>
       </p>
 
       <div ref="scroller" class="messages" @scroll="onScroll">
         <div class="messages-inner">
           <p v-if="!companies.length" class="empty">
-            Keine Firmen gefunden — bist du eingeloggt?
+            {{ $t('cockpit.empty.noCompanies') }}
           </p>
           <p v-else-if="!messages.length" class="empty">
-            Frag {{ currentCompany?.name }} etwas – die Antwort streamt live herein.
+            {{ $t('cockpit.empty.askSomething', { name: currentCompany?.name }) }}
           </p>
           <template v-for="(m, i) in messages" :key="m.id">
             <div v-if="daySep(i)" class="date-sep">
@@ -109,7 +110,7 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
 
       <Transition name="pill">
         <button v-if="showPill" class="scroll-pill" type="button" @click="scrollToBottom(true)">
-          ↓ Neueste
+          {{ $t('cockpit.scrollToLatest') }}
         </button>
       </Transition>
 
@@ -118,9 +119,9 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
       <div v-if="showCompanies" class="services-overlay" @click.self="showCompanies = false">
         <div class="services-panel">
           <div class="services-head">
-            <span class="services-title">Firmen</span>
+            <span class="services-title">{{ $t('cockpit.companies.title') }}</span>
             <button class="ghost" type="button" @click="showCompanies = false">
-              Fertig
+              {{ $t('common.done') }}
             </button>
           </div>
           <div class="services-list">
@@ -137,27 +138,33 @@ watch(messages, () => { void nextTick(autoStick) }, { deep: true })
             </button>
           </div>
           <NuxtLink to="/companies" class="services-note">
-            troop-Steuerung ›
+            {{ $t('cockpit.companies.controlLink') }}
           </NuxtLink>
         </div>
       </div>
 
       <div v-if="showWorkerDialog" class="worker-dialog-backdrop" @click.self="showWorkerDialog = false">
-        <div class="worker-dialog" role="dialog" aria-label="Operator starten">
-          <h3>Operator starten</h3>
-          <p>
-            Kopiere den Prompt und füge ihn in <strong>Claude Code</strong> oder <strong>codex</strong>
-            auf deiner Maschine ein. Wichtig: <a href="https://developers.openai.com/codex/cli" target="_blank" rel="noopener"><strong>codex muss installiert sein</strong></a> —
-            der Worker nutzt codex als Backend, auch wenn du das Setup mit Claude Code startest.
-          </p>
+        <div class="worker-dialog" role="dialog" :aria-label="$t('cockpit.worker.title')">
+          <h3>{{ $t('cockpit.worker.title') }}</h3>
+          <i18n-t keypath="cockpit.worker.body" tag="p">
+            <template #claudeCode>
+              <strong>Claude Code</strong>
+            </template>
+            <template #codex>
+              <strong>codex</strong>
+            </template>
+            <template #codexRequired>
+              <a href="https://developers.openai.com/codex/cli" target="_blank" rel="noopener"><strong>{{ $t('cockpit.worker.codexRequired') }}</strong></a>
+            </template>
+          </i18n-t>
           <pre class="worker-prompt">{{ workerPrompt }}</pre>
           <div class="worker-dialog-actions">
             <button type="button" class="primary" @click="copyWorkerPrompt">
-              {{ promptCopied ? '✓ Kopiert' : 'Prompt kopieren' }}
+              {{ promptCopied ? $t('cockpit.worker.copied') : $t('cockpit.worker.copy') }}
             </button>
-            <a :href="workerDeepLink">In Claude Code öffnen</a>
+            <a :href="workerDeepLink">{{ $t('cockpit.worker.openInClaudeCode') }}</a>
             <button type="button" class="ghost" @click="showWorkerDialog = false">
-              Schließen
+              {{ $t('common.close') }}
             </button>
           </div>
         </div>

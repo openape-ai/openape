@@ -10,6 +10,7 @@ export function presenceErrorMode(error: unknown): 'unauthenticated' | 'disconne
 // idle, a live countdown to the next check-in). Cheap GET every 5s; the countdown
 // ticks locally each second between fetches.
 export function useCockpitPresence(company?: () => string) {
+  const { t } = useI18n()
   const mode = ref<AgentMode>('offline')
   const nextPollInSec = ref<number | null>(null)
   const missingTools = ref<string[]>([])
@@ -36,22 +37,24 @@ export function useCockpitPresence(company?: () => string) {
 
   const label = computed(() => {
     switch (mode.value) {
-      case 'active': return 'Operator live'
-      case 'working': return 'Operator arbeitet'
-      case 'idle': return nextPollInSec.value != null ? `Ruhemodus · ${nextPollInSec.value}s` : 'Ruhemodus'
-      case 'unauthenticated': return 'Neu einloggen'
-      case 'disconnected': return 'Keine Verbindung'
-      default: return 'Operator offline'
+      case 'active': return t('cockpit.presence.label.active')
+      case 'working': return t('cockpit.presence.label.working')
+      case 'idle': return nextPollInSec.value != null
+        ? t('cockpit.presence.label.idleCountdown', { seconds: nextPollInSec.value })
+        : t('cockpit.presence.label.idle')
+      case 'unauthenticated': return t('cockpit.presence.label.unauthenticated')
+      case 'disconnected': return t('cockpit.presence.label.disconnected')
+      default: return t('cockpit.presence.label.offline')
     }
   })
   const title = computed(() => {
     switch (mode.value) {
-      case 'active': return 'Operator verbunden und wach — Antworten kommen sofort'
-      case 'working': return 'Operator arbeitet gerade an einer Aufgabe'
-      case 'idle': return 'Operator im Ruhemodus — deine Frage wird beim nächsten Check-in beantwortet'
-      case 'unauthenticated': return 'Deine Sitzung ist abgelaufen — bitte neu einloggen'
-      case 'disconnected': return 'Die Verbindung zum Cockpit ist unterbrochen'
-      default: return 'Kein Operator-Loop verbunden — Fragen bleiben unbeantwortet, bis er läuft'
+      case 'active': return t('cockpit.presence.title.active')
+      case 'working': return t('cockpit.presence.title.working')
+      case 'idle': return t('cockpit.presence.title.idle')
+      case 'unauthenticated': return t('cockpit.presence.title.unauthenticated')
+      case 'disconnected': return t('cockpit.presence.title.disconnected')
+      default: return t('cockpit.presence.title.offline')
     }
   })
 

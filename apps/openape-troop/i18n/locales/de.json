@@ -441,7 +441,88 @@
   "callDetail": {},
   "policies": {},
   "records": {},
-  "cockpit": {},
+  "cockpit": {
+    "tabTitle": "Troop-Chat",
+    "enableNotifications": "🔔 Benachrichtigungen aktivieren",
+    "header": {
+      "switchCompany": "Firma wechseln",
+      "noCompanies": "Keine Firmen",
+      "newChat": "Neu",
+      "startOperator": "▸ Operator starten",
+      "startOperatorHint": "Zeigt den Setup-Prompt für Claude Code oder codex"
+    },
+    "notice": {
+      "missingTools": "⚠ Beim Operator fehlen Werkzeuge: {tools} — im Worker-PATH nicht gefunden.",
+      "sessionExpired": "Sitzung abgelaufen — neu einloggen"
+    },
+    "empty": {
+      "noCompanies": "Keine Firmen gefunden — bist du eingeloggt?",
+      "askSomething": "Frag {name} etwas – die Antwort streamt live herein."
+    },
+    "scrollToLatest": "↓ Neueste",
+    "day": {
+      "today": "Heute",
+      "yesterday": "Gestern"
+    },
+    "companies": {
+      "title": "Firmen",
+      "controlLink": "troop-Steuerung ›"
+    },
+    "worker": {
+      "title": "Operator starten",
+      "body": "Kopiere den Prompt und füge ihn in {claudeCode} oder {codex} auf deiner Maschine ein. Wichtig: {codexRequired} — der Worker nutzt codex als Backend, auch wenn du das Setup mit Claude Code startest.",
+      "codexRequired": "codex muss installiert sein",
+      "copy": "Prompt kopieren",
+      "copied": "✓ Kopiert",
+      "openInClaudeCode": "In Claude Code öffnen"
+    },
+    "bubble": {
+      "progress": "Zwischenstand",
+      "typing": "tippt",
+      "copyCode": "Kopieren",
+      "codeCopied": "Kopiert"
+    },
+    "composer": {
+      "placeholder": "Nachricht…",
+      "attach": "Datei anhängen",
+      "removeAttachment": "{name} entfernen",
+      "send": "Senden",
+      "stop": "Stopp",
+      "uploadFailed": "Upload fehlgeschlagen: {name}"
+    },
+    "chat": {
+      "attachmentOnly": "(Anhang)",
+      "reconnecting": "Verbindung unterbrochen — verbinde neu …",
+      "answerPending": "Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.",
+      "answerFallback": "Zu deiner Frage „{question}“: {choice}",
+      "waitSeconds": "{text} · Antwort in ~{sec} s"
+    },
+    "presence": {
+      "label": {
+        "active": "Operator live",
+        "working": "Operator arbeitet",
+        "idle": "Ruhemodus",
+        "idleCountdown": "Ruhemodus · {seconds}s",
+        "unauthenticated": "Neu einloggen",
+        "disconnected": "Keine Verbindung",
+        "offline": "Operator offline"
+      },
+      "title": {
+        "active": "Operator verbunden und wach — Antworten kommen sofort",
+        "working": "Operator arbeitet gerade an einer Aufgabe",
+        "idle": "Operator im Ruhemodus — deine Frage wird beim nächsten Check-in beantwortet",
+        "unauthenticated": "Deine Sitzung ist abgelaufen — bitte neu einloggen",
+        "disconnected": "Die Verbindung zum Cockpit ist unterbrochen",
+        "offline": "Kein Operator-Loop verbunden — Fragen bleiben unbeantwortet, bis er läuft"
+      }
+    },
+    "services": {
+      "error": {
+        "loadFailed": "Konnte Services nicht laden.",
+        "invalidUrl": "Ungültige URL."
+      }
+    }
+  },
   "companiesIndex": {},
   "companyDetail": {},
   "companyPanels": {},
