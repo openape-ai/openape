@@ -64,6 +64,35 @@ const troopClient = createSpClient({
   defaultAud: 'troop.openape.ai',
 })
 
+/** A proof link the human should be able to open straight from the card. */
+export function proofAttachedEvent(who: AttentionActor, url: string, kind: 'pr' | 'testrun' | 'screenshot' | 'log', nowSeconds: number) {
+  return {
+    id: ulid(),
+    ts: nowSeconds,
+    actor: who.actor,
+    actor_kind: who.actorKind,
+    task_ref: who.taskRef,
+    type: 'proof.attached',
+    payload: { url, kind },
+  }
+}
+
+/**
+ * Lifecycle of a piece of work — no card, no buzz. These are what the metrics
+ * (waiting time, autonomy rate) are later computed from.
+ */
+export function lifecycleEvent(who: AttentionActor, type: 'work.started' | 'task.shipped', nowSeconds: number) {
+  return {
+    id: ulid(),
+    ts: nowSeconds,
+    actor: who.actor,
+    actor_kind: who.actorKind,
+    task_ref: who.taskRef,
+    type,
+    payload: {},
+  }
+}
+
 /**
  * Post events to troop's inbox. Best-effort by design: a troop outage must
  * never fail the command the user actually ran, so failures warn and return
