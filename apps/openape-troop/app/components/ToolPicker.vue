@@ -17,7 +17,7 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const res = await ($fetch as any)('/api/tool-catalog') as { tools: ToolEntry[] }
+    const res = await apiFetch('/api/tool-catalog') as { tools: ToolEntry[] }
     catalog.value = res.tools
   }
   catch (err: any) {

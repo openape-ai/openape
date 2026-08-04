@@ -20,7 +20,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    detail.value = await ($fetch as any)(`/api/agents/${agentName.value}`)
+    detail.value = await apiFetch(`/api/agents/${agentName.value}`)
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
@@ -41,7 +41,7 @@ onMounted(() => { if (!user.value) navigateTo('/login') })
 const nestHosts = ref<NestHost[]>([])
 let nestHostsTimer: ReturnType<typeof setInterval> | null = null
 async function loadNestHosts() {
-  try { nestHosts.value = await ($fetch as any)('/api/nest/hosts') }
+  try { nestHosts.value = await apiFetch('/api/nest/hosts') }
   catch { /* badge silently falls back to "offline" */ }
 }
 onMounted(() => {
@@ -66,7 +66,7 @@ async function togglePause() {
   pausing.value = true
   try {
     const verb = paused.value ? 'resume' : 'pause'
-    await ($fetch as any)(`/api/agents/${agentName.value}/${verb}`, { method: 'POST' })
+    await apiFetch(`/api/agents/${agentName.value}/${verb}`, { method: 'POST' })
     detail.value.agent.paused = !paused.value
   }
   catch (err: any) {
@@ -97,7 +97,7 @@ async function saveSystemPrompt() {
   systemPromptSaving.value = true
   systemPromptError.value = ''
   try {
-    await ($fetch as any)(`/api/agents/${agentName.value}`, {
+    await apiFetch(`/api/agents/${agentName.value}`, {
       method: 'PATCH',
       body: { system_prompt: systemPromptDraft.value },
     })
@@ -127,13 +127,13 @@ async function applyRecipe() {
   try {
     let params: Record<string, unknown> = {}
     if (recipeParams.value.trim()) params = JSON.parse(recipeParams.value)
-    const res = await ($fetch as any)(`/api/agents/${agentName.value}/recipe`, {
+    const res = await apiFetch<{ ref: string, required_capabilities?: string[] }>(`/api/agents/${agentName.value}/recipe`, {
       method: 'POST',
       body: { repo_ref: recipeRef.value.trim(), params },
     })
     recipeResult.value = { ref: res.ref, required_capabilities: res.required_capabilities ?? [] }
     // Refresh the system prompt the editor shows.
-    if (detail.value) detail.value.agent.systemPrompt = (await ($fetch as any)(`/api/agents/${agentName.value}`)).agent.systemPrompt
+    if (detail.value) detail.value.agent.systemPrompt = (await apiFetch<Detail>(`/api/agents/${agentName.value}`)).agent.systemPrompt
   }
   catch (err: any) {
     recipeError.value = err?.data?.statusMessage || err?.message || t('agentDetail.recipe.error.applyFailed')
@@ -165,7 +165,7 @@ async function saveTools() {
   toolsSaving.value = true
   toolsError.value = ''
   try {
-    await ($fetch as any)(`/api/agents/${agentName.value}`, {
+    await apiFetch(`/api/agents/${agentName.value}`, {
       method: 'PATCH',
       body: { tools: toolsDraft.value },
     })
@@ -229,13 +229,13 @@ async function save() {
   saveError.value = ''
   try {
     if (editing.value.isNew) {
-      await ($fetch as any)(`/api/agents/${agentName.value}/tasks`, {
+      await apiFetch(`/api/agents/${agentName.value}/tasks`, {
         method: 'POST',
         body: form.value,
       })
     }
     else {
-      await ($fetch as any)(`/api/agents/${agentName.value}/tasks/${editing.value.taskId}`, {
+      await apiFetch(`/api/agents/${agentName.value}/tasks/${editing.value.taskId}`, {
         method: 'PUT',
         body: {
           name: form.value.name,
@@ -261,7 +261,7 @@ async function save() {
 async function remove(task: Task) {
   if (!confirm(t('agentDetail.tasks.confirmDelete', { name: task.name }))) return
   try {
-    await ($fetch as any)(`/api/agents/${agentName.value}/tasks/${task.taskId}`, { method: 'DELETE' })
+    await apiFetch(`/api/agents/${agentName.value}/tasks/${task.taskId}`, { method: 'DELETE' })
     await load()
   }
   catch (err: any) {
@@ -292,7 +292,7 @@ function openDestroy() {
 async function pollDestroy(): Promise<void> {
   if (!destroyIntentId.value) return
   try {
-    const res = await ($fetch as any)(`/api/agents/destroy-intent/${destroyIntentId.value}`)
+    const res = await apiFetch<{ pending?: boolean, ok?: boolean, error?: string }>(`/api/agents/destroy-intent/${destroyIntentId.value}`)
     if (res.pending) {
       destroyPollTimer = setTimeout(() => { void pollDestroy() }, 2000)
       return
@@ -315,7 +315,7 @@ async function submitDestroy() {
   destroyError.value = ''
   destroying.value = true
   try {
-    const res = await ($fetch as any)('/api/agents/destroy-intent', {
+    const res = await apiFetch<{ intent_id: string }>('/api/agents/destroy-intent', {
       method: 'POST',
       body: { name: agentName.value },
     })

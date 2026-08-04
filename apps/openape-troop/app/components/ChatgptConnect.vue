@@ -20,7 +20,7 @@ async function connect() {
   error.value = ''
   state.value = 'pending'
   try {
-    const res = await ($fetch as any)(`/api/agents/${props.agentName}/oauth/chatgpt/initiate`, { method: 'POST' })
+    const res = await apiFetch<{ user_code: string, verification_uri: string, interval?: number }>(`/api/agents/${props.agentName}/oauth/chatgpt/initiate`, { method: 'POST' })
     userCode.value = res.user_code
     verificationUri.value = res.verification_uri
     schedule((res.interval ?? 5) * 1000)
@@ -37,10 +37,10 @@ function schedule(ms: number) {
 
 async function poll() {
   try {
-    const res = await ($fetch as any)(`/api/agents/${props.agentName}/oauth/chatgpt/poll`, { method: 'POST' })
+    const res = await apiFetch<{ status: string, account_id?: string, error?: string }>(`/api/agents/${props.agentName}/oauth/chatgpt/poll`, { method: 'POST' })
     if (res.status === 'connected') {
       state.value = 'connected'
-      accountId.value = res.account_id
+      accountId.value = res.account_id ?? ''
       emit('connected')
     }
     else if (res.status === 'denied') {

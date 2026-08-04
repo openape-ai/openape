@@ -37,8 +37,8 @@ async function load() {
   error.value = ''
   try {
     ;[items.value, agents.value] = await Promise.all([
-      ($fetch as any)('/api/cockpit/skills'),
-      ($fetch as any)('/api/cockpit/agents'),
+      apiFetch<Skill[]>('/api/cockpit/skills'),
+      apiFetch<Agent[]>('/api/cockpit/agents'),
     ])
   }
   catch (err: any) {
@@ -78,8 +78,8 @@ async function submit() {
   formError.value = ''
   const body = { name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo }
   try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/skills/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)('/api/cockpit/skills', { method: 'POST', body })
+    if (editingId.value) await apiFetch(`/api/cockpit/skills/${editingId.value}`, { method: 'PATCH', body })
+    else await apiFetch('/api/cockpit/skills', { method: 'POST', body })
     showForm.value = false
     await load()
   }
@@ -89,7 +89,7 @@ async function submit() {
 async function remove(s: Skill) {
   busy[s.id] = true
   try {
-    await ($fetch as any)(`/api/cockpit/skills/${s.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/cockpit/skills/${s.id}`, { method: 'DELETE' })
     await load()
   }
   finally { busy[s.id] = false }
