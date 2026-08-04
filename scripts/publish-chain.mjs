@@ -71,7 +71,8 @@ function getNpmVersion(name) {
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     return result.trim()
-  } catch {
+  }
+  catch {
     return null // not yet published
   }
 }
@@ -110,9 +111,10 @@ for (const pkg of PACKAGES) {
   const npm = getNpmVersion(pkg.name)
 
   if (local === npm) {
-    console.log(`\x1b[2m⏭  ${pkg.name}@${local} — already on npm\x1b[0m`)
-  } else {
-    console.log(`\x1b[36m📦 ${pkg.name} ${npm || '(new)'} → ${local}\x1b[0m`)
+    console.log(`\x1B[2m⏭  ${pkg.name}@${local} — already on npm\x1B[0m`)
+  }
+  else {
+    console.log(`\x1B[36m📦 ${pkg.name} ${npm || '(new)'} → ${local}\x1B[0m`)
     toPublish.push(pkg)
   }
 }
@@ -137,20 +139,21 @@ const failures = []
 
 for (const pkg of toPublish) {
   const version = getLocalVersion(pkg.dir)
-  console.log(`\n\x1b[36m▶ ${pkg.name}@${version}\x1b[0m`)
+  console.log(`\n\x1B[36m▶ ${pkg.name}@${version}\x1B[0m`)
 
   try {
     build(pkg.dir)
     publish(pkg.dir)
-    console.log(`\x1b[32m✓ ${pkg.name}@${version} published\x1b[0m`)
-  } catch (err) {
-    console.error(`\x1b[31m✗ ${pkg.name}@${version} failed\x1b[0m`)
+    console.log(`\x1B[32m✓ ${pkg.name}@${version} published\x1B[0m`)
+  }
+  catch (err) {
+    console.error(`\x1B[31m✗ ${pkg.name}@${version} failed\x1B[0m`)
     failures.push(pkg.name)
     // Stop on failure — downstream packages depend on this
-    console.error(`\n\x1b[31mStopping: ${pkg.name} failed, downstream packages would have wrong dependencies.\x1b[0m\n`)
+    console.error(`\n\x1B[31mStopping: ${pkg.name} failed, downstream packages would have wrong dependencies.\x1B[0m\n`)
     process.exit(1)
   }
 }
 
 console.log(`\n${'─'.repeat(50)}`)
-console.log(`\x1b[32m✅ All ${toPublish.length} package(s) published successfully.\x1b[0m\n`)
+console.log(`\x1B[32m✅ All ${toPublish.length} package(s) published successfully.\x1B[0m\n`)

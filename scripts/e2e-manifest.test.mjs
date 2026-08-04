@@ -80,3 +80,11 @@ test('throws on a malformed report instead of silently skipping it', () => {
     /no testResults array/,
   )
 })
+
+test('--allow-empty: no affected suite is a valid outcome, not a failure', () => {
+  // Since e2e runs --affected, a PR that touches no app runs no suite at all.
+  // Without the flag that must still throw: a suite crashing before vitest
+  // wrote its report looks identical and must not pass silently.
+  const allSkipped = [{ name: 'core', report: null }, { name: 'pr', report: null }]
+  assert.throws(() => buildManifest(allSkipped, { sha: 'abc' }), /nothing to publish/)
+})
