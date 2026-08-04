@@ -543,10 +543,143 @@
       }
     }
   },
-  "companiesIndex": {},
-  "companyDetail": {},
+  "companiesIndex": {
+    "tabTitle": "Companies",
+    "heading": "Companies",
+    "subheading": "Your companies — open one to see its hierarchy and objectives.",
+    "newButton": "Company",
+    "loginWhat": "your companies",
+    "empty": {
+      "title": "No company yet",
+      "hint": "Create your first company — the Operator takes its direction from your vision.",
+      "button": "Create company"
+    },
+    "card": {
+      "members": "Members",
+      "budget": "Budget",
+      "budgetPerMonth": "€{amount}/mo"
+    },
+    "create": {
+      "title": "Create company",
+      "nameLabel": "Name",
+      "namePlaceholder": "Company name",
+      "visionLabel": "Vision",
+      "visionDescription": "The Operator reads this on every interaction.",
+      "visionPlaceholder": "What should this company achieve?",
+      "submit": "Create"
+    },
+    "error": {
+      "loadFailed": "Could not load your companies.",
+      "createFailed": "Creating the company failed."
+    }
+  },
+  "companyDetail": {
+    "tabTitle": "Company",
+    "backToCompanies": "Companies",
+    "provider": {
+      "session": "Claude session",
+      "active": "Active",
+      "idle": "Idle",
+      "working": "Working",
+      "offline": "Offline"
+    },
+    "tab": {
+      "company": "Company",
+      "objectives": "Objectives",
+      "memory": "Memory",
+      "skills": "Skills",
+      "automation": "Automation",
+      "reports": "Reports"
+    },
+    "policySync": {
+      "failedTitle": "Policy sync failed",
+      "failedDescription": "Last attempt {when} — role changes have no effect. {error}",
+      "driftTitle": "Role tools changed since the last policy sync",
+      "driftDescription": "Policy last confirmed {when}. Takes effect with the next sync: {changes}",
+      "upToDate": "Operator policy up to date ({mode}, {patterns} patterns) · confirmed {when}"
+    },
+    "template": {
+      "none": "No template (empty)",
+      "programmierer": "Developer",
+      "ceo": "Operator",
+      "pm": "Project manager",
+      "mail-m365": "Mail assistant · Microsoft 365",
+      "mail-gmail": "Mail assistant · Gmail",
+      "buchhaltung": "Bookkeeping",
+      "social": "Social media",
+      "docs": "Document reader"
+    },
+    "employee": {
+      "titleAdd": "Add employee",
+      "titleEdit": "Edit employee",
+      "template": {
+        "label": "Template",
+        "description": "Optional — pre-fills the fields. Edit them freely afterwards.",
+        "placeholder": "No template"
+      },
+      "name": {
+        "label": "Name",
+        "placeholder": "Mail assistant"
+      },
+      "role": {
+        "label": "Role"
+      },
+      "supervisor": {
+        "label": "Reports to",
+        "description": "Who does this employee report to? This builds the hierarchy.",
+        "placeholder": "Pick a manager",
+        "owner": "— Owner (no manager)"
+      },
+      "tools": {
+        "label": "Tools",
+        "description": "Commands available in the terminal, written as patterns, one per line — e.g. o365-cli *"
+      },
+      "duties": {
+        "label": "Summary",
+        "description": "Shown in the org chart. One sentence — what is this role for?",
+        "placeholder": "Triages the inbox read-only and reports the mails that need action."
+      },
+      "procedure": {
+        "label": "Work instructions",
+        "description": "The agent receives exactly this text. Leave it empty if the role should only report.",
+        "placeholder": "## 1. Pick up a task\n…"
+      },
+      "risk": {
+        "badge": "Injection score {score}",
+        "badgeWithReason": "Injection score {score} · {reason}",
+        "none": "no injection patterns detected"
+      },
+      "vars": {
+        "label": "Facts (vars)",
+        "description": "JSON. This role's own facts — the company facts are added on top automatically."
+      }
+    },
+    "editOrg": {
+      "title": "Edit company",
+      "nameLabel": "Name",
+      "visionLabel": "Vision",
+      "visionDescription": "The Operator reads this on every interaction.",
+      "budgetLabel": "Monthly budget (EUR)",
+      "varsLabel": "Company facts (vars)",
+      "varsDescription": "JSON. Every employee inherits these facts — their own facts override them."
+    },
+    "error": {
+      "loadFailed": "Could not load this company.",
+      "invalidJson": "Not valid JSON: {message}",
+      "varsNotObject": "vars must be a JSON object, not an array or a plain value."
+    }
+  },
   "companyPanels": {},
-  "orgChart": {},
+  "orgChart": {
+    "title": "Org chart",
+    "addButton": "Employee",
+    "ownerRole": "Owner",
+    "empty": "No employees yet — add the Operator and their team.",
+    "action": {
+      "pause": "Pause",
+      "activate": "Activate"
+    }
+  },
   "nestsIndex": {},
   "nestDetail": {},
   "servicesIndex": {},

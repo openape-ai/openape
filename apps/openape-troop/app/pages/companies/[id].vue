@@ -8,7 +8,9 @@ import { useOpenApeAuth } from '#imports'
 // defines the workforce; a provider (Claude session today, a nest later) runs it.
 const route = useRoute()
 const orgId = computed(() => String(route.params.id))
-useSeoMeta({ title: () => 'Firma' })
+const { t, te } = useI18n()
+const { fmtRelative } = useRelativeTime()
+useSeoMeta({ title: () => t('companyDetail.tabTitle') })
 
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
@@ -39,22 +41,14 @@ async function loadYoloSync() {
 const driftDescription = computed(() => {
   const s = yoloSync.value
   if (!s?.state) return ''
-  const changes = [...(s.added ?? []).map(t => `+ ${t}`), ...(s.removed ?? []).map(t => `− ${t}`)].join(' · ')
-  return `Policy zuletzt bestätigt ${agoLabel(s.state.syncedAt)}. Wirkt erst nach dem nächsten Sync: ${changes}`
+  const changes = [...(s.added ?? []).map(tool => `+ ${tool}`), ...(s.removed ?? []).map(tool => `− ${tool}`)].join(' · ')
+  return t('companyDetail.policySync.driftDescription', { when: fmtRelative(s.state.syncedAt), changes })
 })
-function agoLabel(ts: number) {
-  if (!ts) return 'nie'
-  const s = Math.max(0, Math.floor(Date.now() / 1000) - ts)
-  if (s < 90) return 'gerade eben'
-  if (s < 5400) return `vor ${Math.round(s / 60)} min`
-  if (s < 129600) return `vor ${Math.round(s / 3600)} h`
-  return `vor ${Math.round(s / 86400)} Tagen`
-}
 
 // Provider status — the agentic provider running this company (today: the Claude
 // session loop). Reuses the cockpit presence (active/idle/working/offline).
 const providerMode = ref<'active' | 'idle' | 'working' | 'offline'>('offline')
-const providerLabel = computed(() => ({ active: 'Aktiv', idle: 'Ruhend', working: 'Arbeitet', offline: 'Offline' }[providerMode.value]))
+const providerLabel = computed(() => t(`companyDetail.provider.${providerMode.value}`))
 const providerColor = computed(() => ({ active: 'success', idle: 'info', working: 'warning', offline: 'neutral' } as const)[providerMode.value])
 async function loadProvider() {
   try { providerMode.value = (await apiFetch<{ mode: 'active' | 'idle' | 'working' | 'offline' }>('/api/cockpit/status')).mode }
@@ -70,47 +64,50 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'Konnte die Firma nicht laden.'
+    error.value = err?.data?.statusMessage || err?.message || t('companyDetail.error.loadFailed')
   }
   finally { loading.value = false }
 }
 
 const tab = ref<'firma' | 'ziele' | 'memory' | 'skills' | 'automatik' | 'reports'>('firma')
 const TABS = [
-  { key: 'firma', label: 'Firma', icon: 'i-lucide-building-2' },
-  { key: 'ziele', label: 'Ziele', icon: 'i-lucide-target' },
-  { key: 'memory', label: 'Memory', icon: 'i-lucide-brain' },
-  { key: 'skills', label: 'Skills', icon: 'i-lucide-wand-2' },
-  { key: 'automatik', label: 'Automatik', icon: 'i-lucide-alarm-clock' },
-  { key: 'reports', label: 'Reports', icon: 'i-lucide-file-text' },
+  { key: 'firma', labelKey: 'companyDetail.tab.company', icon: 'i-lucide-building-2' },
+  { key: 'ziele', labelKey: 'companyDetail.tab.objectives', icon: 'i-lucide-target' },
+  { key: 'memory', labelKey: 'companyDetail.tab.memory', icon: 'i-lucide-brain' },
+  { key: 'skills', labelKey: 'companyDetail.tab.skills', icon: 'i-lucide-wand-2' },
+  { key: 'automatik', labelKey: 'companyDetail.tab.automation', icon: 'i-lucide-alarm-clock' },
+  { key: 'reports', labelKey: 'companyDetail.tab.reports', icon: 'i-lucide-file-text' },
 ] as const
 
 // ── Employee form (add + edit) ──
 // An optional template pre-fills Name/Rolle/Werkzeuge/Beschreibung, then edit
 // freely. „Werkzeuge" = wildcard command patterns (e.g. `o365-cli *`).
-interface RoleTemplate { key: string, label: string, name: string, role: string, tools: string, duties: string, procedure?: string }
+// The prefilled name/duties/tools stay as authored: they are persisted and end
+// up in the agent's own prompt. Only the picker label is UI text.
+interface RoleTemplate { key: string, name: string, role: string, tools: string, duties: string, procedure?: string }
 const ROLE_TEMPLATES: RoleTemplate[] = [
-  { key: '', label: 'Keine Vorlage (leer)', name: '', role: 'specialist', tools: '', duties: '' },
-  { key: 'programmierer', label: 'Programmierer', name: 'Programmierer', role: 'specialist', tools: '*', duties: 'Implementiert Sprint-Todos in einem Worktree, verifiziert lokal und pusht einen PR. Merged nie selbst.', procedure: '' },
-  { key: 'ceo', label: 'Operator', name: 'Operator', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
-  { key: 'pm', label: 'Projektmanager', name: 'Projektmanager', role: 'teamlead', tools: 'ape-tasks *', duties: 'Pflegt Backlog/Aufgaben, plant, hält Termine/Blocker sichtbar.' },
-  { key: 'mail-m365', label: 'Mail-Assistent · Microsoft 365', name: 'Mail-Assistent', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Triagiert die Inbox read-only, meldet die handlungsrelevanten Mails und liest Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht NIE.' },
-  { key: 'mail-gmail', label: 'Mail-Assistent · Gmail', name: 'Mail-Assistent', role: 'specialist', tools: 'gmail-cli *', duties: 'Triagiert die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
-  { key: 'buchhaltung', label: 'Buchhaltung', name: 'Buchhaltung', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Sichtet Belege/Eingangsrechnungen read-only, bereitet Ablage nach Bill-To-Regeln vor. Bucht/zahlt nichts selbst — legt Vorschläge vor.' },
-  { key: 'social', label: 'Social Media', name: 'Social Media', role: 'specialist', tools: '', duties: 'Entwirft LinkedIn/X-Posts (blog-first) aus delta-mind.at-Inhalten. Postet nichts selbst — legt Entwürfe vor.' },
-  { key: 'docs', label: 'Dokument-Leser', name: 'Dokument-Leser', role: 'specialist', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
+  { key: '', name: '', role: 'specialist', tools: '', duties: '' },
+  { key: 'programmierer', name: 'Programmierer', role: 'specialist', tools: '*', duties: 'Implementiert Sprint-Todos in einem Worktree, verifiziert lokal und pusht einen PR. Merged nie selbst.', procedure: '' },
+  { key: 'ceo', name: 'Operator', role: 'ceo', tools: 'ape-tasks *', duties: 'Führt die Firma, kommuniziert mit dem Owner und skaliert das Team hoch/runter. Verdichtet die Meldungen der Mitarbeiter zu Handlungsbedarf.' },
+  { key: 'pm', name: 'Projektmanager', role: 'teamlead', tools: 'ape-tasks *', duties: 'Pflegt Backlog/Aufgaben, plant, hält Termine/Blocker sichtbar.' },
+  { key: 'mail-m365', name: 'Mail-Assistent', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Triagiert die Inbox read-only, meldet die handlungsrelevanten Mails und liest Anhänge (PDF) auf Nachfrage. Sendet/verschiebt/löscht NIE.' },
+  { key: 'mail-gmail', name: 'Mail-Assistent', role: 'specialist', tools: 'gmail-cli *', duties: 'Triagiert die Gmail-Inbox read-only und meldet die handlungsrelevanten Mails. Sendet/verschiebt/löscht NIE.' },
+  { key: 'buchhaltung', name: 'Buchhaltung', role: 'specialist', tools: 'o365-cli *\npdftotext *', duties: 'Sichtet Belege/Eingangsrechnungen read-only, bereitet Ablage nach Bill-To-Regeln vor. Bucht/zahlt nichts selbst — legt Vorschläge vor.' },
+  { key: 'social', name: 'Social Media', role: 'specialist', tools: '', duties: 'Entwirft LinkedIn/X-Posts (blog-first) aus delta-mind.at-Inhalten. Postet nichts selbst — legt Entwürfe vor.' },
+  { key: 'docs', name: 'Dokument-Leser', role: 'specialist', tools: 'pdftotext *\npdfinfo *', duties: 'Liest PDF-/Dokument-Inhalte read-only und fasst die relevanten Fakten/Zahlen zusammen.' },
 ]
-const templateItems = ROLE_TEMPLATES.map(t => ({ label: t.label, value: t.key }))
-const roleItems = [
-  { label: 'Operator', value: 'ceo' },
-  { label: 'Team-Lead', value: 'teamlead' },
-  { label: 'Specialist', value: 'specialist' },
-]
-const roleLabelShort: Record<string, string> = { ceo: 'Operator', teamlead: 'Team-Lead', specialist: 'Specialist', sanierer: 'Controlling', other: 'Mitarbeiter' }
+const templateItems = computed(() => ROLE_TEMPLATES.map(tpl => ({ label: t(`companyDetail.template.${tpl.key || 'none'}`), value: tpl.key })))
+const ROLE_OPTIONS = ['ceo', 'teamlead', 'specialist']
+const roleItems = computed(() => ROLE_OPTIONS.map(role => ({ label: t(`common.role.${role}`), value: role })))
+// A role the catalog does not know still has to name itself in the picker.
+function roleLabel(role: string): string {
+  const key = `common.role.${role}`
+  return te(key) ? t(key) : role
+}
 const editingId = ref<string | null>(null)
 const supervisorItems = computed(() => [
-  { label: '— Owner (kein Vorgesetzter)', value: '' },
-  ...employees.value.filter(e => e.id !== editingId.value).map(e => ({ label: `${e.label} · ${roleLabelShort[e.role] ?? e.role}`, value: e.id })),
+  { label: t('companyDetail.employee.supervisor.owner'), value: '' },
+  ...employees.value.filter(e => e.id !== editingId.value).map(e => ({ label: `${e.label} · ${roleLabel(e.role)}`, value: e.id })),
 ])
 const showForm = ref(false)
 const templateKey = ref('')
@@ -125,8 +122,8 @@ function parseVarsText(text: string): { vars: Record<string, unknown> } | { erro
   if (!trimmed) return { vars: {} }
   let parsed: unknown
   try { parsed = JSON.parse(trimmed) }
-  catch (err) { return { error: `Kein gültiges JSON: ${(err as Error).message}` } }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: 'vars muss ein JSON-Objekt sein, kein Array oder Wert.' }
+  catch (err) { return { error: t('companyDetail.error.invalidJson', { message: (err as Error).message }) } }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: t('companyDetail.error.varsNotObject') }
   return { vars: parsed as Record<string, unknown> }
 }
 const varsError = computed(() => {
@@ -144,10 +141,18 @@ const procedureRisk = computed(() => {
   const level = score >= 0.7 ? 'error' : score >= 0.3 ? 'warning' : 'success'
   return { score, reason: reason ?? '', level: level as 'error' | 'warning' | 'success' }
 })
+const procedureRiskLabel = computed(() => {
+  const risk = procedureRisk.value
+  if (!risk) return ''
+  const score = risk.score.toFixed(2)
+  return risk.reason
+    ? t('companyDetail.employee.risk.badgeWithReason', { score, reason: risk.reason })
+    : t('companyDetail.employee.risk.badge', { score })
+})
 
 watch(templateKey, (key) => {
-  const t = ROLE_TEMPLATES.find(x => x.key === key) ?? ROLE_TEMPLATES[0]!
-  form.name = t.name; form.role = t.role; form.tools = t.tools; form.duties = t.duties; form.procedure = t.procedure ?? ''
+  const tpl = ROLE_TEMPLATES.find(x => x.key === key) ?? ROLE_TEMPLATES[0]!
+  form.name = tpl.name; form.role = tpl.role; form.tools = tpl.tools; form.duties = tpl.duties; form.procedure = tpl.procedure ?? ''
 })
 function openAdd() {
   formError.value = ''; editingId.value = null; templateKey.value = ''
@@ -163,7 +168,7 @@ function openEdit(e: Employee) {
   showForm.value = true
 }
 async function submitForm() {
-  if (!form.name.trim()) { formError.value = 'Name angeben.'; return }
+  if (!form.name.trim()) { formError.value = t('common.required', { field: t('companyDetail.employee.name.label') }); return }
   const parsedVars = parseVarsText(form.varsText)
   if ('error' in parsedVars) { formError.value = parsedVars.error; return }
   saving.value = true
@@ -174,7 +179,7 @@ async function submitForm() {
     duties: form.duties.trim(),
     procedure: form.procedure.trim(),
     vars: parsedVars.vars,
-    tools: form.tools.split(/[\n,]/).map((t: string) => t.trim()).filter(Boolean),
+    tools: form.tools.split(/[\n,]/).map((tool: string) => tool.trim()).filter(Boolean),
     reportsTo: form.reportsTo || null,
   }
   try {
@@ -183,7 +188,7 @@ async function submitForm() {
     showForm.value = false
     await Promise.all([loadEmployees(), loadYoloSync()])
   }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
+  catch (err: any) { formError.value = err?.data?.statusMessage || t('common.error.saveFailed') }
   finally { saving.value = false }
 }
 async function deleteEmployee(e: { id: string }) {
@@ -221,7 +226,7 @@ async function saveOrg() {
     showEdit.value = false
     await load()
   }
-  catch (err: any) { saveOrgError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
+  catch (err: any) { saveOrgError.value = err?.data?.statusMessage || t('common.error.saveFailed') }
   finally { savingEdit.value = false }
 }
 
@@ -230,11 +235,11 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <AppHeader :back="{ to: '/companies', label: 'Firmen' }" active="companies" :show-logout="false" />
+    <AppHeader :back="{ to: '/companies', label: $t('companyDetail.backToCompanies') }" active="companies" :show-logout="false" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <div v-if="loading" class="text-zinc-500 py-20 text-center">
-        Lädt …
+        {{ $t('common.loading') }}
       </div>
       <UAlert v-else-if="error" color="error" variant="subtle" :title="error" />
 
@@ -242,10 +247,10 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <div class="mb-6">
           <div class="flex items-center justify-between gap-2 mb-3">
             <UBadge :color="providerColor" variant="subtle" size="sm" :ui="{ base: 'gap-1.5' }">
-              <UIcon name="i-lucide-cpu" class="size-3.5" /> Claude Session · {{ providerLabel }}
+              <UIcon name="i-lucide-cpu" class="size-3.5" /> {{ $t('companyDetail.provider.session') }} · {{ providerLabel }}
             </UBadge>
             <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-pencil" @click="openEditOrg">
-              Firma bearbeiten
+              {{ $t('companyDetail.editOrg.title') }}
             </UButton>
           </div>
           <h2 class="text-3xl font-bold tracking-tight">
@@ -256,15 +261,15 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
         <div class="flex gap-1 border-b border-zinc-800/80 mb-8 overflow-x-auto">
           <button
-            v-for="t in TABS"
-            :key="t.key"
+            v-for="tabItem in TABS"
+            :key="tabItem.key"
             class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 shrink-0"
-            :class="tab === t.key ? 'border-primary-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'"
-            :aria-label="t.label"
-            @click="tab = t.key"
+            :class="tab === tabItem.key ? 'border-primary-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'"
+            :aria-label="$t(tabItem.labelKey)"
+            @click="tab = tabItem.key"
           >
-            <UIcon :name="t.icon" class="size-4" />
-            <span :class="tab === t.key ? '' : 'hidden sm:inline'">{{ t.label }}</span>
+            <UIcon :name="tabItem.icon" class="size-4" />
+            <span :class="tab === tabItem.key ? '' : 'hidden sm:inline'">{{ $t(tabItem.labelKey) }}</span>
           </button>
         </div>
 
@@ -275,8 +280,8 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               color="error"
               variant="subtle"
               icon="i-lucide-shield-alert"
-              title="Policy-Sync fehlgeschlagen"
-              :description="`Letzter Versuch ${agoLabel(yoloSync.state.reportedAt)} — Rollen-Änderungen wirken nicht. ${yoloSync.state.error}`"
+              :title="$t('companyDetail.policySync.failedTitle')"
+              :description="$t('companyDetail.policySync.failedDescription', { when: fmtRelative(yoloSync.state.reportedAt), error: yoloSync.state.error })"
               class="mb-4"
             />
             <UAlert
@@ -284,13 +289,13 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               color="warning"
               variant="subtle"
               icon="i-lucide-shield-alert"
-              title="Rollen-Werkzeuge geändert seit dem letzten Policy-Sync"
+              :title="$t('companyDetail.policySync.driftTitle')"
               :description="driftDescription"
               class="mb-4"
             />
             <div v-else class="mb-4 flex items-center gap-2 text-xs text-zinc-500">
               <UIcon name="i-lucide-shield-check" class="size-4 text-success-500" />
-              <span>Operator-Policy aktuell ({{ yoloSync.state.mode }}, {{ yoloSync.state.patternCount }} Muster) · bestätigt {{ agoLabel(yoloSync.state.syncedAt) }}</span>
+              <span>{{ $t('companyDetail.policySync.upToDate', { mode: yoloSync.state.mode, patterns: yoloSync.state.patternCount, when: fmtRelative(yoloSync.state.syncedAt) }) }}</span>
             </div>
           </template>
           <CompanyChart :employees="employees" :owner-email="ownerEmail" @add="openAdd" @edit="openEdit" @delete="deleteEmployee" @toggle="toggleEmployee" />
@@ -312,55 +317,55 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              {{ editingId ? 'Mitarbeiter bearbeiten' : 'Mitarbeiter hinzufügen' }}
+              {{ editingId ? $t('companyDetail.employee.titleEdit') : $t('companyDetail.employee.titleAdd') }}
             </h3>
             <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
           </div>
-          <UFormField v-if="!editingId" label="Vorlage" description="Optional — füllt die Felder vor. Danach frei editierbar.">
-            <USelect v-model="templateKey" :items="templateItems" placeholder="Keine Vorlage" class="w-full" />
+          <UFormField v-if="!editingId" :label="$t('companyDetail.employee.template.label')" :description="$t('companyDetail.employee.template.description')">
+            <USelect v-model="templateKey" :items="templateItems" :placeholder="$t('companyDetail.employee.template.placeholder')" class="w-full" />
           </UFormField>
           <div class="grid grid-cols-2 gap-3">
-            <UFormField label="Name">
-              <UInput v-model="form.name" placeholder="Mail-Assistent" class="w-full" :ui="{ base: 'w-full' }" />
+            <UFormField :label="$t('companyDetail.employee.name.label')">
+              <UInput v-model="form.name" :placeholder="$t('companyDetail.employee.name.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
             </UFormField>
-            <UFormField label="Rolle">
+            <UFormField :label="$t('companyDetail.employee.role.label')">
               <USelect v-model="form.role" :items="roleItems" class="w-full" />
             </UFormField>
           </div>
-          <UFormField label="Vorgesetzter" description="Wem berichtet dieser Mitarbeiter? Bildet die Hierarchie.">
-            <USelect v-model="form.reportsTo" :items="supervisorItems" placeholder="Vorgesetzten wählen" class="w-full" />
+          <UFormField :label="$t('companyDetail.employee.supervisor.label')" :description="$t('companyDetail.employee.supervisor.description')">
+            <USelect v-model="form.reportsTo" :items="supervisorItems" :placeholder="$t('companyDetail.employee.supervisor.placeholder')" class="w-full" />
           </UFormField>
-          <UFormField label="Werkzeuge" description="Im Terminal verfügbare Kommandos als Muster, eines pro Zeile — z. B. o365-cli *">
+          <UFormField :label="$t('companyDetail.employee.tools.label')" :description="$t('companyDetail.employee.tools.description')">
             <UTextarea v-model="form.tools" :rows="2" placeholder="o365-cli *" class="w-full font-mono text-sm" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Kurzfassung" description="Erscheint im Organigramm. Ein Satz — wofür ist die Rolle da?">
-            <UTextarea v-model="form.duties" :rows="2" placeholder="Triagiert die Inbox read-only und meldet die handlungsrelevanten Mails." class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="$t('companyDetail.employee.duties.label')" :description="$t('companyDetail.employee.duties.description')">
+            <UTextarea v-model="form.duties" :rows="2" :placeholder="$t('companyDetail.employee.duties.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Arbeitsanweisung" description="Der Agent bekommt genau diesen Text. Leer lassen, wenn die Rolle nur berichten soll.">
+          <UFormField :label="$t('companyDetail.employee.procedure.label')" :description="$t('companyDetail.employee.procedure.description')">
             <template #hint>
               <UBadge
                 v-if="procedureRisk"
                 :color="procedureRisk.level"
                 variant="subtle"
                 size="sm"
-                :title="procedureRisk.reason || 'keine Injection-Muster erkannt'"
+                :title="procedureRisk.reason || $t('companyDetail.employee.risk.none')"
               >
-                Injection-Score {{ procedureRisk.score.toFixed(2) }}{{ procedureRisk.reason ? ` · ${procedureRisk.reason}` : '' }}
+                {{ procedureRiskLabel }}
               </UBadge>
             </template>
-            <UTextarea v-model="form.procedure" :rows="12" placeholder="## 1. Aufgabe holen&#10;…" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+            <UTextarea v-model="form.procedure" :rows="12" :placeholder="$t('companyDetail.employee.procedure.placeholder')" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Kenndaten (vars)" description="JSON. Die eigenen Fakten der Rolle — die Firmen-Fakten kommen automatisch dazu.">
+          <UFormField :label="$t('companyDetail.employee.vars.label')" :description="$t('companyDetail.employee.vars.description')">
             <UTextarea v-model="form.varsText" :rows="4" placeholder="{ &quot;boardUser&quot;: 254 }" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UAlert v-if="varsError" color="warning" variant="subtle" :title="varsError" />
           <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showForm = false">
-              Abbrechen
+              {{ $t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="saving" :disabled="!!varsError" @click="submitForm">
-              {{ editingId ? 'Speichern' : 'Hinzufügen' }}
+              {{ editingId ? $t('common.save') : $t('common.add') }}
             </UButton>
           </div>
         </div>
@@ -373,30 +378,30 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Firma bearbeiten
+              {{ $t('companyDetail.editOrg.title') }}
             </h3>
             <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showEdit = false" />
           </div>
-          <UFormField label="Name">
+          <UFormField :label="$t('companyDetail.editOrg.nameLabel')">
             <UInput v-model="editForm.name" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Vision" description="Der Operator liest das bei jeder Interaktion.">
+          <UFormField :label="$t('companyDetail.editOrg.visionLabel')" :description="$t('companyDetail.editOrg.visionDescription')">
             <UTextarea v-model="editForm.vision" :rows="5" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Monatsbudget (EUR)">
+          <UFormField :label="$t('companyDetail.editOrg.budgetLabel')">
             <UInput v-model.number="editForm.budget" type="number" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Firmen-Kenndaten (vars)" description="JSON. Jeder Mitarbeiter erbt diese Fakten — eigene Kenndaten überschreiben sie.">
+          <UFormField :label="$t('companyDetail.editOrg.varsLabel')" :description="$t('companyDetail.editOrg.varsDescription')">
             <UTextarea v-model="editForm.varsText" :rows="5" placeholder="{ &quot;project&quot;: 125 }" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UAlert v-if="editVarsError" color="warning" variant="subtle" :title="editVarsError" />
           <UAlert v-if="saveOrgError" color="error" variant="subtle" :title="saveOrgError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showEdit = false">
-              Abbrechen
+              {{ $t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="savingEdit" :disabled="!!editVarsError" @click="saveOrg">
-              Speichern
+              {{ $t('common.save') }}
             </UButton>
           </div>
         </div>

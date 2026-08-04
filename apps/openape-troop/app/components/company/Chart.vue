@@ -37,9 +37,9 @@ watch(() => props.employees, () => nextTick(centerOnOwner))
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-center gap-2">
-      <span class="text-xs text-zinc-500">Organigramm</span>
+      <span class="text-xs text-zinc-500">{{ $t('orgChart.title') }}</span>
       <UButton size="xs" variant="soft" color="primary" icon="i-lucide-user-plus" @click="$emit('add')">
-        Mitarbeiter
+        {{ $t('orgChart.addButton') }}
       </UButton>
     </div>
 
@@ -48,7 +48,7 @@ watch(() => props.employees, () => nextTick(centerOnOwner))
         <li>
           <div class="org-card" style="border-color: color-mix(in srgb, #f59e0b 40%, transparent); background: color-mix(in srgb, #f59e0b 6%, #18181b)">
             <div class="org-role" style="color:#f59e0b">
-              Owner
+              {{ $t('orgChart.ownerRole') }}
             </div>
             <div class="org-name" style="font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all">
               {{ ownerEmail }}
@@ -68,7 +68,7 @@ watch(() => props.employees, () => nextTick(centerOnOwner))
       </ul>
     </div>
     <p v-else class="text-center text-sm text-zinc-500">
-      Noch keine Mitarbeiter — leg den Operator und sein Team an.
+      {{ $t('orgChart.empty') }}
     </p>
   </div>
 </template>

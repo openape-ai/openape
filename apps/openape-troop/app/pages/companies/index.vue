@@ -4,7 +4,8 @@ import { useOpenApeAuth } from '#imports'
 
 // Companies list — the business view's landing. Mirrors the former org.openape.ai
 // list (card per company → click into its hierarchy). Toggle to the Nests view.
-useSeoMeta({ title: () => 'Firmen' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('companiesIndex.tabTitle') })
 
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
@@ -41,7 +42,7 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'Konnte die Firmen nicht laden.'
+    error.value = err?.data?.statusMessage || err?.message || t('companiesIndex.error.loadFailed')
   }
   finally { loading.value = false }
 }
@@ -53,7 +54,7 @@ async function createCompany() {
     const r = await apiFetch<{ id: string }>('/api/orgs', { method: 'POST', body: { name: createForm.name.trim(), vision_md: createForm.vision.trim() } })
     await navigateTo(`/companies/${r.id}`)
   }
-  catch (err: any) { error.value = err?.data?.statusMessage || 'Anlegen fehlgeschlagen.' }
+  catch (err: any) { error.value = err?.data?.statusMessage || t('companiesIndex.error.createFailed') }
   finally { creating.value = false }
 }
 
@@ -65,25 +66,25 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     <AppHeader active="companies" :show-logout="!!user" @logout="logout">
       <template #actions>
         <UButton color="primary" size="sm" icon="i-lucide-plus" @click="showCreate = true">
-          <span class="hidden sm:inline">Firma</span>
+          <span class="hidden sm:inline">{{ $t('companiesIndex.newButton') }}</span>
         </UButton>
       </template>
     </AppHeader>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
-      <InlineLogin v-if="!user" hint="Melde dich an, um deine Firmen zu sehen." />
+      <InlineLogin v-if="!user" :hint="$t('common.loginHint', { what: $t('companiesIndex.loginWhat') })" />
       <template v-else>
         <h2 class="text-2xl font-bold mb-1">
-          Firmen
+          {{ $t('companiesIndex.heading') }}
         </h2>
         <p class="text-zinc-400 mb-6">
-          Deine Firmen — klick eine an, um Hierarchie und Ziele zu sehen.
+          {{ $t('companiesIndex.subheading') }}
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
         <p v-if="loading" class="text-zinc-500 py-12 text-center">
-          Lädt …
+          {{ $t('common.loading') }}
         </p>
 
         <div v-else-if="!orgs.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
@@ -91,13 +92,13 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             🏢
           </div>
           <h3 class="text-lg font-medium">
-            Noch keine Firma
+            {{ $t('companiesIndex.empty.title') }}
           </h3>
           <p class="text-sm text-zinc-400 max-w-md mx-auto">
-            Leg deine erste Firma an — der Operator richtet sich nach ihrer Vision.
+            {{ $t('companiesIndex.empty.hint') }}
           </p>
           <UButton color="primary" icon="i-lucide-plus" @click="showCreate = true">
-            Firma anlegen
+            {{ $t('companiesIndex.empty.button') }}
           </UButton>
         </div>
 
@@ -121,7 +122,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               <dl class="mt-3 grid grid-cols-2 gap-x-4 text-xs max-w-xs">
                 <div>
                   <dt class="text-zinc-500">
-                    Mitglieder
+                    {{ $t('companiesIndex.card.members') }}
                   </dt>
                   <dd class="font-medium">
                     {{ o.memberCount }}
@@ -129,10 +130,10 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
                 </div>
                 <div>
                   <dt class="text-zinc-500">
-                    Budget
+                    {{ $t('companiesIndex.card.budget') }}
                   </dt>
                   <dd class="font-medium">
-                    {{ o.budgetMonthlyEur }} €/Mo
+                    {{ $t('companiesIndex.card.budgetPerMonth', { amount: o.budgetMonthlyEur }) }}
                   </dd>
                 </div>
               </dl>
@@ -147,22 +148,22 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
         <div class="p-5 sm:p-6 space-y-4">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              Firma anlegen
+              {{ $t('companiesIndex.create.title') }}
             </h3>
             <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showCreate = false" />
           </div>
-          <UFormField label="Name">
-            <UInput v-model="createForm.name" placeholder="Firmenname" class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="$t('companiesIndex.create.nameLabel')">
+            <UInput v-model="createForm.name" :placeholder="$t('companiesIndex.create.namePlaceholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Vision" description="Der Operator liest das bei jeder Interaktion.">
-            <UTextarea v-model="createForm.vision" :rows="4" placeholder="Was soll die Firma erreichen?" class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="$t('companiesIndex.create.visionLabel')" :description="$t('companiesIndex.create.visionDescription')">
+            <UTextarea v-model="createForm.vision" :rows="4" :placeholder="$t('companiesIndex.create.visionPlaceholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showCreate = false">
-              Abbrechen
+              {{ $t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="creating" :disabled="!createForm.name.trim()" @click="createCompany">
-              Anlegen
+              {{ $t('companiesIndex.create.submit') }}
             </UButton>
           </div>
         </div>
