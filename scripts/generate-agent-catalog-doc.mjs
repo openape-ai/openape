@@ -1,110 +1,110 @@
 #!/usr/bin/env node
 /**
  * Generate agent-catalog.md documentation from persona-catalog.ts
- * 
+ *
  * This script reads the PERSONA_CATEGORIES and PERSONAS from the source of truth
  * and generates a markdown documentation file.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const repoRoot = join(__dirname, '..');
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const repoRoot = join(__dirname, '..')
 
 // Path to the persona catalog source
-const personaCatalogPath = join(repoRoot, 'apps/openape-troop/shared/persona-catalog.ts');
-const docsOutputPath = join(repoRoot, 'apps/docs/content/2.ecosystem/9.agent-catalog.md');
+const personaCatalogPath = join(repoRoot, 'apps/openape-troop/shared/persona-catalog.ts')
+const docsOutputPath = join(repoRoot, 'apps/docs/content/2.ecosystem/9.agent-catalog.md')
 
 // Read the persona catalog
-const catalogContent = readFileSync(personaCatalogPath, 'utf-8');
+const catalogContent = readFileSync(personaCatalogPath, 'utf-8')
 
 // Extract PERSONA_CATEGORIES
-const categoriesMatch = catalogContent.match(/export const PERSONA_CATEGORIES[^=]*=\s*\[([\s\S]*?)\]/);
+const categoriesMatch = catalogContent.match(/export const PERSONA_CATEGORIES[^=]*=\s*\[([\s\S]*?)\]/)
 if (!categoriesMatch) {
-  console.error('Could not parse PERSONA_CATEGORIES');
-  process.exit(1);
+  console.error('Could not parse PERSONA_CATEGORIES')
+  process.exit(1)
 }
 
-const categoriesRaw = categoriesMatch[1];
-const categories = [];
-const categoryRegex = /\{\s*key:\s*'([^']+)'(?:\s*,\s*label:\s*'([^']+)')?\s*\}/g;
-let match;
+const categoriesRaw = categoriesMatch[1]
+const categories = []
+const categoryRegex = /\{\s*key:\s*'([^']+)'(?:\s*,\s*label:\s*'([^']+)')?\s*\}/g
+let match
 while ((match = categoryRegex.exec(categoriesRaw)) !== null) {
-  categories.push({ key: match[1], label: match[2] || match[1] });
+  categories.push({ key: match[1], label: match[2] || match[1] })
 }
 
 // Extract PERSONAS - parse line by line for robustness
-const personas = [];
-const lines = catalogContent.split('\n');
-let inPersonas = false;
-let currentPersona = {};
+const personas = []
+const lines = catalogContent.split('\n')
+let inPersonas = false
+let currentPersona = {}
 
 for (const line of lines) {
   if (line.includes('export const PERSONAS')) {
-    inPersonas = true;
-    continue;
+    inPersonas = true
+    continue
   }
-  
+
   if (inPersonas) {
     // Check for key
-    const keyMatch = line.match(/key:\s*'([^']+)'/);
+    const keyMatch = line.match(/key:\s*'([^']+)'/)
     if (keyMatch) {
-      currentPersona.key = keyMatch[1];
+      currentPersona.key = keyMatch[1]
     }
-    
-    const titleMatch = line.match(/title:\s*'([^']+)'/);
+
+    const titleMatch = line.match(/title:\s*'([^']+)'/)
     if (titleMatch) {
-      currentPersona.title = titleMatch[1];
+      currentPersona.title = titleMatch[1]
     }
-    
-    const roleMatch = line.match(/role:\s*'([^']+)'/);
+
+    const roleMatch = line.match(/role:\s*'([^']+)'/)
     if (roleMatch) {
-      currentPersona.role = roleMatch[1];
+      currentPersona.role = roleMatch[1]
     }
-    
-    const categoryMatch = line.match(/category:\s*'([^']+)'/);
+
+    const categoryMatch = line.match(/category:\s*'([^']+)'/)
     if (categoryMatch) {
-      currentPersona.category = categoryMatch[1];
+      currentPersona.category = categoryMatch[1]
     }
-    
-    const iconMatch = line.match(/icon:\s*'([^']+)'/);
+
+    const iconMatch = line.match(/icon:\s*'([^']+)'/)
     if (iconMatch) {
-      currentPersona.icon = iconMatch[1];
+      currentPersona.icon = iconMatch[1]
     }
-    
+
     // Match summary with escaped quotes
-    const summaryMatch = line.match(/summary:\s*'((?:[^'\\]|\\.)+)'/);
+    const summaryMatch = line.match(/summary:\s*'((?:[^'\\]|\\.)+)'/)
     if (summaryMatch) {
-      currentPersona.summary = summaryMatch[1].replace(/\\'/g, "'");
+      currentPersona.summary = summaryMatch[1].replace(/\\'/g, '\'')
     }
-    
-    const codingMatch = line.match(/coding:\s*(true|false)/);
+
+    const codingMatch = line.match(/coding:\s*(true|false)/)
     if (codingMatch) {
-      currentPersona.coding = codingMatch[1] === 'true';
+      currentPersona.coding = codingMatch[1] === 'true'
     }
-    
-    const recipeRefMatch = line.match(/recipeRef:\s*'([^']+)'/);
+
+    const recipeRefMatch = line.match(/recipeRef:\s*'([^']+)'/)
     if (recipeRefMatch) {
-      currentPersona.recipeRef = recipeRefMatch[1];
+      currentPersona.recipeRef = recipeRefMatch[1]
     }
-    
+
     // End of persona object
     if (line.trim() === '},' || line.trim() === '}]') {
       if (currentPersona.key && currentPersona.title) {
-        personas.push({ ...currentPersona });
+        personas.push({ ...currentPersona })
       }
-      currentPersona = {};
+      currentPersona = {}
     }
   }
 }
 
-console.log(`Parsed ${personas.length} personas and ${categories.length} categories`);
+console.log(`Parsed ${personas.length} personas and ${categories.length} categories`)
 
 // Generate markdown
-const generateMarkdown = () => {
+function generateMarkdown() {
   let md = `---
 title: Agent Catalog
 description: The catalog of ${personas.length} personas available to compose your OpenApe company.
@@ -129,34 +129,34 @@ The catalog groups personas into ${categories.length} categories:
 
 | Category | Key | Description |
 |----------|-----|-------------|
-`;
+`
 
   for (const cat of categories) {
-    md += `| ${cat.label} | \`${cat.key}\` | - |\n`;
+    md += `| ${cat.label} | \`${cat.key}\` | - |\n`
   }
 
-  md += '\n## Personas\n\n';
+  md += '\n## Personas\n\n'
 
   // Group personas by category
-  const personasByCategory = {};
+  const personasByCategory = {}
   for (const cat of categories) {
-    personasByCategory[cat.key] = personas.filter(p => p.category === cat.key);
+    personasByCategory[cat.key] = personas.filter(p => p.category === cat.key)
   }
 
   for (const cat of categories) {
-    const catPersonas = personasByCategory[cat.key];
-    if (catPersonas.length === 0) continue;
+    const catPersonas = personasByCategory[cat.key]
+    if (catPersonas.length === 0) continue
 
-    md += `### ${cat.label}\n\n`;
-    md += '| Persona | Role | Coding | Summary |\n';
-    md += '|---------|------|--------|---------|\n';
+    md += `### ${cat.label}\n\n`
+    md += '| Persona | Role | Coding | Summary |\n'
+    md += '|---------|------|--------|---------|\n'
 
     for (const p of catPersonas) {
-      const coding = p.coding ? 'Yes' : 'No';
-      md += `| **${p.title}** | \`${p.role}\` | ${coding} | ${p.summary} |\n`;
+      const coding = p.coding ? 'Yes' : 'No'
+      md += `| **${p.title}** | \`${p.role}\` | ${coding} | ${p.summary} |\n`
     }
 
-    md += '\n';
+    md += '\n'
   }
 
   md += `## How to Compose a Company
@@ -200,14 +200,14 @@ node scripts/generate-agent-catalog-doc.mjs
 - [Agent Recipe](/ecosystem/agent-recipe) - How recipes work
 - [Quick Start: Agent](/getting-started/quickstart-agent) - Deploy your first agent
 - [Capabilities & Grants](/guides/capabilities) - The consent model
-`;
+`
 
-  return md;
-};
+  return md
+}
 
-const markdown = generateMarkdown();
-writeFileSync(docsOutputPath, markdown, 'utf-8');
+const markdown = generateMarkdown()
+writeFileSync(docsOutputPath, markdown, 'utf-8')
 
-console.log(`Generated ${docsOutputPath}`);
-console.log(`- Categories: ${categories.length}`);
-console.log(`- Personas: ${personas.length}`);
+console.log(`Generated ${docsOutputPath}`)
+console.log(`- Categories: ${categories.length}`)
+console.log(`- Personas: ${personas.length}`)

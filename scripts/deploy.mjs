@@ -92,12 +92,14 @@ const changedArg = args.find(a => a === '--changed' || a.startsWith('--changed='
 
 if (args.includes('--all')) {
   selected = Object.keys(TARGETS)
-} else if (changedArg) {
+}
+else if (changedArg) {
   const ref = changedArg.includes('=') ? changedArg.split('=')[1] : 'origin/main'
   const files = changedFiles(ref)
   console.log(`Changed vs ${ref}: ${files.length} file(s)`)
   selected = Object.keys(TARGETS).filter(name => files.some(f => TARGETS[name].paths.some(p => fileMatches(f, p))))
-} else {
+}
+else {
   const named = args.filter(a => !a.startsWith('--'))
   const unknown = named.filter(n => !TARGETS[n])
   if (unknown.length) {
@@ -122,7 +124,7 @@ const failures = []
 for (const name of selected) {
   const t = TARGETS[name]
   const scriptPath = resolve(SCRIPTS_DIR, t.script)
-  console.log(`\n\x1b[36m▶ ${name}\x1b[0m`)
+  console.log(`\n\x1B[36m▶ ${name}\x1B[0m`)
 
   if (dryRun) {
     console.log(`  would run: ${scriptPath}`)
@@ -142,11 +144,11 @@ for (const name of selected) {
   const res = spawnSync('bash', [scriptPath], { cwd: ROOT, stdio: 'inherit', env: process.env })
 
   if (res.status === 0) {
-    console.log(`\x1b[32m✓ ${name} deployed\x1b[0m`)
+    console.log(`\x1B[32m✓ ${name} deployed\x1B[0m`)
     continue
   }
 
-  console.error(`\x1b[31m✗ ${name} failed (exit ${res.status})\x1b[0m`)
+  console.error(`\x1B[31m✗ ${name} failed (exit ${res.status})\x1B[0m`)
   failures.push(name)
 
   // Roll back only to a release path we recognise (defends against a
@@ -156,17 +158,19 @@ for (const name of selected) {
     try {
       ssh(`ln -sfn ${prev} ${t.base}/current && sudo systemctl restart ${t.service}`)
       console.error(`  ✓ rolled back`)
-    } catch (e) {
+    }
+    catch (e) {
       console.error(`  ✗ rollback failed: ${e.message}`)
     }
-  } else if (t.service) {
+  }
+  else if (t.service) {
     console.error(`  (no valid previous release to roll back to)`)
   }
 }
 
 if (failures.length) {
-  console.error(`\n\x1b[31m✗ failed: ${failures.join(', ')}\x1b[0m`)
+  console.error(`\n\x1B[31m✗ failed: ${failures.join(', ')}\x1B[0m`)
   process.exit(1)
 }
 
-console.log(`\n\x1b[32m✅ deployed: ${selected.join(', ')}\x1b[0m`)
+console.log(`\n\x1B[32m✅ deployed: ${selected.join(', ')}\x1B[0m`)

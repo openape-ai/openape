@@ -44,8 +44,9 @@ const FILES = [
 
 const DEPLOY = process.argv.includes('--deploy')
 const md5 = buf => createHash('md5').update(buf).digest('hex')
-const ssh = (script, opts = {}) =>
-  execFileSync('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', `${USER}@${HOST}`, script], { encoding: 'utf8', ...opts })
+function ssh(script, opts = {}) {
+  return execFileSync('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', `${USER}@${HOST}`, script], { encoding: 'utf8', ...opts })
+}
 
 function remoteMd5s() {
   const out = ssh(`md5sum ${FILES.map(f => `${REMOTE_DIR}/${f}`).join(' ')} 2>/dev/null || true`)
