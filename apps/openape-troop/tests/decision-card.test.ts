@@ -75,18 +75,48 @@ describe('decision card — before the decision', () => {
     expect(text()).toContain('wartet 10 min')
   })
 
-  it('offers one button per option', () => {
-    const buttons = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global }).findAll('button')
-    expect(buttons.map(b => b.text().replace(/\s+/g, ' ').trim())).toEqual([
-      'Bei jedem Push',
-      'Nur vor dem Merge (Empfehlung)',
-    ])
+  it('offers every option as a selectable choice, not as its own button', () => {
+    const card = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global })
+    const choices = card.findAll('[role="radio"]')
+    expect(choices).toHaveLength(2)
+    expect(choices[0]!.text()).toContain('Bei jedem Push')
+    expect(choices[0]!.text()).toContain('Maximale Sicherheit, kostet Wartezeit.')
+    expect(choices[1]!.text()).toContain('Nur vor dem Merge')
+    expect(choices[1]!.text()).toContain('Schnelles Iterieren, Beweis bleibt vor dem Merge.')
   })
 
-  it('emits the chosen option', async () => {
+  it('pre-selects the recommendation', () => {
     const card = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global })
-    await card.findAll('button')[1]!.trigger('click')
+    const checked = card.findAll('[role="radio"]').filter(c => c.attributes('aria-checked') === 'true')
+    expect(checked).toHaveLength(1)
+    expect(checked[0]!.text()).toContain('Nur vor dem Merge')
+  })
+
+  it('falls back to the first option when nothing is recommended', () => {
+    const card = mount(DecisionCard, { props: { event: decisionCard({ recommendation: undefined }), now: NOW }, global })
+    const checked = card.findAll('[role="radio"]').filter(c => c.attributes('aria-checked') === 'true')
+    expect(checked).toHaveLength(1)
+    expect(checked[0]!.text()).toContain('Bei jedem Push')
+  })
+
+  it('confirms the pre-selected recommendation with one click', async () => {
+    const card = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global })
+    await card.find('[data-test="confirm"]').trigger('click')
     expect(card.emitted('resolve')).toEqual([[{ choice: 'Nur vor dem Merge' }]])
+  })
+
+  it('confirms whichever option was selected instead', async () => {
+    const card = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global })
+    await card.findAll('[role="radio"]')[0]!.trigger('click')
+    expect(card.find('[data-test="confirm"]').text()).toContain('Bei jedem Push')
+    await card.find('[data-test="confirm"]').trigger('click')
+    expect(card.emitted('resolve')).toEqual([[{ choice: 'Bei jedem Push' }]])
+  })
+
+  it('selecting alone decides nothing', async () => {
+    const card = mount(DecisionCard, { props: { event: decisionCard(), now: NOW }, global })
+    await card.findAll('[role="radio"]')[0]!.trigger('click')
+    expect(card.emitted('resolve')).toBeUndefined()
   })
 })
 
@@ -106,8 +136,11 @@ describe('decision card — after the decision', () => {
     expect(text).toContain('patrick@hofmann.eco')
   })
 
-  it('takes the buttons away so nobody decides twice', () => {
-    expect(decided().findAll('button')).toHaveLength(0)
+  it('leaves nothing to click so nobody decides twice', () => {
+    const card = decided()
+    expect(card.find('[data-test="confirm"]').exists()).toBe(false)
+    // The options stay on screen — they are part of the briefing — but dead.
+    expect(card.findAll('[role="radio"]').every(c => c.attributes('disabled') !== undefined)).toBe(true)
   })
 })
 
@@ -137,12 +170,22 @@ describe('verdict card', () => {
     expect(text).toContain('Lokal bewiesen, CI grün.')
   })
 
-  it('marks the recommended verdict among the three buttons', () => {
-    const buttons = mount(DecisionCard, { props: { event: verdict, now: NOW }, global }).findAll('button')
-    expect(buttons.map(b => b.text().replace(/\s+/g, ' ').trim())).toEqual([
-      'Merge (Empfehlung)',
+  it('offers the three verdicts as choices with the recommended one selected', () => {
+    const card = mount(DecisionCard, { props: { event: verdict, now: NOW }, global })
+    const choices = card.findAll('[role="radio"]')
+    expect(choices.map(c => c.text().replace(/\s+/g, ' ').trim())).toEqual([
+      'Merge Empfehlung',
       'Nacharbeit',
       'Ablehnen',
     ])
+    expect(choices[0]!.attributes('aria-checked')).toBe('true')
+    expect(card.find('[data-test="confirm"]').text()).toContain('Merge')
+  })
+
+  it('emits a verdict, not a choice', async () => {
+    const card = mount(DecisionCard, { props: { event: verdict, now: NOW }, global })
+    await card.findAll('[role="radio"]')[1]!.trigger('click')
+    await card.find('[data-test="confirm"]').trigger('click')
+    expect(card.emitted('resolve')).toEqual([[{ verdict: 'rework' }]])
   })
 })

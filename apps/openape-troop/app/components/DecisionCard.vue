@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { WireEvent } from '../utils/attention-inbox'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { callKind, waitingLabel } from '../utils/attention-inbox'
 
 // The card has to stand on its own: opened days later, on a phone, by someone
@@ -14,7 +14,7 @@ const props = defineProps<{
   now: number
   submitting?: boolean
 }>()
-defineEmits<{ resolve: [{ choice?: string, verdict?: string }] }>()
+const emit = defineEmits<{ resolve: [{ choice?: string, verdict?: string }] }>()
 
 const e = computed(() => props.event)
 const kind = computed(() => callKind(e.value))
@@ -32,11 +32,32 @@ const optionSummaries = computed(() => {
   const list = (e.value.payload.option_summaries as { option: string, summary: string }[] | undefined) ?? []
   return Object.fromEntries(list.map(o => [o.option, o.summary]))
 })
-const verdictOptions = [
-  { value: 'merge', label: 'Merge' },
-  { value: 'rework', label: 'Nacharbeit' },
-  { value: 'reject', label: 'Ablehnen' },
-]
+const VERDICT_LABELS: Record<string, string> = { merge: 'Merge', rework: 'Nacharbeit', reject: 'Ablehnen' }
+const VERDICT_VALUES = ['merge', 'rework', 'reject']
+
+/** One list for both card kinds: value, its label, and what choosing it means. */
+const choices = computed(() => {
+  const values = isVerdict.value ? VERDICT_VALUES : options.value
+  return values.map(value => ({
+    value,
+    label: isVerdict.value ? (VERDICT_LABELS[value] ?? value) : value,
+    summary: optionSummaries.value[value],
+    recommended: value === recommendation.value,
+  }))
+})
+
+// Pre-select the recommendation so confirming is one tap; falling back to the
+// first choice keeps the button meaningful on cards that recommend nothing.
+const selected = ref('')
+watch(choices, (list) => {
+  if (list.some(c => c.value === selected.value)) return
+  selected.value = list.find(c => c.recommended)?.value ?? list[0]?.value ?? ''
+}, { immediate: true })
+
+function confirm() {
+  if (!selected.value) return
+  emit('resolve', isVerdict.value ? { verdict: selected.value } : { choice: selected.value })
+}
 </script>
 
 <template>
@@ -83,20 +104,33 @@ const verdictOptions = [
       </a>
     </div>
 
-    <div v-if="!isVerdict && options.length" class="space-y-2 mb-4">
-      <div
-        v-for="option in options" :key="option"
-        class="rounded-lg border px-3 py-2"
-        :class="option === recommendation ? 'border-primary-600/60 bg-primary-500/5' : 'border-zinc-800'"
+    <div
+      v-if="choices.length" role="radiogroup" :aria-label="isVerdict ? 'Verdict wählen' : 'Option wählen'"
+      class="space-y-2 mb-4"
+    >
+      <button
+        v-for="choice in choices" :key="choice.value"
+        type="button" role="radio" :aria-checked="choice.value === selected"
+        :disabled="!!resolution || submitting"
+        class="option-choice w-full text-left rounded-lg border px-3 py-2 transition-colors disabled:cursor-default"
+        :class="choice.value === selected ? 'border-primary-500 bg-primary-500/10' : 'border-zinc-800 enabled:hover:border-zinc-600'"
+        @click="selected = choice.value"
       >
-        <div class="flex items-center gap-2 text-sm font-medium">
-          {{ option }}
-          <span v-if="option === recommendation" class="text-[10px] uppercase tracking-wide text-primary-400">Empfehlung</span>
-        </div>
-        <p v-if="optionSummaries[option]" class="text-xs text-zinc-400 mt-1 leading-relaxed">
-          {{ optionSummaries[option] }}
-        </p>
-      </div>
+        <span class="flex items-center gap-2 text-sm font-medium">
+          <span
+            aria-hidden="true"
+            class="size-4 shrink-0 rounded-full border grid place-items-center"
+            :class="choice.value === selected ? 'border-primary-400' : 'border-zinc-600'"
+          >
+            <span v-if="choice.value === selected" class="size-2 rounded-full bg-primary-400" />
+          </span>
+          {{ choice.label }}
+          <span v-if="choice.recommended" class="text-[10px] uppercase tracking-wide text-primary-400">Empfehlung</span>
+        </span>
+        <span v-if="choice.summary" class="block text-xs text-zinc-400 mt-1 leading-relaxed">
+          {{ choice.summary }}
+        </span>
+      </button>
     </div>
 
     <div v-if="why" class="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 mb-4">
@@ -109,28 +143,15 @@ const verdictOptions = [
     </div>
 
     <template v-if="!resolution">
-      <div v-if="isVerdict" class="flex flex-wrap gap-2">
-        <UButton
-          v-for="v in verdictOptions" :key="v.value"
-          :color="v.value === 'reject' ? 'error' : 'primary'"
-          :variant="recommendation ? (v.value === recommendation ? 'solid' : 'outline') : (v.value === 'merge' ? 'solid' : 'outline')"
-          :loading="submitting"
-          @click="$emit('resolve', { verdict: v.value })"
-        >
-          {{ v.label }} <span v-if="v.value === recommendation" class="opacity-70">(Empfehlung)</span>
-        </UButton>
-      </div>
-      <div v-else class="flex flex-wrap gap-2">
-        <UButton
-          v-for="option in options" :key="option"
-          :color="option === recommendation ? 'primary' : 'neutral'"
-          :variant="option === recommendation ? 'solid' : 'outline'"
-          :loading="submitting"
-          @click="$emit('resolve', { choice: option })"
-        >
-          {{ option }} <span v-if="option === recommendation" class="opacity-70">(Empfehlung)</span>
-        </UButton>
-      </div>
+      <UButton
+        data-test="confirm"
+        :color="selected === 'reject' ? 'error' : 'primary'"
+        :loading="submitting"
+        :disabled="!selected"
+        @click="confirm"
+      >
+        {{ isVerdict ? 'Verdict abgeben' : 'Entscheiden' }}: {{ choices.find(c => c.value === selected)?.label }}
+      </UButton>
     </template>
 
     <div v-if="resolution" class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3">
