@@ -16,6 +16,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ resolve: [{ choice?: string, verdict?: string }] }>()
 
+const { t } = useI18n()
+
 const e = computed(() => props.event)
 const kind = computed(() => callKind(e.value))
 const isVerdict = computed(() => kind.value === 'verdict')
@@ -32,15 +34,18 @@ const optionSummaries = computed(() => {
   const list = (e.value.payload.option_summaries as { option: string, summary: string }[] | undefined) ?? []
   return Object.fromEntries(list.map(o => [o.option, o.summary]))
 })
-const VERDICT_LABELS: Record<string, string> = { merge: 'Merge', rework: 'Nacharbeit', reject: 'Ablehnen' }
 const VERDICT_VALUES = ['merge', 'rework', 'reject']
 
-/** One list for both card kinds: value, its label, and what choosing it means. */
+/**
+ * One list for both card kinds: value, its label, and what choosing it means.
+ * A verdict has three fixed labels the app names; an option label is the
+ * agent's own wording and reaches the screen untranslated.
+ */
 const choices = computed(() => {
   const values = isVerdict.value ? VERDICT_VALUES : options.value
   return values.map(value => ({
     value,
-    label: isVerdict.value ? (VERDICT_LABELS[value] ?? value) : value,
+    label: isVerdict.value ? t(`decisionCard.verdict.${value}`) : value,
     summary: optionSummaries.value[value],
     recommended: value === recommendation.value,
   }))
@@ -53,6 +58,14 @@ watch(choices, (list) => {
   if (list.some(c => c.value === selected.value)) return
   selected.value = list.find(c => c.recommended)?.value ?? list[0]?.value ?? ''
 }, { immediate: true })
+
+const waiting = computed(() => waitingLabel(e.value, props.now))
+const confirmLabel = computed(() => t(
+  isVerdict.value ? 'decisionCard.confirm.verdict' : 'decisionCard.confirm.decision',
+  { choice: choices.value.find(c => c.value === selected.value)?.label ?? '' },
+))
+// The answer as the log recorded it — `decision` for a choice, `verdict` for a review.
+const answer = computed(() => String(props.resolution?.payload.decision ?? props.resolution?.payload.verdict ?? ''))
 
 function confirm() {
   if (!selected.value) return
@@ -67,10 +80,10 @@ function confirm() {
         class="text-xs px-2 py-0.5 rounded"
         :class="isVerdict ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'"
       >
-        {{ isVerdict ? 'Verdict' : (e.type === 'work.blocked' ? 'Eskalation' : 'Entscheidung') }}
+        {{ t(`inbox.kind.${kind}`) }}
       </span>
-      <span v-if="blocks" class="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">blockiert {{ blocks }}</span>
-      <span class="ml-auto text-xs text-zinc-400">{{ resolution ? 'entschieden' : waitingLabel(e, props.now) }}</span>
+      <span v-if="blocks" class="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">{{ t('decisionCard.blocks', { task: blocks }) }}</span>
+      <span class="ml-auto text-xs text-zinc-400">{{ resolution ? t('decisionCard.decided') : t(waiting.key, waiting.params) }}</span>
     </div>
 
     <h2 class="text-lg font-semibold mb-1">
@@ -94,18 +107,18 @@ function confirm() {
 
     <div v-if="isVerdict && (prUrl || (proofs?.length ?? 0))" class="flex flex-wrap gap-2 mb-4">
       <a v-if="prUrl" :href="prUrl" target="_blank" class="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500">
-        PR ansehen ↗
+        {{ t('decisionCard.viewPr') }} ↗
       </a>
       <a
         v-for="p in proofs ?? []" :key="p.id" :href="String(p.payload.url)" target="_blank"
         class="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500"
       >
-        Beweis: {{ p.payload.kind }} ↗
+        {{ t('decisionCard.proof', { kind: String(p.payload.kind) }) }} ↗
       </a>
     </div>
 
     <div
-      v-if="choices.length" role="radiogroup" :aria-label="isVerdict ? 'Verdict wählen' : 'Option wählen'"
+      v-if="choices.length" role="radiogroup" :aria-label="isVerdict ? t('decisionCard.chooseVerdict') : t('decisionCard.chooseOption')"
       class="space-y-2 mb-4"
     >
       <button
@@ -125,7 +138,7 @@ function confirm() {
             <span v-if="choice.value === selected" class="size-2 rounded-full bg-primary-400" />
           </span>
           {{ choice.label }}
-          <span v-if="choice.recommended" class="text-[10px] uppercase tracking-wide text-primary-400">Empfehlung</span>
+          <span v-if="choice.recommended" class="text-[10px] uppercase tracking-wide text-primary-400">{{ t('decisionCard.recommended') }}</span>
         </span>
         <span v-if="choice.summary" class="block text-xs text-zinc-400 mt-1 leading-relaxed">
           {{ choice.summary }}
@@ -135,7 +148,7 @@ function confirm() {
 
     <div v-if="why" class="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 mb-4">
       <p class="text-xs uppercase tracking-wide text-zinc-500 mb-1">
-        Warum diese Empfehlung
+        {{ t('decisionCard.why') }}
       </p>
       <p class="text-sm text-zinc-300 leading-relaxed">
         {{ why }}
@@ -150,16 +163,18 @@ function confirm() {
         :disabled="!selected"
         @click="confirm"
       >
-        {{ isVerdict ? 'Verdict abgeben' : 'Entscheiden' }}: {{ choices.find(c => c.value === selected)?.label }}
+        {{ confirmLabel }}
       </UButton>
     </template>
 
     <div v-if="resolution" class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3">
-      <p class="text-sm text-emerald-300">
-        Entschieden: <strong>{{ resolution.payload.decision ?? resolution.payload.verdict }}</strong>
-      </p>
+      <i18n-t keypath="decisionCard.resolved" tag="p" class="text-sm text-emerald-300">
+        <template #decision>
+          <strong>{{ answer }}</strong>
+        </template>
+      </i18n-t>
       <p class="text-xs text-zinc-400 mt-1">
-        {{ resolution.actor }} · Event {{ resolution.id }}
+        {{ t('decisionCard.resolvedBy', { actor: resolution.actor, id: resolution.id }) }}
       </p>
     </div>
   </div>

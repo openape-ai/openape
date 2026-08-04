@@ -6,8 +6,10 @@ import type { AgentRecord } from '../utils/attention-metrics'
 // whether to spend it.
 defineProps<{ records: AgentRecord[] }>()
 
+const { t } = useI18n()
+
 function percent(rate: number): string {
-  return `${Math.round(rate * 100)} %`
+  return t('inbox.percent', { value: Math.round(rate * 100) })
 }
 </script>
 
@@ -19,16 +21,16 @@ function percent(rate: number): string {
     >
       <span class="min-w-0 flex-1 truncate text-sm font-mono">{{ r.agent }}</span>
       <span class="text-xs text-zinc-400 sm:shrink-0">
-        {{ r.reviews }} Review{{ r.reviews === 1 ? '' : 's' }} · {{ percent(r.cleanRate) }} ohne Nacharbeit
+        {{ t('records.summary', { count: r.reviews, rate: percent(r.cleanRate) }, r.reviews) }}
       </span>
       <span
         class="text-[11px] px-2 py-0.5 rounded self-start sm:shrink-0"
         :class="r.suggestedSampling === 1 ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-500/15 text-emerald-400'"
-        :title="r.reviews < 20 ? 'Unter 20 Reviews gibt es keine belastbare Historie' : 'Vorschlag, keine Regel'"
-      >Sampling {{ percent(r.suggestedSampling) }}</span>
+        :title="r.reviews < 20 ? t('records.samplingTitle.fresh') : t('records.samplingTitle.suggestion')"
+      >{{ t('records.sampling', { rate: percent(r.suggestedSampling) }) }}</span>
     </div>
   </div>
   <p v-else class="text-zinc-400 py-8 text-center">
-    Noch keine Reviews. Sobald Agenten PRs zur Entscheidung stellen, entsteht hier ihre Historie.
+    {{ t('records.empty') }}
   </p>
 </template>

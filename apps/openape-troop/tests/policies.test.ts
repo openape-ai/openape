@@ -2,10 +2,16 @@
 import type { WireEvent } from '../app/utils/attention-inbox'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import PolicyList from '../app/components/PolicyList.vue'
 import { policiesFromEvents } from '../app/utils/policies'
+import de from '../i18n/locales/de.json'
 
-const global = { stubs: { NuxtLink: { template: '<a><slot /></a>' } } }
+// The list renders the shipped German catalog, so the assertions stay on the
+// strings a user sees.
+const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
+
+const global = { plugins: [i18n], stubs: { NuxtLink: { template: '<a><slot /></a>' } } }
 
 function policyEvent(type: string, rule: string, ts: number, payload: Record<string, unknown> = {}): WireEvent {
   return {
