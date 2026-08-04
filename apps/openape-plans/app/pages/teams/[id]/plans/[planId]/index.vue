@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
 import { renderMarkdown } from '~/utils/markdown'
+import { statusColor } from '~/utils/plan-status'
 
 const { user, fetchUser } = useOpenApeAuth()
 const route = useRoute()
@@ -87,13 +88,6 @@ async function deletePlan() {
 
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleString()
-}
-
-function statusColor(s: Plan['status']): 'neutral' | 'primary' | 'success' | 'warning' {
-  if (s === 'active') return 'primary'
-  if (s === 'done') return 'success'
-  if (s === 'archived') return 'warning'
-  return 'neutral'
 }
 </script>
 
