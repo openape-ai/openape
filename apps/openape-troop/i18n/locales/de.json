@@ -864,10 +864,108 @@
       "activate": "Aktivieren"
     }
   },
-  "nestsIndex": {},
-  "nestDetail": {},
-  "servicesIndex": {},
-  "skillsLibrary": {},
+  "nestsIndex": {
+    "tabTitle": "Nests",
+    "heading": "Nests",
+    "subheading": "Deine Geräte — klick ein Nest an, um Infos und die dort laufenden Agents zu sehen.",
+    "loginWhat": "deine Nests",
+    "empty": {
+      "title": "Noch kein Nest verbunden",
+      "hint": "Starte den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen."
+    },
+    "status": {
+      "active": "aktiv",
+      "unbound": "nicht gebunden",
+      "revoked": "widerrufen"
+    },
+    "card": {
+      "status": "Status",
+      "ip": "IP",
+      "agents": "Agents",
+      "lastSeen": "Zuletzt"
+    },
+    "error": {
+      "loadFailed": "Konnte die Nests nicht laden."
+    }
+  },
+  "nestDetail": {
+    "tabTitle": "Nest",
+    "notFound": "Nest nicht gefunden.",
+    "error": {
+      "loadFailed": "Konnte das Nest nicht laden."
+    },
+    "pause": {
+      "button": "Nest pausieren",
+      "title": "Alle Agents auf diesem Nest pausieren (bleiben verbunden, 0 Tokens)",
+      "toast": "Nest pausiert — alle Agents idle"
+    },
+    "resume": {
+      "button": "Fortsetzen",
+      "title": "Nest fortsetzen (per-Agent-Pausen bleiben bestehen)",
+      "toast": "Nest fortgesetzt"
+    },
+    "actionFailed": "Aktion fehlgeschlagen",
+    "info": {
+      "ip": "Aktuelle IP",
+      "hostId": "Host-ID",
+      "pod": "Pod",
+      "lastSeen": "Zuletzt gesehen",
+      "boundSince": "Gebunden seit"
+    },
+    "agents": {
+      "title": "Agents auf diesem Nest",
+      "empty": "Keine Agents auf diesem Nest.",
+      "tasks": "keine Tasks | 1 Task | {count} Tasks"
+    },
+    "runStatus": {
+      "running": "läuft",
+      "ok": "ok",
+      "error": "Fehler",
+      "idle": "idle"
+    }
+  },
+  "servicesIndex": {
+    "tabTitle": "Services",
+    "heading": "Services",
+    "subheading": "Externe sp-tasks-Dienste (z. B. zaz.delta-mind.at), die dein reaktiver Loop zusätzlich zum Cockpit betreut — read-only unter deiner Identität.",
+    "loginHint": "Melde dich an, um deine Services zu verwalten.",
+    "labelPlaceholder": "Name (optional)",
+    "empty": "Noch keine Services. Trag oben den ersten ein.",
+    "removeAria": "Service entfernen"
+  },
+  "skillsLibrary": {
+    "tabTitle": "Skill-Bibliothek",
+    "heading": "Skill-Bibliothek",
+    "subheading": "Wiederverwendbare Prozeduren (z. B. Tool-Skills wie o365-cli, gmail-cli) — einmal definiert, Agents in jeder Firma zuweisbar.",
+    "loginWhat": "deine Skill-Bibliothek",
+    "newButton": "Skill",
+    "empty": "Noch kein Bibliotheks-Skill. Leg den ersten an — z. B. „o365-cli: Microsoft 365 Mail & Kalender“.",
+    "ceoTarget": "Operator (alle Firmen)",
+    "deleteAria": "Skill entfernen",
+    "error": {
+      "loadFailed": "Konnte die Bibliothek nicht laden."
+    },
+    "form": {
+      "titleNew": "Skill hinzufügen",
+      "titleEdit": "Skill bearbeiten",
+      "name": {
+        "label": "Name"
+      },
+      "description": {
+        "label": "Beschreibung",
+        "hint": "Wofür/wann — der Agent wählt den Skill darüber aus.",
+        "placeholder": "Microsoft 365 Mail & Kalender via o365-cli."
+      },
+      "prompt": {
+        "hint": "Wie man das Werkzeug bedient — der Agent bekommt genau diesen Text.",
+        "placeholder": "## o365-cli\n- mail search …\n- calendar create …"
+      },
+      "assignedTo": {
+        "label": "Zugeordnet an",
+        "hint": "Wer diesen Skill einsetzen darf — firmenübergreifend."
+      }
+    }
+  },
   "docs": {
     "shell": {
       "badge": "Guide",

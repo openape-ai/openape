@@ -864,10 +864,108 @@
       "activate": "Activate"
     }
   },
-  "nestsIndex": {},
-  "nestDetail": {},
-  "servicesIndex": {},
-  "skillsLibrary": {},
+  "nestsIndex": {
+    "tabTitle": "Nests",
+    "heading": "Nests",
+    "subheading": "Your devices — open a nest to see its details and the agents running on it.",
+    "loginWhat": "your nests",
+    "empty": {
+      "title": "No nest connected yet",
+      "hint": "Start the nest daemon on a device to run agents there."
+    },
+    "status": {
+      "active": "active",
+      "unbound": "unbound",
+      "revoked": "revoked"
+    },
+    "card": {
+      "status": "Status",
+      "ip": "IP",
+      "agents": "Agents",
+      "lastSeen": "Last seen"
+    },
+    "error": {
+      "loadFailed": "Could not load your nests."
+    }
+  },
+  "nestDetail": {
+    "tabTitle": "Nest",
+    "notFound": "Nest not found.",
+    "error": {
+      "loadFailed": "Could not load this nest."
+    },
+    "pause": {
+      "button": "Pause nest",
+      "title": "Pause every agent on this nest (they stay connected and burn no tokens)",
+      "toast": "Nest paused — every agent is idle"
+    },
+    "resume": {
+      "button": "Resume",
+      "title": "Resume the nest (per-agent pauses stay in place)",
+      "toast": "Nest resumed"
+    },
+    "actionFailed": "Action failed",
+    "info": {
+      "ip": "Current IP",
+      "hostId": "Host ID",
+      "pod": "Pod",
+      "lastSeen": "Last seen",
+      "boundSince": "Bound since"
+    },
+    "agents": {
+      "title": "Agents on this nest",
+      "empty": "No agents on this nest.",
+      "tasks": "no tasks | 1 task | {count} tasks"
+    },
+    "runStatus": {
+      "running": "running",
+      "ok": "ok",
+      "error": "error",
+      "idle": "idle"
+    }
+  },
+  "servicesIndex": {
+    "tabTitle": "Services",
+    "heading": "Services",
+    "subheading": "External sp-tasks services (e.g. zaz.delta-mind.at) that your reactive loop tends alongside the cockpit — read-only, under your identity.",
+    "loginHint": "Sign in to manage your services.",
+    "labelPlaceholder": "Name (optional)",
+    "empty": "No services yet. Add your first one above.",
+    "removeAria": "Remove service"
+  },
+  "skillsLibrary": {
+    "tabTitle": "Skill library",
+    "heading": "Skill library",
+    "subheading": "Reusable procedures (e.g. tool skills like o365-cli or gmail-cli) — define one once, assign it to agents in every company.",
+    "loginWhat": "your skill library",
+    "newButton": "Skill",
+    "empty": "No library skill yet. Add the first one — e.g. “o365-cli: Microsoft 365 mail & calendar”.",
+    "ceoTarget": "Operator (all companies)",
+    "deleteAria": "Remove skill",
+    "error": {
+      "loadFailed": "Could not load the library."
+    },
+    "form": {
+      "titleNew": "Add skill",
+      "titleEdit": "Edit skill",
+      "name": {
+        "label": "Name"
+      },
+      "description": {
+        "label": "Description",
+        "hint": "What it does and when to reach for it — that is how the agent picks it.",
+        "placeholder": "Microsoft 365 mail & calendar via o365-cli."
+      },
+      "prompt": {
+        "hint": "How to operate the tool — the agent receives exactly this text.",
+        "placeholder": "## o365-cli\n- mail search …\n- calendar create …"
+      },
+      "assignedTo": {
+        "label": "Assigned to",
+        "hint": "Who may use this skill — across all companies."
+      }
+    }
+  },
   "docs": {
     "shell": {
       "badge": "Guide",
