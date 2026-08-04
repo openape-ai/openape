@@ -44,6 +44,13 @@ function listImages(dir: string): string[] {
  *
  * Only the URL goes to stdout — pipe-friendly for agents.
  */
+/** The card shows a summary, not the whole PR description — take the opening paragraph. */
+function firstParagraph(description: unknown): string | undefined {
+  if (typeof description !== 'string') return undefined
+  const paragraph = description.trim().split(/\n\s*\n/)[0]?.trim()
+  return paragraph ? paragraph.slice(0, 600) : undefined
+}
+
 export const uploadCommand = defineCommand({
   meta: { name: 'upload', description: 'Upload a pull request for review, print the review link.' },
   args: {
@@ -105,6 +112,11 @@ export const uploadCommand = defineCommand({
         { actor: me.email, actorKind: me.act === 'human' ? 'human' : 'agent', taskRef },
         pr.review_url,
         Math.floor(Date.now() / 1000),
+        {
+          title: String(manifest.title ?? ''),
+          summary: firstParagraph(manifest.description),
+          highlights: [`${pr.files} Datei(en), +${pr.additions}/-${pr.deletions}`],
+        },
       )
       const sent = await emitAttentionEvents(events, msg => info(msg))
       if (sent) info('Verdict card raised in troop inbox.')
