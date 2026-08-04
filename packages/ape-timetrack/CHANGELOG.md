@@ -1,5 +1,12 @@
 # @openape/ape-timetrack
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [dd0d9ac]
+  - @openape/proof-cli@0.2.0
+
 ## 0.1.7
 
 ### Patch Changes

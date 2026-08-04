@@ -1,5 +1,13 @@
 # @openape/apes
 
+## 1.35.4
+
+### Patch Changes
+
+- 951b549: Test-only: the IdP-backed suites now boot the real `examples/idp` app (via the
+  shared `openape-e2e/idp-fixture` helper) instead of the `@openape/server` fork,
+  which has been removed from the monorepo. No runtime change to the CLI.
+
 ## 1.35.3
 
 ### Patch Changes
@@ -1864,14 +1872,14 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 
   export async function pollGrantUntilResolved(
     idp: string,
-    grantId: string
+    grantId: string,
   ): Promise<PollOutcome> {
     const intervalMs = getPollIntervalSeconds() * 1000;
     const maxMs = getPollMaxMinutes() * 60_000;
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       const grant = await apiFetch<{ status: string }>(
-        `${grantsEndpoint}/${grantId}`
+        `${grantsEndpoint}/${grantId}`,
       );
       if (grant.status === "approved") return { kind: "approved" };
       if (
@@ -1970,7 +1978,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Test-Manifest
 
   ### Neue Tests in `commands-grants-run.test.ts` (7 Tests)
-
   1. **Regression guard**: ohne `--wait` bleibt pending → error Verhalten
   2. `--wait` + pending → poll → approved → dispatch shapes grant
   3. `--wait` + pending → poll → denied → CliError
@@ -1984,7 +1991,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   8 existierende "async info block audience mode" Tests geupdated: die alten `expect(out).toContain('every 10s')` Assertions werden durch Assertions auf die neue Text-Struktur ersetzt (`For agents:`, `apes grants run X --wait`, `exit code 75`, `EX_TEMPFAIL`). Zusätzliche Regression-Guard: `APES_GRANT_POLL_INTERVAL` darf NICHT mehr in den agent-text leaken (da es jetzt internes CLI-Detail ist).
 
   ### Regression
-
   - `shell-grant-dispatch.test.ts`: 27/27 green (unberührt)
   - `commands-run-async.test.ts`: 43/43 green
   - `commands-grants-run.test.ts`: 15/15 green (8 baseline + 7 neu)
@@ -2060,7 +2066,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Valid range ist POSIX exit code space (0–255).
 
   ## Warum 75 und nicht 1, 2, oder -1
-
   - **1** = POSIX "general error". Agenten und CI-Pipelines lesen das als "etwas ist schiefgegangen" ohne Spezifität. Falsches Signal — es ist kein Fehler, es ist ein erwarteter pending state.
   - **2** = lose Konvention für "shell usage error" oder "misuse of shell builtins" (bash, git). Würde als user's fault interpretiert. Auch falsch.
   - **-1** ist in POSIX nicht gültig — shells truncieren zu 255. Nicht portabel.
@@ -2112,7 +2117,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   ## Test plan
-
   - [x] 11 new tests in `packages/apes/test/commands-run-async.test.ts` `async exit code (APES_ASYNC_EXIT_CODE)` describe block:
     - default 75 (EX_TEMPFAIL)
     - `APES_ASYNC_EXIT_CODE=0` restores legacy
@@ -2131,7 +2135,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   - [x] Pre-commit hook (turbo lint + typecheck): green
 
   ## Files touched
-
   - `packages/apes/src/commands/run.ts` — new `getAsyncExitCode()` helper, `throw new CliExit(getAsyncExitCode())` at all four async-exit sites (`runShellMode` session, `tryAdapterModeFromShell`, `runAdapterMode`, `runAudienceMode`)
   - `packages/apes/src/config.ts` — new `defaults.async_exit_code?: string` field in `ApesConfig` interface
   - `packages/apes/test/commands-run-async.test.ts` — new `expectCliExit` helper + 20 existing tests wrapped + 11 new exit code tests
@@ -2219,7 +2222,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   **11 neue Tests** in `packages/apes/test/commands-run-async.test.ts` in zwei neuen describe-Blöcken:
 
   ### `runShellMode apes self-dispatch shortcut` (9 Tests)
-
   1. `apes grants status <id>` bypasses grant flow, execs directly
   2. `apes grants run <id>` bypasses (the bootstrap case)
   3. `apes whoami` bypasses
@@ -2231,7 +2233,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   9. `curl example.com` (non-apes) does NOT self-dispatch
 
   ### `execShellCommand APES_SHELL_WRAPPER env strip` (2 Tests)
-
   10. Strips `APES_SHELL_WRAPPER` from the bash child env when self-dispatching
   11. Strips `APES_SHELL_WRAPPER` from the escapes pipe in `runAudienceMode --wait` mode
 
@@ -2506,7 +2507,6 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Status-Gates: `pending` → Hinweis + approve-URL, `denied`/`revoked` → Error, `used` → Error ("already been used — request a new one"), `approved` → dispatch.
 
   ### Override für Legacy-Workflows
-
   - **`apes run --wait`** / **`ape-shell -c --wait ...`** (CLI flag): erzwingt altes blockierendes Verhalten.
   - **`APE_WAIT=1`** (env var): gleiches Ergebnis aus der Umgebung heraus, für Fälle wo Flags nicht durchgereicht werden können (z.B. sshd-login-shell, cron, `$SHELL -c` aus einem Binary).
 
