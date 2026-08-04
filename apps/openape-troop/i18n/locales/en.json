@@ -452,8 +452,8 @@
       "what": "this decision",
       "emailPlaceholder": "you{'@'}company.com",
       "submit": "Sign in",
-      "invalidEmail": "Enter a valid email address.",
-      "failed": "Sign-in failed."
+      "invalidEmail": "Please enter a valid email address.",
+      "failed": "Login failed."
     }
   },
   "inbox": {},
@@ -581,7 +581,7 @@
         "spawn": "You compose a company by spawning agents from the catalog and picking their persona. Each persona carries a {role} (ceo, teamlead, specialist, sanierer) that decides where it sits on the org chart.",
         "scale": "Spawn the same persona more than once when you need more capacity — several backend engineers, for instance."
       },
-      "codesBadge": "Codes",
+      "codesBadge": "Writes code",
       "recipeLabel": "Recipe:",
       "footer": "This page is generated from {file} — the single source of truth for every persona."
     }

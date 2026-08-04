@@ -26,6 +26,12 @@ function header(props: Record<string, unknown> = {}, slots: Record<string, strin
 const logoutButton = (wrapper: ReturnType<typeof header>) => wrapper.find(`[aria-label="${de.common.logout}"]`)
 
 describe('app header — the mark on the left', () => {
+  // Selector and expectation both read the catalog, so without this the copy
+  // could drift to anything and every assertion below would still pass.
+  it('announces the logout button as "Abmelden" in German', () => {
+    expect(de.common.logout).toBe('Abmelden')
+  })
+
   it('shows the gorilla on a top-level page', () => {
     expect(header({ active: 'inbox' }).text()).toContain('🦍')
   })

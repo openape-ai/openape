@@ -452,7 +452,7 @@
       "what": "diese Entscheidung",
       "emailPlaceholder": "du{'@'}firma.at",
       "submit": "Anmelden",
-      "invalidEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
+      "invalidEmail": "Bitte eine gültige Email-Adresse eingeben.",
       "failed": "Login fehlgeschlagen."
     }
   },
