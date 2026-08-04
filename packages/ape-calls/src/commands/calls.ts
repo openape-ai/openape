@@ -2,8 +2,10 @@ import { defineCommand } from 'citty'
 import { error, fmtTime, info, printJson, printLine } from '@openape/proof-cli'
 import { apiCall } from '../api.ts'
 
-const REQUEST_TYPES = ['decision.requested', 'work.blocked', 'verdict.requested']
-const RESOLUTION_TYPES = ['decision.made', 'verdict.given']
+// Both vocabularies: `call.raised`/`call.answered` (schema 0.4.0) plus the
+// three legacy request types, which stay valid forever.
+const REQUEST_TYPES = ['call.raised', 'decision.requested', 'work.blocked', 'verdict.requested']
+const RESOLUTION_TYPES = ['call.answered', 'decision.made', 'verdict.given']
 
 interface WireEvent {
   id: string
@@ -32,7 +34,7 @@ export function openCalls(events: WireEvent[]): WireEvent[] {
 /** What a resolved call decided, in one word. */
 export function answerOf(resolution: { payload: Record<string, unknown> } | null): string | null {
   if (!resolution) return null
-  return String(resolution.payload.verdict ?? resolution.payload.decision ?? '')
+  return String(resolution.payload.answer ?? resolution.payload.verdict ?? resolution.payload.decision ?? '')
 }
 
 export const listCommand = defineCommand({
