@@ -26,7 +26,7 @@ const limitReached = computed(() => agents.value.length >= maxAgents)
 async function loadAgents() {
   loading.value = true
   try {
-    agents.value = await ($fetch as any)('/api/my-agents')
+    agents.value = await apiFetch('/api/my-agents')
   }
   catch {
     agents.value = []
@@ -97,7 +97,7 @@ async function applyBulk() {
   bulkBusy.value = true
   bulkError.value = ''
   try {
-    const res = await ($fetch as any)('/api/standing-grants/bulk-seed', {
+    const res = await apiFetch('/api/standing-grants/bulk-seed', {
       method: 'POST',
       body: { delegates: [...bulkSelected.value] },
     }) as { results: Array<{ delegate: string, created: number, skipped: number }> }

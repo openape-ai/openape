@@ -46,7 +46,7 @@ async function loadStatus() {
   statusLoading.value = true
   error.value = ''
   try {
-    status.value = await ($fetch as any)('/api/free-idp/admin/status')
+    status.value = await apiFetch('/api/free-idp/admin/status')
   }
   catch (err: any) {
     error.value = err?.data?.title || err?.message || 'Status laden fehlgeschlagen'
@@ -60,7 +60,7 @@ async function loadAllowlist() {
   if (!status.value?.isRoot && !status.value?.isOperator) return
   allowlistLoading.value = true
   try {
-    allowlist.value = await ($fetch as any)('/api/free-idp/admin/allowlist')
+    allowlist.value = await apiFetch('/api/free-idp/admin/allowlist')
   }
   catch {
     allowlist.value = []
@@ -74,7 +74,7 @@ async function loadOperators() {
   if (!status.value?.isRoot && !status.value?.isOperator) return
   operatorsLoading.value = true
   try {
-    operators.value = await ($fetch as any)('/api/free-idp/admin/operators')
+    operators.value = await apiFetch('/api/free-idp/admin/operators')
   }
   catch {
     operators.value = []
@@ -90,7 +90,7 @@ async function promoteOperator() {
   promoting.value = true
   error.value = ''
   try {
-    await ($fetch as any)('/api/free-idp/admin/operators', {
+    await apiFetch('/api/free-idp/admin/operators', {
       method: 'POST',
       body: { email },
     })
@@ -107,7 +107,7 @@ async function promoteOperator() {
 
 async function demoteOperator(email: string) {
   try {
-    await ($fetch as any)(`/api/free-idp/admin/operators/${encodeURIComponent(email)}`, {
+    await apiFetch(`/api/free-idp/admin/operators/${encodeURIComponent(email)}`, {
       method: 'DELETE',
     })
     await loadOperators()
@@ -121,7 +121,7 @@ async function generateSecret() {
   issuing.value = true
   error.value = ''
   try {
-    const res = await ($fetch as any)('/api/free-idp/admin/claim-secret', { method: 'POST' })
+    const res = await apiFetch<{ secret: string, txtName: string }>('/api/free-idp/admin/claim-secret', { method: 'POST' })
     lastIssuedSecret.value = res.secret
     lastIssuedTxtName.value = res.txtName
   }
@@ -137,7 +137,7 @@ async function recheck() {
   rechecking.value = true
   error.value = ''
   try {
-    await ($fetch as any)('/api/free-idp/admin/recheck', { method: 'POST' })
+    await apiFetch('/api/free-idp/admin/recheck', { method: 'POST' })
     await loadStatus()
     await loadAllowlist()
     await loadOperators()
@@ -161,7 +161,7 @@ async function bustDdisaCache() {
   error.value = ''
   cacheBustResult.value = ''
   try {
-    const res = await ($fetch as any)('/api/free-idp/admin/dns-cache/bust', { method: 'POST' })
+    const res = await apiFetch<{ wasCached: boolean, domain: string }>('/api/free-idp/admin/dns-cache/bust', { method: 'POST' })
     cacheBustResult.value = res.wasCached
       ? `DNS-Cache für ${res.domain} verworfen — nächster /authorize resolved frisch.`
       : `DNS-Cache für ${res.domain} war bereits leer — nichts zu tun.`
@@ -180,7 +180,7 @@ async function addToAllowlist() {
   adding.value = true
   error.value = ''
   try {
-    await ($fetch as any)('/api/free-idp/admin/allowlist', {
+    await apiFetch('/api/free-idp/admin/allowlist', {
       method: 'POST',
       body: { clientId },
     })
@@ -197,7 +197,7 @@ async function addToAllowlist() {
 
 async function removeFromAllowlist(clientId: string) {
   try {
-    await ($fetch as any)(`/api/free-idp/admin/allowlist/${encodeURIComponent(clientId)}`, {
+    await apiFetch(`/api/free-idp/admin/allowlist/${encodeURIComponent(clientId)}`, {
       method: 'DELETE',
     })
     await loadAllowlist()

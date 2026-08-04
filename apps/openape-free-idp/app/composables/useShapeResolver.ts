@@ -57,7 +57,7 @@ export function useShapeResolver(opts: { maxCacheEntries?: number } = {}) {
     loading.value = true
     error.value = ''
     try {
-      const r = await ($fetch as any)('/api/shapes/resolve', {
+      const r = await apiFetch('/api/shapes/resolve', {
         method: 'POST',
         body: { cli_id: cliId, argv },
       }) as ResolvedCommand

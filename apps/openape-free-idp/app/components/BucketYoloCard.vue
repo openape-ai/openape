@@ -150,7 +150,7 @@ async function load() {
     await Promise.all(props.bucket.audiences.map(async (aud) => {
       try {
         const url = `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`
-        const res = await ($fetch as any)(url) as { policy: YoloPolicy | null }
+        const res = await apiFetch(url) as { policy: YoloPolicy | null }
         fetched[aud] = res?.policy && res.policy.audience === aud ? res.policy : null
       }
       catch {
@@ -218,7 +218,7 @@ async function save() {
       expiresAt,
     }
     await Promise.all(props.bucket.audiences.map(aud =>
-      ($fetch as any)(
+      apiFetch(
         `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`,
         { method: 'PUT', body },
       ),
@@ -240,7 +240,7 @@ async function reset() {
   error.value = ''
   try {
     await Promise.all(props.bucket.audiences.map(aud =>
-      ($fetch as any)(
+      apiFetch(
         `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`,
         { method: 'DELETE' },
       ),
