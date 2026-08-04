@@ -173,6 +173,20 @@ pnpm turbo run typecheck --filter=@openape/nuxt-auth-idp
 
 Ohne bestandene Checks: kein Commit, kein Deploy.
 
+## Policy: UI wird mit Komponenten-Tests entwickelt
+
+**Beschlossen 2026-08-04** (Karte `01KZ5NT798X8WJGPBHSMQKC041` auf troop.openape.ai, Entscheidung: „CLAUDE.md + policy-Events").
+
+Vue-Komponenten mit sichtbarer Logik — Zustände, Verzweigungen, Interaktionen — bekommen einen Komponenten-Test. Ein Screenshot ist ein Blick, kein Test: Der erste Testlauf der `DecisionCard` fand einen Defekt, den kein Screenshot zeigt (`Nur vor dem Merge(Empfehlung)` — das Leerzeichen existierte nur als CSS-Margin).
+
+- **Logik zuerst herausziehen.** Reine Funktionen leben in `app/utils/*.ts` und werden dort getestet (Beispiel: `attention-inbox.ts` — Fold über Events, Titel, Wartezeit). Die Komponente testet dann nur Darstellung und Interaktion.
+- **Setup pro App:** `@vitejs/plugin-vue` in der vitest-Config, `@vue/test-utils` + `happy-dom`, Nuxt-UI-Komponenten als Stubs. Vorlage: `apps/openape-troop/vitest.config.ts` + `tests/decision-card.test.ts`.
+- **Assertions auf sichtbaren Text und emittierte Events**, nicht auf CSS-Klassen oder interne Struktur.
+- **Nicht nötig** für reine Darstellungs-Einzeiler ohne Verzweigung. Kein Snapshot-Testing ganzer Seiten.
+- **Niemals** stattdessen die Auth aushebeln, um eine eingeloggte Ansicht zu Gesicht zu bekommen — genau dieser Umweg war der Anlass für die Regel.
+
+Bestandsaufnahme über alle Apps und die Frage nach gemeinsamen Komponenten: Issue #1172.
+
 ## Workflow: Issue-First Development
 
 Siehe `CONTRIBUTING.md` für den vollständigen Workflow.

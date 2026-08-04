@@ -1,0 +1,41 @@
+<script setup lang="ts">
+import type { Policy } from '../utils/policies'
+
+// Rules in force, with the decision they came from — the point is that a
+// policy is never anonymous: it has an origin, a date and a place where it
+// actually binds.
+defineProps<{ policies: Policy[] }>()
+</script>
+
+<template>
+  <div v-if="policies.length" class="space-y-2">
+    <div
+      v-for="p in policies" :key="p.id"
+      class="rounded-lg border px-4 py-3"
+      :class="p.adopted ? 'border-zinc-800 bg-zinc-900/50' : 'border-dashed border-zinc-700'"
+    >
+      <div class="flex items-start gap-2">
+        <span
+          class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0 mt-0.5"
+          :class="p.adopted ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-400'"
+        >{{ p.adopted ? 'in Kraft' : 'Vorschlag' }}</span>
+        <p class="text-sm font-medium leading-relaxed">
+          {{ p.rule }}
+        </p>
+      </div>
+      <p v-if="p.rationale" class="text-xs text-zinc-400 mt-2 leading-relaxed">
+        {{ p.rationale }}
+      </p>
+      <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-zinc-500">
+        <span>{{ p.actor }}</span>
+        <span v-if="p.enforcedIn" class="font-mono">{{ p.enforcedIn }}</span>
+        <NuxtLink v-if="p.sourceId" :to="`/d/${p.sourceId}`" class="underline hover:text-zinc-300">
+          aus dieser Entscheidung
+        </NuxtLink>
+      </div>
+    </div>
+  </div>
+  <p v-else class="text-zinc-500 py-8 text-center">
+    Noch keine Regeln. Sie entstehen aus Entscheidungen, die über den Einzelfall hinausgehen.
+  </p>
+</template>

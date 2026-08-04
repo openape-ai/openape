@@ -13,6 +13,8 @@ export const ATTENTION_EVENT_TYPES = [
   'verdict.given',
   'cost.recorded',
   'task.shipped',
+  'policy.proposed',
+  'policy.adopted',
 ] as const
 
 export type AttentionEventType = (typeof ATTENTION_EVENT_TYPES)[number]
@@ -94,6 +96,21 @@ export const AttentionEventSchema = z.discriminatedUnion('type', [
   }),
   event('verdict.given', { verdict: z.enum(['merge', 'rework', 'reject']), request_id: ulid.optional(), auto: z.boolean().optional() }),
   event('cost.recorded', { amount_eur: z.number().nonnegative(), note: z.string().optional() }),
+  // What remains of a decision once it applies to future work, not just this
+  // case. `source_id` points at the card it came from, so "since when, and out
+  // of which decision" stays answerable.
+  event('policy.proposed', {
+    rule: z.string().min(1).max(2000),
+    rationale: z.string().max(4000).optional(),
+    source_id: ulid.optional(),
+  }),
+  event('policy.adopted', {
+    rule: z.string().min(1).max(2000),
+    rationale: z.string().max(4000).optional(),
+    source_id: ulid.optional(),
+    /** Where the rule is written down so it actually binds (e.g. CLAUDE.md). */
+    enforced_in: z.string().max(500).optional(),
+  }),
   event('task.shipped', {}),
 ])
 
