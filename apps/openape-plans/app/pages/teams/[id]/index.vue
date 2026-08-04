@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
+import { currentPlans as selectCurrent, formatRelative, historyPlans as selectHistory, statusColor } from '~/utils/plan-status'
 
 const { user, fetchUser } = useOpenApeAuth()
 const route = useRoute()
@@ -44,19 +45,8 @@ const invitesError = ref('')
 const showInvites = ref(false)
 const showHistory = ref(false)
 
-const STATUS_ORDER: Record<TeamPlan['status'], number> = { active: 0, draft: 1, done: 2, archived: 3 }
-function sortByStatusThenUpdated(a: TeamPlan, b: TeamPlan): number {
-  const s = STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
-  return s !== 0 ? s : b.updated_at - a.updated_at
-}
-const currentPlans = computed<TeamPlan[]>(() => {
-  if (!detail.value) return []
-  return detail.value.plans.filter(p => p.status === 'active' || p.status === 'draft').sort(sortByStatusThenUpdated)
-})
-const historyPlans = computed<TeamPlan[]>(() => {
-  if (!detail.value) return []
-  return detail.value.plans.filter(p => p.status === 'done' || p.status === 'archived').sort(sortByStatusThenUpdated)
-})
+const currentPlans = computed<TeamPlan[]>(() => (detail.value ? selectCurrent(detail.value.plans) : []))
+const historyPlans = computed<TeamPlan[]>(() => (detail.value ? selectHistory(detail.value.plans) : []))
 
 const showInviteModal = ref(false)
 const inviteMaxUses = ref(5)
@@ -96,21 +86,6 @@ async function loadDetail() {
   finally {
     loading.value = false
   }
-}
-
-function formatRelative(ts: number): string {
-  const diff = Math.floor(Date.now() / 1000) - ts
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-function statusColor(s: TeamPlan['status']): 'neutral' | 'primary' | 'success' | 'warning' {
-  if (s === 'active') return 'primary'
-  if (s === 'done') return 'success'
-  if (s === 'archived') return 'warning'
-  return 'neutral'
 }
 
 async function removeMember(email: string) {
