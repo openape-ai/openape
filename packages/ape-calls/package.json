@@ -1,8 +1,8 @@
 {
   "name": "@openape/ape-calls",
   "type": "module",
-  "version": "0.1.0",
-  "description": "Wait for the decisions a human still owes you \u2014 OpenApe calls.",
+  "version": "0.1.1",
+  "description": "Wait for the decisions a human still owes you — OpenApe calls.",
   "author": null,
   "license": "MIT",
   "bin": {

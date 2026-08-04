@@ -1,5 +1,12 @@
 # @openape/ape-testruns
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [dd0d9ac]
+  - @openape/proof-cli@0.2.0
+
 ## 0.2.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-plans",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "CLI for plans.openape.ai — cross-device plan management for humans and AI agents",
   "type": "module",
   "license": "MIT",
