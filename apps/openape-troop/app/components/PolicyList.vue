@@ -29,7 +29,7 @@ defineProps<{ policies: Policy[] }>()
       <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-zinc-400">
         <span>{{ p.actor }}</span>
         <span v-if="p.enforcedIn" class="font-mono">{{ p.enforcedIn }}</span>
-        <NuxtLink v-if="p.sourceId" :to="`/d/${p.sourceId}`" class="underline hover:text-zinc-300">
+        <NuxtLink v-if="p.sourceId" :to="`/c/${p.sourceId}`" class="underline hover:text-zinc-300">
           aus dieser Entscheidung
         </NuxtLink>
       </div>

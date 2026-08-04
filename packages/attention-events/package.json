@@ -1,7 +1,7 @@
 {
   "name": "@openape/attention-events",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Append-only attention event schema (v1): envelope plus 12 event types, zod-validated",
   "author": "Delta Mind GmbH",
   "license": "MIT",

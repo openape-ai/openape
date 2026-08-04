@@ -60,7 +60,7 @@ const badge: Record<string, { label: string, class: string }> = {
 
         <div v-if="open.length" class="space-y-2">
           <NuxtLink
-            v-for="e in open" :key="e.id" :to="`/d/${e.id}`"
+            v-for="e in open" :key="e.id" :to="`/c/${e.id}`"
             class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 hover:border-zinc-600 transition-colors"
           >
             <span class="text-xs px-2 py-0.5 rounded shrink-0" :class="badge[e.type]?.class">

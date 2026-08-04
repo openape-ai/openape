@@ -1,0 +1,9 @@
+{
+  "id": "01KZ6C0000F1XTVRE00000CA52",
+  "ts": 1785840600,
+  "actor": "patrick@hofmann.eco",
+  "actor_kind": "human",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "call.answered",
+  "payload": { "answer": "chat", "request_id": "01KZ6C0000F1XTVRE00000CA51" }
+}

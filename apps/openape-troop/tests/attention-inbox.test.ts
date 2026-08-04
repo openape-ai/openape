@@ -57,3 +57,41 @@ describe('waitingLabel', () => {
     expect(waitingLabel(event({ id: 'A', type: 'decision.requested', ts: 1000 }), 1000 + age)).toBe(label)
   })
 })
+
+describe('call vocabulary', () => {
+  const call = (kind: string, payload: Record<string, unknown> = {}): WireEvent => ({
+    id: '01KZ6C0000F1XTVRE00000CA51',
+    ts: 100,
+    actor: 'agent:a1',
+    actor_kind: 'agent',
+    task_ref: 'ape-tasks:T1',
+    type: 'call.raised',
+    payload: { kind, ...payload },
+  })
+
+  it('reads the kind off a raised call', async () => {
+    const { callKind } = await import('../app/utils/attention-inbox')
+    expect(callKind(call('verdict'))).toBe('verdict')
+    expect(callKind(call('escalation'))).toBe('escalation')
+    expect(callKind(call('decision'))).toBe('decision')
+  })
+
+  it('derives the kind from the older types, so both render the same', async () => {
+    const { callKind } = await import('../app/utils/attention-inbox')
+    expect(callKind({ ...call('x'), type: 'verdict.requested' })).toBe('verdict')
+    expect(callKind({ ...call('x'), type: 'work.blocked' })).toBe('escalation')
+    expect(callKind({ ...call('x'), type: 'decision.requested' })).toBe('decision')
+  })
+
+  it('treats a raised call as open until it is answered', () => {
+    const raised = call('decision', { question: 'wohin?' })
+    expect(openRequests([raised])).toHaveLength(1)
+    const answered = { ...raised, id: 'ANS', type: 'call.answered', ts: 200, payload: { answer: 'links', request_id: raised.id } }
+    expect(openRequests([raised, answered])).toHaveLength(0)
+  })
+
+  it('mixes both vocabularies in one inbox without double-counting', () => {
+    const old = { ...call('decision'), id: 'OLD', type: 'decision.requested', ts: 50, payload: { question: 'alt?' } }
+    expect(openRequests([old, call('decision', { question: 'neu?' })]).map(e => e.id)).toEqual(['OLD', '01KZ6C0000F1XTVRE00000CA51'])
+  })
+})

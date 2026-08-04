@@ -15,6 +15,8 @@ export const ATTENTION_EVENT_TYPES = [
   'task.shipped',
   'policy.proposed',
   'policy.adopted',
+  'call.raised',
+  'call.answered',
 ] as const
 
 export type AttentionEventType = (typeof ATTENTION_EVENT_TYPES)[number]
@@ -60,7 +62,35 @@ function event<T extends AttentionEventType, P extends z.ZodRawShape>(type: T, p
   return z.strictObject({ ...envelope, type: z.literal(type), payload: z.strictObject(payload) })
 }
 
+// A **call** is the OpenApe word for a decision waiting on a human: an agent
+// *raises* one, a human *answers* it. `call.raised` unifies what used to be
+// three separate request types — the `kind` says which sort it is, and the
+// payload carries whatever that sort needs.
+//
+// The older `decision.requested` / `work.blocked` / `verdict.requested` and
+// their answers stay valid forever: 50+ of them are already recorded, and
+// every reader folds both vocabularies. New writers should raise calls.
+const CALL_KINDS = ['decision', 'escalation', 'verdict'] as const
+
 export const AttentionEventSchema = z.discriminatedUnion('type', [
+  event('call.raised', {
+    kind: z.enum(CALL_KINDS),
+    question: z.string().min(1).optional(),
+    options: z.array(z.string()).optional(),
+    option_summaries: optionBriefing,
+    recommendation: z.string().optional(),
+    recommendation_why: z.string().max(2000).optional(),
+    blocks: z.string().optional(),
+    pr_url: z.url().optional(),
+    highlights: z.array(z.string().min(1).max(500)).max(10).optional(),
+    ...briefing,
+    ...waiting,
+  }),
+  event('call.answered', {
+    answer: z.string().min(1),
+    request_id: ulid.optional(),
+    auto: z.boolean().optional(),
+  }),
   event('spec.created', { title: z.string().min(1), spec_url: z.url().optional() }),
   event('spec.approved', {}),
   event('spec.changes_requested', { reason: z.string().optional() }),

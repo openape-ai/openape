@@ -5,7 +5,7 @@ import { useOpenApeAuth } from '#imports'
 // Stufe 2 in nuce: what each agent's history says, and what sampling rate that
 // would justify. Shown, never enforced — see AgentRecords.vue.
 useSeoMeta({ title: () => 'Track-Records' })
-const { user, fetchUser } = useOpenApeAuth()
+const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
 const { data } = await useFetch<{ metrics: Metrics, agents: AgentRecord[], events_considered: number }>('/api/inbox/metrics', {
@@ -19,14 +19,13 @@ const { data } = await useFetch<{ metrics: Metrics, agents: AgentRecord[], event
     <header class="app-header">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <NuxtLink to="/inbox" class="font-semibold hover:underline">
-          Inbox
-        </NuxtLink>
-        <span class="text-zinc-600">/</span>
-        <h1 class="font-semibold">
+        <ViewToggle active="inbox" />
+        <span class="text-zinc-500 hidden sm:inline">/</span>
+        <h1 class="font-semibold truncate hidden sm:block">
           Track-Records
         </h1>
       </div>
+      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" aria-label="Abmelden" @click="logout" />
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">

@@ -1,0 +1,22 @@
+{
+  "id": "01KZ6C0000F1XTVRE00000CA51",
+  "ts": 1785840000,
+  "actor": "agent:frontend@delta-mind.at",
+  "actor_kind": "agent",
+  "task_ref": "ape-tasks:01KZ3QAAAA0000000000TASK01",
+  "type": "call.raised",
+  "payload": {
+    "kind": "decision",
+    "title": "Welche App bekommt zuerst Komponenten-Tests?",
+    "summary": "Die Policy gilt seit heute, trägt aber nur eine von zehn Apps.",
+    "question": "Womit fangen wir an?",
+    "options": ["chat", "plans", "free-idp"],
+    "option_summaries": [
+      { "option": "chat", "summary": "Config existiert, drei ungetestete Composables." }
+    ],
+    "recommendation": "chat",
+    "recommendation_why": "Bestes Verhältnis von Aufwand zu Ertrag.",
+    "deadline": 1785926400,
+    "on_timeout": "recommendation"
+  }
+}

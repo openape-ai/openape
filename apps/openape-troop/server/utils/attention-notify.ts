@@ -11,6 +11,13 @@ const TITLES: Record<string, string> = {
   'decision.requested': 'Entscheidung',
   'work.blocked': 'Eskalation',
   'verdict.requested': 'Verdict',
+  'call.raised': 'Entscheidung',
+}
+
+const CALL_KIND_TITLES: Record<string, string> = {
+  decision: 'Entscheidung',
+  escalation: 'Eskalation',
+  verdict: 'Verdict',
 }
 
 /** How many request cards of this owner are still unanswered. */
@@ -27,9 +34,9 @@ export async function openCardCount(ownerEmail: string, sinceSeconds: number): P
 
 /** Notification body for a card — the question itself, or the PR under review. */
 export function cardMessage(type: string, payload: Record<string, unknown>, openCount: number) {
-  const title = TITLES[type] ?? 'Karte'
+  const title = (type === 'call.raised' ? CALL_KIND_TITLES[String(payload.kind)] : TITLES[type]) ?? 'Karte'
   if (openCount > 1) {
-    return { title: `${openCount} Entscheidungen warten`, body: `Zuletzt: ${describe(type, payload)}`, url: '/inbox' }
+    return { title: `${openCount} Calls warten`, body: `Zuletzt: ${describe(type, payload)}`, url: '/inbox' }
   }
   return { title, body: describe(type, payload) }
 }
@@ -52,5 +59,5 @@ export async function notifyCardRaised(ownerEmail: string, event: { id: string, 
   const openCount = await openCardCount(ownerEmail, event.ts - BURST_WINDOW_SECONDS)
   const message = cardMessage(event.type, event.payload, openCount)
   const { pushToOwner } = await import('./cockpit/push')
-  await pushToOwner(ownerEmail, { url: `/d/${event.id}`, ...message })
+  await pushToOwner(ownerEmail, { url: `/c/${event.id}`, ...message })
 }
