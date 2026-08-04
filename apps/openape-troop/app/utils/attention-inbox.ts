@@ -10,8 +10,19 @@ export interface WireEvent {
   payload: Record<string, unknown>
 }
 
-const REQUEST_TYPES = ['decision.requested', 'work.blocked', 'verdict.requested']
-const RESOLUTION_TYPES = ['decision.made', 'verdict.given']
+// A call is a decision waiting on a human. `call.raised`/`call.answered` is the
+// current vocabulary; the three older request types stay folded in because the
+// log already holds 50+ of them.
+const REQUEST_TYPES = ['call.raised', 'decision.requested', 'work.blocked', 'verdict.requested']
+const RESOLUTION_TYPES = ['call.answered', 'decision.made', 'verdict.given']
+
+/** decision | escalation | verdict — from the payload for a call, from the type otherwise. */
+export function callKind(event: WireEvent): 'decision' | 'escalation' | 'verdict' {
+  if (event.type === 'call.raised') return (event.payload.kind as 'decision' | 'escalation' | 'verdict') ?? 'decision'
+  if (event.type === 'verdict.requested') return 'verdict'
+  if (event.type === 'work.blocked') return 'escalation'
+  return 'decision'
+}
 
 /**
  * Fold the event log into the open decision cards: request events without a
@@ -32,7 +43,7 @@ export function openRequests(events: WireEvent[]): WireEvent[] {
 export function cardTitle(event: WireEvent): string {
   const title = event.payload.title as string | undefined
   if (title) return title
-  if (event.type === 'verdict.requested') return `Verdict: ${event.task_ref}`
+  if (callKind(event) === 'verdict') return `Verdict: ${event.task_ref}`
   return String(event.payload.question ?? event.task_ref)
 }
 

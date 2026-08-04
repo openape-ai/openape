@@ -28,14 +28,14 @@ describe('cardMessage', () => {
     expect(cardMessage('work.blocked', { question: 'Blockiert?' }, 1).title).toBe('Eskalation')
   })
 
-  it('summarises to the inbox once several cards are open', () => {
+  it('summarises to the inbox once several calls are open', () => {
     const msg = cardMessage('decision.requested', { question: 'Frage 3' }, 3)
-    expect(msg).toEqual({ title: '3 Entscheidungen warten', body: 'Zuletzt: Frage 3', url: '/inbox' })
+    expect(msg).toEqual({ title: '3 Calls warten', body: 'Zuletzt: Frage 3', url: '/inbox' })
   })
 })
 
 describe('notifyCardRaised', () => {
-  it('buzzes with a deep link to the card itself', async () => {
+  it('buzzes with a deep link to the call itself', async () => {
     mockPush.mockClear()
     await notifyCardRaised('patrick@hofmann.eco', {
       id: '01KZ4C12QZN14SS33ZKKHHKMCQ',
@@ -44,7 +44,7 @@ describe('notifyCardRaised', () => {
       payload: { question: 'Welche App zuerst?' },
     })
     expect(mockPush).toHaveBeenCalledWith('patrick@hofmann.eco', expect.objectContaining({
-      url: '/d/01KZ4C12QZN14SS33ZKKHHKMCQ',
+      url: '/c/01KZ4C12QZN14SS33ZKKHHKMCQ',
       body: 'Welche App zuerst?',
     }))
   })

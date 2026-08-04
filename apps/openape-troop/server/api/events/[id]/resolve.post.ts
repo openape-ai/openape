@@ -27,7 +27,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<{ choice?: string, verdict?: string }>(event)
-  const isVerdict = row.type === 'verdict.requested'
+  const isCall = row.type === 'call.raised'
+  const isVerdict = row.type === 'verdict.requested' || (isCall && (row.payload as { kind?: string }).kind === 'verdict')
   const resolving = AttentionEventSchema.parse({
     id: newUlid(),
     ts: Math.floor(Date.now() / 1000),
@@ -36,10 +37,13 @@ export default defineEventHandler(async (event) => {
     task_ref: row.taskRef,
     ...(row.goalRef ? { goal_ref: row.goalRef } : {}),
     ...(row.orgId ? { org_id: row.orgId } : {}),
-    type: isVerdict ? 'verdict.given' : 'decision.made',
-    payload: isVerdict
-      ? { verdict: body?.verdict, request_id: row.id }
-      : { decision: body?.choice, request_id: row.id },
+    // Answer in the dialect the request was raised in, so a log stays readable.
+    type: isCall ? 'call.answered' : isVerdict ? 'verdict.given' : 'decision.made',
+    payload: isCall
+      ? { answer: body?.verdict ?? body?.choice, request_id: row.id }
+      : isVerdict
+        ? { verdict: body?.verdict, request_id: row.id }
+        : { decision: body?.choice, request_id: row.id },
   })
 
   await db.insert(attentionEvents).values({

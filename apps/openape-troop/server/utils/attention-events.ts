@@ -76,8 +76,11 @@ export function toWire(row: AttentionEventRow) {
   }
 }
 
-const REQUEST_TYPES = ['decision.requested', 'work.blocked', 'verdict.requested'] as const
-const RESOLUTION_TYPES = ['decision.made', 'verdict.given'] as const
+// Both vocabularies, folded everywhere. `call.raised`/`call.answered` is what
+// new writers use; the three older request types and their answers stay valid
+// because 50+ recorded events depend on them.
+const REQUEST_TYPES = ['call.raised', 'decision.requested', 'work.blocked', 'verdict.requested'] as const
+const RESOLUTION_TYPES = ['call.answered', 'decision.made', 'verdict.given'] as const
 
 export function isRequestType(type: string): boolean {
   return (REQUEST_TYPES as readonly string[]).includes(type)

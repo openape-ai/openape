@@ -178,3 +178,34 @@ describe('briefing fields (v0.3)', () => {
     expect(AttentionEventSchema.safeParse(verdict).success).toBe(true)
   })
 })
+
+describe('call vocabulary (v0.4)', () => {
+  const raised = loadFixture('call-raised.json') as { payload: Record<string, unknown> }
+
+  it.each(['decision', 'escalation', 'verdict'])('accepts a %s call', (kind) => {
+    expect(AttentionEventSchema.safeParse({ ...raised, payload: { ...raised.payload, kind } }).success).toBe(true)
+  })
+
+  it('rejects a kind nobody can render', () => {
+    expect(AttentionEventSchema.safeParse({ ...raised, payload: { ...raised.payload, kind: 'vibe' } }).success).toBe(false)
+  })
+
+  it('carries a verdict call with its PR and highlights', () => {
+    const verdict = {
+      ...raised,
+      payload: { kind: 'verdict', title: 'PR #1181', pr_url: 'https://git.openape.ai/x/y/pulls/1181', highlights: ['+280/-0'] },
+    }
+    expect(AttentionEventSchema.safeParse(verdict).success).toBe(true)
+  })
+
+  it('needs an answer on call.answered — an empty one would read as "decided nothing"', () => {
+    const answered = loadFixture('call-answered.json') as { payload: Record<string, unknown> }
+    expect(AttentionEventSchema.safeParse(answered).success).toBe(true)
+    expect(AttentionEventSchema.safeParse({ ...answered, payload: { ...answered.payload, answer: '' } }).success).toBe(false)
+  })
+
+  it('keeps the old vocabulary valid — 50+ recorded events depend on it', () => {
+    expect(AttentionEventSchema.safeParse(loadFixture('decision-requested.json')).success).toBe(true)
+    expect(AttentionEventSchema.safeParse(loadFixture('verdict-given.json')).success).toBe(true)
+  })
+})
