@@ -747,7 +747,7 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
               <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
               <div v-if="toolsDirty" class="flex justify-end mt-3">
                 <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
-                  Save tools
+                  {{ $t('common.save') }}
                 </UButton>
               </div>
             </div>

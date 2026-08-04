@@ -82,7 +82,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
           Firmen
         </h2>
         <p class="text-zinc-400 mb-6">
-          Ihre Firmen — klicken Sie eine an, um Hierarchie und Ziele zu sehen.
+          Deine Firmen — klick eine an, um Hierarchie und Ziele zu sehen.
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
@@ -99,7 +99,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             Noch keine Firma
           </h3>
           <p class="text-sm text-zinc-400 max-w-md mx-auto">
-            Legen Sie Ihre erste Firma an — der Operator richtet sich nach ihrer Vision.
+            Leg deine erste Firma an — der Operator richtet sich nach ihrer Vision.
           </p>
           <UButton color="primary" icon="i-lucide-plus" @click="showCreate = true">
             Firma anlegen
