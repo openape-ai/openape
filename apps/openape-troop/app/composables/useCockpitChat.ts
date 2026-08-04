@@ -146,7 +146,7 @@ export function useCockpitChat() {
             if (ev.k === 'id' && ev.id) { taskId = ev.id }
             else if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
             else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
-            else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? `${ev.text} · Antwort in ~${ev.sec}s` : ev.text }
+            else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? t('cockpit.chat.waitSeconds', { text: ev.text, sec: ev.sec }) : ev.text }
             else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
             // The Operator paused on a question — the bubble settles into chips.
             else if (ev.k === 'ask' && ev.text) { assistant.content = ev.text; assistant.ask = { taskId: ev.taskId ?? taskId, options: ev.options ?? [] }; assistant.waiting = undefined; assistant.system = undefined }

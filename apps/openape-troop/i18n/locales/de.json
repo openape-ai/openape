@@ -494,7 +494,8 @@
       "attachmentOnly": "(Anhang)",
       "reconnecting": "Verbindung unterbrochen — verbinde neu …",
       "answerPending": "Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.",
-      "answerFallback": "Zu deiner Frage „{question}“: {choice}"
+      "answerFallback": "Zu deiner Frage „{question}“: {choice}",
+      "waitSeconds": "{text} · Antwort in ~{sec} s"
     },
     "presence": {
       "label": {

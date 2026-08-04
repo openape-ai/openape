@@ -494,7 +494,8 @@
       "attachmentOnly": "(Attachment)",
       "reconnecting": "Connection lost — reconnecting …",
       "answerPending": "The answer arrives as soon as the Operator is done — it will be waiting the next time you open the chat.",
-      "answerFallback": "On your question “{question}”: {choice}"
+      "answerFallback": "Answering “{question}”: {choice}",
+      "waitSeconds": "{text} · answer in ~{sec}s"
     },
     "presence": {
       "label": {
