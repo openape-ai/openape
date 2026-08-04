@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentRecord, Metrics } from '../../utils/attention-metrics'
+import type { AgentRecord, Metrics } from '../utils/attention-metrics'
 import { useOpenApeAuth } from '#imports'
 
 // Stufe 2 in nuce: what each agent's history says, and what sampling rate that

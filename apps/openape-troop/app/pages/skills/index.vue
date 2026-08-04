@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 // Skill library — owner-level, reusable procedures (e.g. tool-skills like o365-cli/
@@ -7,7 +7,7 @@ import { useOpenApeAuth } from '#imports'
 // own Skills tab (org-scoped).
 useSeoMeta({ title: () => 'Skill-Bibliothek' })
 
-const { fetchUser, logout } = useOpenApeAuth()
+const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
 interface Skill { id: string, name: string, description: string, prompt: string, assignedTo: string[], updatedAt: number }
@@ -95,7 +95,10 @@ async function remove(s: Skill) {
   finally { busy[s.id] = false }
 }
 
-await load()
+// Load only once a user is known. A top-level `await load()` crashed SSR for
+// logged-out visitors: its 401 branch calls navigateTo after several await
+// boundaries, where the Nuxt instance is already gone (500 on /skills).
+watch(user, (u) => { if (u) void load() }, { immediate: true })
 </script>
 
 <template>
@@ -114,46 +117,49 @@ await load()
     </header>
 
     <main class="max-w-4xl mx-auto px-4 sm:px-8 py-8">
-      <h2 class="text-2xl font-bold mb-1">
-        Skill-Bibliothek
-      </h2>
-      <p class="text-sm text-zinc-500 mb-6">
-        Wiederverwendbare Prozeduren (z. B. Tool-Skills wie o365-cli, gmail-cli) — einmal definiert, Agents in jeder Firma zuweisbar.
-      </p>
+      <InlineLogin v-if="!user" hint="Melde dich an, um deine Skill-Bibliothek zu sehen." />
+      <template v-else>
+        <h2 class="text-2xl font-bold mb-1">
+          Skill-Bibliothek
+        </h2>
+        <p class="text-sm text-zinc-500 mb-6">
+          Wiederverwendbare Prozeduren (z. B. Tool-Skills wie o365-cli, gmail-cli) — einmal definiert, Agents in jeder Firma zuweisbar.
+        </p>
 
-      <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
-      <div v-if="loading" class="text-zinc-500 py-10 text-center">
-        Lädt …
-      </div>
-      <div v-else-if="!items.length" class="text-zinc-600 italic py-10 text-center">
-        Noch kein Bibliotheks-Skill. Leg den ersten an — z. B. „o365-cli: Microsoft 365 Mail & Kalender".
-      </div>
-      <div v-else class="space-y-2">
-        <div
-          v-for="s in items"
-          :key="s.id"
-          class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
-          @click="openEdit(s)"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-medium truncate">{{ s.name || '(ohne Name)' }}</span>
-                <UBadge v-for="t in s.assignedTo" :key="t" :color="t === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
-                  {{ labelFor(t) }}
-                </UBadge>
-                <UBadge v-if="!s.assignedTo.length" color="warning" variant="subtle" size="xs">
-                  niemandem zugeordnet
-                </UBadge>
+        <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+        <div v-if="loading" class="text-zinc-500 py-10 text-center">
+          Lädt …
+        </div>
+        <div v-else-if="!items.length" class="text-zinc-600 italic py-10 text-center">
+          Noch kein Bibliotheks-Skill. Leg den ersten an — z. B. „o365-cli: Microsoft 365 Mail & Kalender".
+        </div>
+        <div v-else class="space-y-2">
+          <div
+            v-for="s in items"
+            :key="s.id"
+            class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
+            @click="openEdit(s)"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-medium truncate">{{ s.name || '(ohne Name)' }}</span>
+                  <UBadge v-for="t in s.assignedTo" :key="t" :color="t === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
+                    {{ labelFor(t) }}
+                  </UBadge>
+                  <UBadge v-if="!s.assignedTo.length" color="warning" variant="subtle" size="xs">
+                    niemandem zugeordnet
+                  </UBadge>
+                </div>
+                <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
+                  {{ s.description }}
+                </p>
               </div>
-              <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
-                {{ s.description }}
-              </p>
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s)" />
             </div>
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s)" />
           </div>
         </div>
-      </div>
+      </template>
     </main>
 
     <UModal v-model:open="showForm" :ui="{ content: 'sm:max-w-2xl max-h-[85dvh]' }">
