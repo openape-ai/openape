@@ -190,7 +190,12 @@
       "hint": "Sign in once — the agent then uses your ChatGPT subscription.",
       "enterCode": "Open and enter the code:",
       "waiting": "Waiting for browser confirmation …",
-      "connected": "ChatGPT connected (account {account})"
+      "connected": "ChatGPT connected (account {account})",
+      "error": {
+        "start": "Could not start the connection.",
+        "denied": "ChatGPT declined the connection.",
+        "poll": "Could not check the status."
+      }
     },
     "secrets": {
       "title": "Secrets",
@@ -434,8 +439,23 @@
       "invalidField": "Invalid field — see help"
     }
   },
-  "nav": {},
-  "header": {},
+  "nav": {
+    "inbox": "Inbox",
+    "companies": "Companies",
+    "services": "Services",
+    "skills": "Skills",
+    "nests": "Nests",
+    "chat": "Chat"
+  },
+  "header": {
+    "login": {
+      "what": "this decision",
+      "emailPlaceholder": "you{'@'}company.com",
+      "submit": "Sign in",
+      "invalidEmail": "Please enter a valid email address.",
+      "failed": "Login failed."
+    }
+  },
   "inbox": {},
   "decisionCard": {},
   "callDetail": {},
@@ -531,5 +551,39 @@
   "nestDetail": {},
   "servicesIndex": {},
   "skillsLibrary": {},
-  "docs": {}
+  "docs": {
+    "shell": {
+      "badge": "Guide",
+      "openApp": "Open Troop",
+      "navLabel": "Guide",
+      "overview": "Overview"
+    },
+    "index": {
+      "tabTitle": "Guide",
+      "description": "How Troop is used, story by story — generated from live end-to-end test runs.",
+      "heading": "Troop Guide",
+      "intro": "Every story here comes straight out of a live end-to-end test run. The screenshots and steps are regenerated on every run, so this guide cannot drift from the real product.",
+      "catalogLink": "View the agent catalog →",
+      "stepCount": "{count} step | {count} steps",
+      "footer": "Captured live from the containerized E2E test stack — every screenshot is regenerated on each run."
+    },
+    "story": {
+      "tabTitle": "{title} — Guide",
+      "notFound": "Story not found"
+    },
+    "catalog": {
+      "tabTitle": "Agent catalog",
+      "description": "Every persona you can build your company from — generated from the agent catalog itself.",
+      "heading": "Agent catalog",
+      "intro": "The agent catalog describes all {count} personas you can build your company from. Each persona points at a pinned recipe from {link} and takes a place on your org chart.",
+      "compose": {
+        "title": "How to compose a company",
+        "spawn": "You compose a company by spawning agents from the catalog and picking their persona. Each persona carries a {role} (ceo, teamlead, specialist, sanierer) that decides where it sits on the org chart.",
+        "scale": "Spawn the same persona more than once when you need more capacity — several backend engineers, for instance."
+      },
+      "codesBadge": "Writes code",
+      "recipeLabel": "Recipe:",
+      "footer": "This page is generated from {file} — the single source of truth for every persona."
+    }
+  }
 }

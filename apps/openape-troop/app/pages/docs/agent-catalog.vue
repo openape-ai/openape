@@ -4,37 +4,39 @@ import { PERSONA_CATEGORIES, PERSONAS } from '#shared/persona-catalog'
 // Agent-Catalog documentation page: lists the personas from the catalog — the
 // single source of truth for company personas. The catalog lives in shared/, so
 // this static page imports it directly and prerenders.
+const { t } = useI18n()
 useSeoMeta({
-  title: 'Agent Catalog — Troop',
-  description: 'All personas available to compose your company. Generated from the agent-catalog source.',
+  title: () => t('docs.catalog.tabTitle'),
+  description: () => t('docs.catalog.description'),
 })
 </script>
 
 <template>
   <DocsGuideShell>
     <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
-      Agent Catalog
+      {{ $t('docs.catalog.heading') }}
     </h1>
-    <p class="mt-3 max-w-2xl text-zinc-400">
-      The Agent Catalog defines all 29 personas you can spawn to compose your
-      company. Each persona maps to a pinned recipe from
-      <a href="https://github.com/openape-ai/agent-catalog" target="_blank" rel="noopener" class="text-primary-400 hover:text-primary-300">github.com/openape-ai/agent-catalog</a>
-      and occupies a structural role on your org chart.
-    </p>
+    <i18n-t keypath="docs.catalog.intro" tag="p" class="mt-3 max-w-2xl text-zinc-400">
+      <template #count>
+        {{ PERSONAS.length }}
+      </template>
+      <template #link>
+        <a href="https://github.com/openape-ai/agent-catalog" target="_blank" rel="noopener" class="text-primary-400 hover:text-primary-300">github.com/openape-ai/agent-catalog</a>
+      </template>
+    </i18n-t>
 
     <section class="mt-12">
       <h2 class="text-xl font-semibold text-white">
-        How to Compose a Company
+        {{ $t('docs.catalog.compose.title') }}
       </h2>
       <div class="prose mt-4 max-w-2xl text-zinc-400">
+        <i18n-t keypath="docs.catalog.compose.spawn" tag="p">
+          <template #role>
+            <code>role</code>
+          </template>
+        </i18n-t>
         <p>
-          To compose a company via ORG, spawn agents from the catalog by selecting
-          their persona from the picker. Each persona carries a structural <code>role</code>
-          (ceo, teamlead, specialist, sanierer) that determines its position on the org chart.
-        </p>
-        <p>
-          The Owner can spawn multiple agents of the same persona type to scale
-          capabilities (e.g., multiple Backend Engineers).
+          {{ $t('docs.catalog.compose.scale') }}
         </p>
       </div>
     </section>
@@ -64,21 +66,22 @@ useSeoMeta({
                 {{ persona.role }}
               </span>
               <span v-if="persona.coding" class="rounded bg-green-900/30 px-2 py-1 text-green-400">
-                Codes
+                {{ $t('docs.catalog.codesBadge') }}
               </span>
             </div>
             <p class="mt-2 text-xs text-zinc-500">
-              Recipe: <code>{{ persona.recipeRef }}</code>
+              {{ $t('docs.catalog.recipeLabel') }} <code>{{ persona.recipeRef }}</code>
             </p>
           </div>
         </div>
       </div>
     </section>
 
-    <footer class="mt-16 border-t border-zinc-800/80 pt-6 text-sm text-zinc-500">
-      This page is generated from <code>persona-catalog.ts</code> — the single source of truth
-      for all company personas.
-    </footer>
+    <i18n-t keypath="docs.catalog.footer" tag="footer" class="mt-16 border-t border-zinc-800/80 pt-6 text-sm text-zinc-500">
+      <template #file>
+        <code>persona-catalog.ts</code>
+      </template>
+    </i18n-t>
   </DocsGuideShell>
 </template>
 
