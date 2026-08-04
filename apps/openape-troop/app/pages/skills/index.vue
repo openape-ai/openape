@@ -103,18 +103,13 @@ watch(user, (u) => { if (u) void load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <ViewToggle active="skills" />
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
+    <AppHeader active="skills" :show-logout="!!user" @logout="logout">
+      <template #actions>
         <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openAdd">
           <span class="hidden sm:inline">Skill</span>
         </UButton>
-        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout" />
-      </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <main class="max-w-4xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" hint="Melde dich an, um deine Skill-Bibliothek zu sehen." />
