@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { ref } from 'vue'
+import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Webhooks panel: event triggers. An external system POSTs to the hook URL and the
 // Operator runs `prompt` (optionally with the payload) on the same spine as the
@@ -19,9 +20,13 @@ interface Hook {
   lastFiredAt: number | null
 }
 
-const items = ref<Hook[]>([])
-const loading = ref(true)
-const busy = reactive<Record<string, boolean>>({})
+interface HookForm { label: string, prompt: string, eventFilter: string, includePayload: boolean, useSecret: boolean }
+
+const { items, loading, error, busy, showForm, saving, formError, form, openAdd, submit, patch, remove } = useOrgCrud<Hook, HookForm>({
+  collection: () => `/api/cockpit/orgs/${props.orgId}/hooks`,
+  emptyForm: () => ({ label: '', prompt: '', eventFilter: '', includePayload: false, useSecret: false }),
+})
+
 const origin = ref('')
 
 const hookUrl = (token: string) => `${origin.value}/api/hooks/${token}`
@@ -36,55 +41,21 @@ async function copy(text: string, tag: string) {
   catch { /* clipboard blocked — the field is selectable anyway */ }
 }
 
-async function load() {
-  loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks`)
-  loading.value = false
-}
-
-const showForm = ref(false)
-const saving = ref(false)
-const formError = ref('')
-const form = reactive({ label: '', prompt: '', eventFilter: '', includePayload: false, useSecret: false })
 const created = ref<{ url: string, secret: string | null } | null>(null)
 
-function openAdd() {
-  Object.assign(form, { label: '', prompt: '', eventFilter: '', includePayload: false, useSecret: false })
-  formError.value = ''
+function startAdd() {
   created.value = null
-  showForm.value = true
+  openAdd()
 }
 
-async function submit() {
+// The form stays open after saving: the URL (and with it the one-time HMAC secret)
+// is only ever shown here.
+async function save() {
   if (!form.prompt.trim()) { formError.value = 'Anweisung nötig.'; return }
-  saving.value = true
-  formError.value = ''
-  try {
-    const res = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks`, { method: 'POST', body: { ...form } })
-    created.value = { url: hookUrl(res.token), secret: res.secret }
-    await load()
-  }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
-  finally { saving.value = false }
-}
-async function toggleEnabled(h: Hook) {
-  busy[h.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'PATCH', body: { enabled: !h.enabled } })
-    await load()
-  }
-  finally { busy[h.id] = false }
-}
-async function remove(h: Hook) {
-  busy[h.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/hooks/${h.id}`, { method: 'DELETE' })
-    await load()
-  }
-  finally { busy[h.id] = false }
+  const hook = await submit<{ token: string, secret: string | null }>({ ...form }, { closeForm: false })
+  if (hook) created.value = { url: hookUrl(hook.token), secret: hook.secret }
 }
 
-watch(() => props.orgId, load, { immediate: true })
 if (import.meta.client) origin.value = window.location.origin
 </script>
 
@@ -94,10 +65,12 @@ if (import.meta.client) origin.value = window.location.origin
       <p class="text-sm text-zinc-500">
         Webhooks — ein externes Ereignis (POST auf die Hook-URL) lässt den Operator sich melden.
       </p>
-      <UButton color="primary" variant="soft" icon="i-lucide-webhook" @click="openAdd">
+      <UButton color="primary" variant="soft" icon="i-lucide-webhook" @click="startAdd">
         Webhook
       </UButton>
     </div>
+
+    <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-6 text-center">
       Lädt …
@@ -143,8 +116,8 @@ if (import.meta.client) origin.value = window.location.origin
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            <USwitch :model-value="h.enabled" :disabled="busy[h.id]" @update:model-value="toggleEnabled(h)" />
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[h.id]" @click="remove(h)" />
+            <USwitch :model-value="h.enabled" :disabled="busy[h.id]" @update:model-value="patch(h.id, { enabled: !h.enabled })" />
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[h.id]" @click="remove(h.id)" />
           </div>
         </div>
       </div>
@@ -183,7 +156,7 @@ if (import.meta.client) origin.value = window.location.origin
               <UButton color="neutral" variant="ghost" @click="showForm = false">
                 Abbrechen
               </UButton>
-              <UButton color="primary" :loading="saving" @click="submit">
+              <UButton color="primary" :loading="saving" @click="save">
                 Erzeugen
               </UButton>
             </div>

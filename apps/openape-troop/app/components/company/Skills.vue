@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Skills panel: reusable named procedures assigned to agents. An assigned agent
 // picks a skill by its description and follows the prompt (M2 fetch). Assignment
@@ -15,33 +16,15 @@ const targetOptions = computed(() => [
 ])
 const targetLabel = (t: string) => targetOptions.value.find(o => o.value === t)?.label ?? t
 
-const items = ref<Skill[]>([])
-const loading = ref(true)
-const busy = reactive<Record<string, boolean>>({})
+interface SkillForm { name: string, description: string, prompt: string, assignedTo: string[] }
 
-async function load() {
-  loading.value = true
-  items.value = await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills`)
-  loading.value = false
-}
+const { items, loading, error, busy, showForm, editingId, saving, formError, form, openAdd, openEdit, submit, remove } = useOrgCrud<Skill, SkillForm>({
+  collection: () => `/api/cockpit/orgs/${props.orgId}/skills`,
+  emptyForm: () => ({ name: '', description: '', prompt: '', assignedTo: [] }),
+})
 
-const showForm = ref(false)
-const editingId = ref('')
-const saving = ref(false)
-const formError = ref('')
-const form = reactive({ name: '', description: '', prompt: '', assignedTo: [] as string[] })
-
-function openAdd() {
-  editingId.value = ''
-  Object.assign(form, { name: '', description: '', prompt: '', assignedTo: [] })
-  formError.value = ''
-  showForm.value = true
-}
-function openEdit(s: Skill) {
-  editingId.value = s.id
-  Object.assign(form, { name: s.name, description: s.description, prompt: s.prompt, assignedTo: [...s.assignedTo] })
-  formError.value = ''
-  showForm.value = true
+function edit(s: Skill) {
+  openEdit(s.id, { name: s.name, description: s.description, prompt: s.prompt, assignedTo: [...s.assignedTo] })
 }
 function toggleTarget(value: string) {
   const i = form.assignedTo.indexOf(value)
@@ -49,30 +32,10 @@ function toggleTarget(value: string) {
   else form.assignedTo.splice(i, 1)
 }
 
-async function submit() {
+async function save() {
   if (!form.name.trim()) { formError.value = 'Name nötig.'; return }
-  saving.value = true
-  formError.value = ''
-  const body = { name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo }
-  try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills`, { method: 'POST', body })
-    showForm.value = false
-    await load()
-  }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
-  finally { saving.value = false }
+  await submit({ name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo })
 }
-async function remove(s: Skill) {
-  busy[s.id] = true
-  try {
-    await ($fetch as any)(`/api/cockpit/orgs/${props.orgId}/skills/${s.id}`, { method: 'DELETE' })
-    await load()
-  }
-  finally { busy[s.id] = false }
-}
-
-watch(() => props.orgId, load, { immediate: true })
 </script>
 
 <template>
@@ -86,6 +49,8 @@ watch(() => props.orgId, load, { immediate: true })
       </UButton>
     </div>
 
+    <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
       Lädt …
     </div>
@@ -97,7 +62,7 @@ watch(() => props.orgId, load, { immediate: true })
         v-for="s in items"
         :key="s.id"
         class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
-        @click="openEdit(s)"
+        @click="edit(s)"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
@@ -114,7 +79,7 @@ watch(() => props.orgId, load, { immediate: true })
               {{ s.description }}
             </p>
           </div>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s)" />
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s.id)" />
         </div>
       </div>
     </div>
@@ -150,7 +115,7 @@ watch(() => props.orgId, load, { immediate: true })
             <UButton color="neutral" variant="ghost" @click="showForm = false">
               Abbrechen
             </UButton>
-            <UButton color="primary" :loading="saving" @click="submit">
+            <UButton color="primary" :loading="saving" @click="save">
               {{ editingId ? 'Speichern' : 'Hinzufügen' }}
             </UButton>
           </div>
