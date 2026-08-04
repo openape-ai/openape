@@ -4,7 +4,8 @@ import { useOpenApeAuth } from '#imports'
 
 // Registered external sp-tasks services (e.g. zaz.delta-mind.at) that the reactive
 // loop co-tends alongside the cockpit. Managed here in the control-plane.
-useSeoMeta({ title: () => 'Services' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('servicesIndex.tabTitle') })
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
@@ -29,20 +30,20 @@ async function onAdd() {
     <AppHeader active="services" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
-      <InlineLogin v-if="!user" hint="Melde dich an, um deine Services zu verwalten." />
+      <InlineLogin v-if="!user" :hint="$t('servicesIndex.loginHint')" />
       <template v-else>
         <h2 class="text-2xl font-bold mb-1">
-          Services
+          {{ $t('servicesIndex.heading') }}
         </h2>
         <p class="text-zinc-400 mb-6">
-          Externe sp-tasks-Dienste (z.&nbsp;B. zaz.delta-mind.at), die dein reaktiver Loop zusätzlich zum Cockpit betreut — read-only unter deiner Identität.
+          {{ $t('servicesIndex.subheading') }}
         </p>
 
         <form class="flex flex-col sm:flex-row gap-2 mb-4" @submit.prevent="onAdd">
           <UInput v-model="url" type="url" placeholder="https://service.example.com" class="flex-1" :ui="{ base: 'w-full' }" />
-          <UInput v-model="label" placeholder="Name (optional)" class="sm:w-48" :ui="{ base: 'w-full' }" />
+          <UInput v-model="label" :placeholder="$t('servicesIndex.labelPlaceholder')" class="sm:w-48" :ui="{ base: 'w-full' }" />
           <UButton type="submit" color="primary" icon="i-lucide-plus" :loading="adding" :disabled="!url.trim()">
-            Hinzufügen
+            {{ $t('common.add') }}
           </UButton>
         </form>
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
@@ -58,11 +59,11 @@ async function onAdd() {
                 {{ s.baseUrl }}{{ s.tasksPath }}
               </div>
             </div>
-            <UButton color="error" variant="ghost" size="xs" icon="i-lucide-trash-2" @click="remove(s.id)" />
+            <UButton color="error" variant="ghost" size="xs" icon="i-lucide-trash-2" :aria-label="$t('servicesIndex.removeAria')" @click="remove(s.id)" />
           </div>
         </div>
         <p v-else class="text-zinc-500 py-8 text-center">
-          Noch keine Services. Trag oben den ersten ein.
+          {{ $t('servicesIndex.empty') }}
         </p>
       </template>
     </main>

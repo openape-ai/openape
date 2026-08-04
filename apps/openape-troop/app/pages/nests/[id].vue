@@ -7,7 +7,10 @@ import { useOpenApeAuth } from '#imports'
 const route = useRoute()
 const hostId = computed(() => String(route.params.id))
 
-useSeoMeta({ title: () => 'Nest' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('nestDetail.tabTitle') })
+
+const { fmtDate } = useDateFormat()
 
 const { user, fetchUser } = useOpenApeAuth()
 await fetchUser()
@@ -21,8 +24,18 @@ const loading = ref(true)
 const error = ref('')
 
 const nestAgents = computed(() => agents.value.filter(a => (a.nestHostId ?? a.hostId) === hostId.value))
-function fmtTs(ts: number | null) { return ts ? new Date(ts * 1000).toLocaleString('de-AT') : '—' }
 function runColor(s: string | null) { return s === 'ok' ? 'success' : s === 'error' ? 'error' : s === 'running' ? 'primary' : 'neutral' }
+function runLabel(s: string | null) { return t(`nestDetail.runStatus.${s ?? 'idle'}`) }
+
+const STATUS_KEYS: Record<string, string> = {
+  active: 'nestsIndex.status.active',
+  unbound: 'nestsIndex.status.unbound',
+  revoked: 'nestsIndex.status.revoked',
+}
+function statusLabel(status: string) {
+  const key = STATUS_KEYS[status]
+  return key ? t(key) : status
+}
 
 async function load() {
   loading.value = true
@@ -41,12 +54,12 @@ async function load() {
       if (onHost.length) {
         nest.value = { host_id: hostId.value, display_name: onHost[0]!.hostname || hostId.value, pod_uuid: null, status: 'unbound', created_at: 0, last_seen_at: onHost[0]!.lastSeenAt, last_ip: null }
       }
-      else { error.value = 'Nest nicht gefunden.' }
+      else { error.value = t('nestDetail.notFound') }
     }
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'Konnte das Nest nicht laden.'
+    error.value = err?.data?.statusMessage || err?.message || t('nestDetail.error.loadFailed')
   }
   finally { loading.value = false }
 }
@@ -63,10 +76,10 @@ async function fleetPause(pause: boolean) {
   try {
     const verb = pause ? 'pause' : 'resume'
     await apiFetch(`/api/nests/${encodeURIComponent(hostId.value)}/${verb}`, { method: 'POST' })
-    toast.add({ title: pause ? 'Nest pausiert — alle Agents idle' : 'Nest fortgesetzt', color: pause ? 'warning' : 'success' })
+    toast.add({ title: pause ? t('nestDetail.pause.toast') : t('nestDetail.resume.toast'), color: pause ? 'warning' : 'success' })
   }
   catch (err: any) {
-    toast.add({ title: err?.data?.statusMessage || 'Aktion fehlgeschlagen', color: 'error' })
+    toast.add({ title: err?.data?.statusMessage || t('nestDetail.actionFailed'), color: 'error' })
   }
   finally { fleetPausing.value = false }
 }
@@ -74,11 +87,11 @@ async function fleetPause(pause: boolean) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <AppHeader :back="{ to: '/nests', label: 'Nests' }" active="nests" :show-logout="false" />
+    <AppHeader :back="{ to: '/nests', label: $t('nestsIndex.heading') }" active="nests" :show-logout="false" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <div v-if="loading" class="text-zinc-500 py-20 text-center">
-        Lädt …
+        {{ $t('common.loading') }}
       </div>
       <UAlert v-else-if="error" color="error" variant="subtle" :title="error" />
 
@@ -90,7 +103,7 @@ async function fleetPause(pause: boolean) {
             {{ nest.display_name }}
           </h2>
           <UBadge :color="nest.status === 'active' ? 'success' : 'neutral'" variant="subtle">
-            {{ nest.status }}
+            {{ statusLabel(nest.status) }}
           </UBadge>
           <div class="ml-auto flex items-center gap-2">
             <UButton
@@ -100,10 +113,10 @@ async function fleetPause(pause: boolean) {
               size="sm"
               :loading="fleetPausing"
               :disabled="!nestAgents.length"
-              title="Alle Agents auf diesem Nest pausieren (bleiben verbunden, 0 Tokens)"
+              :title="$t('nestDetail.pause.title')"
               @click="fleetPause(true)"
             >
-              Nest pausieren
+              {{ $t('nestDetail.pause.button') }}
             </UButton>
             <UButton
               icon="i-lucide-play"
@@ -112,17 +125,17 @@ async function fleetPause(pause: boolean) {
               size="sm"
               :loading="fleetPausing"
               :disabled="!nestAgents.length"
-              title="Nest fortsetzen (per-Agent-Pausen bleiben bestehen)"
+              :title="$t('nestDetail.resume.title')"
               @click="fleetPause(false)"
             >
-              Fortsetzen
+              {{ $t('nestDetail.resume.button') }}
             </UButton>
           </div>
         </div>
         <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-10 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
           <div>
             <dt class="text-xs text-zinc-500">
-              Aktuelle IP
+              {{ $t('nestDetail.info.ip') }}
             </dt>
             <dd class="text-sm font-mono break-all">
               {{ nest.last_ip || '—' }}
@@ -130,7 +143,7 @@ async function fleetPause(pause: boolean) {
           </div>
           <div>
             <dt class="text-xs text-zinc-500">
-              Host-ID
+              {{ $t('nestDetail.info.hostId') }}
             </dt>
             <dd class="text-sm font-mono break-all">
               {{ nest.host_id }}
@@ -138,7 +151,7 @@ async function fleetPause(pause: boolean) {
           </div>
           <div>
             <dt class="text-xs text-zinc-500">
-              Pod
+              {{ $t('nestDetail.info.pod') }}
             </dt>
             <dd class="text-sm font-mono break-all">
               {{ nest.pod_uuid || '—' }}
@@ -146,28 +159,28 @@ async function fleetPause(pause: boolean) {
           </div>
           <div>
             <dt class="text-xs text-zinc-500">
-              Zuletzt gesehen
+              {{ $t('nestDetail.info.lastSeen') }}
             </dt>
             <dd class="text-sm">
-              {{ fmtTs(nest.last_seen_at) }}
+              {{ fmtDate(nest.last_seen_at) }}
             </dd>
           </div>
           <div>
             <dt class="text-xs text-zinc-500">
-              Gebunden seit
+              {{ $t('nestDetail.info.boundSince') }}
             </dt>
             <dd class="text-sm">
-              {{ fmtTs(nest.created_at) }}
+              {{ fmtDate(nest.created_at) }}
             </dd>
           </div>
         </dl>
 
         <!-- Agents on this nest -->
         <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
-          Agents auf diesem Nest <span class="text-zinc-600">({{ nestAgents.length }})</span>
+          {{ $t('nestDetail.agents.title') }} <span class="text-zinc-600">({{ nestAgents.length }})</span>
         </h3>
         <p v-if="!nestAgents.length" class="text-zinc-500 py-6 text-center">
-          Keine Agents auf diesem Nest.
+          {{ $t('nestDetail.agents.empty') }}
         </p>
         <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <NuxtLink
@@ -182,9 +195,9 @@ async function fleetPause(pause: boolean) {
             </div>
             <div class="mt-2 flex items-center gap-2 text-xs text-zinc-500">
               <UBadge :color="runColor(a.lastRunStatus)" variant="subtle" size="xs">
-                {{ a.lastRunStatus ?? 'idle' }}
+                {{ runLabel(a.lastRunStatus) }}
               </UBadge>
-              <span>{{ a.taskCount }} Tasks</span>
+              <span>{{ $t('nestDetail.agents.tasks', a.taskCount) }}</span>
             </div>
           </NuxtLink>
         </div>

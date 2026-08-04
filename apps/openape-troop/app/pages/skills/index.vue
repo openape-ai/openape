@@ -5,7 +5,8 @@ import { useOpenApeAuth } from '#imports'
 // Skill library — owner-level, reusable procedures (e.g. tool-skills like o365-cli/
 // gmail-cli) assignable to agents across ALL companies. Distinct from a company's
 // own Skills tab (org-scoped).
-useSeoMeta({ title: () => 'Skill-Bibliothek' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('skillsLibrary.tabTitle') })
 
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
@@ -30,7 +31,7 @@ const agentsByOrg = computed(() => {
   }
   return Array.from(groups.entries(), ([orgName, list]) => ({ orgName, list }))
 })
-const labelFor = (t: string) => t === 'ceo' ? 'Operator (alle Firmen)' : agents.value.find(a => a.id === t)?.label ?? t
+const labelFor = (target: string) => target === 'ceo' ? t('skillsLibrary.ceoTarget') : agents.value.find(a => a.id === target)?.label ?? target
 
 async function load() {
   loading.value = true
@@ -43,7 +44,7 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'Konnte die Bibliothek nicht laden.'
+    error.value = err?.data?.statusMessage || err?.message || t('skillsLibrary.error.loadFailed')
   }
   finally { loading.value = false }
 }
@@ -73,7 +74,7 @@ function toggleTarget(value: string) {
 }
 
 async function submit() {
-  if (!form.name.trim()) { formError.value = 'Name nötig.'; return }
+  if (!form.name.trim()) { formError.value = t('common.required', { field: t('skillsLibrary.form.name.label') }); return }
   saving.value = true
   formError.value = ''
   const body = { name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo }
@@ -83,7 +84,7 @@ async function submit() {
     showForm.value = false
     await load()
   }
-  catch (err: any) { formError.value = err?.data?.statusMessage || 'Speichern fehlgeschlagen.' }
+  catch (err: any) { formError.value = err?.data?.statusMessage || t('common.error.saveFailed') }
   finally { saving.value = false }
 }
 async function remove(s: Skill) {
@@ -105,28 +106,28 @@ watch(user, (u) => { if (u) void load() }, { immediate: true })
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
     <AppHeader active="skills" :show-logout="!!user" @logout="logout">
       <template #actions>
-        <UButton color="primary" size="sm" icon="i-lucide-plus" @click="openAdd">
-          <span class="hidden sm:inline">Skill</span>
+        <UButton color="primary" size="sm" icon="i-lucide-plus" :aria-label="$t('skillsLibrary.form.titleNew')" @click="openAdd">
+          <span class="hidden sm:inline">{{ $t('skillsLibrary.newButton') }}</span>
         </UButton>
       </template>
     </AppHeader>
 
     <main class="max-w-4xl mx-auto px-4 sm:px-8 py-8">
-      <InlineLogin v-if="!user" hint="Melde dich an, um deine Skill-Bibliothek zu sehen." />
+      <InlineLogin v-if="!user" :hint="$t('common.loginHint', { what: $t('skillsLibrary.loginWhat') })" />
       <template v-else>
         <h2 class="text-2xl font-bold mb-1">
-          Skill-Bibliothek
+          {{ $t('skillsLibrary.heading') }}
         </h2>
         <p class="text-sm text-zinc-500 mb-6">
-          Wiederverwendbare Prozeduren (z. B. Tool-Skills wie o365-cli, gmail-cli) — einmal definiert, Agents in jeder Firma zuweisbar.
+          {{ $t('skillsLibrary.subheading') }}
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
         <div v-if="loading" class="text-zinc-500 py-10 text-center">
-          Lädt …
+          {{ $t('common.loading') }}
         </div>
         <div v-else-if="!items.length" class="text-zinc-600 italic py-10 text-center">
-          Noch kein Bibliotheks-Skill. Leg den ersten an — z. B. „o365-cli: Microsoft 365 Mail & Kalender".
+          {{ $t('skillsLibrary.empty') }}
         </div>
         <div v-else class="space-y-2">
           <div
@@ -138,19 +139,19 @@ watch(user, (u) => { if (u) void load() }, { immediate: true })
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium truncate">{{ s.name || '(ohne Name)' }}</span>
-                  <UBadge v-for="t in s.assignedTo" :key="t" :color="t === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
-                    {{ labelFor(t) }}
+                  <span class="text-sm font-medium truncate">{{ s.name || $t('common.unnamed') }}</span>
+                  <UBadge v-for="target in s.assignedTo" :key="target" :color="target === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
+                    {{ labelFor(target) }}
                   </UBadge>
                   <UBadge v-if="!s.assignedTo.length" color="warning" variant="subtle" size="xs">
-                    niemandem zugeordnet
+                    {{ $t('common.unassigned') }}
                   </UBadge>
                 </div>
                 <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
                   {{ s.description }}
                 </p>
               </div>
-              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s)" />
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" :aria-label="$t('skillsLibrary.deleteAria')" @click.stop="remove(s)" />
             </div>
           </div>
         </div>
@@ -162,24 +163,24 @@ watch(user, (u) => { if (u) void load() }, { immediate: true })
         <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              {{ editingId ? 'Skill bearbeiten' : 'Skill hinzufügen' }}
+              {{ editingId ? $t('skillsLibrary.form.titleEdit') : $t('skillsLibrary.form.titleNew') }}
             </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" :aria-label="$t('common.close')" @click="showForm = false" />
           </div>
-          <UFormField label="Name" description="Kurzer Bezeichner.">
+          <UFormField :label="$t('skillsLibrary.form.name.label')" :description="$t('common.field.shortIdHint')">
             <UInput v-model="form.name" placeholder="o365-cli" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Beschreibung" description="Wofür/wann — der Agent wählt den Skill darüber aus.">
-            <UInput v-model="form.description" placeholder="Microsoft 365 Mail & Kalender via o365-cli." class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="$t('skillsLibrary.form.description.label')" :description="$t('skillsLibrary.form.description.hint')">
+            <UInput v-model="form.description" :placeholder="$t('skillsLibrary.form.description.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Anweisung (prompt)" description="Wie man das Werkzeug bedient — der Agent bekommt genau diesen Text.">
-            <UTextarea v-model="form.prompt" :rows="10" placeholder="## o365-cli&#10;- mail search …&#10;- calendar create …" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+          <UFormField :label="$t('common.field.promptLabel')" :description="$t('skillsLibrary.form.prompt.hint')">
+            <UTextarea v-model="form.prompt" :rows="10" :placeholder="$t('skillsLibrary.form.prompt.placeholder')" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Zugeordnet an" description="Wer diesen Skill einsetzen darf — firmenübergreifend.">
+          <UFormField :label="$t('skillsLibrary.form.assignedTo.label')" :description="$t('skillsLibrary.form.assignedTo.hint')">
             <div class="space-y-3 pt-1">
               <label class="flex items-center gap-2 cursor-pointer text-sm">
                 <UCheckbox :model-value="form.assignedTo.includes('ceo')" @update:model-value="toggleTarget('ceo')" />
-                Operator (alle Firmen)
+                {{ $t('skillsLibrary.ceoTarget') }}
               </label>
               <div v-for="grp in agentsByOrg" :key="grp.orgName">
                 <div class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
@@ -197,10 +198,10 @@ watch(user, (u) => { if (u) void load() }, { immediate: true })
           <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showForm = false">
-              Abbrechen
+              {{ $t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="saving" @click="submit">
-              {{ editingId ? 'Speichern' : 'Hinzufügen' }}
+              {{ editingId ? $t('common.save') : $t('common.add') }}
             </UButton>
           </div>
         </div>
