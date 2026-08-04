@@ -99,7 +99,7 @@ watch([filterCompany, filterProject], () => {
 onMounted(async () => {
   await fetchUser()
   if (!user.value) { await navigateTo('/login'); return }
-  projectsList.value = await ($fetch as any)('/api/me/projects') as Proj[]
+  projectsList.value = await apiFetch('/api/me/projects') as Proj[]
   // No auto-prefill: default filter is "Alle" → user must pick a project
   // before logging is possible.
   await load()
@@ -110,7 +110,7 @@ async function load() {
   error.value = ''
   try {
     const { first, last } = monthBounds(month.value)
-    entries.value = await ($fetch as any)('/api/me/entries', { query: { from: first, to: last } }) as Entry[]
+    entries.value = await apiFetch('/api/me/entries', { query: { from: first, to: last } }) as Entry[]
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Laden fehlgeschlagen'
@@ -152,7 +152,7 @@ async function logTime() {
       body.ended_at = e
     }
     else { body.duration = form.value.duration }
-    await ($fetch as any)('/api/entries', { method: 'POST', body })
+    await apiFetch('/api/entries', { method: 'POST', body })
     form.value.from = ''; form.value.to = ''; form.value.duration = ''
     form.value.description = ''; form.value.isBreak = false
     await load()
@@ -167,7 +167,7 @@ async function logTime() {
 
 async function remove(id: string) {
   try {
-    await ($fetch as any)(`/api/entries/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/entries/${id}`, { method: 'DELETE' })
     await load()
   }
   catch (err: unknown) {

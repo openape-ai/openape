@@ -31,7 +31,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    data.value = await ($fetch as any)(`/api/companies/${companyId}`) as Detail
+    data.value = await apiFetch(`/api/companies/${companyId}`) as Detail
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Failed to load company'
@@ -46,7 +46,7 @@ async function addProject() {
   if (!name || creating.value) return
   creating.value = true
   try {
-    await ($fetch as any)('/api/projects', { method: 'POST', body: { company_id: companyId, name } })
+    await apiFetch('/api/projects', { method: 'POST', body: { company_id: companyId, name } })
     newProject.value = ''
     await load()
   }
@@ -60,7 +60,7 @@ async function addProject() {
 
 async function makeInvite() {
   try {
-    const r = await ($fetch as any)(`/api/companies/${companyId}/invite`, {
+    const r = await apiFetch(`/api/companies/${companyId}/invite`, {
       method: 'POST', body: { role: 'member' },
     }) as { url: string }
     inviteUrl.value = r.url

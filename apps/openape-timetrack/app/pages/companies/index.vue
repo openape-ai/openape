@@ -22,7 +22,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    companies.value = await ($fetch as any)('/api/companies') as Company[]
+    companies.value = await apiFetch('/api/companies') as Company[]
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Failed to load companies'
@@ -37,7 +37,7 @@ async function create() {
   if (!name || creating.value) return
   creating.value = true
   try {
-    await ($fetch as any)('/api/companies', { method: 'POST', body: { name } })
+    await apiFetch('/api/companies', { method: 'POST', body: { name } })
     newName.value = ''
     await load()
   }

@@ -36,7 +36,7 @@ async function loadPreview() {
   loading.value = true
   error.value = ''
   try {
-    preview.value = await ($fetch as any)(`/api/invites/${encodeURIComponent(token.value)}`) as InvitePreview
+    preview.value = await apiFetch(`/api/invites/${encodeURIComponent(token.value)}`) as InvitePreview
   }
   catch (err: unknown) {
     error.value = (err as { data?: { title?: string } }).data?.title ?? 'Invite not available'
@@ -72,7 +72,7 @@ async function onAccept() {
   accepting.value = true
   error.value = ''
   try {
-    const r = await ($fetch as any)('/api/invites/accept', {
+    const r = await apiFetch('/api/invites/accept', {
       method: 'POST',
       body: { token: token.value },
     }) as { scope: string, company_id?: string, project_id?: string }
