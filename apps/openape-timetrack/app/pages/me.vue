@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
+import { fmt, hhmm, monthBounds, monthGrid, toEpoch, totalsByDay } from '../utils/time'
 
 const { user, fetchUser, logout } = useOpenApeAuth()
 
@@ -49,38 +50,8 @@ const form = ref({
 })
 const TYPES = ['code', 'research', 'planning', 'review', 'admin', 'meeting']
 
-function fmt(min: number) {
-  const h = Math.floor(min / 60); const m = min % 60
-  return h > 0 ? `${h}h${m ? `${m}m` : ''}` : `${m}m`
-}
-function hhmm(e: number | null) { return e ? new Date(e * 1000).toISOString().slice(11, 16) : '—' }
-function toEpoch(date: string, t: string): number | null {
-  const m = t.match(/^(\d{1,2}):(\d{2})$/)
-  if (!m) return null
-  const base = new Date(`${date}T00:00:00Z`)
-  return Number.isNaN(base.getTime()) ? null : Math.floor(base.getTime() / 1000) + Number(m[1]) * 3600 + Number(m[2]) * 60
-}
-
-function monthBounds(ym: string) {
-  const [y, m] = ym.split('-').map(Number)
-  const first = `${ym}-01`
-  const last = new Date(Date.UTC(y!, m!, 0)).toISOString().slice(0, 10)
-  return { first, last, y: y!, m: m! }
-}
-
 // Calendar grid: weeks (Mon-first) covering the month.
-const grid = computed(() => {
-  const { y, m } = monthBounds(month.value)
-  const firstDow = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7 // Mon=0
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const cells: Array<{ date: string | null }> = []
-  for (let i = 0; i < firstDow; i++) cells.push({ date: null })
-  for (let d = 1; d <= days; d++) cells.push({ date: `${month.value}-${String(d).padStart(2, '0')}` })
-  while (cells.length % 7 !== 0) cells.push({ date: null })
-  const weeks: Array<Array<{ date: string | null }>> = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
-})
+const grid = computed(() => monthGrid(month.value))
 
 // Distinct companies/projects for the filter dropdowns (from loggable
 // projects ∪ projects that appear in the month's own entries).
@@ -106,17 +77,7 @@ const visibleEntries = computed(() => entries.value.filter(e =>
   && (filterProject.value === ALL || e.project_id === filterProject.value),
 ))
 
-const byDay = computed(() => {
-  const map = new Map<string, { work: number, brk: number, overlap: boolean }>()
-  for (const e of visibleEntries.value) {
-    const d = map.get(e.entry_date) ?? { work: 0, brk: 0, overlap: false }
-    if (e.is_break) d.brk += e.duration_minutes
-    else d.work += e.duration_minutes
-    if (e.overlap) d.overlap = true
-    map.set(e.entry_date, d)
-  }
-  return map
-})
+const byDay = computed(() => totalsByDay(visibleEntries.value))
 const dayEntries = computed(() => visibleEntries.value.filter(e => e.entry_date === selectedDay.value))
 const monthWork = computed(() => visibleEntries.value.filter(e => !e.is_break).reduce((s, e) => s + e.duration_minutes, 0))
 const monthBillable = computed(() => visibleEntries.value.filter(e => !e.is_break && e.billable).reduce((s, e) => s + e.duration_minutes, 0))
