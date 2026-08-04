@@ -8,15 +8,15 @@ const who = {
 }
 
 describe('verdictRequestedEvents', () => {
-  it('raises a verdict card with the PR as its proof', () => {
+  it('raises a verdict call with the PR as its proof', () => {
     const [card, proof] = verdictRequestedEvents(who, 'https://pr.openape.ai/prs/abc', 1_785_758_183)
     expect(card).toMatchObject({
-      type: 'verdict.requested',
+      type: 'call.raised',
       actor: who.actor,
       actor_kind: 'agent',
       task_ref: who.taskRef,
       ts: 1_785_758_183,
-      payload: { pr_url: 'https://pr.openape.ai/prs/abc' },
+      payload: { kind: 'verdict', pr_url: 'https://pr.openape.ai/prs/abc' },
     })
     expect(proof).toMatchObject({ type: 'proof.attached', payload: { url: 'https://pr.openape.ai/prs/abc', kind: 'pr' } })
     expect(card!.id).not.toBe(proof!.id)
@@ -47,7 +47,7 @@ describe('verdict briefing', () => {
 
   it('omits empty briefing fields instead of sending blanks', () => {
     const [card] = verdictRequestedEvents(who, 'https://pr.openape.ai/prs/abc', 1, { title: '', highlights: [] })
-    expect(card!.payload).toEqual({ pr_url: 'https://pr.openape.ai/prs/abc' })
+    expect(card!.payload).toEqual({ kind: 'verdict', pr_url: 'https://pr.openape.ai/prs/abc' })
   })
 })
 
