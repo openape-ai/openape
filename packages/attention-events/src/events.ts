@@ -33,6 +33,22 @@ const envelope = {
 // request may declare when it stops waiting and what holds instead:
 // `recommendation` applies the recommended option, `fail` leaves the work
 // blocked. Absent `deadline` means "waits forever" — fine for interactive use.
+// A card has to stand on its own: whoever opens it — days later, on a phone,
+// without the conversation that produced it — must understand what is at stake
+// before deciding, and still understand it afterwards. `title` is the headline,
+// `summary` the executive summary of the situation.
+const briefing = {
+  title: z.string().min(1).max(200).optional(),
+  summary: z.string().min(1).max(4000).optional(),
+} as const
+
+// One line per option: what choosing it actually means. Kept separate from
+// `options` (the machine-readable values) so buttons stay stable.
+const optionBriefing = z.array(z.strictObject({
+  option: z.string().min(1),
+  summary: z.string().min(1).max(1000),
+})).optional()
+
 const waiting = {
   deadline: z.number().int().positive().optional(),
   on_timeout: z.enum(['recommendation', 'fail']).optional(),
@@ -50,19 +66,32 @@ export const AttentionEventSchema = z.discriminatedUnion('type', [
   event('work.blocked', {
     question: z.string().min(1),
     options: z.array(z.string()).optional(),
+    option_summaries: optionBriefing,
     recommendation: z.string().optional(),
+    recommendation_why: z.string().max(2000).optional(),
+    ...briefing,
     ...waiting,
   }),
   event('decision.requested', {
     question: z.string().min(1),
     options: z.array(z.string()).min(2),
+    option_summaries: optionBriefing,
     recommendation: z.string().optional(),
+    recommendation_why: z.string().max(2000).optional(),
     blocks: z.string().optional(),
+    ...briefing,
     ...waiting,
   }),
   event('decision.made', { decision: z.string().min(1), request_id: ulid.optional(), auto: z.boolean().optional() }),
   event('proof.attached', { url: z.url(), kind: z.enum(['pr', 'testrun', 'screenshot', 'log']) }),
-  event('verdict.requested', { pr_url: z.url().optional() }),
+  event('verdict.requested', {
+    pr_url: z.url().optional(),
+    // What the change does and what the reviewer should look at.
+    highlights: z.array(z.string().min(1).max(500)).max(10).optional(),
+    recommendation: z.enum(['merge', 'rework', 'reject']).optional(),
+    recommendation_why: z.string().max(2000).optional(),
+    ...briefing,
+  }),
   event('verdict.given', { verdict: z.enum(['merge', 'rework', 'reject']), request_id: ulid.optional(), auto: z.boolean().optional() }),
   event('cost.recorded', { amount_eur: z.number().nonnegative(), note: z.string().optional() }),
   event('task.shipped', {}),

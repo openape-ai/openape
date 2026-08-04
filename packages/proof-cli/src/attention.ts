@@ -33,11 +33,26 @@ export interface AttentionActor {
   taskRef: string
 }
 
+export interface VerdictBriefing {
+  /** Headline — the PR title, so the card is readable without opening it. */
+  title?: string
+  /** Executive summary of what the change does and why. */
+  summary?: string
+  /** Short facts a reviewer wants up front (diff size, proofs, risks). */
+  highlights?: string[]
+}
+
 /** The pair a finished PR upload raises: a verdict card and its proof. */
-export function verdictRequestedEvents(who: AttentionActor, prUrl: string, nowSeconds: number) {
+export function verdictRequestedEvents(who: AttentionActor, prUrl: string, nowSeconds: number, briefing: VerdictBriefing = {}) {
   const envelope = { ts: nowSeconds, actor: who.actor, actor_kind: who.actorKind, task_ref: who.taskRef }
+  const card = {
+    pr_url: prUrl,
+    ...(briefing.title ? { title: briefing.title } : {}),
+    ...(briefing.summary ? { summary: briefing.summary } : {}),
+    ...(briefing.highlights?.length ? { highlights: briefing.highlights } : {}),
+  }
   return [
-    { id: ulid(), ...envelope, type: 'verdict.requested', payload: { pr_url: prUrl } },
+    { id: ulid(), ...envelope, type: 'verdict.requested', payload: card },
     { id: ulid(), ...envelope, type: 'proof.attached', payload: { url: prUrl, kind: 'pr' } },
   ]
 }
