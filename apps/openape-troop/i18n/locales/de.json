@@ -556,6 +556,7 @@
   "cockpit": {
     "tabTitle": "Troop-Chat",
     "enableNotifications": "🔔 Benachrichtigungen aktivieren",
+    "notificationsFailed": "Benachrichtigungen konnten nicht aktiviert werden — Details stehen in der Browser-Konsole.",
     "header": {
       "switchCompany": "Firma wechseln",
       "noCompanies": "Keine Firmen",
@@ -607,7 +608,9 @@
       "reconnecting": "Verbindung unterbrochen — verbinde neu …",
       "answerPending": "Die Antwort kommt, sobald der Operator fertig ist — beim nächsten Öffnen ist sie da.",
       "answerFallback": "Zu deiner Frage „{question}“: {choice}",
-      "waitSeconds": "{text} · Antwort in ~{sec} s"
+      "waitSeconds": "{text} · Antwort in ~{sec} s",
+      "sendFailed": "Die Nachricht konnte nicht zu Ende verarbeitet werden — Details stehen in der Browser-Konsole.",
+      "choiceFailed": "Deine Auswahl konnte nicht zu Ende verarbeitet werden — Details stehen in der Browser-Konsole."
     },
     "presence": {
       "label": {

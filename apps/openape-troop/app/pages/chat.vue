@@ -22,6 +22,7 @@ useHead({
 // them even when the tab/PWA is in the background.
 const showEnable = ref(false)
 const busy = ref(false)
+const enableError = ref('')
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -42,11 +43,16 @@ async function subscribe(reg: ServiceWorkerRegistration) {
 
 async function enable() {
   busy.value = true
+  enableError.value = ''
   try {
     const perm = await Notification.requestPermission()
     if (perm !== 'granted') return
     await subscribe(await navigator.serviceWorker.ready)
     showEnable.value = false
+  }
+  catch (error) {
+    console.error('[cockpit] enabling notifications failed', error)
+    enableError.value = t('cockpit.notificationsFailed')
   }
   finally {
     busy.value = false
@@ -69,6 +75,9 @@ onMounted(async () => {
   <button v-if="showEnable" class="push-enable" :disabled="busy" @click="enable">
     {{ $t('cockpit.enableNotifications') }}
   </button>
+  <p v-if="enableError" class="push-error" role="alert">
+    {{ enableError }}
+  </p>
 </template>
 
 <style>
@@ -88,4 +97,17 @@ onMounted(async () => {
   cursor: pointer;
 }
 .push-enable:disabled { opacity: 0.5; cursor: default; }
+.push-error {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 44px);
+  right: 10px;
+  z-index: 50;
+  max-width: min(320px, calc(100vw - 20px));
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  background: #2a1418;
+  color: #ffb4b4;
+  border: 1px solid #5a2a30;
+}
 </style>
