@@ -187,6 +187,17 @@ Vue-Komponenten mit sichtbarer Logik — Zustände, Verzweigungen, Interaktionen
 
 Bestandsaufnahme über alle Apps und die Frage nach gemeinsamen Komponenten: Issue #1172.
 
+### Alles, was Geometrie ist, gehört in den Browser-Modus
+
+**Beschlossen 2026-08-04** (Patrick, nach dem Organigramm-Bug: eine Karte war auf dem Handy breiter als der Bildschirm, und der Komponenten-Test blieb grün).
+
+happy-dom rechnet kein Layout: `offsetWidth` ist dort immer 0, Media-Queries werden nicht ausgewertet, und die Kaskade über mehrere SFC-`<style>`-Blöcke existiert nicht. Sichtbare Größen, Überläufe, Breakpoints und Dark-Mode prüft deshalb der Vitest-Browser-Modus (`pnpm --filter @openape/troop test:layout`, Vorlage `apps/openape-troop/vitest.browser.config.ts` + `tests/layout/`). Ein Lauf dauert ~3 s.
+
+- **Wann Browser-Modus:** alles, was eine Größe, eine Position oder einen Breakpoint hat. **Wann weiter happy-dom:** Zustände, Verzweigungen, Texte, emittierte Events — das ist schneller und braucht keinen Browser.
+- **Kein Binary-Download:** der Provider fährt das installierte Google Chrome (`launchOptions.executablePath`, überschreibbar per `CHROME_PATH`). Deshalb läuft der `layout`-Workflow auf dem `mac`-Runner — der `docker`-Runner von ci/e2e hat keinen Browser.
+- **Falle 1 — globales CSS fehlt.** Ein Mount bringt nur die eigenen `<style>`-Blöcke mit; der Tailwind-Preflight kommt aus dem Nuxt-Build. Ohne ihn misst jede gepolsterte Box 26 px zu breit (content-box) und der Test meldet einen Überlauf, den es in der App nicht gibt. `tests/layout/setup.ts` injiziert die eine Regel, an der die Geometrie hängt.
+- **Falle 2 — Style-Reihenfolge ist die der Importe.** Vite injiziert SFC-Styles in Import-Reihenfolge der Testdatei, nicht in Bundle-Reihenfolge. Bei einem Kaskaden-Gleichstand zwischen zwei Komponenten entscheidet damit die Importzeile über rot oder grün (im Organigramm-Fall: `671 > 390` oder „passt"). Importiere deshalb wie im Build ausgewertet wird — Kind vor Elternteil — und sichere die Ursache zusätzlich im Quelltext ab, wenn sie eine Duplikat-Regel ist.
+
 ## Workflow: Issue-First Development
 
 Siehe `CONTRIBUTING.md` für den vollständigen Workflow.

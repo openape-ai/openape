@@ -11,6 +11,9 @@ export default defineConfig({
     retry: 2,
     testTimeout: 15000,
     include: ['tests/**/*.test.ts'],
+    // tests/layout/** measures real boxes and belongs to vitest.browser.config.ts;
+    // in this node environment every offsetWidth would read 0.
+    exclude: ['tests/layout/**'],
     globals: true,
     environment: 'node',
   },

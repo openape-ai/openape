@@ -15,7 +15,8 @@
     "nuxt-prepare": "nuxi prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:layout": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.114",
@@ -42,10 +43,12 @@
     "@types/node": "^22.20.0",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/browser": "^4.1.9",
     "@vitest/coverage-istanbul": "^4.1.9",
     "@vue/test-utils": "^2.4.6",
     "h3": "^1.15.11",
     "happy-dom": "^20.0.0",
+    "playwright": "1.62.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
   }
