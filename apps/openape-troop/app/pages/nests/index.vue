@@ -77,13 +77,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <ViewToggle active="nests" />
-      </div>
-      <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" class="shrink-0" @click="logout" />
-    </header>
+    <AppHeader active="nests" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" hint="Melde dich an, um deine Nests zu sehen." />

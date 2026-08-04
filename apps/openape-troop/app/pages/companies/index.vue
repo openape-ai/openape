@@ -62,18 +62,13 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <ViewToggle active="companies" />
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
+    <AppHeader active="companies" :show-logout="!!user" @logout="logout">
+      <template #actions>
         <UButton color="primary" size="sm" icon="i-lucide-plus" @click="showCreate = true">
           <span class="hidden sm:inline">Firma</span>
         </UButton>
-        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout" />
-      </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" hint="Melde dich an, um deine Firmen zu sehen." />

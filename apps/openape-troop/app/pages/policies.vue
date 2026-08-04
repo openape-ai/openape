@@ -19,17 +19,7 @@ const policies = computed(() => policiesFromEvents(data.value.events))
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <ViewToggle active="inbox" />
-        <span class="text-zinc-500 hidden sm:inline">/</span>
-        <h1 class="font-semibold truncate hidden sm:block">
-          Regeln
-        </h1>
-      </div>
-      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" aria-label="Abmelden" @click="logout" />
-    </header>
+    <AppHeader active="inbox" title="Regeln" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" hint="Melde dich an, um die geltenden Regeln zu sehen." />

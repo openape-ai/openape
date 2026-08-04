@@ -38,14 +38,7 @@ async function resolve(body: { choice?: string, verdict?: string }) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="app-header">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="text-2xl shrink-0" aria-hidden="true">🦍</span>
-        <NuxtLink to="/inbox" class="font-semibold hover:underline">
-          Inbox
-        </NuxtLink>
-      </div>
-    </header>
+    <AppHeader :back="{ to: '/inbox', label: 'Inbox' }" :show-logout="false" />
 
     <main class="max-w-2xl mx-auto px-4 sm:px-8 py-8">
       <InlineLogin v-if="!user" />
