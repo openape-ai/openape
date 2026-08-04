@@ -77,106 +77,16 @@ async function togglePause() {
   }
 }
 
-// Agent-level system prompt editor — saved on blur via PATCH
-// /api/agents/[name]. The bridge daemon re-reads agent.json on every
-// inbound chat message, and `apes agents run` reads it at run start,
-// so edits propagate within one sync cycle (~5min) without restart.
-const systemPromptDraft = ref('')
-const systemPromptSaving = ref(false)
-const systemPromptError = ref('')
-const systemPromptDirty = computed(() =>
-  systemPromptDraft.value !== (detail.value?.agent.systemPrompt ?? ''),
-)
-
-watch(detail, (d) => {
-  if (d) systemPromptDraft.value = d.agent.systemPrompt ?? ''
-}, { immediate: true })
-
-async function saveSystemPrompt() {
-  if (!systemPromptDirty.value) return
-  systemPromptSaving.value = true
-  systemPromptError.value = ''
-  try {
-    await apiFetch(`/api/agents/${agentName.value}`, {
-      method: 'PATCH',
-      body: { system_prompt: systemPromptDraft.value },
-    })
-    if (detail.value) detail.value.agent.systemPrompt = systemPromptDraft.value
-  }
-  catch (err: any) {
-    systemPromptError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
-  }
-  finally {
-    systemPromptSaving.value = false
-  }
+// The agent's system prompt has two writers: the operator typing in the
+// system-prompt card, and the recipe card, whose apply rewrites the prompt
+// server-side and reports the new value back. Both land here, on the one copy
+// of the agent this page owns.
+function adoptSystemPrompt(systemPrompt: string) {
+  if (detail.value) detail.value.agent.systemPrompt = systemPrompt
 }
 
-// Set / update the recipe on this existing agent (INT-4). Re-materializes
-// <repo>@<ref> and applies its intent + toolset live (no respawn).
-const recipeRef = ref('')
-const recipeParams = ref('{}')
-const recipeSaving = ref(false)
-const recipeError = ref('')
-const recipeResult = ref<{ ref: string, required_capabilities: string[] } | null>(null)
-
-async function applyRecipe() {
-  if (!recipeRef.value.trim()) return
-  recipeSaving.value = true
-  recipeError.value = ''
-  recipeResult.value = null
-  try {
-    let params: Record<string, unknown> = {}
-    if (recipeParams.value.trim()) params = JSON.parse(recipeParams.value)
-    const res = await apiFetch<{ ref: string, required_capabilities?: string[] }>(`/api/agents/${agentName.value}/recipe`, {
-      method: 'POST',
-      body: { repo_ref: recipeRef.value.trim(), params },
-    })
-    recipeResult.value = { ref: res.ref, required_capabilities: res.required_capabilities ?? [] }
-    // Refresh the system prompt the editor shows.
-    if (detail.value) detail.value.agent.systemPrompt = (await apiFetch<Detail>(`/api/agents/${agentName.value}`)).agent.systemPrompt
-  }
-  catch (err: any) {
-    recipeError.value = err?.data?.statusMessage || err?.message || t('agentDetail.recipe.error.applyFailed')
-  }
-  finally {
-    recipeSaving.value = false
-  }
-}
-
-// Agent-level tool whitelist editor — saved on toggle via PATCH
-// /api/agents/[name] with `tools: string[]`. The bridge re-reads the
-// list from agent.json on every new chat thread, so changes
-// propagate within the next sync (~5min).
-const toolsDraft = ref<string[]>([])
-const toolsSaving = ref(false)
-const toolsError = ref('')
-const toolsDirty = computed(() => {
-  const a = (detail.value?.agent.tools ?? []).toSorted()
-  const b = toolsDraft.value.toSorted()
-  return a.length !== b.length || a.some((v, i) => v !== b[i])
-})
-
-watch(detail, (d) => {
-  if (d) toolsDraft.value = [...(d.agent.tools ?? [])]
-}, { immediate: true })
-
-async function saveTools() {
-  if (!toolsDirty.value) return
-  toolsSaving.value = true
-  toolsError.value = ''
-  try {
-    await apiFetch(`/api/agents/${agentName.value}`, {
-      method: 'PATCH',
-      body: { tools: toolsDraft.value },
-    })
-    if (detail.value) detail.value.agent.tools = [...toolsDraft.value]
-  }
-  catch (err: any) {
-    toolsError.value = err?.data?.statusMessage || err?.message || t('common.error.saveFailed')
-  }
-  finally {
-    toolsSaving.value = false
-  }
+function adoptTools(tools: string[]) {
+  if (detail.value) detail.value.agent.tools = tools
 }
 
 // Task editor state
@@ -394,122 +304,19 @@ onBeforeUnmount(() => { if (destroyPollTimer) clearTimeout(destroyPollTimer) })
 
         <AgentMetaCard :agent="detail.agent" />
 
-        <!-- Agent-level system prompt — applies to every chat message
-             AND every cron task run. Tasks supply the user-prompt
-             (what to do); chat supplies the user-message (the human's
-             question). Saved on blur. Collapsed by default to keep
-             the page compact on mobile; the summary-badge surfaces
-             the status (set / empty / unsaved) so users know which
-             sections deserve a tap. -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-message-square" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.systemPrompt.title') }}</span>
-                <UBadge v-if="systemPromptDirty" color="warning" variant="subtle" size="xs">
-                  {{ $t('common.badge.unsaved') }}
-                </UBadge>
-                <UBadge v-else-if="systemPromptDraft" color="success" variant="subtle" size="xs">
-                  {{ $t('common.badge.set') }}
-                </UBadge>
-                <UBadge v-else color="neutral" variant="subtle" size="xs">
-                  {{ $t('common.badge.empty') }}
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
-              <UTextarea
-                v-model="systemPromptDraft"
-                :rows="5"
-                autoresize
-                size="lg"
-                class="w-full"
-                :ui="{ base: 'w-full' }"
-                :placeholder="$t('agentDetail.systemPrompt.placeholder')"
-                @blur="saveSystemPrompt"
-              />
-              <p class="text-xs text-muted mt-2">
-                {{ $t('agentDetail.systemPrompt.hint') }}
-              </p>
-              <UAlert v-if="systemPromptError" color="error" :title="systemPromptError" class="mt-3" />
-              <div v-if="systemPromptDirty" class="flex justify-end mt-3">
-                <UButton size="sm" color="primary" :loading="systemPromptSaving" @click="saveSystemPrompt">
-                  {{ $t('common.save') }}
-                </UButton>
-              </div>
-            </div>
-          </details>
-        </UCard>
+        <AgentSystemPromptCard
+          :agent-name="agentName"
+          :agent="detail.agent"
+          @saved="adoptSystemPrompt"
+        />
 
-        <!-- Set / update the recipe on this existing agent (INT-4).
-             Re-materializes <repo>@<ref> and applies its intent + tools
-             live; the nest re-syncs within ~1s. -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-package" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.recipe.title') }}</span>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border) space-y-3">
-              <UFormField :label="$t('agentDetail.recipe.ref.label')" :description="$t('agentDetail.recipe.ref.description')">
-                <UInput v-model="recipeRef" placeholder="openape-ai/coding-agent@main" class="w-full" :ui="{ base: 'w-full' }" />
-              </UFormField>
-              <UFormField :label="$t('agentDetail.recipe.params.label')" :description="$t('agentDetail.recipe.params.description')">
-                <UTextarea v-model="recipeParams" :rows="2" class="w-full" :ui="{ base: 'w-full' }" />
-              </UFormField>
-              <UAlert v-if="recipeError" color="error" :title="recipeError" />
-              <UAlert
-                v-if="recipeResult"
-                color="success"
-                :title="$t('agentDetail.recipe.applied', { ref: recipeResult.ref })"
-                :description="recipeResult.required_capabilities.length ? $t('agentDetail.recipe.bindSecrets', { names: recipeResult.required_capabilities.join(', ') }) : $t('agentDetail.recipe.noNewSecrets')"
-              />
-              <div class="flex justify-end">
-                <UButton size="sm" color="primary" :loading="recipeSaving" :disabled="!recipeRef.trim()" @click="applyRecipe">
-                  {{ $t('agentDetail.recipe.applyButton') }}
-                </UButton>
-              </div>
-            </div>
-          </details>
-        </UCard>
+        <AgentRecipeCard :agent-name="agentName" @applied="adoptSystemPrompt" />
 
-        <!-- Agent-level tool whitelist — controls which tools the chat-
-             bridge exposes to the LLM during live thread turns. New
-             agents start with all tools enabled; narrow as needed. -->
-        <UCard :ui="{ body: 'p-0' }">
-          <details class="group">
-            <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 text-sm">
-                <UIcon name="i-lucide-wrench" class="text-muted size-4" />
-                <span class="font-medium">{{ $t('agentDetail.tools.title') }}</span>
-                <UBadge color="neutral" variant="subtle" size="xs">
-                  {{ $t('agentDetail.tools.selectedCount', { n: toolsDraft.length }) }}
-                </UBadge>
-                <UBadge v-if="toolsDirty" color="warning" variant="subtle" size="xs">
-                  {{ $t('common.badge.unsaved') }}
-                </UBadge>
-              </div>
-              <UIcon name="i-lucide-chevron-down" class="size-4 text-muted transition-transform group-open:rotate-180" />
-            </summary>
-            <div class="px-4 pb-4 pt-3 border-t border-(--ui-border)">
-              <p class="text-xs text-muted mb-3">
-                {{ $t('agentDetail.tools.hint') }}
-              </p>
-              <ToolPicker v-model="toolsDraft" :disabled="toolsSaving" />
-              <UAlert v-if="toolsError" color="error" :title="toolsError" class="mt-3" />
-              <div v-if="toolsDirty" class="flex justify-end mt-3">
-                <UButton size="sm" color="primary" :loading="toolsSaving" @click="saveTools">
-                  {{ $t('common.save') }}
-                </UButton>
-              </div>
-            </div>
-          </details>
-        </UCard>
+        <AgentToolsCard
+          :agent-name="agentName"
+          :agent="detail.agent"
+          @saved="adoptTools"
+        />
 
         <AgentSkillsCard :agent-name="agentName" />
 
