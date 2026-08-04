@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ulid, verdictRequestedEvents } from '../src/attention'
+import { lifecycleEvent, proofAttachedEvent, ulid, verdictRequestedEvents } from '../src/attention'
 
 const who = {
   actor: 'agent+a1+hofmann_eco@id.openape.ai',
@@ -48,5 +48,29 @@ describe('verdict briefing', () => {
   it('omits empty briefing fields instead of sending blanks', () => {
     const [card] = verdictRequestedEvents(who, 'https://pr.openape.ai/prs/abc', 1, { title: '', highlights: [] })
     expect(card!.payload).toEqual({ pr_url: 'https://pr.openape.ai/prs/abc' })
+  })
+})
+
+describe('proof and lifecycle events', () => {
+  it('attaches a testrun report as proof', () => {
+    const event = proofAttachedEvent(who, 'https://testrun.openape.ai/r/kx3f', 'testrun', 1_785_758_183)
+    expect(event).toMatchObject({
+      type: 'proof.attached',
+      task_ref: who.taskRef,
+      actor_kind: 'agent',
+      ts: 1_785_758_183,
+      payload: { url: 'https://testrun.openape.ai/r/kx3f', kind: 'testrun' },
+    })
+  })
+
+  it('records the lifecycle without a payload — these are counters, not cards', () => {
+    expect(lifecycleEvent(who, 'work.started', 1)).toMatchObject({ type: 'work.started', payload: {} })
+    expect(lifecycleEvent(who, 'task.shipped', 1)).toMatchObject({ type: 'task.shipped', payload: {} })
+  })
+
+  it('gives every event its own id', () => {
+    const a = proofAttachedEvent(who, 'https://x.example/a', 'log', 1)
+    const b = lifecycleEvent(who, 'task.shipped', 1)
+    expect(a.id).not.toBe(b.id)
   })
 })

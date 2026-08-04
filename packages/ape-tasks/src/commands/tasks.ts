@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty'
 import { readFileSync } from 'node:fs'
+import { emitAttentionEvents, lifecycleEvent } from '@openape/proof-cli'
 import { apiCall, createApiError } from '../api.ts'
 import { resolveTeamId } from '../config.ts'
 import { printJson, printLine } from '../output.ts'
@@ -500,6 +501,7 @@ export const statusCommand = defineCommand({
       endpoint: args.endpoint,
       body: { status: args.status },
     })
+    await emitLifecycle(args.taskId, args.status, args.endpoint)
     printLine(`${args.taskId} → ${args.status}`)
   },
 })
@@ -507,6 +509,23 @@ export const statusCommand = defineCommand({
 /**
  * Mark a task done. Shorthand for `ape-tasks status <id> done`.
  */
+/**
+ * A status change is the work's lifecycle, not a decision: `doing` starts it,
+ * `done` ships it. No card, no notification — but the attention metrics
+ * (waiting time, autonomy rate) are computed from exactly these two.
+ * Best-effort: troop being down must never fail a status change.
+ */
+async function emitLifecycle(taskId: string, status: string, endpoint: string | undefined) {
+  const type = status === 'doing' ? 'work.started' : status === 'done' ? 'task.shipped' : null
+  if (!type) return
+  try {
+    const me = await apiCall<{ email: string, act: 'human' | 'agent' }>('GET', '/api/cli/me', { endpoint })
+    const who = { actor: me.email, actorKind: me.act === 'human' ? ('human' as const) : ('agent' as const), taskRef: `ape-tasks:${taskId}` }
+    await emitAttentionEvents([lifecycleEvent(who, type, Math.floor(Date.now() / 1000))])
+  }
+  catch { /* the status change already succeeded; attention events are derivative */ }
+}
+
 export const doneCommand = defineCommand({
   meta: {
     name: 'done',
@@ -521,6 +540,7 @@ export const doneCommand = defineCommand({
       endpoint: args.endpoint,
       body: { status: 'done' },
     })
+    await emitLifecycle(args.taskId, 'done', args.endpoint)
     printLine(`${args.taskId} ✓ done`)
   },
 })

@@ -3,6 +3,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { apiCall } from '../api.ts'
 import { resolveEndpoint } from '../client.ts'
+import { emitAttentionEvents, proofAttachedEvent } from '@openape/proof-cli'
 import { error, info, printJson, printLine } from '../output.ts'
 
 interface CreateRunResponse {
@@ -39,6 +40,7 @@ export const uploadCommand = defineCommand({
     series: { type: 'string', description: 'Stable series key — re-uploads with the same key update the same link (version +1).' },
     json: { type: 'boolean', description: 'Print the full result as JSON instead of just the URL.' },
     endpoint: { type: 'string', description: 'Override testrun endpoint.' },
+    'task-ref': { type: 'string', description: 'Work this run belongs to ("ape-tasks:<id>"); attaches the report as proof in troop.' },
   },
   async run({ args }) {
     const dir = resolve(args.dir ?? '.')
@@ -87,6 +89,14 @@ export const uploadCommand = defineCommand({
       error('The report renders without them; re-run upload after adding the files to replace the run.')
     }
     info(`Uploaded ${uploaded}/${run.expected_assets.length} screenshot(s).`)
+
+    const taskRef = args['task-ref']
+    if (taskRef) {
+      const me = await apiCall<{ email: string, act: 'human' | 'agent' }>('GET', '/api/cli/me', { endpoint: args.endpoint })
+      const who = { actor: me.email, actorKind: me.act === 'human' ? 'human' as const : 'agent' as const, taskRef }
+      const sent = await emitAttentionEvents([proofAttachedEvent(who, run.url, 'testrun', Math.floor(Date.now() / 1000))], msg => info(msg))
+      if (sent) info('Report attached as proof in troop.')
+    }
 
     if (args.json) {
       printJson({ id: run.id, slug: run.slug, url: run.url, status: run.status, version: run.version ?? 1, uploaded, missing })
