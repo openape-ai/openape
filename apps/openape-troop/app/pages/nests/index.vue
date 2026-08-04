@@ -59,8 +59,8 @@ async function load() {
   error.value = ''
   try {
     const [n, a] = await Promise.all([
-      ($fetch as any)('/api/nests'),
-      ($fetch as any)('/api/agents'),
+      apiFetch<Nest[]>('/api/nests'),
+      apiFetch<Agent[]>('/api/agents'),
     ])
     nests.value = n
     agents.value = a
