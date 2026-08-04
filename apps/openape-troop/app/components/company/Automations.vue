@@ -7,6 +7,9 @@ import { useOrgCrud } from '../../composables/useOrgCrud'
 // the answer lands in the cockpit chat and fires a Web-Push.
 const props = defineProps<{ orgId: string }>()
 
+const { t } = useI18n()
+const { fmtDate } = useDateFormat()
+
 interface Trigger {
   id: string
   kind: string
@@ -20,22 +23,24 @@ interface Trigger {
   lastRunAt: number | null
 }
 
-const fmt = (ms: number) => new Date(ms).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' })
-function scheduleLabel(t: Trigger): string {
-  if (t.cronExpr) return `cron · ${t.cronExpr}`
-  if (t.fireAt != null) return `einmalig · ${fmt(t.fireAt)}`
-  if (t.atHour != null) return `täglich · ${String(t.atHour).padStart(2, '0')}:00 Uhr`
-  if (t.everyMinutes != null) return `alle ${t.everyMinutes} min`
+// The API keeps these timestamps in milliseconds; the shared formatter takes seconds.
+const fmt = (ms: number) => fmtDate(ms / 1000)
+
+function scheduleLabel(trigger: Trigger): string {
+  if (trigger.cronExpr) return t('companyPanels.automations.schedule.cron', { expr: trigger.cronExpr })
+  if (trigger.fireAt != null) return t('companyPanels.automations.schedule.once', { when: fmt(trigger.fireAt) })
+  if (trigger.atHour != null) return t('companyPanels.automations.schedule.daily', { time: `${String(trigger.atHour).padStart(2, '0')}:00` })
+  if (trigger.everyMinutes != null) return t('companyPanels.automations.schedule.everyMinutes', { minutes: trigger.everyMinutes })
   return '—'
 }
 
 type Mode = 'daily' | 'periodic' | 'timer' | 'cron'
-const modeOptions = [
-  { value: 'daily', label: 'Täglich zur Uhrzeit' },
-  { value: 'periodic', label: 'Alle N Minuten' },
-  { value: 'timer', label: 'Einmalig zum Zeitpunkt' },
-  { value: 'cron', label: 'Cron-Ausdruck' },
-]
+const modeOptions = computed(() => [
+  { value: 'daily', label: t('companyPanels.automations.mode.daily') },
+  { value: 'periodic', label: t('companyPanels.automations.mode.periodic') },
+  { value: 'timer', label: t('companyPanels.automations.mode.timer') },
+  { value: 'cron', label: t('companyPanels.automations.mode.cron') },
+])
 
 interface TriggerForm { kind: string, prompt: string, mode: Mode, atHour: number, everyMinutes: number, fireAtLocal: string, cronExpr: string }
 
@@ -50,22 +55,24 @@ function toLocalInput(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-function edit(t: Trigger) {
-  const mode: Mode = t.cronExpr ? 'cron' : t.fireAt != null ? 'timer' : t.everyMinutes != null ? 'periodic' : 'daily'
-  openEdit(t.id, {
-    kind: t.kind,
-    prompt: t.prompt,
+function edit(trigger: Trigger) {
+  const mode: Mode = trigger.cronExpr ? 'cron' : trigger.fireAt != null ? 'timer' : trigger.everyMinutes != null ? 'periodic' : 'daily'
+  openEdit(trigger.id, {
+    kind: trigger.kind,
+    prompt: trigger.prompt,
     mode,
-    atHour: t.atHour ?? 7,
-    everyMinutes: t.everyMinutes ?? 60,
-    fireAtLocal: t.fireAt != null ? toLocalInput(t.fireAt) : '',
-    cronExpr: t.cronExpr ?? '',
+    atHour: trigger.atHour ?? 7,
+    everyMinutes: trigger.everyMinutes ?? 60,
+    fireAtLocal: trigger.fireAt != null ? toLocalInput(trigger.fireAt) : '',
+    cronExpr: trigger.cronExpr ?? '',
   })
 }
 
+const required = (fieldKey: string) => t('common.required', { field: t(fieldKey) })
+
 async function save() {
-  if (!form.kind.trim()) { formError.value = 'Name nötig.'; return }
-  if (!form.prompt.trim()) { formError.value = 'Anweisung nötig.'; return }
+  if (!form.kind.trim()) { formError.value = required('companyPanels.field.name'); return }
+  if (!form.prompt.trim()) { formError.value = required('companyPanels.field.instruction'); return }
   const body: Record<string, unknown> = { kind: form.kind.trim(), prompt: form.prompt.trim(), atHour: null, everyMinutes: null, fireAt: null, cronExpr: null }
   if (form.mode === 'daily') {
     body.atHour = Math.max(0, Math.min(23, Math.floor(form.atHour)))
@@ -74,12 +81,12 @@ async function save() {
     body.everyMinutes = Math.max(1, Math.floor(form.everyMinutes))
   }
   else if (form.mode === 'cron') {
-    if (!form.cronExpr.trim()) { formError.value = 'Cron-Ausdruck nötig.'; return }
+    if (!form.cronExpr.trim()) { formError.value = required('companyPanels.field.cronExpr'); return }
     body.cronExpr = form.cronExpr.trim()
   }
   else {
     const ms = form.fireAtLocal ? new Date(form.fireAtLocal).getTime() : Number.NaN
-    if (!Number.isFinite(ms)) { formError.value = 'Zeitpunkt nötig.'; return }
+    if (!Number.isFinite(ms)) { formError.value = required('companyPanels.field.fireAt'); return }
     body.fireAt = ms
   }
   await submit(body)
@@ -96,52 +103,52 @@ const timerPreview = computed(() => {
   <div>
     <div class="flex justify-between items-center mb-6">
       <p class="text-sm text-zinc-500">
-        Proaktive Trigger — der Operator meldet sich von sich aus (Briefing, Erinnerung) in den Chat + aufs Handy.
+        {{ t('companyPanels.automations.intro') }}
       </p>
       <UButton color="primary" icon="i-lucide-plus" @click="openAdd">
-        Trigger
+        {{ t('companyPanels.automations.addButton') }}
       </UButton>
     </div>
 
     <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
-      Lädt …
+      {{ t('common.loading') }}
     </div>
     <div v-else-if="!items.length" class="text-zinc-600 italic py-10 text-center">
-      Noch kein Trigger. Leg den ersten an — z. B. „morning-digest: täglich 7:00 Uhr das Briefing".
+      {{ t('companyPanels.automations.empty') }}
     </div>
     <div v-else class="space-y-2">
       <div
-        v-for="t in items"
-        :key="t.id"
+        v-for="trigger in items"
+        :key="trigger.id"
         class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 cursor-pointer hover:border-zinc-700"
-        @click="edit(t)"
+        @click="edit(trigger)"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm font-medium truncate">{{ t.kind || '(ohne Name)' }}</span>
+              <span class="text-sm font-medium truncate">{{ trigger.kind || t('common.unnamed') }}</span>
               <UBadge color="neutral" variant="subtle" size="xs" icon="i-lucide-clock">
-                {{ scheduleLabel(t) }}
+                {{ scheduleLabel(trigger) }}
               </UBadge>
-              <UBadge v-if="t.createdBy === 'operator'" color="info" variant="subtle" size="xs" icon="i-lucide-bot">
-                vom Operator
+              <UBadge v-if="trigger.createdBy === 'operator'" color="info" variant="subtle" size="xs" icon="i-lucide-bot">
+                {{ t('companyPanels.badge.fromOperator') }}
               </UBadge>
-              <UBadge v-if="!t.enabled" color="warning" variant="subtle" size="xs">
-                pausiert
+              <UBadge v-if="!trigger.enabled" color="warning" variant="subtle" size="xs">
+                {{ t('common.badge.paused') }}
               </UBadge>
             </div>
             <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
-              {{ t.prompt }}
+              {{ trigger.prompt }}
             </p>
             <p class="text-[11px] text-zinc-600 mt-1">
-              zuletzt gefeuert: {{ t.lastRunAt ? fmt(t.lastRunAt) : 'noch nie' }}
+              {{ t('common.lastFired') }} {{ trigger.lastRunAt ? fmt(trigger.lastRunAt) : t('time.never') }}
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0" @click.stop>
-            <USwitch :model-value="t.enabled" :disabled="busy[t.id]" @update:model-value="patch(t.id, { enabled: !t.enabled })" />
-            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[t.id]" @click="remove(t.id)" />
+            <USwitch :model-value="trigger.enabled" :disabled="busy[trigger.id]" @update:model-value="patch(trigger.id, { enabled: !trigger.enabled })" />
+            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :aria-label="t('common.remove')" :loading="busy[trigger.id]" @click="remove(trigger.id)" />
           </div>
         </div>
       </div>
@@ -152,48 +159,50 @@ const timerPreview = computed(() => {
         <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              {{ editingId ? 'Trigger bearbeiten' : 'Trigger hinzufügen' }}
+              {{ editingId ? t('companyPanels.automations.form.titleEdit') : t('companyPanels.automations.form.titleNew') }}
             </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" :aria-label="t('common.close')" @click="showForm = false" />
           </div>
-          <UFormField label="Name" description="Kurzer Bezeichner.">
-            <UInput v-model="form.kind" placeholder="morning-digest" class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="t('companyPanels.field.name')" :description="t('common.field.shortIdHint')">
+            <UInput v-model="form.kind" :placeholder="t('companyPanels.automations.field.name.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Zeitplan">
+          <UFormField :label="t('companyPanels.automations.field.schedule.label')">
             <div class="space-y-3">
               <USelect v-model="form.mode" :items="modeOptions" value-key="value" class="w-full" />
               <div v-if="form.mode === 'daily'" class="flex items-center gap-2">
                 <UInput v-model.number="form.atHour" type="number" :min="0" :max="23" class="w-24" />
-                <span class="text-sm text-zinc-500">Uhr (Wiener Zeit, täglich)</span>
+                <span class="text-sm text-zinc-500">{{ t('companyPanels.automations.hourSuffix') }}</span>
               </div>
               <div v-else-if="form.mode === 'periodic'" class="flex items-center gap-2">
                 <UInput v-model.number="form.everyMinutes" type="number" :min="1" class="w-24" />
-                <span class="text-sm text-zinc-500">Minuten Intervall</span>
+                <span class="text-sm text-zinc-500">{{ t('companyPanels.automations.minutesSuffix') }}</span>
               </div>
               <div v-else-if="form.mode === 'timer'">
                 <UInput v-model="form.fireAtLocal" type="datetime-local" class="w-full" :ui="{ base: 'w-full' }" />
                 <p v-if="timerPreview" class="text-xs text-zinc-500 mt-1">
-                  feuert einmalig am {{ timerPreview }}
+                  {{ t('companyPanels.automations.timerPreview', { when: timerPreview }) }}
                 </p>
               </div>
               <div v-else>
                 <UInput v-model="form.cronExpr" placeholder="0 7 * * 1-5" class="w-full font-mono" :ui="{ base: 'w-full' }" />
-                <p class="text-xs text-zinc-500 mt-1">
-                  5-Feld-Cron (Wiener Zeit): Minute Stunde Tag Monat Wochentag. Beispiel: <code>0 7 * * 1-5</code> = werktags 7:00.
-                </p>
+                <i18n-t keypath="companyPanels.automations.cronHelp" tag="p" class="text-xs text-zinc-500 mt-1">
+                  <template #example>
+                    <code>0 7 * * 1-5</code>
+                  </template>
+                </i18n-t>
               </div>
             </div>
           </UFormField>
-          <UFormField label="Anweisung (prompt)" description="Was der Operator tut, wenn der Trigger fällig ist.">
-            <UTextarea v-model="form.prompt" :rows="8" placeholder="Erstelle das Morgen-Briefing: neue Mails, heutige Termine, offene Ziele — 3–5 Sätze." class="w-full text-xs" :ui="{ base: 'w-full' }" />
+          <UFormField :label="t('common.field.promptLabel')" :description="t('companyPanels.automations.field.prompt.description')">
+            <UTextarea v-model="form.prompt" :rows="8" :placeholder="t('companyPanels.automations.field.prompt.placeholder')" class="w-full text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
           <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showForm = false">
-              Abbrechen
+              {{ t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="saving" @click="save">
-              {{ editingId ? 'Speichern' : 'Hinzufügen' }}
+              {{ editingId ? t('common.save') : t('common.add') }}
             </UButton>
           </div>
         </div>

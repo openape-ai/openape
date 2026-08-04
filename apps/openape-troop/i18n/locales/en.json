@@ -669,7 +669,191 @@
       "varsNotObject": "vars must be a JSON object, not an array or a plain value."
     }
   },
-  "companyPanels": {},
+  "companyPanels": {
+    "crud": {
+      "loadFailed": "Loading failed.",
+      "patchFailed": "Update failed."
+    },
+    "field": {
+      "name": "Name",
+      "instruction": "Instruction",
+      "cronExpr": "Cron expression",
+      "fireAt": "Time",
+      "titleOrBody": "A title or some content"
+    },
+    "badge": {
+      "fromOperator": "from the Operator"
+    },
+    "objectives": {
+      "placeholder": "New objective …",
+      "addButton": "Objective",
+      "column": {
+        "planned": "Planned",
+        "inProgress": "In progress",
+        "done": "Done"
+      },
+      "moveLeftAria": "Move objective back",
+      "moveRightAria": "Move objective forward"
+    },
+    "memory": {
+      "intro": "Facts your company knows — the Operator reads them when it answers.",
+      "addButton": "Memory",
+      "empty": "No memory yet. Add the first one — for example “this is how our files are organised”.",
+      "untitled": "(untitled)",
+      "scope": {
+        "company": "Company (everyone)",
+        "role": "Role",
+        "agent": "Agent"
+      },
+      "mode": {
+        "auto": "Automatic (by size)",
+        "inline": "Inline (always in the prompt)",
+        "reference": "Reference (on demand)"
+      },
+      "form": {
+        "titleNew": "Add memory",
+        "titleEdit": "Edit memory"
+      },
+      "field": {
+        "scope": {
+          "label": "Applies to"
+        },
+        "target": {
+          "label": "Role / agent ID",
+          "description": "Who it applies to (role name or agent id).",
+          "placeholder": "accounting"
+        },
+        "title": {
+          "label": "Title",
+          "description": "Keep it short — the Operator reads it to decide whether this memory fits.",
+          "placeholder": "How our files are organised"
+        },
+        "body": {
+          "label": "Content",
+          "placeholder": "Invoices live under …"
+        },
+        "mode": {
+          "label": "Mode",
+          "description": "Automatic: small docs go inline, large ones become references (~1500 characters)."
+        }
+      }
+    },
+    "reports": {
+      "writeButton": "Write a report",
+      "empty": "No reports yet.",
+      "titlePlaceholder": "Title",
+      "bodyPlaceholder": "Content (Markdown)",
+      "kind": {
+        "adhoc": "Ad hoc",
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "quarterly": "Quarterly",
+        "alert": "Alert"
+      }
+    },
+    "skills": {
+      "intro": "Reusable procedures — an assigned agent applies one whenever a task calls for it.",
+      "addButton": "Skill",
+      "empty": "No skills yet. Add the first one — for example “monthly-report: writes the monthly report”.",
+      "form": {
+        "titleNew": "Add skill",
+        "titleEdit": "Edit skill"
+      },
+      "field": {
+        "name": {
+          "placeholder": "monthly-report"
+        },
+        "description": {
+          "label": "Description",
+          "description": "What it does and when — the agent picks a skill by this line.",
+          "placeholder": "Builds the monthly report from the numbers."
+        },
+        "prompt": {
+          "description": "The agent receives exactly this text and follows it.",
+          "placeholder": "## Steps\n1. …"
+        },
+        "assignedTo": {
+          "label": "Assigned to",
+          "description": "Who may use this skill."
+        }
+      }
+    },
+    "automations": {
+      "intro": "Proactive triggers — the Operator gets in touch on its own (briefing, reminder) in the chat and on your phone.",
+      "addButton": "Trigger",
+      "empty": "No triggers yet. Add the first one — for example “morning-digest: the briefing every day at 07:00”.",
+      "schedule": {
+        "cron": "cron · {expr}",
+        "once": "once · {when}",
+        "daily": "daily · {time}",
+        "everyMinutes": "every {minutes} min"
+      },
+      "mode": {
+        "daily": "Daily at a set time",
+        "periodic": "Every N minutes",
+        "timer": "Once at a set time",
+        "cron": "Cron expression"
+      },
+      "form": {
+        "titleNew": "Add trigger",
+        "titleEdit": "Edit trigger"
+      },
+      "field": {
+        "name": {
+          "placeholder": "morning-digest"
+        },
+        "schedule": {
+          "label": "Schedule"
+        },
+        "prompt": {
+          "description": "What the Operator does when the trigger is due.",
+          "placeholder": "Write the morning briefing: new mail, today’s appointments, open objectives — 3 to 5 sentences."
+        }
+      },
+      "hourSuffix": "(Vienna time, every day)",
+      "minutesSuffix": "minute interval",
+      "timerPreview": "fires once on {when}",
+      "cronHelp": "Five-field cron (Vienna time): minute hour day-of-month month day-of-week. Example: {example} = weekdays at 07:00."
+    },
+    "webhooks": {
+      "intro": "Webhooks — an external event (a POST to the hook URL) makes the Operator speak up.",
+      "addButton": "Webhook",
+      "empty": "No webhooks yet. Add one — for example “CI failed: report the broken build”.",
+      "badge": {
+        "hmac": "HMAC",
+        "payload": "Payload"
+      },
+      "copyUrlAria": "Copy hook URL",
+      "copySecretAria": "Copy HMAC secret",
+      "form": {
+        "title": "Add webhook"
+      },
+      "field": {
+        "name": {
+          "placeholder": "ci-failed"
+        },
+        "prompt": {
+          "description": "What the Operator does when the event arrives.",
+          "placeholder": "A CI build failed — report which one and what to do about it."
+        },
+        "eventFilter": {
+          "label": "Only these events",
+          "description": "Comma-separated, e.g. “issues, pull_request”. Empty means every event. Works with senders that name the event type in a header (Forgejo, Gitea, GitHub).",
+          "placeholder": "issues"
+        },
+        "includePayload": "Pass the payload to the Operator (as data)",
+        "useSecret": "Generate an HMAC secret (verify the body signature)"
+      },
+      "createButton": "Create",
+      "created": {
+        "title": "Webhook created",
+        "description": "Copy the URL now — the HMAC secret is shown this one time only.",
+        "urlLabel": "Hook URL",
+        "secretLabel": "HMAC secret",
+        "secretDescription": "X-Signature: sha256=HMAC-SHA256(secret, body)"
+      }
+    }
+  },
   "orgChart": {
     "title": "Org chart",
     "addButton": "Employee",

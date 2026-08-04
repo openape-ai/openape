@@ -669,7 +669,191 @@
       "varsNotObject": "vars muss ein JSON-Objekt sein, kein Array oder Wert."
     }
   },
-  "companyPanels": {},
+  "companyPanels": {
+    "crud": {
+      "loadFailed": "Laden fehlgeschlagen.",
+      "patchFailed": "Ändern fehlgeschlagen."
+    },
+    "field": {
+      "name": "Name",
+      "instruction": "Anweisung",
+      "cronExpr": "Cron-Ausdruck",
+      "fireAt": "Zeitpunkt",
+      "titleOrBody": "Titel oder Inhalt"
+    },
+    "badge": {
+      "fromOperator": "vom Operator"
+    },
+    "objectives": {
+      "placeholder": "Neues Ziel …",
+      "addButton": "Ziel",
+      "column": {
+        "planned": "Geplant",
+        "inProgress": "In Arbeit",
+        "done": "Erledigt"
+      },
+      "moveLeftAria": "Ziel zurückschieben",
+      "moveRightAria": "Ziel weiterschieben"
+    },
+    "memory": {
+      "intro": "Fakten, die deine Firma kennt — der Operator liest sie beim Antworten.",
+      "addButton": "Memory",
+      "empty": "Noch kein Memory. Leg das erste an — z. B. „so ist die Datenablage strukturiert“.",
+      "untitled": "(ohne Titel)",
+      "scope": {
+        "company": "Firma (alle)",
+        "role": "Rolle",
+        "agent": "Agent"
+      },
+      "mode": {
+        "auto": "Automatisch (nach Größe)",
+        "inline": "Inline (immer im Prompt)",
+        "reference": "Referenz (bei Bedarf)"
+      },
+      "form": {
+        "titleNew": "Memory hinzufügen",
+        "titleEdit": "Memory bearbeiten"
+      },
+      "field": {
+        "scope": {
+          "label": "Gültig für"
+        },
+        "target": {
+          "label": "Rolle / Agent-ID",
+          "description": "An wen (Rollen-Name oder Agent-id).",
+          "placeholder": "buchhaltung"
+        },
+        "title": {
+          "label": "Titel",
+          "description": "Kurz — der Operator sieht ihn, um zu entscheiden, ob das Memory passt.",
+          "placeholder": "Datenablage-Struktur"
+        },
+        "body": {
+          "label": "Inhalt",
+          "placeholder": "Rechnungen liegen unter …"
+        },
+        "mode": {
+          "label": "Modus",
+          "description": "Automatisch: kleine Docs inline, große als Referenz (~1500 Zeichen)."
+        }
+      }
+    },
+    "reports": {
+      "writeButton": "Report schreiben",
+      "empty": "Noch keine Reports.",
+      "titlePlaceholder": "Titel",
+      "bodyPlaceholder": "Inhalt (Markdown)",
+      "kind": {
+        "adhoc": "Ad-hoc",
+        "daily": "Täglich",
+        "weekly": "Wöchentlich",
+        "quarterly": "Quartal",
+        "alert": "Alarm"
+      }
+    },
+    "skills": {
+      "intro": "Wiederverwendbare Prozeduren — ein zugeordneter Agent setzt sie ein, wenn eine Aufgabe passt.",
+      "addButton": "Skill",
+      "empty": "Noch kein Skill. Leg den ersten an — z. B. „monatsbericht: erstellt den Monatsbericht“.",
+      "form": {
+        "titleNew": "Skill hinzufügen",
+        "titleEdit": "Skill bearbeiten"
+      },
+      "field": {
+        "name": {
+          "placeholder": "monatsbericht"
+        },
+        "description": {
+          "label": "Beschreibung",
+          "description": "Wofür/wann — der Agent wählt den Skill darüber aus.",
+          "placeholder": "Erstellt den Monatsbericht aus den Zahlen."
+        },
+        "prompt": {
+          "description": "Der Agent bekommt genau diesen Text und befolgt ihn.",
+          "placeholder": "## Schritte\n1. …"
+        },
+        "assignedTo": {
+          "label": "Zugeordnet an",
+          "description": "Wer diesen Skill einsetzen darf."
+        }
+      }
+    },
+    "automations": {
+      "intro": "Proaktive Trigger — der Operator meldet sich von sich aus (Briefing, Erinnerung) in den Chat + aufs Handy.",
+      "addButton": "Trigger",
+      "empty": "Noch kein Trigger. Leg den ersten an — z. B. „morning-digest: täglich 7:00 Uhr das Briefing“.",
+      "schedule": {
+        "cron": "cron · {expr}",
+        "once": "einmalig · {when}",
+        "daily": "täglich · {time} Uhr",
+        "everyMinutes": "alle {minutes} min"
+      },
+      "mode": {
+        "daily": "Täglich zur Uhrzeit",
+        "periodic": "Alle N Minuten",
+        "timer": "Einmalig zum Zeitpunkt",
+        "cron": "Cron-Ausdruck"
+      },
+      "form": {
+        "titleNew": "Trigger hinzufügen",
+        "titleEdit": "Trigger bearbeiten"
+      },
+      "field": {
+        "name": {
+          "placeholder": "morning-digest"
+        },
+        "schedule": {
+          "label": "Zeitplan"
+        },
+        "prompt": {
+          "description": "Was der Operator tut, wenn der Trigger fällig ist.",
+          "placeholder": "Erstelle das Morgen-Briefing: neue Mails, heutige Termine, offene Ziele — 3–5 Sätze."
+        }
+      },
+      "hourSuffix": "Uhr (Wiener Zeit, täglich)",
+      "minutesSuffix": "Minuten Intervall",
+      "timerPreview": "feuert einmalig am {when}",
+      "cronHelp": "5-Feld-Cron (Wiener Zeit): Minute Stunde Tag Monat Wochentag. Beispiel: {example} = werktags 7:00."
+    },
+    "webhooks": {
+      "intro": "Webhooks — ein externes Ereignis (POST auf die Hook-URL) lässt den Operator sich melden.",
+      "addButton": "Webhook",
+      "empty": "Noch kein Webhook. Leg einen an — z. B. „CI failed: melde den fehlgeschlagenen Build“.",
+      "badge": {
+        "hmac": "HMAC",
+        "payload": "Payload"
+      },
+      "copyUrlAria": "Hook-URL kopieren",
+      "copySecretAria": "HMAC-Secret kopieren",
+      "form": {
+        "title": "Webhook hinzufügen"
+      },
+      "field": {
+        "name": {
+          "placeholder": "ci-failed"
+        },
+        "prompt": {
+          "description": "Was der Operator tut, wenn das Ereignis eintrifft.",
+          "placeholder": "Ein CI-Build ist fehlgeschlagen — melde welcher und was zu tun ist."
+        },
+        "eventFilter": {
+          "label": "Nur diese Ereignisse",
+          "description": "Kommagetrennt, z. B. „issues, pull_request“. Leer = jedes Ereignis. Gilt für Sender, die den Ereignistyp im Header nennen (Forgejo, Gitea, GitHub).",
+          "placeholder": "issues"
+        },
+        "includePayload": "Payload an den Operator übergeben (als Daten)",
+        "useSecret": "HMAC-Secret erzeugen (Signatur des Bodys prüfen)"
+      },
+      "createButton": "Erzeugen",
+      "created": {
+        "title": "Webhook erstellt",
+        "description": "URL jetzt kopieren — beim HMAC-Secret ist dies die einzige Anzeige.",
+        "urlLabel": "Hook-URL",
+        "secretLabel": "HMAC-Secret",
+        "secretDescription": "X-Signature: sha256=HMAC-SHA256(secret, body)"
+      }
+    }
+  },
   "orgChart": {
     "title": "Organigramm",
     "addButton": "Mitarbeiter",

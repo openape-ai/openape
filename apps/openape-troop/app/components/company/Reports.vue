@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useOrgCrud } from '../../composables/useOrgCrud'
 
 // Reports inbox (B0 merge). Newest first. Operator/Sanierer write weekly/alert
 // reports here (M1+); the Owner can also hand-author. This is Patrick's
 // steering cockpit — the company reporting up to him.
 const props = defineProps<{ orgId: string }>()
+
+const { t } = useI18n()
+const { fmtDate } = useDateFormat()
 
 interface Report { id: string, kind: string, title: string, bodyMd: string, createdAt: number }
 
@@ -16,15 +19,15 @@ const { items, loading, error, showForm, saving, formError, form, submit } = use
   emptyForm: () => ({ kind: 'adhoc', title: '', body: '' }),
 })
 
-const KINDS = [
-  { label: 'Ad-hoc', value: 'adhoc' },
-  { label: 'Täglich', value: 'daily' },
-  { label: 'Wöchentlich', value: 'weekly' },
-  { label: 'Quartal', value: 'quarterly' },
-  { label: 'Alarm', value: 'alert' },
-]
+const KINDS = computed(() => [
+  { label: t('companyPanels.reports.kind.adhoc'), value: 'adhoc' },
+  { label: t('companyPanels.reports.kind.daily'), value: 'daily' },
+  { label: t('companyPanels.reports.kind.weekly'), value: 'weekly' },
+  { label: t('companyPanels.reports.kind.quarterly'), value: 'quarterly' },
+  { label: t('companyPanels.reports.kind.alert'), value: 'alert' },
+])
+const kindLabel = (k: string) => KINDS.value.find(x => x.value === k)?.label ?? k
 function kindColor(k: string) { return k === 'alert' ? 'error' : k === 'weekly' || k === 'quarterly' ? 'primary' : 'neutral' }
-function fmtDate(s: number) { return new Date(s * 1000).toLocaleDateString('de-AT', { day: '2-digit', month: 'short', year: 'numeric' }) }
 
 async function save() {
   if (!form.title.trim() || !form.body.trim()) return
@@ -40,20 +43,20 @@ async function save() {
   <div>
     <div class="flex justify-end mb-4">
       <UButton color="neutral" variant="outline" size="sm" icon="i-lucide-pencil" @click="showForm = !showForm">
-        Report schreiben
+        {{ t('companyPanels.reports.writeButton') }}
       </UButton>
     </div>
 
     <div v-if="showForm" class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 mb-6 space-y-3">
       <div class="flex gap-2">
         <USelect v-model="form.kind" :items="KINDS" class="w-40" />
-        <UInput v-model="form.title" placeholder="Titel" class="flex-1" :ui="{ base: 'w-full' }" />
+        <UInput v-model="form.title" :placeholder="t('companyPanels.reports.titlePlaceholder')" class="flex-1" :ui="{ base: 'w-full' }" />
       </div>
-      <UTextarea v-model="form.body" placeholder="Inhalt (Markdown)" :rows="5" class="w-full" :ui="{ base: 'w-full' }" />
+      <UTextarea v-model="form.body" :placeholder="t('companyPanels.reports.bodyPlaceholder')" :rows="5" class="w-full" :ui="{ base: 'w-full' }" />
       <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
       <div class="flex justify-end">
         <UButton color="primary" size="sm" :loading="saving" :disabled="!form.title.trim() || !form.body.trim()" @click="save">
-          Speichern
+          {{ t('common.save') }}
         </UButton>
       </div>
     </div>
@@ -61,10 +64,10 @@ async function save() {
     <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
-      Lädt …
+      {{ t('common.loading') }}
     </div>
     <p v-else-if="!items.length" class="text-zinc-500 py-10 text-center">
-      Noch keine Reports.
+      {{ t('companyPanels.reports.empty') }}
     </p>
     <div v-else class="space-y-2">
       <div
@@ -75,7 +78,7 @@ async function save() {
         <button class="w-full text-left p-4 flex items-center justify-between gap-3" @click="expanded = expanded === r.id ? null : r.id">
           <div class="flex items-center gap-3 min-w-0">
             <UBadge :color="kindColor(r.kind)" variant="subtle" size="sm">
-              {{ r.kind }}
+              {{ kindLabel(r.kind) }}
             </UBadge>
             <span class="font-medium truncate">{{ r.title }}</span>
           </div>
