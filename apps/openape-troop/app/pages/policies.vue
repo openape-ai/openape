@@ -6,7 +6,8 @@ import { policiesFromEvents } from '../utils/policies'
 
 // The rules that outlived their decision. Kept next to the inbox on purpose:
 // deciding and governing are the same surface, one is just the residue.
-useSeoMeta({ title: () => 'Regeln' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('policies.tabTitle') })
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
 
@@ -19,13 +20,13 @@ const policies = computed(() => policiesFromEvents(data.value.events))
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <AppHeader active="inbox" title="Regeln" :show-logout="!!user" @logout="logout" />
+    <AppHeader active="inbox" :title="t('policies.tabTitle')" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
-      <InlineLogin v-if="!user" hint="Melde dich an, um die geltenden Regeln zu sehen." />
+      <InlineLogin v-if="!user" :hint="t('common.loginHint', { what: t('policies.loginWhat') })" />
       <template v-else>
         <p class="text-zinc-400 mb-6">
-          Was aus Entscheidungen geblieben ist — mit Herkunft, Datum und dem Ort, an dem die Regel bindet.
+          {{ t('policies.intro') }}
         </p>
         <PolicyList :policies="policies" />
       </template>

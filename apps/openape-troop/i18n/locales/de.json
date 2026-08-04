@@ -456,11 +456,103 @@
       "failed": "Login fehlgeschlagen."
     }
   },
-  "inbox": {},
-  "decisionCard": {},
-  "callDetail": {},
-  "policies": {},
-  "records": {},
+  "inbox": {
+    "tabTitle": "Inbox",
+    "waiting": "Nichts wartet auf dich. | 1 Entscheidung wartet auf dich. | {count} Entscheidungen warten auf dich — älteste zuerst.",
+    "trackRecordsLink": "Track-Records",
+    "policiesLink": "Regeln",
+    "refresh": "Neu laden",
+    "empty": "Inbox Zero — nichts wartet auf dich.",
+    "loginWhat": "deine offenen Entscheidungen",
+    "kind": {
+      "decision": "Entscheidung",
+      "escalation": "Eskalation",
+      "verdict": "Verdict"
+    },
+    "cardTitle": {
+      "plain": "{text}",
+      "verdict": "Verdict: {ref}"
+    },
+    "waitingFor": {
+      "minutes": "wartet {count} min",
+      "hours": "wartet {count} h",
+      "days": "wartet {count} d"
+    },
+    "percent": "{value} %",
+    "duration": {
+      "seconds": "{value} s",
+      "minutes": "{value} min",
+      "hours": "{value} h",
+      "days": "{value} d"
+    },
+    "metrics": {
+      "wait": {
+        "label": "Wartezeit auf dich",
+        "hint": "Median, ohne Fristablauf"
+      },
+      "autonomy": {
+        "label": "Autonomie-Quote",
+        "hint": "geliefert ohne Rückfrage"
+      },
+      "rework": {
+        "label": "Nacharbeit-Rate",
+        "hint": "Verdicts, die zurückgingen"
+      },
+      "answered": {
+        "label": "Entschieden",
+        "hint": "{count} offen"
+      }
+    }
+  },
+  "decisionCard": {
+    "blocks": "blockiert {task}",
+    "decided": "entschieden",
+    "viewPr": "PR ansehen",
+    "proof": "Beweis: {kind}",
+    "chooseVerdict": "Verdict wählen",
+    "chooseOption": "Option wählen",
+    "recommended": "Empfehlung",
+    "verdict": {
+      "merge": "Merge",
+      "rework": "Nacharbeit",
+      "reject": "Ablehnen"
+    },
+    "why": "Warum diese Empfehlung",
+    "confirm": {
+      "verdict": "Verdict abgeben: {choice}",
+      "decision": "Entscheiden: {choice}"
+    },
+    "resolved": "Entschieden: {decision}",
+    "resolvedBy": "{actor} · Event {id}"
+  },
+  "callDetail": {
+    "tabTitle": "Entscheidung",
+    "backToInbox": "Inbox",
+    "notFound": "Karte nicht gefunden oder kein Zugriff."
+  },
+  "policies": {
+    "tabTitle": "Regeln",
+    "loginWhat": "die geltenden Regeln",
+    "intro": "Was aus Entscheidungen geblieben ist — mit Herkunft, Datum und dem Ort, an dem die Regel bindet.",
+    "badge": {
+      "adopted": "in Kraft",
+      "proposed": "Vorschlag"
+    },
+    "source": "aus dieser Entscheidung",
+    "empty": "Noch keine Regeln. Sie entstehen aus Entscheidungen, die über den Einzelfall hinausgehen."
+  },
+  "records": {
+    "tabTitle": "Track-Records",
+    "loginWhat": "die Historie deiner Agenten",
+    "fromEvents": "Aus {count} Event. Die Sampling-Rate ist ein Vorschlag — jede PR läuft weiterhin durch die Inbox. | Aus {count} Events. Die Sampling-Rate ist ein Vorschlag — jede PR läuft weiterhin durch die Inbox.",
+    "summary": "{count} Review · {rate} ohne Nacharbeit | {count} Reviews · {rate} ohne Nacharbeit",
+    "sampling": "Sampling {rate}",
+    "samplingTitle": {
+      "fresh": "Unter 20 Reviews gibt es keine belastbare Historie",
+      "suggestion": "Vorschlag, keine Regel"
+    },
+    "empty": "Noch keine Reviews. Sobald Agenten PRs zur Entscheidung stellen, entsteht hier ihre Historie."
+  },
   "cockpit": {
     "tabTitle": "Troop-Chat",
     "enableNotifications": "🔔 Benachrichtigungen aktivieren",

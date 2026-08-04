@@ -1,10 +1,17 @@
 // @vitest-environment happy-dom
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import AgentRecords from '../app/components/AgentRecords.vue'
 import MetricTiles from '../app/components/MetricTiles.vue'
+import de from '../i18n/locales/de.json'
 
-const global = { stubs: { NuxtLink: { template: '<a><slot /></a>' } } }
+// The tiles read the shipped German catalog — including where a percentage
+// puts its space, which is exactly the kind of thing a locale decides.
+const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
+vi.stubGlobal('useI18n', () => i18n.global)
+
+const global = { plugins: [i18n], stubs: { NuxtLink: { template: '<a><slot /></a>' } } }
 const empty = { medianWaitSeconds: null, autonomyRate: null, reworkRate: null, answered: 0, openNow: 0 }
 
 describe('metric tiles', () => {
