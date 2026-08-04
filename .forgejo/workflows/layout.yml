@@ -1,0 +1,27 @@
+name: layout
+# Layout tests run a real browser at a real viewport — the only place CSS
+# exists. They live on the `mac` runner because it has Google Chrome installed;
+# the `docker` runner that carries ci/e2e has no browser, and shipping a
+# Playwright build into it would cost a ~150 MB download per run.
+#
+# If the mac runner is offline the job queues — ci/e2e are unaffected.
+on:
+  pull_request:
+    paths:
+      - 'apps/openape-troop/app/**'
+      - 'apps/openape-troop/tests/layout/**'
+      - 'apps/openape-troop/vitest.browser.config.ts'
+
+concurrency:
+  group: layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layout:
+    runs-on: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Layout tests (troop)
+        run: pnpm --filter @openape/troop test:layout
