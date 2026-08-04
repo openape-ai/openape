@@ -1,6 +1,17 @@
 <script setup lang="ts">
+import type { Lane, LaneStatus, RemindPreset } from '../../../utils/board'
 import { computed, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
+import {
+  callerRole as boardCallerRole,
+  laneCounts as boardLaneCounts,
+  dueLabel,
+  effectiveLaneId,
+  laneTasks,
+  localInputToUnix,
+  remindPresetDate,
+  unixToLocalInput,
+} from '../../../utils/board'
 
 const { user, fetchUser } = useOpenApeAuth()
 const route = useRoute()
@@ -8,8 +19,6 @@ const teamId = computed(() => String(route.params.id))
 
 interface TeamMember { email: string, role: 'owner' | 'editor' | 'viewer', joined_at: number }
 interface TaskCount { open: number, doing: number, done: number, archived: number, total: number }
-type LaneStatus = 'open' | 'doing' | 'done'
-interface Lane { id: string, name: string, status: LaneStatus }
 interface TeamDetail {
   id: string
   name: string
@@ -152,42 +161,19 @@ function applyDevPreset() {
 const lanes = computed<Lane[]>(() => detail.value?.lanes ?? [])
 const activeLaneId = ref('')
 
-// Mirror of server/utils/lanes.ts effectiveLaneId: an explicit, still-valid
-// lane wins; otherwise a task falls into the first lane of its status bucket.
 function effectiveLane(t: Task): string {
-  if (t.lane_id && lanes.value.some(l => l.id === t.lane_id)) return t.lane_id
-  const bucket: LaneStatus = t.status === 'archived' ? 'done' : t.status
-  const match = lanes.value.find(l => l.status === bucket) ?? lanes.value[0]
-  return match?.id ?? ''
+  return effectiveLaneId(t, lanes.value)
 }
 
 const activeLaneName = computed(() => lanes.value.find(l => l.id === activeLaneId.value)?.name ?? '')
-const isDoneLane = computed(() => lanes.value.find(l => l.id === activeLaneId.value)?.status === 'done')
 
-const laneCounts = computed<Record<string, number>>(() => {
-  const counts: Record<string, number> = {}
-  for (const l of lanes.value) counts[l.id] = 0
-  for (const t of tasks.value) {
-    if (t.status === 'archived') continue
-    const id = effectiveLane(t)
-    if (id in counts) counts[id] = (counts[id] ?? 0) + 1
-  }
-  return counts
-})
+const laneCounts = computed<Record<string, number>>(() => boardLaneCounts(tasks.value, lanes.value))
 
-const activeLaneTasks = computed(() =>
-  tasks.value
-    .filter(t => t.status !== 'archived' && effectiveLane(t) === activeLaneId.value)
-    .sort((a, b) => {
-      // Done lanes read newest-completed-first; others by manual order.
-      if (isDoneLane.value) return (b.completed_at ?? 0) - (a.completed_at ?? 0)
-      return a.sort_order - b.sort_order || a.created_at - b.created_at
-    }),
-)
+const activeLaneTasks = computed(() => laneTasks(tasks.value, lanes.value, activeLaneId.value))
 
 const callerRole = computed<'owner' | 'editor' | 'viewer' | null>(() => {
   if (!detail.value || !user.value) return null
-  return detail.value.members.find(m => m.email === user.value?.sub)?.role ?? null
+  return boardCallerRole(detail.value.members, user.value.sub)
 })
 const canEdit = computed(() => callerRole.value === 'owner' || callerRole.value === 'editor')
 const isOwner = computed(() => callerRole.value === 'owner')
@@ -539,70 +525,8 @@ function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleString()
 }
 
-function dueLabel(ts: number | null): string | null {
-  if (!ts) return null
-  const now = Math.floor(Date.now() / 1000)
-  const diff = ts - now
-  const absH = Math.abs(diff) / 3600
-  if (absH < 24) {
-    const d = new Date(ts * 1000)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-  const days = Math.round(diff / 86400)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Tomorrow'
-  if (days === -1) return 'Yesterday'
-  if (days < 0) return `${Math.abs(days)}d overdue`
-  if (days < 7) return `In ${days}d`
-  return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-// <input type="datetime-local"> helpers. The input's value is a naive string
-// in the user's local timezone; we round-trip via Date which applies local TZ.
-function unixToLocalInput(ts: number): string {
-  const d = new Date(ts * 1000)
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-function localInputToUnix(s: string): number {
-  return Math.floor(new Date(s).getTime() / 1000)
-}
-
-/**
- * Set the Remind input to a named preset, modeled after iOS Reminders'
- * date popover (Heute Abend / Morgen früh / Nächste Woche). All anchors
- * are computed in the user's local timezone — Date constructor with
- * year/month/day/hour applies local TZ implicitly.
- */
-type RemindPreset = 'plus-1h' | 'today-evening' | 'tomorrow-morning' | 'next-week'
-
 function setRemindPreset(preset: RemindPreset): void {
-  const now = new Date()
-  let target: Date
-  switch (preset) {
-    case 'plus-1h':
-      target = new Date(now.getTime() + 3600_000)
-      break
-    case 'today-evening':
-      target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0)
-      // If it's already past 18:00, push to tomorrow evening so the preset
-      // never resolves into the past.
-      if (target.getTime() <= now.getTime()) {
-        target.setDate(target.getDate() + 1)
-      }
-      break
-    case 'tomorrow-morning':
-      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0)
-      break
-    case 'next-week': {
-      // Next Monday 09:00 (local). getDay() = 0..6 with 0=Sunday.
-      const today = now.getDay()
-      const daysUntilMonday = ((1 - today + 7) % 7) || 7
-      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMonday, 9, 0, 0)
-      break
-    }
-  }
-  editRemindLocal.value = unixToLocalInput(Math.floor(target.getTime() / 1000))
+  editRemindLocal.value = unixToLocalInput(Math.floor(remindPresetDate(preset).getTime() / 1000))
 }
 
 const isEditOpen = computed({
