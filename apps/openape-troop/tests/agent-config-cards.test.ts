@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import type { Agent } from '../app/types/agent'
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick, reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import AgentRecipeCard from '../app/components/AgentRecipeCard.vue'
@@ -143,6 +144,23 @@ describe('agent system prompt card', () => {
     await card.setProps({ agent: { ...agent, systemPrompt: 'Vom Server.' } })
     expect(card.get('textarea').element.value).toBe('Vom Server.')
     expect(card.text()).toContain('gesetzt')
+  })
+
+  // Applying a recipe rewrites the prompt server-side; the page writes the new
+  // value into the same agent object it already holds. The identity never
+  // changes, so a draft left in the textarea would survive — and the next
+  // Speichern would PATCH it back over what the recipe just wrote.
+  it('re-seeds the draft when a recipe rewrites the prompt in place', async () => {
+    const live = reactive({ ...agent })
+    const card = mount(AgentSystemPromptCard, { props: { agentName: 'zaz', agent: live }, global })
+    await card.get('textarea').setValue('Halbfertiger Entwurf.')
+
+    live.systemPrompt = 'Vom Recipe geschrieben.'
+    await nextTick()
+
+    expect(card.get('textarea').element.value).toBe('Vom Recipe geschrieben.')
+    expect(card.text()).toContain('gesetzt')
+    expect(saveButton(card)).toBeUndefined()
   })
 })
 
