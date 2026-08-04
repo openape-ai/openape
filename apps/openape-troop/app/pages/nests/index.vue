@@ -5,7 +5,10 @@ import { useOpenApeAuth } from '#imports'
 // Nests list — the operations view's landing. One card per bound device;
 // click into it for the nest's info + the agents running on it. Toggle to
 // the Companies view.
-useSeoMeta({ title: () => 'Nests' })
+const { t } = useI18n()
+useSeoMeta({ title: () => t('nestsIndex.tabTitle') })
+
+const { fmtRelative } = useRelativeTime()
 
 const { user, fetchUser, logout } = useOpenApeAuth()
 await fetchUser()
@@ -19,14 +22,16 @@ const agents = ref<Agent[]>([])
 const loading = ref(true)
 const error = ref('')
 
-function lastSeen(ts: number | null) {
-  if (!ts) return '—'
-  const mins = Math.floor((Date.now() / 1000 - ts) / 60)
-  if (mins < 1) return 'gerade eben'
-  if (mins < 60) return `vor ${mins} min`
-  const h = Math.floor(mins / 60)
-  if (h < 24) return `vor ${h} h`
-  return `vor ${Math.floor(h / 24)} d`
+// Only 'active' rows and the client-side 'unbound' synthesis reach the list;
+// anything else the API grows later shows through as its raw value.
+const STATUS_KEYS: Record<string, string> = {
+  active: 'nestsIndex.status.active',
+  unbound: 'nestsIndex.status.unbound',
+  revoked: 'nestsIndex.status.revoked',
+}
+function statusLabel(status: string) {
+  const key = STATUS_KEYS[status]
+  return key ? t(key) : status
 }
 
 // A nest = a host that agents actually run on. Bound devices (from /api/nests)
@@ -67,7 +72,7 @@ async function load() {
   }
   catch (err: any) {
     if (err?.statusCode === 401) { await navigateTo('/login'); return }
-    error.value = err?.data?.statusMessage || err?.message || 'Konnte die Nests nicht laden.'
+    error.value = err?.data?.statusMessage || err?.message || t('nestsIndex.error.loadFailed')
   }
   finally { loading.value = false }
 }
@@ -80,19 +85,19 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     <AppHeader active="nests" :show-logout="!!user" @logout="logout" />
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
-      <InlineLogin v-if="!user" hint="Melde dich an, um deine Nests zu sehen." />
+      <InlineLogin v-if="!user" :hint="$t('common.loginHint', { what: $t('nestsIndex.loginWhat') })" />
       <template v-else>
         <h2 class="text-2xl font-bold mb-1">
-          Nests
+          {{ $t('nestsIndex.heading') }}
         </h2>
         <p class="text-zinc-400 mb-6">
-          Deine Geräte — klick ein Nest an, um Infos und die dort laufenden Agents zu sehen.
+          {{ $t('nestsIndex.subheading') }}
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
         <p v-if="loading" class="text-zinc-500 py-12 text-center">
-          Lädt …
+          {{ $t('common.loading') }}
         </p>
 
         <div v-else-if="!mergedNests.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
@@ -100,10 +105,10 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
             🪺
           </div>
           <h3 class="text-lg font-medium">
-            Noch kein Nest verbunden
+            {{ $t('nestsIndex.empty.title') }}
           </h3>
           <p class="text-sm text-zinc-400 max-w-md mx-auto">
-            Starte den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen.
+            {{ $t('nestsIndex.empty.hint') }}
           </p>
         </div>
 
@@ -130,17 +135,17 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
               <dl class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs max-w-xl">
                 <div>
                   <dt class="text-zinc-500">
-                    Status
+                    {{ $t('nestsIndex.card.status') }}
                   </dt>
                   <dd>
                     <UBadge :color="n.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
-                      {{ n.status }}
+                      {{ statusLabel(n.status) }}
                     </UBadge>
                   </dd>
                 </div>
                 <div>
                   <dt class="text-zinc-500">
-                    IP
+                    {{ $t('nestsIndex.card.ip') }}
                   </dt>
                   <dd class="font-mono">
                     {{ n.last_ip || '—' }}
@@ -148,7 +153,7 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
                 </div>
                 <div>
                   <dt class="text-zinc-500">
-                    Agents
+                    {{ $t('nestsIndex.card.agents') }}
                   </dt>
                   <dd class="font-medium">
                     {{ n.agentCount }}
@@ -156,10 +161,10 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
                 </div>
                 <div>
                   <dt class="text-zinc-500">
-                    Zuletzt
+                    {{ $t('nestsIndex.card.lastSeen') }}
                   </dt>
                   <dd class="font-medium">
-                    {{ lastSeen(n.last_seen_at) }}
+                    {{ fmtRelative(n.last_seen_at) }}
                   </dd>
                 </div>
               </dl>
