@@ -21,7 +21,7 @@ const loading = ref(true)
 const error = ref('')
 const ownerEmail = computed(() => (user.value as { sub?: string } | null)?.sub ?? '')
 
-async function loadEmployees() { employees.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`) }
+async function loadEmployees() { employees.value = await apiFetch(`/api/cockpit/orgs/${orgId.value}/agents`) }
 
 // YOLO-Drift: was der Worker zuletzt als Operator-Policy gemeldet hat vs. die
 // heutigen Rollen-tools. Fehlt der Report (alter Worker), zeigen wir nichts an.
@@ -33,7 +33,7 @@ interface YoloSyncView {
 }
 const yoloSync = ref<YoloSyncView | null>(null)
 async function loadYoloSync() {
-  try { yoloSync.value = await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/yolo-sync`) }
+  try { yoloSync.value = await apiFetch(`/api/cockpit/orgs/${orgId.value}/yolo-sync`) }
   catch { yoloSync.value = null }
 }
 const driftDescription = computed(() => {
@@ -57,7 +57,7 @@ const providerMode = ref<'active' | 'idle' | 'working' | 'offline'>('offline')
 const providerLabel = computed(() => ({ active: 'Aktiv', idle: 'Ruhend', working: 'Arbeitet', offline: 'Offline' }[providerMode.value]))
 const providerColor = computed(() => ({ active: 'success', idle: 'info', working: 'warning', offline: 'neutral' } as const)[providerMode.value])
 async function loadProvider() {
-  try { providerMode.value = (await ($fetch as any)('/api/cockpit/status')).mode }
+  try { providerMode.value = (await apiFetch<{ mode: 'active' | 'idle' | 'working' | 'offline' }>('/api/cockpit/status')).mode }
   catch { providerMode.value = 'offline' }
 }
 
@@ -65,7 +65,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    org.value = await ($fetch as any)(`/api/orgs/${orgId.value}`)
+    org.value = await apiFetch(`/api/orgs/${orgId.value}`)
     await Promise.all([loadEmployees(), loadProvider(), loadYoloSync()])
   }
   catch (err: any) {
@@ -178,8 +178,8 @@ async function submitForm() {
     reportsTo: form.reportsTo || null,
   }
   try {
-    if (editingId.value) await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${editingId.value}`, { method: 'PATCH', body })
-    else await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body })
+    if (editingId.value) await apiFetch(`/api/cockpit/orgs/${orgId.value}/agents/${editingId.value}`, { method: 'PATCH', body })
+    else await apiFetch(`/api/cockpit/orgs/${orgId.value}/agents`, { method: 'POST', body })
     showForm.value = false
     await Promise.all([loadEmployees(), loadYoloSync()])
   }
@@ -187,11 +187,11 @@ async function submitForm() {
   finally { saving.value = false }
 }
 async function deleteEmployee(e: { id: string }) {
-  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'DELETE' })
+  await apiFetch(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'DELETE' })
   await Promise.all([loadEmployees(), loadYoloSync()])
 }
 async function toggleEmployee(e: { id: string, enabled: boolean }) {
-  await ($fetch as any)(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'PATCH', body: { enabled: !e.enabled } })
+  await apiFetch(`/api/cockpit/orgs/${orgId.value}/agents/${e.id}`, { method: 'PATCH', body: { enabled: !e.enabled } })
   await Promise.all([loadEmployees(), loadYoloSync()])
 }
 
@@ -217,7 +217,7 @@ async function saveOrg() {
   savingEdit.value = true
   saveOrgError.value = ''
   try {
-    await ($fetch as any)(`/api/orgs/${orgId.value}`, { method: 'PATCH', body: { name: editForm.name.trim(), vision_md: editForm.vision.trim(), budget_monthly_eur: editForm.budget, vars: parsedVars.vars } })
+    await apiFetch(`/api/orgs/${orgId.value}`, { method: 'PATCH', body: { name: editForm.name.trim(), vision_md: editForm.vision.trim(), budget_monthly_eur: editForm.budget, vars: parsedVars.vars } })
     showEdit.value = false
     await load()
   }

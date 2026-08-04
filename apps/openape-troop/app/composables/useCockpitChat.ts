@@ -94,9 +94,7 @@ export function useCockpitChat() {
     // eslint-disable-next-line no-unmodified-loop-condition -- pollAbort is flipped by stop()/selectCompany
     while (Date.now() < deadline && !pollAbort) {
       let t: { state: string, progress: string[], answer: string }
-      // ($fetch as any): a dynamic route URL blows the typed-route inference (the
-      // app's convention for these — see Memory.vue/companies/[id].vue).
-      try { t = await ($fetch as any)(`/api/cockpit/tasks/${taskId}/progress`) }
+      try { t = await apiFetch(`/api/cockpit/tasks/${taskId}/progress`) }
       catch { return } // 404 (task gone) or transient → caller falls back to messages poll
       assistant.thoughts = [...t.progress]
       assistant.waiting = assistant.waiting ?? 'Verbindung unterbrochen — verbinde neu …'

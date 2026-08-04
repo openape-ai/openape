@@ -29,11 +29,11 @@ async function load() {
   error.value = ''
   try {
     const [n, a] = await Promise.all([
-      ($fetch as any)('/api/nests'),
-      ($fetch as any)('/api/agents'),
+      apiFetch<Nest[]>('/api/nests'),
+      apiFetch<Agent[]>('/api/agents'),
     ])
     agents.value = a
-    nest.value = (n as Nest[]).find(x => x.host_id === hostId.value) ?? null
+    nest.value = n.find(x => x.host_id === hostId.value) ?? null
     if (!nest.value) {
       // Not a bound device — synthesize the nest from the agents that report
       // this host_id (e.g. a container the agents run in, not formally bound).
@@ -62,7 +62,7 @@ async function fleetPause(pause: boolean) {
   fleetPausing.value = true
   try {
     const verb = pause ? 'pause' : 'resume'
-    await ($fetch as any)(`/api/nests/${encodeURIComponent(hostId.value)}/${verb}`, { method: 'POST' })
+    await apiFetch(`/api/nests/${encodeURIComponent(hostId.value)}/${verb}`, { method: 'POST' })
     toast.add({ title: pause ? 'Nest pausiert — alle Agents idle' : 'Nest fortgesetzt', color: pause ? 'warning' : 'success' })
   }
   catch (err: any) {
