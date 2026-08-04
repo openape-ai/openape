@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "e2e": "node scripts/e2e.mjs",
     "dev": "turbo run dev",
     "graph": "node scripts/dependency-graph.mjs",
     "knip": "node scripts/knip-workspaces.mjs",
