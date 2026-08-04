@@ -5,6 +5,7 @@ import { useOpenApeAuth } from '#imports'
 // Shared decision links land here logged out; asking for the email right where
 // they arrived beats bouncing them to the start page and back.
 const props = defineProps<{ hint?: string }>()
+const { t } = useI18n()
 const { loading, login } = useOpenApeAuth()
 
 const email = ref('')
@@ -14,7 +15,7 @@ const submitting = ref(false)
 async function handleLogin() {
   error.value = ''
   if (!email.value.includes('@')) {
-    error.value = 'Bitte eine gültige E-Mail-Adresse eingeben.'
+    error.value = t('header.login.invalidEmail')
     return
   }
   submitting.value = true
@@ -24,7 +25,7 @@ async function handleLogin() {
   catch (e) {
     error.value = (e as { data?: { statusMessage?: string }, message?: string })?.data?.statusMessage
       ?? (e as { message?: string }).message
-      ?? 'Login fehlgeschlagen.'
+      ?? t('header.login.failed')
     submitting.value = false
   }
 }
@@ -33,12 +34,12 @@ async function handleLogin() {
 <template>
   <form class="w-full max-w-sm mx-auto space-y-3 py-12" @submit.prevent="handleLogin">
     <p class="text-zinc-400 text-center">
-      {{ props.hint ?? 'Melde dich an, um diese Entscheidung zu sehen.' }}
+      {{ props.hint ?? $t('common.loginHint', { what: $t('header.login.what') }) }}
     </p>
     <UInput
       v-model="email"
       type="email"
-      placeholder="du@firma.at"
+      :placeholder="$t('header.login.emailPlaceholder')"
       size="lg"
       autocomplete="email"
       icon="i-lucide-mail"
@@ -50,7 +51,7 @@ async function handleLogin() {
       {{ error }}
     </p>
     <UButton type="submit" color="primary" block size="lg" icon="i-lucide-fingerprint" :loading="submitting || loading">
-      Anmelden
+      {{ $t('header.login.submit') }}
     </UButton>
   </form>
 </template>

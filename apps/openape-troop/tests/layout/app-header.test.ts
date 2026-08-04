@@ -2,7 +2,13 @@ import type { Slots } from 'vue'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import AppHeader from '../../app/components/AppHeader.vue'
+import de from '../../i18n/locales/de.json'
+
+// German is the longer of the two catalogs, so it is the one that can push the
+// row wide — measure the header wearing the labels most likely to overflow.
+const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
 
 // A phone viewport (390px) is set in vitest.browser.config.ts. The header brings
 // its own styles; everything inside it is stubbed, so the stubs carry the widths
@@ -17,6 +23,7 @@ const GHOST_BUTTON = 28
 // compiler, so a `template` stub renders nothing at all — and a header made of
 // empty boxes passes every geometry assertion.
 const global = {
+  plugins: [i18n],
   stubs: {
     // flex-shrink: 0 mirrors the real switch: six rigid buttons that keep their
     // width even when the row around them runs out of space.

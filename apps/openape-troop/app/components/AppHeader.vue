@@ -48,7 +48,7 @@ defineEmits<{ logout: [] }>()
         variant="ghost"
         size="sm"
         icon="i-lucide-log-out"
-        aria-label="Abmelden"
+        :aria-label="$t('common.logout')"
         @click="$emit('logout')"
       />
     </div>

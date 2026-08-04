@@ -8,6 +8,8 @@ import { onUnmounted, ref } from 'vue'
 const props = defineProps<{ agentName: string }>()
 const emit = defineEmits<{ connected: [] }>()
 
+const { t } = useI18n()
+
 type State = 'idle' | 'pending' | 'connected' | 'error'
 const state = ref<State>('idle')
 const userCode = ref('')
@@ -27,7 +29,7 @@ async function connect() {
   }
   catch (e: any) {
     state.value = 'error'
-    error.value = e?.data?.statusMessage || e?.message || 'failed to start'
+    error.value = e?.data?.statusMessage || e?.message || t('agentDetail.chatgpt.error.start')
   }
 }
 
@@ -45,7 +47,7 @@ async function poll() {
     }
     else if (res.status === 'denied') {
       state.value = 'error'
-      error.value = res.error || 'denied'
+      error.value = res.error || t('agentDetail.chatgpt.error.denied')
     }
     else {
       schedule(res.status === 'slow_down' ? 8000 : 5000)
@@ -53,7 +55,7 @@ async function poll() {
   }
   catch (e: any) {
     state.value = 'error'
-    error.value = e?.data?.statusMessage || e?.message || 'poll failed'
+    error.value = e?.data?.statusMessage || e?.message || t('agentDetail.chatgpt.error.poll')
   }
 }
 
