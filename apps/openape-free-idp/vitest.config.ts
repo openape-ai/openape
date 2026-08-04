@@ -1,7 +1,10 @@
 import { fileURLToPath } from 'node:url'
+import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // Component tests mount .vue files; server tests keep the node environment.
+  plugins: [vue()],
   resolve: {
     alias: {
       // Nuxt's shared/ directory alias — vitest runs outside Nuxt and
