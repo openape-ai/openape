@@ -19,11 +19,11 @@ const activeStory = computed(() => route.params.story as string | undefined)
           to="/docs"
           class="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-400 ring-1 ring-primary-500/30"
         >
-          Guide
+          {{ $t('docs.shell.badge') }}
         </NuxtLink>
         <div class="ms-auto">
           <UButton to="/" size="sm" color="primary" variant="soft">
-            Open Troop
+            {{ $t('docs.shell.openApp') }}
           </UButton>
         </div>
       </div>
@@ -31,13 +31,13 @@ const activeStory = computed(() => route.params.story as string | undefined)
 
     <div class="mx-auto flex max-w-6xl gap-10 px-4 pb-24 pt-10">
       <aside class="hidden w-60 shrink-0 lg:block">
-        <nav class="sticky top-24 space-y-6 text-sm" aria-label="Guide">
+        <nav class="sticky top-24 space-y-6 text-sm" :aria-label="$t('docs.shell.navLabel')">
           <NuxtLink
             to="/docs"
             class="block font-medium transition"
             :class="activeStory ? 'text-zinc-400 hover:text-zinc-200' : 'text-primary-400'"
           >
-            Overview
+            {{ $t('docs.shell.overview') }}
           </NuxtLink>
           <div v-for="cat in docsGuide.categories" :key="cat.title">
             <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">

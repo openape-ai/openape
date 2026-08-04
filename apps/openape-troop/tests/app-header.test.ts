@@ -1,11 +1,18 @@
 // @vitest-environment happy-dom
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import AppHeader from '../app/components/AppHeader.vue'
+import de from '../i18n/locales/de.json'
+
+// The header labels its logout button from the shipped German catalog, so the
+// selector below is the string a user's screen reader actually announces.
+const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
 
 // Nuxt UI and the top-level switch are auto-imported in the app; here they are
 // stubbed to plain elements so assertions read the text, not the design system.
 const global = {
+  plugins: [i18n],
   stubs: {
     UButton: { template: '<button :aria-label="$attrs[\'aria-label\']"><slot /></button>' },
     ViewToggle: { props: ['active'], template: '<nav>Ansicht: {{ active }}</nav>' },
@@ -16,7 +23,7 @@ function header(props: Record<string, unknown> = {}, slots: Record<string, strin
   return mount(AppHeader, { props, slots, global })
 }
 
-const logoutButton = (wrapper: ReturnType<typeof header>) => wrapper.find('[aria-label="Abmelden"]')
+const logoutButton = (wrapper: ReturnType<typeof header>) => wrapper.find(`[aria-label="${de.common.logout}"]`)
 
 describe('app header — the mark on the left', () => {
   it('shows the gorilla on a top-level page', () => {
@@ -72,6 +79,6 @@ describe('app header — page actions', () => {
   it('places the page own buttons before logout', () => {
     const wrapper = header({ active: 'companies' }, { actions: '<button>Firma</button>' })
     const labels = wrapper.findAll('button').map(b => b.text().trim() || b.attributes('aria-label'))
-    expect(labels).toEqual(['Firma', 'Abmelden'])
+    expect(labels).toEqual(['Firma', de.common.logout])
   })
 })

@@ -4,25 +4,24 @@ import { docsGuide } from '../../docs.generated'
 // Guide overview: every category with its user stories. All content is
 // generated from the E2E test run (see compose/demo/story-kit.mjs) — our own
 // committed HTML, so v-html is safe.
+const { t } = useI18n()
 useSeoMeta({
-  title: 'Troop — Guide',
-  description: 'How Troop is used, story by story — generated from live E2E test runs.',
+  title: () => t('docs.index.tabTitle'),
+  description: () => t('docs.index.description'),
 })
 </script>
 
 <template>
   <DocsGuideShell>
     <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
-      Troop Guide
+      {{ $t('docs.index.heading') }}
     </h1>
     <p class="mt-3 max-w-2xl text-zinc-400">
-      Every story below is captured from a live end-to-end test run — the
-      screenshots and steps are regenerated on each run, so this guide cannot
-      drift from the real product.
+      {{ $t('docs.index.intro') }}
     </p>
 
     <NuxtLink to="/docs/agent-catalog" class="mt-6 inline-flex items-center text-sm text-primary-400 hover:text-primary-300">
-      View Agent Catalog →
+      {{ $t('docs.index.catalogLink') }}
     </NuxtLink>
 
     <section v-for="cat in docsGuide.categories" :key="cat.title" class="mt-12">
@@ -48,7 +47,7 @@ useSeoMeta({
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose-intro mt-2 line-clamp-3 text-sm text-zinc-400" v-html="s.introHtml" />
             <p class="mt-3 text-xs text-zinc-500">
-              {{ s.steps.length }} step{{ s.steps.length === 1 ? '' : 's' }}
+              {{ $t('docs.index.stepCount', s.steps.length) }}
             </p>
           </div>
         </NuxtLink>
@@ -56,8 +55,7 @@ useSeoMeta({
     </section>
 
     <footer class="mt-16 border-t border-zinc-800/80 pt-6 text-sm text-zinc-500">
-      Captured live from the containerized E2E test stack — every screenshot is
-      regenerated on each run.
+      {{ $t('docs.index.footer') }}
     </footer>
   </DocsGuideShell>
 </template>
