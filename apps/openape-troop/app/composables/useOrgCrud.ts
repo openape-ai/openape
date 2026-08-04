@@ -26,8 +26,12 @@ function errorMessage(err: unknown, fallback: string): string {
  *
  * Failures are always visible — `error` carries load and row failures, `formError`
  * the ones the open form caused. Nothing is swallowed.
+ *
+ * The panels are components, this is not — so the fallback messages are resolved
+ * here through `useI18n()` rather than handed down from six call sites.
  */
 export function useOrgCrud<TItem extends { id: string }, TForm extends object>(options: OrgCrudOptions<TForm>) {
+  const { t } = useI18n()
   const items = ref([]) as Ref<TItem[]>
   const loading = ref(true)
   const error = ref('')
@@ -46,7 +50,7 @@ export function useOrgCrud<TItem extends { id: string }, TForm extends object>(o
       items.value = await apiFetch<TItem[]>(options.collection())
     }
     catch (err) {
-      error.value = errorMessage(err, 'Laden fehlgeschlagen.')
+      error.value = errorMessage(err, t('companyPanels.crud.loadFailed'))
     }
     finally {
       loading.value = false
@@ -84,7 +88,7 @@ export function useOrgCrud<TItem extends { id: string }, TForm extends object>(o
       return result
     }
     catch (err) {
-      formError.value = errorMessage(err, opts.fallbackError ?? 'Speichern fehlgeschlagen.')
+      formError.value = errorMessage(err, opts.fallbackError ?? t('common.error.saveFailed'))
       return undefined
     }
     finally {
@@ -107,8 +111,8 @@ export function useOrgCrud<TItem extends { id: string }, TForm extends object>(o
     }
   }
 
-  const patch = (id: string, body: Record<string, unknown>) => rowRequest(id, 'PATCH', body, 'Ändern fehlgeschlagen.')
-  const remove = (id: string) => rowRequest(id, 'DELETE', undefined, 'Löschen fehlgeschlagen.')
+  const patch = (id: string, body: Record<string, unknown>) => rowRequest(id, 'PATCH', body, t('companyPanels.crud.patchFailed'))
+  const remove = (id: string) => rowRequest(id, 'DELETE', undefined, t('common.error.deleteFailed'))
 
   watch(options.collection, load, { immediate: true })
 

@@ -7,14 +7,16 @@ import { useOrgCrud } from '../../composables/useOrgCrud'
 // targets: the Operator ('ceo') and/or the org's delegation agents.
 const props = defineProps<{ orgId: string, agents: { id: string, role: string, label: string }[] }>()
 
+const { t } = useI18n()
+
 interface Skill { id: string, name: string, description: string, prompt: string, assignedTo: string[], updatedAt: number }
 
 // The Operator is a fixed target; the rest are the (non-Operator) delegation agents.
 const targetOptions = computed(() => [
-  { value: 'ceo', label: 'Operator' },
+  { value: 'ceo', label: t('common.role.ceo') },
   ...props.agents.filter(a => a.role !== 'ceo').map(a => ({ value: a.id, label: a.label })),
 ])
-const targetLabel = (t: string) => targetOptions.value.find(o => o.value === t)?.label ?? t
+const targetLabel = (target: string) => targetOptions.value.find(o => o.value === target)?.label ?? target
 
 interface SkillForm { name: string, description: string, prompt: string, assignedTo: string[] }
 
@@ -33,7 +35,10 @@ function toggleTarget(value: string) {
 }
 
 async function save() {
-  if (!form.name.trim()) { formError.value = 'Name nötig.'; return }
+  if (!form.name.trim()) {
+    formError.value = t('common.required', { field: t('companyPanels.field.name') })
+    return
+  }
   await submit({ name: form.name.trim(), description: form.description.trim(), prompt: form.prompt, assignedTo: form.assignedTo })
 }
 </script>
@@ -42,20 +47,20 @@ async function save() {
   <div>
     <div class="flex justify-between items-center mb-6">
       <p class="text-sm text-zinc-500">
-        Wiederverwendbare Prozeduren — ein zugeordneter Agent setzt sie ein, wenn eine Aufgabe passt.
+        {{ t('companyPanels.skills.intro') }}
       </p>
       <UButton color="primary" icon="i-lucide-plus" @click="openAdd">
-        Skill
+        {{ t('companyPanels.skills.addButton') }}
       </UButton>
     </div>
 
     <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
 
     <div v-if="loading" class="text-zinc-500 py-10 text-center">
-      Lädt …
+      {{ t('common.loading') }}
     </div>
     <div v-else-if="!items.length" class="text-zinc-600 italic py-10 text-center">
-      Noch kein Skill. Leg den ersten an — z. B. „monatsbericht: erstellt den Monatsbericht".
+      {{ t('companyPanels.skills.empty') }}
     </div>
     <div v-else class="space-y-2">
       <div
@@ -67,19 +72,19 @@ async function save() {
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm font-medium truncate">{{ s.name || '(ohne Name)' }}</span>
-              <UBadge v-for="t in s.assignedTo" :key="t" :color="t === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
-                {{ targetLabel(t) }}
+              <span class="text-sm font-medium truncate">{{ s.name || t('common.unnamed') }}</span>
+              <UBadge v-for="target in s.assignedTo" :key="target" :color="target === 'ceo' ? 'primary' : 'neutral'" variant="subtle" size="xs">
+                {{ targetLabel(target) }}
               </UBadge>
               <UBadge v-if="!s.assignedTo.length" color="warning" variant="subtle" size="xs">
-                niemandem zugeordnet
+                {{ t('common.unassigned') }}
               </UBadge>
             </div>
             <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
               {{ s.description }}
             </p>
           </div>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :loading="busy[s.id]" @click.stop="remove(s.id)" />
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :aria-label="t('common.remove')" :loading="busy[s.id]" @click.stop="remove(s.id)" />
         </div>
       </div>
     </div>
@@ -89,20 +94,20 @@ async function save() {
         <div class="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div class="flex items-start justify-between">
             <h3 class="text-lg font-semibold">
-              {{ editingId ? 'Skill bearbeiten' : 'Skill hinzufügen' }}
+              {{ editingId ? t('companyPanels.skills.form.titleEdit') : t('companyPanels.skills.form.titleNew') }}
             </h3>
-            <UButton variant="ghost" size="sm" icon="i-lucide-x" @click="showForm = false" />
+            <UButton variant="ghost" size="sm" icon="i-lucide-x" :aria-label="t('common.close')" @click="showForm = false" />
           </div>
-          <UFormField label="Name" description="Kurzer Bezeichner.">
-            <UInput v-model="form.name" placeholder="monatsbericht" class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="t('companyPanels.field.name')" :description="t('common.field.shortIdHint')">
+            <UInput v-model="form.name" :placeholder="t('companyPanels.skills.field.name.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Beschreibung" description="Wofür/wann — der Agent wählt den Skill darüber aus.">
-            <UInput v-model="form.description" placeholder="Erstellt den Monatsbericht aus den Zahlen." class="w-full" :ui="{ base: 'w-full' }" />
+          <UFormField :label="t('companyPanels.skills.field.description.label')" :description="t('companyPanels.skills.field.description.description')">
+            <UInput v-model="form.description" :placeholder="t('companyPanels.skills.field.description.placeholder')" class="w-full" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Anweisung (prompt)" description="Der Agent bekommt genau diesen Text und befolgt ihn.">
-            <UTextarea v-model="form.prompt" :rows="10" placeholder="## Schritte&#10;1. …" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
+          <UFormField :label="t('common.field.promptLabel')" :description="t('companyPanels.skills.field.prompt.description')">
+            <UTextarea v-model="form.prompt" :rows="10" :placeholder="t('companyPanels.skills.field.prompt.placeholder')" class="w-full font-mono text-xs" :ui="{ base: 'w-full' }" />
           </UFormField>
-          <UFormField label="Zugeordnet an" description="Wer diesen Skill einsetzen darf.">
+          <UFormField :label="t('companyPanels.skills.field.assignedTo.label')" :description="t('companyPanels.skills.field.assignedTo.description')">
             <div class="flex flex-wrap gap-3 pt-1">
               <label v-for="o in targetOptions" :key="o.value" class="flex items-center gap-2 cursor-pointer text-sm">
                 <UCheckbox :model-value="form.assignedTo.includes(o.value)" @update:model-value="toggleTarget(o.value)" />
@@ -113,10 +118,10 @@ async function save() {
           <UAlert v-if="formError" color="error" variant="subtle" :title="formError" />
           <div class="flex justify-end gap-2 pt-2">
             <UButton color="neutral" variant="ghost" @click="showForm = false">
-              Abbrechen
+              {{ t('common.cancel') }}
             </UButton>
             <UButton color="primary" :loading="saving" @click="save">
-              {{ editingId ? 'Speichern' : 'Hinzufügen' }}
+              {{ editingId ? t('common.save') : t('common.add') }}
             </UButton>
           </div>
         </div>
