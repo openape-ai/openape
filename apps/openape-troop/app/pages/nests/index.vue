@@ -86,90 +86,93 @@ watch(user, (u) => { if (u) load() }, { immediate: true })
     </header>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-8 py-8">
-      <h2 class="text-2xl font-bold mb-1">
-        Nests
-      </h2>
-      <p class="text-zinc-400 mb-6">
-        Ihre Geräte — klicken Sie ein Nest an, um Infos und die dort laufenden Agents zu sehen.
-      </p>
-
-      <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
-
-      <p v-if="loading" class="text-zinc-500 py-12 text-center">
-        Lädt …
-      </p>
-
-      <div v-else-if="!mergedNests.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
-        <div class="text-5xl">
-          🪺
-        </div>
-        <h3 class="text-lg font-medium">
-          Noch kein Nest verbunden
-        </h3>
-        <p class="text-sm text-zinc-400 max-w-md mx-auto">
-          Starten Sie den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen.
+      <InlineLogin v-if="!user" hint="Melde dich an, um deine Nests zu sehen." />
+      <template v-else>
+        <h2 class="text-2xl font-bold mb-1">
+          Nests
+        </h2>
+        <p class="text-zinc-400 mb-6">
+          Ihre Geräte — klicken Sie ein Nest an, um Infos und die dort laufenden Agents zu sehen.
         </p>
-      </div>
 
-      <ul v-else class="space-y-3">
-        <li v-for="n in mergedNests" :key="n.host_id">
-          <NuxtLink
-            :to="`/nests/${encodeURIComponent(n.host_id)}`"
-            class="block rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 hover:bg-zinc-900 transition-colors"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex items-center gap-3 min-w-0">
-                <UIcon name="i-lucide-server" class="size-5 text-zinc-500 shrink-0" />
-                <div class="min-w-0">
-                  <h3 class="text-lg font-semibold truncate">
-                    {{ n.display_name }}
-                  </h3>
-                  <p class="text-xs font-mono text-zinc-600 truncate">
-                    {{ n.host_id }}
-                  </p>
+        <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mb-4" />
+
+        <p v-if="loading" class="text-zinc-500 py-12 text-center">
+          Lädt …
+        </p>
+
+        <div v-else-if="!mergedNests.length" class="rounded-xl border border-dashed border-zinc-700 py-12 text-center space-y-3">
+          <div class="text-5xl">
+            🪺
+          </div>
+          <h3 class="text-lg font-medium">
+            Noch kein Nest verbunden
+          </h3>
+          <p class="text-sm text-zinc-400 max-w-md mx-auto">
+            Starten Sie den Nest-Daemon auf einem Gerät, um Agents dort laufen zu lassen.
+          </p>
+        </div>
+
+        <ul v-else class="space-y-3">
+          <li v-for="n in mergedNests" :key="n.host_id">
+            <NuxtLink
+              :to="`/nests/${encodeURIComponent(n.host_id)}`"
+              class="block rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 hover:bg-zinc-900 transition-colors"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                  <UIcon name="i-lucide-server" class="size-5 text-zinc-500 shrink-0" />
+                  <div class="min-w-0">
+                    <h3 class="text-lg font-semibold truncate">
+                      {{ n.display_name }}
+                    </h3>
+                    <p class="text-xs font-mono text-zinc-600 truncate">
+                      {{ n.host_id }}
+                    </p>
+                  </div>
                 </div>
+                <UIcon name="i-lucide-chevron-right" class="text-zinc-500 shrink-0 size-5 mt-1" />
               </div>
-              <UIcon name="i-lucide-chevron-right" class="text-zinc-500 shrink-0 size-5 mt-1" />
-            </div>
-            <dl class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs max-w-xl">
-              <div>
-                <dt class="text-zinc-500">
-                  Status
-                </dt>
-                <dd>
-                  <UBadge :color="n.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
-                    {{ n.status }}
-                  </UBadge>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-zinc-500">
-                  IP
-                </dt>
-                <dd class="font-mono">
-                  {{ n.last_ip || '—' }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-zinc-500">
-                  Agents
-                </dt>
-                <dd class="font-medium">
-                  {{ n.agentCount }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-zinc-500">
-                  Zuletzt
-                </dt>
-                <dd class="font-medium">
-                  {{ lastSeen(n.last_seen_at) }}
-                </dd>
-              </div>
-            </dl>
-          </NuxtLink>
-        </li>
-      </ul>
+              <dl class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs max-w-xl">
+                <div>
+                  <dt class="text-zinc-500">
+                    Status
+                  </dt>
+                  <dd>
+                    <UBadge :color="n.status === 'active' ? 'success' : 'neutral'" variant="subtle" size="xs">
+                      {{ n.status }}
+                    </UBadge>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-zinc-500">
+                    IP
+                  </dt>
+                  <dd class="font-mono">
+                    {{ n.last_ip || '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-zinc-500">
+                    Agents
+                  </dt>
+                  <dd class="font-medium">
+                    {{ n.agentCount }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-zinc-500">
+                    Zuletzt
+                  </dt>
+                  <dd class="font-medium">
+                    {{ lastSeen(n.last_seen_at) }}
+                  </dd>
+                </div>
+              </dl>
+            </NuxtLink>
+          </li>
+        </ul>
+      </template>
     </main>
   </div>
 </template>

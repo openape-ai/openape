@@ -30,7 +30,7 @@ const policies = computed(() => policiesFromEvents(data.value.events))
           Regeln
         </h1>
       </div>
-      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" @click="logout" />
+      <UButton v-if="user" color="neutral" variant="ghost" size="sm" icon="i-lucide-log-out" aria-label="Abmelden" @click="logout" />
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-8 py-8">
