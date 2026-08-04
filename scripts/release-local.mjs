@@ -31,11 +31,11 @@ import { resolve } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname
 
-const RED = '\x1b[31m'
-const GREEN = '\x1b[32m'
-const CYAN = '\x1b[36m'
-const DIM = '\x1b[2m'
-const RESET = '\x1b[0m'
+const RED = '\x1B[31m'
+const GREEN = '\x1B[32m'
+const CYAN = '\x1B[36m'
+const DIM = '\x1B[2m'
+const RESET = '\x1B[0m'
 
 function run(cmd, args, opts = {}) {
   console.log(`${DIM}$ ${cmd} ${args.join(' ')}${RESET}`)
