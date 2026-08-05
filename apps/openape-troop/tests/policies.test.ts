@@ -1,15 +1,20 @@
 // @vitest-environment happy-dom
 import type { WireEvent } from '../app/utils/attention-inbox'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import PolicyList from '../app/components/PolicyList.vue'
+import { useDateFormat } from '../app/composables/useDateFormat'
 import { policiesFromEvents } from '../app/utils/policies'
 import de from '../i18n/locales/de.json'
 
 // The list renders the shipped German catalog, so the assertions stay on the
 // strings a user sees.
 const i18n = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de } })
+
+// useDateFormat is a Nuxt auto-import and reaches for useI18n as a global.
+vi.stubGlobal('useI18n', () => i18n.global)
+vi.stubGlobal('useDateFormat', useDateFormat)
 
 const global = { plugins: [i18n], stubs: { NuxtLink: { template: '<a><slot /></a>' } } }
 
@@ -87,6 +92,16 @@ describe('policy list', () => {
     expect(text).toContain('Ein Screenshot ist ein Blick, kein Test.')
     expect(text).toContain('.claude/CLAUDE.md')
     expect(text).toContain('aus dieser Entscheidung')
+  })
+
+  // The intro on /policies promises origin, date and place. 12:00 UTC so the
+  // calendar day is the same in every timezone a runner might sit in.
+  it('shows the date the rule was adopted', () => {
+    const noon = Math.floor(Date.UTC(2026, 7, 4, 12, 0) / 1000)
+    const policies = policiesFromEvents([policyEvent('policy.adopted', 'Geometrie in den Browser-Modus', noon)])
+    const card = mount(PolicyList, { props: { policies }, global })
+    expect(card.text()).toContain('04.08.2026')
+    expect(card.find('time').attributes('datetime')).toBe('2026-08-04T12:00:00.000Z')
   })
 
   it('marks a proposal as not yet binding', () => {

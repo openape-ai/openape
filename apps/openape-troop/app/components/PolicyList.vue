@@ -5,6 +5,8 @@ import type { Policy } from '../utils/policies'
 // policy is never anonymous: it has an origin, a date and a place where it
 // actually binds.
 defineProps<{ policies: Policy[] }>()
+
+const { fmtDate } = useDateFormat()
 </script>
 
 <template>
@@ -28,6 +30,7 @@ defineProps<{ policies: Policy[] }>()
       </p>
       <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-zinc-400">
         <span>{{ p.actor }}</span>
+        <time :datetime="new Date(p.ts * 1000).toISOString()">{{ fmtDate(p.ts) }}</time>
         <span v-if="p.enforcedIn" class="font-mono">{{ p.enforcedIn }}</span>
         <NuxtLink v-if="p.sourceId" :to="`/c/${p.sourceId}`" class="underline hover:text-zinc-300">
           {{ $t('policies.source') }}
