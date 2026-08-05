@@ -29,8 +29,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
-    "@vitest/browser": "^4.1.10",
-    "@vitest/browser-playwright": "^4.1.10",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
     "openape-e2e": "workspace:*",
     "playwright": "catalog:",
