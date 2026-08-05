@@ -94,3 +94,20 @@ describe('cockpit file store', () => {
     expect(pushToOwner).toHaveBeenCalledTimes(1)
   })
 })
+
+// The push body quotes the answer. An answer that is only files has no text to
+// quote, so the file names stand in — they are data, so no language is picked.
+describe('cockpit chat push body', () => {
+  it('names the files when the answer carries no text', async () => {
+    vi.mocked(pushToOwner).mockClear()
+    await useDb().insert(organizations).values({ id: 'push-org', ownerEmail: 'push@x', name: 'Acme', visionMd: '', budgetMonthlyEur: 0, vars: {}, createdAt: Date.now(), updatedAt: Date.now() })
+    await saveChatMessage('push-org', 'push@x', 'assistant', '', undefined, [{ id: 'f1', mime: 'application/pdf', name: 'report.pdf' }])
+    expect(vi.mocked(pushToOwner).mock.calls[0]![1]).toMatchObject({ body: 'Troop-Chat · report.pdf' })
+  })
+
+  it('still quotes the text when there is one', async () => {
+    vi.mocked(pushToOwner).mockClear()
+    await saveChatMessage('push-org', 'push@x', 'assistant', 'Hier ist die Zusammenfassung.')
+    expect(vi.mocked(pushToOwner).mock.calls[0]![1]).toMatchObject({ body: 'Troop-Chat · Hier ist die Zusammenfassung.' })
+  })
+})

@@ -79,7 +79,7 @@ export function useCockpitChat() {
 
   // The answer is persisted on the server; if the live stream drops or the Operator
   // is asleep, poll for it instead of showing a dead-end error.
-  async function pollForAnswer(companyId: string, sinceMs: number): Promise<string | null> {
+  async function pollForAnswer(companyId: string, sinceMs: number): Promise<ServerMsg | null> {
     const deadline = Date.now() + POLL_MAX_MS
     // eslint-disable-next-line no-unmodified-loop-condition -- pollAbort is flipped by stop()/selectCompany
     while (Date.now() < deadline && !pollAbort) {
@@ -87,8 +87,10 @@ export function useCockpitChat() {
       if (pollAbort) break
       try {
         const rows = await $fetch<ServerMsg[]>('/api/cockpit/messages', { query: { company: companyId, since: sinceMs } })
+        // The row, not its text: an answer that is only files has empty
+        // content, and returning that would read as "still no answer".
         const ans = rows.find(m => m.role === 'assistant')
-        if (ans) return ans.content
+        if (ans) return ans
       }
       catch { /* transient — keep polling */ }
     }
@@ -187,7 +189,12 @@ export function useCockpitChat() {
         if (taskId) await reattachProgress(taskId, assistant)
         if (!assistant.content.trim() && !pollAbort) {
           const ans = await pollForAnswer(companyId, sinceMs)
-          if (ans) { assistant.content = ans; assistant.system = undefined; assistant.waiting = undefined }
+          if (ans) {
+            assistant.content = ans.content
+            assistant.files = ans.files?.length ? ans.files : undefined
+            assistant.system = undefined
+            assistant.waiting = undefined
+          }
           else if (!assistant.system) {
             assistant.system = t('cockpit.chat.answerPending')
           }
@@ -228,8 +235,11 @@ export function useCockpitChat() {
       await reattachProgress(ask.taskId, assistant)
       if (!assistant.content.trim() && !pollAbort) {
         const ans = await pollForAnswer(currentCompanyId.value, Date.now() - 1000)
-        if (ans) assistant.content = ans
-        else if (!assistant.system) assistant.system = t('cockpit.chat.answerPending')
+        if (ans) {
+          assistant.content = ans.content
+          assistant.files = ans.files?.length ? ans.files : undefined
+        }
+        else if (!assistant.system) { assistant.system = t('cockpit.chat.answerPending') }
       }
     }
     catch (error) {
