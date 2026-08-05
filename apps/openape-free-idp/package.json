@@ -41,7 +41,7 @@
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
-    "happy-dom": "^20.0.0",
+    "happy-dom": "catalog:",
     "openape-e2e": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:",
