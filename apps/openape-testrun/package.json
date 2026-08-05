@@ -12,7 +12,8 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "postinstall": "nuxt prepare",
-    "guide": "tsx scripts/capture-guide.ts"
+    "guide": "tsx scripts/capture-guide.ts",
+    "test:layout": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.114",
@@ -27,8 +28,13 @@
     "ulid": "^2.4.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/browser": "^4.1.9",
+    "@vitest/browser-playwright": "^4.1.9",
+    "@vue/test-utils": "^2.4.6",
     "openape-e2e": "workspace:*",
+    "playwright": "1.62.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.9"
   }
 }
