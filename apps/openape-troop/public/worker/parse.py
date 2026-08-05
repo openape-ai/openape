@@ -33,7 +33,10 @@ open(os.path.join(outdir, "org.txt"), "w").write(org if isinstance(org, str) els
 allowed = meta.get("allowedTools")
 allowed_path = os.path.join(outdir, "allowed.txt")
 if isinstance(allowed, list):
-    open(allowed_path, "w").write("\n".join(x for x in allowed if isinstance(x, str)))
+    allowed_str = "\n".join(x for x in allowed if isinstance(x, str))
+    open(allowed_path, "w").write(allowed_str)
+    # The worker's execution backend consumes the same task-scoped list.
+    open(os.path.join(outdir, "tools.txt"), "w").write(allowed_str)
 elif os.path.exists(allowed_path):
     os.remove(allowed_path)
 print(t["id"])
