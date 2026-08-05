@@ -12,16 +12,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "catalog:",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "nuxt": "^4.4.8",
-    "tailwindcss": "^4.3.1"
+    "nuxt": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0",
-    "typescript": "^5.9.3"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

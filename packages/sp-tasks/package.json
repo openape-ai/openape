@@ -48,12 +48,12 @@
     }
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@libsql/client": "^0.17.4",
     "@types/node": "catalog:",
-    "h3": "^1.15.11",
+    "h3": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

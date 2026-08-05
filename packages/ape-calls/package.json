@@ -24,9 +24,9 @@
     "citty": "^0.1.6"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "engines": {

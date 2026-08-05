@@ -13,29 +13,29 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.114",
+    "@iconify-json/lucide": "catalog:",
     "@libsql/client": "^0.17.4",
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "catalog:",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "@vite-pwa/nuxt": "^1.1.1",
-    "drizzle-orm": "^0.45.2",
+    "@vite-pwa/nuxt": "catalog:",
+    "drizzle-orm": "catalog:",
     "jose": "catalog:",
-    "marked": "^18.0.5",
-    "nuxt": "^4.4.8",
-    "tailwindcss": "^4.3.1",
-    "web-push": "^3.6.7",
-    "zod": "^4.4.3"
+    "marked": "catalog:",
+    "nuxt": "catalog:",
+    "tailwindcss": "catalog:",
+    "web-push": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0",
-    "@types/web-push": "^3.6.4",
-    "@vitejs/plugin-vue": "^6.0.1",
-    "@vitest/coverage-istanbul": "^4.1.9",
-    "@vue/test-utils": "^2.4.6",
-    "h3": "^1.15.11",
+    "@types/node": "catalog:",
+    "@types/web-push": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "h3": "catalog:",
     "happy-dom": "^20.0.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -35,13 +35,13 @@
     "@openape/cli-auth": "workspace:*",
     "citty": "^0.2.2",
     "jose": "catalog:",
-    "ws": "^8.21.0"
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "^8.18.1",
-    "eslint": "^9.39.4",
+    "@types/ws": "catalog:",
+    "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:"
   },
