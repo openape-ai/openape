@@ -18,31 +18,31 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@iconify-json/lucide": "^1.2.114",
+    "@iconify-json/lucide": "catalog:",
     "@iconify-json/simple-icons": "^1.2.87",
     "@iconify-json/vscode-icons": "^1.2.62",
     "@libsql/client": "^0.17.4",
     "@nuxt/content": "^3.14.0",
     "@nuxt/image": "^2.0.0",
-    "@nuxt/ui": "^4.9.0",
+    "@nuxt/ui": "catalog:",
     "@nuxtjs/mcp-toolkit": "^0.16.1",
     "@nuxtjs/mdc": "^0.22.0",
     "@vueuse/core": "^14.3.0",
-    "h3": "^1.15.11",
+    "h3": "catalog:",
     "minimark": "^0.2.0",
-    "nuxt": "^4.4.8",
+    "nuxt": "catalog:",
     "nuxt-llms": "0.2.0",
     "nuxt-og-image": "^6.7.0",
     "satori": "^0.26.0",
-    "tailwindcss": "^4.3.1",
+    "tailwindcss": "catalog:",
     "ufo": "^1.6.4",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9",
-    "vue-tsc": "^3.3.5"
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:"
   },
   "author": "Patrick Hofmann",
   "engines": {

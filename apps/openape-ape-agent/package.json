@@ -43,15 +43,15 @@
     "@openape/prompt-injection-detector": "workspace:*",
     "@openape/sp-tasks": "workspace:*",
     "jose": "catalog:",
-    "ofetch": "^1.5.1",
-    "ws": "^8.21.0",
-    "yaml": "^2.9.0"
+    "ofetch": "catalog:",
+    "ws": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "^8.18.1",
-    "eslint": "^9.39.4",
+    "@types/ws": "catalog:",
+    "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -35,13 +35,13 @@
     "test": "vitest run --no-coverage"
   },
   "dependencies": {
-    "ofetch": "^1.5.1"
+    "ofetch": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^25.9.4",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=20"
