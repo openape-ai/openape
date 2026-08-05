@@ -32,16 +32,16 @@
   "dependencies": {
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
-    "consola": "^3.4.2",
-    "shell-quote": "^1.9.0"
+    "consola": "catalog:",
+    "shell-quote": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/shell-quote": "^1.7.5",
-    "@vitest/coverage-istanbul": "^4.1.9",
-    "h3": "^1.15.11",
+    "@types/shell-quote": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "h3": "catalog:",
     "tsup": "catalog:",
-    "typescript": "^5.9.3",
+    "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "engines": {

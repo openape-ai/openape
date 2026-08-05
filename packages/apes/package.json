@@ -39,19 +39,19 @@
     "@openape/proxy": "workspace:*",
     "@openape/shapes": "workspace:*",
     "citty": "^0.2.2",
-    "consola": "^3.4.2",
+    "consola": "catalog:",
     "giget": "^2.0.0",
-    "shell-quote": "^1.9.0",
-    "zod": "^4.4.3"
+    "shell-quote": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^25.9.4",
-    "@types/shell-quote": "^1.7.5",
-    "@vitest/coverage-istanbul": "^4.1.9",
+    "@types/node": "catalog:",
+    "@types/shell-quote": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
     "openape-e2e": "workspace:*",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "license": "MIT",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>",

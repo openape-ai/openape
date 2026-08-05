@@ -33,32 +33,32 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@nuxt/kit": "^4.4.8",
+    "@nuxt/kit": "catalog:",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@simplewebauthn/browser": "^13.3.0",
-    "defu": "^6.1.7",
-    "jose": "^5.10.0"
+    "defu": "catalog:",
+    "jose": "catalog:"
   },
   "peerDependencies": {
     "h3": "^1.15.11",
     "nuxt": "^4.0.0"
   },
   "devDependencies": {
-    "@nuxt/module-builder": "^1.0.2",
-    "@nuxt/ui": "^4.9.0",
-    "@types/node": "^22.20.0",
-    "@vitejs/plugin-vue": "^6.0.7",
-    "@vue/test-utils": "^2.4.11",
-    "h3": "^1.15.11",
+    "@nuxt/module-builder": "catalog:",
+    "@nuxt/ui": "catalog:",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "h3": "catalog:",
     "happy-dom": "^18.0.1",
-    "nuxt": "^4.4.8",
-    "tailwindcss": "^4.3.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9",
-    "vue": "^3.5.39",
-    "vue-tsc": "^3.3.5"
+    "nuxt": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:",
+    "vue-tsc": "catalog:"
   },
   "engines": {
     "node": ">=22"

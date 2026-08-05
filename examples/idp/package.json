@@ -12,15 +12,15 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@nuxt/ui": "4.7.1",
+    "@nuxt/ui": "catalog:",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/unstorage-s3-driver": "workspace:*",
-    "aws4fetch": "^1.0.20",
-    "nuxt": "^4.4.8",
-    "tailwindcss": "^4.3.1"
+    "aws4fetch": "catalog:",
+    "nuxt": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0",
-    "typescript": "^5.9.3"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

@@ -24,13 +24,13 @@
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
     "citty": "^0.2.2",
-    "consola": "^3.4.2"
+    "consola": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^25.9.4",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "license": "MIT",
   "author": "Patrick Hofmann <phofmann@delta-mind.at>",
