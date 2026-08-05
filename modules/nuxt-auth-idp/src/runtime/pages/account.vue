@@ -30,16 +30,20 @@ onMounted(async () => {
       Loading…
     </div>
 
-    <ul v-else class="space-y-3">
-      <li v-for="s in sections" :key="s.to">
-        <UButton :to="s.to" color="neutral" variant="soft" block class="justify-start" size="lg">
-          <UIcon :name="s.icon" class="size-5 shrink-0" />
-          <span class="text-left">
-            <span class="block font-medium">{{ s.title }}</span>
-            <span class="block text-xs text-muted">{{ s.desc }}</span>
-          </span>
-        </UButton>
-      </li>
-    </ul>
+    <template v-else>
+      <ul class="space-y-3">
+        <li v-for="s in sections" :key="s.to">
+          <UButton :to="s.to" color="neutral" variant="soft" block class="justify-start" size="lg">
+            <UIcon :name="s.icon" class="size-5 shrink-0" />
+            <span class="text-left">
+              <span class="block font-medium">{{ s.title }}</span>
+              <span class="block text-xs text-muted">{{ s.desc }}</span>
+            </span>
+          </UButton>
+        </li>
+      </ul>
+
+      <IdpSessionTransfer class="mt-6" />
+    </template>
   </IdpPage>
 </template>
