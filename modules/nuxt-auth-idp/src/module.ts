@@ -264,6 +264,8 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/logout', method: 'post', handler: resolve('./runtime/server/api/logout.post') })
       addServerHandler({ route: '/api/session/login', method: 'post', handler: resolve('./runtime/server/api/session/login.post') })
       addServerHandler({ route: '/api/session/logout', method: 'post', handler: resolve('./runtime/server/api/session/logout.post') })
+      addServerHandler({ route: '/api/session/transfer', method: 'post', handler: resolve('./runtime/server/api/session/transfer.post') })
+      addServerHandler({ route: '/api/session/transfer/:token', method: 'get', handler: resolve('./runtime/server/api/session/transfer/[token].get') })
       addServerHandler({ route: '/api/session/ssh-keys', handler: resolve('./runtime/server/api/session/ssh-keys.get') })
       addServerHandler({ route: '/api/session/ssh-keys', method: 'post', handler: resolve('./runtime/server/api/session/ssh-keys.post') })
       addServerHandler({ route: '/api/session/ssh-keys/:keyId', method: 'delete', handler: resolve('./runtime/server/api/session/ssh-keys/[keyId].delete') })
