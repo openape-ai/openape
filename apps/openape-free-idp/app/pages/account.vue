@@ -70,6 +70,8 @@ onMounted(async () => {
           </li>
         </ul>
       </section>
+
+      <IdpSessionTransfer />
     </div>
   </IdpPage>
 </template>
