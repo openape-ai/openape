@@ -1,2 +1,7 @@
 .vercel
 .env*.local
+
+# docs run artefacts
+.test2docs/
+test-results/
+tests/docs/.auth/
