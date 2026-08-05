@@ -1,0 +1,12 @@
+{
+  "title": "OpenApe Plans — Manual",
+  "description": "Plan together: teams, plans, and the people you share them with.",
+  "lang": "en",
+  "inDir": ".test2docs",
+  "outDir": "docs/manual",
+  "viewport": { "width": 1280, "height": 800 },
+  "groups": [
+    { "title": "Getting started", "categories": ["teams"] },
+    { "title": "Plans", "categories": ["plans"] }
+  ]
+}
