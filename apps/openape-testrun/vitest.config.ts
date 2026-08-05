@@ -7,16 +7,9 @@ export default defineConfig({
     retry: 2,
     testTimeout: 15000,
     include: ['tests/**/*.test.ts'],
+    // tests/layout/ needs a real browser and runs from vitest.browser.config.ts.
+    exclude: ['tests/layout/**'],
     globals: true,
     environment: 'node',
-  },
-  esbuild: {
-    tsconfigRaw: {
-      compilerOptions: {
-        target: 'ES2022',
-        module: 'ESNext',
-        moduleResolution: 'Bundler',
-      },
-    },
   },
 })
