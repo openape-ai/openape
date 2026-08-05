@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
   const [skill] = await useDb().select().from(cockpitSkills).where(and(eq(cockpitSkills.id, id), eq(cockpitSkills.ownerEmail, agent)))
+  if (skill && !skill.assignedTo.includes(agent) && !skill.assignedTo.includes('ceo')) throw createError({ statusCode: 404, statusMessage: 'unknown skill' })
   if (!skill) throw createError({ statusCode: 404, statusMessage: 'unknown skill' })
   return { id: skill.id, name: skill.name, prompt: skill.prompt }
 })
