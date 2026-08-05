@@ -96,7 +96,15 @@ export function useCockpitChat() {
     while (Date.now() < deadline && !pollAbort) {
       let task: { state: string, progress: string[], answer: string }
       try { task = await apiFetch(`/api/cockpit/tasks/${taskId}/progress`) }
-      catch { return } // 404 (task gone) or transient → caller falls back to messages poll
+      catch (error) {
+        // Only a 404 means the task left memory — then the caller falls back to
+        // the messages poll. A 5xx or a dropped connection is transient: the task
+        // still runs, so keep re-attaching until the window closes.
+        if ((error as { statusCode?: number })?.statusCode === 404) return
+        console.warn('[cockpit] reading task progress failed — retrying', error)
+        await sleep(POLL_EVERY_MS)
+        continue
+      }
       assistant.thoughts = [...task.progress]
       assistant.waiting = assistant.waiting ?? t('cockpit.chat.reconnecting')
       if (task.state === 'completed' || task.state === 'failed') {
