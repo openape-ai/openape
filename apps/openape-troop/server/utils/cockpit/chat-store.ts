@@ -18,11 +18,11 @@ export async function saveChatMessage(orgId: string, owner: string, role: ChatRo
   const db = useDb()
   const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, meta: meta ?? null, files: files?.length ? files : null, createdAt: Date.now() }
   await db.insert(cockpitChatMessages).values(row)
-  await notifyAssistant(orgId, owner, role, content, meta)
+  await notifyAssistant(orgId, owner, role, content, meta, files)
   return row
 }
 
-async function notifyAssistant(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta) {
+async function notifyAssistant(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta, files?: { id: string, mime: string, name: string }[]) {
   // A Operator answer → notify the owner's installed PWA / browsers (fire-and-forget,
   // never blocks or fails the save). The SW suppresses it if a tab is focused.
   //
@@ -33,7 +33,10 @@ async function notifyAssistant(orgId: string, owner: string, role: ChatRole, con
   if (role === 'assistant' && !meta?.progress) {
     const org = await useDb().select({ name: organizations.name }).from(organizations).where(and(eq(organizations.id, orgId), eq(organizations.ownerEmail, owner))).get()
     const orgName = org?.name ?? orgId
-    void pushToOwner(owner, { title: orgName, body: `Troop-Chat · ${content.slice(0, 120)}`, url: '/chat' }).catch(() => {})
+    // An answer that is only files has no text to quote — the file names say
+    // more than an empty line, and they are data, so no locale is involved.
+    const summary = content.slice(0, 120) || (files ?? []).map(f => f.name).join(', ').slice(0, 120)
+    void pushToOwner(owner, { title: orgName, body: `Troop-Chat · ${summary}`, url: '/chat' }).catch(() => {})
   }
 }
 
