@@ -605,6 +605,13 @@
     },
     "chat": {
       "attachmentOnly": "(Attachment)",
+      "stream": {
+        "operator": {
+          "asleep": "💤 Operator asleep",
+          "takingOver": "🧠 Your Operator is taking over …"
+        }
+      },
+      "streamFallback": "🧠 Your Operator is working …",
       "reconnecting": "Connection lost — reconnecting …",
       "answerPending": "The answer arrives as soon as the Operator is done — it will be waiting the next time you open the chat.",
       "answerFallback": "Answering “{question}”: {choice}",

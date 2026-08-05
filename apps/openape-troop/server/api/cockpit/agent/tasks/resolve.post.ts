@@ -49,7 +49,9 @@ export default defineEventHandler(async (event) => {
   }
   // Persist the assistant turn for both outcomes: a completed answer, or a failed
   // task's honest notice — so a failure leaves a visible message instead of silence.
-  if ((state === 'completed' || state === 'failed') && task && task.owner === agent && (text.trim() || files.length)) await saveChatMessage(task.company, task.owner, 'assistant', text.trim() || '(Anhang)', undefined, files)
+  // An answer that is only files is stored with empty text — the client renders
+  // the attachment placeholder in the reader's language.
+  if ((state === 'completed' || state === 'failed') && task && task.owner === agent && (text.trim() || files.length)) await saveChatMessage(task.company, task.owner, 'assistant', text.trim(), undefined, files)
   // Task is terminal → drop its durability row so it isn't re-run after a restart.
   if (state === 'completed' || state === 'failed') void removeTask(id).catch(err => console.error('[task-store] remove', err))
   return { ok: true }

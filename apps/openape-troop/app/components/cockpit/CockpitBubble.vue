@@ -62,10 +62,14 @@ function onCopyClick(e: MouseEvent): void {
         <span class="think-dot" />
         <span class="thought">{{ latestThought }}</span>
       </div>
+      <div v-else-if="message.files?.length" class="plain">
+        {{ $t('cockpit.chat.attachmentOnly') }}
+      </div>
       <span v-else-if="message.streaming" class="typing" :aria-label="$t('cockpit.bubble.typing')"><i /><i /><i /></span>
     </template>
     <div v-else class="plain">
-      {{ message.content }}
+      <!-- Attachment-only turns are stored without text; the label belongs to the reader's language. -->
+      {{ message.content || (message.files?.length ? $t('cockpit.chat.attachmentOnly') : '') }}
     </div>
     <div v-if="message.files?.length" class="bubble-files">
       <template v-for="f in message.files" :key="f.id">
