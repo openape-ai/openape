@@ -4,6 +4,7 @@ import { cockpitAgents } from '../../../../../database/schema'
 import { requireOwnedOrg } from '../../../../../utils/cockpit/org-access'
 import { scoreProcedure } from '../../../../../utils/cockpit/procedure-score'
 import { assertVars } from '../../../../../utils/cockpit/vars'
+import { validateTools } from '../../../../../utils/task-validation'
 
 // Edit a delegation leaf. Any subset of role/label/duties/procedure/vars/tools/
 // reportsTo/enabled. `procedure` is the instruction a subagent executes, not data
@@ -27,7 +28,11 @@ export default defineEventHandler(async (event) => {
     patch.injectionReason = reason
   }
   if ('vars' in (body ?? {})) patch.vars = assertVars(body.vars)
-  if (Array.isArray(body?.tools)) patch.tools = body.tools.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim())
+  if ('tools' in (body ?? {})) {
+    const checkedTools = validateTools(body?.tools ?? [])
+    if (!checkedTools.ok) throw createError({ statusCode: 400, statusMessage: checkedTools.reason })
+    patch.tools = checkedTools.tools
+  }
   if ('reportsTo' in (body ?? {})) patch.reportsTo = body.reportsTo ?? null
   if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
   if (Object.keys(patch).length === 0) throw createError({ statusCode: 400, statusMessage: 'no fields' })

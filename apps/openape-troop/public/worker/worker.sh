@@ -535,7 +535,8 @@ print((json.load(open(os.path.expanduser("~/.config/openape-worker/operators.jso
           answer "$S" "$id" cockpit 1 "" ""
         fi
       else
-        answer "$S" "$id" cockpit 1 "Task Bash" "--dangerously-skip-permissions"
+        allow=$(cat "$S/allowed.txt" 2>/dev/null || true)
+        answer "$S" "$id" cockpit 1 "$allow" "--dangerously-skip-permissions"
       fi
     done
     [ "$worked" -eq 0 ] && sleep 1

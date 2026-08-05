@@ -1,6 +1,6 @@
 import catalog from '../tool-catalog.json'
 
-const KNOWN_TOOLS = new Set<string>(catalog.tools.map((t: { name: string }) => t.name))
+export const KNOWN_TOOLS = new Set<string>(catalog.tools.map((t: { name: string }) => t.name))
 
 // Tiny cron-syntax subset that the apes-runtime's cron runner inside the
 // bridge daemon can evaluate. We accept the 95% — every other syntax
