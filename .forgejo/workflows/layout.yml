@@ -7,7 +7,14 @@ name: layout
 # If the mac runner is offline the job queues — ci/e2e are unaffected.
 # Runs on every PR, not just UI ones: a required check that is path-filtered
 # never reports on the PRs it skips, and a missing required check blocks the
-# merge forever. The whole job costs ~13 s (10 s install, 3 s tests).
+# merge forever. The whole job costs ~15 s (10 s install, 5 s tests).
+#
+# One step per package, on purpose. `pnpm --filter a --filter b test:layout`
+# runs whichever of them has the script and says nothing about the rest —
+# pnpm-workspace.yaml sets no `requiredScripts`, so a package that loses its
+# `test:layout` would leave this check green while testing nothing. A filter
+# that selects a single package without the script fails with
+# ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT instead, which is the point.
 on:
   pull_request:
 
@@ -24,3 +31,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Layout tests (troop)
         run: pnpm --filter @openape/troop test:layout
+      # The login card is embedded on hosts that ship no CSS of their own, so
+      # its geometry has to survive a bare page.
+      - name: Layout tests (nuxt-auth-sp)
+        run: pnpm --filter @openape/nuxt-auth-sp test:layout
+      # The public report page: the screenshot frame and the markdown blocks
+      # are the app's only geometry written as CSS rather than utilities.
+      - name: Layout tests (testrun)
+        run: pnpm --filter @openape-testrun/app test:layout
