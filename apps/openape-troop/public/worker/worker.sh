@@ -331,7 +331,7 @@ heartbeat_loop() {
 # (IURIO, OpenApe) waeren sie sonst auto-approved. Patricks Regel (29.07.): triagieren
 # eigenstaendig, SENDEN braucht seinen Grant. In allow-list-Orgs ergibt sich dasselbe
 # dadurch, dass die Rollen-Muster nur Lese-/Ablage-Verben nennen.
-YOLO_DANGEROUS='*rm -rf *,*sudo *,*mkfs*,*dd if=*,*shutdown*,*reboot*,*chmod 777*,*| sh*,*|sh*,*| bash*,*|bash*,*git push --force*,*npm publish*,*pnpm publish*,*apes yolo *,*mail send*,*mail reply*,*mail forward*,*mail trash*,*calendar create*,*calendar update*,*calendar delete*,*calendar accept*,*calendar decline*'
+YOLO_DANGEROUS='*rm -rf *,*sudo *,*mkfs*,*dd if=*,*shutdown*,*reboot*,*chmod 777*,*| sh,*| sh *,*|sh,*|sh *,*| bash,*| bash *,*|bash,*|bash *,*git push --force*,*npm publish*,*pnpm publish*,*apes yolo *,*mail send*,*mail reply*,*mail forward*,*mail trash*,*calendar create*,*calendar update*,*calendar delete*,*calendar accept*,*calendar decline*'
 
 # Sync-Ausgang an troop melden (Drift-Anzeige im Cockpit): orgId + Rollen-Union
 # (allowed.txt) + Modus/Muster-Zahl + ok/Fehler. Fire-and-forget — ein
