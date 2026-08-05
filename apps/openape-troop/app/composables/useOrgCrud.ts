@@ -12,8 +12,6 @@ export interface OrgCrudOptions<TForm extends object> {
 export interface SubmitOptions {
   /** Keep the form open after a successful save (panels that show a result). */
   closeForm?: boolean
-  /** Message shown when the server sends no `statusMessage`. */
-  fallbackError?: string
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -88,7 +86,7 @@ export function useOrgCrud<TItem extends { id: string }, TForm extends object>(o
       return result
     }
     catch (err) {
-      formError.value = errorMessage(err, opts.fallbackError ?? t('common.error.saveFailed'))
+      formError.value = errorMessage(err, t('common.error.saveFailed'))
       return undefined
     }
     finally {
