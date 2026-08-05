@@ -1,3 +1,9 @@
 apps/openape-troop/openape-troop.db
 .vitest-attachments/
 tests/layout/__screenshots__/
+
+# docs run artefacts
+.docs-run.db
+.test2docs/
+test-results/
+tests/docs/.auth/
