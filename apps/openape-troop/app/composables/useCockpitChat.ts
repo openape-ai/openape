@@ -14,7 +14,16 @@ let seq = 0
 function makeId(): string { seq += 1; return `${Date.now()}-${seq}` }
 
 export function useCockpitChat() {
-  const { t } = useI18n()
+  const { t, te } = useI18n()
+
+  // The stream carries stable codes, not sentences, so an English session reads
+  // English. A code this client does not know (older client, newer server) still
+  // says something — the bubble is never left blank.
+  function streamText(code: string): string {
+    const key = `cockpit.chat.stream.${code}`
+    return te(key) ? t(key) : t('cockpit.chat.streamFallback')
+  }
+
   const messages = ref<ChatMessage[]>([])
   const isStreaming = ref(false)
   const companies = ref<Company[]>([])
@@ -116,8 +125,10 @@ export function useCockpitChat() {
   }
 
   async function send(text: string, files: { id: string, mime: string, name: string }[] = []): Promise<void> {
-    const content = text.trim() || (files.length ? t('cockpit.chat.attachmentOnly') : '')
-    if (!content || isStreaming.value || !currentCompanyId.value) return
+    // An attachment-only turn stays empty here and on the server — the bubble
+    // renders the placeholder, so it follows the reader's language.
+    const content = text.trim()
+    if ((!content && !files.length) || isStreaming.value || !currentCompanyId.value) return
     const companyId = currentCompanyId.value
     const sinceMs = Date.now() - 1000
     messages.value.push({ id: makeId(), role: 'user', content, files: files.length ? files : undefined, createdAt: Date.now() })
@@ -150,11 +161,13 @@ export function useCockpitChat() {
           if (done) break
           for (const payload of parse(decoder.decode(value, { stream: true }))) {
             if (payload === '[DONE]') continue
-            const ev = JSON.parse(payload) as { k?: string, t?: string, text?: string, sec?: number, id?: string, options?: string[], taskId?: string }
+            const ev = JSON.parse(payload) as { k?: string, t?: string, code?: string, text?: string, sec?: number, id?: string, options?: string[], taskId?: string }
+            // `code` = one of our own states; `text` = free-form worker progress.
+            const line = ev.code ? streamText(ev.code) : ev.text
             if (ev.k === 'id' && ev.id) { taskId = ev.id }
             else if (ev.k === 'tok' && ev.t) { assistant.content += ev.t; assistant.waiting = undefined; assistant.system = undefined }
-            else if (ev.k === 'think' && ev.text) { assistant.thoughts!.push(ev.text); assistant.waiting = undefined }
-            else if (ev.k === 'wait' && ev.text) { assistant.waiting = ev.sec != null ? t('cockpit.chat.waitSeconds', { text: ev.text, sec: ev.sec }) : ev.text }
+            else if (ev.k === 'think' && line) { assistant.thoughts!.push(line); assistant.waiting = undefined }
+            else if (ev.k === 'wait' && line) { assistant.waiting = ev.sec != null ? t('cockpit.chat.waitSeconds', { text: line, sec: ev.sec }) : line }
             else if (ev.k === 'offline' && ev.text) { assistant.system = ev.text; assistant.waiting = undefined }
             // The Operator paused on a question — the bubble settles into chips.
             else if (ev.k === 'ask' && ev.text) { assistant.content = ev.text; assistant.ask = { taskId: ev.taskId ?? taskId, options: ev.options ?? [] }; assistant.waiting = undefined; assistant.system = undefined }
