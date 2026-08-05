@@ -9,7 +9,9 @@ import { orgAllowedTools } from '../../utils/cockpit/allowed-tools'
 const HARD_WAIT_MS = 180000 // give a present-but-idle brain this long to claim before we call it offline
 const WAIT_EMIT_EVERY_MS = 3000 // refresh the Ruhemodus countdown this often
 const MAX_STREAM_MS = 240000
-const WAIT_TEXT = '💤 Operator im Ruhemodus'
+// Wire codes, not sentences — the browser picks the wording for its language.
+const WAIT_CODE = 'operator.asleep'
+const TAKING_OVER_CODE = 'operator.takingOver'
 const OFFLINE_TEXT = '💤 Deine Nachricht ist aufgenommen — der Operator beantwortet sie, sobald er wieder da ist. Beim nächsten Öffnen ist die Antwort da.'
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -29,13 +31,17 @@ export default defineEventHandler(async (event) => {
   const fileIds = Array.isArray(body?.files) ? body.files.filter(f => typeof f === 'string') : []
   const files = await resolveRefs(owner, fileIds)
   if (files === null) throw createError({ statusCode: 400, statusMessage: 'invalid files' })
-  if (latestUser.trim() || files.length) await saveChatMessage(company, owner, 'user', latestUser.trim() || '(Anhang)', undefined, files)
+  // An attachment-only turn is stored with empty text — the client renders the
+  // placeholder in the reader's language. The agent prompt keeps a literal, since
+  // the whole prompt is German and an empty user message tells the worker nothing.
+  const latestUserText = latestUser.trim()
+  if (latestUserText || files.length) await saveChatMessage(company, owner, 'user', latestUserText, undefined, files)
   // Give the Operator the recent conversation (last 20 turns) so follow-ups like
   // "bitte ablegen - ja" resolve against what was said before — not just the last line.
   const recent = history.slice(-20)
   const prompt = recent.length > 1
     ? `Bisheriger Gesprächsverlauf:\n${recent.map(m => `${m.role === 'user' ? 'Patrick' : 'Du'}: ${m.content}`).join('\n')}\n\nBeantworte die LETZTE Nachricht von Patrick im Kontext dieses Verlaufs — antworte direkt als Operator, ohne Namenspräfix.`
-    : latestUser
+    : (latestUserText || '(Anhang)')
   // Server-derived command allowlist (#1036) — rides the task as data; the
   // worker enforces it. Never taken from the client request.
   const allowedTools = await orgAllowedTools(owner, company)
@@ -80,9 +86,9 @@ export default defineEventHandler(async (event) => {
         const first = agentStatus(owner)
         if (first.mode !== 'offline') {
           if (first.mode === 'idle' && first.nextPollInSec != null)
-            emit({ k: 'wait', text: WAIT_TEXT, sec: first.nextPollInSec })
+            emit({ k: 'wait', code: WAIT_CODE, sec: first.nextPollInSec })
           else
-            emit({ k: 'think', text: '🧠 Dein Operator übernimmt …' })
+            emit({ k: 'think', code: TAKING_OVER_CODE })
 
           const waitStart = Date.now()
           let nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
@@ -91,7 +97,7 @@ export default defineEventHandler(async (event) => {
             const st = agentStatus(owner)
             if (st.mode === 'offline' || Date.now() - waitStart > HARD_WAIT_MS) break
             if (st.mode === 'idle' && st.nextPollInSec != null && Date.now() >= nextEmit) {
-              emit({ k: 'wait', text: WAIT_TEXT, sec: st.nextPollInSec })
+              emit({ k: 'wait', code: WAIT_CODE, sec: st.nextPollInSec })
               nextEmit = Date.now() + WAIT_EMIT_EVERY_MS
             }
             if (Date.now() - lastByteAt >= KEEPALIVE_MS) keepAlive()
