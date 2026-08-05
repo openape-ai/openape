@@ -34,7 +34,7 @@
     "@vitest/coverage-istanbul": "catalog:",
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
-    "happy-dom": "^20.0.0",
+    "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
