@@ -7,7 +7,7 @@
       "publishable"
     ]
   },
-  "description": "OpenApe Service Provider Nuxt module — adds OIDC login via DNS-based IdP discovery",
+  "description": "OpenApe Service Provider Nuxt module \u2014 adds OIDC login via DNS-based IdP discovery",
   "author": "Delta Mind GmbH",
   "license": "MIT",
   "exports": {
@@ -54,8 +54,8 @@
     "@nuxt/ui": "catalog:",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
-    "@vitest/browser": "^4.1.9",
-    "@vitest/browser-playwright": "^4.1.9",
+    "@vitest/browser": "^4.1.10",
+    "@vitest/browser-playwright": "^4.1.10",
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
     "nuxt": "catalog:",

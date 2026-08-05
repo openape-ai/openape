@@ -7,7 +7,7 @@
       "publishable"
     ]
   },
-  "description": "OpenApe agent HTTP gateway — forward proxy with grant-based access control",
+  "description": "OpenApe agent HTTP gateway \u2014 forward proxy with grant-based access control",
   "author": "Patrick Hofmann",
   "license": "MIT",
   "bin": {
