@@ -15,11 +15,12 @@ vi.stubGlobal('createError', (error: { statusCode: number, statusMessage: string
 
 const skillHandler = (await import('../server/api/cockpit/agent/skill/[id].get')).default as unknown as (event: unknown) => Promise<unknown>
 const memoryHandler = (await import('../server/api/cockpit/agent/memory/[id].get')).default as unknown as (event: unknown) => Promise<unknown>
+const { validateAssignedTo, validateOwnerAssignedTo } = await import('../server/utils/cockpit/skill-assign')
 
 function result(row: unknown): void {
   mockSelect.mockReturnValue({
     from: () => ({
-      where: async () => row ? [row] : [],
+      where: async () => Array.isArray(row) ? row : row ? [row] : [],
     }),
   })
 }
@@ -35,6 +36,11 @@ describe('agent content retrieval scope (#1036)', () => {
     await expect(skillHandler({})).rejects.toMatchObject({ statusCode: 404 })
   })
 
+  it('hides a skill owned by another owner', async () => {
+    result(null)
+    await expect(skillHandler({})).rejects.toMatchObject({ statusCode: 404 })
+  })
+
   it('allows company memory and agent-targeted memory only', async () => {
     result({ id: 'content-1', ownerEmail: 'owner@x', scope: 'company', targetId: 'other', title: 'company', body: 'ok' })
     await expect(memoryHandler({})).resolves.toMatchObject({ body: 'ok' })
@@ -44,5 +50,38 @@ describe('agent content retrieval scope (#1036)', () => {
 
     result({ id: 'content-1', ownerEmail: 'owner@x', scope: 'agent', targetId: 'agent-b', title: 'private', body: 'secret' })
     await expect(memoryHandler({})).rejects.toMatchObject({ statusCode: 404 })
+
+    result(null)
+    await expect(memoryHandler({})).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
+describe('skill assignment scope (#1036)', () => {
+  it('deduplicates valid agent targets and keeps the ceo target', async () => {
+    result([{ id: 'agent-a' }])
+    await expect(validateAssignedTo('owner@x', 'org-a', ['ceo', 'agent-a', 'agent-a']))
+      .resolves
+      .toEqual(['ceo', 'agent-a'])
+  })
+
+  it('rejects an agent outside the organization scope', async () => {
+    result([{ id: 'agent-a' }])
+    await expect(validateAssignedTo('owner@x', 'org-a', ['agent-b']))
+      .rejects
+      .toMatchObject({ statusCode: 400 })
+  })
+
+  it('allows an owner-level skill to target an agent in another org', async () => {
+    result([{ id: 'agent-b' }])
+    await expect(validateOwnerAssignedTo('owner@x', ['agent-b']))
+      .resolves
+      .toEqual(['agent-b'])
+  })
+
+  it('rejects an owner-level skill target from another owner', async () => {
+    result([])
+    await expect(validateOwnerAssignedTo('owner@x', ['agent-b']))
+      .rejects
+      .toMatchObject({ statusCode: 400 })
   })
 })
