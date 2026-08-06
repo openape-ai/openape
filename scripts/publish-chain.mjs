@@ -33,6 +33,9 @@ const PACKAGES = [
   { name: '@openape/core', dir: 'packages/core' },
   { name: '@openape/grants', dir: 'packages/grants' },
   { name: '@openape/auth', dir: 'packages/auth' },
+  // Leaf: ships the protocol JSON Schemas so an implementer can validate
+  // payloads without cloning the repo. Nothing here depends on it.
+  { name: '@openape/protocol-conformance', dir: 'packages/protocol-conformance' },
   { name: '@openape/cli-auth', dir: 'packages/cli-auth' },
   { name: '@openape/proof-cli', dir: 'packages/proof-cli' },
   { name: '@openape/proxy', dir: 'packages/proxy' },

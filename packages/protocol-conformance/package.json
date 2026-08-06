@@ -1,19 +1,30 @@
 {
   "name": "@openape/protocol-conformance",
-  "private": true,
   "version": "0.0.6",
+  "description": "JSON Schemas for the DDISA and OpenApe protocol documents, kept executable by a conformance test suite",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape.git",
+    "directory": "packages/protocol-conformance"
+  },
+  "exports": {
+    "./schemas/*": "./schemas/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "schemas"
+  ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "sync-schemas": "node ../../scripts/sync-protocol-schemas.mjs"
   },
-  "dependencies": {
-    "@openape/core": "workspace:*",
-    "@openape/grants": "workspace:*"
-  },
   "devDependencies": {
+    "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
     "@types/node": "catalog:",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
