@@ -51,6 +51,14 @@ describe('validateTools — catalog allowlist', () => {
   it('accepts empty array (task with no tools is valid)', () => {
     expect(validateTools([]).ok).toBe(true)
   })
+
+  it('returns the validated catalog names unchanged', () => {
+    expect(validateTools(['time.now', 'http.get'])).toEqual({ ok: true, tools: ['time.now', 'http.get'] })
+  })
+
+  it('rejects blank tool names', () => {
+    expect(validateTools(['time.now', '   ']).ok).toBe(false)
+  })
 })
 
 describe('validateTaskId — slug rules', () => {
