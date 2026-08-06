@@ -54,7 +54,7 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "openape-e2e": "workspace:*",
-    "test2docs": "file:/tmp/test2docs-0.1.0.tgz",
+    "test2docs": "^0.1.0",
     "@playwright/test": "^1.62.0"
   }
 }

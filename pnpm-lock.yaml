@@ -608,8 +608,8 @@ importers:
         specifier: workspace:*
         version: link:../../examples/e2e
       test2docs:
-        specifier: file:/tmp/test2docs-0.1.0.tgz
-        version: file:../../../../../../../tmp/test2docs-0.1.0.tgz(@playwright/test@1.62.0)
+        specifier: ^0.1.0
+        version: 0.1.0(@playwright/test@1.62.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -941,8 +941,8 @@ importers:
         specifier: 'catalog:'
         version: 1.62.0
       test2docs:
-        specifier: file:/tmp/test2docs-0.1.0.tgz
-        version: file:../../../../../../../tmp/test2docs-0.1.0.tgz(@playwright/test@1.62.0)
+        specifier: ^0.1.0
+        version: 0.1.0(@playwright/test@1.62.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -997,8 +997,8 @@ importers:
         specifier: workspace:*
         version: link:../e2e
       test2docs:
-        specifier: file:/tmp/test2docs-0.1.0.tgz
-        version: file:../../../../../../../tmp/test2docs-0.1.0.tgz(@playwright/test@1.62.0)
+        specifier: ^0.1.0
+        version: 0.1.0(@playwright/test@1.62.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -11556,9 +11556,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  test2docs@file:../../../../../../../tmp/test2docs-0.1.0.tgz:
-    resolution: {integrity: sha512-Ezp55NxuHT8947guxTOpydx+xi58ToG8RWKEY3opivQTujLDT8K3YtDpeylSObbG/XX6Du57ZVuXHArZw+s5Jg==, tarball: file:../../../../../../../tmp/test2docs-0.1.0.tgz}
-    version: 0.1.0
+  test2docs@0.1.0:
+    resolution: {integrity: sha512-Ezp55NxuHT8947guxTOpydx+xi58ToG8RWKEY3opivQTujLDT8K3YtDpeylSObbG/XX6Du57ZVuXHArZw+s5Jg==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -26095,7 +26094,7 @@ snapshots:
       commander: 2.20.3
       source-map-support: 0.5.21
 
-  test2docs@file:../../../../../../../tmp/test2docs-0.1.0.tgz(@playwright/test@1.62.0):
+  test2docs@0.1.0(@playwright/test@1.62.0):
     optionalDependencies:
       '@playwright/test': 1.62.0
 
