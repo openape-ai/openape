@@ -22,6 +22,9 @@ minimumReleaseAge: 10080
 # Freigabe = Publish + 7 Tage, unten als UTC notiert.
 minimumReleaseAgeExclude:
   - '@openape/*'
+  # Eigenes Package (unscoped veröffentlicht), gleiche Kategorie wie @openape/*:
+  # keine Quarantäne, kein Freigabe-Datum — bleibt dauerhaft hier.
+  - test2docs
   # brace-expansion 1.1.18/2.1.4/5.0.9 (Security-Override gegen
   # GHSA-rgw5-rvv9-x895).
   # Publish 2026-07-30 10:17 UTC → frei ab 2026-08-06 10:17 UTC.
