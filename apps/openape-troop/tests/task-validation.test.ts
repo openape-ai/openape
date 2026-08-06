@@ -22,9 +22,25 @@ describe('validateCron — supported subset', () => {
     ['1,5 * * * *'], // lists not supported
     ['1-5 * * * *'], // ranges not supported
     ['@hourly'], // shortcuts not supported
-    ['* */5 * * *'], // step on hour — accepted (allowStep on hour)
-  ].slice(0, 8))('rejects %s', ([expr]) => {
+    ['* * */5 * *'], // step on day-of-month not supported
+    ['* * * */2 *'], // step on month not supported
+    ['* * * * */2'], // step on day-of-week not supported
+  ])('rejects %s', ([expr]) => {
     expect(validateCron(expr!).ok).toBe(false)
+  })
+
+  it('accepts steps on minute and hour only', () => {
+    expect(validateCron('* */5 * * *').ok).toBe(true)
+    expect(validateCron('*/15 8 * * *').ok).toBe(true)
+  })
+
+  it('checks each numeric field boundary', () => {
+    expect(validateCron('59 23 31 12 7').ok).toBe(true)
+    expect(validateCron('60 23 31 12 7').ok).toBe(false)
+    expect(validateCron('59 24 31 12 7').ok).toBe(false)
+    expect(validateCron('59 23 32 12 7').ok).toBe(false)
+    expect(validateCron('59 23 31 13 7').ok).toBe(false)
+    expect(validateCron('59 23 31 12 8').ok).toBe(false)
   })
 })
 
@@ -57,7 +73,18 @@ describe('validateTools — catalog allowlist', () => {
   })
 
   it('rejects blank tool names', () => {
-    expect(validateTools(['time.now', '   ']).ok).toBe(false)
+    const r = validateTools(['time.now', '   '])
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.reason).toContain('   ')
+  })
+
+  it('reports every unknown tool without widening the result', () => {
+    const r = validateTools(['unknown.one', 'unknown.two'])
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.reason).toContain('unknown.one')
+      expect(r.reason).toContain('unknown.two')
+    }
   })
 })
 

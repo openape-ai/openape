@@ -73,6 +73,13 @@ describe('orgAllowedTools — server-side derivation (#1036)', () => {
     await seedAgent('frank@x', 'org-agents', ['curl *'])
     expect(await orgAllowedTools('erin@x', 'org-agents')).toEqual(['o365-cli *'])
   })
+
+  it('keeps an owner\'s allowlist isolated between orgs', async () => {
+    await seedAgent('hugo@x', 'org-one', ['gh *'])
+    await seedAgent('hugo@x', 'org-two', ['curl *'])
+    expect(await orgAllowedTools('hugo@x', 'org-one')).toEqual(['gh *'])
+    expect(await orgAllowedTools('hugo@x', 'org-two')).toEqual(['curl *'])
+  })
 })
 
 describe('enqueue carries allowedTools as task data', () => {
