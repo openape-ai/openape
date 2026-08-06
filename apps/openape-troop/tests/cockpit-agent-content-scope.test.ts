@@ -24,6 +24,17 @@ function result(row: unknown): void {
   })
 }
 
+it('allows a skill explicitly assigned to the owner/ceo', async () => {
+  result({ id: 'content-1', ownerEmail: 'owner-x', assignedTo: ['ceo'], name: 'skill', prompt: 'owner-only' })
+  await expect(skillHandler({})).resolves.toMatchObject({ id: 'content-1', prompt: 'owner-only' })
+})
+
+it('hides content when the owner-bound query finds no row', async () => {
+  result(undefined)
+  await expect(skillHandler({})).rejects.toMatchObject({ statusCode: 404 })
+  await expect(memoryHandler({})).rejects.toMatchObject({ statusCode: 404 })
+})
+
 describe('agent content retrieval scope (#1036)', () => {
   it('returns an assigned skill to its agent', async () => {
     result({ id: 'content-1', ownerEmail: 'owner@x', assignedTo: ['agent-a'], name: 'skill', prompt: 'do it' })

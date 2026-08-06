@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { validateCron, validateTaskId, validateTools } from '../server/utils/task-validation'
 
+it.each([
+  ['*/0 * * * *'],
+  ['*/60 * * * *'],
+  ['* */24 * * *'],
+  ['* * */2 * *'],
+])('rejects unsupported cron boundary %s', (expr) => {
+  expect(validateCron(expr).ok).toBe(false)
+})
+
+it('accepts surrounding whitespace but rejects an empty expression', () => {
+  expect(validateCron('  * * * * *  ').ok).toBe(true)
+  expect(validateCron('   ').ok).toBe(false)
+})
+
 describe('validateCron — supported subset', () => {
   it.each([
     ['*/5 * * * *', true],
@@ -9,6 +23,7 @@ describe('validateCron — supported subset', () => {
     ['*/15 8 * * *', true],
     ['0 0 1 * *', true],
     ['* * * * *', true],
+    ['59 23 31 12 7', true],
   ])('accepts %s', (expr, ok) => {
     expect(validateCron(expr).ok).toBe(ok)
   })
@@ -26,6 +41,11 @@ describe('validateCron — supported subset', () => {
   ].slice(0, 8))('rejects %s', ([expr]) => {
     expect(validateCron(expr!).ok).toBe(false)
   })
+})
+
+it('rejects near-miss tool names without normalization', () => {
+  expect(validateTools([' time.now']).ok).toBe(false)
+  expect(validateTools(['http.get ']).ok).toBe(false)
 })
 
 describe('validateTools — catalog allowlist', () => {

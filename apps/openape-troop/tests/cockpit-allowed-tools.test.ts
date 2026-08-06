@@ -44,6 +44,11 @@ async function seedOrg(owner: string, orgId: string): Promise<void> {
   })
 }
 
+it('does not grant tools to an agent from a foreign owner', async () => {
+  await seedAgent('owner-x', 'org-owned', ['o365-cli *'])
+  expect(await orgAllowedTools('agent-x', 'org-owned')).toEqual([])
+})
+
 describe('orgAllowedTools — server-side derivation (#1036)', () => {
   it('unions the tools of all enabled roles, deduplicated', async () => {
     await seedAgent('alice@x', 'org-a', ['o365-cli *', 'gh *'])
