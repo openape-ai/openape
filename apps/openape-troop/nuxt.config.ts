@@ -103,6 +103,8 @@ export default defineNuxtConfig({
     tursoAuthToken: process.env.NUXT_TURSO_AUTH_TOKEN || '',
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
     vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
+    resendApiKey: process.env.NUXT_RESEND_API_KEY || '',
+    mailFrom: process.env.NUXT_MAIL_FROM || 'troop@openape.ai',
     public: {
       idpUrl: process.env.NUXT_PUBLIC_IDP_URL || 'https://id.openape.ai',
       // Web-Push public key (safe to ship). Private key lives in env only.

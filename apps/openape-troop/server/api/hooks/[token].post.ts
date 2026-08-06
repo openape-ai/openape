@@ -1,8 +1,10 @@
 import { eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 import { useDb } from '../../database/drizzle'
-import { cockpitHooks } from '../../database/schema'
+import { cockpitHooks, forgejoHookDeliveries } from '../../database/schema'
 import { fireProactiveTask } from '../../utils/cockpit/fire'
 import { allowHookHit, hookAcceptsEvent, verifyHookSignature } from '../../utils/cockpit/hook-auth'
+import { notifyForgejoPr, parseForgejoPrEvent } from '../../utils/forgejo-pr'
 
 const MAX_BODY = 100_000 // 100KB cap on the event payload
 const MAX_PAYLOAD_IN_PROMPT = 4000 // how much of the body is handed to the Operator
@@ -40,6 +42,30 @@ export default defineEventHandler(async (event) => {
   if (!hookAcceptsEvent(hook.eventFilter, eventName)) {
     setResponseStatus(event, 202)
     return { ok: false, ignored: 'event' }
+  }
+
+  let payload: unknown = null
+  if (eventName?.toLowerCase() === 'pull_request') {
+    try { payload = JSON.parse(raw) }
+    catch { throw createError({ statusCode: 400, statusMessage: 'invalid JSON payload' }) }
+    const pr = parseForgejoPrEvent(payload)
+    if (pr) {
+      const deliveryKey = `${hook.id}:${getHeader(event, 'x-forgejo-delivery') || `${pr.repository}:${pr.number}:opened`}`
+      const existing = await useDb().select({ status: forgejoHookDeliveries.status }).from(forgejoHookDeliveries).where(eq(forgejoHookDeliveries.deliveryKey, deliveryKey)).get()
+      if (existing?.status === 'sent') {
+        setResponseStatus(event, 202)
+        return { ok: true, duplicate: true }
+      }
+      try {
+        const mailId = await notifyForgejoPr(hook.ownerEmail, pr)
+        await useDb().insert(forgejoHookDeliveries).values({ id: randomUUID(), hookId: hook.id, deliveryKey, status: 'sent', mailId, createdAt: Date.now() }).onConflictDoUpdate({ target: forgejoHookDeliveries.deliveryKey, set: { status: 'sent', mailId, error: null } })
+        console.log(`[hook] Forgejo PR mail sent to ${hook.ownerEmail} (${pr.repository}#${pr.number}, ${mailId})`)
+      }
+      catch (err) {
+        console.error(`[hook] Forgejo PR mail failed for ${hook.ownerEmail} (${pr.repository}#${pr.number}):`, err)
+        await useDb().insert(forgejoHookDeliveries).values({ id: randomUUID(), hookId: hook.id, deliveryKey, status: 'failed', error: String(err), createdAt: Date.now() }).onConflictDoNothing()
+      }
+    }
   }
 
   const userMessage = hook.includePayload && raw.trim()
