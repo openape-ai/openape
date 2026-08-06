@@ -506,6 +506,16 @@ export const cockpitHooks = sqliteTable('cockpit_hooks', {
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_hooks_owner').on(table.ownerEmail), index('idx_cockpit_hooks_token').on(table.token)])
 
+export const forgejoHookDeliveries = sqliteTable('forgejo_hook_deliveries', {
+  id: text('id').primaryKey(),
+  hookId: text('hook_id').notNull(),
+  deliveryKey: text('delivery_key').notNull().unique(),
+  status: text('status', { enum: ['sent', 'failed'] }).notNull(),
+  mailId: text('mail_id'),
+  error: text('error'),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_forgejo_deliveries_hook').on(table.hookId)])
+
 // cockpit_tasks — durability for the in-memory cockpit queue: the INPUT of an
 // in-flight task, so a troop restart doesn't silently drop a proactive fire
 // (trigger/hook). Only unfinished tasks live here; the boot rehydrate re-offers
