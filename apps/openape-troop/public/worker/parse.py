@@ -32,11 +32,19 @@ org = meta.get("company")
 open(os.path.join(outdir, "org.txt"), "w").write(org if isinstance(org, str) else "")
 allowed = meta.get("allowedTools")
 allowed_path = os.path.join(outdir, "allowed.txt")
+tools_path = os.path.join(outdir, "tools.txt")
 if isinstance(allowed, list):
     allowed_str = "\n".join(x for x in allowed if isinstance(x, str))
     open(allowed_path, "w").write(allowed_str)
     # The worker's execution backend consumes the same task-scoped list.
-    open(os.path.join(outdir, "tools.txt"), "w").write(allowed_str)
-elif os.path.exists(allowed_path):
-    os.remove(allowed_path)
+    open(tools_path, "w").write(allowed_str)
+else:
+    if os.path.exists(allowed_path):
+        os.remove(allowed_path)
+    # services_loop reads tools.txt unconditionally (no legacy fallback like
+    # cockpit's allowed.txt three-state read) — without a valid org allowlist
+    # it must NOT keep the task-declared `tools` from line 16, or a stale
+    # scratch dir could re-grant a previous/foreign task's tool access.
+    if os.path.exists(tools_path):
+        os.remove(tools_path)
 print(t["id"])
