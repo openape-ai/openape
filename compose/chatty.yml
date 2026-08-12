@@ -238,8 +238,8 @@ services:
     volumes:
       - /home/openape/projects/openape-dashboard/shared:/home/openape/projects/openape-dashboard/shared
     ports:
-      - "127.0.0.1:3019:3019"
-      - "10.0.1.1:3019:3019"
+      - "127.0.0.1:3022:3022"
+      - "10.0.1.1:3022:3022"
     # Traefik statt nginx: Routing über den Docker-Provider des coolify-proxy
     # (gleiches Muster wie die PR-Previews). Kein root-Dynamic-File nötig.
     networks:
@@ -256,9 +256,9 @@ services:
       traefik.http.routers.dashboard-https.tls: "true"
       traefik.http.routers.dashboard-https.tls.certresolver: letsencrypt
       traefik.http.routers.dashboard-https.middlewares: gzip
-      traefik.http.services.dashboard.loadbalancer.server.port: "3019"
+      traefik.http.services.dashboard.loadbalancer.server.port: "3022"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3019/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3022/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 6
