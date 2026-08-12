@@ -30,6 +30,9 @@ ape-kpi whoami --json
 ## Rules
 
 - Push at the END of a duty, once, with the final numbers.
+- **The number and the detail list must never contradict**: if `value` is 17
+  and you list the top 3, the detail MUST end with a rest line — `+14 weitere`.
+  A reader who counts 3 items under a 17 stops trusting the whole board.
 - One push per metric — don't batch unrelated metrics into one detail.
 - The detail is user-facing Markdown: write it for the human reading their
   morning mail, not as a log dump.
