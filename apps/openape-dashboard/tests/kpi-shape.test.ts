@@ -14,7 +14,7 @@ describe('validateKpiInput', () => {
   })
 
   it('accepts a full push with slash-path scope', () => {
-    const r = validateKpiInput({ scope: 'delta-mind/mail', key: 'wichtig', value: '2', unit: 'mails', detail: '## Top\n- a' })
+    const r = validateKpiInput({ scope: 'delta-mind/mail', key: 'wichtig', value: '2', unit: 'mails', detail: '## Top\n- a', link: 'https://tasks.openape.ai' })
     expect(r.ok).toBe(true)
     if (r.ok) {
       expect(r.kpi.scope).toBe('delta-mind/mail')
@@ -32,6 +32,8 @@ describe('validateKpiInput', () => {
     [{ key: 'k', value: 1, scope: 'a//b' }, 'scope must be'],
     [{ key: 'k', value: 1, unit: 'x'.repeat(33) }, 'unit must be'],
     [{ key: 'k', value: 1, detail: 42 }, 'detail must be a string'],
+    [{ key: 'k', value: 1, link: 'http://insecure.example' }, 'link must be an https'],
+    [{ key: 'k', value: 1, link: 'javascript:alert(1)' }, 'link must be an https'],
   ])('rejects %j', (body, message) => {
     const r = validateKpiInput(body)
     expect(r.ok).toBe(false)

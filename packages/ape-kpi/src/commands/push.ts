@@ -22,6 +22,7 @@ export const pushCommand = defineCommand({
     unit: { type: 'string', description: 'Display unit, e.g. mails, h' },
     'detail': { type: 'string', description: 'Markdown detail inline' },
     'detail-file': { type: 'string', description: 'Read the Markdown detail from a file' },
+    'link': { type: 'string', description: 'https:// URL of the source system (dashboard links label + rest line there)' },
     json: { type: 'boolean', description: 'Print the stored row as JSON' },
   },
   async run({ args }) {
@@ -29,7 +30,7 @@ export const pushCommand = defineCommand({
     if (args['detail-file'])
       detail = readFileSync(args['detail-file'], 'utf8')
 
-    const parsed = parsePushArgs({ key: args.key, value: args.value, scope: args.scope, unit: args.unit, detail })
+    const parsed = parsePushArgs({ key: args.key, value: args.value, scope: args.scope, unit: args.unit, detail, link: args.link })
     if (!parsed.ok) {
       printLine(parsed.error)
       process.exitCode = 1
