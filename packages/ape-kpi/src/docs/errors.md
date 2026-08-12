@@ -9,4 +9,4 @@ All API errors follow the RFC 7807 problem shape: `{ status, title, detail? }`.
 | 403 | Delegated token lacks the `kpi:push` / `kpi:read` scope | Re-issue the delegation with the scope |
 | 413 | Body too large | detail ≤ 64 KB |
 
-Endpoint override for local dev: `APE_KPI_ENDPOINT=http://127.0.0.1:3019`.
+Endpoint override for local dev: `APE_KPI_ENDPOINT=http://127.0.0.1:3022`.
