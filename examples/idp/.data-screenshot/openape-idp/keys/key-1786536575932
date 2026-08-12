@@ -1,0 +1,1 @@
+{"kid":"key-1786536575932","privateKeyJwk":{"crv":"Ed25519","d":"svTW9yfynuSBu3aqUOxdvW-6Tirn7-mD38gtEPQB4xM","x":"bxixoYDp20EX212KLlDQlJ-NSV4Szomw6RE_hIVa9bw","kty":"OKP"},"publicKeyJwk":{"crv":"Ed25519","x":"bxixoYDp20EX212KLlDQlJ-NSV4Szomw6RE_hIVa9bw","kty":"OKP"},"isActive":true}
