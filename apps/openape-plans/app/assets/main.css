@@ -1,5 +1,11 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+@plugin "@tailwindcss/typography";
+
+/* Typography malt Backticks um Inline-Code (code::before/after) — im Plan-Body
+   ist Code ohnehin als Pille gestylt, die Anführung wäre doppelt. */
+.prose code::before,
+.prose code::after { content: none; }
 
 /* Safe-area helpers (iPhone notch / home bar / Android gesture bar). */
 :root {
