@@ -44,6 +44,7 @@ onMounted(async () => {
       </ul>
 
       <IdpSessionTransfer class="mt-6" />
+      <IdpQrSessions class="mt-6" />
     </template>
   </IdpPage>
 </template>

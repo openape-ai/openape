@@ -43,6 +43,16 @@ function federationLogin(providerId) {
   }
   window.location.href = url
 }
+async function handleQrSignedIn() {
+  await fetchUser()
+  const returnTo = route.query.returnTo
+  if (returnTo) {
+    await navigateTo(returnTo, { external: true })
+  }
+  else {
+    await navigateTo('/')
+  }
+}
 </script>
 
 <template>
@@ -81,10 +91,7 @@ function federationLogin(providerId) {
         />
       </div>
 
-      <div
-        v-if="federationProviders.length > 0"
-        class="mt-4"
-      >
+      <div class="mt-4">
         <div class="relative my-4">
           <div class="absolute inset-0 flex items-center">
             <div class="w-full border-t" />
@@ -95,6 +102,7 @@ function federationLogin(providerId) {
         </div>
 
         <div class="space-y-2">
+          <IdpQrLogin @signed-in="handleQrSignedIn" />
           <UButton
             v-for="provider in federationProviders"
             :key="provider.id"

@@ -113,6 +113,28 @@ describe('management bucket (authenticated owner APIs) — the #1073 core', () =
   })
 })
 
+describe('qr bucket (kiosk claim polling)', () => {
+  it('two minutes of claim polling does not drain the login bucket', async () => {
+    const request = await createLimiter()
+    // A kiosk polling every 2s for the full channel TTL (~60 calls)…
+    for (let i = 0; i < 60; i++) {
+      expect(request(`/api/session/qr/${'a'.repeat(64)}/claim`).status).toBe(200)
+    }
+    // …must not push the same IP's passkey login into 429.
+    expect(request('/api/session/login').status).toBe(200)
+  })
+
+  it('caps at its own limit and reports it', async () => {
+    const request = await createLimiter()
+    const first = request('/api/session/qr')
+    expect(first.headers['X-RateLimit-Limit']).toBe('90')
+    for (let i = 0; i < 89; i++) request('/api/session/qr')
+    expect(request('/api/session/qr').status).toBe(429)
+    // The strict bucket is untouched by the QR flood.
+    expect(request('/api/session/login').status).toBe(200)
+  })
+})
+
 describe('/token joins the agent bucket', () => {
   it('allows sustained token minting well beyond the strict cap', async () => {
     const request = await createLimiter()
