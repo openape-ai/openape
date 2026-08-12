@@ -67,7 +67,7 @@ catalog:
   'happy-dom': ^20.0.0
   'jose': ^5.10.0
   'marked': ^18.0.5
-  'nuxt': ^4.4.8
+  'nuxt': ^4.5.1
   'ofetch': ^1.5.1
   'playwright': 1.62.0
   'shell-quote': ^1.9.0
@@ -103,10 +103,12 @@ overrides:
   drizzle-orm: '>=0.45.2'
   fast-uri: '>=4.1.2'
   ip-address: '>=10.3.1'
+  js-yaml: '>=4.3.1'
   flatted: '>=3.4.2'
   hono: 4.12.34
   lodash: ^4.17.21
   node-forge: '>=1.4.0'
+  nanoid: '>=3.3.18'
   path-to-regexp: '>=8.4.0'
   picomatch: '>=4.0.4'
   postcss: '>=8.5.18'
