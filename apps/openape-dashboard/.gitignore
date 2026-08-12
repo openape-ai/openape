@@ -1,0 +1,5 @@
+.guide/
+dev.db
+dev.db-*
+.output/
+.data/
