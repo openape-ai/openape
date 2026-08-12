@@ -23,6 +23,7 @@
     "marked": "catalog:",
     "nuxt": "catalog:",
     "sanitize-html": "^2.14.0",
+    "@tailwindcss/typography": "^0.5.19",
     "tailwindcss": "catalog:",
     "ulid": "catalog:"
   },
