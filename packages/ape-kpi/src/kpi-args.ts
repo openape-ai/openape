@@ -9,6 +9,7 @@ export interface PushBody {
   scope?: string
   unit?: string
   detail?: string
+  link?: string
 }
 
 export type PushParse
@@ -21,6 +22,7 @@ export function parsePushArgs(args: {
   scope?: string
   unit?: string
   detail?: string
+  link?: string
 }): PushParse {
   const key = args.key?.trim()
   if (!key)
@@ -38,6 +40,7 @@ export function parsePushArgs(args: {
       ...(args.scope ? { scope: args.scope } : {}),
       ...(args.unit ? { unit: args.unit } : {}),
       ...(args.detail ? { detail: args.detail } : {}),
+      ...(args.link ? { link: args.link } : {}),
     },
   }
 }

@@ -14,7 +14,7 @@ must not set them.
 ## Commands
 
 ```
-ape-kpi push <key> <value> [--scope <path>] [--unit <u>] [--detail <md> | --detail-file <f>] [--json]
+ape-kpi push <key> <value> [--scope <path>] [--unit <u>] [--detail <md> | --detail-file <f>] [--link <https-url>] [--json]
 ape-kpi list [--latest] [--scope <path>] [--since <ISO|unix-ms>] --json
 ape-kpi whoami --json
 ```
@@ -36,3 +36,9 @@ ape-kpi whoami --json
 - One push per metric — don't batch unrelated metrics into one detail.
 - The detail is user-facing Markdown: write it for the human reading their
   morning mail, not as a log dump.
+- **Link everything that has a URL.** Pass `--link` with the source system's
+  URL (task board, mailbox, repo) — the dashboard links the card title and its
+  rest line there. Inside the detail, make every line a Markdown link where the
+  item has one: `[Betreff](https://outlook.office.com/mail/inbox/id/<urlencoded
+  message_id>)` for M365 mails, the team board URL for tasks, the PR URL for
+  PRs. A line without a link is a dead end for the reader.

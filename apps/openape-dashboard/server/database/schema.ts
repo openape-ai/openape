@@ -17,6 +17,7 @@ export const kpis = sqliteTable('kpis', {
   value: real('value').notNull(),
   unit: text('unit'),
   detail: text('detail'),
+  link: text('link'),
   source: text('source').notNull(),
   createdAt: integer('created_at').notNull(),
 })

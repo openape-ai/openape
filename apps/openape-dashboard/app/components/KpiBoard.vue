@@ -21,6 +21,7 @@ interface Kpi {
   value: number
   unit: string | null
   detail: string | null
+  link: string | null
   createdAt: number
 }
 
@@ -131,7 +132,10 @@ const NUMBER_TONE: Record<string, string> = {
           :title="`${kpi.scope} · ${kpi.key} · ${formatAge(kpi.createdAt)}`"
         >
           <span class="text-xs font-semibold uppercase tracking-widest text-zinc-400">{{ kpi.scope }}</span>
-          <span class="min-w-0 flex-1 basis-full text-sm font-medium text-zinc-200 sm:basis-auto">{{ labelForKey(kpi.key) }}</span>
+          <span class="min-w-0 flex-1 basis-full text-sm font-medium text-zinc-200 sm:basis-auto">
+            <a v-if="kpi.link" :href="kpi.link" target="_blank" rel="noopener noreferrer" class="hover:text-sky-300 hover:underline">{{ labelForKey(kpi.key) }}</a>
+            <template v-else>{{ labelForKey(kpi.key) }}</template>
+          </span>
           <span class="ml-auto flex shrink-0 items-center gap-1.5">
             <span class="text-2xl font-semibold tabular-nums" :class="NUMBER_TONE[toneForKey(kpi.key, kpi.value)]">
               {{ formatValue(kpi) }}
@@ -162,7 +166,8 @@ const NUMBER_TONE: Record<string, string> = {
             v-html="renderedDetails.get(kpi.id)?.html ?? ''"
           />
           <p v-if="renderedDetails.get(kpi.id)?.missing" class="mt-1.5 text-sm italic text-zinc-400">
-            … und {{ renderedDetails.get(kpi.id)!.missing }} weitere
+            <a v-if="kpi.link" :href="kpi.link" target="_blank" rel="noopener noreferrer" class="hover:text-sky-300 hover:underline">… und {{ renderedDetails.get(kpi.id)!.missing }} weitere</a>
+            <template v-else>… und {{ renderedDetails.get(kpi.id)!.missing }} weitere</template>
           </p>
         </div>
       </article>
