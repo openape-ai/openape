@@ -134,7 +134,7 @@ Uses Changesets with a single root `.changeset/config.json`. **Publishing is loc
 **Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
-pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service
+pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service | dashboard
 pnpm run deploy:image --all
 ```
 
@@ -152,6 +152,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `monitor`    | 3018 | openape-monitor        |
 | `question-service` | 3017 | openape-question-service |
 | `pr`         | 3014 | openape-pr             |
+| `dashboard`  | 3019 | openape-dashboard      |
 
 **Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
 
