@@ -57,6 +57,7 @@ const TARGETS = {
   'timetrack': { filter: '@openape-timetrack/app', dir: 'apps/openape-timetrack', image: 'openape-timetrack', port: 3011, compose: 'timetrack', unit: 'openape-timetrack', domain: 'timetrack.openape.ai', envVar: 'TIMETRACK_TAG' },
   'monitor': { filter: '@openape-monitor/app', dir: 'apps/openape-monitor', image: 'openape-monitor', port: 3018, compose: 'monitor', unit: 'openape-monitor', domain: 'monitor.openape.ai', envVar: 'MONITOR_TAG' },
   'question-service': { filter: '@openape-question-service/app', dir: 'apps/openape-question-service', image: 'openape-question-service', port: 3017, compose: 'question-service', unit: 'openape-question-service', domain: 'question-service.openape.ai', envVar: 'QUESTION_SERVICE_TAG' },
+  'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3019, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
 }
 
 function sh(cmd, args, opts = {}) {

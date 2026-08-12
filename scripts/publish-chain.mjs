@@ -56,6 +56,7 @@ const PACKAGES = [
   { name: '@openape/ape-pr', dir: 'packages/ape-pr' },
   { name: '@openape/ape-plans', dir: 'packages/ape-plans' },
   { name: '@openape/ape-timetrack', dir: 'packages/ape-timetrack' },
+  { name: '@openape/ape-kpi', dir: 'packages/ape-kpi' },
 ]
 
 const dryRun = process.argv.includes('--dry-run')

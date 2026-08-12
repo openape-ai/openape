@@ -1,0 +1,51 @@
+{
+  "name": "@openape/ape-kpi",
+  "version": "0.1.0",
+  "description": "CLI for dashboard.openape.ai — agents push KPIs, the dashboard and morning mail consume them",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ape-kpi": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape.git",
+    "directory": "packages/ape-kpi"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "kpi",
+    "dashboard",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}
