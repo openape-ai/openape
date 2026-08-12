@@ -45,6 +45,19 @@ function parseMaxManagementRequests(): number {
   return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_MANAGEMENT
 }
 
+// QR sign-in traffic: the kiosk polls its claim endpoint every 2 s while
+// waiting for the phone (~30/min), plus channel creation and the phone's
+// context/approve calls. Legitimate by design, so it must not drain the
+// strict per-IP login budget — the same starvation #1073 fixed for
+// management APIs. Guessing tokens here is hopeless anyway (64-hex,
+// timing-safe), the bucket only bounds storage churn.
+const DEFAULT_MAX_QR = 90
+
+function parseMaxQrRequests(): number {
+  const raw = Number(process.env.OPENAPE_RATE_LIMIT_MAX_QR)
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_QR
+}
+
 // Rate-limited path-prefixes. Anything brute-forceable (auth ceremonies,
 // agent challenges, push subscriptions, account registration, user lookups)
 // is in here. The hyphen in `my-agents` is escaped explicitly. Extended in
@@ -69,6 +82,9 @@ const RE_AGENT_PATHS = /^\/(?:api\/agent\b|token\b)/
 // would be attacker-chosen — rotating it would bypass the limit entirely.
 // Identity-based keying would require verified tokens inside the limiter.
 const RE_MANAGEMENT_PATHS = /^\/api\/(?:my-agents|users)\b/
+
+// QR sign-in endpoints (subset of /api/session, so checked first).
+const RE_QR_PATHS = /^\/api\/session\/qr\b/
 
 const store = new Map<string, RateLimitEntry>()
 
@@ -180,6 +196,7 @@ export default (nitroApp: NitroApp) => {
   const maxAuth = parseMaxRequests()
   const maxAgent = parseMaxAgentRequests()
   const maxManagement = parseMaxManagementRequests()
+  const maxQr = parseMaxQrRequests()
 
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
@@ -193,9 +210,13 @@ export default (nitroApp: NitroApp) => {
     // agent = machine auth (/api/agent/*, /token),
     // management = authenticated owner APIs (/api/my-agents, /api/users).
     // Machine work must never drain the human login budget or vice versa.
-    let bucket: 'agent' | 'mgmt' | 'auth'
+    let bucket: 'agent' | 'mgmt' | 'auth' | 'qr'
     let maxRequests: number
-    if (RE_AGENT_PATHS.test(path)) {
+    if (RE_QR_PATHS.test(path)) {
+      bucket = 'qr'
+      maxRequests = maxQr
+    }
+    else if (RE_AGENT_PATHS.test(path)) {
       bucket = 'agent'
       maxRequests = maxAgent
     }

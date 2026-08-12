@@ -210,6 +210,7 @@ export default defineNuxtModule<ModuleOptions>({
       extendPages((pages) => {
         const modulePages = [
           { name: 'openape-login', path: '/login', file: resolve('./runtime/pages/login.vue') },
+          { name: 'openape-link', path: '/link', file: resolve('./runtime/pages/link.vue') },
           { name: 'openape-register', path: '/register', file: resolve('./runtime/pages/register.vue') },
           { name: 'openape-recover', path: '/recover', file: resolve('./runtime/pages/recover.vue') },
           { name: 'openape-recover-cancel', path: '/recover/cancel', file: resolve('./runtime/pages/recover-cancel.vue') },
@@ -266,6 +267,14 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/session/logout', method: 'post', handler: resolve('./runtime/server/api/session/logout.post') })
       addServerHandler({ route: '/api/session/transfer', method: 'post', handler: resolve('./runtime/server/api/session/transfer.post') })
       addServerHandler({ route: '/api/session/transfer/:token', method: 'get', handler: resolve('./runtime/server/api/session/transfer/[token].get') })
+      // QR sign-in: kiosk opens a channel, phone approves, kiosk claims.
+      addServerHandler({ route: '/api/session/qr', method: 'post', handler: resolve('./runtime/server/api/session/qr/index.post') })
+      addServerHandler({ route: '/api/session/qr/sessions', method: 'get', handler: resolve('./runtime/server/api/session/qr/sessions/index.get') })
+      addServerHandler({ route: '/api/session/qr/sessions/:id', method: 'delete', handler: resolve('./runtime/server/api/session/qr/sessions/[id].delete') })
+      addServerHandler({ route: '/api/session/qr/:id', method: 'get', handler: resolve('./runtime/server/api/session/qr/[id].get') })
+      addServerHandler({ route: '/api/session/qr/:id/approve', method: 'post', handler: resolve('./runtime/server/api/session/qr/[id]/approve.post') })
+      addServerHandler({ route: '/api/session/qr/:id/deny', method: 'post', handler: resolve('./runtime/server/api/session/qr/[id]/deny.post') })
+      addServerHandler({ route: '/api/session/qr/:id/claim', method: 'post', handler: resolve('./runtime/server/api/session/qr/[id]/claim.post') })
       addServerHandler({ route: '/api/session/ssh-keys', handler: resolve('./runtime/server/api/session/ssh-keys.get') })
       addServerHandler({ route: '/api/session/ssh-keys', method: 'post', handler: resolve('./runtime/server/api/session/ssh-keys.post') })
       addServerHandler({ route: '/api/session/ssh-keys/:keyId', method: 'delete', handler: resolve('./runtime/server/api/session/ssh-keys/[keyId].delete') })

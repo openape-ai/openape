@@ -1,6 +1,8 @@
 import type { H3Event } from 'h3'
 import { useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import { useGrantStorage } from './grant-storage'
+import { qrSessionKey } from './qr-login'
 
 export async function getAppSession(event: H3Event) {
   const config = useRuntimeConfig()
@@ -19,7 +21,7 @@ export async function getAppSession(event: H3Event) {
   // strict-equality on the same env so they can't drift.
   const corsAllowlist = !!(process.env.NUXT_OPENAPE_IDP_CORS_ALLOWED_ORIGINS)
   const crossOrigin = embeddable || corsAllowlist
-  return await useSession(event, {
+  const session = await useSession(event, {
     name: sessionName,
     password: idpConfig.sessionSecret as string,
     maxAge: (idpConfig.sessionMaxAge as number) || 60 * 60 * 24 * 7,
@@ -29,4 +31,19 @@ export async function getAppSession(event: H3Event) {
       sameSite: crossOrigin ? 'none' : 'lax',
     },
   })
+
+  // Sessions that arrived via QR sign-in live on machines the user does not
+  // control (public computers). They carry their own, much shorter expiry,
+  // and stay valid only while their server-side record exists — deleting
+  // that record from any other device revokes the kiosk remotely.
+  const data = session.data as { userId?: string, qrChannelId?: string, qrExpiresAt?: number }
+  if (data.userId && typeof data.qrChannelId === 'string') {
+    const expired = typeof data.qrExpiresAt !== 'number' || data.qrExpiresAt < Date.now()
+    const revoked = expired || !(await useGrantStorage().getItem(qrSessionKey(data.qrChannelId)))
+    if (revoked) {
+      await session.clear()
+    }
+  }
+
+  return session
 }

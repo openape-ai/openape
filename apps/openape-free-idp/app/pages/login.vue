@@ -7,7 +7,9 @@ const route = useRoute()
 const loginHint = (route.query.login_hint as string) || ''
 
 const email = ref(loginHint)
-const keyMode = ref(false)
+// Three sign-in alternatives, one visible at a time: passkey (default),
+// SSH-key challenge-response, and QR (a signed-in phone approves).
+const mode = ref<'passkey' | 'ssh' | 'qr'>('passkey')
 
 // With a pre-filled email (login_hint) the user just needs to confirm — focus the
 // passkey button so Enter authenticates; otherwise focus the email field to type.
@@ -37,18 +39,22 @@ const noPasskeyForDomain = computed(() =>
   /no passkeys?/i.test(webauthnError.value ?? ''),
 )
 
+async function finishSignIn() {
+  await fetchUser()
+  const returnTo = route.query.returnTo as string
+  if (returnTo) {
+    await navigateTo(returnTo, { external: true })
+  }
+  else {
+    await navigateTo('/')
+  }
+}
+
 async function handlePasskeyLogin() {
   try {
     const success = await login(email.value || undefined)
     if (success) {
-      await fetchUser()
-      const returnTo = route.query.returnTo as string
-      if (returnTo) {
-        await navigateTo(returnTo, { external: true })
-      }
-      else {
-        await navigateTo('/')
-      }
+      await finishSignIn()
     }
   }
   catch {
@@ -115,14 +121,7 @@ async function submitSignature() {
         signature: signature.value.trim(),
       },
     })
-    await fetchUser()
-    const returnTo = route.query.returnTo as string
-    if (returnTo) {
-      await navigateTo(returnTo, { external: true })
-    }
-    else {
-      await navigateTo('/')
-    }
+    await finishSignIn()
   }
   catch (err: unknown) {
     const msg = (err as { data?: { title?: string } })?.data?.title
@@ -170,7 +169,7 @@ onUnmounted(() => {
       </p>
 
       <!-- Passkey mode (default) -->
-      <form v-if="!keyMode" class="w-full space-y-4" @submit.prevent="handlePasskeyLogin">
+      <form v-if="mode === 'passkey'" class="w-full space-y-4" @submit.prevent="handlePasskeyLogin">
         <UInput
           ref="emailInput"
           v-model="email"
@@ -193,6 +192,11 @@ onUnmounted(() => {
           Sign in with Passkey
         </UButton>
       </form>
+
+      <!-- QR mode: a signed-in phone scans and approves -->
+      <div v-else-if="mode === 'qr'" class="w-full">
+        <IdpQrLogin @signed-in="finishSignIn" />
+      </div>
 
       <!-- SSH Key challenge-response mode -->
       <div v-else class="w-full space-y-4">
@@ -288,12 +292,29 @@ onUnmounted(() => {
         </NuxtLink>
       </div>
 
-      <button
-        class="mt-4 text-sm text-dimmed transition-colors hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        @click="keyMode = !keyMode; resetChallenge()"
-      >
-        {{ keyMode ? 'Sign in with Passkey instead' : 'Sign in with SSH Key instead' }}
-      </button>
+      <div class="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1">
+        <button
+          v-if="mode !== 'passkey'"
+          class="text-sm text-dimmed transition-colors hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          @click="mode = 'passkey'; resetChallenge()"
+        >
+          Sign in with Passkey instead
+        </button>
+        <button
+          v-if="mode !== 'qr'"
+          class="text-sm text-dimmed transition-colors hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          @click="mode = 'qr'; resetChallenge()"
+        >
+          Sign in with phone (QR)
+        </button>
+        <button
+          v-if="mode !== 'ssh'"
+          class="text-sm text-dimmed transition-colors hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          @click="mode = 'ssh'; resetChallenge()"
+        >
+          Sign in with SSH Key instead
+        </button>
+      </div>
 
       <div class="mt-6 text-sm text-dimmed">
         Noch keinen Account?
