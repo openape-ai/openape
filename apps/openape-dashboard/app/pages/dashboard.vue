@@ -8,6 +8,7 @@ interface Kpi {
   value: number
   unit: string | null
   detail: string | null
+  link: string | null
   createdAt: number
 }
 

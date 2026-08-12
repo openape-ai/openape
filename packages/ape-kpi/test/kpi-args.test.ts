@@ -8,10 +8,10 @@ describe('parsePushArgs', () => {
   })
 
   it('carries scope, unit and detail through', () => {
-    const r = parsePushArgs({ key: 'k', value: '2.5', scope: 'delta-mind/mail', unit: 'mails', detail: '# hi' })
+    const r = parsePushArgs({ key: 'k', value: '2.5', scope: 'delta-mind/mail', unit: 'mails', detail: '# hi', link: 'https://x.example' })
     expect(r.ok).toBe(true)
     if (r.ok)
-      expect(r.body).toEqual({ key: 'k', value: 2.5, scope: 'delta-mind/mail', unit: 'mails', detail: '# hi' })
+      expect(r.body).toEqual({ key: 'k', value: 2.5, scope: 'delta-mind/mail', unit: 'mails', detail: '# hi', link: 'https://x.example' })
   })
 
   it.each([
