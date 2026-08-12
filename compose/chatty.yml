@@ -18,6 +18,10 @@
 
 name: openape-prod
 
+networks:
+  coolify:
+    external: true
+
 services:
   idp:
     image: registry.openape.ai/openape-free-idp:${IDP_TAG:-unset}
@@ -236,6 +240,23 @@ services:
     ports:
       - "127.0.0.1:3019:3019"
       - "10.0.1.1:3019:3019"
+    # Traefik statt nginx: Routing über den Docker-Provider des coolify-proxy
+    # (gleiches Muster wie die PR-Previews). Kein root-Dynamic-File nötig.
+    networks:
+      - default
+      - coolify
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: coolify
+      traefik.http.routers.dashboard-http.entryPoints: http
+      traefik.http.routers.dashboard-http.rule: Host(`dashboard.openape.ai`)
+      traefik.http.routers.dashboard-http.middlewares: redirect-to-https
+      traefik.http.routers.dashboard-https.entryPoints: https
+      traefik.http.routers.dashboard-https.rule: Host(`dashboard.openape.ai`)
+      traefik.http.routers.dashboard-https.tls: "true"
+      traefik.http.routers.dashboard-https.tls.certresolver: letsencrypt
+      traefik.http.routers.dashboard-https.middlewares: gzip
+      traefik.http.services.dashboard.loadbalancer.server.port: "3019"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3019/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
