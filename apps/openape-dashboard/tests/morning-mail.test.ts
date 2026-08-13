@@ -39,7 +39,7 @@ describe('buildMorningMail', () => {
     expect(mail.html).toContain('href="https://outlook.office.com/x"')
     expect(mail.html).toContain('href="https://tasks.openape.ai"')
     expect(mail.html).toContain('Versorgt:')
-    expect(mail.text).toContain('tasks · Offene Tasks: 17 offen')
+    expect(mail.text).toContain('Offene Tasks: 17 offen')
   })
 
   it('enforces the rest contract in the mail like the board does', () => {
@@ -63,6 +63,6 @@ describe('buildMorningMail', () => {
       kpi({ scope: 'a<b', unit: 'x<img>', detail: '<script>alert(1)</script>- ok' }),
     ], 'Donnerstag, 13. August', DASH)
     expect(mail.html).not.toContain('<script>')
-    expect(mail.html).toContain('a&lt;b')
+    expect(mail.html).toContain('A&lt;B')
   })
 })

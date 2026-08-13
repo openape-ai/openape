@@ -46,16 +46,55 @@ export function toneForKey(key: string, value: number): Tone {
   return 'neutral'
 }
 
+/** Fixed briefing order — predictability beats dramaturgy (decision 13.8.). */
+const THEME_ORDER = [
+  'mail.attention',
+  'calendar.upcoming',
+  'tasks.open',
+  'grants.pending',
+  'rechnungen.abgelegt',
+]
+
+export interface ThemeGroup<T extends KpiLike = KpiLike> {
+  key: string
+  label: string
+  tone: Tone
+  total: number
+  unit: string | null
+  members: T[]
+}
+
 /**
- * Flat card order by urgency: attention (value desc), then neutral, then
- * done/empty at the bottom — never an empty inbox above waiting work.
+ * One card per THEME (= metric key), accounts/scopes become sub-sections
+ * inside it — "which mails need me?" is one question across all accounts.
+ * Themes follow THEME_ORDER, unknown keys append alphabetically. Members
+ * sort by value desc, empty ones last.
  */
-export function orderedCards<T extends KpiLike>(kpis: T[]): T[] {
-  const rank: Record<Tone, number> = { attention: 0, neutral: 1, done: 2 }
-  return kpis.slice().sort((a, b) => {
-    const ra = rank[toneForKey(a.key, a.value)]
-    const rb = rank[toneForKey(b.key, b.value)]
-    return ra - rb || b.value - a.value || a.scope.localeCompare(b.scope)
+export function themeGroups<T extends KpiLike>(kpis: T[]): ThemeGroup<T>[] {
+  const byKey = new Map<string, T[]>()
+  for (const kpi of kpis) {
+    const list = byKey.get(kpi.key)
+    if (list)
+      list.push(kpi)
+    else
+      byKey.set(kpi.key, [kpi])
+  }
+  const keys = [...byKey.keys()].sort((a, b) => {
+    const ia = THEME_ORDER.indexOf(a)
+    const ib = THEME_ORDER.indexOf(b)
+    return (ia === -1 ? THEME_ORDER.length : ia) - (ib === -1 ? THEME_ORDER.length : ib) || a.localeCompare(b)
+  })
+  return keys.map((key) => {
+    const members = byKey.get(key)!.slice().sort((a, b) => b.value - a.value || a.scope.localeCompare(b.scope))
+    const tones = members.map(m => toneForKey(m.key, m.value))
+    return {
+      key,
+      label: labelForKey(key),
+      tone: tones.includes('attention') ? 'attention' as Tone : tones.every(t => t === 'done') ? 'done' as Tone : 'neutral' as Tone,
+      total: Math.round(members.reduce((sum, m) => sum + m.value, 0) * 100) / 100,
+      unit: members[0]?.unit ?? null,
+      members,
+    }
   })
 }
 
