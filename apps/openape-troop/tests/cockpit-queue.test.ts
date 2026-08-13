@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { agentStatus, claimNext, enqueue, getTask, markAgentPoll, resolve, restoreTask } from '../server/utils/cockpit/queue'
 
 describe('cockpit queue — owner-bound', () => {
@@ -52,6 +52,23 @@ describe('cockpit queue — owner-bound', () => {
     const task = getTask(t.id)!
     task.notBefore = Date.now() - 1
     expect(claimNext('later@x')?.id).toBe(t.id)
+  })
+
+  it('a queued task survives a batch longer than the claimed-task window', () => {
+    const waiting = enqueue('c', 'sp', 'letzte Duty im Batch', 'batch@x')
+    getTask(waiting.id)!.createdAt = Date.now() - 90 * 60_000
+    enqueue('c', 'sp', 'der nächste Trigger', 'batch@x') // löst gcStaleTasks aus
+    expect(claimNext('batch@x')?.id).toBe(waiting.id)
+  })
+
+  it('drops an abandoned task loudly instead of silently', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const lost = enqueue('c', 'sp', 'nie geholt', 'lost@x')
+    getTask(lost.id)!.createdAt = Date.now() - 7 * 60 * 60_000
+    enqueue('c', 'sp', 'nächster', 'lost@x')
+    expect(getTask(lost.id)).toBeUndefined()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(lost.id))
+    warn.mockRestore()
   })
 
   it('never polled => offline', () => {
