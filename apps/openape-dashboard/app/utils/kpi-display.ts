@@ -24,6 +24,7 @@ const LABELS: Array<[RegExp, string]> = [
   [/^tasks\.due$/, 'Fällige Tasks'],
   [/^calendar\.today$/, 'Termine heute'],
   [/\.prs_merged_24h$/, 'Gemergte PRs (24 h)'],
+  [/^rechnungen\.abgelegt$/, 'Abgelegte Rechnungen'],
 ]
 
 export function labelForKey(key: string): string {
@@ -38,7 +39,7 @@ export function labelForKey(key: string): string {
 export function toneForKey(key: string, value: number): Tone {
   if (/attention|due|overdue|^tasks\.open$/.test(key))
     return value > 0 ? 'attention' : 'done'
-  if (/merged|done|archived/.test(key))
+  if (/merged|done|archived|abgelegt/.test(key))
     return 'done'
   return 'neutral'
 }
