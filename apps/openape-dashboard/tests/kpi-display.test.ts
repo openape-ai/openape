@@ -5,7 +5,7 @@ import {
   formatAge,
   formatValue,
   labelForKey,
-  orderedCards,
+  themeGroups,
   summaryChips,
   toneForKey,
   totalWaiting,
@@ -40,22 +40,29 @@ describe('toneForKey', () => {
   })
 })
 
-describe('orderedCards', () => {
-  it('sorts by urgency: attention desc, neutral, done/empty last', () => {
-    const cards = orderedCards([
-      kpi('hofmann.eco', 'mail.attention', 0, 'mails'),
+describe('themeGroups', () => {
+  it('groups by metric key in fixed briefing order with account members', () => {
+    const groups = themeGroups([
       kpi('dev/openape', 'dev.prs_merged_24h', 3),
-      kpi('delta-mind', 'demo.test', 1),
-      kpi('delta-mind', 'mail.attention', 10, 'mails'),
       kpi('tasks', 'tasks.open', 17),
+      kpi('hofmann.eco', 'mail.attention', 0, 'mails'),
+      kpi('delta-mind', 'mail.attention', 10, 'mails'),
+      kpi('docpit', 'calendar.upcoming', 3, 'Termine'),
     ])
-    expect(cards.map(c => `${c.scope} ${c.key}`)).toEqual([
-      'tasks tasks.open',
-      'delta-mind mail.attention',
-      'delta-mind demo.test',
-      'dev/openape dev.prs_merged_24h',
-      'hofmann.eco mail.attention',
+    expect(groups.map(g => g.key)).toEqual(['mail.attention', 'calendar.upcoming', 'tasks.open', 'dev.prs_merged_24h'])
+    const mail = groups[0]!
+    expect(mail.label).toBe('Mails, die Aufmerksamkeit brauchen')
+    expect(mail.total).toBe(10)
+    expect(mail.tone).toBe('attention')
+    expect(mail.members.map(m => m.scope)).toEqual(['delta-mind', 'hofmann.eco'])
+  })
+
+  it('tones a theme done only when every member is done', () => {
+    const groups = themeGroups([
+      kpi('a', 'mail.attention', 0, 'mails'),
+      kpi('b', 'mail.attention', 0, 'mails'),
     ])
+    expect(groups[0]!.tone).toBe('done')
   })
 })
 

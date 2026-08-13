@@ -17,7 +17,7 @@ const kpis = [
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <main class="mx-auto max-w-5xl px-4 py-8">
+    <main class="mx-auto max-w-3xl px-4 py-8">
       <KpiBoard :kpis="kpis" />
     </main>
   </div>
