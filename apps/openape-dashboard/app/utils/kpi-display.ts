@@ -19,7 +19,8 @@ export type Tone = 'attention' | 'done' | 'neutral'
 
 const LABELS: Array<[RegExp, string]> = [
   [/^mail\.attention$/, 'Mails, die Aufmerksamkeit brauchen'],
-  [/^mail\.archived/, 'Archivierte Mails'],
+  [/^mail\.inbox$/, 'Bewusst in der Inbox'],
+  [/^mail\.archived/, 'Zuletzt archiviert'],
   [/^tasks\.open$/, 'Offene Tasks'],
   [/^tasks\.due$/, 'Fällige Tasks'],
   [/^calendar\.today$/, 'Termine heute'],
@@ -52,7 +53,9 @@ const THEME_ORDER = [
   'calendar.upcoming',
   'tasks.open',
   'grants.pending',
+  'mail.inbox',
   'rechnungen.abgelegt',
+  'mail.archived',
 ]
 
 export interface ThemeGroup<T extends KpiLike = KpiLike> {
