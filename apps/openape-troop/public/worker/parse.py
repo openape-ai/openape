@@ -11,9 +11,6 @@ data = t["history"][0]["parts"][0]["data"]
 open(os.path.join(outdir, "sys.txt"), "w").write(data.get("systemPrompt", ""))
 open(os.path.join(outdir, "user.txt"), "w").write(data.get("userMessage", ""))
 # Open tasks: a task may opt into tools (code access, bash, …). Empty = text-only.
-tools = data.get("tools")
-tools_str = " ".join(x for x in tools if isinstance(x, str)) if isinstance(tools, list) else ""
-open(os.path.join(outdir, "tools.txt"), "w").write(tools_str)
 # Attachments: one line per file (id<TAB>mime<TAB>name) — worker.sh downloads them.
 files = data.get("files")
 lines = []
@@ -32,11 +29,15 @@ org = meta.get("company")
 open(os.path.join(outdir, "org.txt"), "w").write(org if isinstance(org, str) else "")
 allowed = meta.get("allowedTools")
 allowed_path = os.path.join(outdir, "allowed.txt")
+tools_path = os.path.join(outdir, "tools.txt")
 if isinstance(allowed, list):
     allowed_str = "\n".join(x for x in allowed if isinstance(x, str))
     open(allowed_path, "w").write(allowed_str)
     # The worker's execution backend consumes the same task-scoped list.
-    open(os.path.join(outdir, "tools.txt"), "w").write(allowed_str)
-elif os.path.exists(allowed_path):
-    os.remove(allowed_path)
+    open(tools_path, "w").write(allowed_str)
+else:
+    # Legacy/error payloads must not fall back to the client-provided tools.
+    for path in (allowed_path, tools_path):
+        if os.path.exists(path):
+            os.remove(path)
 print(t["id"])
