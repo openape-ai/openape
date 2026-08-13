@@ -35,6 +35,7 @@ describe('toneForKey', () => {
     expect(toneForKey('grants.pending', 2)).toBe('attention')
     expect(toneForKey('grants.pending', 0)).toBe('done')
     expect(labelForKey('grants.pending')).toBe('Grants warten auf Freigabe')
+    expect(labelForKey('calendar.upcoming')).toBe('Termine (nächste 7 Tage)')
     expect(toneForKey('custom.metric', 5)).toBe('neutral')
   })
 })

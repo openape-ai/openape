@@ -23,6 +23,7 @@ const LABELS: Array<[RegExp, string]> = [
   [/^tasks\.open$/, 'Offene Tasks'],
   [/^tasks\.due$/, 'Fällige Tasks'],
   [/^calendar\.today$/, 'Termine heute'],
+  [/^calendar\.upcoming$/, 'Termine (nächste 7 Tage)'],
   [/\.prs_merged_24h$/, 'Gemergte PRs (24 h)'],
   [/^rechnungen\.abgelegt$/, 'Abgelegte Rechnungen'],
   [/^grants\.pending$/, 'Grants warten auf Freigabe'],
