@@ -42,15 +42,26 @@ function makeId(): string {
 }
 
 const TASK_TTL_MS = 30 * 60_000
+// A task nobody has claimed yet is work the owner is waiting for. The worker
+// runs one task at a time and a proactive duty takes 5–13 min, so a morning
+// batch of eight sits in the queue for over an hour — the claimed-task window
+// would drop the tail of every batch. 6 h is long enough for any batch and
+// still bounded; a task older than that answers into a day that moved on.
+const UNCLAIMED_TTL_MS = 6 * 60 * 60_000
 // An open question waits for a human — hours, not minutes. Same window as the
 // DB prune in task-store so memory and durability agree on a task's lifetime.
 const ASK_TTL_MS = 7 * 24 * 60 * 60_000
 function gcStaleTasks(): void {
   const now = Date.now()
   for (const [id, t] of tasks) {
-    const terminal = t.state === 'completed' || t.state === 'failed'
-    const ttl = t.state === 'input-required' ? ASK_TTL_MS : TASK_TTL_MS
-    if (terminal || now - t.createdAt > ttl) tasks.delete(id)
+    if (t.state === 'completed' || t.state === 'failed') {
+      tasks.delete(id)
+      continue
+    }
+    const ttl = t.state === 'input-required' ? ASK_TTL_MS : t.claimed ? TASK_TTL_MS : UNCLAIMED_TTL_MS
+    if (now - t.createdAt <= ttl) continue
+    console.warn(`[cockpit-queue] dropped ${id} (company ${t.company}, state ${t.state}, ${Math.round((now - t.createdAt) / 60_000)} min old)`)
+    tasks.delete(id)
   }
 }
 
