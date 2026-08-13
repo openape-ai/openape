@@ -36,7 +36,7 @@ const { data, pending, refresh } = await useFetch<{ kpis: Kpi[] }>('/api/kpis', 
       </div>
     </header>
 
-    <main class="mx-auto max-w-5xl px-4 py-8">
+    <main class="mx-auto max-w-3xl px-4 py-8">
       <KpiBoard :kpis="data?.kpis ?? []" />
     </main>
   </div>

@@ -7,10 +7,8 @@ import { renderMarkdown } from '../../app/utils/markdown'
 import {
   doneSummary,
   formatValue,
-  labelForKey,
   missingRest,
-  orderedCards,
-  toneForKey,
+  themeGroups,
   topScope,
   totalWaiting,
 } from '../../app/utils/kpi-display'
@@ -39,7 +37,7 @@ export function buildMorningMail(kpis: KpiRow[], dateLabel: string, dashboardUrl
     }
   }
 
-  const cards = orderedCards(kpis)
+  const groups = themeGroups(kpis)
   const total = totalWaiting(kpis)
   const done = doneSummary(kpis)
 
@@ -49,28 +47,34 @@ export function buildMorningMail(kpis: KpiRow[], dateLabel: string, dashboardUrl
 
   const textLines = [dateLabel, '']
   const htmlCards: string[] = []
-  for (const kpi of cards) {
-    const label = labelForKey(kpi.key)
-    const tone = toneForKey(kpi.key, kpi.value)
-    const value = `${formatValue(kpi)}${kpi.unit ? ` ${kpi.unit}` : ''}`
-    textLines.push(`${topScope(kpi.scope)} · ${label}: ${value}`)
+  for (const group of groups) {
+    const color = group.tone === 'attention' ? AMBER : group.tone === 'done' ? GREEN : '#e4e4e7'
+    textLines.push(`${group.label}: ${group.total}${group.unit ? ` ${group.unit}` : ''}`)
 
-    const color = tone === 'attention' ? AMBER : tone === 'done' ? GREEN : '#e4e4e7'
-    const title = kpi.link ? `<a href="${esc(kpi.link)}" style="color:inherit">${esc(label)}</a>` : esc(label)
-    let detailHtml = ''
-    if (kpi.detail && !(kpi.value === 0 && tone === 'done')) {
-      const rendered = renderMarkdown(kpi.detail)
-      const missing = missingRest(kpi.value, rendered)
-      const rest = missing > 0
-        ? `<p style="font-style:italic;color:${MUTED};margin:4px 0 0">${kpi.link ? `<a href="${esc(kpi.link)}" style="color:${MUTED}">… und ${missing} weitere</a>` : `… und ${missing} weitere`}</p>`
-        : ''
-      detailHtml = `<div style="border-top:1px solid #e4e4e7;margin-top:8px;padding-top:8px;font-size:14px">${rendered}${rest}</div>`
+    const memberBlocks: string[] = []
+    for (const kpi of group.members) {
+      const scopeLabel = kpi.link
+        ? `<a href="${esc(kpi.link)}" style="color:${MUTED}">${esc(topScope(kpi.scope).toUpperCase())}</a>`
+        : esc(topScope(kpi.scope).toUpperCase())
+      const value = `${formatValue(kpi)}${kpi.unit ? ` ${kpi.unit}` : ''}`
+      textLines.push(`  ${topScope(kpi.scope)}: ${value}`)
+      let body = ''
+      if (kpi.detail && kpi.value > 0) {
+        const rendered = renderMarkdown(kpi.detail)
+        const missing = missingRest(kpi.value, rendered)
+        const rest = missing > 0
+          ? `<p style="font-style:italic;color:${MUTED};margin:4px 0 0">${kpi.link ? `<a href="${esc(kpi.link)}" style="color:${MUTED}">… und ${missing} weitere</a>` : `… und ${missing} weitere`}</p>`
+          : ''
+        body = `<div style="font-size:14px;margin-top:4px">${rendered}${rest}</div>`
+      }
+      const zero = kpi.value === 0 ? ` <span style="color:${GREEN};font-size:12px">nichts wartet ✓</span>` : ''
+      memberBlocks.push(`<div style="margin-top:8px"><span style="font-size:11px;letter-spacing:1px;color:${MUTED}">${scopeLabel}</span> <strong style="color:${kpi.value > 0 ? color : GREEN}">${esc(value)}</strong>${zero}${body}</div>`)
     }
-    htmlCards.push(`<div style="border:1px solid ${tone === 'attention' ? AMBER : '#d4d4d8'};border-radius:10px;padding:12px 14px;margin:0 0 10px">
-<div><span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${MUTED}">${esc(topScope(kpi.scope))}</span>
-<span style="float:right;font-size:20px;font-weight:600;color:${color}">${esc(value)}</span></div>
-<div style="font-weight:500;margin-top:2px">${title}</div>
-${detailHtml}</div>`)
+
+    htmlCards.push(`<div style="border:1px solid ${group.tone === 'attention' ? AMBER : '#d4d4d8'};border-radius:10px;padding:12px 14px;margin:0 0 10px">
+<div><span style="font-weight:500">${esc(group.label)}</span>
+<span style="float:right;font-size:20px;font-weight:600;color:${color}">${group.total}${group.unit ? ` <span style="font-size:12px">${esc(group.unit)}</span>` : ''}</span></div>
+${memberBlocks.join('\n')}</div>`)
   }
 
   const doneLine = done.length
