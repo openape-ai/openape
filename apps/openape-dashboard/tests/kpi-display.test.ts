@@ -20,6 +20,7 @@ describe('labelForKey', () => {
   it('humanizes known keys and passes unknown ones through', () => {
     expect(labelForKey('mail.attention')).toBe('Mails, die Aufmerksamkeit brauchen')
     expect(labelForKey('dev.prs_merged_24h')).toBe('Gemergte PRs (24 h)')
+    expect(labelForKey('rechnungen.abgelegt')).toBe('Abgelegte Rechnungen')
     expect(labelForKey('custom.metric')).toBe('custom.metric')
   })
 })
@@ -30,6 +31,7 @@ describe('toneForKey', () => {
     expect(toneForKey('mail.attention', 0)).toBe('done')
     expect(toneForKey('tasks.open', 17)).toBe('attention')
     expect(toneForKey('dev.prs_merged_24h', 3)).toBe('done')
+    expect(toneForKey('rechnungen.abgelegt', 2)).toBe('done')
     expect(toneForKey('custom.metric', 5)).toBe('neutral')
   })
 })
