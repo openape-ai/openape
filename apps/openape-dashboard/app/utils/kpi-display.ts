@@ -25,6 +25,7 @@ const LABELS: Array<[RegExp, string]> = [
   [/^calendar\.today$/, 'Termine heute'],
   [/\.prs_merged_24h$/, 'Gemergte PRs (24 h)'],
   [/^rechnungen\.abgelegt$/, 'Abgelegte Rechnungen'],
+  [/^grants\.pending$/, 'Grants warten auf Freigabe'],
 ]
 
 export function labelForKey(key: string): string {
@@ -37,7 +38,7 @@ export function labelForKey(key: string): string {
 
 /** Attention pulls amber, completed work pulls green, the rest stays quiet. */
 export function toneForKey(key: string, value: number): Tone {
-  if (/attention|due|overdue|^tasks\.open$/.test(key))
+  if (/attention|due|overdue|pending|^tasks\.open$/.test(key))
     return value > 0 ? 'attention' : 'done'
   if (/merged|done|archived|abgelegt/.test(key))
     return 'done'
