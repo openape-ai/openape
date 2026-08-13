@@ -20,6 +20,7 @@ describe('labelForKey', () => {
   it('humanizes known keys and passes unknown ones through', () => {
     expect(labelForKey('mail.attention')).toBe('Mails, die Aufmerksamkeit brauchen')
     expect(labelForKey('dev.prs_merged_24h')).toBe('Gemergte PRs (24 h)')
+    expect(labelForKey('dev.prs_open')).toBe('Offene PRs (zuletzt bewegt zuerst)')
     expect(labelForKey('rechnungen.abgelegt')).toBe('Abgelegte Rechnungen')
     expect(labelForKey('custom.metric')).toBe('custom.metric')
   })
@@ -47,13 +48,15 @@ describe('toneForKey', () => {
 describe('themeGroups', () => {
   it('groups by metric key in fixed briefing order with account members', () => {
     const groups = themeGroups([
-      kpi('dev/openape', 'dev.prs_merged_24h', 3),
+      kpi('openape/dev', 'dev.prs_merged_24h', 3),
+      kpi('openape/dev', 'dev.prs_open', 5),
       kpi('tasks', 'tasks.open', 17),
       kpi('hofmann.eco', 'mail.attention', 0, 'mails'),
       kpi('delta-mind', 'mail.attention', 10, 'mails'),
       kpi('docpit', 'calendar.upcoming', 3, 'Termine'),
     ])
-    expect(groups.map(g => g.key)).toEqual(['mail.attention', 'calendar.upcoming', 'tasks.open', 'dev.prs_merged_24h'])
+    expect(groups.map(g => g.key)).toEqual(['mail.attention', 'calendar.upcoming', 'tasks.open', 'dev.prs_open', 'dev.prs_merged_24h'])
+    expect(groups[3]!.tone).toBe('neutral')
     const mail = groups[0]!
     expect(mail.label).toBe('Mails, die Aufmerksamkeit brauchen')
     expect(mail.total).toBe(10)
