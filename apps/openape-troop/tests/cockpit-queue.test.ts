@@ -71,6 +71,41 @@ describe('cockpit queue — owner-bound', () => {
     warn.mockRestore()
   })
 
+  it('a task claimed late still gets the FULL claimed-TTL, not one measured from submission (#1251 follow-up)', () => {
+    // Sits unclaimed for 40 min — past the 30 min claimed-TTL but well inside
+    // the 6 h unclaimed-TTL, so it survives to be claimed at all.
+    const t = enqueue('c', 'sp', 'spät geholt', 'lateclaim@x')
+    getTask(t.id)!.createdAt = Date.now() - 40 * 60_000
+    expect(claimNext('lateclaim@x')?.id).toBe(t.id)
+    // Trigger a GC well within the 30 min claimed-TTL counted from the claim —
+    // if the TTL still measured against createdAt (already 40 min old) this
+    // would wrongly drop a task that's mid-run.
+    enqueue('c', 'sp', 'nächster Trigger', 'lateclaim@x')
+    expect(getTask(t.id)?.state).toBe('working')
+  })
+
+  it('a claimed task is still dropped after the claimed-TTL, measured from the claim', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const t = enqueue('c', 'sp', 'hängt fest', 'stuck@x')
+    expect(claimNext('stuck@x')?.id).toBe(t.id)
+    getTask(t.id)!.claimedAt = Date.now() - 31 * 60_000
+    enqueue('c', 'sp', 'nächster Trigger', 'stuck@x')
+    expect(getTask(t.id)).toBeUndefined()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(t.id))
+    warn.mockRestore()
+  })
+
+  it('regular completed/failed cleanup stays quiet (no console.warn)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const t = enqueue('c', 'sp', 'fertig', 'quiet@x')
+    claimNext('quiet@x')
+    resolve(t.id, 'completed', 'ok', 'quiet@x')
+    enqueue('c', 'sp', 'nächster Trigger', 'quiet@x') // löst gcStaleTasks aus
+    expect(getTask(t.id)).toBeUndefined()
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('never polled => offline', () => {
     expect(agentStatus('nobody@x').mode).toBe('offline')
   })
