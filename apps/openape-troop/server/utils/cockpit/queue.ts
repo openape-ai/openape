@@ -18,6 +18,12 @@ export interface QueueTask {
   progress: string[] // intermediate "thinking" artifacts
   answer: string // terminal artifact text
   createdAt: number
+  // Set when claimNext() hands the task to a worker — the claimed-task TTL in
+  // gcStaleTasks() counts from here, not from createdAt (#1251 follow-up): a
+  // task that sat unclaimed for hours must get the FULL claimed-TTL once a
+  // worker actually picks it up, not whatever's left of a window measured
+  // from submission.
+  claimedAt?: number
   notBefore?: number
   // input-required: the agent's open question to the owner (answerTask resumes).
   question?: string
@@ -59,8 +65,12 @@ function gcStaleTasks(): void {
       continue
     }
     const ttl = t.state === 'input-required' ? ASK_TTL_MS : t.claimed ? TASK_TTL_MS : UNCLAIMED_TTL_MS
-    if (now - t.createdAt <= ttl) continue
-    console.warn(`[cockpit-queue] dropped ${id} (company ${t.company}, state ${t.state}, ${Math.round((now - t.createdAt) / 60_000)} min old)`)
+    // Claimed tasks age from the claim, not from submission — otherwise a task
+    // claimed late (thanks to the 6 h UNCLAIMED_TTL_MS) is already over the
+    // 30 min claimed-TTL the instant it's picked up and gets GC'd mid-run.
+    const age = t.claimed && t.claimedAt != null ? now - t.claimedAt : now - t.createdAt
+    if (age <= ttl) continue
+    console.warn(`[cockpit-queue] dropped ${id} (company ${t.company}, state ${t.state}, ${Math.round(age / 60_000)} min old)`)
     tasks.delete(id)
   }
 }
@@ -108,6 +118,7 @@ export function claimNext(owner: string): QueueTask | null {
       (!task.notBefore || Date.now() >= task.notBefore)) {
       pending.splice(i, 1)
       task.claimed = true
+      task.claimedAt = Date.now()
       task.state = 'working'
       return task
     }
