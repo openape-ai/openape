@@ -1,0 +1,47 @@
+{
+  "name": "@openape/ape-crm",
+  "version": "0.1.0",
+  "description": "CLI for crm.openape.ai — deal pipeline, contacts and notes for humans and AI agents",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ape-crm": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/proof-cli": "workspace:*",
+    "citty": "^0.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "crm",
+    "deals",
+    "pipeline",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}
