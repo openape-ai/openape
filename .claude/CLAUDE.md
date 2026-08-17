@@ -35,6 +35,7 @@ packages/         # Publishable libraries
   ape-pr/         # @openape/ape-pr — CLI for pr.openape.ai
   ape-plans/      # @openape/ape-plans — CLI for plans.openape.ai
   ape-timetrack/  # @openape/ape-timetrack — CLI for timetrack.openape.ai
+  ape-crm/        # @openape/ape-crm — CLI for crm.openape.ai
 
 modules/          # Publishable Nuxt modules
   nuxt-auth-idp/  # @openape/nuxt-auth-idp — IdP Nuxt module
@@ -52,6 +53,7 @@ apps/             # Deployable applications (private, not published)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
   openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
+  openape-crm/        # crm.openape.ai — Deal-Pipeline, Kontakte, Notizen → self-hosted (chatty)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -134,7 +136,7 @@ Uses Changesets with a single root `.changeset/config.json`. **Publishing is loc
 **Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
-pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service | dashboard
+pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service | dashboard | crm
 pnpm run deploy:image --all
 ```
 
@@ -153,6 +155,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `question-service` | 3017 | openape-question-service |
 | `pr`         | 3014 | openape-pr             |
 | `dashboard`  | 3022 | openape-dashboard      |
+| `crm`        | 3024 | openape-crm            |
 
 **Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
 
