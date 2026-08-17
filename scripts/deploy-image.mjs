@@ -58,6 +58,7 @@ const TARGETS = {
   'monitor': { filter: '@openape-monitor/app', dir: 'apps/openape-monitor', image: 'openape-monitor', port: 3018, compose: 'monitor', unit: 'openape-monitor', domain: 'monitor.openape.ai', envVar: 'MONITOR_TAG' },
   'question-service': { filter: '@openape-question-service/app', dir: 'apps/openape-question-service', image: 'openape-question-service', port: 3017, compose: 'question-service', unit: 'openape-question-service', domain: 'question-service.openape.ai', envVar: 'QUESTION_SERVICE_TAG' },
   'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3022, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
+  'crm': { filter: '@openape-crm/app', dir: 'apps/openape-crm', image: 'openape-crm', port: 3024, compose: 'crm', unit: 'openape-crm', domain: 'crm.openape.ai', envVar: 'CRM_TAG' },
 }
 
 function sh(cmd, args, opts = {}) {
