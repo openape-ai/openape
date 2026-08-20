@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { buildRuleProposals, ruleTemplatePreview } from '../utils/rule-suggestions'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
@@ -44,16 +45,8 @@ const isGenericGrant = computed(() =>
   cliDetails.value.some(d => d?.operation_id === '_generic.exec'),
 )
 
-/**
- * "Make a rule from this" (plan 2026-07-29-compound-shapes-grants M3):
- * derive a standing-grant proposal per shaped CLI in the request. The
- * template keeps the first resource link's selector (the account/scope
- * anchor) and wildcards the rest; max_risk caps at the highest incoming
- * risk, so the risk model of the adapter does the verb-gating (a low rule
- * never covers send/delete). Generic details are excluded — a rule for
- * one exact argv is pointless.
- */
-const RULE_RISK_ORDER = { low: 0, medium: 1, high: 2, critical: 3 }
+// "Make a rule from this" — proposal derivation lives in
+// utils/rule-suggestions (shared with the /grants card quick action).
 const RULE_DURATIONS = [
   { label: '24 hours', value: '86400' },
   { label: '7 days', value: '604800' },
@@ -64,35 +57,7 @@ const ruleCreatedByCli = ref({})
 const ruleErrorByCli = ref({})
 const ruleProcessing = ref(false)
 
-const ruleProposals = computed(() => {
-  const byCli = new Map()
-  for (const detail of cliDetails.value) {
-    if (!detail || detail.operation_id === '_generic.exec') continue
-    const existing = byCli.get(detail.cli_id)
-    if (!existing) {
-      byCli.set(detail.cli_id, {
-        cliId: detail.cli_id,
-        template: detail.resource_chain.map((ref, i) => i === 0 ? ref : { resource: ref.resource }),
-        maxRisk: detail.risk,
-        samples: [detail.display],
-      })
-    }
-    else {
-      if (RULE_RISK_ORDER[detail.risk] > RULE_RISK_ORDER[existing.maxRisk]) existing.maxRisk = detail.risk
-      existing.samples.push(detail.display)
-    }
-  }
-  return [...byCli.values()]
-})
-
-function ruleTemplatePreview(proposal) {
-  const chain = proposal.template
-    .map(ref => ref.selector
-      ? `${ref.resource}[${Object.entries(ref.selector).map(([k, v]) => `${k}=${v}`).join(',')}]`
-      : `${ref.resource}[*]`)
-    .join('.')
-  return `${proposal.cliId}.${chain} — risk ≤ ${proposal.maxRisk}`
-}
+const ruleProposals = computed(() => buildRuleProposals(cliDetails.value))
 
 async function createRule(proposal) {
   ruleProcessing.value = true
