@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
+import { pipelineStages, workspaces } from '../database/schema'
+import { defaultStageRows } from '../utils/stages'
 
 // Greenfield: CREATE TABLE IF NOT EXISTS beim Boot, wie in den Schwester-Apps.
 // Spätere Spalten brauchen hier ein explizites ALTER TABLE — sonst startet der
@@ -58,6 +60,27 @@ export default defineNitroPlugin(async () => {
     created_at INTEGER NOT NULL
   )`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_contact_workspace ON contacts(workspace_id)`)
+
+  await db.run(sql`CREATE TABLE IF NOT EXISTS pipeline_stages (
+    workspace_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    outcome TEXT NOT NULL DEFAULT 'open',
+    position INTEGER NOT NULL,
+    PRIMARY KEY (workspace_id, key)
+  )`)
+
+  // Workspaces aus der Zeit fester Stufen bekommen die Default-Pipeline
+  // nachgereicht. Wer eigene Stufen hat, wird nicht angefasst — sonst käme
+  // eine gelöschte Stufe bei jedem Boot zurück.
+  const unseeded = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(sql`NOT EXISTS (SELECT 1 FROM pipeline_stages p WHERE p.workspace_id = workspaces.id)`)
+    .all()
+  for (const workspace of unseeded) {
+    await db.insert(pipelineStages).values(defaultStageRows(workspace.id))
+  }
 
   await db.run(sql`CREATE TABLE IF NOT EXISTS deals (
     id TEXT PRIMARY KEY,

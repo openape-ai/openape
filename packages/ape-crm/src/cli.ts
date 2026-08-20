@@ -11,6 +11,7 @@ import { acceptCommand } from './commands/accept.ts'
 import { contactsCommand } from './commands/contacts.ts'
 import { dealsCommand } from './commands/deals.ts'
 import { noteCommand } from './commands/note.ts'
+import { stagesCommand } from './commands/stages.ts'
 import { workspacesCommand } from './commands/workspaces.ts'
 import agent from './docs/agent.md'
 import cli from './docs/cli.md'
@@ -43,6 +44,7 @@ const main = defineCommand({
     whoami: makeWhoamiCommand(DESCRIPTOR, crmClient),
     workspaces: workspacesCommand,
     deals: dealsCommand,
+    stages: stagesCommand,
     contacts: contactsCommand,
     note: noteCommand,
     accept: acceptCommand,

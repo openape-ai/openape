@@ -2,7 +2,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { deals } from '../../database/schema'
-import { isClosedStage, parseStage, parseTitle, parseValueCents } from '../../utils/deal-shape'
+import { parseTitle, parseValueCents } from '../../utils/deal-shape'
+import { requireStage } from '../../utils/stages'
 import { createProblemError } from '../../utils/problem'
 import { requireRole } from '../../utils/workspace-access'
 
@@ -32,17 +33,17 @@ export default defineEventHandler(async (event) => {
   if (body?.org_id !== undefined) patch.orgId = body.org_id
 
   if (body?.stage !== undefined) {
-    const stage = parseStage(body.stage)
-    if (stage !== deal.stage) {
+    const stage = await requireStage(db, deal.workspaceId, body.stage)
+    if (stage.key !== deal.stage) {
       const last = await db
         .select({ max: sql<number | null>`max(${deals.position})` })
         .from(deals)
-        .where(and(eq(deals.workspaceId, deal.workspaceId), eq(deals.stage, stage)))
+        .where(and(eq(deals.workspaceId, deal.workspaceId), eq(deals.stage, stage.key)))
         .get()
       patch.position = (last?.max ?? -1) + 1
-      patch.closedAt = isClosedStage(stage) ? Date.now() : null
+      patch.closedAt = stage.outcome === 'open' ? null : Date.now()
     }
-    patch.stage = stage
+    patch.stage = stage.key
   }
 
   if (Object.keys(patch).length === 0) throw createProblemError({ status: 400, title: 'nothing to update' })
