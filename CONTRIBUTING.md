@@ -93,7 +93,7 @@ pnpm run deploy:image tasks plans           # several at once
 pnpm run deploy:image --all                 # every target
 ```
 
-Targets: `free-idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`, `timetrack`, `pr`, `monitor`, `question-service`. The documentation site has its own equivalent path, `pnpm run deploy:docs-site`.
+Targets: `free-idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`, `timetrack`, `pr`, `monitor`, `question-service`, `dashboard`, `crm`. The documentation site has its own equivalent path, `pnpm run deploy:docs-site`.
 
 Requires local SSH access to chatty (`openape@chatty.delta-mind.at`) and a `docker login` against `registry.openape.ai`.
 
