@@ -20,6 +20,7 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "h3": "catalog:",
+    "marked": "catalog:",
     "nuxt": "^4.4.8",
     "tailwindcss": "^4.3.1",
     "ulid": "^2.4.0"
