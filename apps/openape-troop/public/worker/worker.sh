@@ -550,6 +550,9 @@ services_loop() {
     worked=0
     while IFS=$'\t' read -r URL TP LABEL; do
       [ -z "$URL" ] && continue
+      # #1262: Services, die ein anderer Operator bedient, ueberspringen —
+      # genau ein Claimer pro Queue (OPENAPE_WORKER_SKIP_SERVICES, Komma-Liste).
+      case ",${OPENAPE_WORKER_SKIP_SERVICES:-}," in *",$LABEL,"*) continue ;; esac
       S="$DIR/scratch/svc-$LABEL"; mkdir -p "$S"
       export SVC_URL="$URL" SVC_TASKS="$TP"
       while true; do
