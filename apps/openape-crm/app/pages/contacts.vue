@@ -2,17 +2,22 @@
 import { useOpenApeAuth } from '#imports'
 import { computed, onMounted, ref, watch } from 'vue'
 import { apiFetch } from '../utils/api'
+import { problemMessage } from '../utils/problem-message'
 
 interface Contact { id: string, name: string, email: string | null, phone: string | null, org_id: string | null, org_name: string | null }
 interface Organization { id: string, name: string, domain: string | null }
 
 const { user, fetchUser } = useOpenApeAuth()
 const { activeId, load: loadWorkspaces } = useWorkspaces()
+const { run } = useApiAction()
 
+const loading = ref(true)
+const loadError = ref('')
 const contacts = ref<Contact[]>([])
 const organizations = ref<Organization[]>([])
 const newContact = ref({ name: '', email: '', phone: '', org_id: '' })
 const newOrg = ref({ name: '', domain: '' })
+const pendingDelete = ref<Contact | null>(null)
 
 onMounted(async () => {
   await fetchUser()
@@ -20,11 +25,19 @@ onMounted(async () => {
     await navigateTo('/')
     return
   }
-  await loadWorkspaces()
-  await reload()
+  try {
+    await loadWorkspaces()
+    await reload()
+  }
+  catch (error) {
+    loadError.value = problemMessage(error, 'Kontakte konnten nicht geladen werden').title
+  }
+  finally {
+    loading.value = false
+  }
 })
 
-watch(activeId, reload)
+watch(activeId, () => void reload())
 
 async function reload() {
   if (!activeId.value) return
@@ -37,26 +50,41 @@ async function reload() {
 }
 
 async function addContact() {
-  await apiFetch('/api/contacts', {
-    method: 'POST',
-    body: { workspace_id: activeId.value, ...newContact.value, org_id: newContact.value.org_id || null },
-  })
+  const created = await run(
+    () => apiFetch('/api/contacts', {
+      method: 'POST',
+      body: { workspace_id: activeId.value, ...newContact.value, org_id: newContact.value.org_id || null },
+    }),
+    { success: `${newContact.value.name} angelegt`, failure: 'Kontakt konnte nicht angelegt werden' },
+  )
+  if (created === null) return
   newContact.value = { name: '', email: '', phone: '', org_id: '' }
-  await reload()
+  await run(() => reload(), { failure: 'Liste konnte nicht aktualisiert werden' })
 }
 
 async function addOrganization() {
-  await apiFetch('/api/organizations', {
-    method: 'POST',
-    body: { workspace_id: activeId.value, ...newOrg.value },
-  })
+  const created = await run(
+    () => apiFetch('/api/organizations', {
+      method: 'POST',
+      body: { workspace_id: activeId.value, ...newOrg.value },
+    }),
+    { success: `${newOrg.value.name} angelegt`, failure: 'Firma konnte nicht angelegt werden' },
+  )
+  if (created === null) return
   newOrg.value = { name: '', domain: '' }
-  await reload()
+  await run(() => reload(), { failure: 'Liste konnte nicht aktualisiert werden' })
 }
 
-async function removeContact(id: string) {
-  await apiFetch(`/api/contacts/${id}`, { method: 'DELETE' })
-  await reload()
+async function removeContact() {
+  const contact = pendingDelete.value
+  if (!contact) return
+  const deleted = await run(
+    () => apiFetch(`/api/contacts/${contact.id}`, { method: 'DELETE' }),
+    { success: `${contact.name} gelöscht`, failure: 'Kontakt konnte nicht gelöscht werden' },
+  )
+  pendingDelete.value = null
+  if (deleted === null) return
+  await run(() => reload(), { failure: 'Liste konnte nicht aktualisiert werden' })
 }
 
 const orgItems = computed(() => [
@@ -72,7 +100,14 @@ const orgItems = computed(() => [
         Kontakte
       </h1>
 
+      <p v-if="loadError" class="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
+        {{ loadError }}
+      </p>
+
       <ul class="mt-4 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
+        <li v-if="loading" class="p-6 text-center text-sm text-zinc-500">
+          Lade …
+        </li>
         <li v-for="contact in contacts" :key="contact.id" class="flex items-center gap-4 p-3">
           <div class="min-w-0 flex-1">
             <p class="font-medium">
@@ -89,11 +124,11 @@ const orgItems = computed(() => [
             variant="ghost"
             size="xs"
             :aria-label="`${contact.name} löschen`"
-            @click="removeContact(contact.id)"
+            @click="pendingDelete = contact"
           />
         </li>
-        <li v-if="!contacts.length" class="p-6 text-center text-sm text-zinc-500">
-          Noch keine Kontakte.
+        <li v-if="!loading && !contacts.length" class="p-6 text-center text-sm text-zinc-500">
+          Noch keine Kontakte. Leg den ersten an — dann kannst du Deals daran hängen.
         </li>
       </ul>
 
@@ -101,6 +136,9 @@ const orgItems = computed(() => [
         Firmen
       </h2>
       <ul class="mt-4 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
+        <li v-if="loading" class="p-6 text-center text-sm text-zinc-500">
+          Lade …
+        </li>
         <li v-for="org in organizations" :key="org.id" class="p-3">
           <p class="font-medium">
             {{ org.name }}
@@ -109,7 +147,7 @@ const orgItems = computed(() => [
             {{ org.domain || '—' }}
           </p>
         </li>
-        <li v-if="!organizations.length" class="p-6 text-center text-sm text-zinc-500">
+        <li v-if="!loading && !organizations.length" class="p-6 text-center text-sm text-zinc-500">
           Noch keine Firmen.
         </li>
       </ul>
@@ -160,5 +198,13 @@ const orgItems = computed(() => [
         </form>
       </UCard>
     </section>
+
+    <ConfirmDialog
+      :open="!!pendingDelete"
+      title="Kontakt löschen?"
+      :consequence="`${pendingDelete?.name} wird entfernt. Deals bleiben bestehen, verlieren aber die Verknüpfung.`"
+      @update:open="pendingDelete = null"
+      @confirm="removeContact"
+    />
   </main>
 </template>
