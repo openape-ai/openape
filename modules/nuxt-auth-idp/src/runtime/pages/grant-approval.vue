@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -31,6 +32,8 @@ const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.reques
 // per auto-approval mechanism that could have fired and didn't.
 const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
+const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.command))
+const requesterName = computed(() => grant.value?.request?.requester ? formatRequesterName(grant.value.request.requester) : '')
 /**
  * True when this grant was requested via the `apes` generic-fallback path.
  * Such CLIs have no registered shape — the approver should see a prominent
@@ -377,7 +380,10 @@ function isExactCommand(detail) {
                   <dt class="text-muted">
                     Requester
                   </dt>
-                  <dd class="font-mono text-sm break-all">
+                  <dd class="text-sm font-semibold">
+                    {{ requesterName }}
+                  </dd>
+                  <dd v-if="requesterName !== grant.request?.requester" class="font-mono text-xs text-dimmed break-all">
                     {{ grant.request?.requester }}
                   </dd>
                 </div>
@@ -413,15 +419,16 @@ function isExactCommand(detail) {
                     {{ grant.request.run_as }}
                   </dd>
                 </div>
-                <div v-if="grant.request?.command?.length">
-                  <dt class="text-muted mb-1">
+                <div v-if="commandDisplay">
+                  <dt class="text-muted mb-1 flex items-center gap-2">
                     Command
+                    <UBadge v-if="commandDisplay.shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay.shell}`" />
                   </dt>
                   <dd
                     class="font-mono text-sm rounded px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words"
                     style="background-color: #0b1220; color: #4ade80;"
                   >
-                    {{ grant.request.command.join(" ") }}
+                    {{ commandDisplay.text }}
                   </dd>
                 </div>
                 <div v-if="grant.request?.cmd_hash">
@@ -705,15 +712,16 @@ function isExactCommand(detail) {
                     {{ grant.request.run_as }}
                   </dd>
                 </div>
-                <div v-if="grant.request?.command?.length">
-                  <dt class="text-muted">
+                <div v-if="commandDisplay">
+                  <dt class="text-muted flex items-center gap-2">
                     Command
+                    <UBadge v-if="commandDisplay.shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay.shell}`" />
                   </dt>
                   <dd
                     class="font-mono text-sm rounded px-3 py-2 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words"
                     style="background-color: #0b1220; color: #4ade80;"
                   >
-                    {{ grant.request.command.join(" ") }}
+                    {{ commandDisplay.text }}
                   </dd>
                 </div>
                 <div v-if="grant.request?.reason">
