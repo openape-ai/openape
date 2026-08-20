@@ -2,7 +2,9 @@ import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDeta
 import { computeCmdHash } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
+import { hasValidManagementToken } from '../../utils/admin'
 import { tryBearerAuth } from '../../utils/agent-auth'
+import { allowUnauthenticatedGrantRequests } from '../../utils/grant-request-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { runGrantPendingHooks } from '../../utils/grant-pending-hooks'
 import { runPreApprovalHooks } from '../../utils/pre-approval-hooks'
@@ -69,9 +71,20 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<OpenApeGrantRequest>(event)
   const { grantStore } = useGrantStores()
 
+  // Spec §5: grant requests MUST carry a Bearer token; §3.4: an authenticated
+  // requester is always the token's subject — a body-supplied `requester` is
+  // display data an attacker controls, never an identity.
   const bearerPayload = await tryBearerAuth(event)
   if (bearerPayload) {
     body.requester = bearerPayload.sub
+  }
+  else if (!hasValidManagementToken(event) && !allowUnauthenticatedGrantRequests()) {
+    // Management-token callers (admin tooling, test harnesses) may set
+    // `requester` freely — the token is a deliberate operator secret.
+    throw createProblemError({
+      status: 401,
+      title: 'Authentication required: grant requests must carry a Bearer token identifying the requester',
+    })
   }
 
   if (!body.requester || !body.target_host || !body.audience) {

@@ -19,6 +19,17 @@ vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   requireAgent: vi.fn(async () => { throw new Error('not authenticated') }),
 }))
 
+// Most tests here exercise creation logic, not the auth gate — run them in
+// legacy mode. The gate itself is tested explicitly below.
+const allowUnauthMock = vi.fn(() => true)
+vi.mock('../src/runtime/server/utils/grant-request-auth', () => ({
+  allowUnauthenticatedGrantRequests: () => allowUnauthMock(),
+}))
+const managementTokenMock = vi.fn(() => false)
+vi.mock('../src/runtime/server/utils/admin', () => ({
+  hasValidManagementToken: () => managementTokenMock(),
+}))
+
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({
   useGrantStores: () => ({
     grantStore,
@@ -57,7 +68,57 @@ describe('grant create endpoint', () => {
   beforeEach(() => {
     readBodyMock.mockReset()
     setResponseStatusMock.mockReset()
+    allowUnauthMock.mockReturnValue(true)
     grantStore = new InMemoryGrantStore()
+  })
+
+  it('rejects unauthenticated grant requests by default (401, spec §5)', async () => {
+    allowUnauthMock.mockReturnValue(false)
+    readBodyMock.mockResolvedValue({
+      requester: 'spoofed-agent@example.com',
+      target_host: 'macmini',
+      audience: 'ape-shell',
+      grant_type: 'once',
+      command: ['bash', '-c', 'touch /tmp/x'],
+    })
+
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 401 })
+  })
+
+  it('accepts a management-token caller with a body-supplied requester', async () => {
+    allowUnauthMock.mockReturnValue(false)
+    managementTokenMock.mockReturnValueOnce(true)
+    readBodyMock.mockResolvedValue({
+      requester: 'agent@example.com',
+      target_host: 'macmini',
+      audience: 'ape-shell',
+      grant_type: 'once',
+      command: ['bash', '-c', 'ls'],
+    })
+
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+
+    expect(result.request.requester).toBe('agent@example.com')
+  })
+
+  it('binds requester to the bearer token subject, ignoring the body value', async () => {
+    allowUnauthMock.mockReturnValue(false)
+    const { tryBearerAuth } = await import('../src/runtime/server/utils/agent-auth')
+    ;(tryBearerAuth as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ sub: 'real-agent@example.com' })
+    readBodyMock.mockResolvedValue({
+      requester: 'spoofed-agent@example.com',
+      target_host: 'macmini',
+      audience: 'ape-shell',
+      grant_type: 'once',
+      command: ['bash', '-c', 'ls'],
+    })
+
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+
+    expect(result.request.requester).toBe('real-agent@example.com')
   })
 
   it('creates a shapes grant and canonicalizes execution fields', async () => {

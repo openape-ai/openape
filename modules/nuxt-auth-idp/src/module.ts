@@ -18,6 +18,11 @@ export interface ModuleOptions {
   sessionSecret: string
   /** Session cookie max age in seconds (default: 604800 = 7 days) */
   sessionMaxAge: number
+  /**
+   * Accept POST /api/grants without a Bearer token (legacy / test fixtures).
+   * The grants spec requires authentication — leave this off in production.
+   */
+  allowUnauthenticatedGrantRequests: boolean
   managementToken: string
   adminEmails: string
   storageKey: string
@@ -92,6 +97,7 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
     sessionMaxAge: 60 * 60 * 24 * 7, // 7 days
+    allowUnauthenticatedGrantRequests: false,
     managementToken: '',
     adminEmails: '',
     storageKey: 'openape-idp',
