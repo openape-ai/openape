@@ -52,6 +52,7 @@ services:
           - testrun.openape.test
           - timetrack.openape.test
           - pr.openape.test
+          - crm.openape.test
           - docs.openape.test
     ports:
       - "127.0.0.1:443:443"
@@ -325,6 +326,41 @@ services:
       - openape-test
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3011/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  crm:
+    build:
+      context: ..
+      dockerfile: compose/Nuxt.Dockerfile
+      args:
+        APP_FILTER: "@openape-crm/app"
+        APP_DIR: openape-crm
+        PORT: "3024"
+    image: openape-crm:local
+    depends_on:
+      proxy:
+        condition: service_healthy
+    dns:
+      - 172.30.0.53
+    volumes:
+      - caddy-data:/caddy-data:ro
+    environment:
+      NUXT_OPENAPE_SP_CLIENT_ID: crm.openape.test
+      NUXT_OPENAPE_SP_SP_NAME: OpenApe CRM
+      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
+      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
+      NUXT_PUBLIC_IDP_URL: https://id.openape.test
+      # Schreibbarer Pfad im Container — das Image bringt kein beschreibbares cwd mit.
+      NUXT_TURSO_URL: file:/tmp/crm.db
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NITRO_PORT: "3024"
+      HOST: 0.0.0.0
+    networks:
+      - openape-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3024/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 30
