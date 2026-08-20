@@ -72,6 +72,14 @@ function checkManagementToken(event: H3Event): 'valid' | 'invalid' | 'none' {
   return timingSafeEqual(tokenBuf, expectedBuf) ? 'valid' : 'invalid'
 }
 
+/**
+ * True when the request carries the (timing-safe compared) management token.
+ * Lets admin tooling and test harnesses act without an agent JWT.
+ */
+export function hasValidManagementToken(event: H3Event): boolean {
+  return checkManagementToken(event) === 'valid'
+}
+
 export async function requireAuth(event: H3Event): Promise<string> {
   const tokenCheck = checkManagementToken(event)
   if (tokenCheck === 'valid') return '_management_'
