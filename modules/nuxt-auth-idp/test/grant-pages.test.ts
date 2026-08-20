@@ -305,7 +305,7 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('Pending Requests')
     expect(wrapper.text()).toContain('List DNS records in Exoscale domain "example.com"')
 
-    await wrapper.findAll('button').find(button => button.text() === 'Approve')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Just this once')!.trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
@@ -315,6 +315,70 @@ describe('grant approval pages', () => {
       },
     })
     expect(wrapper.text()).toContain('Active Permissions')
+  })
+
+  it('approves a pending grant permanently via the "Always allow" quick action', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ data: [buildCliGrant()] })
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+      .mockResolvedValueOnce({ id: 'grant-1', status: 'approved' })
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Always allow')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
+      method: 'POST',
+      body: {
+        grant_type: 'always',
+      },
+    })
+  })
+
+  it('shows the inner command of an ape-shell bash -c transport, shell only as badge', async () => {
+    const shellGrant = buildCliGrant({
+      request: {
+        ...buildCliGrant().request,
+        requester: 'op-delta-mind-cb6bf26a+patrick+hofmann_eco@id.openape.ai',
+        command: ['bash', '-c', 'o365-cli calendar today'],
+      },
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ data: [shellGrant] })
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    // The approver reads the inner command and the agent's short name.
+    const commandBlock = wrapper.find('code')
+    expect(commandBlock.text()).toBe('o365-cli calendar today')
+    expect(wrapper.text()).toContain('via bash')
+    expect(wrapper.text()).toContain('op-delta-mind-cb6bf26a')
+  })
+
+  it('hides the approval-type radio behind "More options"', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ data: [buildCliGrant()] })
+      .mockResolvedValueOnce({ data: [], pagination: { cursor: null, has_more: false } })
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Approval Type')
+
+    await wrapper.findAll('button').find(button => button.text().includes('More options'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Approval Type')
+    expect(wrapper.text()).toContain('Approve with selected options')
   })
 
   it('denies a pending grant from the dashboard', async () => {
