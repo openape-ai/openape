@@ -32,6 +32,12 @@ export interface IdpFixtureOptions {
    * the OIDC flow has to declare the record its test users' domain publishes.
    */
   ddisaMockRecords?: Record<string, { version?: string, idp: string, mode?: string }>
+  /**
+   * Relax the grants API's Bearer-auth requirement (#1276). Only for suites
+   * whose SP-initiated grant-request flow can't yet forward a token — see
+   * the option's doc comment in `modules/nuxt-auth-idp/src/module.ts`.
+   */
+  allowUnauthenticatedGrantRequests?: boolean
 }
 
 /**
@@ -58,6 +64,7 @@ export function startIdp(opts: IdpFixtureOptions): Promise<RunningServer> {
       NUXT_OPENAPE_SESSION_SECRET: SESSION_SECRET,
       NUXT_OPENAPE_DATA_DIR: makeTempDir('openape-idp-fixture-'),
       DDISA_MOCK_RECORDS: opts.ddisaMockRecords ? JSON.stringify(opts.ddisaMockRecords) : undefined,
+      NUXT_OPENAPE_IDP_ALLOW_UNAUTH_GRANT_REQUESTS: opts.allowUnauthenticatedGrantRequests ? '1' : undefined,
     }),
   })
 }

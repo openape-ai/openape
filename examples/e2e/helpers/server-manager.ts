@@ -43,6 +43,11 @@ export async function startServers(): Promise<void> {
       managementToken: MANAGEMENT_TOKEN,
       adminEmails: [ADMIN_EMAIL],
       ddisaMockRecords: DDISA_MOCK_RECORDS,
+      // examples/sp's session-based `/api/request-permission` flow (#1276)
+      // calls the IdP's grants API server-to-server on behalf of a human
+      // whose only credential is the SP session cookie — it has no Bearer
+      // token to forward yet. Same escape hatch the module ships for this.
+      allowUnauthenticatedGrantRequests: true,
     }),
     startServer({
       cwd: SP_DIR,
