@@ -2,13 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import type { BucketDisplay, HttpMethodChoice } from '../utils/audience-buckets'
 import { HTTP_METHODS, parsePattern, serializePattern } from '../utils/audience-buckets'
-
-type YoloMode = 'deny-list' | 'allow-list'
+import { formatProvenance, fullAutoFromMode, isIneffectiveFullAuto, modeFromFullAuto } from '../utils/automation-policy'
 
 interface YoloPolicy {
   agentEmail: string
   audience: string
-  mode: YoloMode
+  mode: 'deny-list' | 'allow-list'
   enabledBy: string
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | null
   denyPatterns: string[]
@@ -26,26 +25,14 @@ const props = defineProps<{
 interface PatternRow { method: HttpMethodChoice, value: string }
 
 interface FormState {
-  /**
-   * YOLO toggle: true = mode='deny-list' (default allow, list filters out),
-   * false = mode='allow-list' (default deny, list lets through). The conceptual
-   * mapping matches the OpenApe YOLO semantic: YOLO ON = lazy auto-approve.
-   */
-  yoloOn: boolean
+  /** Vollautomatik: default allow, Blockliste als Veto (wire: mode='deny-list'). */
+  fullAuto: boolean
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
-  /**
-   * Independent pattern lists per mode. The active list is shown/edited
-   * based on `yoloOn`; the inactive one is preserved so flipping the toggle
-   * doesn't lose work. Both lists go to the server on every save.
-   */
-  denyPatterns: PatternRow[]
+  /** „Immer blockiert" — Veto in beiden Modi (wire: denyPatterns). */
+  blockPatterns: PatternRow[]
+  /** „Ohne Rückfrage erlaubt" — wirkt nur ohne Vollautomatik (wire: allowPatterns). */
   allowPatterns: PatternRow[]
   duration: string
-}
-
-/** Map between the binary toggle and the wire-format `mode` enum. */
-function modeFromToggle(yoloOn: boolean): YoloMode {
-  return yoloOn ? 'deny-list' : 'allow-list'
 }
 
 const policiesByAudience = ref<Record<string, YoloPolicy | null>>({})
@@ -74,33 +61,33 @@ const expiryLabel = computed(() => {
   return new Date(ts * 1000).toLocaleString()
 })
 
-const form = ref<FormState>(emptyForm())
-
-// The pattern list the user is currently editing — picked by the YOLO toggle.
-// Switching the toggle reveals the OTHER list rather than relabeling the same
-// one (the previous shape lost data on every flip).
-const activePatterns = computed<PatternRow[]>({
-  get: () => form.value.yoloOn ? form.value.denyPatterns : form.value.allowPatterns,
-  set: (v) => {
-    if (form.value.yoloOn) form.value.denyPatterns = v
-    else form.value.allowPatterns = v
-  },
+const provenanceLine = computed(() => {
+  const p = representativePolicy.value
+  if (!p) return ''
+  return formatProvenance(p.enabledBy, p.updatedAt)
 })
+
+const form = ref<FormState>(emptyForm())
 
 function emptyForm(): FormState {
   return {
-    // No row in DB yet → default OFF (= allow-list with 0 patterns =
-    // every request needs human approval). This is the safer default.
-    yoloOn: false,
+    // No row in DB yet → everything asks for approval. The safer default.
+    fullAuto: false,
     denyRiskThreshold: '',
-    denyPatterns: [],
+    blockPatterns: [],
     allowPatterns: [],
     duration: '',
   }
 }
 
+// A Vollautomatik without a single block rule or risk threshold is a server-
+// side no-op (fail-closed) — the switch would silently do nothing.
+const ineffectiveFullAuto = computed(() =>
+  isIneffectiveFullAuto(form.value.fullAuto, form.value.blockPatterns.length, form.value.denyRiskThreshold || null),
+)
+
 const riskOptions = [
-  { label: 'Kein Schwellwert', value: '' },
+  { label: 'Keine', value: '' },
   { label: 'Low', value: 'low' },
   { label: 'Medium', value: 'medium' },
   { label: 'High (empfohlen)', value: 'high' },
@@ -117,30 +104,9 @@ const durationOptions = [
 ]
 const methodOptions = HTTP_METHODS.map(m => ({ label: m === '*' ? 'ALL' : m, value: m }))
 
-const accentClass = computed(() => {
-  switch (props.bucket.accent) {
-    case 'blue': return 'border-blue-700/40 bg-blue-950/20'
-    case 'orange': return 'border-orange-700/40 bg-orange-950/20'
-    case 'purple': return 'border-purple-700/40 bg-purple-950/20'
-    default: return 'border-gray-700 bg-gray-900/40'
-  }
-})
-
-// Risk threshold has the SAME semantic in both modes ("alles bis zu diesem
-// Level wird auto-approved"). Hidden only for Web because there's no shape
-// resolver / risk score for ape-proxy grants.
+// Risk threshold has the same semantic in both modes. Hidden only for the
+// Netzwerk group because ape-proxy grants carry no shape-resolved risk score.
 const showRiskThreshold = computed(() => props.bucket.id !== 'web')
-
-// List header changes meaning with the YOLO toggle. Both wordings honest:
-//  - YOLO ON  → list contents are denied (everything else auto-approved)
-//  - YOLO OFF → list contents are allowed (everything else needs human)
-const listLabel = computed(() => form.value.yoloOn ? 'Deny-Patterns (Ausnahmen vom Auto-Approve)' : 'Allow-Patterns (was auto-approved werden darf)')
-const listEmptyHint = computed(() => form.value.yoloOn
-  ? 'Keine Deny-Patterns. YOLO approved JEDEN Request automatisch.'
-  : 'Keine Allow-Patterns. Jeder Request wartet auf manuelle Bestätigung.',
-)
-
-// --- Data flow --------------------------------------------------------------
 
 async function load() {
   loading.value = true
@@ -162,11 +128,11 @@ async function load() {
     const rep = representativePolicy.value
     if (rep) {
       form.value = {
-        yoloOn: rep.mode !== 'allow-list',
+        fullAuto: fullAutoFromMode(rep.mode),
         denyRiskThreshold: (rep.denyRiskThreshold ?? '') as FormState['denyRiskThreshold'],
-        denyPatterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
+        blockPatterns: (rep.denyPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
         allowPatterns: (rep.allowPatterns ?? []).map(p => parsePattern(p, props.bucket.patternShape)),
-        duration: rep.expiresAt ? '' : '',
+        duration: '',
       }
     }
     else {
@@ -175,21 +141,21 @@ async function load() {
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string } }
-    error.value = e.data?.title ?? 'YOLO-Policies konnten nicht geladen werden'
+    error.value = e.data?.title ?? 'Regeln konnten nicht geladen werden'
   }
   finally {
     loading.value = false
   }
 }
 
-function addPatternRow() {
-  activePatterns.value = [...activePatterns.value, { method: '*', value: '' }]
+function addRow(list: 'blockPatterns' | 'allowPatterns') {
+  form.value[list] = [...form.value[list], { method: '*', value: '' }]
 }
 
-function removePatternRow(i: number) {
-  const next = activePatterns.value.slice()
+function removeRow(list: 'blockPatterns' | 'allowPatterns', i: number) {
+  const next = form.value[list].slice()
   next.splice(i, 1)
-  activePatterns.value = next
+  form.value[list] = next
 }
 
 function serializeRows(rows: PatternRow[]): string[] {
@@ -206,14 +172,12 @@ async function save() {
     const expiresAt = Number.isFinite(durationSec) && durationSec > 0
       ? Math.floor(Date.now() / 1000) + durationSec
       : null
-    // Send BOTH lists every save so the inactive one is preserved across mode
-    // flips. The server treats the unspecified list as "keep current" only
-    // when the field is absent — we always include both, so what the user
-    // sees is what they get.
+    // Both lists go to the server on every save — what the owner sees is
+    // what is stored, in both modes.
     const body = {
-      mode: modeFromToggle(form.value.yoloOn),
+      mode: modeFromFullAuto(form.value.fullAuto),
       denyRiskThreshold: showRiskThreshold.value ? (form.value.denyRiskThreshold || null) : null,
-      denyPatterns: serializeRows(form.value.denyPatterns),
+      denyPatterns: serializeRows(form.value.blockPatterns),
       allowPatterns: serializeRows(form.value.allowPatterns),
       expiresAt,
     }
@@ -235,7 +199,7 @@ async function save() {
 }
 
 async function reset() {
-  if (!confirm(`Policy für ${props.bucket.label} wirklich löschen? Default-Verhalten (jeder Request manuell) wird wiederhergestellt.`)) return
+  if (!confirm(`Regeln für ${props.bucket.label} wirklich löschen? Danach braucht wieder jede Aktion deine Freigabe.`)) return
   submitting.value = true
   error.value = ''
   try {
@@ -261,31 +225,26 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
 </script>
 
 <template>
-  <div class="border rounded-lg p-4 space-y-3" :class="[accentClass]">
+  <div
+    class="border rounded-lg p-4 space-y-3"
+    :class="form.fullAuto ? 'border-amber-600/60 bg-amber-950/15' : 'border-gray-700 bg-gray-900/40'"
+  >
     <div class="flex items-start justify-between gap-2">
       <div class="flex items-start gap-3">
         <UIcon :name="bucket.icon" class="w-5 h-5 mt-0.5 text-gray-300" />
         <div>
           <h3 class="text-base font-semibold flex items-center gap-2">
             {{ bucket.label }}
+            <UBadge v-if="aggregate === 'partial'" color="warning" variant="outline" size="sm">
+              teilweise gesetzt
+            </UBadge>
           </h3>
           <p class="text-xs text-gray-400 mt-1">
             {{ bucket.description }}
           </p>
-          <p class="text-xs text-gray-500 mt-1 font-mono">
-            audiences: {{ bucket.audiences.join(', ') }}
-          </p>
         </div>
       </div>
     </div>
-
-    <UAlert
-      v-if="bucket.notice"
-      color="info"
-      variant="subtle"
-      :title="bucket.notice"
-      icon="i-lucide-info"
-    />
 
     <UAlert v-if="error" color="error" :title="error" @close="error = ''" />
 
@@ -294,54 +253,56 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
     </div>
 
     <template v-else>
-      <!-- YOLO toggle: ON = default allow / list = deny-exceptions.
-           OFF = default deny / list = allow-exceptions. -->
-      <div class="flex items-center justify-between gap-3 p-3 rounded-md bg-gray-900/60 border border-gray-700/60">
+      <!-- Vollautomatik: default allow, Blockliste als Veto. Deliberately the
+           loudest element on the card — this is the dangerous switch. -->
+      <div
+        class="flex items-center justify-between gap-3 p-3 rounded-md border"
+        :class="form.fullAuto ? 'bg-amber-950/40 border-amber-600/60' : 'bg-gray-900/60 border-gray-700/60'"
+      >
         <div>
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-zap" class="w-4 h-4" :class="form.yoloOn ? 'text-amber-400' : 'text-gray-500'" />
-            <span class="text-sm font-semibold">YOLO-Modus</span>
-            <UBadge v-if="form.yoloOn" color="warning" variant="subtle" size="sm">
-              an — default allow
-            </UBadge>
-            <UBadge v-else color="neutral" variant="subtle" size="sm">
-              aus — default deny
-            </UBadge>
-            <UBadge v-if="aggregate === 'partial'" color="warning" variant="outline" size="sm">
-              teilweise
+            <UIcon name="i-lucide-zap" class="w-4 h-4" :class="form.fullAuto ? 'text-amber-400' : 'text-gray-500'" />
+            <span class="text-sm font-semibold">Vollautomatik</span>
+            <UBadge v-if="form.fullAuto" color="warning" variant="subtle" size="sm">
+              an
             </UBadge>
           </div>
-          <p class="text-xs text-gray-400 mt-1">
-            <span v-if="form.yoloOn">Jeder Request auto-approved — die Liste unten ist eine <strong>Deny</strong>-Liste (engt weiter ein).</span>
-            <span v-else>Jeder Request wartet auf manuelle Bestätigung — die Liste unten ist eine <strong>Allow</strong>-Liste (öffnet weiter).</span>
-            <span v-if="showRiskThreshold && form.denyRiskThreshold">
-              Plus: alles bis Risiko <code class="font-mono">{{ form.denyRiskThreshold }}</code> wird zusätzlich auto-approved.
-            </span>
+          <p class="text-xs mt-1" :class="form.fullAuto ? 'text-amber-200/80' : 'text-gray-400'">
+            <span v-if="form.fullAuto">Alles wird automatisch erlaubt — außer es steht in „Immer blockiert".</span>
+            <span v-else>Aus — jede Aktion braucht deine Freigabe, außer sie steht in „Ohne Rückfrage erlaubt".</span>
           </p>
         </div>
-        <USwitch v-model="form.yoloOn" />
+        <USwitch v-model="form.fullAuto" />
       </div>
 
-      <!-- Always-visible pattern list; label flips with the toggle. -->
+      <UAlert
+        v-if="ineffectiveFullAuto"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-alert-triangle"
+        title="Wirkungslos ohne Einschränkung"
+        description="Vollautomatik braucht mindestens eine Blocklisten-Regel oder eine Risiko-Schwelle — sonst ignoriert der IdP die Policy und jede Anfrage wartet weiter auf dich."
+      />
+
+      <!-- „Immer blockiert" — the veto list, active in BOTH modes. -->
       <div>
         <div class="flex items-center justify-between mb-1">
-          <label class="text-sm font-medium text-gray-300">{{ listLabel }}</label>
-          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addPatternRow">
-            Hinzufügen
+          <label class="text-sm font-medium text-gray-300 flex items-center gap-1.5">
+            <UIcon name="i-lucide-ban" class="w-3.5 h-3.5 text-red-400" />
+            Immer blockiert
+          </label>
+          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addRow('blockPatterns')">
+            Regel
           </UButton>
         </div>
         <p class="text-xs text-gray-500 mb-2">
-          {{ bucket.patternHelp }}
+          Veto-Liste: gilt immer, auch bei Vollautomatik. {{ bucket.patternHelp }}
         </p>
-        <div v-if="activePatterns.length === 0" class="text-xs italic text-gray-500 py-2">
-          {{ listEmptyHint }}
+        <div v-if="form.blockPatterns.length === 0" class="text-xs italic text-gray-500 py-1">
+          Keine Blockregeln.
         </div>
         <div v-else class="space-y-2">
-          <div
-            v-for="(row, i) in activePatterns"
-            :key="i"
-            class="flex items-center gap-2"
-          >
+          <div v-for="(row, i) in form.blockPatterns" :key="i" class="flex items-center gap-2">
             <USelect
               v-if="bucket.patternShape === 'method-url'"
               v-model="row.method"
@@ -354,35 +315,73 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
               class="flex-1"
               :class="{ 'font-mono text-xs': bucket.patternShape === 'method-url' }"
             />
-            <UButton
-              size="xs"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              @click="removePatternRow(i)"
-            />
+            <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeRow('blockPatterns', i)" />
           </div>
         </div>
       </div>
 
-      <!-- YOLO-Timer + Risiko-Schwelle (deny-mode + non-web only). -->
+      <!-- „Ohne Rückfrage erlaubt" — active only while Vollautomatik is off. -->
+      <div :class="{ 'opacity-60': form.fullAuto }">
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-medium text-gray-300 flex items-center gap-1.5">
+            <UIcon name="i-lucide-check-circle-2" class="w-3.5 h-3.5 text-green-400" />
+            Ohne Rückfrage erlaubt
+          </label>
+          <UButton size="xs" variant="ghost" icon="i-lucide-plus" @click="addRow('allowPatterns')">
+            Pattern
+          </UButton>
+        </div>
+        <p v-if="form.fullAuto" class="text-xs text-amber-200/70 mb-2">
+          Inaktiv, solange Vollautomatik an ist — dann ist ohnehin alles erlaubt, was nicht blockiert ist. Die Liste bleibt gespeichert.
+        </p>
+        <p v-else class="text-xs text-gray-500 mb-2">
+          {{ bucket.patternHelp }}
+        </p>
+        <div v-if="form.allowPatterns.length === 0" class="text-xs italic text-gray-500 py-1">
+          Keine Patterns — jede Anfrage wartet auf dich.
+        </div>
+        <div v-else class="space-y-2">
+          <div v-for="(row, i) in form.allowPatterns" :key="i" class="flex items-center gap-2">
+            <USelect
+              v-if="bucket.patternShape === 'method-url'"
+              v-model="row.method"
+              :items="methodOptions"
+              class="w-28 shrink-0"
+            />
+            <UInput
+              v-model="row.value"
+              :placeholder="bucket.patternPlaceholder"
+              class="flex-1"
+              :class="{ 'font-mono text-xs': bucket.patternShape === 'method-url' }"
+            />
+            <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash-2" @click="removeRow('allowPatterns', i)" />
+          </div>
+        </div>
+        <!-- Scoped standing grants render here so the owner sees ONE
+             "ohne Rückfrage"-Liste, fed by two mechanisms. -->
+        <slot name="allow-extra" />
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <UFormField label="YOLO-Timer" help="Nach Ablauf wird die Policy gelöscht (zurück zu default deny).">
-          <USelect v-model="form.duration" :items="durationOptions" />
-        </UFormField>
         <UFormField
           v-if="showRiskThreshold"
           label="Risiko-Schwelle"
-          help="Alles bis zu diesem Level wird auto-approved, alles darüber wartet auf manuelle Bestätigung. Wirkt in beiden Modi (im YOLO-aus-Modus zusammen mit der Allow-Liste)."
+          help="Anfragen bis zu dieser Risiko-Stufe werden automatisch erlaubt — darüber wartet die Anfrage auf dich. Gilt zusätzlich zu den Listen."
         >
           <USelect v-model="form.denyRiskThreshold" :items="riskOptions" />
         </UFormField>
+        <UFormField label="Automatisch beenden" help="Nach Ablauf werden die Regeln gelöscht — danach fragt wieder alles nach.">
+          <USelect v-model="form.duration" :items="durationOptions" />
+        </UFormField>
       </div>
 
-      <!-- Action row. -->
+      <p v-if="provenanceLine" class="text-xs text-gray-500 border-t border-gray-800 pt-2">
+        {{ provenanceLine }} — automatische Syncs (z. B. aus troop-Rollen) überschreiben Handänderungen beim nächsten Lauf.
+      </p>
+
       <div class="flex items-center justify-between gap-2 pt-1">
         <span v-if="expiryLabel" class="text-xs text-gray-500">
-          Aktuell aktiv bis: <span class="font-mono">{{ expiryLabel }}</span>
+          Aktiv bis: <span class="font-mono">{{ expiryLabel }}</span>
         </span>
         <span v-else />
         <div class="flex gap-2">
@@ -398,7 +397,7 @@ watch(() => props.agentEmail, () => { if (props.agentEmail) load() }, { immediat
             Zurücksetzen
           </UButton>
           <UButton
-            color="warning"
+            :color="form.fullAuto ? 'warning' : 'primary'"
             size="sm"
             icon="i-lucide-save"
             :loading="submitting"
