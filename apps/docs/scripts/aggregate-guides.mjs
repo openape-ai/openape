@@ -17,10 +17,11 @@ const monorepoRoot = join(docsRoot, '..', '..')
 
 // dir under apps/ → { slug, title } for the guide page + screenshot folder.
 // An app only appears here once it has captured guides (apps/<app>/docs/
-// stories.json). openape-monitor and openape-question-service run in prod but
-// have no story-kit story and no local-stack service yet, so they have no page
-// in this section — add compose/demo/stories/<app>.mjs and a local-stack
-// service first, then list them here.
+// stories.json). openape-monitor, openape-question-service and
+// openape-dashboard run in prod but have no story-kit story and no local-stack
+// service yet, so they have no page in this section — add
+// compose/demo/stories/<app>.mjs and a local-stack service first, then list
+// them here.
 const APPS = [
   { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
   { dir: 'openape-troop', slug: 'troop', title: 'Troop' },
@@ -30,6 +31,7 @@ const APPS = [
   { dir: 'openape-testrun', slug: 'testrun', title: 'Testrun' },
   { dir: 'openape-timetrack', slug: 'timetrack', title: 'Timetrack' },
   { dir: 'openape-pr', slug: 'pr', title: 'PR' },
+  { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
 ]
 
 const sectionDir = join(docsRoot, 'content', '5.apps')
