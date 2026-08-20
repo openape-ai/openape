@@ -200,6 +200,12 @@ export function createMultiAgentProxy(
 
       const effectiveEmail = agentEmail ?? agentConf.email
       const grantsClient = grantsClients.get(agentConf.email)!
+      // The verified agent JWT, forwarded to the IdP on grant requests
+      // (#1276): the grants API requires bearer auth and binds the grant's
+      // requester to the token subject.
+      const rawAgentToken = agentIdentity
+        ? req.headers.get('proxy-authorization')?.match(/^Bearer (.+)$/i)?.[1]
+        : undefined
 
       // Build a ProxyConfig-shaped object for evaluateRules
       const rulesConfig: ProxyConfig = {
@@ -280,6 +286,7 @@ export function createMultiAgentProxy(
           reason: `${method} ${targetUrl}`,
           requestHash,
           duration: rule.duration,
+          agentToken: rawAgentToken,
         }).catch(() => null)
 
         writeAudit({
@@ -312,6 +319,7 @@ export function createMultiAgentProxy(
           reason: `${method} ${targetUrl}`,
           requestHash,
           duration: rule.duration,
+          agentToken: rawAgentToken,
         })
 
         const approved = await grantsClient.waitForApproval(grant.id)
