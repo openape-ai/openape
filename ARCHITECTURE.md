@@ -96,6 +96,7 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
 | `question-service` | `question-service` | openape-question-service | 3017 | question-service.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
+| `crm` | `crm` | openape-crm | 3024 | crm.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
