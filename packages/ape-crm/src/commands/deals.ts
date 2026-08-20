@@ -12,8 +12,6 @@ interface Deal {
   org_name: string | null
 }
 
-const STAGES = ['lead', 'qualified', 'proposal', 'won', 'lost']
-
 function formatDeal(d: Deal): string {
   const who = [d.contact_name, d.org_name].filter(Boolean).join(', ')
   const euro = (d.value_cents / 100).toFixed(0)
@@ -24,7 +22,7 @@ const list = defineCommand({
   meta: { name: 'list', description: 'List deals, optionally filtered by stage.' },
   args: {
     workspace: { type: 'string', description: 'Workspace ULID (default: the one set via `workspaces use`).' },
-    stage: { type: 'string', description: `Only this stage (${STAGES.join('|')}).` },
+    stage: { type: 'string', description: 'Only this stage key — see `ape-crm stages`.' },
     json: { type: 'boolean', description: 'JSON output.' },
     endpoint: { type: 'string', description: 'Override endpoint.' },
   },
@@ -45,7 +43,7 @@ const create = defineCommand({
   args: {
     title: { type: 'string', description: 'Deal title.', required: true },
     value: { type: 'string', description: 'Value in EUR (default 0).' },
-    stage: { type: 'string', description: `Stage (default lead): ${STAGES.join('|')}.` },
+    stage: { type: 'string', description: 'Stage key (default: the first stage) — see `ape-crm stages`.' },
     contact: { type: 'string', description: 'Contact ULID.' },
     org: { type: 'string', description: 'Organization ULID.' },
     workspace: { type: 'string', description: 'Workspace ULID.' },
@@ -59,7 +57,7 @@ const create = defineCommand({
         workspace_id: resolveWorkspaceId(args.workspace),
         title: args.title,
         value_cents: Math.round(Number(args.value ?? 0) * 100),
-        stage: args.stage ?? 'lead',
+        stage: args.stage,
         contact_id: args.contact ?? null,
         org_id: args.org ?? null,
       },
@@ -73,7 +71,7 @@ const move = defineCommand({
   meta: { name: 'move', description: 'Move a deal to another stage.' },
   args: {
     id: { type: 'positional', required: true, description: 'Deal ULID.' },
-    stage: { type: 'positional', required: true, description: STAGES.join('|') },
+    stage: { type: 'positional', required: true, description: 'Stage key — see `ape-crm stages`.' },
     json: { type: 'boolean', description: 'JSON output.' },
     endpoint: { type: 'string', description: 'Override endpoint.' },
   },

@@ -1,6 +1,10 @@
 import type { Deal } from '../app/utils/board'
+import type { PipelineStage } from '../shared/stages'
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_STAGES } from '../shared/stages'
 import { buildColumns, dropInto, formatEuro } from '../app/utils/board'
+
+const STAGES: PipelineStage[] = DEFAULT_STAGES.map((stage, position) => ({ ...stage, position }))
 
 function deal(id: string, stage: string, position: number, valueCents = 0): Deal {
   // `stage` bleibt hier absichtlich ein roher String: die Spaltenlogik muss
@@ -9,7 +13,7 @@ function deal(id: string, stage: string, position: number, valueCents = 0): Deal
     id,
     title: id,
     value_cents: valueCents,
-    stage: stage as Deal['stage'],
+    stage,
     position,
     contact_id: null,
     contact_name: null,
@@ -22,24 +26,34 @@ function deal(id: string, stage: string, position: number, valueCents = 0): Deal
 
 describe('buildColumns', () => {
   it('returns one column per stage, even when empty', () => {
-    const columns = buildColumns([])
-    expect(columns.map(c => c.stage)).toEqual(['lead', 'qualified', 'proposal', 'won', 'lost'])
+    const columns = buildColumns([], STAGES)
+    expect(columns.map(c => c.stage.key)).toEqual(['lead', 'qualified', 'proposal', 'won', 'lost'])
     expect(columns.every(c => c.deals.length === 0)).toBe(true)
   })
 
   it('sorts a column by position, not by arrival order', () => {
-    const columns = buildColumns([deal('b', 'lead', 1), deal('a', 'lead', 0)])
+    const columns = buildColumns([deal('b', 'lead', 1), deal('a', 'lead', 0)], STAGES)
     expect(columns[0]!.deals.map(d => d.id)).toEqual(['a', 'b'])
   })
 
   it('sums the values of each column', () => {
-    const columns = buildColumns([deal('a', 'lead', 0, 5000), deal('b', 'lead', 1, 2500), deal('c', 'won', 0, 100)])
+    const columns = buildColumns([deal('a', 'lead', 0, 5000), deal('b', 'lead', 1, 2500), deal('c', 'won', 0, 100)], STAGES)
     expect(columns[0]!.totalCents).toBe(7500)
-    expect(columns.find(c => c.stage === 'won')!.totalCents).toBe(100)
+    expect(columns.find(c => c.stage.key === 'won')!.totalCents).toBe(100)
   })
 
-  it('ignores an unknown stage instead of inventing a column', () => {
-    expect(buildColumns([deal('x', 'archived', 0)]).every(c => c.deals.length === 0)).toBe(true)
+  it('ignores a stage that is not in the pipeline instead of inventing a column', () => {
+    expect(buildColumns([deal('x', 'archived', 0)], STAGES).every(c => c.deals.length === 0)).toBe(true)
+  })
+
+  it('follows a renamed pipeline, keys and order included', () => {
+    const custom: PipelineStage[] = [
+      { key: 'won', name: 'Auftrag', outcome: 'won', position: 0 },
+      { key: 'lead', name: 'Anfrage', outcome: 'open', position: 1 },
+    ]
+    const columns = buildColumns([deal('a', 'lead', 0)], custom)
+    expect(columns.map(c => c.stage.name)).toEqual(['Auftrag', 'Anfrage'])
+    expect(columns[1]!.deals.map(d => d.id)).toEqual(['a'])
   })
 })
 
