@@ -87,12 +87,19 @@ export function restoreTask(t: { id: string, company: string, owner: string, sys
   if (!asking) pending.push(t.id)
 }
 
+// Optional per-claim company filter: multiple workers of the SAME owner can
+// split the queue by company (exactly one claimer per company). Absent filter
+// keeps the legacy behavior — existing clients send no body and see no change.
+export interface ClaimCompanyFilter { company?: string, excludeCompanies?: string[] }
+
 // Owner-bound: an agent only ever claims tasks whose owner matches its own
 // DDISA identity — the per-user security + routing boundary (multi-user ready).
-export function claimNext(owner: string): QueueTask | null {
+export function claimNext(owner: string, filter?: ClaimCompanyFilter): QueueTask | null {
   for (let i = 0; i < pending.length; i++) {
     const task = tasks.get(pending[i]!)
     if (!task) { pending.splice(i, 1); i--; continue }
+    if (filter?.company !== undefined && task.company !== filter.company) continue
+    if (filter?.excludeCompanies?.includes(task.company)) continue
     if (task.owner === owner && !task.claimed && task.state === 'submitted' &&
       (!task.notBefore || Date.now() >= task.notBefore)) {
       pending.splice(i, 1)
