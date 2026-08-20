@@ -2,12 +2,16 @@
 import { useOpenApeAuth } from '#imports'
 import { onMounted, ref, watch } from 'vue'
 import { apiFetch } from '../utils/api'
+import { problemMessage } from '../utils/problem-message'
 
 interface Member { user_email: string, role: string, joined_at: number }
 
 const { user, fetchUser } = useOpenApeAuth()
 const { active, activeId, load: loadWorkspaces, create: createWorkspace } = useWorkspaces()
+const { run } = useApiAction()
 
+const loading = ref(true)
+const loadError = ref('')
 const members = ref<Member[]>([])
 const inviteUrl = ref('')
 const inviteRole = ref('member')
@@ -19,11 +23,19 @@ onMounted(async () => {
     await navigateTo('/')
     return
   }
-  await loadWorkspaces()
-  await reload()
+  try {
+    await loadWorkspaces()
+    await reload()
+  }
+  catch (error) {
+    loadError.value = problemMessage(error, 'Workspace konnte nicht geladen werden').title
+  }
+  finally {
+    loading.value = false
+  }
 })
 
-watch(activeId, reload)
+watch(activeId, () => void reload())
 
 async function reload() {
   inviteUrl.value = ''
@@ -35,17 +47,24 @@ async function reload() {
 }
 
 async function createInvite() {
-  const invite = await apiFetch<{ url: string }>(`/api/workspaces/${activeId.value}/invites`, {
-    method: 'POST',
-    body: { role: inviteRole.value },
-  })
-  inviteUrl.value = invite.url
+  const invite = await run(
+    () => apiFetch<{ url: string }>(`/api/workspaces/${activeId.value}/invites`, {
+      method: 'POST',
+      body: { role: inviteRole.value },
+    }),
+    { success: 'Einladungslink erzeugt', failure: 'Einladung konnte nicht erzeugt werden' },
+  )
+  if (invite) inviteUrl.value = invite.url
 }
 
 async function addWorkspace() {
-  await createWorkspace(newWorkspaceName.value)
+  const created = await run(
+    () => createWorkspace(newWorkspaceName.value),
+    { success: 'Workspace angelegt', failure: 'Workspace konnte nicht angelegt werden' },
+  )
+  if (created === null) return
   newWorkspaceName.value = ''
-  await reload()
+  await run(() => reload(), { failure: 'Mitglieder konnten nicht geladen werden' })
 }
 </script>
 
@@ -59,7 +78,14 @@ async function addWorkspace() {
         Deine Rolle: {{ active?.role ?? '—' }}
       </p>
 
+      <p v-if="loadError" class="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
+        {{ loadError }}
+      </p>
+
       <ul class="mt-4 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
+        <li v-if="loading" class="p-6 text-center text-sm text-zinc-500">
+          Lade …
+        </li>
         <li v-for="member in members" :key="member.user_email" class="flex items-center justify-between p-3">
           <span class="truncate">{{ member.user_email }}</span>
           <span class="text-xs text-zinc-400">{{ member.role }}</span>
