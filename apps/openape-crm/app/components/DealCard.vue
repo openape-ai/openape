@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import type { PipelineStage } from '#shared/stages'
 import type { Deal } from '../utils/board'
 import { computed } from 'vue'
-import { STAGE_LABELS, STAGES } from '#shared/stages'
 import { formatEuro } from '../utils/board'
 
-const props = defineProps<{ deal: Deal }>()
+const props = defineProps<{ deal: Deal, stages: PipelineStage[] }>()
 const emit = defineEmits<{ open: [], move: [stage: string] }>()
 
 const subtitle = computed(() => [props.deal.contact_name, props.deal.org_name].filter(Boolean).join(' · '))
 const closedOn = computed(() =>
   props.deal.closed_at ? new Date(props.deal.closed_at).toLocaleDateString('de-AT') : '',
 )
-const stageItems = STAGES.map(stage => ({ label: STAGE_LABELS[stage], value: stage }))
+const stageItems = computed(() => props.stages.map(stage => ({ label: stage.name, value: stage.key })))
 </script>
 
 <template>

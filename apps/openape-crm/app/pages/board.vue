@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { Stage } from '#shared/stages'
+import type { Outcome, PipelineStage } from '#shared/stages'
 import type { Deal } from '../utils/board'
 import { useOpenApeAuth } from '#imports'
 import { computed, onMounted, ref, watch } from 'vue'
-import { STAGE_LABELS, STAGES } from '#shared/stages'
+import { MAX_STAGE_NAME } from '#shared/stages'
 import { apiFetch } from '../utils/api'
 import { buildColumns, dropInto } from '../utils/board'
 import { problemMessage } from '../utils/problem-message'
@@ -12,31 +12,36 @@ interface ContactRow { id: string, name: string, org_name: string | null }
 interface Note { id: string, body: string, author_email: string, created_at: number }
 
 const { user, fetchUser } = useOpenApeAuth()
-const { list: workspaces, activeId, load: loadWorkspaces, create: createWorkspace } = useWorkspaces()
+const { list: workspaces, active, activeId, load: loadWorkspaces, create: createWorkspace } = useWorkspaces()
 const { run } = useApiAction()
 
 const loading = ref(true)
 const loadError = ref('')
 const deals = ref<Deal[]>([])
 const contacts = ref<ContactRow[]>([])
-const columns = computed(() => buildColumns(deals.value))
+const stages = ref<PipelineStage[]>([])
+const columns = computed(() => buildColumns(deals.value, stages.value))
+/** Die Pipeline ist Konfiguration — daran darf nur, wer auch einladen darf. */
+const canEditStages = computed(() => active.value?.role === 'owner' || active.value?.role === 'manager')
 const draggedId = ref<string | null>(null)
 
 const newWorkspaceName = ref('')
 const showNewDeal = ref(false)
-const newDeal = ref<{ title: string, euro: number | null, stage: Stage, contact_id: string }>({
-  title: '',
-  euro: null,
-  stage: 'lead',
-  contact_id: '',
-})
+const newDeal = ref({ title: '', euro: null as number | null, stage: '', contact_id: '' })
 
 const openDeal = ref<Deal | null>(null)
-const edit = ref({ title: '', euro: null as number | null, stage: 'lead' as Stage, contact_id: '' })
+const edit = ref({ title: '', euro: null as number | null, stage: '', contact_id: '' })
 const saving = ref(false)
 const notes = ref<Note[]>([])
 const noteBody = ref('')
 const confirmDelete = ref(false)
+
+const showNewStage = ref(false)
+const newStageName = ref('')
+const newStageOutcome = ref<Outcome>('open')
+const insertAfter = ref<string | null>(null)
+const removingStage = ref<PipelineStage | null>(null)
+const moveTo = ref('')
 
 onMounted(async () => {
   await fetchUser()
@@ -62,14 +67,17 @@ async function reload() {
   if (!activeId.value) {
     deals.value = []
     contacts.value = []
+    stages.value = []
     return
   }
-  const [d, c] = await Promise.all([
+  const [d, c, s] = await Promise.all([
     apiFetch<Deal[]>(`/api/deals?workspace_id=${activeId.value}`),
     apiFetch<ContactRow[]>(`/api/contacts?workspace_id=${activeId.value}`),
+    apiFetch<PipelineStage[]>(`/api/stages?workspace_id=${activeId.value}`),
   ])
   deals.value = d
   contacts.value = c
+  stages.value = s
 }
 
 /** Nach jeder Änderung: frisch vom Server, damit Positionen nicht auseinanderlaufen. */
@@ -77,12 +85,12 @@ async function refresh() {
   await run(() => reload(), { failure: 'Board konnte nicht aktualisiert werden' })
 }
 
-async function onDrop(stage: Stage, beforeId: string | null) {
+async function onDrop(stage: string, beforeId: string | null) {
   const dealId = draggedId.value
   draggedId.value = null
   if (!dealId) return
 
-  const column = columns.value.find(c => c.stage === stage)!
+  const column = columns.value.find(c => c.stage.key === stage)!
   const ids = dropInto(column.deals.map(d => d.id), dealId, beforeId)
   const moved = await run(
     () => apiFetch('/api/deals/reorder', {
@@ -97,7 +105,7 @@ async function onDrop(stage: Stage, beforeId: string | null) {
 async function moveDeal(deal: Deal, stage: string) {
   const moved = await run(
     () => apiFetch(`/api/deals/${deal.id}`, { method: 'PATCH', body: { stage } }),
-    { success: `„${deal.title}" ist jetzt ${STAGE_LABELS[stage as Stage]}`, failure: 'Stufe konnte nicht geändert werden' },
+    { success: `„${deal.title}" ist jetzt ${stageName(stage)}`, failure: 'Stufe konnte nicht geändert werden' },
   )
   if (moved !== null) await refresh()
 }
@@ -118,7 +126,7 @@ async function submitNewDeal() {
   )
   if (created === null) return
   showNewDeal.value = false
-  newDeal.value = { title: '', euro: null, stage: 'lead', contact_id: '' }
+  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: '' }
   await refresh()
 }
 
@@ -129,6 +137,58 @@ async function addFirstWorkspace() {
   )
   if (created === null) return
   newWorkspaceName.value = ''
+  await refresh()
+}
+
+function openNewDeal() {
+  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: '' }
+  showNewDeal.value = true
+}
+
+async function patchStage(stage: PipelineStage, body: Record<string, unknown>, success: string) {
+  const saved = await run(
+    () => apiFetch(`/api/stages/${stage.key}`, {
+      method: 'PATCH',
+      body: { workspace_id: activeId.value, ...body },
+    }),
+    { success, failure: 'Stufe konnte nicht geändert werden' },
+  )
+  if (saved !== null) await refresh()
+}
+
+async function addStage(after: string | null) {
+  const created = await run(
+    () => apiFetch<PipelineStage>('/api/stages', {
+      method: 'POST',
+      body: { workspace_id: activeId.value, name: newStageName.value, outcome: newStageOutcome.value, after },
+    }),
+    { success: `Stufe „${newStageName.value.trim()}" angelegt`, failure: 'Stufe konnte nicht angelegt werden' },
+  )
+  if (created === null) return
+  newStageName.value = ''
+  newStageOutcome.value = 'open'
+  insertAfter.value = null
+  showNewStage.value = false
+  await refresh()
+}
+
+/** Löschen fragt zwingend nach dem Ziel — kein Deal verschwindet mit seiner Spalte. */
+function askRemoveStage(stage: PipelineStage) {
+  removingStage.value = stage
+  moveTo.value = stages.value.find(s => s.key !== stage.key)?.key ?? ''
+}
+
+async function removeStage() {
+  const stage = removingStage.value
+  if (!stage) return
+  const query = new URLSearchParams({ workspace_id: activeId.value })
+  if (moveTo.value) query.set('move_to', moveTo.value)
+  const deleted = await run(
+    () => apiFetch(`/api/stages/${stage.key}?${query}`, { method: 'DELETE' }),
+    { success: `Stufe „${stage.name}" gelöscht`, failure: 'Stufe konnte nicht gelöscht werden' },
+  )
+  removingStage.value = null
+  if (deleted === null) return
   await refresh()
 }
 
@@ -205,11 +265,31 @@ function retry() {
   window.location.reload()
 }
 
-const stageItems = STAGES.map(stage => ({ label: STAGE_LABELS[stage], value: stage }))
+const stageItems = computed(() => stages.value.map(stage => ({ label: stage.name, value: stage.key })))
+function stageName(key: string): string {
+  return stages.value.find(s => s.key === key)?.name ?? key
+}
 const contactItems = computed(() => [
   { label: 'ohne Kontakt', value: '' },
   ...contacts.value.map(c => ({ label: c.org_name ? `${c.name} (${c.org_name})` : c.name, value: c.id })),
 ])
+const OUTCOME_LABELS: Record<Outcome, string> = { open: 'offen', won: 'gewonnen', lost: 'verloren' }
+function outcomeLabel(outcome: Outcome): string {
+  return OUTCOME_LABELS[outcome]
+}
+const outcomeItems = [
+  { label: 'Offen', value: 'open' },
+  { label: 'Gewonnen', value: 'won' },
+  { label: 'Verloren', value: 'lost' },
+]
+const removingCount = computed(() =>
+  columns.value.find(c => c.stage.key === removingStage.value?.key)?.deals.length ?? 0,
+)
+const moveTargets = computed(() =>
+  stages.value
+    .filter(s => s.key !== removingStage.value?.key)
+    .map(s => ({ label: s.name, value: s.key })),
+)
 const deleteConsequence = computed(() =>
   notes.value.length
     ? `„${openDeal.value?.title}" wird samt ${notes.value.length} Notiz${notes.value.length === 1 ? '' : 'en'} entfernt. Das lässt sich nicht rückgängig machen.`
@@ -259,7 +339,7 @@ const deleteConsequence = computed(() =>
         <h1 class="text-xl font-semibold">
           Pipeline
         </h1>
-        <UButton icon="i-lucide-plus" @click="showNewDeal = true">
+        <UButton icon="i-lucide-plus" @click="openNewDeal">
           Neuer Deal
         </UButton>
       </div>
@@ -267,13 +347,31 @@ const deleteConsequence = computed(() =>
       <div class="mt-6 flex gap-4 overflow-x-auto pb-4">
         <BoardColumn
           v-for="column in columns"
-          :key="column.stage"
+          :key="column.stage.key"
           :column="column"
+          :stages="stages"
+          :editable="canEditStages"
           @drag-card="draggedId = $event"
-          @drop-on="onDrop(column.stage, $event)"
+          @drop-on="onDrop(column.stage.key, $event)"
           @open="show"
           @move="moveDeal"
+          @rename="patchStage(column.stage, { name: $event }, `Stufe heißt jetzt „${$event}“`)"
+          @outcome="patchStage(column.stage, { outcome: $event }, `„${column.stage.name}“ zählt jetzt als ${outcomeLabel($event)}`)"
+          @reposition="patchStage(column.stage, { position: $event }, `„${column.stage.name}“ verschoben`)"
+          @insert-after="insertAfter = column.stage.key; showNewStage = true"
+          @remove="askRemoveStage(column.stage)"
         />
+
+        <!-- Der sichtbare Beweis, dass die Spalten nichts Festes sind. -->
+        <button
+          v-if="canEditStages"
+          type="button"
+          class="flex w-48 shrink-0 items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-800 p-3 text-sm text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+          @click="insertAfter = null; showNewStage = true"
+        >
+          <UIcon name="i-lucide-plus" class="size-4" />
+          Stufe
+        </button>
       </div>
     </template>
 
@@ -358,5 +456,50 @@ const deleteConsequence = computed(() =>
       :consequence="deleteConsequence"
       @confirm="removeDeal"
     />
+
+    <UModal v-model:open="showNewStage">
+      <template #content>
+        <form class="max-w-sm space-y-4 p-6" @submit.prevent="addStage(insertAfter)">
+          <h2 class="text-lg font-semibold">
+            Neue Stufe
+          </h2>
+          <UFormField label="Name" :hint="insertAfter ? `nach „${stageName(insertAfter)}“` : 'am Ende der Pipeline'">
+            <UInput v-model="newStageName" :maxlength="MAX_STAGE_NAME" size="lg" class="w-full" autofocus />
+          </UFormField>
+          <UFormField label="Ergebnis" hint="schließt den Deal ab">
+            <USelect v-model="newStageOutcome" :items="outcomeItems" size="lg" class="w-full" />
+          </UFormField>
+          <UButton type="submit" block size="lg" :disabled="!newStageName.trim()">
+            Anlegen
+          </UButton>
+        </form>
+      </template>
+    </UModal>
+
+    <UModal :open="!!removingStage" @update:open="removingStage = null">
+      <template #content>
+        <form v-if="removingStage" class="max-w-sm space-y-4 p-6" @submit.prevent="removeStage">
+          <h2 class="text-lg font-semibold">
+            Stufe „{{ removingStage.name }}“ löschen?
+          </h2>
+          <p class="text-sm text-zinc-400">
+            {{ removingCount
+              ? `${removingCount} Deal${removingCount === 1 ? '' : 's'} liegen darin und brauchen eine neue Stufe.`
+              : 'Die Stufe ist leer.' }}
+          </p>
+          <UFormField v-if="removingCount" label="Deals verschieben nach">
+            <USelect v-model="moveTo" :items="moveTargets" size="lg" class="w-full" />
+          </UFormField>
+          <div class="flex justify-end gap-2">
+            <UButton color="neutral" variant="ghost" @click="removingStage = null">
+              Abbrechen
+            </UButton>
+            <UButton type="submit" color="error" :disabled="!!removingCount && !moveTo">
+              Löschen
+            </UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
   </main>
 </template>
