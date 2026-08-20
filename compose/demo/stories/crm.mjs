@@ -6,6 +6,18 @@
 // session the browser just got, the same way an agent would post them.
 import { approveIfPrompted, click, fillEmail } from '../story-kit.mjs'
 
+/**
+ * Eine Fehlerseite ist kein Screenshot wert: ohne diese Sperre fotografiert der
+ * Capture einen 500er und der Guide zeigt ihn als Anleitung.
+ */
+async function expectRendered(page, marker) {
+  const body = await page.locator('body').innerText()
+  if (/internal server error|\b500\b/i.test(body))
+    throw new Error(`page rendered an error instead of content: ${body.slice(0, 200)}`)
+  if (marker && !body.includes(marker))
+    throw new Error(`expected "${marker}" on the page, got: ${body.slice(0, 200)}`)
+}
+
 /** Seed a workspace worth showing — a company, a contact and deals across the board. */
 async function seedPipeline(page, CRM) {
   const post = async (path, body) => {
@@ -77,6 +89,7 @@ export default async function run({ kit, page, CRM, EMAIL }) {
         await seedPipeline(page, CRM)
         await page.reload({ waitUntil: 'networkidle' })
         await page.waitForTimeout(1500)
+        await expectRendered(page, 'Website-Relaunch')
       },
       shot: 'board',
     }, 'Each card carries its title, value and the person behind it; the column header sums what is riding on that stage. Drag a card to move it, and the closing columns stand out so a full pipeline reads at a glance.')
@@ -85,6 +98,7 @@ export default async function run({ kit, page, CRM, EMAIL }) {
       do: async () => {
         await page.getByText('Website-Relaunch').first().click()
         await page.waitForTimeout(1800)
+        await expectRendered(page, 'Notiz')
       },
       shot: 'deal',
     }, 'Click a card to work it: title, value, stage and contact are editable, and the note history sits right below. Every note is stamped with who wrote it and when — a human or an agent.')
@@ -104,6 +118,7 @@ export default async function run({ kit, page, CRM, EMAIL }) {
         await page.keyboard.press('Escape')
         await page.goto(`${CRM}/contacts`, { waitUntil: 'networkidle' })
         await page.waitForTimeout(1500)
+        await expectRendered(page, 'Max Muster')
       },
       shot: 'contacts',
     }, 'People and the companies they work for live behind the board. Link a contact to a deal and the card shows who to call — the same records `ape-crm contacts` reads and writes.')
