@@ -2,6 +2,7 @@
 import { useOpenApeAuth } from '#imports'
 import { computed, onMounted, ref, watch } from 'vue'
 import { apiFetch } from '../utils/api'
+import { NO_SELECTION, selectionToId } from '../utils/board'
 import { problemMessage } from '../utils/problem-message'
 
 interface Contact { id: string, name: string, email: string | null, phone: string | null, org_id: string | null, org_name: string | null }
@@ -15,7 +16,7 @@ const loading = ref(true)
 const loadError = ref('')
 const contacts = ref<Contact[]>([])
 const organizations = ref<Organization[]>([])
-const newContact = ref({ name: '', email: '', phone: '', org_id: '' })
+const newContact = ref({ name: '', email: '', phone: '', org_id: NO_SELECTION })
 const newOrg = ref({ name: '', domain: '' })
 const pendingDelete = ref<Contact | null>(null)
 
@@ -53,12 +54,12 @@ async function addContact() {
   const created = await run(
     () => apiFetch('/api/contacts', {
       method: 'POST',
-      body: { workspace_id: activeId.value, ...newContact.value, org_id: newContact.value.org_id || null },
+      body: { workspace_id: activeId.value, ...newContact.value, org_id: selectionToId(newContact.value.org_id) },
     }),
     { success: `${newContact.value.name} angelegt`, failure: 'Kontakt konnte nicht angelegt werden' },
   )
   if (created === null) return
-  newContact.value = { name: '', email: '', phone: '', org_id: '' }
+  newContact.value = { name: '', email: '', phone: '', org_id: NO_SELECTION }
   await run(() => reload(), { failure: 'Liste konnte nicht aktualisiert werden' })
 }
 
@@ -88,7 +89,7 @@ async function removeContact() {
 }
 
 const orgItems = computed(() => [
-  { label: 'ohne Firma', value: '' },
+  { label: 'ohne Firma', value: NO_SELECTION },
   ...organizations.value.map(o => ({ label: o.name, value: o.id })),
 ])
 </script>

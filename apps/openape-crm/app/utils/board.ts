@@ -52,3 +52,19 @@ export function formatEuro(cents: number): string {
   return new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
     .format(cents / 100)
 }
+
+/**
+ * Nuxt UIs Select verbietet einen Eintrag mit leerem Wert — der leere String
+ * IST dort das Signal „nichts gewählt". Die Option „ohne …" braucht deshalb
+ * einen eigenen Schlüssel, der an der API-Grenze wieder zu `null` wird.
+ * Ein ULID kann damit nicht kollidieren.
+ */
+export const NO_SELECTION = 'none'
+
+export function selectionToId(value: string): string | null {
+  return value === NO_SELECTION || value === '' ? null : value
+}
+
+export function idToSelection(id: string | null | undefined): string {
+  return id ?? NO_SELECTION
+}
