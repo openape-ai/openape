@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 
 useHead({ title: 'Grants' })
 
@@ -130,10 +131,10 @@ async function loadMoreHistory() {
     loadingHistory.value = false
   }
 }
-async function approveGrant(id) {
+async function approveGrant(id, grantTypeOverride) {
   actionError.value = ''
   try {
-    const grantType = grantTypeSelections.value[id] ?? 'once'
+    const grantType = grantTypeOverride ?? grantTypeSelections.value[id] ?? 'once'
     const extendMode = extendModeSelections.value[id]
     const similar = similarGrantsData.value[id]
     const extendBody = extendMode && extendMode !== 'separate' && similar?.similar_grants?.length
@@ -189,10 +190,15 @@ async function confirmRevoke() {
     actionError.value = e.data?.statusMessage ?? 'Failed to revoke grant'
   }
 }
-function formatRequester(requester) {
-  if (requester.startsWith('agent:'))
-    return `Agent ${requester.slice(6, 14)}...`
-  return requester
+// Per-card disclosure for the advanced approval options (timed grants,
+// extend/widen against similar grants). The quick actions cover the common
+// phone-approval moment; everything else lives behind this toggle.
+const moreOptionsOpen = ref({})
+function toggleMoreOptions(id) {
+  moreOptionsOpen.value = { ...moreOptionsOpen.value, [id]: !moreOptionsOpen.value[id] }
+}
+function commandDisplay(grant) {
+  return unwrapShellCommand(grant.request?.command)
 }
 function formatTime(ts) {
   return new Date(ts * 1e3).toLocaleString()
@@ -238,28 +244,24 @@ function isExactCommand(detail) {
             <div class="flex flex-col gap-3">
               <div class="text-sm space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-mono text-xs text-dimmed">{{ grant.id.slice(0, 8) }}...</span>
-                  <UBadge color="warning" variant="soft" :label="grant.status" />
-                  <UBadge color="secondary" :label="grant.request.grant_type" />
+                  <span class="text-base font-semibold">{{ formatRequesterName(grant.request.requester) }}</span>
+                  <UBadge v-if="grant.request.run_as" color="warning" variant="soft" :label="`run as ${grant.request.run_as}`" />
+                  <span class="text-xs text-dimmed">on {{ grant.request.target_host }}</span>
                 </div>
-                <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
-                <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
-                <p v-if="cliSummary(grant)">
-                  <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
+                <p v-if="grant.request.reason">
+                  {{ grant.request.reason }}
                 </p>
-                <p v-if="grant.request.run_as">
-                  <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
+                <p v-if="cliSummary(grant)" class="text-muted">
+                  {{ cliSummary(grant) }}
                 </p>
-                <div v-if="grant.request.command?.length" class="mt-1">
-                  <span class="text-muted">Command:</span>
-                  <code class="block font-mono text-xs bg-default text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
-                </div>
-                <div v-if="grant.request.permissions?.length" class="mt-1">
-                  <span class="text-muted">Permissions:</span>
-                  <code class="block font-mono text-xs bg-default text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(", ") }}</code>
+                <div v-if="commandDisplay(grant)" class="mt-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-muted">Command:</span>
+                    <UBadge v-if="commandDisplay(grant).shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay(grant).shell}`" />
+                  </div>
+                  <code class="block font-mono text-xs bg-default text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ commandDisplay(grant).text }}</code>
                 </div>
                 <div v-if="cliDetails(grant).length" class="mt-1 space-y-1">
-                  <span class="text-muted">Structured Permissions:</span>
                   <div
                     v-for="detail in cliDetails(grant)"
                     :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
@@ -281,93 +283,116 @@ function isExactCommand(detail) {
                     </div>
                   </div>
                 </div>
-                <p v-if="grant.request.reason">
-                  <span class="text-muted">Reason:</span> {{ grant.request.reason }}
-                </p>
                 <p class="text-xs text-dimmed">
-                  Created: {{ formatTime(grant.created_at) }}
+                  {{ grant.request.requester }} · {{ formatTime(grant.created_at) }}
                 </p>
               </div>
-              <div v-if="hasSimilar(grant.id)" class="rounded border border-info/30 bg-info/5 px-3 py-2 space-y-2">
-                <div class="flex items-center gap-2">
-                  <UBadge color="info" variant="soft" label="Similar grants exist" />
-                </div>
-                <div
-                  v-for="similar in similarGrantsData[grant.id]?.similar_grants ?? []"
-                  :key="similar.grant.id"
-                  class="text-xs"
-                >
-                  <span class="text-muted">Existing:</span>
-                  <span class="font-mono text-dimmed">{{ similar.grant.id.slice(0, 8) }}...</span>
-                  <div
-                    v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
-                    :key="detail.permission"
-                    class="font-mono text-dimmed break-all"
-                  >
-                    {{ detail.permission }}
-                  </div>
-                </div>
-                <URadioGroup
-                  v-model="extendModeSelections[grant.id]"
-                  :items="EXTEND_MODE_OPTIONS"
-                />
-                <div v-if="extendModeSelections[grant.id] === 'widen'" class="rounded bg-elevated/50 px-2 py-1">
-                  <p class="text-xs text-muted">
-                    Result:
-                  </p>
-                  <p
-                    v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.widened_details ?? [])"
-                    :key="perm"
-                    class="font-mono text-xs text-green-400"
-                  >
-                    {{ perm }}
-                  </p>
-                </div>
-                <div v-if="extendModeSelections[grant.id] === 'merge'" class="rounded bg-elevated/50 px-2 py-1">
-                  <p class="text-xs text-muted">
-                    Result:
-                  </p>
-                  <p
-                    v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.merged_details ?? [])"
-                    :key="perm"
-                    class="font-mono text-xs text-blue-400"
-                  >
-                    {{ perm }}
-                  </p>
-                </div>
-              </div>
-              <div class="space-y-2">
-                <div>
-                  <label class="text-xs font-medium text-muted block mb-1">Approval Type</label>
-                  <URadioGroup
-                    v-model="grantTypeSelections[grant.id]"
-                    :items="GRANT_TYPE_OPTIONS"
-                  />
-                </div>
-                <div v-if="grantTypeSelections[grant.id] === 'timed'" class="space-y-1">
-                  <label class="text-xs font-medium text-muted block">Duration</label>
-                  <USelect
-                    v-model="durationPresetSelections[grant.id]"
-                    :items="DURATION_PRESETS"
-                    size="sm"
-                  />
-                  <UInput
-                    v-if="durationPresetSelections[grant.id] === 'custom'"
-                    v-model.number="customDurations[grant.id]"
-                    type="number"
-                    :min="60"
-                    placeholder="Duration in seconds"
-                    size="sm"
-                  />
-                </div>
-              </div>
+
               <div class="flex gap-2">
-                <UButton color="success" size="sm" class="flex-1" @click="approveGrant(grant.id)">
-                  Approve
-                </UButton>
-                <UButton color="error" size="sm" class="flex-1" @click="denyGrant(grant.id)">
+                <UButton color="error" variant="soft" size="sm" class="flex-1" @click="denyGrant(grant.id)">
                   Deny
                 </UButton>
+                <UButton color="success" size="sm" class="flex-1" @click="approveGrant(grant.id, 'once')">
+                  Just this once
+                </UButton>
+                <UButton color="success" variant="outline" size="sm" class="flex-1" @click="approveGrant(grant.id, 'always')">
+                  Always allow
+                </UButton>
+              </div>
+
+              <button
+                type="button"
+                class="self-start flex items-center gap-2 text-xs text-muted hover:text-default"
+                @click="toggleMoreOptions(grant.id)"
+              >
+                <span>{{ moreOptionsOpen[grant.id] ? '▾' : '▸' }} More options</span>
+                <UBadge v-if="hasSimilar(grant.id)" color="info" variant="soft" size="xs" label="similar grants exist" />
+              </button>
+
+              <div v-if="moreOptionsOpen[grant.id]" class="space-y-3">
+                <p class="font-mono text-xs text-dimmed">
+                  Grant {{ grant.id.slice(0, 8) }}… · Audience: {{ grant.request.audience }} · Requested as: {{ grant.request.grant_type }}
+                </p>
+                <div v-if="grant.request.permissions?.length">
+                  <span class="text-xs text-muted">Permissions:</span>
+                  <code class="block font-mono text-xs bg-default text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.permissions.join(", ") }}</code>
+                </div>
+                <div v-if="hasSimilar(grant.id)" class="rounded border border-info/30 bg-info/5 px-3 py-2 space-y-2">
+                  <div class="flex items-center gap-2">
+                    <UBadge color="info" variant="soft" label="Similar grants exist" />
+                  </div>
+                  <div
+                    v-for="similar in similarGrantsData[grant.id]?.similar_grants ?? []"
+                    :key="similar.grant.id"
+                    class="text-xs"
+                  >
+                    <span class="text-muted">Existing:</span>
+                    <span class="font-mono text-dimmed">{{ similar.grant.id.slice(0, 8) }}...</span>
+                    <div
+                      v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
+                      :key="detail.permission"
+                      class="font-mono text-dimmed break-all"
+                    >
+                      {{ detail.permission }}
+                    </div>
+                  </div>
+                  <URadioGroup
+                    v-model="extendModeSelections[grant.id]"
+                    :items="EXTEND_MODE_OPTIONS"
+                  />
+                  <div v-if="extendModeSelections[grant.id] === 'widen'" class="rounded bg-elevated/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p
+                      v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.widened_details ?? [])"
+                      :key="perm"
+                      class="font-mono text-xs text-green-400"
+                    >
+                      {{ perm }}
+                    </p>
+                  </div>
+                  <div v-if="extendModeSelections[grant.id] === 'merge'" class="rounded bg-elevated/50 px-2 py-1">
+                    <p class="text-xs text-muted">
+                      Result:
+                    </p>
+                    <p
+                      v-for="perm in formatWidenedPreview(similarGrantsData[grant.id]?.merged_details ?? [])"
+                      :key="perm"
+                      class="font-mono text-xs text-blue-400"
+                    >
+                      {{ perm }}
+                    </p>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <div>
+                    <label class="text-xs font-medium text-muted block mb-1">Approval Type</label>
+                    <URadioGroup
+                      v-model="grantTypeSelections[grant.id]"
+                      :items="GRANT_TYPE_OPTIONS"
+                    />
+                  </div>
+                  <div v-if="grantTypeSelections[grant.id] === 'timed'" class="space-y-1">
+                    <label class="text-xs font-medium text-muted block">Duration</label>
+                    <USelect
+                      v-model="durationPresetSelections[grant.id]"
+                      :items="DURATION_PRESETS"
+                      size="sm"
+                    />
+                    <UInput
+                      v-if="durationPresetSelections[grant.id] === 'custom'"
+                      v-model.number="customDurations[grant.id]"
+                      type="number"
+                      :min="60"
+                      placeholder="Duration in seconds"
+                      size="sm"
+                    />
+                  </div>
+                  <UButton color="success" variant="outline" size="sm" @click="approveGrant(grant.id)">
+                    Approve with selected options
+                  </UButton>
+                </div>
               </div>
             </div>
           </UCard>
@@ -393,7 +418,7 @@ function isExactCommand(detail) {
                   <UBadge color="success" variant="soft" :label="grant.status" />
                   <UBadge color="secondary" :label="grant.request.grant_type" />
                 </div>
-                <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
+                <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                 <p v-if="cliSummary(grant)">
                   <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
@@ -401,9 +426,12 @@ function isExactCommand(detail) {
                 <p v-if="grant.request.run_as">
                   <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                 </p>
-                <div v-if="grant.request.command?.length" class="mt-1">
-                  <span class="text-muted">Command:</span>
-                  <code class="block font-mono text-xs bg-default text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
+                <div v-if="commandDisplay(grant)" class="mt-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-muted">Command:</span>
+                    <UBadge v-if="commandDisplay(grant).shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay(grant).shell}`" />
+                  </div>
+                  <code class="block font-mono text-xs bg-default text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ commandDisplay(grant).text }}</code>
                 </div>
                 <div v-if="grant.request.permissions?.length" class="mt-1">
                   <span class="text-muted">Permissions:</span>
@@ -475,7 +503,7 @@ function isExactCommand(detail) {
                   :label="grant.status"
                 />
               </div>
-              <p><span class="text-muted">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
+              <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
               <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
               <p v-if="cliSummary(grant)">
                 <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
