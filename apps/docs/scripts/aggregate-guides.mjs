@@ -60,14 +60,13 @@ APPS.forEach((app, i) => {
   // JSON.stringify → a valid double-quoted YAML scalar; intros carry colons and
   // em-dashes that would otherwise turn the frontmatter into a nested map (and
   // hand the OG renderer an object instead of a string).
-  const desc = (ordered[0].intro ?? `How ${app.title} is used, step by step.`).replace(/\n/g, ' ').slice(0, 200)
+  const descFull = (ordered[0].intro ?? `How ${app.title} is used, step by step.`).replace(/\n/g, ' ')
+  const desc = descFull.length <= 200 ? descFull : `${descFull.slice(0, 200).replace(/\s+\S*$/, '')}…`
   const lines = [
     '---',
     `title: ${JSON.stringify(app.title)}`,
     `description: ${JSON.stringify(desc)}`,
     '---',
-    '',
-    `# ${app.title}`,
     '',
     '::note',
     'Every step below is captured from a live end-to-end run on the local stack — the screenshots refresh on each capture, so this guide cannot drift from the real product.',
