@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useIdpAuth } from '#imports'
 import AllowedCommandsList from '../../components/AllowedCommandsList.vue'
-import BucketYoloCard from '../../components/BucketYoloCard.vue'
+import AutomationPolicyCard from '../../components/AutomationPolicyCard.vue'
 import ScopedCommandWizard from '../../components/ScopedCommandWizard.vue'
 import { BUCKET_DISPLAY } from '../../utils/audience-buckets'
 
@@ -44,17 +44,13 @@ const statusError = ref('')
 const standingGrants = ref<StandingGrant[]>([])
 const wizardOpen = ref(false)
 
-// YOLO state moved into per-bucket BucketYoloCard components — each card owns
-// its own load/save lifecycle. The page just hands them the agent email and
-// lets them render.
+// Policy state lives in the per-group AutomationPolicyCard components — each
+// card owns its own load/save lifecycle. The page just hands them the agent
+// email and lets them render.
 
-// Tab navigation for the bucket sections. Commands is the default landing
-// tab because Standing Grants currently only live there (Web/Root will get
-// their own surfaces in a follow-up PR). Custom tab bar instead of UTabs:
-// UTabs's link-variant put each tab into a narrow column that clipped the
-// labels to one or two letters at the agent-detail card width — manual
-// markup gives us proper button sizing.
-const activeBucketTab = ref<'commands' | 'web' | 'root' | 'default'>('commands')
+// Wildcard fallback + audience mapping are implementation detail — folded
+// behind this disclosure instead of getting their own tab.
+const advancedOpen = ref(false)
 function bucketByValue(value: string) {
   return BUCKET_DISPLAY.find(b => b.id === value) ?? BUCKET_DISPLAY[0]!
 }
@@ -348,16 +344,15 @@ async function handleDelete() {
           </p>
         </div>
 
-        <!-- Per-Bucket Tabs: Authorization-Layer (Commands / Web / Root /
-             Default-Fallback). Standing-Grants-Liste für "Erlaubte Commands"
-             ist nur unter Commands sichtbar — Web und Root haben heute noch
-             keine eigene UI dafür, kommt in Folge-PRs. Auth-Details sind
-             jetzt ein Help-Popover statt eines Accordion-Blocks. -->
-        <div class="overflow-hidden rounded-lg border border-default">
+        <!-- Freigabe-Regeln: zwei sichtbare Gruppen (Kommandos inkl. Root,
+             Netzwerk); Wildcard-Fallback, Audience-Zuordnung und Roadmap-
+             Hinweise stecken hinter „Erweitert". Auth-Details sind ein
+             Help-Popover. -->
+        <div class="rounded-lg border border-default">
           <div class="flex items-center justify-between gap-2 border-b border-default bg-elevated/40 px-3 py-2">
             <h2 class="flex items-center gap-2 text-sm font-semibold text-muted">
               <UIcon name="i-lucide-shield-check" class="size-4 text-muted" />
-              Auto-Approval (YOLO) + Standing Grants
+              Freigabe-Regeln
             </h2>
             <UPopover :content="{ side: 'bottom', align: 'end' }">
               <UButton
@@ -410,56 +405,63 @@ async function handleDelete() {
               </template>
             </UPopover>
           </div>
-          <div class="flex overflow-x-auto border-b border-default bg-default/40">
-            <button
-              v-for="b in BUCKET_DISPLAY"
-              :key="b.id"
-              type="button"
-              class="flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              :class="activeBucketTab === b.id
-                ? 'border-primary text-primary bg-elevated/40'
-                : 'border-transparent text-muted hover:text-default hover:bg-elevated/30'"
-              @click="activeBucketTab = b.id as typeof activeBucketTab"
-            >
-              <UIcon :name="b.icon" class="size-4" />
-              <span>{{ b.label }}</span>
-            </button>
-          </div>
-          <div v-if="activeBucketTab === 'commands'" class="space-y-3 p-3">
-            <BucketYoloCard
+          <div class="space-y-3 p-3">
+            <p class="text-xs text-dimmed">
+              Standard: jede Aktion braucht deine Freigabe. Hier legst du fest, was ohne Rückfrage laufen darf — und was immer blockiert ist.
+            </p>
+
+            <AutomationPolicyCard
               :agent-email="agent.email"
               :bucket="bucketByValue('commands')"
-            />
-            <div>
-              <h3 class="mb-2 mt-2 text-sm font-semibold text-muted">
-                Erlaubte Commands (Standing Grants)
-              </h3>
-              <AllowedCommandsList
-                :agent-email="agent.email"
-                :owner="agent.owner ?? user?.email ?? ''"
-                :standing-grants="standingGrants"
-                @refresh="loadStandingGrants"
-                @add-scoped="openWizard"
-              />
-            </div>
-          </div>
-          <div v-else-if="activeBucketTab === 'web'" class="p-3">
-            <BucketYoloCard
-              :agent-email="agent.email"
-              :bucket="bucketByValue('web')"
-            />
-          </div>
-          <div v-else-if="activeBucketTab === 'root'" class="p-3">
-            <BucketYoloCard
+            >
+              <template #allow-extra>
+                <div class="mt-3 border-t border-gray-800 pt-3">
+                  <AllowedCommandsList
+                    :agent-email="agent.email"
+                    :owner="agent.owner ?? user?.email ?? ''"
+                    :standing-grants="standingGrants"
+                    @refresh="loadStandingGrants"
+                    @add-scoped="openWizard"
+                  />
+                </div>
+              </template>
+            </AutomationPolicyCard>
+
+            <AutomationPolicyCard
               :agent-email="agent.email"
               :bucket="bucketByValue('root')"
             />
-          </div>
-          <div v-else-if="activeBucketTab === 'default'" class="p-3">
-            <BucketYoloCard
+
+            <AutomationPolicyCard
               :agent-email="agent.email"
-              :bucket="bucketByValue('default')"
+              :bucket="bucketByValue('web')"
             />
+
+            <div>
+              <button
+                type="button"
+                class="flex items-center gap-1 text-xs text-muted hover:text-default"
+                @click="advancedOpen = !advancedOpen"
+              >
+                {{ advancedOpen ? '▾' : '▸' }} Erweitert
+              </button>
+              <div v-if="advancedOpen" class="mt-3 space-y-3">
+                <p class="text-xs text-dimmed">
+                  Technische Zuordnung: Kommandos = <span class="font-mono">ape-shell, claude-code, shapes</span> · Als Root = <span class="font-mono">escapes</span> · Netzwerk = <span class="font-mono">ape-proxy</span> · Fallback = alle übrigen Audiences (<span class="font-mono">*</span>).
+                </p>
+                <UAlert
+                  v-if="bucketByValue('web').notice"
+                  color="info"
+                  variant="subtle"
+                  icon="i-lucide-info"
+                  :title="bucketByValue('web').notice"
+                />
+                <AutomationPolicyCard
+                  :agent-email="agent.email"
+                  :bucket="bucketByValue('default')"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
