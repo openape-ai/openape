@@ -2,8 +2,8 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { defineEventHandler, readBody } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { deals } from '../../database/schema'
-import { isClosedStage, parseStage } from '../../utils/deal-shape'
 import { createProblemError } from '../../utils/problem'
+import { requireStage } from '../../utils/stages'
 import { requireRole } from '../../utils/workspace-access'
 
 const MAX_IDS = 500
@@ -24,10 +24,10 @@ export default defineEventHandler(async (event) => {
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_IDS) {
     throw createProblemError({ status: 400, title: `ids must be 1–${MAX_IDS} deal ids` })
   }
-  const stage = parseStage(body?.stage)
 
   const db = useDb()
   await requireRole(db, workspaceId, caller.email)
+  const stage = await requireStage(db, workspaceId, body?.stage)
 
   // Fremde IDs dürfen nicht mitwandern: nur was wirklich in DIESEM Workspace
   // liegt, wird geschrieben.
@@ -44,11 +44,11 @@ export default defineEventHandler(async (event) => {
     const current = known.get(id)!
     // Ein bereits abgeschlossener Deal behält sein Abschlussdatum — bloßes
     // Umsortieren innerhalb „Gewonnen" darf es nicht auf heute schieben.
-    const closedAt = isClosedStage(stage) ? current.closedAt ?? now : null
+    const closedAt = stage.outcome === 'open' ? null : current.closedAt ?? now
     return db.update(deals)
-      .set({ stage, position, closedAt })
+      .set({ stage: stage.key, position, closedAt })
       .where(and(eq(deals.id, id), eq(deals.workspaceId, workspaceId)))
   }))
 
-  return { stage, count: ids.length }
+  return { stage: stage.key, count: ids.length }
 })
