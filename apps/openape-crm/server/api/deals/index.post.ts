@@ -3,7 +3,8 @@ import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
 import { deals } from '../../database/schema'
-import { isClosedStage, parseStage, parseTitle, parseValueCents } from '../../utils/deal-shape'
+import { parseTitle, parseValueCents } from '../../utils/deal-shape'
+import { firstStage, requireStage } from '../../utils/stages'
 import { createProblemError } from '../../utils/problem'
 import { requireRole } from '../../utils/workspace-access'
 
@@ -28,12 +29,14 @@ export default defineEventHandler(async (event) => {
 
   const title = parseTitle(body?.title)
   const valueCents = parseValueCents(body?.value_cents)
-  const stage = parseStage(body?.stage ?? 'lead')
+  const stage = body?.stage === undefined
+    ? await firstStage(db, workspaceId)
+    : await requireStage(db, workspaceId, body.stage)
 
   const last = await db
     .select({ max: sql<number | null>`max(${deals.position})` })
     .from(deals)
-    .where(and(eq(deals.workspaceId, workspaceId), eq(deals.stage, stage)))
+    .where(and(eq(deals.workspaceId, workspaceId), eq(deals.stage, stage.key)))
     .get()
 
   const now = Date.now()
@@ -44,15 +47,15 @@ export default defineEventHandler(async (event) => {
     workspaceId,
     title,
     valueCents,
-    stage,
+    stage: stage.key,
     contactId: body?.contact_id ?? null,
     orgId: body?.org_id ?? null,
     position: (last?.max ?? -1) + 1,
     createdBy: caller.email,
     createdAt: now,
-    closedAt: isClosedStage(stage) ? now : null,
+    closedAt: stage.outcome === 'open' ? null : now,
   })
 
   setResponseStatus(event, 201)
-  return { id, title, value_cents: valueCents, stage, created_at: now }
+  return { id, title, value_cents: valueCents, stage: stage.key, created_at: now }
 })

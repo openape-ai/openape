@@ -24,8 +24,20 @@ ape-crm deals move 01J…  won               # change the stage
 ape-crm deals rm 01J…                      # delete deal and its notes
 ```
 
-Values are given in euros and stored as cents. Stages are `lead`, `qualified`,
-`proposal`, `won` and `lost`; `won` and `lost` stamp the closing date.
+Values are given in euros and stored as cents.
+
+## Stages
+
+```bash
+ape-crm stages                             # key, name and outcome per column
+```
+
+Each workspace has its own pipeline; rename, reorder, add and delete columns in
+the web app. A deal carries the stage **key**, so renaming a column leaves every
+deal where it is. A stage whose outcome is `won` or `lost` stamps the closing
+date — a workspace can hold several of each, e.g. "Verloren – Preis" and
+"Verloren – Timing". New workspaces start with `lead`, `qualified`, `proposal`,
+`won`, `lost`.
 
 ## Contacts and organizations
 
