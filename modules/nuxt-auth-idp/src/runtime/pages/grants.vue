@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
+import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
 useHead({ title: 'Grants' })
 
@@ -200,6 +201,89 @@ function toggleMoreOptions(id) {
 function commandDisplay(grant) {
   return unwrapShellCommand(grant.request?.command)
 }
+// "Always allow" proposes a RULE covering future requests like this one
+// (#1277) — an exact always-grant would never match the next ape-shell
+// command line. Shaped requests become standing-grant templates; free-form
+// commands become an editable allow-pattern on the requester's policy.
+const alwaysOpen = ref({})
+const patternDrafts = ref({})
+const ruleErrors = ref({})
+const ruleBusy = ref(null)
+function toggleAlwaysPanel(grant) {
+  const open = !alwaysOpen.value[grant.id]
+  alwaysOpen.value = { ...alwaysOpen.value, [grant.id]: open }
+  if (open && patternDrafts.value[grant.id] === undefined) {
+    const display = commandDisplay(grant)
+    patternDrafts.value = {
+      ...patternDrafts.value,
+      [grant.id]: display ? (suggestAllowPattern(display.text) ?? '') : '',
+    }
+  }
+}
+function ruleProposalsFor(grant) {
+  return buildRuleProposals(cliDetails(grant))
+}
+async function createRuleAndApproveOnce(grant) {
+  ruleBusy.value = grant.id
+  ruleErrors.value = { ...ruleErrors.value, [grant.id]: '' }
+  try {
+    const proposals = ruleProposalsFor(grant)
+    if (proposals.length) {
+      for (const proposal of proposals) {
+        await $fetch('/api/standing-grants', {
+          method: 'POST',
+          body: {
+            delegate: grant.request.requester,
+            audience: grant.request.audience,
+            // Host-bound on purpose: the narrower default (same as the
+            // single-grant approval page).
+            ...grant.request.target_host ? { target_host: grant.request.target_host } : {},
+            cli_id: proposal.cliId,
+            resource_chain_template: proposal.template,
+            max_risk: proposal.maxRisk,
+            grant_type: 'always',
+            reason: `Rule created from grant ${grant.id}`,
+          },
+        })
+      }
+    }
+    else {
+      const pattern = (patternDrafts.value[grant.id] ?? '').trim()
+      if (!pattern) {
+        ruleErrors.value = { ...ruleErrors.value, [grant.id]: 'Enter a pattern first — or approve only this exact request.' }
+        return
+      }
+      const base = `/api/users/${encodeURIComponent(grant.request.requester)}/yolo-policy?audience=${encodeURIComponent(grant.request.audience)}`
+      const existing = await $fetch(base).catch(() => null)
+      const policy = existing?.policy ?? null
+      const allowPatterns = policy?.allowPatterns ?? []
+      if (!allowPatterns.includes(pattern)) {
+        await $fetch(base, {
+          method: 'PUT',
+          body: {
+            mode: policy?.mode ?? 'allow-list',
+            denyRiskThreshold: policy?.denyRiskThreshold ?? null,
+            denyPatterns: policy?.denyPatterns ?? [],
+            allowPatterns: [...allowPatterns, pattern],
+            expiresAt: policy?.expiresAt ?? null,
+          },
+        })
+      }
+    }
+    await approveGrant(grant.id, 'once')
+    alwaysOpen.value = { ...alwaysOpen.value, [grant.id]: false }
+  }
+  catch (err) {
+    const e = err
+    ruleErrors.value = {
+      ...ruleErrors.value,
+      [grant.id]: `${e.data?.title ?? e.message ?? 'Rule creation failed'} — you can still approve only this exact request.`,
+    }
+  }
+  finally {
+    ruleBusy.value = null
+  }
+}
 function formatTime(ts) {
   return new Date(ts * 1e3).toLocaleString()
 }
@@ -295,9 +379,43 @@ function isExactCommand(detail) {
                 <UButton color="success" size="sm" class="flex-1" @click="approveGrant(grant.id, 'once')">
                   Just this once
                 </UButton>
-                <UButton color="success" variant="outline" size="sm" class="flex-1" @click="approveGrant(grant.id, 'always')">
+                <UButton color="success" variant="outline" size="sm" class="flex-1" @click="toggleAlwaysPanel(grant)">
                   Always allow
                 </UButton>
+              </div>
+
+              <div v-if="alwaysOpen[grant.id]" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+                <p class="text-xs text-muted">
+                  Make a rule so future requests like this auto-approve. This request itself runs once.
+                </p>
+                <template v-if="ruleProposalsFor(grant).length">
+                  <p
+                    v-for="proposal in ruleProposalsFor(grant)"
+                    :key="proposal.cliId"
+                    class="font-mono text-xs break-all"
+                  >
+                    {{ ruleTemplatePreview(proposal) }}
+                  </p>
+                </template>
+                <template v-else>
+                  <UInput
+                    v-model="patternDrafts[grant.id]"
+                    placeholder="command pattern, e.g. o365-cli mail list *"
+                    class="w-full font-mono text-xs"
+                  />
+                  <p class="text-xs text-dimmed">
+                    Glob pattern matched against future command lines (* = anything). Only requests matching it auto-approve.
+                  </p>
+                </template>
+                <UAlert v-if="ruleErrors[grant.id]" color="error" variant="subtle" :title="ruleErrors[grant.id]" />
+                <div class="flex flex-wrap gap-2">
+                  <UButton color="success" size="sm" :loading="ruleBusy === grant.id" @click="createRuleAndApproveOnce(grant)">
+                    Create rule + run once
+                  </UButton>
+                  <UButton color="success" variant="outline" size="sm" @click="approveGrant(grant.id, 'always')">
+                    Only this exact request, always
+                  </UButton>
+                </div>
               </div>
 
               <button
