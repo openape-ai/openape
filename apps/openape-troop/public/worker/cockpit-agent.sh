@@ -288,7 +288,13 @@ for s in json.load(sys.stdin):
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call POST /api/cockpit/agent/heartbeat "$(printf '{"nextPollInMs":%s,"doctor":%s}' "${1:-12000}" "$REPORT")"
     echo "$REPORT" ;;
-  next)      call POST "$TP/next" ;;
+  next)      # Cockpit-Claim: optionaler Company-Ausschluss (#1262) — nur fuer die
+    # troop-Queue, Service-Queues (SVC_URL gesetzt) kennen keine Companies.
+    if [ -z "${SVC_URL:-}" ] && [ -n "${OPENAPE_WORKER_EXCLUDE_COMPANIES:-}" ]; then
+      call POST "$TP/next" "$(python3 -c 'import json,os;print(json.dumps({"excludeCompanies":[c.strip() for c in os.environ["OPENAPE_WORKER_EXCLUDE_COMPANIES"].split(",") if c.strip()]}))')"
+    else
+      call POST "$TP/next"
+    fi ;;
   yolo-report) # always troop; stdin = JSON body {orgId,opEmail,mode,patternCount,tools,ok,error}
     SP="$TROOP" CACHE="/tmp/cockpit-sp-$(printf '%s' "$TROOP" | shasum | cut -c1-12).tok" \
       call POST /api/cockpit/agent/yolo-sync "$(cat)" ;;
