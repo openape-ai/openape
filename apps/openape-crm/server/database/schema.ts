@@ -60,6 +60,18 @@ export const contacts = sqliteTable('contacts', {
   index('idx_contact_workspace').on(t.workspaceId),
 ])
 
+export const pipelineStages = sqliteTable('pipeline_stages', {
+  workspaceId: text('workspace_id').notNull(),
+  /** Stabiler Schlüssel, auf den `deals.stage` zeigt — Umbenennen ändert nur `name`. */
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  /** Nur `outcome` entscheidet über den Abschluss, nie der Name der Stufe. */
+  outcome: text('outcome', { enum: ['open', 'won', 'lost'] }).notNull().default('open'),
+  position: integer('position').notNull(),
+}, t => [
+  primaryKey({ columns: [t.workspaceId, t.key] }),
+])
+
 export const deals = sqliteTable('deals', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id').notNull(),

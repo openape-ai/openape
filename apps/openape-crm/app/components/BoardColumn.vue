@@ -1,36 +1,60 @@
 <script setup lang="ts">
+import type { Outcome, PipelineStage } from '#shared/stages'
 import type { Column, Deal } from '../utils/board'
-import { STAGE_LABELS } from '#shared/stages'
+import { computed } from 'vue'
 import { formatEuro } from '../utils/board'
 
-defineProps<{ column: Column }>()
+const props = defineProps<{
+  column: Column
+  stages: PipelineStage[]
+  editable: boolean
+}>()
+
 const emit = defineEmits<{
   dropOn: [beforeId: string | null]
   dragCard: [dealId: string]
   open: [deal: Deal]
   move: [deal: Deal, stage: string]
+  rename: [name: string]
+  outcome: [value: Outcome]
+  reposition: [position: number]
+  insertAfter: []
+  remove: []
 }>()
+
+/** Abschlussspalten heben sich ab — sonst sieht das Board-Ende aus wie jede andere Stufe. */
+const tone = computed(() => ({
+  open: 'bg-zinc-900/40',
+  won: 'bg-emerald-950/40 ring-1 ring-emerald-900/50',
+  lost: 'bg-rose-950/30 ring-1 ring-rose-900/40',
+}[props.column.stage.outcome]))
 </script>
 
 <template>
   <section
-    class="flex w-72 shrink-0 flex-col gap-2 rounded-xl bg-zinc-900/40 p-3"
+    class="flex w-72 shrink-0 flex-col gap-2 rounded-xl p-3"
+    :class="tone"
     @dragover.prevent
     @drop.prevent="emit('dropOn', null)"
   >
-    <header class="flex items-baseline justify-between">
-      <h2 class="font-semibold">
-        {{ STAGE_LABELS[column.stage] }}
-      </h2>
-      <span class="text-xs text-zinc-400">
-        {{ column.deals.length }} · {{ formatEuro(column.totalCents) }}
-      </span>
-    </header>
+    <StageHeader
+      :stage="column.stage"
+      :count="column.deals.length"
+      :total="formatEuro(column.totalCents)"
+      :stage-count="stages.length"
+      :editable="editable"
+      @rename="emit('rename', $event)"
+      @outcome="emit('outcome', $event)"
+      @move="emit('reposition', $event)"
+      @insert-after="emit('insertAfter')"
+      @remove="emit('remove')"
+    />
 
     <DealCard
       v-for="deal in column.deals"
       :key="deal.id"
       :deal="deal"
+      :stages="stages"
       draggable="true"
       @dragstart="emit('dragCard', deal.id)"
       @drop.prevent.stop="emit('dropOn', deal.id)"

@@ -34,8 +34,10 @@ ape-crm deals rm <id>
 ```
 
 - `--value` is euros; the API stores `value_cents`.
-- Stages: `lead`, `qualified`, `proposal`, `won`, `lost`. Moving into `won`/`lost`
-  sets `closed_at`; moving back out clears it.
+- Stage keys are per workspace — read them with `ape-crm stages --json`
+  (`[{ key, name, outcome, position }]`). Never assume the defaults. A stage with
+  `outcome` `won`/`lost` sets `closed_at`; moving into an `open` stage clears it.
+  Without `--stage`, a new deal lands in the first stage of the pipeline.
 - A moved deal lands at the end of its new column. Reordering inside a column is
   a web-app gesture and has no CLI command.
 

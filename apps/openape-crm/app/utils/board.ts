@@ -1,11 +1,10 @@
-import type { Stage } from '#shared/stages'
-import { STAGES } from '#shared/stages'
+import type { PipelineStage } from '#shared/stages'
 
 export interface Deal {
   id: string
   title: string
   value_cents: number
-  stage: Stage
+  stage: string
   position: number
   contact_id: string | null
   contact_name: string | null
@@ -16,16 +15,16 @@ export interface Deal {
 }
 
 export interface Column {
-  stage: Stage
+  stage: PipelineStage
   deals: Deal[]
   totalCents: number
 }
 
-/** Deals auf die fünf Spalten verteilen, jede nach `position` sortiert. */
-export function buildColumns(deals: Deal[]): Column[] {
-  return STAGES.map((stage) => {
+/** Deals auf die Stufen des Workspaces verteilen, jede Spalte nach `position` sortiert. */
+export function buildColumns(deals: Deal[], stages: PipelineStage[]): Column[] {
+  return stages.map((stage) => {
     const inStage = deals
-      .filter(d => d.stage === stage)
+      .filter(d => d.stage === stage.key)
       .sort((a, b) => a.position - b.position)
     return {
       stage,
