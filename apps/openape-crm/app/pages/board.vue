@@ -5,7 +5,7 @@ import { useOpenApeAuth } from '#imports'
 import { computed, onMounted, ref, watch } from 'vue'
 import { MAX_STAGE_NAME } from '#shared/stages'
 import { apiFetch } from '../utils/api'
-import { buildColumns, dropInto } from '../utils/board'
+import { buildColumns, dropInto, idToSelection, NO_SELECTION, selectionToId } from '../utils/board'
 import { problemMessage } from '../utils/problem-message'
 
 interface ContactRow { id: string, name: string, org_name: string | null }
@@ -27,10 +27,10 @@ const draggedId = ref<string | null>(null)
 
 const newWorkspaceName = ref('')
 const showNewDeal = ref(false)
-const newDeal = ref({ title: '', euro: null as number | null, stage: '', contact_id: '' })
+const newDeal = ref({ title: '', euro: null as number | null, stage: '', contact_id: NO_SELECTION })
 
 const openDeal = ref<Deal | null>(null)
-const edit = ref({ title: '', euro: null as number | null, stage: '', contact_id: '' })
+const edit = ref({ title: '', euro: null as number | null, stage: '', contact_id: NO_SELECTION })
 const saving = ref(false)
 const notes = ref<Note[]>([])
 const noteBody = ref('')
@@ -119,14 +119,14 @@ async function submitNewDeal() {
         title: newDeal.value.title,
         value_cents: Math.round((newDeal.value.euro ?? 0) * 100),
         stage: newDeal.value.stage,
-        contact_id: newDeal.value.contact_id || null,
+        contact_id: selectionToId(newDeal.value.contact_id),
       },
     }),
     { success: 'Deal angelegt', failure: 'Deal konnte nicht angelegt werden' },
   )
   if (created === null) return
   showNewDeal.value = false
-  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: '' }
+  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: NO_SELECTION }
   await refresh()
 }
 
@@ -141,7 +141,7 @@ async function addFirstWorkspace() {
 }
 
 function openNewDeal() {
-  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: '' }
+  newDeal.value = { title: '', euro: null, stage: stages.value[0]?.key ?? '', contact_id: NO_SELECTION }
   showNewDeal.value = true
 }
 
@@ -198,7 +198,7 @@ function show(deal: Deal) {
     title: deal.title,
     euro: deal.value_cents / 100,
     stage: deal.stage,
-    contact_id: deal.contact_id ?? '',
+    contact_id: idToSelection(deal.contact_id),
   }
   noteBody.value = ''
   notes.value = []
@@ -224,7 +224,7 @@ async function saveDeal() {
         title: edit.value.title,
         value_cents: Math.round((edit.value.euro ?? 0) * 100),
         stage: edit.value.stage,
-        contact_id: edit.value.contact_id || null,
+        contact_id: selectionToId(edit.value.contact_id),
       },
     }),
     { success: 'Deal gespeichert', failure: 'Deal konnte nicht gespeichert werden' },
@@ -270,7 +270,7 @@ function stageName(key: string): string {
   return stages.value.find(s => s.key === key)?.name ?? key
 }
 const contactItems = computed(() => [
-  { label: 'ohne Kontakt', value: '' },
+  { label: 'ohne Kontakt', value: NO_SELECTION },
   ...contacts.value.map(c => ({ label: c.org_name ? `${c.name} (${c.org_name})` : c.name, value: c.id })),
 ])
 const OUTCOME_LABELS: Record<Outcome, string> = { open: 'offen', won: 'gewonnen', lost: 'verloren' }
