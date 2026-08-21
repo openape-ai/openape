@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
 interface Monitor {
   id: string
   name: string
+  kind: 'http' | 'heartbeat'
   url: string
+  ping_url: string | null
+  last_ping_at: number | null
   interval_sec: number
   status: 'up' | 'down' | null
   last_code: number | null
@@ -23,7 +26,12 @@ const loading = ref(true)
 
 const url = ref('')
 const name = ref('')
+const kind = ref<'http' | 'heartbeat'>('http')
 const intervalSec = ref(300)
+const kindOptions = [
+  { label: 'URL', value: 'http' },
+  { label: 'Heartbeat', value: 'heartbeat' },
+]
 const adding = ref(false)
 const error = ref('')
 const busy = ref<Record<string, boolean>>({})
@@ -34,21 +42,37 @@ const intervalOptions = [
   { label: 'every 15 min', value: 900 },
   { label: 'every hour', value: 3600 },
 ]
+// Same field, different question: for a heartbeat the interval is how long a
+// ping may be missing before we call it down.
+const heartbeatOptions = [
+  { label: 'silent for 5 min', value: 300 },
+  { label: 'silent for 15 min', value: 900 },
+  { label: 'silent for 1 hour', value: 3600 },
+  { label: 'silent for 6 hours', value: 21600 },
+]
 
 async function load() {
   monitors.value = await $fetch<Monitor[]>('/api/monitors')
   loading.value = false
 }
 
+const canAdd = computed(() =>
+  kind.value === 'heartbeat' ? !!name.value.trim() : !!url.value.trim(),
+)
+
 async function add() {
-  const value = url.value.trim()
-  if (!value || adding.value) return
+  if (!canAdd.value || adding.value) return
   adding.value = true
   error.value = ''
   try {
     await $fetch('/api/monitors', {
       method: 'POST',
-      body: { url: value, name: name.value.trim() || undefined, intervalSec: intervalSec.value },
+      body: {
+        kind: kind.value,
+        url: url.value.trim() || undefined,
+        name: name.value.trim() || undefined,
+        intervalSec: intervalSec.value,
+      },
     })
     url.value = ''
     name.value = ''
@@ -128,35 +152,48 @@ onUnmounted(() => {
     </header>
 
     <main class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <form class="flex flex-col sm:flex-row gap-2 mb-8" @submit.prevent="add">
-        <UInput
-          v-model="url"
-          type="url"
-          placeholder="https://example.com"
-          size="lg"
-          class="flex-1"
-        />
-        <UInput
-          v-model="name"
-          placeholder="Name (optional)"
-          size="lg"
-          class="sm:w-40"
-        />
-        <USelect
-          v-model="intervalSec"
-          :items="intervalOptions"
-          size="lg"
-          class="sm:w-40"
-        />
-        <UButton
-          type="submit"
-          color="primary"
-          size="lg"
-          :loading="adding"
-          :disabled="!url.trim() || adding"
-        >
-          Add
-        </UButton>
+      <form class="mb-8 space-y-2" @submit.prevent="add">
+        <div class="flex flex-col sm:flex-row gap-2">
+          <USelect
+            v-model="kind"
+            :items="kindOptions"
+            size="lg"
+            class="sm:w-36"
+          />
+          <UInput
+            v-if="kind === 'http'"
+            v-model="url"
+            type="url"
+            placeholder="https://example.com"
+            size="lg"
+            class="flex-1"
+          />
+          <UInput
+            v-model="name"
+            :placeholder="kind === 'heartbeat' ? 'Name, e.g. OpenClaw scheduler' : 'Name (optional)'"
+            size="lg"
+            :class="kind === 'heartbeat' ? 'flex-1' : 'sm:w-40'"
+          />
+          <USelect
+            v-model="intervalSec"
+            :items="kind === 'heartbeat' ? heartbeatOptions : intervalOptions"
+            size="lg"
+            class="sm:w-44"
+          />
+          <UButton
+            type="submit"
+            color="primary"
+            size="lg"
+            :loading="adding"
+            :disabled="!canAdd || adding"
+          >
+            Add
+          </UButton>
+        </div>
+        <p v-if="kind === 'heartbeat'" class="text-xs text-zinc-500">
+          You get a ping URL. Have the thing you want watched POST to it while it is healthy —
+          silence past the chosen window is the alert.
+        </p>
       </form>
 
       <UAlert v-if="error" color="error" :title="error" class="mb-6" @close="error = ''" />
@@ -194,11 +231,18 @@ onUnmounted(() => {
               </UBadge>
             </div>
             <a
+              v-if="m.kind === 'http'"
               :href="m.url"
               target="_blank"
               rel="noopener noreferrer"
               class="text-sm text-zinc-500 hover:text-zinc-300 truncate block"
             >{{ m.url }}</a>
+            <p v-else class="text-sm text-zinc-500 truncate">
+              heartbeat · last ping {{ ago(m.last_ping_at) }}
+            </p>
+            <p v-if="m.kind === 'heartbeat' && m.ping_url" class="text-xs font-mono text-zinc-600 truncate">
+              {{ m.ping_url }}
+            </p>
             <p v-if="m.status === 'down' && m.last_error" class="text-xs text-red-400 mt-0.5 truncate">
               {{ m.last_error }}
             </p>
