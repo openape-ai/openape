@@ -8,6 +8,7 @@ import {
   createGrant,
   denyGrant,
   introspectGrant,
+  isGrantExpired,
   revokeGrant,
   useGrant,
   validateDelegation,
@@ -1150,5 +1151,36 @@ describe('grant lifecycle', () => {
       expect(approved.request.duration).toBe(3600)
       expect(approved.expires_at).toBeDefined()
     })
+  })
+})
+
+describe('isGrantExpired', () => {
+  const timed = (expiresAt?: number, status = 'approved') => ({
+    status,
+    expires_at: expiresAt,
+    request: { grant_type: 'timed' },
+  }) as Parameters<typeof isGrantExpired>[0]
+
+  it('is true once the deadline has passed', () => {
+    expect(isGrantExpired(timed(1000), 1000)).toBe(true)
+    expect(isGrantExpired(timed(1000), 5000)).toBe(true)
+  })
+
+  it('is false a second before', () => {
+    expect(isGrantExpired(timed(1000), 999)).toBe(false)
+  })
+
+  it('ignores grants that were never approved', () => {
+    expect(isGrantExpired(timed(1000, 'pending'), 5000)).toBe(false)
+    expect(isGrantExpired(timed(1000, 'revoked'), 5000)).toBe(false)
+  })
+
+  it('ignores grants without a deadline', () => {
+    expect(isGrantExpired(timed(undefined), 5000)).toBe(false)
+  })
+
+  it('ignores non-timed grants — "always" has no deadline to miss', () => {
+    const always = { status: 'approved', expires_at: 1000, request: { grant_type: 'always' } }
+    expect(isGrantExpired(always as Parameters<typeof isGrantExpired>[0], 5000)).toBe(false)
   })
 })
