@@ -24,8 +24,12 @@ echo "→ Clearing old captures…"
 rm -rf docs/local-stack/screenshots
 rm -f docs/local-stack/manifest-demo.json
 
-echo "→ Ensuring the stack is up…"
-"${COMPOSE[@]}" up -d >/dev/null
+# `--build`, nicht nur `up -d`: existiert ein Image bereits, wuerde compose es
+# wiederverwenden und der Capture fotografiert den alten Code. Eine Anleitung,
+# die aus dem Testlauf entsteht, darf nicht am Testlauf vorbei veralten — genau
+# das passierte beim Fix zu #1269. Warme Layer machen das billig.
+echo "→ Ensuring the stack is up (rebuilding changed apps)…"
+"${COMPOSE[@]}" up -d --build >/dev/null
 
 # Every browser request reaches the IdP through the Caddy proxy, so the
 # rate-limiter keys all four SSO flows on the proxy's single IP — with four
