@@ -1,5 +1,6 @@
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery } from 'h3'
+import { expireStaleGrants } from '../../utils/expire-stale-grants'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
@@ -57,16 +58,19 @@ export default defineEventHandler(async (event) => {
     if (!requesters.includes(requester)) {
       throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
     }
-    return await grantStore.listGrants({ limit, cursor, status, requester })
+    const page = await grantStore.listGrants({ limit, cursor, status, requester })
+    return { ...page, data: await expireStaleGrants(page.data, grantStore) }
   }
 
   // Default paginated case: delegate to DB-level query with IN clause
   if (!section) {
-    return await grantStore.listGrants({ limit, cursor, status, requester: requesters })
+    const page = await grantStore.listGrants({ limit, cursor, status, requester: requesters })
+    return { ...page, data: await expireStaleGrants(page.data, grantStore) }
   }
 
   // Section queries need all user grants, then filter in-memory
-  const { data: owned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
+  const { data: rawOwned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
+  const owned = await expireStaleGrants(rawOwned, grantStore)
 
   // section=active
   if (section === 'active') {
