@@ -49,6 +49,9 @@ export default defineNuxtConfig({
     prerender: {
       routes: [
         '/',
+        // Statische Fehlerseite fuer den Caddy-Fallback: ohne sie beantwortet
+        // der Server jede unbekannte URL mit einer weissen Seite.
+        '/404.html',
       ],
       crawlLinks: true,
       autoSubfolderIndex: false,
