@@ -82,8 +82,8 @@ APPS.forEach((app, i) => {
     `description: ${JSON.stringify(desc)}`,
     '---',
     '',
-    `# ${app.title}`,
-    '',
+    // Kein `# ${app.title}` im Body: das Frontmatter-`title` rendert bereits
+    // als Seitenueberschrift, ein zweites H1 stellt denselben Namen doppelt.
     '::note',
     'Every step below is captured from a live end-to-end run on the local stack — the screenshots refresh on each capture, so this guide cannot drift from the real product.',
     '::',
@@ -110,8 +110,6 @@ const indexLines = [
   'title: Overview',
   `description: ${JSON.stringify(`Every OpenApe app, documented from a live end-to-end run: ${overview.map(a => a.title).join(', ')}.`)}`,
   '---',
-  '',
-  '# Apps',
   '',
   'Every app below is documented from a live end-to-end run on the local stack — a headless browser drives the real flow, and the screenshots are captured as it goes. The guide cannot drift from the product because it *is* the test run.',
   '',
