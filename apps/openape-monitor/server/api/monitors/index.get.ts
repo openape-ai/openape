@@ -2,6 +2,7 @@ import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { useDb } from '../../database/drizzle'
 import { checks, monitors } from '../../database/schema'
+import { pingUrlFor } from '../../utils/ping-url'
 
 /** GET /api/monitors — the caller's monitors with current status + uptime%. */
 export default defineEventHandler(async (event) => {
@@ -27,7 +28,12 @@ export default defineEventHandler(async (event) => {
     return {
       id: m.id,
       name: m.name,
+      kind: m.kind,
       url: m.url,
+      // The owner needs it to wire up (or rewire) the pinging job. It is
+      // their own secret, behind their own session.
+      ping_url: m.pingToken ? pingUrlFor(event, m.pingToken) : null,
+      last_ping_at: m.lastPingAt,
       interval_sec: m.intervalSec,
       status: m.lastStatus,
       last_code: m.lastCode,
