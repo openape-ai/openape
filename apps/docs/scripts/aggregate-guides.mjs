@@ -34,6 +34,18 @@ const APPS = [
   { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
 ]
 
+/**
+ * Kurzfassung an der letzten Wortgrenze — ein harter Schnitt endet mitten im
+ * Wort, und dieser Text ist auch die OG-Beschreibung der Seite.
+ */
+function summarize(text, max) {
+  const flat = text.replace(/\n/g, ' ').trim()
+  if (flat.length <= max) return flat
+  const cut = flat.slice(0, max - 1)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.\s]+$/, '')}…`
+}
+
 const sectionDir = join(docsRoot, 'content', '5.apps')
 const shotsRoot = join(docsRoot, 'public', 'guides')
 rmSync(sectionDir, { recursive: true, force: true })
@@ -42,6 +54,7 @@ mkdirSync(sectionDir, { recursive: true })
 
 writeFileSync(join(sectionDir, '.navigation.yml'), 'title: Apps\nicon: i-lucide-layout-grid\n')
 
+const overview = []
 let written = 0
 APPS.forEach((app, i) => {
   const storiesPath = join(monorepoRoot, 'apps', app.dir, 'docs', 'stories.json')
@@ -60,7 +73,9 @@ APPS.forEach((app, i) => {
   // JSON.stringify → a valid double-quoted YAML scalar; intros carry colons and
   // em-dashes that would otherwise turn the frontmatter into a nested map (and
   // hand the OG renderer an object instead of a string).
-  const desc = (ordered[0].intro ?? `How ${app.title} is used, step by step.`).replace(/\n/g, ' ').slice(0, 200)
+  const intro = ordered[0].intro ?? `How ${app.title} is used, step by step.`
+  const desc = summarize(intro, 200)
+  overview.push({ ...app, blurb: summarize(intro, 130) })
   const lines = [
     '---',
     `title: ${JSON.stringify(app.title)}`,
@@ -83,8 +98,31 @@ APPS.forEach((app, i) => {
       if (step.shot) lines.push(`![${step.title}](/guides/${app.slug}/${step.shot})`, '')
     }
   }
-  writeFileSync(join(sectionDir, `${i + 1}.${app.slug}.md`), `${lines.join('\n')}\n`)
+  const prefix = String(i + 2).padStart(2, '0')
+  writeFileSync(join(sectionDir, `${prefix}.${app.slug}.md`), `${lines.join('\n')}\n`)
   written++
 })
 
-console.log(`[aggregate-guides] wrote ${written} app guides → content/5.apps/ + public/guides/`)
+// Ohne diese Seite ist /apps ein 404: die Sektion existiert sonst nur als
+// Navigationsgruppe, und genau diese URL verlinken README und run.sh.
+const indexLines = [
+  '---',
+  'title: Overview',
+  `description: ${JSON.stringify(`Every OpenApe app, documented from a live end-to-end run: ${overview.map(a => a.title).join(', ')}.`)}`,
+  '---',
+  '',
+  '# Apps',
+  '',
+  'Every app below is documented from a live end-to-end run on the local stack — a headless browser drives the real flow, and the screenshots are captured as it goes. The guide cannot drift from the product because it *is* the test run.',
+  '',
+  '::card-group',
+  ...overview.flatMap(app => [
+    `  ::card{title="${app.title}" icon="i-lucide-app-window" to="/apps/${app.slug}"}`,
+    `  ${app.blurb}`,
+    '  ::',
+  ]),
+  '::',
+]
+writeFileSync(join(sectionDir, '01.index.md'), `${indexLines.join('\n')}\n`)
+
+console.log(`[aggregate-guides] wrote ${written} app guides + the overview → content/5.apps/ + public/guides/`)
