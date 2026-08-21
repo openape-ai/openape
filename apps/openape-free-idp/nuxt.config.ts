@@ -65,6 +65,13 @@ export default defineNuxtConfig({
     // and subject (a mailto: that push services can use to contact us if
     // we misbehave) are server-side only. Defaults to empty so dev still
     // boots without push — the helper silently no-ops in that case.
+    // Telegram leg of the grant-pending fan-out (#1292). All three empty by
+    // default: without them the hook is a silent no-op, like push without
+    // VAPID and mail without a Resend key. `telegramApprover` scopes the chat
+    // to one human — the free IdP serves many, and a chat belongs to one.
+    telegramBotToken: process.env.NUXT_TELEGRAM_BOT_TOKEN || '',
+    telegramChatId: process.env.NUXT_TELEGRAM_CHAT_ID || '',
+    telegramApprover: process.env.NUXT_TELEGRAM_APPROVER || '',
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
     vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
     public: {
