@@ -38,6 +38,25 @@ describe('checkMultiLineStatus', () => {
       expect(checkMultiLineStatus('for i in 1 2 3; do')).toEqual({ kind: 'continue' })
     })
 
+    // bash translates its diagnostics; the classifier matches English text.
+    // Without the pinned child locale this returns { kind: 'error' } on a
+    // German desktop — the whole reason the six tests above were red there
+    // while CI (C locale) stayed green. Machines without de_DE installed see
+    // bash fall back to English, so this only bites where it can.
+    it('classifies incomplete input the same under a localized parent env', () => {
+      const previous = process.env.LC_ALL
+      process.env.LC_ALL = 'de_DE.UTF-8'
+      try {
+        expect(checkMultiLineStatus('for i in 1 2 3; do')).toEqual({ kind: 'continue' })
+      }
+      finally {
+        if (previous === undefined)
+          delete process.env.LC_ALL
+        else
+          process.env.LC_ALL = previous
+      }
+    })
+
     it('detects an unclosed if-then-fi', () => {
       expect(checkMultiLineStatus('if true; then')).toEqual({ kind: 'continue' })
     })
