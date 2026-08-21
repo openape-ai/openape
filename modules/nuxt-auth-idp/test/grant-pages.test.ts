@@ -113,7 +113,7 @@ describe('grant approval pages', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders a pending CLI grant and approves it from the single-grant page', async () => {
+  it('renders a pending CLI grant and approves it once from the single-grant page', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(buildCliGrant())
@@ -132,7 +132,7 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('List DNS records in Exoscale domain "example.com"')
     expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[name=example.com].dns-record[*]#list')
 
-    await wrapper.findAll('button').find(button => button.text() === 'Approve')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Just this once')!.trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
@@ -144,43 +144,86 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('Grant approved')
   })
 
-  it('offers "make a rule" for shaped details and POSTs a widened standing grant', async () => {
+  it('"Always allow" proposes a standing-grant rule and runs this request once', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(buildCliGrant())
-      .mockResolvedValueOnce({ id: 'sg-1' }) // POST /api/standing-grants
+    const { fetchMock, calls } = routedFetchMock(buildCliGrant())
     vi.stubGlobal('$fetch', fetchMock)
 
     const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
     await flushPromises()
 
-    // Proposal preview: first link keeps its selector, the rest wildcard.
-    expect(wrapper.text()).toContain('Make a rule for the future')
-    expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[*].dns-record[*] — risk ≤ low')
-
-    await wrapper.findAll('button').find(button => button.text() === 'Create rule')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Always allow')!.trigger('click')
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/standing-grants', {
-      method: 'POST',
-      body: {
-        delegate: 'agent@example.com',
-        audience: 'shapes',
-        target_host: 'macmini',
-        cli_id: 'exo',
-        resource_chain_template: [
-          { resource: 'account', selector: { name: 'current' } },
-          { resource: 'dns-domain' },
-          { resource: 'dns-record' },
-        ],
-        max_risk: 'low',
-        // Default duration: 7 days, timed.
-        grant_type: 'timed',
-        duration: 604800,
-        reason: 'Rule created from grant grant-1',
-      },
+    // Opening the panel decides nothing — it asks what "always" should mean.
+    expect(calls.some(c => c.url.endsWith('/approve'))).toBe(false)
+    // Proposal preview: first link keeps its selector, the rest wildcard.
+    expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[*].dns-record[*] — risk ≤ low')
+
+    await wrapper.findAll('button').find(button => button.text() === 'Create rule + run once')!.trigger('click')
+    await flushPromises()
+
+    expect(calls.find(c => c.url === '/api/standing-grants')?.opts.body).toMatchObject({
+      delegate: 'agent@example.com',
+      audience: 'shapes',
+      target_host: 'macmini',
+      cli_id: 'exo',
+      resource_chain_template: [
+        { resource: 'account', selector: { name: 'current' } },
+        { resource: 'dns-domain' },
+        { resource: 'dns-record' },
+      ],
+      max_risk: 'low',
+      grant_type: 'always',
+      reason: 'Rule created from grant grant-1',
     })
-    expect(wrapper.text()).toContain('Rule created')
+    expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
+      method: 'POST',
+      body: { grant_type: 'once' },
+    })
+  })
+
+  it('keeps the callback round-trip on the quick "Just this once" action', async () => {
+    __setRouteQuery({ grant_id: 'grant-1', callback: 'https://agent.example.com/callback' })
+    const navigateToMock = vi.fn(async () => {})
+    __setNavigateTo(navigateToMock)
+    const { fetchMock } = routedFetchMock(buildCliGrant())
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Just this once')!.trigger('click')
+    await flushPromises()
+
+    expect(navigateToMock).toHaveBeenCalledWith(
+      'https://agent.example.com/callback?grant_id=grant-1&authz_jwt=jwt-token&status=approved',
+      { external: true },
+    )
+  })
+
+  it('hides the approval-type radio behind "More options" on the landing page', async () => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const { fetchMock } = routedFetchMock(buildCliGrant())
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Approval Type')
+
+    await wrapper.findAll('button').find(button => button.text().includes('More options'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Approval Type')
+
+    await wrapper.findAll('button').find(button => button.text() === 'Approve with selected options')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
+      method: 'POST',
+      body: { grant_type: 'once' },
+    })
   })
 
   it('renders the why-pending diagnostics the IdP attached', async () => {
@@ -212,9 +255,10 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('A rule is per CLI')
   })
 
-  it('offers no rule for generic-only grants', async () => {
+  it('offers an editable allow-pattern instead of a rule for unshaped commands', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
     const generic = buildCliGrant()
+    generic.request.command = ['bash', '-c', 'o365-cli mail list --top 5']
     generic.request.authorization_details = [{
       type: 'openape_cli',
       cli_id: 'jq',
@@ -229,13 +273,34 @@ describe('grant approval pages', () => {
       risk: 'high',
       constraints: { exact_command: true },
     }]
-    const fetchMock = vi.fn().mockResolvedValueOnce(generic)
+    const { fetchMock, calls } = routedFetchMock(generic)
     vi.stubGlobal('$fetch', fetchMock)
 
     const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('Make a rule for the future')
+    await wrapper.findAll('button').find(button => button.text() === 'Always allow')!.trigger('click')
+    await flushPromises()
+
+    // No standing-grant template for an exact argv — a glob pattern instead,
+    // prefilled from the unwrapped inner command.
+    expect(wrapper.text()).not.toContain('risk ≤')
+    const patternInput = wrapper.findAll('input')
+      .find(i => (i.element as HTMLInputElement).value === 'o365-cli mail list *')
+    expect(patternInput).toBeTruthy()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Create rule + run once')!.trigger('click')
+    await flushPromises()
+
+    const put = calls.find(c => c.url.includes('/yolo-policy') && c.opts.method === 'PUT')
+    expect(put?.opts.body).toMatchObject({
+      mode: 'allow-list',
+      allowPatterns: ['o365-cli mail list *'],
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/approve', {
+      method: 'POST',
+      body: { grant_type: 'once' },
+    })
   })
 
   it('denies a grant and redirects to the callback URL when present', async () => {
@@ -321,11 +386,15 @@ describe('grant approval pages', () => {
     const calls: Array<{ url: string, opts: { method?: string, body?: Record<string, unknown> } }> = []
     const fetchMock = vi.fn(async (url: string, opts: { method?: string, body?: Record<string, unknown> } = {}) => {
       calls.push({ url, opts })
+      if (url === `/api/grants/${grant.id}`) return grant
       if (url.startsWith('/api/grants?section=active')) return { data: [grant] }
       if (url.startsWith('/api/grants?section=history')) return { data: [], pagination: { cursor: null, has_more: false } }
       if (url.includes('/yolo-policy')) return opts.method === 'PUT' ? { ok: true } : { policy: null }
       if (url === '/api/standing-grants') return { id: 'sg-1' }
-      if (url.endsWith('/approve') || url.endsWith('/deny')) return { id: grant.id, status: 'approved' }
+      if (url.endsWith('/approve')) {
+        return { id: grant.id, status: 'approved', grant: { ...grant, status: 'approved' }, authz_jwt: 'jwt-token' }
+      }
+      if (url.endsWith('/deny')) return { id: grant.id, status: 'denied' }
       return {}
     })
     return { fetchMock, calls }
