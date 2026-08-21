@@ -77,6 +77,13 @@ export function checkMultiLineStatus(buffer: string): MultiLineStatus {
   const result = spawnSync('bash', ['-n', '-c', buffer], {
     stdio: ['ignore', 'ignore', 'pipe'],
     encoding: 'utf-8',
+    // bash translates its diagnostics, and CONTINUE_PATTERNS above are
+    // English. On a German desktop `for i in 1 2 3; do` comes back as
+    // "Syntaxfehler: Unerwartetes Dateiende" — no pattern matches, and every
+    // multi-line construct is rejected as a hard error instead of prompting
+    // for the next line. Pin the child's locale so the parse verdict is the
+    // same everywhere.
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
   })
 
   if (result.error) {
