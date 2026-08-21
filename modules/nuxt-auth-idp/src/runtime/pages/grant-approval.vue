@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
-import { buildRuleProposals, ruleTemplatePreview } from '../utils/rule-suggestions'
+import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
@@ -45,49 +45,80 @@ const isGenericGrant = computed(() =>
   cliDetails.value.some(d => d?.operation_id === '_generic.exec'),
 )
 
-// "Make a rule from this" — proposal derivation lives in
-// utils/rule-suggestions (shared with the /grants card quick action).
-const RULE_DURATIONS = [
-  { label: '24 hours', value: '86400' },
-  { label: '7 days', value: '604800' },
-  { label: 'Forever', value: 'always' },
-]
-const ruleDurationByCli = ref({})
-const ruleCreatedByCli = ref({})
-const ruleErrorByCli = ref({})
-const ruleProcessing = ref(false)
-
+// "Always allow" opens a rule panel instead of granting an exact always-grant
+// (#1277): an exact grant would never match the next command line. Shaped
+// requests become standing-grant templates, free-form commands an allow-pattern
+// on the requester's policy. Either way the triggering request runs once.
+// Proposal derivation lives in utils/rule-suggestions, shared with /grants.
 const ruleProposals = computed(() => buildRuleProposals(cliDetails.value))
+const alwaysOpen = ref(false)
+const patternDraft = ref('')
+const ruleError = ref('')
+const ruleBusy = ref(false)
+const moreOptionsOpen = ref(false)
 
-async function createRule(proposal) {
-  ruleProcessing.value = true
-  ruleErrorByCli.value = { ...ruleErrorByCli.value, [proposal.cliId]: null }
+function toggleAlwaysPanel() {
+  alwaysOpen.value = !alwaysOpen.value
+  if (alwaysOpen.value && !patternDraft.value) {
+    patternDraft.value = commandDisplay.value ? (suggestAllowPattern(commandDisplay.value.text) ?? '') : ''
+  }
+}
+
+async function createRuleAndApproveOnce() {
+  ruleBusy.value = true
+  ruleError.value = ''
   try {
-    const duration = ruleDurationByCli.value[proposal.cliId] ?? '604800'
-    await $fetch('/api/standing-grants', {
-      method: 'POST',
-      body: {
-        delegate: grant.value.request.requester,
-        audience: grant.value.request.audience,
-        // Host-bound on purpose: the narrower default. Owners who want a
-        // host-independent rule manage it on the agent page instead.
-        ...(grant.value.request.target_host ? { target_host: grant.value.request.target_host } : {}),
-        cli_id: proposal.cliId,
-        resource_chain_template: proposal.template,
-        max_risk: proposal.maxRisk,
-        grant_type: duration === 'always' ? 'always' : 'timed',
-        ...(duration !== 'always' ? { duration: Number(duration) } : {}),
-        reason: `Rule created from grant ${grantId.value}`,
-      },
-    })
-    ruleCreatedByCli.value = { ...ruleCreatedByCli.value, [proposal.cliId]: true }
+    if (ruleProposals.value.length) {
+      for (const proposal of ruleProposals.value) {
+        await $fetch('/api/standing-grants', {
+          method: 'POST',
+          body: {
+            delegate: grant.value.request.requester,
+            audience: grant.value.request.audience,
+            // Host-bound on purpose: the narrower default. Owners who want a
+            // host-independent rule manage it on the agent page instead.
+            ...(grant.value.request.target_host ? { target_host: grant.value.request.target_host } : {}),
+            cli_id: proposal.cliId,
+            resource_chain_template: proposal.template,
+            max_risk: proposal.maxRisk,
+            grant_type: 'always',
+            reason: `Rule created from grant ${grantId.value}`,
+          },
+        })
+      }
+    }
+    else {
+      const pattern = patternDraft.value.trim()
+      if (!pattern) {
+        ruleError.value = 'Enter a pattern first — or approve only this exact request.'
+        return
+      }
+      const base = `/api/users/${encodeURIComponent(grant.value.request.requester)}/yolo-policy?audience=${encodeURIComponent(grant.value.request.audience)}`
+      const existing = await $fetch(base).catch(() => null)
+      const policy = existing?.policy ?? null
+      const allowPatterns = policy?.allowPatterns ?? []
+      if (!allowPatterns.includes(pattern)) {
+        await $fetch(base, {
+          method: 'PUT',
+          body: {
+            mode: policy?.mode ?? 'allow-list',
+            denyRiskThreshold: policy?.denyRiskThreshold ?? null,
+            denyPatterns: policy?.denyPatterns ?? [],
+            allowPatterns: [...allowPatterns, pattern],
+            expiresAt: policy?.expiresAt ?? null,
+          },
+        })
+      }
+    }
+    alwaysOpen.value = false
+    await handleApprove('once')
   }
   catch (err) {
     const e = err
-    ruleErrorByCli.value = { ...ruleErrorByCli.value, [proposal.cliId]: e.data?.title ?? e.message ?? 'Failed to create rule' }
+    ruleError.value = `${e.data?.title ?? e.message ?? 'Rule creation failed'} — you can still approve only this exact request.`
   }
   finally {
-    ruleProcessing.value = false
+    ruleBusy.value = false
   }
 }
 const delegateDuration = computed(() => {
@@ -197,7 +228,7 @@ onUnmounted(() => {
     document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 })
-async function handleApprove() {
+async function handleApprove(grantTypeOverride) {
   processing.value = true
   try {
     const extendBody = hasSimilarGrants.value && selectedExtendMode.value !== 'separate'
@@ -222,12 +253,15 @@ async function handleApprove() {
         wideningBody = { widened_details: chosen }
       }
     }
-    const resolvedGrantType = selectedGrantType.value === 'as_requested'
-      ? (grant.value?.request?.grant_type || 'once')
-      : selectedGrantType.value
-    const resolvedDuration = selectedGrantType.value === 'as_requested'
-      ? grant.value?.request?.duration
-      : effectiveDuration.value
+    const resolvedGrantType = grantTypeOverride
+      ?? (selectedGrantType.value === 'as_requested'
+        ? (grant.value?.request?.grant_type || 'once')
+        : selectedGrantType.value)
+    const resolvedDuration = grantTypeOverride
+      ? void 0
+      : (selectedGrantType.value === 'as_requested'
+          ? grant.value?.request?.duration
+          : effectiveDuration.value)
     const result = await $fetch(
       `/api/grants/${grantId.value}/approve`,
       {
@@ -396,14 +430,6 @@ function isExactCommand(detail) {
                     {{ commandDisplay.text }}
                   </dd>
                 </div>
-                <div v-if="grant.request?.cmd_hash">
-                  <dt class="text-muted">
-                    Hash
-                  </dt>
-                  <dd class="font-mono text-xs text-dimmed break-all">
-                    {{ grant.request.cmd_hash }}
-                  </dd>
-                </div>
                 <div v-if="grant.request?.reason">
                   <dt class="text-muted">
                     Reason
@@ -450,109 +476,6 @@ function isExactCommand(detail) {
             </template>
           </UAlert>
 
-          <div
-            v-if="hasWideningSuggestions && !hasSimilarGrants"
-            class="rounded-lg border border-default p-4 space-y-3"
-          >
-            <div>
-              <h3 class="text-sm font-semibold">
-                Approve scope
-              </h3>
-              <p class="text-xs text-muted mt-1">
-                Choose how broad this grant should be. Conservative default is exact.
-              </p>
-            </div>
-            <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-2">
-              <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
-                For: <span class="font-mono break-all">{{ cliDetails[detailIdx].display }}</span>
-              </p>
-              <URadioGroup
-                v-model="selectedWideningByIndex[detailIdx]"
-                :items="suggestions.map((s, i) => ({
-                  label: s.label,
-                  value: String(i),
-                  description: s.permission,
-                }))"
-                :ui="{ description: 'font-mono text-xs break-all' }"
-              />
-            </div>
-          </div>
-
-          <UAlert
-            v-if="hasSimilarGrants"
-            color="info"
-            title="Similar grant(s) exist"
-          >
-            <template #description>
-              <div class="text-sm space-y-2 mt-2">
-                <div v-for="similar in similarGrants" :key="similar.grant.id">
-                  <p class="text-muted">
-                    Existing grant: <span class="font-mono text-xs">{{ similar.grant.id.slice(0, 8) }}...</span>
-                  </p>
-                  <div
-                    v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
-                    :key="detail.permission"
-                    class="font-mono text-xs text-dimmed break-all"
-                  >
-                    {{ detail.permission }}
-                  </div>
-                </div>
-                <div class="mt-2 space-y-1">
-                  <p class="text-muted font-medium">
-                    Extension options:
-                  </p>
-                  <URadioGroup
-                    v-model="selectedExtendMode"
-                    :items="EXTEND_MODE_OPTIONS"
-                  />
-                  <div v-if="selectedExtendMode === 'widen'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
-                    <p class="text-xs text-muted">
-                      Result:
-                    </p>
-                    <p v-for="perm in widenedPreview" :key="perm" class="font-mono text-xs text-green-400">
-                      {{ perm }}
-                    </p>
-                  </div>
-                  <div v-if="selectedExtendMode === 'merge'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
-                    <p class="text-xs text-muted">
-                      Result:
-                    </p>
-                    <p v-for="perm in mergedPreview" :key="perm" class="font-mono text-xs text-blue-400">
-                      {{ perm }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </UAlert>
-
-          <div class="space-y-3">
-            <div>
-              <label class="text-sm font-medium text-muted block mb-2">Approval Type</label>
-              <p v-if="grant.request?.grant_type" class="text-xs text-dimmed mb-2">
-                Requested: {{ grant.request.grant_type }}
-              </p>
-              <URadioGroup
-                v-model="selectedGrantType"
-                :items="grantTypeOptions"
-              />
-            </div>
-            <div v-if="selectedGrantType === 'timed'" class="space-y-2">
-              <label class="text-sm font-medium text-muted block">Duration</label>
-              <USelect
-                v-model="selectedDurationPreset"
-                :items="DURATION_PRESETS"
-              />
-              <UInput
-                v-if="selectedDurationPreset === 'custom'"
-                v-model.number="customDuration"
-                type="number"
-                :min="60"
-                placeholder="Duration in seconds"
-              />
-            </div>
-          </div>
-
           <div v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
             <h3 class="text-sm font-semibold">
               Why this is waiting
@@ -579,69 +502,178 @@ function isExactCommand(detail) {
             </div>
           </div>
 
-          <div v-if="ruleProposals.length" class="rounded-lg border border-default p-4 space-y-3">
-            <div>
-              <h3 class="text-sm font-semibold">
-                Make a rule for the future
-              </h3>
-              <p class="text-xs text-muted mt-1">
-                Auto-approve requests like this one — same agent, same host, capped at the shown risk.
-                This request itself still needs your approval below.
-              </p>
-            </div>
-            <div v-for="proposal in ruleProposals" :key="proposal.cliId" class="space-y-2">
-              <p class="font-mono text-xs break-all">
+          <div class="flex gap-2">
+            <UButton color="error" variant="soft" :loading="processing" class="flex-1" @click="handleDeny">
+              Deny
+            </UButton>
+            <UButton color="success" :loading="processing" class="flex-1" @click="handleApprove('once')">
+              Just this once
+            </UButton>
+            <UButton color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
+              Always allow
+            </UButton>
+          </div>
+
+          <div v-if="alwaysOpen" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+            <p class="text-xs text-muted">
+              Make a rule so future requests like this auto-approve. This request itself runs once.
+            </p>
+            <template v-if="ruleProposals.length">
+              <p
+                v-for="proposal in ruleProposals"
+                :key="proposal.cliId"
+                class="font-mono text-xs break-all"
+              >
                 {{ ruleTemplatePreview(proposal) }}
               </p>
-              <div v-if="ruleCreatedByCli[proposal.cliId]" class="text-sm text-success">
-                Rule created — future matching requests auto-approve.
-              </div>
-              <div v-else class="flex items-center gap-2">
-                <label :for="`rule-duration-${proposal.cliId}`" class="sr-only">Rule duration for {{ proposal.cliId }}</label>
-                <USelect
-                  :id="`rule-duration-${proposal.cliId}`"
-                  :model-value="ruleDurationByCli[proposal.cliId] ?? '604800'"
-                  :items="RULE_DURATIONS"
-                  class="w-36"
-                  @update:model-value="v => ruleDurationByCli = { ...ruleDurationByCli, [proposal.cliId]: v }"
-                />
-                <UButton
-                  color="neutral"
-                  variant="outline"
-                  size="sm"
-                  :loading="ruleProcessing"
-                  @click="createRule(proposal)"
-                >
-                  Create rule
-                </UButton>
-              </div>
-              <UAlert
-                v-if="ruleErrorByCli[proposal.cliId]"
-                color="error"
-                variant="subtle"
-                :description="ruleErrorByCli[proposal.cliId]"
+            </template>
+            <template v-else>
+              <UInput
+                v-model="patternDraft"
+                placeholder="command pattern, e.g. o365-cli mail list *"
+                class="w-full font-mono text-xs"
               />
+              <p class="text-xs text-dimmed">
+                Glob pattern matched against future command lines (* = anything). Only requests matching it auto-approve.
+              </p>
+            </template>
+            <UAlert v-if="ruleError" color="error" variant="subtle" :title="ruleError" />
+            <div class="flex flex-wrap gap-2">
+              <UButton color="success" size="sm" :loading="ruleBusy" @click="createRuleAndApproveOnce">
+                Create rule + run once
+              </UButton>
+              <UButton color="success" variant="outline" size="sm" @click="handleApprove('always')">
+                Only this exact request, always
+              </UButton>
             </div>
           </div>
 
-          <div class="flex gap-3">
+          <button
+            type="button"
+            class="flex items-center gap-2 text-xs text-muted hover:text-default"
+            @click="moreOptionsOpen = !moreOptionsOpen"
+          >
+            <span>{{ moreOptionsOpen ? '▾' : '▸' }} More options</span>
+            <UBadge v-if="hasSimilarGrants" color="info" variant="soft" size="xs" label="similar grants exist" />
+          </button>
+
+          <div v-if="moreOptionsOpen" class="space-y-3">
+            <p class="font-mono text-xs text-dimmed break-all">
+              Grant {{ grantId.slice(0, 8) }}… · Audience: {{ grant.request?.audience }}
+            </p>
+            <p v-if="grant.request?.cmd_hash" class="font-mono text-xs text-dimmed break-all">
+              Hash: {{ grant.request.cmd_hash }}
+            </p>
+            <div
+              v-if="hasWideningSuggestions && !hasSimilarGrants"
+              class="rounded-lg border border-default p-4 space-y-3"
+            >
+              <div>
+                <h3 class="text-sm font-semibold">
+                  Approve scope
+                </h3>
+                <p class="text-xs text-muted mt-1">
+                  Choose how broad this grant should be. Conservative default is exact.
+                </p>
+              </div>
+              <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-2">
+                <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
+                  For: <span class="font-mono break-all">{{ cliDetails[detailIdx].display }}</span>
+                </p>
+                <URadioGroup
+                  v-model="selectedWideningByIndex[detailIdx]"
+                  :items="suggestions.map((s, i) => ({
+                    label: s.label,
+                    value: String(i),
+                    description: s.permission,
+                  }))"
+                  :ui="{ description: 'font-mono text-xs break-all' }"
+                />
+              </div>
+            </div>
+
+            <UAlert
+              v-if="hasSimilarGrants"
+              color="info"
+              title="Similar grant(s) exist"
+            >
+              <template #description>
+                <div class="text-sm space-y-2 mt-2">
+                  <div v-for="similar in similarGrants" :key="similar.grant.id">
+                    <p class="text-muted">
+                      Existing grant: <span class="font-mono text-xs">{{ similar.grant.id.slice(0, 8) }}...</span>
+                    </p>
+                    <div
+                      v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
+                      :key="detail.permission"
+                      class="font-mono text-xs text-dimmed break-all"
+                    >
+                      {{ detail.permission }}
+                    </div>
+                  </div>
+                  <div class="mt-2 space-y-1">
+                    <p class="text-muted font-medium">
+                      Extension options:
+                    </p>
+                    <URadioGroup
+                      v-model="selectedExtendMode"
+                      :items="EXTEND_MODE_OPTIONS"
+                    />
+                    <div v-if="selectedExtendMode === 'widen'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                      <p class="text-xs text-muted">
+                        Result:
+                      </p>
+                      <p v-for="perm in widenedPreview" :key="perm" class="font-mono text-xs text-green-400">
+                        {{ perm }}
+                      </p>
+                    </div>
+                    <div v-if="selectedExtendMode === 'merge'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
+                      <p class="text-xs text-muted">
+                        Result:
+                      </p>
+                      <p v-for="perm in mergedPreview" :key="perm" class="font-mono text-xs text-blue-400">
+                        {{ perm }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </UAlert>
+
+            <div class="space-y-3">
+              <div>
+                <label class="text-sm font-medium text-muted block mb-2">Approval Type</label>
+                <p v-if="grant.request?.grant_type" class="text-xs text-dimmed mb-2">
+                  Requested: {{ grant.request.grant_type }}
+                </p>
+                <URadioGroup
+                  v-model="selectedGrantType"
+                  :items="grantTypeOptions"
+                />
+              </div>
+              <div v-if="selectedGrantType === 'timed'" class="space-y-2">
+                <label class="text-sm font-medium text-muted block">Duration</label>
+                <USelect
+                  v-model="selectedDurationPreset"
+                  :items="DURATION_PRESETS"
+                />
+                <UInput
+                  v-if="selectedDurationPreset === 'custom'"
+                  v-model.number="customDuration"
+                  type="number"
+                  :min="60"
+                  placeholder="Duration in seconds"
+                />
+              </div>
+            </div>
             <UButton
               color="success"
+              variant="outline"
+              size="sm"
               :loading="processing"
-              block
-              class="flex-1"
-              @click="handleApprove"
+              @click="handleApprove()"
             >
-              Approve
-            </UButton>
-            <UButton
-              color="error"
-              :loading="processing"
-              block
-              class="flex-1"
-              @click="handleDeny"
-            >
-              Deny
+              Approve with selected options
             </UButton>
           </div>
         </div>
