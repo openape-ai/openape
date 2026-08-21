@@ -3,7 +3,8 @@
 # Nitro server). Build context = the directory to serve:
 #   docker buildx build --platform linux/amd64 -f compose/site.Dockerfile \
 #     -t registry.openape.ai/site-docs:prod-<sha> --load apps/docs/.output/public
-# /200.html is the prerender SPA fallback for routes that weren't crawled.
 FROM caddy:2-alpine
-RUN printf ':80 {\n\troot * /srv\n\ttry_files {path} {path}.html {path}/ /200.html\n\tfile_server\n}\n' > /etc/caddy/Caddyfile
+# Unbekannte URLs bekommen die prerenderte 404-Seite MIT Status 404 — ein
+# Fallback auf eine Datei, die es nicht gibt, liefert eine weisse Seite.
+RUN printf ':80 {\n\troot * /srv\n\ttry_files {path} {path}.html {path}/\n\tfile_server\n\thandle_errors {\n\t\trewrite * /404.html\n\t\tfile_server\n\t}\n}\n' > /etc/caddy/Caddyfile
 COPY . /srv
