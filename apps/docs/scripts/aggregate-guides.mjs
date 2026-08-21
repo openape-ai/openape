@@ -1,7 +1,10 @@
 // Aggregate every app's story-guide (apps/<app>/docs/stories.json, written by
 // compose/distribute-docs.mjs from the live E2E captures) into a single "Apps"
 // section on docs.openape.ai. One Markdown page per app under
-// content/5.apps/, screenshots copied into public/guides/<app>/.
+// content/5.apps/, plus a content/5.apps/0.index.md overview card grid (one
+// card per app: title, first screenshot, intro — pulled from the same
+// stories.json, so there is no second place to maintain it). Screenshots
+// copied into public/guides/<app>/.
 //
 //   node scripts/aggregate-guides.mjs
 //
@@ -43,6 +46,7 @@ mkdirSync(sectionDir, { recursive: true })
 writeFileSync(join(sectionDir, '.navigation.yml'), 'title: Apps\nicon: i-lucide-layout-grid\n')
 
 let written = 0
+const indexCards = []
 APPS.forEach((app, i) => {
   const storiesPath = join(monorepoRoot, 'apps', app.dir, 'docs', 'stories.json')
   if (!existsSync(storiesPath)) {
@@ -85,6 +89,34 @@ APPS.forEach((app, i) => {
   }
   writeFileSync(join(sectionDir, `${i + 1}.${app.slug}.md`), `${lines.join('\n')}\n`)
   written++
+
+  const firstShot = ordered.flatMap(s => s.steps).find(step => step.shot)
+  indexCards.push({
+    slug: app.slug,
+    title: app.title,
+    intro: (ordered[0].intro ?? `How ${app.title} is used, step by step.`).replace(/\n/g, ' '),
+    shot: firstShot ? `/guides/${app.slug}/${firstShot.shot}` : undefined,
+  })
 })
 
-console.log(`[aggregate-guides] wrote ${written} app guides → content/5.apps/ + public/guides/`)
+const indexLines = [
+  '---',
+  'title: Apps',
+  'description: "The OpenApe apps — sign in once with your passkey, use any of them."',
+  '---',
+  '',
+  '# Apps',
+  '',
+  'Every app below runs standalone or wired together behind the same OpenApe sign-in — pick one and follow the guide.',
+  '',
+  '::card-group',
+]
+for (const card of indexCards) {
+  indexLines.push(`  ::card{title=${JSON.stringify(card.title)} to="/apps/${card.slug}"}`)
+  if (card.shot) indexLines.push(`  ![${card.title}](${card.shot})`, '')
+  indexLines.push(`  ${card.intro}`, '  ::')
+}
+indexLines.push('::')
+writeFileSync(join(sectionDir, '0.index.md'), `${indexLines.join('\n')}\n`)
+
+console.log(`[aggregate-guides] wrote ${written} app guides + index → content/5.apps/ + public/guides/`)
