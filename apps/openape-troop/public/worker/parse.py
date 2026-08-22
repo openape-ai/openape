@@ -32,11 +32,17 @@ org = meta.get("company")
 open(os.path.join(outdir, "org.txt"), "w").write(org if isinstance(org, str) else "")
 allowed = meta.get("allowedTools")
 allowed_path = os.path.join(outdir, "allowed.txt")
+tools_path = os.path.join(outdir, "tools.txt")
 if isinstance(allowed, list):
     allowed_str = "\n".join(x for x in allowed if isinstance(x, str))
     open(allowed_path, "w").write(allowed_str)
     # The worker's execution backend consumes the same task-scoped list.
-    open(os.path.join(outdir, "tools.txt"), "w").write(allowed_str)
-elif os.path.exists(allowed_path):
-    os.remove(allowed_path)
+    open(tools_path, "w").write(allowed_str)
+else:
+    # Legacy/invalid metadata: don't leave the client-supplied tools.txt
+    # from line 16 (or a stale one from a reused outdir) as the allowlist.
+    if os.path.exists(allowed_path):
+        os.remove(allowed_path)
+    if os.path.exists(tools_path):
+        os.remove(tools_path)
 print(t["id"])
