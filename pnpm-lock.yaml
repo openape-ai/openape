@@ -883,6 +883,9 @@ importers:
       '@vue/test-utils':
         specifier: 'catalog:'
         version: 2.4.11(@vue/compiler-dom@3.5.39)(@vue/server-renderer@3.5.39(vue@3.5.39(typescript@5.9.3)))(vue@3.5.39(typescript@5.9.3))
+      happy-dom:
+        specifier: 'catalog:'
+        version: 20.11.1
       openape-e2e:
         specifier: workspace:*
         version: link:../../examples/e2e
