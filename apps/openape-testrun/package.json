@@ -32,6 +32,7 @@
     "@vitest/browser": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
+    "happy-dom": "catalog:",
     "openape-e2e": "workspace:*",
     "playwright": "catalog:",
     "typescript": "catalog:",
