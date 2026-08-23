@@ -34,6 +34,8 @@ const { isLapsed, toRequestView } = await import('../server/utils/request-view')
 const createConsumer = (await import('../server/api/consumers/index.post')).default
 const createRequest = (await import('../server/api/requests/index.post')).default
 const readRequest = (await import('../server/api/requests/[id].get')).default
+const fillRequest = (await import('../server/api/requests/[id]/fill.post')).default
+const cancelRequest = (await import('../server/api/requests/[id]/cancel.post')).default
 
 const PUB = { kty: 'EC', crv: 'P-256', x: 'abc', y: 'def' }
 
@@ -120,5 +122,51 @@ describe('a request nobody filled in time is dead', () => {
   })
   it('says nothing about one that was already filled', () => {
     expect(isLapsed({ status: 'filled', expiresAt: 1 }, 9999)).toBe(false)
+  })
+})
+
+describe('handing a value over', () => {
+  const BOX = { epk: 'EPK', salt: 'SALT', iv: 'IV', ct: 'CIPHERTEXT' }
+
+  async function freshRequest() {
+    caller = 'patrick@hofmann.eco'
+    const consumer = await createConsumer(event({ name: 'mac', publicKeyJwk: PUB })) as { id: string }
+    return await createRequest(event({ consumerId: consumer.id, fieldName: 'TOKEN' })) as { id: string }
+  }
+
+  it('accepts a complete envelope once', async () => {
+    const req = await freshRequest()
+    const filled = await fillRequest(event({ box: BOX }, { id: req.id })) as { status: string }
+    expect(filled.status).toBe('filled')
+  })
+
+  it('refuses a second fill — a gate you can fill twice is not one', async () => {
+    const req = await freshRequest()
+    await fillRequest(event({ box: BOX }, { id: req.id }))
+    await expect(fillRequest(event({ box: BOX }, { id: req.id }))).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('refuses a half envelope instead of storing part of it', async () => {
+    const req = await freshRequest()
+    await expect(fillRequest(event({ box: { epk: 'a', salt: 'b', iv: 'c' } }, { id: req.id }))).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('lets nobody but the owner fill it — not even the requester', async () => {
+    const req = await freshRequest()
+    caller = 'fremd@example.com'
+    await expect(fillRequest(event({ box: BOX }, { id: req.id }))).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('never returns the envelope it just took', async () => {
+    const req = await freshRequest()
+    const filled = await fillRequest(event({ box: BOX }, { id: req.id }))
+    expect(JSON.stringify(filled)).not.toContain('CIPHERTEXT')
+  })
+
+  it('declining closes the request and stores nothing', async () => {
+    const req = await freshRequest()
+    const cancelled = await cancelRequest(event(undefined, { id: req.id })) as { status: string }
+    expect(cancelled.status).toBe('cancelled')
+    await expect(fillRequest(event({ box: BOX }, { id: req.id }))).rejects.toMatchObject({ statusCode: 409 })
   })
 })
