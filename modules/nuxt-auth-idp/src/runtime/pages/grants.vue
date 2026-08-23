@@ -4,6 +4,7 @@ import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
+import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
 import { buildRuleProposals, ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
 useHead({ title: 'Grants' })
@@ -209,6 +210,12 @@ function liveness(grant) {
 function toggleMoreOptions(id) {
   moreOptionsOpen.value = { ...moreOptionsOpen.value, [id]: !moreOptionsOpen.value[id] }
 }
+function summaryText(grant) {
+  return grantSummaryText(grant.request.summary)
+}
+function summaryLink(grant) {
+  return safeSummaryLink(grant.request.summary?.link)
+}
 function commandDisplay(grant) {
   return unwrapShellCommand(grant.request?.command)
 }
@@ -352,6 +359,21 @@ function isExactCommand(detail) {
                 <p v-if="cliSummary(grant)" class="text-muted">
                   {{ cliSummary(grant) }}
                 </p>
+                <div v-if="summaryText(grant)" class="mt-1 rounded border border-default bg-elevated/50 px-3 py-2">
+                  <p class="text-xs text-muted mb-1">
+                    Angabe des Antragstellers
+                  </p>
+                  <p class="text-sm whitespace-pre-wrap break-words">
+                    {{ summaryText(grant) }}
+                  </p>
+                  <a
+                    v-if="summaryLink(grant)"
+                    :href="summaryLink(grant)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm text-primary underline break-all"
+                  >{{ summaryLink(grant) }}</a>
+                </div>
                 <div v-if="commandDisplay(grant)" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>
@@ -581,6 +603,21 @@ function isExactCommand(detail) {
                 <p v-if="grant.request.run_as">
                   <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                 </p>
+                <div v-if="summaryText(grant)" class="mt-1 rounded border border-default bg-elevated/50 px-3 py-2">
+                  <p class="text-xs text-muted mb-1">
+                    Angabe des Antragstellers
+                  </p>
+                  <p class="text-sm whitespace-pre-wrap break-words">
+                    {{ summaryText(grant) }}
+                  </p>
+                  <a
+                    v-if="summaryLink(grant)"
+                    :href="summaryLink(grant)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm text-primary underline break-all"
+                  >{{ summaryLink(grant) }}</a>
+                </div>
                 <div v-if="commandDisplay(grant)" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>

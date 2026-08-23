@@ -26,10 +26,15 @@ export function callerState(
   return { kind: 'abandoned', waitedSeconds: Math.max(0, until - createdAt) }
 }
 
-/** `4:07` — a countdown reads as a countdown only with the seconds visible. */
+/**
+ * `4:07` for the short waits a shell command makes, `23 h 59 min` for the long
+ * ones a review can afford. Counting a day out in minutes (`1439:45`) reads as
+ * a stopwatch nobody can convert in their head.
+ */
 export function formatCountdown(secondsLeft: number): string {
   const s = Math.max(0, secondsLeft)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`
 }
 
 /** How long the caller was prepared to wait, for the abandoned note. */
