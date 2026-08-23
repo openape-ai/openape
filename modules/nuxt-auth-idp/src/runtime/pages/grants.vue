@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
-import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
+import { buildRuleProposals, ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
 useHead({ title: 'Grants' })
 
@@ -219,6 +219,9 @@ function toggleAlwaysPanel(grant) {
       [grant.id]: display ? (suggestAllowPattern(display.text) ?? '') : '',
     }
   }
+}
+function standingRule(grant) {
+  return standingRulePreview(grant.request)
 }
 function ruleProposalsFor(grant) {
   return buildRuleProposals(cliDetails(grant))
@@ -538,6 +541,10 @@ function isExactCommand(detail) {
                 </div>
                 <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
+                <div v-if="standingRule(grant)" class="mt-1">
+                  <span class="text-muted">Allows:</span>
+                  <code class="block font-mono text-xs bg-default text-blue-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ standingRule(grant) }}</code>
+                </div>
                 <p v-if="cliSummary(grant)">
                   <span class="text-muted">Request:</span> {{ cliSummary(grant) }}
                 </p>
