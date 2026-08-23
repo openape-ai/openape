@@ -55,6 +55,6 @@
     "vitest": "catalog:",
     "openape-e2e": "workspace:*",
     "test2docs": "^0.1.0",
-    "@playwright/test": "^1.62.0"
+    "@playwright/test": "catalog:"
   }
 }
