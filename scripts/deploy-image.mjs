@@ -59,6 +59,7 @@ const TARGETS = {
   'question-service': { filter: '@openape-question-service/app', dir: 'apps/openape-question-service', image: 'openape-question-service', port: 3017, compose: 'question-service', unit: 'openape-question-service', domain: 'question-service.openape.ai', envVar: 'QUESTION_SERVICE_TAG' },
   'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3022, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
   'crm': { filter: '@openape-crm/app', dir: 'apps/openape-crm', image: 'openape-crm', port: 3024, compose: 'crm', unit: 'openape-crm', domain: 'crm.openape.ai', envVar: 'CRM_TAG' },
+  'secrets': { filter: '@openape-secrets/app', dir: 'apps/openape-secrets', image: 'openape-secrets', port: 3019, compose: 'secrets', unit: 'openape-secrets', domain: 'secrets.openape.ai', envVar: 'SECRETS_TAG' },
 }
 
 function sh(cmd, args, opts = {}) {
