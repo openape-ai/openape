@@ -784,7 +784,8 @@
       "titleOrBody": "Titel oder Inhalt"
     },
     "badge": {
-      "fromOperator": "vom Operator"
+      "fromOperator": "vom Operator",
+      "silent": "still"
     },
     "objectives": {
       "placeholder": "Neues Ziel …",
@@ -881,7 +882,7 @@
       }
     },
     "automations": {
-      "intro": "Proaktive Trigger — der Operator meldet sich von sich aus (Briefing, Erinnerung) in den Chat + aufs Handy.",
+      "intro": "Proaktive Trigger — der Operator meldet sich von sich aus (Briefing, Erinnerung) in den Chat. Die Glocke entscheidet, ob das Ergebnis zusätzlich aufs Handy geht.",
       "addButton": "Trigger",
       "empty": "Noch kein Trigger. Leg den ersten an — z. B. „morning-digest: täglich 7:00 Uhr das Briefing“.",
       "schedule": {
@@ -915,7 +916,11 @@
       "hourSuffix": "Uhr (Wiener Zeit, täglich)",
       "minutesSuffix": "Minuten Intervall",
       "timerPreview": "feuert einmalig am {when}",
-      "cronHelp": "5-Feld-Cron (Wiener Zeit): Minute Stunde Tag Monat Wochentag. Beispiel: {example} = werktags 7:00."
+      "cronHelp": "5-Feld-Cron (Wiener Zeit): Minute Stunde Tag Monat Wochentag. Beispiel: {example} = werktags 7:00.",
+      "notify": {
+        "turnOff": "Ergebnis nicht aufs Handy pushen",
+        "turnOn": "Ergebnis wieder aufs Handy pushen"
+      }
     },
     "webhooks": {
       "intro": "Webhooks — ein externes Ereignis (POST auf die Hook-URL) lässt den Operator sich melden.",
