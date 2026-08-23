@@ -36,7 +36,7 @@ export const TEST_SSH_PRIVATE_KEY = testPrivateKeyObject
 export const TEST_SSH_PUBLIC_KEY_OBJECT = testPublicKeyObject
 
 /** Format an ed25519 public key as an OpenSSH string (ssh-ed25519 ...). */
-function keyObjectToSshString(pubKey: KeyObject, email: string): string {
+export function keyObjectToSshString(pubKey: KeyObject, email: string): string {
   const rawKey = pubKey.export({ type: 'spki', format: 'der' })
   // SPKI DER for ed25519 is 44 bytes: 12 byte prefix + 32 byte key
   const raw32 = (rawKey as Buffer).subarray(12)
