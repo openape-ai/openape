@@ -150,6 +150,14 @@ export interface OpenApeCliAuthorizationDetail {
 /** Supported OpenApe authorization detail variants */
 export type OpenApeAuthorizationDetail = OpenApeGrantAuthorizationDetail | OpenApeCliAuthorizationDetail
 
+/** What the requester says this grant is about */
+export interface OpenApeGrantSummary {
+  /** Free text, rendered with its line breaks intact. */
+  text: string
+  /** Where to verify the claim. Only http(s) is linked by the approval UI. */
+  link?: string
+}
+
 /** OpenApe grant request */
 export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
@@ -182,6 +190,13 @@ export interface OpenApeGrantRequest {
    * different decision and has to be presented as one.
    */
   waits_until?: number
+  /**
+   * The requester's own account of what it is asking for, so an owner can
+   * decide without reconstructing the context (#1310). Self-reported: the
+   * approval card labels it as the requester's claim, and `command` remains
+   * the binding description of what will run.
+   */
+  summary?: OpenApeGrantSummary
   /** Execute as this user identity */
   run_as?: string
   /** Delegator — who is being acted on behalf of (delegation grants only) */
