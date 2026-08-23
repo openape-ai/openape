@@ -21,6 +21,13 @@ export default defineNuxtConfig({
     // (path under shared/ so it survives deploy rotation).
     tursoUrl: 'file:./dev.db',
     tursoAuthToken: '',
+    // Telegram leg of the request notification. All three empty by default:
+    // without them the notifier is a silent no-op, the same shape the IdP uses
+    // for pending grants. `telegramApprover` scopes the chat to one person —
+    // a chat belongs to exactly one human, the service does not.
+    telegramBotToken: process.env.NUXT_TELEGRAM_BOT_TOKEN || '',
+    telegramChatId: process.env.NUXT_TELEGRAM_CHAT_ID || '',
+    telegramApprover: process.env.NUXT_TELEGRAM_APPROVER || '',
     // Empty default → public URLs derive from the request origin. Production
     // sets NUXT_PUBLIC_URL=https://secrets.openape.ai explicitly.
     publicUrl: '',

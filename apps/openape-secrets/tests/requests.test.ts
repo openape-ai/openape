@@ -17,12 +17,17 @@ let caller = 'patrick@hofmann.eco'
 // requireCaller is a Nitro auto-import from @openape/nuxt-auth-sp; outside Nuxt
 // it resolves through globalThis.
 vi.stubGlobal('requireCaller', async () => ({ email: caller, act: 'human' }))
+// Nitro auto-import. Empty Telegram settings, so the notifier is the silent
+// no-op it is meant to be when unconfigured — these tests are about the gate,
+// not the announcement (tests/notify.test.ts covers that).
+vi.stubGlobal('useRuntimeConfig', () => ({ telegramBotToken: '', telegramChatId: '', telegramApprover: '', publicUrl: '' }))
 
 // The handlers import these from 'h3', so a global stub would not intercept.
 vi.mock('h3', () => ({
   defineEventHandler: (fn: unknown) => fn,
   readBody: async (e: { __body: unknown }) => e.__body,
   getRouterParam: (e: { context: { params: Record<string, string> } }, k: string) => e.context.params[k],
+  getRequestURL: () => new URL('http://localhost/'),
   setResponseStatus: () => {},
   createError: (opts: { statusCode: number, statusMessage?: string, data?: unknown }) =>
     Object.assign(new Error(opts.statusMessage ?? 'error'), { statusCode: opts.statusCode, data: opts.data }),
@@ -36,6 +41,10 @@ const createRequest = (await import('../server/api/requests/index.post')).defaul
 const readRequest = (await import('../server/api/requests/[id].get')).default
 const fillRequest = (await import('../server/api/requests/[id]/fill.post')).default
 const cancelRequest = (await import('../server/api/requests/[id]/cancel.post')).default
+const collectRequest = (await import('../server/api/requests/[id]/collect.post')).default
+const { useDb: db } = await import('../server/database/drizzle')
+const { secretRequests } = await import('../server/database/schema')
+const { eq } = await import('drizzle-orm')
 
 const PUB = { kty: 'EC', crv: 'P-256', x: 'abc', y: 'def' }
 
@@ -168,5 +177,55 @@ describe('handing a value over', () => {
     const cancelled = await cancelRequest(event(undefined, { id: req.id })) as { status: string }
     expect(cancelled.status).toBe('cancelled')
     await expect(fillRequest(event({ box: BOX }, { id: req.id }))).rejects.toMatchObject({ statusCode: 409 })
+  })
+})
+
+describe('collecting destroys what it hands over', () => {
+  const BOX = { epk: 'EPK', salt: 'SALT', iv: 'IV', ct: 'CIPHERTEXT' }
+
+  async function filledRequest() {
+    caller = 'patrick@hofmann.eco'
+    const consumer = await createConsumer(event({ name: 'mac', publicKeyJwk: PUB })) as { id: string }
+    const req = await createRequest(event({ consumerId: consumer.id, fieldName: 'TOKEN' })) as { id: string }
+    await fillRequest(event({ box: BOX }, { id: req.id }))
+    return req
+  }
+
+  it('hands the envelope over once', async () => {
+    const req = await filledRequest()
+    const got = await collectRequest(event(undefined, { id: req.id })) as { box: typeof BOX }
+    expect(got.box).toEqual(BOX)
+  })
+
+  it('leaves nothing behind in the database', async () => {
+    const req = await filledRequest()
+    await collectRequest(event(undefined, { id: req.id }))
+    // Read the row directly: an API that says "gone" while the column still
+    // holds ciphertext would pass any test that only asks the API.
+    const row = await db().select().from(secretRequests).where(eq(secretRequests.id, req.id)).get()
+    expect(row!.status).toBe('fetched')
+    expect(row!.boxCt).toBeNull()
+    expect(row!.boxEpk).toBeNull()
+    expect(row!.boxSalt).toBeNull()
+    expect(row!.boxIv).toBeNull()
+  })
+
+  it('refuses a second collection', async () => {
+    const req = await filledRequest()
+    await collectRequest(event(undefined, { id: req.id }))
+    await expect(collectRequest(event(undefined, { id: req.id }))).rejects.toMatchObject({ statusCode: 410 })
+  })
+
+  it('refuses a stranger', async () => {
+    const req = await filledRequest()
+    caller = 'fremd@example.com'
+    await expect(collectRequest(event(undefined, { id: req.id }))).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('has nothing to hand over before it is filled', async () => {
+    caller = 'patrick@hofmann.eco'
+    const consumer = await createConsumer(event({ name: 'mac', publicKeyJwk: PUB })) as { id: string }
+    const req = await createRequest(event({ consumerId: consumer.id, fieldName: 'TOKEN' })) as { id: string }
+    await expect(collectRequest(event(undefined, { id: req.id }))).rejects.toMatchObject({ statusCode: 409 })
   })
 })
