@@ -104,6 +104,10 @@ export default defineNitroPlugin(async () => {
     // when due; `fire_at` = one-shot timer alternative to at_hour/every_minutes.
     try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN prompt TEXT NOT NULL DEFAULT ''`) }
     catch { /* column exists */ }
+    // Whether a due trigger's answer rings the owner's phone (#1295). Default 1
+    // so every existing trigger keeps behaving exactly as before.
+    try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN notify INTEGER NOT NULL DEFAULT 1`) }
+    catch { /* column exists */ }
     try { await db.run(sql`ALTER TABLE cockpit_schedules ADD COLUMN fire_at INTEGER`) }
     catch { /* column exists */ }
     // Self-scheduling (#proactive-operators Phase 3): who created this trigger.

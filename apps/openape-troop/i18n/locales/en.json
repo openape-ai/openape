@@ -784,7 +784,8 @@
       "titleOrBody": "A title or some content"
     },
     "badge": {
-      "fromOperator": "from the Operator"
+      "fromOperator": "from the Operator",
+      "silent": "silent"
     },
     "objectives": {
       "placeholder": "New objective …",
@@ -881,7 +882,7 @@
       }
     },
     "automations": {
-      "intro": "Proactive triggers — the Operator gets in touch on its own (briefing, reminder) in the chat and on your phone.",
+      "intro": "Proactive triggers — the Operator speaks up on its own (briefing, reminder) in the chat. The bell decides whether the result also reaches your phone.",
       "addButton": "Trigger",
       "empty": "No triggers yet. Add the first one — for example “morning-digest: the briefing every day at 07:00”.",
       "schedule": {
@@ -915,7 +916,11 @@
       "hourSuffix": "(Vienna time, every day)",
       "minutesSuffix": "minute interval",
       "timerPreview": "fires once on {when}",
-      "cronHelp": "Five-field cron (Vienna time): minute hour day-of-month month day-of-week. Example: {example} = weekdays at 07:00."
+      "cronHelp": "Five-field cron (Vienna time): minute hour day-of-month month day-of-week. Example: {example} = weekdays at 07:00.",
+      "notify": {
+        "turnOff": "Don't push this result to the phone",
+        "turnOn": "Push this result to the phone again"
+      }
     },
     "webhooks": {
       "intro": "Webhooks — an external event (a POST to the hook URL) makes the Operator speak up.",

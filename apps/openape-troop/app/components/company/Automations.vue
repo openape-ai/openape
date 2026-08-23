@@ -19,6 +19,7 @@ interface Trigger {
   fireAt: number | null
   cronExpr: string | null
   enabled: boolean
+  notify: boolean
   createdBy: string
   lastRunAt: number | null
 }
@@ -138,6 +139,9 @@ const timerPreview = computed(() => {
               <UBadge v-if="!trigger.enabled" color="warning" variant="subtle" size="xs">
                 {{ t('common.badge.paused') }}
               </UBadge>
+              <UBadge v-if="trigger.notify === false" color="neutral" variant="subtle" size="xs" icon="i-lucide-bell-off">
+                {{ t('companyPanels.badge.silent') }}
+              </UBadge>
             </div>
             <p class="text-xs text-zinc-500 mt-1 line-clamp-2">
               {{ trigger.prompt }}
@@ -147,6 +151,16 @@ const timerPreview = computed(() => {
             </p>
           </div>
           <div class="flex items-center gap-1 shrink-0" @click.stop>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :icon="trigger.notify === false ? 'i-lucide-bell-off' : 'i-lucide-bell'"
+              :aria-label="trigger.notify === false ? t('companyPanels.automations.notify.turnOn') : t('companyPanels.automations.notify.turnOff')"
+              :title="trigger.notify === false ? t('companyPanels.automations.notify.turnOn') : t('companyPanels.automations.notify.turnOff')"
+              :disabled="busy[trigger.id]"
+              @click="patch(trigger.id, { notify: trigger.notify === false })"
+            />
             <USwitch :model-value="trigger.enabled" :disabled="busy[trigger.id]" @update:model-value="patch(trigger.id, { enabled: !trigger.enabled })" />
             <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-x" :aria-label="t('common.remove')" :loading="busy[trigger.id]" @click="remove(trigger.id)" />
           </div>
