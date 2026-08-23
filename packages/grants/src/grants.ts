@@ -123,6 +123,21 @@ export async function revokeGrant(
 }
 
 /**
+ * Is anybody still waiting for this decision?
+ *
+ * `undefined` means the requester never said — then nothing may be claimed
+ * either way, because "abandoned" on a caller that is actually still polling
+ * would teach the owner to ignore the label.
+ */
+export function isCallerWaiting(
+  request: Pick<OpenApeGrantRequest, 'waits_until'>,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean | undefined {
+  if (typeof request.waits_until !== 'number') return undefined
+  return nowSec < request.waits_until
+}
+
+/**
  * Has a timed grant outlived its `expires_at`?
  *
  * Expiry is enforced lazily: the stored status only flips to 'expired' when

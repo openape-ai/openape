@@ -25,6 +25,11 @@ vi.mock('../src/shapes/index.js', async () => ({
   resolveCommand: vi.fn(),
   verifyAndConsume: vi.fn(),
   waitForGrantStatus: vi.fn(),
+  // Real on purpose, like isAutoApproved above: the announced deadline must be
+  // the one this module actually waits for, and a stubbed clock would hide a
+  // drift between the two (#1306).
+  GRANT_WAIT_MS: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).GRANT_WAIT_MS,
+  waitsUntil: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).waitsUntil,
 }))
 vi.mock('../src/notifications.js', () => ({
   notifyGrantPending: vi.fn(),

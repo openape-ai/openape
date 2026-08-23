@@ -8,6 +8,7 @@ import {
   createGrant,
   denyGrant,
   introspectGrant,
+  isCallerWaiting,
   isGrantExpired,
   revokeGrant,
   useGrant,
@@ -1182,5 +1183,28 @@ describe('isGrantExpired', () => {
   it('ignores non-timed grants — "always" has no deadline to miss', () => {
     const always = { status: 'approved', expires_at: 1000, request: { grant_type: 'always' } }
     expect(isGrantExpired(always as Parameters<typeof isGrantExpired>[0], 5000)).toBe(false)
+  })
+})
+
+describe('isCallerWaiting', () => {
+  it('says nothing when the requester never said — silence is not evidence', () => {
+    expect(isCallerWaiting({}, 5000)).toBeUndefined()
+  })
+
+  it('is true while the deadline is ahead', () => {
+    expect(isCallerWaiting({ waits_until: 5000 }, 4999)).toBe(true)
+  })
+
+  it('is false the moment it passes', () => {
+    expect(isCallerWaiting({ waits_until: 5000 }, 5000)).toBe(false)
+    expect(isCallerWaiting({ waits_until: 5000 }, 9999)).toBe(false)
+  })
+
+  it('flips over time on ONE request — the card must not need a second fixture', () => {
+    // The bug this guards: showing a countdown that never turns into
+    // "abandoned" because the two states came from different test data.
+    const request = { waits_until: 1000 }
+    expect(isCallerWaiting(request, 999)).toBe(true)
+    expect(isCallerWaiting(request, 1001)).toBe(false)
   })
 })

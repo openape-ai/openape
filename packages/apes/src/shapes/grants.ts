@@ -59,6 +59,19 @@ export function isAutoApproved(grant: { status?: string, approved_automatically?
   return grant.approved_automatically === true || grant.status === 'approved'
 }
 
+/**
+ * How long a caller waits for a decision before giving up. Both the waiting and
+ * the deadline announced to the approver come from here — if they drifted, the
+ * grant card would promise a countdown nobody honours, which is worse than no
+ * countdown at all.
+ */
+export const GRANT_WAIT_MS = 300_000
+
+/** The wall-clock moment this caller stops caring, in epoch seconds. */
+export function waitsUntil(nowMs: number = Date.now()): number {
+  return Math.floor((nowMs + GRANT_WAIT_MS) / 1000)
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {
@@ -85,6 +98,8 @@ export async function createShapesGrant(
       permissions: [resolved.permission],
       authorization_details: [resolved.detail],
       execution_context: resolved.executionContext,
+      // Tell the approver when this stops being a live decision (#1306).
+      waits_until: waitsUntil(),
     },
   })
 }
@@ -98,7 +113,7 @@ export async function createShapesGrant(
  */
 export async function waitForGrantStatus(idp: string, grantId: string): Promise<'approved' | 'denied' | 'revoked'> {
   const grantsEndpoint = await getGrantsEndpoint(idp)
-  const deadline = Date.now() + 300_000
+  const deadline = Date.now() + GRANT_WAIT_MS
   const reportProgress = createWaitProgressReporter(grantId)
 
   while (Date.now() < deadline) {
