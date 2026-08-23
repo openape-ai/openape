@@ -1429,6 +1429,25 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
+  packages/ape-secrets:
+    dependencies:
+      '@openape/cli-auth':
+        specifier: workspace:*
+        version: link:../cli-auth
+      '@openape/proof-cli':
+        specifier: workspace:*
+        version: link:../proof-cli
+      citty:
+        specifier: ^0.1.6
+        version: 0.1.6
+    devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/ape-tasks:
     dependencies:
       '@openape/cli-auth':
