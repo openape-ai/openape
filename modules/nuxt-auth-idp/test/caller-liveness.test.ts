@@ -22,6 +22,17 @@ describe('callerState', () => {
   })
 })
 
+describe('formatCountdown over long waits', () => {
+  it('counts a review deadline in hours, not in minutes', () => {
+    expect(formatCountdown(86_385)).toBe('23 h 59 min')
+    expect(formatCountdown(3600)).toBe('1 h 0 min')
+  })
+
+  it('keeps the stopwatch for anything under an hour', () => {
+    expect(formatCountdown(3599)).toBe('59:59')
+  })
+})
+
 describe('formatting', () => {
   it('shows a countdown with seconds, so it reads as one', () => {
     expect(formatCountdown(247)).toBe('4:07')
