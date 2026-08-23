@@ -9,7 +9,8 @@
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -22,6 +23,9 @@
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0",
     "typescript": "catalog:",
     "vue-tsc": "catalog:"
   }
