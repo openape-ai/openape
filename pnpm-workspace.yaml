@@ -76,7 +76,7 @@ catalog:
   'typescript': ^5.9.3
   'ulid': ^2.4.0
   'vitest': ^4.1.10
-  'vue': ^3.5.39
+  'vue': ^3.5.41
   'vue-tsc': ^3.3.5
   'web-push': ^3.6.7
   'ws': ^8.21.0
@@ -110,6 +110,12 @@ overrides:
   # Major-Sprung, den kein Advisory verlangt.
   'js-yaml@4': '>=4.3.1'
   'nanoid@3': '>=3.3.18'
+  # Eine einzige Vue-Kopie im Baum. nuxt 4.5.2 verlangt 3.5.41, während
+  # Workspaces auf 3.5.39 stünden — zwei Kopien nebeneinander lassen
+  # `resolveComponent` ins Leere greifen, weil die eine Kopie die aktuelle
+  # Instanz der anderen nicht kennt. Sichtbar wurde das als sechs rote
+  # Komponententests in openape-crm, nicht als Versionswarnung.
+  vue: '>=3.5.41'
   lodash: ^4.17.21
   node-forge: '>=1.4.0'
   path-to-regexp: '>=8.4.0'
