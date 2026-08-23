@@ -29,6 +29,7 @@ export {
   denyGrant,
   type ExtendMode,
   introspectGrant,
+  isCallerWaiting,
   isGrantExpired,
   revokeGrant,
   useGrant,
