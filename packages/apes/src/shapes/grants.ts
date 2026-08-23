@@ -1,4 +1,4 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeGrant } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
 import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
@@ -78,6 +78,7 @@ export async function createShapesGrant(
     idp: string
     approval: 'once' | 'timed' | 'always'
     reason?: string
+    summary?: OpenApeGrantSummary
   },
 ): Promise<CreateShapesGrantResult> {
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
@@ -100,6 +101,7 @@ export async function createShapesGrant(
       execution_context: resolved.executionContext,
       // Tell the approver when this stops being a live decision (#1306).
       waits_until: waitsUntil(),
+      ...(params.summary ? { summary: params.summary } : {}),
     },
   })
 }

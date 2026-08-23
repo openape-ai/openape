@@ -5,6 +5,7 @@ import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetail
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
+import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -35,6 +36,8 @@ const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.reques
 const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.command))
+const summaryText = computed(() => grantSummaryText(grant.value?.request?.summary))
+const summaryLink = computed(() => safeSummaryLink(grant.value?.request?.summary?.link))
 const requesterName = computed(() => grant.value?.request?.requester ? formatRequesterName(grant.value.request.requester) : '')
 /**
  * True when this grant was requested via the `apes` generic-fallback path.
@@ -428,6 +431,17 @@ function isExactCommand(detail) {
                     {{ grant.request.run_as }}
                   </dd>
                 </div>
+                <div v-if="summaryText">
+                  <dt class="text-muted mb-1">
+                    Angabe des Antragstellers
+                  </dt>
+                  <dd class="text-sm whitespace-pre-wrap break-words">
+                    {{ summaryText }}
+                  </dd>
+                  <dd v-if="summaryLink" class="text-sm">
+                    <a :href="summaryLink" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summaryLink }}</a>
+                  </dd>
+                </div>
                 <div v-if="commandDisplay">
                   <dt class="text-muted mb-1 flex items-center gap-2">
                     Command
@@ -737,6 +751,17 @@ function isExactCommand(detail) {
                   </dt>
                   <dd class="font-mono text-sm">
                     {{ grant.request.run_as }}
+                  </dd>
+                </div>
+                <div v-if="summaryText">
+                  <dt class="text-muted mb-1">
+                    Angabe des Antragstellers
+                  </dt>
+                  <dd class="text-sm whitespace-pre-wrap break-words">
+                    {{ summaryText }}
+                  </dd>
+                  <dd v-if="summaryLink" class="text-sm">
+                    <a :href="summaryLink" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summaryLink }}</a>
                   </dd>
                 </div>
                 <div v-if="commandDisplay">
