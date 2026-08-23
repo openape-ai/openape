@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
+import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
@@ -56,6 +57,15 @@ const patternDraft = ref('')
 const ruleError = ref('')
 const ruleBusy = ref(false)
 const moreOptionsOpen = ref(false)
+// The landing page is where a push lands, often minutes later — the one place
+// this matters most.
+const nowSec = ref(Math.floor(Date.now() / 1000))
+let clock
+onMounted(() => {
+  clock = setInterval(() => { nowSec.value = Math.floor(Date.now() / 1000) }, 1000)
+})
+onUnmounted(() => clearInterval(clock))
+const liveness = computed(() => callerState(grant.value?.request, grant.value?.created_at ?? 0, nowSec.value))
 
 function toggleAlwaysPanel() {
   alwaysOpen.value = !alwaysOpen.value
@@ -502,11 +512,31 @@ function isExactCommand(detail) {
             </div>
           </div>
 
+          <UAlert
+            v-if="liveness.kind === 'abandoned'"
+            color="warning"
+            title="Aufgegeben — niemand wartet mehr"
+          >
+            <template #description>
+              Der Aufrufer hat {{ formatWaited(liveness.waitedSeconds) }} gewartet und weitergemacht.
+              Eine Freigabe lässt dieses Kommando nicht mehr laufen; sie wirkt nur noch als Regel für künftige Anfragen.
+            </template>
+          </UAlert>
+          <p v-else-if="liveness.kind === 'waiting'" class="text-sm text-success">
+            Der Prozess wartet noch — {{ formatCountdown(liveness.secondsLeft) }}
+          </p>
+
           <div class="flex gap-2">
             <UButton color="error" variant="soft" :loading="processing" class="flex-1" @click="handleDeny">
               Deny
             </UButton>
-            <UButton color="success" :loading="processing" class="flex-1" @click="handleApprove('once')">
+            <UButton
+              v-if="liveness.kind !== 'abandoned'"
+              color="success"
+              :loading="processing"
+              class="flex-1"
+              @click="handleApprove('once')"
+            >
               Just this once
             </UButton>
             <UButton color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
