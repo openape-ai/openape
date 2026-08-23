@@ -10,7 +10,8 @@
     "nuxt-prepare": "nuxi prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -28,6 +29,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "@types/web-push": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
@@ -35,6 +37,8 @@
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
     "happy-dom": "catalog:",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
