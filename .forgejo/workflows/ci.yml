@@ -83,15 +83,43 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           python3 - <<'PYEOF'
-          import json, os, urllib.request
+          import json, os, re, urllib.request
+          # A blind tail is the wrong tool here: turbo interleaves many tasks, so
+          # the last 12 KB are usually another task's compile chatter while the
+          # actual error scrolled past. Search for the failure instead, and only
+          # fall back to a tail when nothing matches.
+          FAILURE = re.compile(
+              r'ERROR|error TS\d+|Error:|FAIL |✗|✘|failed|Failed:|npm ERR|ELIFECYCLE|AssertionError',
+              re.IGNORECASE)
+          ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+          CONTEXT = 6
           logs = [('Lint · Typecheck · Test', '/tmp/ci-checks.log'), ('Build', '/tmp/ci-build.log')]
           section = 'Kein Log erfasst — Fehler lag vor den instrumentierten Steps (checkout/install?).'
           for name, path in logs:
-              if os.path.exists(path):
-                  tail = open(path, 'rb').read()[-12000:].decode('utf-8', 'replace')
-                  section = f"Fehlgeschlagener Step: **{name}** (letzte 12 KB von `{path}`):\n\n```\n{tail}\n```"
-                  break
-          body = 'CI-Fehlerlog (letzter Abschnitt)\n\n' + section
+              if not os.path.exists(path):
+                  continue
+              lines = ANSI.sub('', open(path, 'rb').read().decode('utf-8', 'replace')).splitlines()
+              keep = set()
+              for i, line in enumerate(lines):
+                  if FAILURE.search(line):
+                      keep.update(range(max(0, i - CONTEXT), min(len(lines), i + CONTEXT + 1)))
+              if keep:
+                  out, last = [], None
+                  for i in sorted(keep):
+                      if last is not None and i > last + 1:
+                          out.append(f'  … {i - last - 1} Zeilen …')
+                      out.append(lines[i])
+                      last = i
+                  # Keep the END of the excerpt: turbo's own summary lands there.
+                  body_text = '\n'.join(out)[-14000:]
+                  section = (f"Fehlgeschlagener Step: **{name}** — Treffer auf Fehlermuster "
+                             f"in `{path}`, mit {CONTEXT} Zeilen Kontext:\n\n```\n{body_text}\n```")
+              else:
+                  tail = '\n'.join(lines)[-12000:]
+                  section = (f"Fehlgeschlagener Step: **{name}** — kein Fehlermuster gefunden, "
+                             f"deshalb die letzten 12 KB von `{path}`:\n\n```\n{tail}\n```")
+              break
+          body = 'CI-Fehlerlog\n\n' + section
           req = urllib.request.Request(
               f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{os.environ['PR_NUMBER']}/comments",
               data=json.dumps({'body': body}).encode(),
