@@ -215,17 +215,17 @@ services:
     environment:
       HOST: 0.0.0.0
       NITRO_HOST: 0.0.0.0
-      # shared/.env carries no port — the deployed port (3020) is pinned
+      # shared/.env carries no port — the deployed port (3025) is pinned
       # here so the container matches the nginx upstream.
-      PORT: "3020"
-      NITRO_PORT: "3020"
+      PORT: "3025"
+      NITRO_PORT: "3025"
     volumes:
       - /home/openape/projects/openape-secrets/shared:/home/openape/projects/openape-secrets/shared
     ports:
-      - "127.0.0.1:3020:3020"
-      - "10.0.1.1:3020:3020"
+      - "127.0.0.1:3025:3025"
+      - "10.0.1.1:3025:3025"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3020/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3025/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 6
