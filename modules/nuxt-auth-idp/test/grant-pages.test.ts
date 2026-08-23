@@ -400,6 +400,37 @@ describe('grant approval pages', () => {
     return { fetchMock, calls }
   }
 
+  it('shows an active standing grant what it lets through', async () => {
+    const rule = {
+      id: 'sg-9',
+      status: 'approved',
+      type: 'standing',
+      created_at: 1_710_000_000,
+      decided_by: 'owner@example.com',
+      request: {
+        type: 'standing',
+        requester: 'agent@example.com',
+        target_host: 'macmini',
+        audience: 'shapes',
+        grant_type: 'always',
+        cli_id: 'exo',
+        max_risk: 'medium',
+        resource_chain_template: [
+          { resource: 'account', selector: { name: 'current' } },
+          { resource: 'dns-domain' },
+          { resource: 'dns-record' },
+        ],
+        reason: 'Rule created from grant grant-1',
+      },
+    } as unknown as ReturnType<typeof buildCliGrant>
+    vi.stubGlobal('$fetch', routedFetchMock(rule).fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[*].dns-record[*] — risk ≤ medium')
+  })
+
   it('"Always allow" opens the rule panel; exact-always stays one click away', async () => {
     const { fetchMock, calls } = routedFetchMock(buildCliGrant())
     vi.stubGlobal('$fetch', fetchMock)
