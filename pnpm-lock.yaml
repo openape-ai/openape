@@ -795,6 +795,43 @@ importers:
         specifier: 'catalog:'
         version: 3.3.5(typescript@5.9.3)
 
+  apps/openape-secrets:
+    dependencies:
+      '@iconify-json/lucide':
+        specifier: 'catalog:'
+        version: 1.2.114
+      '@libsql/client':
+        specifier: ^0.14.0
+        version: 0.14.0
+      '@nuxt/ui':
+        specifier: 'catalog:'
+        version: 4.9.0(06c67f046e890d06f568b81b2a97b3b4)
+      '@openape/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@openape/nuxt-auth-sp':
+        specifier: workspace:*
+        version: link:../../modules/nuxt-auth-sp
+      drizzle-orm:
+        specifier: '>=0.45.2'
+        version: 0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.11.1)(bun-types@1.3.14)
+      nuxt:
+        specifier: 'catalog:'
+        version: 4.4.8(b91dbd359c6ccc3614af454e53db0e61)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.1
+      ulid:
+        specifier: 'catalog:'
+        version: 2.4.0
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.0.1)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+
   apps/openape-tasks:
     dependencies:
       '@iconify-json/lucide':
