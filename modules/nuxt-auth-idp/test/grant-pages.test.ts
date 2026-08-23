@@ -576,4 +576,54 @@ describe('grant approval pages', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/grants/grant-1/deny', { method: 'POST' })
     expect(wrapper.text()).toContain('History')
   })
+  describe('a card says whether anybody is still waiting', () => {
+    const NOW = Math.floor(Date.now() / 1000)
+
+    function waitingGrant(waitsUntil: number) {
+      const g = buildCliGrant()
+      g.created_at = NOW - 10
+      ;(g.request as Record<string, unknown>).waits_until = waitsUntil
+      return g
+    }
+
+    it('shows a countdown while the requester still polls', async () => {
+      const { fetchMock } = routedFetchMock(waitingGrant(NOW + 120))
+      vi.stubGlobal('$fetch', fetchMock)
+
+      const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Der Prozess wartet noch')
+      expect(wrapper.findAll('button').some(b => b.text() === 'Just this once')).toBe(true)
+    })
+
+    it('calls a lapsed request abandoned and drops the button that cannot work', async () => {
+      const { fetchMock } = routedFetchMock(waitingGrant(NOW - 1))
+      vi.stubGlobal('$fetch', fetchMock)
+
+      const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Aufgegeben')
+      expect(wrapper.text()).toContain('nur noch als Regel')
+      // The whole point: approving "once" cannot make a dead command run, so the
+      // button is gone rather than quietly doing nothing.
+      expect(wrapper.findAll('button').some(b => b.text() === 'Just this once')).toBe(false)
+      // The rule path stays reachable.
+      expect(wrapper.findAll('button').some(b => b.text() === 'Always allow')).toBe(true)
+    })
+
+    it('claims nothing when the requester never said', async () => {
+      const { fetchMock } = routedFetchMock(buildCliGrant())
+      vi.stubGlobal('$fetch', fetchMock)
+
+      const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('Aufgegeben')
+      expect(wrapper.text()).not.toContain('Der Prozess wartet noch')
+      expect(wrapper.findAll('button').some(b => b.text() === 'Just this once')).toBe(true)
+    })
+  })
+
 })

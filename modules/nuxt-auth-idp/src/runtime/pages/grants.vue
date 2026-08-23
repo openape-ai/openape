@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
@@ -195,6 +196,16 @@ async function confirmRevoke() {
 // extend/widen against similar grants). The quick actions cover the common
 // phone-approval moment; everything else lives behind this toggle.
 const moreOptionsOpen = ref({})
+// A countdown that does not count is a screenshot. One clock for all cards.
+const nowSec = ref(Math.floor(Date.now() / 1000))
+let clock
+onMounted(() => {
+  clock = setInterval(() => { nowSec.value = Math.floor(Date.now() / 1000) }, 1000)
+})
+onUnmounted(() => clearInterval(clock))
+function liveness(grant) {
+  return callerState(grant.request, grant.created_at, nowSec.value)
+}
 function toggleMoreOptions(id) {
   moreOptionsOpen.value = { ...moreOptionsOpen.value, [id]: !moreOptionsOpen.value[id] }
 }
@@ -370,13 +381,32 @@ function isExactCommand(detail) {
                 <p class="text-xs text-dimmed">
                   {{ grant.request.requester }} · {{ formatTime(grant.created_at) }}
                 </p>
+                <p
+                  v-if="liveness(grant).kind === 'waiting'"
+                  class="text-xs text-success"
+                >
+                  Der Prozess wartet noch — {{ formatCountdown(liveness(grant).secondsLeft) }}
+                </p>
+                <p
+                  v-else-if="liveness(grant).kind === 'abandoned'"
+                  class="text-xs text-warning"
+                >
+                  Aufgegeben: der Aufrufer hat {{ formatWaited(liveness(grant).waitedSeconds) }} gewartet und weitergemacht.
+                  Eine Freigabe lässt dieses Kommando nicht mehr laufen — sie wirkt nur noch als Regel.
+                </p>
               </div>
 
               <div class="flex gap-2">
                 <UButton color="error" variant="soft" size="sm" class="flex-1" @click="denyGrant(grant.id)">
                   Deny
                 </UButton>
-                <UButton color="success" size="sm" class="flex-1" @click="approveGrant(grant.id, 'once')">
+                <UButton
+                  v-if="liveness(grant).kind !== 'abandoned'"
+                  color="success"
+                  size="sm"
+                  class="flex-1"
+                  @click="approveGrant(grant.id, 'once')"
+                >
                   Just this once
                 </UButton>
                 <UButton color="success" variant="outline" size="sm" class="flex-1" @click="toggleAlwaysPanel(grant)">

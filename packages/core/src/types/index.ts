@@ -174,6 +174,14 @@ export interface OpenApeGrantRequest {
   duration?: number
   /** Human-readable reason for the request */
   reason?: string
+  /**
+   * Epoch seconds until which the requester is still waiting for a decision
+   * (#1306). Optional: older clients omit it, and nothing may be claimed about
+   * a caller that did not say. Past this moment an approval can no longer let
+   * the command run — it only acts as a rule for future requests, which is a
+   * different decision and has to be presented as one.
+   */
+  waits_until?: number
   /** Execute as this user identity */
   run_as?: string
   /** Delegator — who is being acted on behalf of (delegation grants only) */
@@ -249,11 +257,15 @@ export interface OpenApeAuthZClaims {
   permissions?: string[]
   /** Structured authorization details */
   authorization_details?: OpenApeAuthorizationDetail[]
-  /** Delegation scopes — present for delegation grants so a relying party
-   * can enforce them offline (protocol sp-data-access.md §5). */
+  /**
+   * Delegation scopes — present for delegation grants so a relying party
+   * can enforce them offline (protocol sp-data-access.md §5).
+   */
   scope?: string[]
-  /** Delegate identity (delegation grants only) — the actor acting on
-   * behalf of `sub`, per delegation.md. Provenance for the relying party. */
+  /**
+   * Delegate identity (delegation grants only) — the actor acting on
+   * behalf of `sub`, per delegation.md. Provenance for the relying party.
+   */
   delegate?: string
   /** Command hash */
   cmd_hash?: string
