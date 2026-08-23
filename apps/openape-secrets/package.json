@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev --port 3019",
+    "dev": "nuxt dev --port 3020",
     "build": "nuxt build",
     "preview": "nuxt preview",
     "test": "vitest run",
