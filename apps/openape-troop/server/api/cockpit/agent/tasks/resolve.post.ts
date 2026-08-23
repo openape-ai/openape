@@ -51,7 +51,10 @@ export default defineEventHandler(async (event) => {
   // task's honest notice — so a failure leaves a visible message instead of silence.
   // An answer that is only files is stored with empty text — the client renders
   // the attachment placeholder in the reader's language.
-  if ((state === 'completed' || state === 'failed') && task && task.owner === agent && (text.trim() || files.length)) await saveChatMessage(task.company, task.owner, 'assistant', text.trim(), undefined, files)
+  // A trigger that asked for silence gets it here — and only here. The
+  // `input-required` question above always notifies: it is blocked on the owner,
+  // which is the one thing a quiet schedule still has to interrupt for.
+  if ((state === 'completed' || state === 'failed') && task && task.owner === agent && (text.trim() || files.length)) await saveChatMessage(task.company, task.owner, 'assistant', text.trim(), undefined, files, { notify: task.notify !== false })
   // Task is terminal → drop its durability row so it isn't re-run after a restart.
   if (state === 'completed' || state === 'failed') void removeTask(id).catch(err => console.error('[task-store] remove', err))
   return { ok: true }

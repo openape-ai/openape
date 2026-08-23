@@ -481,6 +481,12 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   cronExpr: text('cron_expr'), // 5-field cron (Europe/Vienna); takes precedence over atHour/everyMinutes
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-scheduled)
+  // Should this trigger's answer reach the owner's phone, or only the chat?
+  // Defaults to true: a trigger stays as loud as it was until someone decides
+  // otherwise. Note that `createdBy` is NOT a usable proxy here — the KPI duties
+  // are owner-created and want silence, the reminders are operator-created and
+  // must ring (#1295).
+  notify: integer('notify', { mode: 'boolean' }).notNull().default(true),
   lastRunAt: integer('last_run_at'),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
@@ -525,6 +531,9 @@ export const cockpitTasks = sqliteTable('cockpit_tasks', {
   askedAt: integer('asked_at'),
   files: text('files'), // JSON [{id,mime,name}] — chat attachments riding the task
   allowedTools: text('allowed_tools'), // JSON string[] — the worker's command allowlist (#1036)
+  // Whether the answer rings the owner's phone (#1295). Persisted because a
+  // restart must not turn a deliberately silent trigger back into a loud one.
+  notify: integer('notify', { mode: 'boolean' }),
 })
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).
