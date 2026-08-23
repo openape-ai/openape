@@ -431,6 +431,35 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('exo.account[name=current].dns-domain[*].dns-record[*] — risk ≤ medium')
   })
 
+  it('shows the requester summary, marked as the requester\'s own claim', async () => {
+    const grant = buildCliGrant()
+    grant.request.summary = {
+      text: 'Merge PR #1307 nach main\nCI: 4/4 grün',
+      link: 'https://git.openape.ai/openape-ai/openape/pulls/1307',
+    }
+    vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Angabe des Antragstellers')
+    expect(wrapper.text()).toContain('Merge PR #1307 nach main')
+    expect(wrapper.find('a[href="https://git.openape.ai/openape-ai/openape/pulls/1307"]').exists()).toBe(true)
+  })
+
+  it('never turns an executable scheme into a link', async () => {
+    const grant = buildCliGrant()
+    grant.request.summary = { text: 'Harmlos aussehender Text', link: 'javascript:alert(1)' }
+    vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    // The text still shows — only the link is withheld.
+    expect(wrapper.text()).toContain('Harmlos aussehender Text')
+    expect(wrapper.html()).not.toContain('javascript:alert(1)')
+  })
+
   it('"Always allow" opens the rule panel; exact-always stays one click away', async () => {
     const { fetchMock, calls } = routedFetchMock(buildCliGrant())
     vi.stubGlobal('$fetch', fetchMock)
