@@ -10,7 +10,7 @@ import { isValidCron } from '../../../../utils/cockpit/schedule'
 // The 15s evaluator enqueues it; the answer lands in the cockpit chat + Web-Push.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
-  const body = await readBody<{ kind?: string, prompt?: string, atHour?: number, everyMinutes?: number, fireAt?: number, cronExpr?: string }>(event)
+  const body = await readBody<{ kind?: string, prompt?: string, atHour?: number, everyMinutes?: number, fireAt?: number, cronExpr?: string, notify?: boolean }>(event)
   const kind = (body?.kind ?? '').trim()
   if (!kind) throw createError({ statusCode: 400, statusMessage: 'kind required' })
   const prompt = (body?.prompt ?? '').trim()
@@ -21,7 +21,10 @@ export default defineEventHandler(async (event) => {
   const cronExpr = typeof body?.cronExpr === 'string' && body.cronExpr.trim() ? body.cronExpr.trim() : null
   if (cronExpr != null && !isValidCron(cronExpr)) throw createError({ statusCode: 400, statusMessage: 'invalid cron expression (5-field, e.g. "0 7 * * 1-5")' })
   if (atHour == null && everyMinutes == null && fireAt == null && cronExpr == null) throw createError({ statusCode: 400, statusMessage: 'cronExpr, atHour, everyMinutes or fireAt required' })
-  const row = { id: randomUUID(), ownerEmail: owner, orgId, kind, prompt, atHour, everyMinutes, fireAt, cronExpr, enabled: true, lastRunAt: null, createdAt: Date.now() }
+  // Loud unless the caller says otherwise — a new trigger behaves like every
+  // trigger that existed before this field did.
+  const notify = body?.notify !== false
+  const row = { id: randomUUID(), ownerEmail: owner, orgId, kind, prompt, atHour, everyMinutes, fireAt, cronExpr, enabled: true, notify, lastRunAt: null, createdAt: Date.now() }
   await useDb().insert(cockpitSchedules).values(row)
-  return { id: row.id, kind, prompt, atHour, everyMinutes, fireAt, cronExpr, enabled: true }
+  return { id: row.id, kind, prompt, atHour, everyMinutes, fireAt, cronExpr, enabled: true, notify }
 })

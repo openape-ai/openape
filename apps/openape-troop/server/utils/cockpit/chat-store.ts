@@ -14,11 +14,14 @@ const PROGRESS_INTERVAL_MS = 60_000
 
 // Persist one message of the (owner, org) conversation. Independent of any live
 // stream — the answer survives even if the client is gone.
-export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta, files?: { id: string, mime: string, name: string }[]) {
+export async function saveChatMessage(orgId: string, owner: string, role: ChatRole, content: string, meta?: ChatMeta, files?: { id: string, mime: string, name: string }[], opts?: { notify?: boolean }) {
   const db = useDb()
   const row = { id: randomUUID(), ownerEmail: owner, orgId, role, content, meta: meta ?? null, files: files?.length ? files : null, createdAt: Date.now() }
   await db.insert(cockpitChatMessages).values(row)
-  await notifyAssistant(orgId, owner, role, content, meta, files)
+  // `notify` is deliberately NOT stored on the row: whether the phone rang is a
+  // delivery decision, not part of the conversation. The chat reads the same
+  // either way.
+  if (opts?.notify !== false) await notifyAssistant(orgId, owner, role, content, meta, files)
   return row
 }
 
