@@ -22,6 +22,9 @@ minimumReleaseAge: 10080
 # Freigabe = Publish + 7 Tage, unten als UTC notiert.
 minimumReleaseAgeExclude:
   - '@openape/*'
+  # Eigenes Package (unscoped veröffentlicht), gleiche Kategorie wie @openape/*:
+  # keine Quarantäne, kein Freigabe-Datum — bleibt dauerhaft hier.
+  - test2docs
   # brace-expansion 1.1.18/2.1.4/5.0.9 (Security-Override gegen
   # GHSA-rgw5-rvv9-x895).
   # Publish 2026-07-30 10:17 UTC → frei ab 2026-08-06 10:17 UTC.
@@ -69,7 +72,12 @@ catalog:
   'marked': ^18.0.5
   'nuxt': ^4.5.2
   'ofetch': ^1.5.1
-  'playwright': 1.62.0
+  # Beide Playwright-Pakete aus derselben Quelle: die CLI und @playwright/test
+  # teilen sich eine Test-Registry. Laufen sie auseinander, registriert
+  # `test.use` auf der einen Kopie und der Runner liest die andere — sichtbar
+  # nur als "No tests found", nicht als Versionswarnung.
+  '@playwright/test': 1.62.1
+  'playwright': 1.62.1
   'shell-quote': ^1.9.0
   'tailwindcss': ^4.3.1
   'tsup': ^8.5.1

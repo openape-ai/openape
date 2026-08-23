@@ -1,0 +1,12 @@
+{
+  "title": "OpenApe Identity — Manual",
+  "description": "Sign in without a password, and manage the keys and services tied to your identity.",
+  "lang": "en",
+  "inDir": ".test2docs",
+  "outDir": "docs/manual",
+  "viewport": { "width": 1280, "height": 800 },
+  "groups": [
+    { "title": "Getting started", "categories": ["register"] },
+    { "title": "Your identity", "categories": ["account", "transfer"] }
+  ]
+}

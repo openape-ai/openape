@@ -1,0 +1,25 @@
+{
+  "title": "OpenApe Troop — Manual",
+  "description": "Run a company of agents: companies, their direction, and the agents that do the work.",
+  "lang": "en",
+  "inDir": ".test2docs",
+  "outDir": "docs/manual",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "groups": [
+    {
+      "title": "Getting started",
+      "categories": [
+        "companies"
+      ]
+    },
+    {
+      "title": "Devices",
+      "categories": [
+        "nests"
+      ]
+    }
+  ]
+}

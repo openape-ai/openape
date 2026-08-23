@@ -4,8 +4,12 @@ import { generateKeyPairSync } from 'node:crypto'
 /** When E2E_IDP_URL is set, tests run against deployed (prod) servers. */
 export const IS_PROD = !!process.env.E2E_IDP_URL
 
-export const IDP_PORT = 3000
-export const SP_PORT = 3001
+// Overridable because 3000 and 3001 are the ports everything else on a
+// developer machine wants too: any stray dev server there answers the boot
+// poll, and the suite then talks to a stranger instead of its own fixture —
+// visible only as "Page not found: /api/admin/users". CI leaves them alone.
+export const IDP_PORT = Number(process.env.E2E_IDP_PORT) || 3000
+export const SP_PORT = Number(process.env.E2E_SP_PORT) || 3001
 
 // 127.0.0.1, not `localhost`: in the CI container localhost resolves to ::1
 // first while nuxt dev listens on IPv4 — the readiness poll then never
