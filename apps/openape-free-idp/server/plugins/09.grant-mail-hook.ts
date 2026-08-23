@@ -5,39 +5,9 @@
 // about a pending grant only by accident. Fires AFTER pre-approval
 // hooks (YOLO, standing grants) — auto-approved grants don't mail.
 
-import { eq } from 'drizzle-orm'
-import { useDb } from '../database/drizzle'
-import { users } from '../database/schema'
+import { countPendingForApprover, resolveApprover } from '../utils/approver'
 import { sendPendingGrantEmail } from '../utils/email'
 import { createGrantMailDebouncer, notifyApproverOfPendingGrantByMail } from '../utils/grant-mail'
-
-// Same resolution as the push hook: explicit approver row if present
-// (agents get one at enroll time), else the requester approves their
-// own grants. No user row -> nobody to notify.
-async function resolveApprover(requester: string): Promise<string | null> {
-  const row = await useDb()
-    .select()
-    .from(users)
-    .where(eq(users.email, requester))
-    .get()
-  if (!row) return null
-  return row.approver ?? row.email
-}
-
-async function countPendingForApprover(approver: string): Promise<number> {
-  const { grantStore } = useGrantStores()
-  const pending = await grantStore.findPending()
-  const approverByRequester = new Map<string, string | null>()
-  let count = 0
-  for (const grant of pending) {
-    const requester = grant.request.requester
-    if (!approverByRequester.has(requester)) {
-      approverByRequester.set(requester, await resolveApprover(requester))
-    }
-    if (approverByRequester.get(requester) === approver) count++
-  }
-  return count
-}
 
 export default defineNitroPlugin(() => {
   const debouncer = createGrantMailDebouncer()
