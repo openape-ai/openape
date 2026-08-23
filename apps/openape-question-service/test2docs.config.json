@@ -1,0 +1,11 @@
+{
+  "title": "OpenApe Question Service — Manual",
+  "description": "Ask a question, an agent answers.",
+  "lang": "en",
+  "inDir": ".test2docs",
+  "outDir": "docs/manual",
+  "viewport": { "width": 900, "height": 700 },
+  "groups": [
+    { "title": "Asking", "categories": ["questions"] }
+  ]
+}
