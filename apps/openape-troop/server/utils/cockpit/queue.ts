@@ -29,6 +29,10 @@ export interface QueueTask {
   // enqueue (union of the org's enabled roles' tool patterns), never client-set.
   // Empty = hard sandbox: no commands at all.
   allowedTools: string[]
+  // Should the finished answer ring the owner's phone (#1295)? Chat messages the
+  // owner started always do; a scheduled trigger decides for itself. Undefined
+  // means yes — nothing goes quiet by accident.
+  notify?: boolean
 }
 
 const tasks = new Map<string, QueueTask>()
@@ -54,7 +58,7 @@ function gcStaleTasks(): void {
   }
 }
 
-export function enqueue(company: string, systemPrompt: string, userMessage: string, owner = '', files?: { id: string, mime: string, name: string }[], allowedTools: string[] = []): { id: string } {
+export function enqueue(company: string, systemPrompt: string, userMessage: string, owner = '', files?: { id: string, mime: string, name: string }[], allowedTools: string[] = [], notify = true): { id: string } {
   gcStaleTasks()
   const task: QueueTask = {
     id: makeId(),
@@ -69,6 +73,7 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
     createdAt: Date.now(),
     files: files?.length ? files : undefined,
     allowedTools,
+    notify,
   }
   tasks.set(task.id, task)
   pending.push(task.id)
@@ -78,7 +83,7 @@ export function enqueue(company: string, systemPrompt: string, userMessage: stri
 // Put a persisted task back into the queue with its ORIGINAL id (used by the
 // boot rehydrate after a restart). Fresh submitted state — the worker re-runs it
 // from scratch; its original id keeps removeTask() matching the DB row.
-export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number, files?: { id: string, mime: string, name: string }[], allowedTools?: string[] }): void {
+export function restoreTask(t: { id: string, company: string, owner: string, systemPrompt: string, userMessage: string, createdAt: number, notBefore?: number, lastNote?: string, question?: string, options?: string[], askedAt?: number, files?: { id: string, mime: string, name: string }[], allowedTools?: string[], notify?: boolean }): void {
   if (tasks.has(t.id)) return
   // A persisted open question comes back AS the question — waiting for the
   // owner's answer, not re-offered to the worker.
