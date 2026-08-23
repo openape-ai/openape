@@ -10,7 +10,8 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -28,7 +29,10 @@
     "ulid": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@types/sanitize-html": "^2.13.0",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

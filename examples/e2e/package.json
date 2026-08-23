@@ -5,7 +5,10 @@
   "private": true,
   "exports": {
     "./lifecycle": "./helpers/lifecycle.ts",
-    "./idp-fixture": "./helpers/idp-fixture.ts"
+    "./idp-fixture": "./helpers/idp-fixture.ts",
+    "./bootstrap": "./helpers/bootstrap.ts",
+    "./key-auth": "./helpers/key-auth.ts",
+    "./constants": "./helpers/constants.ts"
   },
   "scripts": {
     "test": "vitest run",
