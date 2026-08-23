@@ -29,7 +29,7 @@
     "ulid": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
+    "@playwright/test": "catalog:",
     "@types/sanitize-html": "^2.13.0",
     "openape-e2e": "workspace:*",
     "test2docs": "^0.1.0",
