@@ -22,6 +22,7 @@ import {
   verifyAndExecute,
   waitForGrantStatus,
 } from '../shapes/index.js'
+import type { OpenApeGrantSummary } from '@openape/core'
 import type { ResolvedCommand } from '../shapes/index.js'
 import consola from 'consola'
 import { getIdpUrl, isGenericFallbackEnabled, loadAuth, loadConfig } from '../config'
@@ -258,6 +259,18 @@ async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): Prom
   console.log('  grant be reused on subsequent invocations without re-approval.')
 }
 
+/**
+ * The requester's own account of the request, for the approval card (#1310).
+ * Absent unless the caller passes `--summary` — an empty field would only
+ * add a heading with nothing under it.
+ */
+function summaryFrom(args: Record<string, unknown>): { summary: OpenApeGrantSummary } | Record<string, never> {
+  const text = (args.summary as string | undefined)?.trim()
+  if (!text) return {}
+  const link = (args['summary-link'] as string | undefined)?.trim()
+  return { summary: { text, ...(link ? { link } : {}) } }
+}
+
 export const runCommand = defineCommand({
   meta: {
     name: 'run',
@@ -272,6 +285,14 @@ export const runCommand = defineCommand({
     'reason': {
       type: 'string',
       description: 'Reason for the grant request',
+    },
+    'summary': {
+      type: 'string',
+      description: 'Executive summary shown on the approval card (multi-line)',
+    },
+    'summary-link': {
+      type: 'string',
+      description: 'Link the approver can use to verify the summary',
     },
     'adapter': {
       type: 'string',
@@ -419,6 +440,7 @@ async function runShellMode(
       grant_type: 'once',
       command: command.slice(0, 3),
       reason: `Shell session: ${command.join(' ').slice(0, 100)}`,
+      ...summaryFrom(args),
     },
   })
 
@@ -534,6 +556,7 @@ async function tryAdapterModeFromShell(
     idp,
     approval,
     reason: (args.reason as string) || `ape-shell: ${resolved.detail.display}`,
+    ...summaryFrom(args),
   })
 
   if (grant.similar_grants?.similar_grants?.length) {
@@ -610,6 +633,7 @@ async function tryCompoundModeFromShell(
     idp,
     approval,
     reason: (args.reason as string) || `ape-shell compound: ${compound.innerLine.slice(0, 100)}`,
+    ...summaryFrom(args),
   })
 
   if (grant.similar_grants?.similar_grants?.length) {
@@ -759,6 +783,7 @@ async function runAdapterMode(
     idp,
     approval,
     ...(args.reason ? { reason: args.reason as string } : {}),
+    ...summaryFrom(args),
   })
 
   if (grant.similar_grants?.similar_grants?.length) {
@@ -836,6 +861,7 @@ async function runAudienceMode(
       grant_type: args.approval,
       command,
       reason: (args.reason as string) || command.join(' '),
+      ...summaryFrom(args),
       ...(runAs ? { run_as: runAs } : {}),
     },
   })
