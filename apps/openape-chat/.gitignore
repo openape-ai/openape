@@ -1,0 +1,6 @@
+
+# docs run artefacts
+.docs-run.db
+.test2docs/
+test-results/
+tests/docs/.auth/
