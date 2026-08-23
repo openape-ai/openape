@@ -66,11 +66,37 @@ export function buildRuleProposals(details: OpenApeCliAuthorizationDetail[]): Ru
   return [...byCli.values()]
 }
 
-export function ruleTemplatePreview(proposal: RuleProposal): string {
-  const chain = proposal.template
+function formatTemplateChain(template: RuleProposal['template']): string {
+  return template
     .map(link => link.selector
       ? `${link.resource}[${Object.entries(link.selector).map(([k, v]) => `${k}=${v}`).join(',')}]`
       : `${link.resource}[*]`)
     .join('.')
-  return `${proposal.cliId}.${chain} — risk ≤ ${proposal.maxRisk}`
+}
+
+export function ruleTemplatePreview(proposal: RuleProposal): string {
+  return `${proposal.cliId}.${formatTemplateChain(proposal.template)} — risk ≤ ${proposal.maxRisk}`
+}
+
+/**
+ * The same sentence again, this time read back off a stored standing grant —
+ * so the active-permissions list says what the rule lets through, in the
+ * wording the approver confirmed when creating it (#1308).
+ *
+ * Returns null for anything that is not a standing grant, which is what the
+ * card falls back to today.
+ */
+export function standingRulePreview(request: {
+  cli_id?: string
+  audience?: string
+  max_risk?: string
+  resource_chain_template?: RuleProposal['template']
+} | undefined): string | null {
+  const template = request?.resource_chain_template
+  if (!Array.isArray(template) || !template.length) return null
+  const head = request?.cli_id ?? request?.audience ?? 'cli'
+  // No cap stored means the rule caps nothing; saying `risk ≤ critical`
+  // would read like a limit where there is none.
+  const risk = request?.max_risk ? ` — risk ≤ ${request.max_risk}` : ''
+  return `${head}.${formatTemplateChain(template)}${risk}`
 }
