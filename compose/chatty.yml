@@ -207,6 +207,30 @@ services:
       retries: 6
       start_period: 10s
 
+  secrets:
+    image: registry.openape.ai/openape-secrets:${SECRETS_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-secrets/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      # shared/.env carries no port — the app's dev default (3019) is pinned
+      # here so the container matches the nginx upstream.
+      PORT: "3019"
+      NITRO_PORT: "3019"
+    volumes:
+      - /home/openape/projects/openape-secrets/shared:/home/openape/projects/openape-secrets/shared
+    ports:
+      - "127.0.0.1:3019:3019"
+      - "10.0.1.1:3019:3019"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3019/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
   question-service:
     image: registry.openape.ai/openape-question-service:${QUESTION_SERVICE_TAG:-unset}
     restart: unless-stopped
