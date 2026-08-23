@@ -1,10 +1,12 @@
-import { defineEventHandler, readBody, setResponseStatus } from 'h3'
+import { defineEventHandler, getRequestURL, readBody, setResponseStatus } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
 import { DEFAULT_TTL_SEC, MAX_TTL_SEC, secretRequests } from '../../database/schema'
 import { callerEmail, loadConsumer } from '../../utils/access'
+import { notifyOwnerOfRequest } from '../../utils/notify'
 import { createProblemError } from '../../utils/problem'
 import { toRequestView } from '../../utils/request-view'
+import { sendTelegramMessage } from '../../utils/telegram'
 
 interface Body {
   consumerId?: unknown
@@ -58,6 +60,20 @@ export default defineEventHandler(async (event) => {
     fetchedAt: null,
   }
   await useDb().insert(secretRequests).values(row)
+
+  // Tell the owner it is waiting. Fire-and-forget on purpose: a request that
+  // exists but went unannounced is recoverable — the owner sees it in the list
+  // — while failing the create because a chat was unreachable is not.
+  const config = useRuntimeConfig()
+  const { telegramBotToken, telegramChatId, telegramApprover, publicUrl } = config
+  if (telegramBotToken && telegramChatId && telegramApprover) {
+    void notifyOwnerOfRequest(row, consumer.name, {
+      publicUrl: (publicUrl as string) || getRequestURL(event).origin,
+      approver: telegramApprover as string,
+      chatId: telegramChatId as string,
+      send: (chatId, text) => sendTelegramMessage(telegramBotToken as string, chatId, text),
+    }).catch(err => console.error('[notify] telegram', err))
+  }
 
   setResponseStatus(event, 201)
   return toRequestView(row)
