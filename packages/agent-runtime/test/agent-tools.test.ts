@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -155,6 +156,51 @@ describe('git_worktree command builders', () => {
   it('builds remove + list commands', () => {
     expect(wtInternal.buildRemoveCommand('repos/myclone', 'issue-42')).toContain('worktree remove --force')
     expect(wtInternal.buildListCommand()).toContain(`${home}/work`)
+  })
+
+  it('derives the issue an attempt belongs to from the branch name', () => {
+    expect(wtInternal.issueOf('fix/issue-1036-code-task')).toBe('1036')
+    expect(wtInternal.issueOf('test/issue-42-cover-the-thing')).toBe('42')
+    // No issue in the name means there is nothing to deduplicate on.
+    expect(wtInternal.issueOf('chore/tidy-up')).toBeNull()
+    expect(wtInternal.issueOf('fix/issue-abc-typo')).toBeNull()
+  })
+
+  it('refuses a second attempt at an issue that is already being worked on', () => {
+    const cmd = wtInternal.buildCreateCommand('https://github.com/x/y.git', 'task-9', 'fix/issue-1036-second-try')
+    // The guard runs before anything is created, names what it found, and
+    // exits with a code the tool turns into a refusal rather than a crash.
+    expect(cmd).toContain('issue-1036')
+    expect(cmd).toContain(`exit ${wtInternal.DUPLICATE_EXIT_CODE}`)
+    // The branch being asked for is excluded — re-running the same attempt
+    // is the idempotent case and must stay allowed.
+    expect(cmd).toContain('fix/issue-1036-second-try')
+  })
+
+  it('leaves the command unguarded when the branch names no issue', () => {
+    const cmd = wtInternal.buildCreateCommand('https://github.com/x/y.git', 'task-9', 'chore/tidy-up')
+    expect(cmd).not.toContain(`exit ${wtInternal.DUPLICATE_EXIT_CODE}`)
+    expect(cmd).toContain('worktree add -B')
+  })
+
+  it('skips the guard only when a duplicate was asked for deliberately', () => {
+    const guarded = wtInternal.buildCreateCommand('https://github.com/x/y.git', 't', 'fix/issue-7-a')
+    const deliberate = wtInternal.buildCreateCommand('https://github.com/x/y.git', 't', 'fix/issue-7-a', true)
+    expect(guarded).toContain(`exit ${wtInternal.DUPLICATE_EXIT_CODE}`)
+    expect(deliberate).not.toContain(`exit ${wtInternal.DUPLICATE_EXIT_CODE}`)
+  })
+
+  // The assertions above match on substrings, which a syntactically broken
+  // command passes just as happily as a working one — the first version of the
+  // guard was missing a separator and every string test stayed green. bash
+  // itself is the only honest judge.
+  it('produces a command bash can actually parse', () => {
+    for (const branch of ['fix/issue-1036-second-try', 'chore/tidy-up', 'fix/issue-77-new']) {
+      const cmd = wtInternal.buildCreateCommand('https://github.com/x/y.git', 'task-9', branch)
+      expect(cmd, `raw newline in the command for ${branch}`).not.toContain('\n')
+      const check = spawnSync('bash', ['-n', '-c', cmd], { encoding: 'utf-8' })
+      expect(check.status, `bash rejected the command for ${branch}: ${check.stderr}`).toBe(0)
+    }
   })
 
   it('rejects injection attempts in inputs', () => {
