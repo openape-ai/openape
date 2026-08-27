@@ -2,23 +2,46 @@
 import { apiFetch } from '../utils/api'
 import { problemMessage } from '../utils/problem-message'
 
-interface Thread {
+interface LiveMail {
   id: string
-  deal_id: string | null
   subject: string
-  status: string
-  source: string
-  created_at: number
+  preview: string
+  from: string
+  from_name: string | null
+  received_at: string | null
+  matched_contact_id: string | null
+  thread_id: string | null
+  deal_id: string | null
 }
+
+interface MailDetail {
+  id: string
+  subject: string
+  from: string
+  from_name: string | null
+  to: string[]
+  received_at: string | null
+  body: string
+}
+
+interface DealOpt { id: string, title: string }
+interface ContactOpt { id: string, name: string, email: string | null }
 
 const { user, fetchUser } = useOpenApeAuth()
 const { activeId, load: loadWorkspaces } = useWorkspaces()
 const { status: graphStatus, reload: reloadGraph, connect } = useGraph()
+const { run } = useApiAction()
 const loading = ref(true)
 const loadError = ref('')
-const filter = ref<'alle' | 'neu'>('alle')
-const threads = ref<Thread[]>([])
-const selectedId = computed(() => String(useRoute().params.id || ''))
+const mails = ref<LiveMail[]>([])
+const selectedId = ref<string | null>(null)
+const detail = ref<MailDetail | null>(null)
+const deals = ref<DealOpt[]>([])
+const contacts = ref<ContactOpt[]>([])
+const attachDeal = ref('')
+const attachContact = ref('')
+
+const selected = computed(() => mails.value.find(m => m.id === selectedId.value) ?? null)
 
 onMounted(async () => {
   await fetchUser()
@@ -32,7 +55,7 @@ onMounted(async () => {
     await reload()
   }
   catch (error) {
-    loadError.value = problemMessage(error, 'Support konnte nicht geladen werden').title
+    loadError.value = problemMessage(error, 'Inbox konnte nicht geladen werden').title
   }
   finally {
     loading.value = false
@@ -40,69 +63,137 @@ onMounted(async () => {
 })
 
 watch(activeId, () => void reload())
-watch(() => graphStatus.value.connected, (connected) => {
-  if (connected) void reload()
+watch(() => graphStatus.value.connected, (ok) => {
+  if (ok) void reload()
 })
 
 async function reload() {
-  if (!activeId.value) {
-    threads.value = []
+  if (!graphStatus.value.connected) {
+    mails.value = []
     return
   }
-  if (graphStatus.value.connected) {
-    await apiFetch(`/api/graph/inbox/pull?workspace_id=${activeId.value}`, { method: 'POST' }).catch(() => null)
+  mails.value = await apiFetch('/api/graph/inbox')
+  if (activeId.value) {
+    const [d, c] = await Promise.all([
+      apiFetch<DealOpt[]>(`/api/deals?workspace_id=${activeId.value}`),
+      apiFetch<ContactOpt[]>(`/api/contacts?workspace_id=${activeId.value}`),
+    ])
+    deals.value = d
+    contacts.value = c
   }
-  const rows = await apiFetch<Thread[]>(`/api/threads?workspace_id=${activeId.value}`)
-  threads.value = filter.value === 'neu' ? rows.filter(t => t.status === 'neu') : rows
+  if (selectedId.value && !mails.value.some(m => m.id === selectedId.value)) {
+    selectedId.value = null
+    detail.value = null
+  }
 }
 
-watch(filter, () => void reload())
+async function openMail(id: string) {
+  selectedId.value = id
+  const row = mails.value.find(m => m.id === id)
+  attachDeal.value = row?.deal_id || ''
+  attachContact.value = row?.matched_contact_id || ''
+  detail.value = await apiFetch(`/api/graph/inbox/${encodeURIComponent(id)}`)
+}
 
-const visible = computed(() => threads.value)
+async function attach() {
+  if (!activeId.value || !selectedId.value) return
+  const created = await run(
+    () => apiFetch('/api/graph/attach', {
+      method: 'POST',
+      body: {
+        workspace_id: activeId.value,
+        message_id: selectedId.value,
+        deal_id: attachDeal.value || null,
+        contact_id: attachContact.value || null,
+      },
+    }),
+    { success: 'Mail angehängt', failure: 'Anhängen fehlgeschlagen' },
+  )
+  if (created) await reload()
+}
+
+const dealItems = computed(() => [
+  { label: 'Kein Vorgang', value: '' },
+  ...deals.value.map(d => ({ label: d.title, value: d.id })),
+])
+const contactItems = computed(() => [
+  { label: 'Kein Kontakt', value: '' },
+  ...contacts.value.map(c => ({ label: c.email ? `${c.name} · ${c.email}` : c.name, value: c.id })),
+])
 </script>
 
 <template>
   <div class="flex h-full">
-    <div class="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+    <div class="flex h-full w-[340px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
       <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
-        <h2 class="mb-2.5 text-[13px] font-semibold">
-          Support
+        <h2 class="text-[13px] font-semibold">
+          Inbox
         </h2>
-        <div class="flex rounded-[7px] border border-[var(--crm-line)] bg-[#0b0d12] p-0.5">
-          <button type="button" class="flex-1 rounded-[5px] py-1 text-xs" :class="filter === 'alle' ? 'bg-[var(--crm-panel-2)]' : 'text-[var(--crm-ink-3)]'" @click="filter = 'alle'">
-            Alle
-          </button>
-          <button type="button" class="flex-1 rounded-[5px] py-1 text-xs" :class="filter === 'neu' ? 'bg-[var(--crm-panel-2)]' : 'text-[var(--crm-ink-3)]'" @click="filter = 'neu'">
-            Neu
-          </button>
-        </div>
+        <p class="mt-1 text-[11.5px] text-[var(--crm-ink-3)]">
+          Live aus Microsoft · letzte 50
+        </p>
       </header>
       <div class="flex-1 overflow-auto p-1.5">
-        <p v-if="!graphStatus.connected" class="p-3 text-sm text-[var(--crm-ink-3)]">
+        <p v-if="loadError" class="p-3 text-sm text-[var(--crm-rose)]">
+          {{ loadError }}
+        </p>
+        <p v-else-if="!graphStatus.connected" class="p-3 text-sm text-[var(--crm-ink-3)]">
           Microsoft verbinden, um die Inbox zu laden.
           <UButton size="xs" class="mt-2" @click="connect">
             Verbinden
           </UButton>
         </p>
-        <NuxtLink
-          v-for="t in visible"
-          :key="t.id"
-          :to="`/support/${t.id}`"
-          class="mb-0.5 block rounded-[7px] px-2.5 py-2"
-          :class="selectedId === t.id ? 'bg-[var(--crm-accent-soft)]' : 'hover:bg-[var(--crm-panel-2)]'"
+        <button
+          v-for="m in mails"
+          :key="m.id"
+          type="button"
+          class="mb-0.5 w-full rounded-[7px] px-2.5 py-2 text-left"
+          :class="selectedId === m.id ? 'bg-[var(--crm-accent-soft)]' : 'hover:bg-[var(--crm-panel-2)]'"
+          @click="openMail(m.id)"
         >
-          <b class="block font-medium">{{ t.subject }}</b>
-          <div class="text-[11.5px] text-[var(--crm-ink-3)]">
-            {{ t.source }} · {{ t.status }}
+          <b class="block truncate font-medium">{{ m.subject }}</b>
+          <div class="truncate text-[11.5px] text-[var(--crm-ink-3)]">
+            {{ m.from_name || m.from }}
+            <span v-if="m.deal_id || m.thread_id"> · angehängt</span>
+            <span v-else-if="m.matched_contact_id"> · Kontakt</span>
           </div>
-        </NuxtLink>
-        <p v-if="!loading && !visible.length" class="p-3.5 text-[var(--crm-ink-3)]">
-          Keine Threads.
+          <div class="truncate text-[11px] text-[var(--crm-ink-3)]">
+            {{ m.preview }}
+          </div>
+        </button>
+        <p v-if="!loading && graphStatus.connected && !mails.length" class="p-3.5 text-[var(--crm-ink-3)]">
+          Keine Mails.
         </p>
       </div>
     </div>
-    <div class="min-w-0 flex-1">
-      <NuxtPage />
+    <div class="min-w-0 flex-1 overflow-auto">
+      <div v-if="detail" class="flex h-full flex-col">
+        <header class="border-b border-[var(--crm-line)] px-5 py-3">
+          <b>{{ detail.subject }}</b>
+          <div class="mt-1 text-sm text-[var(--crm-ink-3)]">
+            {{ detail.from_name || detail.from }}
+            <span v-if="detail.received_at"> · {{ new Date(detail.received_at).toLocaleString('de-AT') }}</span>
+          </div>
+        </header>
+        <div class="flex flex-wrap items-end gap-2 border-b border-[var(--crm-line)] px-5 py-3">
+          <UFormField label="Vorgang" class="min-w-48 flex-1">
+            <USelect v-model="attachDeal" :items="dealItems" />
+          </UFormField>
+          <UFormField label="Kontakt" class="min-w-48 flex-1">
+            <USelect v-model="attachContact" :items="contactItems" />
+          </UFormField>
+          <UButton :disabled="!attachDeal && !attachContact" @click="attach">
+            Anhängen
+          </UButton>
+          <NuxtLink v-if="selected?.deal_id" :to="`/vorgaenge?id=${selected.deal_id}`" class="text-sm text-[var(--crm-accent-2)]">
+            Zum Vorgang
+          </NuxtLink>
+        </div>
+        <pre class="flex-1 overflow-auto px-5 py-4 whitespace-pre-wrap font-sans text-sm text-[var(--crm-ink-2)]">{{ detail.body }}</pre>
+      </div>
+      <div v-else class="flex h-full items-center justify-center text-[var(--crm-ink-3)]">
+        Mail öffnen.
+      </div>
     </div>
   </div>
 </template>

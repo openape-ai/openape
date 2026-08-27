@@ -50,6 +50,8 @@ const meetingOpen = ref(false)
 const mail = ref({ to: '', subject: '', body: '' })
 const meeting = ref({ subject: '', start: '', end: '' })
 const newTask = ref('')
+const uploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 watch(() => props.deal.id, () => {
   void loadExtras()
@@ -175,6 +177,35 @@ async function toggleTask(task: Task) {
     { failure: 'Aufgabe konnte nicht geändert werden' },
   )
   await loadExtras()
+}
+
+async function uploadFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploading.value = true
+  try {
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (const b of bytes) binary += String.fromCharCode(b)
+    const uploaded = await run(
+      () => apiFetch(`/api/deals/${props.deal.id}/files`, {
+        method: 'POST',
+        body: {
+          name: file.name,
+          mime: file.type || 'application/octet-stream',
+          content_base64: btoa(binary),
+        },
+      }),
+      { success: 'Datei hochgeladen', failure: 'Upload fehlgeschlagen' },
+    )
+    if (uploaded) await loadExtras()
+  }
+  finally {
+    uploading.value = false
+    input.value = ''
+  }
 }
 
 const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'))
@@ -314,9 +345,15 @@ const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'
           <p v-if="!files.length" class="px-3.5 py-2 text-sm text-[var(--crm-ink-3)]">
             {{ graphConnected ? 'Noch keine Dateien.' : 'Microsoft verbinden, um OneDrive zu nutzen.' }}
           </p>
-          <a v-if="folderUrl" :href="folderUrl" target="_blank" class="block px-3.5 pb-3 text-[11.5px] text-[var(--crm-ink-3)]">
-            In OneDrive öffnen
-          </a>
+          <div class="flex items-center gap-2 px-3.5 pb-3">
+            <input ref="fileInput" type="file" class="hidden" @change="uploadFile">
+            <UButton size="xs" :disabled="!graphConnected || uploading" @click="fileInput?.click()">
+              Hochladen
+            </UButton>
+            <a v-if="folderUrl" :href="folderUrl" target="_blank" class="text-[11.5px] text-[var(--crm-ink-3)]">
+              In OneDrive öffnen
+            </a>
+          </div>
         </div>
         <UButton icon="i-lucide-plus" @click="emit('add')">
           Neuer Vorgang

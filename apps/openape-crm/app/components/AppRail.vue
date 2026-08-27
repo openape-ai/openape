@@ -5,7 +5,9 @@ const emit = defineEmits<{ search: [] }>()
 const items = [
   { id: 'vorgaenge', to: '/vorgaenge', icon: 'i-lucide-columns-3', title: 'Vorgänge' },
   { id: 'aufgaben', to: '/aufgaben', icon: 'i-lucide-check', title: 'Aufgaben' },
+  { id: 'kalender', to: '/kalender', icon: 'i-lucide-calendar', title: 'Kalender' },
   { id: 'support', to: '/support', icon: 'i-lucide-mail', title: 'Support' },
+  { id: 'dateien', to: '/dateien', icon: 'i-lucide-folder', title: 'Dateien' },
   { id: 'kontakte', to: '/kontakte', icon: 'i-lucide-contact', title: 'Kontakte' },
   { id: 'katalog', to: '/katalog', icon: 'i-lucide-list', title: 'Katalog' },
 ]

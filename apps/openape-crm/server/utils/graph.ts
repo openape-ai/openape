@@ -265,10 +265,11 @@ export interface InboxMessage {
   internetMessageId?: string
   subject?: string
   bodyPreview?: string
-  body?: { content?: string }
-  from?: { emailAddress?: { address?: string } }
+  body?: { content?: string, contentType?: string }
+  from?: { emailAddress?: { address?: string, name?: string } }
   toRecipients?: { emailAddress?: { address?: string } }[]
   ccRecipients?: { emailAddress?: { address?: string } }[]
+  receivedDateTime?: string
 }
 
 export async function listInbox(
@@ -277,11 +278,78 @@ export async function listInbox(
 ): Promise<InboxMessage[]> {
   const data = await graphJson<{ value: InboxMessage[] }>(
     accessToken,
-    '/me/mailFolders/inbox/messages?$top=40&$select=id,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients',
+    '/me/mailFolders/inbox/messages?$top=50&$orderby=receivedDateTime desc&$select=id,internetMessageId,subject,bodyPreview,from,toRecipients,ccRecipients,receivedDateTime',
     {},
     fetchImpl,
   )
   return data.value ?? []
+}
+
+export async function getMessage(
+  accessToken: string,
+  id: string,
+  fetchImpl: GraphFetch = fetch,
+): Promise<InboxMessage> {
+  return graphJson(
+    accessToken,
+    `/me/messages/${encodeURIComponent(id)}?$select=id,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,receivedDateTime`,
+    { headers: { Prefer: 'outlook.body-content-type="text"' } },
+    fetchImpl,
+  )
+}
+
+export async function listEvents(
+  accessToken: string,
+  start: string,
+  end: string,
+  fetchImpl: GraphFetch = fetch,
+) {
+  const q = new URLSearchParams({
+    startDateTime: start,
+    endDateTime: end,
+    $top: '50',
+    $orderby: 'start/dateTime',
+    $select: 'id,subject,start,end,webLink,onlineMeeting,location,organizer',
+  })
+  return graphJson<{ value: {
+    id: string
+    subject?: string
+    start?: { dateTime?: string }
+    end?: { dateTime?: string }
+    webLink?: string
+    onlineMeeting?: { joinUrl?: string }
+    location?: { displayName?: string }
+    organizer?: { emailAddress?: { address?: string, name?: string } }
+  }[] }>(
+    accessToken,
+    `/me/calendarView?${q}`,
+    {},
+    fetchImpl,
+  )
+}
+
+export async function listDriveChildren(
+  accessToken: string,
+  itemId: string | null,
+  fetchImpl: GraphFetch = fetch,
+) {
+  const path = itemId
+    ? `/me/drive/items/${encodeURIComponent(itemId)}?$expand=children($select=id,name,folder,webUrl,size,parentReference)`
+    : '/me/drive/root?$expand=children($select=id,name,folder,webUrl,size,parentReference)'
+  return graphJson<{
+    id: string
+    name: string
+    webUrl?: string
+    parentReference?: { id?: string }
+    children?: {
+      id: string
+      name: string
+      folder?: unknown
+      webUrl?: string
+      size?: number
+      parentReference?: { id?: string }
+    }[]
+  }>(accessToken, path, {}, fetchImpl)
 }
 
 export async function createInboxSubscription(

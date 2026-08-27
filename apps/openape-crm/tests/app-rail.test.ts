@@ -17,10 +17,10 @@ const global = {
 }
 
 describe('appRail', () => {
-  it('shows the five pane titles', () => {
+  it('shows the pane titles including calendar and files', () => {
     const wrapper = mount(AppRail, { props: { pane: 'vorgaenge' }, global })
     const titles = wrapper.findAll('a').map(a => a.attributes('title'))
-    expect(titles).toEqual(['Vorgänge', 'Aufgaben', 'Support', 'Kontakte', 'Katalog'])
+    expect(titles).toEqual(['Vorgänge', 'Aufgaben', 'Kalender', 'Support', 'Dateien', 'Kontakte', 'Katalog'])
   })
 
   it('shows a support unread marker when unread is set', () => {

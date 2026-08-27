@@ -13,7 +13,9 @@ const unread = ref(0)
 const pane = computed(() => {
   const path = route.path
   if (path.startsWith('/aufgaben')) return 'aufgaben'
+  if (path.startsWith('/kalender')) return 'kalender'
   if (path.startsWith('/support')) return 'support'
+  if (path.startsWith('/dateien')) return 'dateien'
   if (path.startsWith('/kontakte') || path.startsWith('/contacts')) return 'kontakte'
   if (path.startsWith('/katalog')) return 'katalog'
   if (path.startsWith('/workspace')) return 'workspace'
