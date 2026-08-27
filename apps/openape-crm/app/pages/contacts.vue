@@ -97,8 +97,8 @@ const orgItems = computed(() => [
 </script>
 
 <template>
-  <div class="flex h-full">
-    <div class="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+  <div class="flex h-full flex-col md:flex-row">
+    <div class="flex max-h-[45%] w-full shrink-0 flex-col overflow-hidden border-b border-[var(--crm-line)] bg-[var(--crm-panel)] md:max-h-none md:h-full md:w-[300px] md:border-r md:border-b-0">
       <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
         <h2 class="text-[13px] font-semibold">
           Kontakte
@@ -145,7 +145,7 @@ const orgItems = computed(() => [
         </div>
       </div>
     </div>
-    <div class="flex-1 overflow-auto p-6">
+    <div class="flex-1 overflow-auto p-4 sm:p-6">
       <div class="grid max-w-xl gap-8">
         <form class="space-y-3" @submit.prevent="addContact">
           <h1 class="text-lg font-semibold">

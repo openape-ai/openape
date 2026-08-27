@@ -19,7 +19,7 @@ const groups = computed(() => groupByStufe(props.deals.filter(d => d.phase === p
 </script>
 
 <template>
-  <div class="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+  <div class="flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)] md:w-[300px]">
     <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
       <h2 class="mb-2.5 flex items-center text-[13px] font-semibold">
         Vorgänge

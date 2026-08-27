@@ -11,12 +11,12 @@ const currentIndex = computed(() => stages.value.findIndex(s => s.id === props.s
 </script>
 
 <template>
-  <div class="mx-[22px] mt-4 flex overflow-hidden rounded-[9px] border border-[var(--crm-line)] bg-[var(--crm-panel)]">
+  <div class="mx-4 mt-4 flex overflow-x-auto rounded-[9px] border border-[var(--crm-line)] bg-[var(--crm-panel)] sm:mx-[22px] sm:overflow-hidden">
     <button
       v-for="(s, i) in stages"
       :key="s.id"
       type="button"
-      class="relative min-w-0 flex-1 truncate border-r border-[var(--crm-line)] px-1.5 py-2 text-[11.5px] last:border-r-0"
+      class="relative min-w-[4.5rem] flex-1 truncate border-r border-[var(--crm-line)] px-1.5 py-2 text-[11px] last:border-r-0 sm:min-w-0 sm:text-[11.5px]"
       :class="[
         s.id === props.stufe ? 'on bg-[var(--crm-accent)] font-medium text-white' : '',
         i < currentIndex && s.id !== props.stufe ? 'done bg-[rgba(124,108,255,.06)] text-[var(--crm-ink-2)]' : '',

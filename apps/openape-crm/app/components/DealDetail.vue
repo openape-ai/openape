@@ -35,6 +35,7 @@ const emit = defineEmits<{
   saveNote: []
   add: []
   reload: []
+  back: []
 }>()
 
 const { run } = useApiAction()
@@ -213,10 +214,20 @@ const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'
 
 <template>
   <div class="flex min-w-0 flex-1 flex-col overflow-auto">
-    <div class="sticky top-0 z-5 bg-[var(--crm-bg)] px-[22px] pt-4">
-      <div class="flex items-start">
-        <div>
-          <h1 class="m-0 flex items-center gap-2.5 text-[19px] font-semibold tracking-tight">
+    <div class="sticky top-0 z-5 bg-[var(--crm-bg)] px-4 pt-3 sm:px-[22px] sm:pt-4">
+      <UButton
+        class="mb-2 md:hidden"
+        size="xs"
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-arrow-left"
+        @click="emit('back')"
+      >
+        Liste
+      </UButton>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div class="min-w-0">
+          <h1 class="m-0 flex flex-wrap items-center gap-2.5 text-[19px] font-semibold tracking-tight">
             {{ deal.org_name || deal.title }}
             <span
               class="rounded-full border px-1.5 text-[10.5px] font-normal"
@@ -237,7 +248,7 @@ const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'
             </template>
           </div>
         </div>
-        <div class="ms-auto flex gap-1.5">
+        <div class="flex flex-wrap gap-1.5 sm:ms-auto sm:justify-end">
           <UButton color="neutral" variant="ghost" size="sm" :disabled="!graphConnected" :title="graphConnected ? '' : 'Microsoft verbinden'" @click="mailOpen = true">
             Mail
           </UButton>
@@ -251,7 +262,7 @@ const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'
       </div>
     </div>
     <PipelineTrack :phase="(deal.phase as Phase)" :stufe="deal.stufe" @select="emit('stufe', $event)" />
-    <div class="grid grid-cols-[1fr_292px] gap-[18px] px-[22px] pt-[18px] pb-10">
+    <div class="grid grid-cols-1 gap-4 px-4 pt-4 pb-10 sm:gap-[18px] sm:px-[22px] sm:pt-[18px] lg:grid-cols-[1fr_292px]">
       <div class="flex flex-col gap-3.5">
         <div class="rounded-[10px] border border-[var(--crm-line)] bg-[var(--crm-panel)]">
           <h3 class="m-0 flex items-center gap-2 border-b border-[var(--crm-line)] px-3.5 py-2.5 text-[11px] uppercase tracking-wide text-[var(--crm-ink-3)]">
@@ -259,9 +270,9 @@ const latestOpen = computed(() => contracts.value.find(c => c.status === 'offen'
           </h3>
           <ul class="m-0 list-none px-3.5 py-1">
             <li v-for="note in notes" :key="note.id" class="border-b border-[var(--crm-line)] py-2.5 last:border-b-0">
-              <div class="flex">
+              <div class="flex flex-col gap-0.5 sm:flex-row sm:items-start">
                 <b class="font-medium">{{ note.title }}</b>
-                <span class="ms-auto text-[11.5px] whitespace-nowrap text-[var(--crm-ink-3)]">
+                <span class="text-[11.5px] text-[var(--crm-ink-3)] sm:ms-auto sm:whitespace-nowrap">
                   {{ new Date(note.created_at).toLocaleString('de-AT') }} · {{ note.author_email }}
                 </span>
               </div>

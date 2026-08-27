@@ -65,7 +65,10 @@ async function toggle(task: Task) {
 
 <template>
   <div class="flex h-full">
-    <div class="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+    <div
+      class="h-full w-full shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)] md:w-[300px]"
+      :class="selected ? 'hidden md:flex' : 'flex'"
+    >
       <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
         <h2 class="mb-2.5 text-[13px] font-semibold">
           Aufgaben
@@ -101,7 +104,17 @@ async function toggle(task: Task) {
         </p>
       </div>
     </div>
-    <div v-if="selected" class="flex-1 overflow-auto p-6">
+    <div v-if="selected" class="flex-1 overflow-auto p-4 sm:p-6">
+      <UButton
+        class="mb-3 md:hidden"
+        size="xs"
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-arrow-left"
+        @click="selected = null"
+      >
+        Liste
+      </UButton>
       <h1 class="text-lg font-semibold">
         {{ selected.title }}
       </h1>
@@ -112,7 +125,7 @@ async function toggle(task: Task) {
         {{ selected.status === 'offen' ? 'Erledigen' : 'Wieder öffnen' }}
       </UButton>
     </div>
-    <div v-else class="flex flex-1 items-center justify-center text-[var(--crm-ink-3)]">
+    <div v-else class="hidden flex-1 items-center justify-center text-[var(--crm-ink-3)] md:flex">
       Keine Aufgabe ausgewählt.
     </div>
   </div>

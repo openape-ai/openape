@@ -95,6 +95,11 @@ async function openMail(id: string) {
   detail.value = await apiFetch(`/api/graph/inbox/${encodeURIComponent(id)}`)
 }
 
+function closeMail() {
+  selectedId.value = null
+  detail.value = null
+}
+
 async function attach() {
   if (!activeId.value || !selectedId.value) return
   const created = await run(
@@ -124,7 +129,10 @@ const contactItems = computed(() => [
 
 <template>
   <div class="flex h-full">
-    <div class="flex h-full w-[340px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+    <div
+      class="h-full w-full shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)] md:w-[340px]"
+      :class="detail ? 'hidden md:flex' : 'flex'"
+    >
       <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
         <h2 class="text-[13px] font-semibold">
           Inbox
@@ -166,21 +174,34 @@ const contactItems = computed(() => [
         </p>
       </div>
     </div>
-    <div class="min-w-0 flex-1 overflow-auto">
-      <div v-if="detail" class="flex h-full flex-col">
-        <header class="border-b border-[var(--crm-line)] px-5 py-3">
+    <div
+      class="min-w-0 flex-1 overflow-auto"
+      :class="detail ? 'flex' : 'hidden md:flex'"
+    >
+      <div v-if="detail" class="flex h-full w-full flex-col">
+        <header class="border-b border-[var(--crm-line)] px-4 py-3 sm:px-5">
+          <UButton
+            class="mb-2 md:hidden"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-arrow-left"
+            @click="closeMail"
+          >
+            Inbox
+          </UButton>
           <b>{{ detail.subject }}</b>
           <div class="mt-1 text-sm text-[var(--crm-ink-3)]">
             {{ detail.from_name || detail.from }}
             <span v-if="detail.received_at"> · {{ new Date(detail.received_at).toLocaleString('de-AT') }}</span>
           </div>
         </header>
-        <div class="flex flex-wrap items-end gap-2 border-b border-[var(--crm-line)] px-5 py-3">
-          <UFormField label="Vorgang" class="min-w-48 flex-1">
-            <USelect v-model="attachDeal" :items="dealItems" />
+        <div class="flex flex-wrap items-end gap-2 border-b border-[var(--crm-line)] px-4 py-3 sm:px-5">
+          <UFormField label="Vorgang" class="min-w-0 flex-1 basis-full sm:basis-48">
+            <USelect v-model="attachDeal" :items="dealItems" class="w-full" />
           </UFormField>
-          <UFormField label="Kontakt" class="min-w-48 flex-1">
-            <USelect v-model="attachContact" :items="contactItems" />
+          <UFormField label="Kontakt" class="min-w-0 flex-1 basis-full sm:basis-48">
+            <USelect v-model="attachContact" :items="contactItems" class="w-full" />
           </UFormField>
           <UButton :disabled="!attachDeal && !attachContact" @click="attach">
             Anhängen
@@ -189,9 +210,9 @@ const contactItems = computed(() => [
             Zum Vorgang
           </NuxtLink>
         </div>
-        <pre class="flex-1 overflow-auto px-5 py-4 whitespace-pre-wrap font-sans text-sm text-[var(--crm-ink-2)]">{{ detail.body }}</pre>
+        <pre class="flex-1 overflow-auto px-4 py-4 whitespace-pre-wrap font-sans text-sm text-[var(--crm-ink-2)] sm:px-5">{{ detail.body }}</pre>
       </div>
-      <div v-else class="flex h-full items-center justify-center text-[var(--crm-ink-3)]">
+      <div v-else class="flex h-full w-full items-center justify-center text-[var(--crm-ink-3)]">
         Mail öffnen.
       </div>
     </div>

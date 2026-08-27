@@ -104,22 +104,22 @@ async function enter(child: DriveChild) {
 
 <template>
   <div class="flex h-full flex-col overflow-hidden">
-    <header class="space-y-2 border-b border-[var(--crm-line)] px-4 py-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+    <header class="space-y-2 border-b border-[var(--crm-line)] px-3 py-3 sm:px-4">
+      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <nav class="flex min-w-0 flex-wrap items-center gap-1 text-sm">
           <button
             v-for="(crumb, i) in trail"
             :key="`${crumb.id}-${i}`"
             type="button"
-            class="rounded px-1 hover:text-[var(--crm-accent-2)]"
+            class="max-w-[9rem] truncate rounded px-1 hover:text-[var(--crm-accent-2)] sm:max-w-none"
             :class="i === trail.length - 1 ? 'font-medium text-[var(--crm-ink)]' : 'text-[var(--crm-ink-3)]'"
             @click="openFolder(crumb.id, crumb.name, i === 0)"
           >
             {{ crumb.name }}<span v-if="i < trail.length - 1" class="ms-1 text-[var(--crm-ink-3)]">/</span>
           </button>
         </nav>
-        <div class="flex items-center gap-2">
-          <UInput v-model="search" icon="i-lucide-search" size="sm" placeholder="In diesem Ordner filtern" class="w-48 sm:w-56" />
+        <div class="flex min-w-0 items-center gap-2">
+          <UInput v-model="search" icon="i-lucide-search" size="sm" placeholder="Filtern" class="min-w-0 flex-1 sm:w-56 sm:flex-none" />
           <UButton
             v-if="folder?.web_url"
             size="sm"
@@ -128,14 +128,15 @@ async function enter(child: DriveChild) {
             icon="i-lucide-external-link"
             :href="folder.web_url"
             target="_blank"
+            aria-label="In OneDrive öffnen"
           >
-            OneDrive
+            <span class="hidden sm:inline">OneDrive</span>
           </UButton>
         </div>
       </div>
     </header>
 
-    <div class="flex-1 overflow-auto p-4">
+    <div class="flex-1 overflow-auto px-3 py-3 sm:p-4">
       <p v-if="loadError" class="text-sm text-[var(--crm-rose)]">
         {{ loadError }}
       </p>

@@ -79,8 +79,7 @@ async function reload() {
 }
 
 async function setPhase(next: Phase) {
-  const first = deals.value.find(d => d.phase === next)
-  await router.replace({ query: { phase: next, ...(first ? { id: first.id } : {}) } })
+  await router.replace({ query: { phase: next } })
 }
 
 async function openDeal(deal: Deal) {
@@ -196,6 +195,8 @@ const contactItems = computed(() => [
   </UCard>
   <div v-else class="flex h-full min-h-0">
     <DealList
+      class="max-md:border-r-0"
+      :class="route.query.id ? 'hidden md:flex' : 'flex'"
       :deals="deals"
       :phase="phase"
       :selected-id="selected?.id ?? null"
@@ -203,7 +204,8 @@ const contactItems = computed(() => [
       @open="openDeal"
     />
     <DealDetail
-      v-if="selected"
+      v-if="selected && route.query.id"
+      class="flex min-w-0 flex-1 flex-col overflow-auto md:flex"
       :deal="selected"
       :notes="notes"
       :note-body="noteBody"
@@ -215,8 +217,15 @@ const contactItems = computed(() => [
       @save-note="addNote"
       @add="showNewDeal = true"
       @reload="reload(); loadNotes(selected.id)"
+      @back="router.replace({ query: { phase: phase } })"
     />
-    <div v-else class="flex flex-1 items-center justify-center text-[var(--crm-ink-3)]">
+    <div
+      v-else-if="selected"
+      class="hidden flex-1 items-center justify-center text-[var(--crm-ink-3)] md:flex"
+    >
+      Vorgang in der Liste wählen.
+    </div>
+    <div v-else class="hidden flex-1 items-center justify-center text-[var(--crm-ink-3)] md:flex">
       Kein Vorgang ausgewählt.
     </div>
   </div>
