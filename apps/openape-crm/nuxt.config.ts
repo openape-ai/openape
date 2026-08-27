@@ -24,6 +24,7 @@ export default defineNuxtConfig({
     publicUrl: 'https://crm.openape.ai',
     graphClientId: '',
     graphClientSecret: '',
+    graphTenantId: '',
     graphTokenSecret: '',
     graphWebhookUrl: '',
     public: {

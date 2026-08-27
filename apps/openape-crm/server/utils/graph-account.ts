@@ -11,6 +11,7 @@ export function graphAppConfig(): GraphAppConfig {
   return {
     clientId: String(c.graphClientId || ''),
     clientSecret: String(c.graphClientSecret || ''),
+    tenantId: String(c.graphTenantId || ''),
     tokenSecret: String(c.graphTokenSecret || ''),
     publicUrl: String(c.publicUrl || 'https://crm.openape.ai'),
     webhookUrl: String(c.graphWebhookUrl || ''),

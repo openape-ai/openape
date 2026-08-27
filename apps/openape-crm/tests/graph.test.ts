@@ -17,6 +17,13 @@ describe('graph helpers', () => {
     expect(url).toContain('Mail.Send')
     expect(url).toContain('Files.ReadWrite')
     expect(url).toContain(encodeURIComponent('https://crm.openape.ai/api/auth/microsoft/callback'))
+    expect(url).toContain('login.microsoftonline.com/common/')
+  })
+
+  it('uses the tenant authority when set', () => {
+    const url = graphAuthorizeUrl({ ...cfg, tenantId: 'tenant-1' }, 'state-1')
+    expect(url).toContain('login.microsoftonline.com/tenant-1/')
+    expect(url).not.toContain('/common/')
   })
 
   it('is unconfigured without a client id', () => {

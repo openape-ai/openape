@@ -10,6 +10,7 @@ export interface GraphAppConfig {
   tokenSecret: string
   publicUrl: string
   webhookUrl: string
+  tenantId?: string
 }
 
 export const GRAPH_SCOPES = [
@@ -22,9 +23,12 @@ export const GRAPH_SCOPES = [
   'Files.ReadWrite',
 ].join(' ')
 
-const TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
-const AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
 const GRAPH = 'https://graph.microsoft.com/v1.0'
+
+function graphLoginBase(cfg: GraphAppConfig): string {
+  const tenant = cfg.tenantId?.trim() || 'common'
+  return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0`
+}
 
 export function isGraphConfigured(cfg: GraphAppConfig): boolean {
   return Boolean(cfg.clientId && cfg.clientSecret && cfg.tokenSecret)
@@ -43,7 +47,7 @@ export function graphAuthorizeUrl(cfg: GraphAppConfig, state: string): string {
     scope: GRAPH_SCOPES,
     state,
   })
-  return `${AUTH_URL}?${q}`
+  return `${graphLoginBase(cfg)}/authorize?${q}`
 }
 
 export function requireGraphConfigured(cfg: GraphAppConfig): void {
@@ -137,7 +141,7 @@ async function tokenRequest(
     scope: GRAPH_SCOPES,
     ...extra,
   })
-  const res = await fetchImpl(TOKEN_URL, {
+  const res = await fetchImpl(`${graphLoginBase(cfg)}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
