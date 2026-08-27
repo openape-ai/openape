@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decryptSecret, encryptSecret } from '../server/utils/secret'
-import { buildEventBody, buildSendMailBody, folderPath, graphAuthorizeUrl, isGraphConfigured } from '../server/utils/graph'
+import { accessTokenFresh, buildEventBody, buildSendMailBody, folderPath, graphAuthorizeUrl, isGraphConfigured } from '../server/utils/graph'
 
 const cfg = {
   clientId: 'cid',
@@ -53,5 +53,13 @@ describe('token encryption', () => {
     const blob = encryptSecret('refresh-xyz', cfg.tokenSecret)
     expect(blob).not.toContain('refresh-xyz')
     expect(decryptSecret(blob, cfg.tokenSecret)).toBe('refresh-xyz')
+  })
+})
+
+describe('accessTokenFresh', () => {
+  it('reuses tokens until near expiry', () => {
+    expect(accessTokenFresh(200_000, 100_000, 60_000)).toBe(true)
+    expect(accessTokenFresh(150_000, 100_000, 60_000)).toBe(false)
+    expect(accessTokenFresh(100_000, 100_000, 60_000)).toBe(false)
   })
 })

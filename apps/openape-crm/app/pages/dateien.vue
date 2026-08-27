@@ -23,6 +23,7 @@ interface DriveFolder {
 const { user, fetchUser } = useOpenApeAuth()
 const { status: graphStatus, reload: reloadGraph, connect } = useGraph()
 const loading = ref(true)
+const navigating = ref(false)
 const loadError = ref('')
 const folder = ref<DriveFolder | null>(null)
 const trail = ref<{ id: string | null, name: string }[]>([{ id: null, name: 'OneDrive' }])
@@ -60,24 +61,38 @@ watch(() => graphStatus.value.connected, (ok) => {
   if (ok) void openFolder(null, 'OneDrive', true)
 })
 
+function setTrail(id: string | null, name: string, reset: boolean) {
+  if (reset) {
+    trail.value = [{ id: null, name: 'OneDrive' }]
+    return
+  }
+  const idx = trail.value.findIndex(t => t.id === id)
+  trail.value = idx >= 0 ? trail.value.slice(0, idx + 1) : [...trail.value, { id, name }]
+}
+
 async function openFolder(id: string | null, name: string, reset = false) {
   if (!graphStatus.value.connected) {
     folder.value = null
     return
   }
-  const q = id ? `?item_id=${encodeURIComponent(id)}` : ''
-  folder.value = await apiFetch(`/api/graph/drive${q}`)
+  setTrail(id, name, reset)
   search.value = ''
-  if (reset) {
-    trail.value = [{ id: null, name: 'OneDrive' }]
+  navigating.value = true
+  loadError.value = ''
+  try {
+    const q = id ? `?item_id=${encodeURIComponent(id)}` : ''
+    folder.value = await apiFetch(`/api/graph/drive${q}`)
   }
-  else {
-    const idx = trail.value.findIndex(t => t.id === id)
-    trail.value = idx >= 0 ? trail.value.slice(0, idx + 1) : [...trail.value, { id, name }]
+  catch (error) {
+    loadError.value = problemMessage(error, 'Ordner konnte nicht geladen werden').title
+  }
+  finally {
+    navigating.value = false
   }
 }
 
 async function enter(child: DriveChild) {
+  if (navigating.value) return
   if (child.folder) {
     await openFolder(child.id, child.name)
   }
@@ -131,12 +146,23 @@ async function enter(child: DriveChild) {
         </UButton>
       </p>
       <template v-else>
-        <div v-if="!loading && !rows.length" class="py-16 text-center text-[var(--crm-ink-3)]">
+        <div v-if="navigating" class="mb-3 flex items-center gap-2 text-sm text-[var(--crm-ink-3)]">
+          <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+          Ordner wird geladen…
+        </div>
+        <div
+          v-if="!loading && !navigating && !rows.length"
+          class="py-16 text-center text-[var(--crm-ink-3)]"
+        >
           <UIcon :name="search ? 'i-lucide-search-x' : 'i-lucide-folder-open'" class="mx-auto mb-2 size-8 opacity-50" />
           <p>{{ search ? 'Nichts passt zum Filter.' : 'Ordner ist leer.' }}</p>
         </div>
 
-        <ul v-if="rows.length" class="divide-y divide-[var(--crm-line)] sm:hidden">
+        <ul
+          v-if="rows.length"
+          class="divide-y divide-[var(--crm-line)] sm:hidden"
+          :class="navigating ? 'pointer-events-none opacity-50' : undefined"
+        >
           <li v-for="child in rows" :key="child.id">
             <button type="button" class="flex w-full items-center gap-3 py-3 text-left" @click="enter(child)">
               <UIcon
@@ -153,7 +179,11 @@ async function enter(child: DriveChild) {
           </li>
         </ul>
 
-        <table v-if="rows.length" class="hidden w-full text-sm sm:table">
+        <table
+          v-if="rows.length"
+          class="hidden w-full text-sm sm:table"
+          :class="navigating ? 'pointer-events-none opacity-50' : undefined"
+        >
           <thead>
             <tr class="border-b border-[var(--crm-line)] text-left text-[11px] uppercase tracking-wide text-[var(--crm-ink-3)]">
               <th class="py-2 font-medium">

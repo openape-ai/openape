@@ -119,6 +119,10 @@ export async function exchangeCode(
   }, fetchImpl)
 }
 
+export function accessTokenFresh(expiresAt: number, now = Date.now(), skewMs = 60_000) {
+  return expiresAt > now + skewMs
+}
+
 export async function refreshAccessToken(
   cfg: GraphAppConfig,
   refreshToken: string,
@@ -333,23 +337,32 @@ export async function listDriveChildren(
   itemId: string | null,
   fetchImpl: GraphFetch = fetch,
 ) {
-  const path = itemId
-    ? `/me/drive/items/${encodeURIComponent(itemId)}?$expand=children($select=id,name,folder,webUrl,size,parentReference)`
-    : '/me/drive/root?$expand=children($select=id,name,folder,webUrl,size,parentReference)'
-  return graphJson<{
-    id: string
-    name: string
-    webUrl?: string
-    parentReference?: { id?: string }
-    children?: {
+  const select = 'id,name,folder,webUrl,size,parentReference'
+  const itemPath = itemId
+    ? `/me/drive/items/${encodeURIComponent(itemId)}?$select=id,name,webUrl,parentReference`
+    : '/me/drive/root?$select=id,name,webUrl,parentReference'
+  const childrenPath = itemId
+    ? `/me/drive/items/${encodeURIComponent(itemId)}/children?$select=${select}&$top=200`
+    : `/me/drive/root/children?$select=${select}&$top=200`
+  const [folder, kids] = await Promise.all([
+    graphJson<{
       id: string
       name: string
-      folder?: unknown
       webUrl?: string
-      size?: number
       parentReference?: { id?: string }
-    }[]
-  }>(accessToken, path, {}, fetchImpl)
+    }>(accessToken, itemPath, {}, fetchImpl),
+    graphJson<{
+      value: {
+        id: string
+        name: string
+        folder?: unknown
+        webUrl?: string
+        size?: number
+        parentReference?: { id?: string }
+      }[]
+    }>(accessToken, childrenPath, {}, fetchImpl),
+  ])
+  return { ...folder, children: kids.value ?? [] }
 }
 
 export async function createInboxSubscription(
