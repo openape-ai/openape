@@ -7,6 +7,7 @@ const { list, activeId, select } = useWorkspaces()
 const route = useRoute()
 const router = useRouter()
 const { status: graphStatus, reload: reloadGraph, connect, disconnect } = useGraph()
+const toast = useToast()
 const unread = ref(0)
 
 const pane = computed(() => {
@@ -20,6 +21,16 @@ const pane = computed(() => {
 })
 
 onMounted(() => void reloadGraph())
+watch(() => route.query.graph, (flag) => {
+  if (!flag) return
+  if (flag === 'ok') toast.add({ title: 'Microsoft verbunden', color: 'success' })
+  else if (flag === 'norefresh') toast.add({ title: 'Microsoft hat kein Refresh-Token geliefert', color: 'error' })
+  else toast.add({ title: 'Microsoft-Verbindung abgebrochen', color: 'error' })
+  void reloadGraph()
+  const query = { ...route.query }
+  delete query.graph
+  void router.replace({ path: route.path, query })
+}, { immediate: true })
 watch(activeId, async (id) => {
   if (!id) {
     unread.value = 0

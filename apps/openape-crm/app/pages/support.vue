@@ -13,7 +13,7 @@ interface Thread {
 
 const { user, fetchUser } = useOpenApeAuth()
 const { activeId, load: loadWorkspaces } = useWorkspaces()
-const { status: graphStatus, connect } = useGraph()
+const { status: graphStatus, reload: reloadGraph, connect } = useGraph()
 const loading = ref(true)
 const loadError = ref('')
 const filter = ref<'alle' | 'neu'>('alle')
@@ -28,6 +28,7 @@ onMounted(async () => {
   }
   try {
     await loadWorkspaces()
+    await reloadGraph()
     await reload()
   }
   catch (error) {
@@ -39,6 +40,9 @@ onMounted(async () => {
 })
 
 watch(activeId, () => void reload())
+watch(() => graphStatus.value.connected, (connected) => {
+  if (connected) void reload()
+})
 
 async function reload() {
   if (!activeId.value) {

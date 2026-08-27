@@ -2,13 +2,18 @@ import { apiFetch } from '../utils/api'
 
 export function useGraph() {
   const { activeId } = useWorkspaces()
-  const status = ref({ configured: false, connected: false, mail: null as string | null })
+  const status = useState('crm-graph-status', () => ({
+    configured: false,
+    connected: false,
+    mail: null as string | null,
+  }))
 
   async function reload() {
     try {
       status.value = await apiFetch('/api/graph/status')
     }
     catch {
+      if (status.value.connected) return
       status.value = { configured: false, connected: false, mail: null }
     }
   }

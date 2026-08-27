@@ -14,7 +14,7 @@ interface Thread {
 const route = useRoute()
 const router = useRouter()
 const { run } = useApiAction()
-const { status: graphStatus } = useGraph()
+const { status: graphStatus, reload: reloadGraph } = useGraph()
 const thread = ref<Thread | null>(null)
 const reply = ref('')
 const to = ref('')
@@ -31,7 +31,10 @@ async function load() {
   to.value = thread.value?.messages[0]?.from_address || ''
 }
 
-onMounted(() => void load())
+onMounted(async () => {
+  await reloadGraph()
+  await load()
+})
 watch(() => route.params.id, () => void load())
 
 async function setStatus(status: string) {

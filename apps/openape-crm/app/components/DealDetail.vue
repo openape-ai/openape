@@ -55,6 +55,9 @@ watch(() => props.deal.id, () => {
   void loadExtras()
   mail.value.to = props.deal.people.find(p => p.email)?.email || ''
 }, { immediate: true })
+watch(() => props.graphConnected, (connected, was) => {
+  if (connected && !was) void loadExtras()
+})
 
 async function loadExtras() {
   try {
