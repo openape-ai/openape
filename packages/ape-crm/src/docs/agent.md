@@ -26,18 +26,17 @@ ape-crm workspaces use <id>
 ## Deals
 
 ```bash
-ape-crm deals list --json                     # [{ id, title, value_cents, stage, contact_name, org_name, … }]
-ape-crm deals list --stage won --json
-ape-crm deals new --title "…" --value 18000 --stage lead --contact <id> --org <id> --json
-ape-crm deals move <id> proposal --json
+ape-crm deals list --json                     # [{ id, title, value_cents, phase, stufe, contact_name, org_name, … }]
+ape-crm deals list --phase deal --stufe angebot --json
+ape-crm deals new --title "…" --value 18000 --phase lead --stufe kalt --contact <id> --org <id> --json
+ape-crm deals move <id> gewonnen --json
 ape-crm deals rm <id>
 ```
 
 - `--value` is euros; the API stores `value_cents`.
-- Stage keys are per workspace — read them with `ape-crm stages --json`
-  (`[{ key, name, outcome, position }]`). Never assume the defaults. A stage with
-  `outcome` `won`/`lost` sets `closed_at`; moving into an `open` stage clears it.
-  Without `--stage`, a new deal lands in the first stage of the pipeline.
+- Stufe keys are fixed — read them with `ape-crm stages --json`
+  (`[{ phase, key, name }]`). `gewonnen` on a deal moves it to phase `kunde`.
+  Without `--phase`/`--stufe`, a new deal lands in `lead` / `kalt`.
 - A moved deal lands at the end of its new column. Reordering inside a column is
   a web-app gesture and has no CLI command.
 

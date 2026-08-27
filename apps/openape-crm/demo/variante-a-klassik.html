@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Variante A · Klassik — OpenApe CRM Demo</title>
+<style>
+:root{
+  --bg:#f4f6f8; --panel:#fff; --line:#e2e6eb; --line-soft:#eef1f4;
+  --ink:#1b2733; --ink-2:#5b6b7c; --ink-3:#8695a5;
+  --accent:#2563eb; --accent-soft:#eaf0fe;
+  --nav:#1a2432; --nav-ink:#a9b8c9;
+  --green:#0f8a5f; --green-soft:#e3f5ed; --amber:#a8600a; --amber-soft:#fdf1de;
+  --red:#b3261e; --red-soft:#fdeceb; --violet:#6d4aca; --violet-soft:#f0ebfd;
+  --r:6px; --shadow:0 1px 2px rgba(20,35,50,.06),0 1px 3px rgba(20,35,50,.04);
+}
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:212px minmax(0,1fr);min-height:100vh}
+
+/* ---- Sidebar ---- */
+.nav{background:var(--nav);color:var(--nav-ink);padding:14px 0;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:9px;padding:2px 16px 18px;color:#fff;font-weight:640;letter-spacing:-.2px;font-size:14px}
+.brand i{width:24px;height:24px;border-radius:6px;background:var(--accent);display:grid;place-items:center;font-style:normal;font-size:13px}
+.nav-sec{padding:14px 16px 6px;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#61748a}
+.nav a{display:flex;align-items:center;gap:9px;padding:7px 16px;color:var(--nav-ink);text-decoration:none;cursor:pointer;border-left:2px solid transparent}
+.nav a:hover{background:#22303f;color:#fff}
+.nav a.on{background:#22303f;color:#fff;border-left-color:var(--accent)}
+.nav a .cnt{margin-left:auto;background:#2f3f52;color:#c6d4e2;border-radius:9px;padding:0 6px;font-size:10.5px;line-height:16px}
+.nav .foot{margin-top:auto;padding:12px 16px;font-size:11px;color:#5b6d82;border-top:1px solid #26333f}
+
+/* ---- Topbar ---- */
+.top{height:48px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;position:sticky;top:0;z-index:20}
+.search{flex:1;max-width:420px;position:relative}
+.search input{width:100%;padding:6px 10px 6px 30px;border:1px solid var(--line);border-radius:var(--r);background:#fbfcfd}
+.search input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft)}
+.search::before{content:"⌕";position:absolute;left:10px;top:4px;color:var(--ink-3);font-size:15px}
+.results{position:absolute;top:34px;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(20,35,50,.14);overflow:hidden;z-index:30}
+.results div{padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.results div:hover{background:var(--accent-soft)}
+.results .t{font-size:10px;text-transform:uppercase;color:var(--ink-3);width:52px;flex:none}
+.results .s{color:var(--ink-3);font-size:11.5px;margin-left:auto}
+.me{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--ink-2)}
+.av{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600}
+
+/* ---- Content ---- */
+main{padding:18px 20px 40px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+h1{font-size:19px;margin:0;font-weight:640;letter-spacing:-.25px}
+.sub{color:var(--ink-2);font-size:12px}
+.tabs{display:flex;gap:2px;background:#e7ebf0;padding:2px;border-radius:var(--r)}
+.tabs button{border:0;background:transparent;padding:5px 12px;border-radius:4px;cursor:pointer;color:var(--ink-2)}
+.tabs button.on{background:#fff;color:var(--ink);box-shadow:var(--shadow);font-weight:560}
+.btn{border:1px solid var(--line);background:#fff;padding:6px 11px;border-radius:var(--r);cursor:pointer;box-shadow:var(--shadow)}
+.btn:hover{background:#f7f9fb}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:#1d4fd8}
+.right{margin-left:auto;display:flex;gap:8px}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600;padding:8px 12px;border-bottom:1px solid var(--line)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#f8fafc}
+tbody tr:last-child td{border-bottom:0}
+.tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:560;white-space:nowrap}
+.tag.lead{background:var(--amber-soft);color:var(--amber)}
+.tag.deal{background:var(--accent-soft);color:var(--accent)}
+.tag.kunde{background:var(--green-soft);color:var(--green)}
+.tag.grey{background:#eef1f4;color:var(--ink-2)}
+.tag.red{background:var(--red-soft);color:var(--red)}
+.tag.violet{background:var(--violet-soft);color:var(--violet)}
+.muted{color:var(--ink-3)}
+
+/* ---- Kanban ---- */
+.board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}
+.col{flex:0 0 232px;background:#eaeef2;border-radius:var(--r);padding:8px;min-height:180px}
+.col.over{background:var(--accent-soft);outline:1.5px dashed var(--accent)}
+.col h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+.col h3 b{margin-left:auto;background:#dbe2e9;border-radius:9px;padding:0 6px;color:var(--ink-2);font-weight:600}
+.col.end h3{color:var(--ink-3)}
+.kcard{background:#fff;border:1px solid var(--line);border-radius:5px;padding:8px 9px;margin-bottom:7px;cursor:grab;box-shadow:var(--shadow)}
+.kcard:hover{border-color:#c3cdd8}
+.kcard b{display:block;font-weight:580;margin-bottom:3px}
+.kcard .m{color:var(--ink-3);font-size:11.5px;display:flex;gap:6px;align-items:center}
+.marker{font-size:10px;color:var(--violet);margin-left:4px}
+
+/* ---- Detail ---- */
+.back{border:0;background:none;color:var(--accent);cursor:pointer;padding:0;margin-bottom:8px}
+.grid2{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.sec:last-child{border-bottom:0}
+.sec h4{margin:0 0 9px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:4px 8px;font-size:12.5px}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0}
+.stepper{display:flex;flex-wrap:wrap;gap:3px;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.step{border:1px solid var(--line);background:#fff;padding:4px 9px;border-radius:20px;cursor:pointer;font-size:11.5px;color:var(--ink-2)}
+.step:hover{border-color:var(--accent);color:var(--accent)}
+.step.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.step.end{border-style:dashed}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+.tl li:last-child{border-bottom:0}
+.ic{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px}
+.ic.mail{background:var(--accent-soft);color:var(--accent)}
+.ic.notiz{background:#fdf1de;color:var(--amber)}
+.ic.aufgabe{background:var(--violet-soft);color:var(--violet)}
+.ic.termin{background:var(--green-soft);color:var(--green)}
+.ic.dokument{background:#eef1f4;color:var(--ink-2)}
+.tl b{font-weight:580}
+.tl .ts{color:var(--ink-3);font-size:11.5px;margin-left:auto;white-space:nowrap}
+.tl p{margin:2px 0 0;color:var(--ink-2)}
+.vtr{border:1px solid var(--line);border-radius:5px;margin-bottom:8px;overflow:hidden}
+.vtr .h{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border-bottom:1px solid var(--line-soft)}
+.vtr table td,.vtr table th{padding:6px 10px;font-size:12px}
+.mini{width:100%;border-collapse:collapse}
+.composer{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--line-soft)}
+.composer input{flex:1;border:1px solid var(--line);border-radius:var(--r);padding:6px 9px}
+.composer input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* ---- Modal / Wizard ---- */
+.ov{position:fixed;inset:0;background:rgba(17,28,40,.4);display:grid;place-items:center;z-index:60}
+.modal{background:#fff;border-radius:8px;width:min(660px,92vw);max-height:86vh;overflow:auto;box-shadow:0 20px 60px rgba(15,25,40,.35)}
+.modal header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal header b{font-size:14px}
+.modal .body{padding:16px 18px}
+.modal footer{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;background:#fafbfc}
+.wsteps{display:flex;gap:6px;font-size:11px;color:var(--ink-3);margin-bottom:14px;flex-wrap:wrap}
+.wsteps span.on{color:var(--accent);font-weight:600}
+label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);margin:0 0 4px}
+.f{margin-bottom:12px}
+.f input,.f select,.f textarea{width:100%;border:1px solid var(--line);border-radius:var(--r);padding:6px 9px;background:#fff}
+.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.posrow{display:grid;grid-template-columns:1fr 88px 78px 108px 28px;gap:6px;margin-bottom:6px;align-items:center}
+.posrow input,.posrow select{width:100%;border:1px solid var(--line);border-radius:var(--r);padding:5px 7px}
+.x{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:15px}
+.sign{border:2px dashed var(--line);border-radius:8px;padding:22px;text-align:center;background:#fbfcfd}
+.toast{position:fixed;bottom:18px;right:18px;background:#1a2432;color:#fff;padding:10px 14px;border-radius:var(--r);box-shadow:0 8px 24px rgba(15,25,40,.3);z-index:80}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="nav"></nav>
+  <div>
+    <div class="top">
+      <div class="search">
+        <input id="q" placeholder="Suche: Name, E-Mail, Firma, Volltext …" autocomplete="off">
+        <div id="res"></div>
+      </div>
+      <div class="me"><span>Patrick Hofmann</span><div class="av">PH</div></div>
+    </div>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="ov"></div>
+<script id="crm-data">
+/* AUTOMATISCH EINGEBETTET AUS data.js – dort aendern, dann "node build.mjs" */
+/* Gemeinsame Demo-Daten + Fachlogik fuer alle drei Design-Varianten.
+   Quelle: CRM_Anforderungsspezifikation.docx v1.0 (26.08.2026) */
+
+const PIPELINES = {
+  lead: {
+    label: 'Lead',
+    stufen: [
+      { id: 'kalt', label: 'Kalter Lead' },
+      { id: 'warm', label: 'Warmer Lead' },
+      { id: 'kontaktiert', label: 'Kontaktiert' },
+      { id: 'konvertiert', label: 'Zu Deal konvertiert', endmarker: 'deal' },
+      { id: 'disqualifiziert', label: 'Disqualifiziert', endstufe: true },
+      { id: 'blacklist', label: 'Blacklist', endstufe: true },
+    ],
+  },
+  deal: {
+    label: 'Deal',
+    stufen: [
+      { id: 'inbound', label: 'Inbound' },
+      { id: 'termin', label: 'Termin vereinbart' },
+      { id: 'demo', label: 'Demo durchgeführt' },
+      { id: 'followup', label: 'Follow-up-Phase' },
+      { id: 'angebot', label: 'Angebotsphase' },
+      { id: 'gewonnen', label: 'Gewonnen', endmarker: 'kunde' },
+      { id: 'spaet', label: 'Abschluss spät oder unwahrscheinlich' },
+      { id: 'verloren', label: 'Final verloren', endstufe: true },
+    ],
+  },
+  kunde: {
+    label: 'Kunde',
+    stufen: [
+      { id: 'onboarding', label: 'Onboarding' },
+      { id: 'zahlend', label: 'Zahlender Kunde' },
+      { id: 'abwehr', label: 'Kündigungsabwehr' },
+      { id: 'gekuendigt', label: 'Final gekündigt', endstufe: true },
+    ],
+  },
+};
+
+const WAEHRUNGEN = ['EUR', 'CHF', 'USD', 'GBP', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'CAD', 'AUD', 'JPY'];
+
+const ABRECHNUNG = [
+  { id: 'monatlich', label: 'monatlich' },
+  { id: 'jaehrlich', label: 'jährlich' },
+  { id: 'einmalig', label: 'einmalig' },
+  { id: 'verwendung', label: 'nach Verwendung' },
+];
+
+const USERS = [
+  { id: 'u1', name: 'Patrick Hofmann', kuerzel: 'PH' },
+  { id: 'u2', name: 'Sandra Weiss', kuerzel: 'SW' },
+  { id: 'u3', name: 'Tobias Lenz', kuerzel: 'TL' },
+];
+
+const PRODUKTE = [
+  { id: 'p1', name: 'OpenApe Platform – Basis', standardpreis: 490, standardAbrechnung: 'monatlich', beschreibung: 'Kernplattform, bis 25 Nutzer' },
+  { id: 'p2', name: 'OpenApe Platform – Enterprise', standardpreis: 1490, standardAbrechnung: 'monatlich', beschreibung: 'Unbegrenzte Nutzer, SSO, SLA' },
+  { id: 'p3', name: 'Onboarding & Setup', standardpreis: 2400, standardAbrechnung: 'einmalig', beschreibung: 'Einrichtung, Datenmigration, Schulung' },
+  { id: 'p4', name: 'Zusatzmodul Dokumentensafe', standardpreis: 180, standardAbrechnung: 'monatlich', beschreibung: 'Revisionssichere Ablage' },
+  { id: 'p5', name: 'Support-Kontingent', standardpreis: 140, standardAbrechnung: 'verwendung', beschreibung: 'Abrechnung je angefangene Stunde' },
+];
+
+const FIRMEN = [
+  { id: 'f1', name: 'Brunner Consulting GmbH', website: 'brunner-consulting.at', adresse: 'Mariahilfer Straße 88', plz: '1070', ort: 'Wien', land: 'Österreich' },
+  { id: 'f2', name: 'Hofstätter Bau AG', website: 'hofstaetter-bau.at', adresse: 'Industriestraße 4', plz: '4020', ort: 'Linz', land: 'Österreich' },
+  { id: 'f3', name: 'Nordlicht Medien GmbH', website: 'nordlicht.de', adresse: 'Elbchaussee 210', plz: '22605', ort: 'Hamburg', land: 'Deutschland' },
+  { id: 'f4', name: 'Alpenquell Getränke AG', website: 'alpenquell.ch', adresse: 'Seestrasse 12', plz: '8002', ort: 'Zürich', land: 'Schweiz' },
+  { id: 'f5', name: 'Kepler Labs GmbH', website: 'keplerlabs.io', adresse: 'Neubaugasse 3', plz: '1070', ort: 'Wien', land: 'Österreich' },
+  { id: 'f6', name: 'Sturmberg Logistik KG', website: 'sturmberg-log.at', adresse: 'Hafenweg 19', plz: '5020', ort: 'Salzburg', land: 'Österreich' },
+  { id: 'f7', name: 'Veritas Rechtsanwälte', website: 'veritas-ra.at', adresse: 'Schottenring 22', plz: '1010', ort: 'Wien', land: 'Österreich' },
+];
+
+const PERSONEN = [
+  { id: 'k1', vorname: 'Michael', nachname: 'Brunner', geschlecht: 'männlich', titel: 'Mag.', emails: ['m.brunner@brunner-consulting.at'], telefone: ['+43 1 555 8820'], firmaId: 'f1' },
+  { id: 'k2', vorname: 'Lena', nachname: 'Kastner', geschlecht: 'weiblich', titel: '', emails: ['l.kastner@brunner-consulting.at'], telefone: [], firmaId: 'f1' },
+  { id: 'k3', vorname: 'Georg', nachname: 'Hofstätter', geschlecht: 'männlich', titel: 'Ing.', emails: ['g.hofstaetter@hofstaetter-bau.at'], telefone: ['+43 732 44 12 90'], firmaId: 'f2' },
+  { id: 'k4', vorname: 'Anke', nachname: 'Sölden', geschlecht: 'weiblich', titel: 'Dr.', emails: ['a.soelden@nordlicht.de', 'anke@nordlicht.de'], telefone: ['+49 40 998 220'], firmaId: 'f3' },
+  { id: 'k5', vorname: 'Reto', nachname: 'Amrein', geschlecht: 'männlich', titel: '', emails: ['r.amrein@alpenquell.ch'], telefone: ['+41 44 220 11 08'], firmaId: 'f4' },
+  { id: 'k6', vorname: 'Julia', nachname: 'Pfeiffer', geschlecht: 'weiblich', titel: 'DI', emails: ['julia@keplerlabs.io'], telefone: ['+43 660 20 33 141'], firmaId: 'f5' },
+  { id: 'k7', vorname: 'Marek', nachname: 'Sturm', geschlecht: 'männlich', titel: '', emails: ['m.sturm@sturmberg-log.at'], telefone: [], firmaId: 'f6' },
+  { id: 'k8', vorname: 'Carolin', nachname: 'Vogl', geschlecht: 'weiblich', titel: 'Mag.', emails: ['c.vogl@veritas-ra.at'], telefone: ['+43 1 401 20'], firmaId: 'f7' },
+  { id: 'k9', vorname: 'Stefan', nachname: 'Radlmayr', geschlecht: 'männlich', titel: '', emails: ['s.radlmayr@keplerlabs.io'], telefone: [], firmaId: 'f5' },
+];
+
+const VORGAENGE = [
+  {
+    id: 'v1', firmaId: 'f5', personIds: ['k6', 'k9'], phase: 'kunde', stufe: 'zahlend',
+    titel: 'Kepler Labs – Plattform Enterprise',
+    dokumente: [{ name: 'Kickoff-Protokoll.pdf', groesse: '340 KB', datum: '2026-05-12' }],
+    vertraege: [
+      { id: 'c1', status: 'aktiv', startdatum: '2026-06-01', mindestlaufzeit: 24, waehrung: 'EUR', signiertesPdf: 'Vertrag-KeplerLabs-signiert.pdf',
+        positionen: [
+          { produktId: 'p2', preis: 1290, rabatt: 200, abrechnung: 'monatlich' },
+          { produktId: 'p3', preis: 2400, rabatt: 0, abrechnung: 'einmalig' },
+        ] },
+      { id: 'c2', status: 'aktiv', startdatum: '2026-08-01', mindestlaufzeit: 12, waehrung: 'EUR', signiertesPdf: 'Upsell-Dokumentensafe-signiert.pdf',
+        positionen: [{ produktId: 'p4', preis: 180, rabatt: 0, abrechnung: 'monatlich' }] },
+    ],
+    historie: [
+      { typ: 'mail', ts: '2026-08-24 09:12', autor: 'PH', titel: 'Upsell Dokumentensafe – Rechnung folgt', text: 'Danke für die schnelle Signatur. Die erste Rechnung geht Anfang September raus.' },
+      { typ: 'dokument', ts: '2026-08-22 16:40', autor: 'System', titel: 'Upsell-Dokumentensafe-signiert.pdf abgelegt', text: 'Vertrag von „offen“ auf „aktiv laufend“ gewechselt.' },
+      { typ: 'notiz', ts: '2026-08-14 11:05', autor: 'SW', titel: 'Interesse an Dokumentensafe', text: 'Julia fragt nach revisionssicherer Ablage für die Laborberichte. Upsell als zusätzlicher Vertrag am bestehenden Vorgang.' },
+      { typ: 'termin', ts: '2026-06-03 10:00', autor: 'PH', titel: 'Onboarding-Workshop (Teams)', text: 'Teams-Link automatisch erzeugt, 90 Minuten.' },
+      { typ: 'dokument', ts: '2026-05-28 14:22', autor: 'System', titel: 'Vertrag-KeplerLabs-signiert.pdf abgelegt', text: 'Signatur durch Kunde (EES).' },
+    ],
+  },
+  {
+    id: 'v2', firmaId: 'f1', personIds: ['k1', 'k2'], phase: 'deal', stufe: 'angebot',
+    titel: 'Brunner Consulting – Basis + Onboarding',
+    dokumente: [{ name: 'Anforderungen-Brunner.docx', groesse: '88 KB', datum: '2026-08-11' }],
+    vertraege: [
+      { id: 'c3', status: 'offen', startdatum: '2026-09-15', mindestlaufzeit: 12, waehrung: 'EUR', signiertesPdf: null,
+        positionen: [
+          { produktId: 'p1', preis: 490, rabatt: 40, abrechnung: 'monatlich' },
+          { produktId: 'p3', preis: 2400, rabatt: 400, abrechnung: 'einmalig' },
+        ] },
+    ],
+    historie: [
+      { typ: 'mail', ts: '2026-08-26 08:30', autor: 'PH', titel: 'Angebot AG-2026-041 versendet', text: 'Signaturlink verschickt, Lizenzvertrag als PDF angehängt.' },
+      { typ: 'aufgabe', ts: '2026-08-26 08:31', autor: 'PH', titel: 'Nachfassen Angebot Brunner', text: 'Fällig 02.09.2026 · Verantwortlich Patrick Hofmann' },
+      { typ: 'notiz', ts: '2026-08-20 15:10', autor: 'SW', titel: 'Budget bestätigt', text: 'Michael hat intern 8k Jahresbudget freigegeben, Rabatt auf Onboarding zugesagt.' },
+      { typ: 'termin', ts: '2026-08-13 14:00', autor: 'SW', titel: 'Demo durchgeführt', text: 'Beide Ansprechpartner dabei, Fokus auf Vorgangs-Historie.' },
+      { typ: 'mail', ts: '2026-08-05 09:44', autor: 'M. Brunner', titel: 'Re: Terminvorschlag', text: 'Passt uns am 13.8. um 14 Uhr – bitte Teams-Link.' },
+    ],
+  },
+  {
+    id: 'v3', firmaId: 'f3', personIds: ['k4'], phase: 'deal', stufe: 'demo',
+    titel: 'Nordlicht Medien – Enterprise-Evaluierung',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'termin', ts: '2026-08-25 11:00', autor: 'TL', titel: 'Demo durchgeführt', text: 'Sehr interessiert an Support-Threads, will Angebot bis KW 36.' },
+      { typ: 'notiz', ts: '2026-08-18 09:15', autor: 'TL', titel: 'Zwei Standorte', text: 'Hamburg und Berlin, ca. 40 Nutzer → Enterprise.' },
+      { typ: 'mail', ts: '2026-08-10 17:02', autor: 'A. Sölden', titel: 'Anfrage über Webformular', text: 'Wir suchen ein CRM mit Outlook-Anbindung für 40 Mitarbeitende.' },
+    ],
+  },
+  {
+    id: 'v4', firmaId: 'f2', personIds: ['k3'], phase: 'deal', stufe: 'followup',
+    titel: 'Hofstätter Bau – Basis',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'notiz', ts: '2026-08-19 10:30', autor: 'PH', titel: 'Entscheidung vertagt', text: 'Wartet auf Abschluss des Geschäftsjahres, Wiedervorlage Mitte September.' },
+      { typ: 'termin', ts: '2026-07-30 09:00', autor: 'PH', titel: 'Demo durchgeführt', text: '' },
+    ],
+  },
+  {
+    id: 'v5', firmaId: 'f4', personIds: ['k5'], phase: 'deal', stufe: 'termin',
+    titel: 'Alpenquell – Erstgespräch',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'termin', ts: '2026-09-02 15:00', autor: 'SW', titel: 'Erstgespräch (Teams)', text: 'Einladung über Outlook versendet.' },
+      { typ: 'mail', ts: '2026-08-21 13:20', autor: 'SW', titel: 'Terminvorschläge', text: 'Drei Slots vorgeschlagen, CHF als Währung angefragt.' },
+    ],
+  },
+  {
+    id: 'v6', firmaId: 'f6', personIds: ['k7'], phase: 'lead', stufe: 'kontaktiert',
+    titel: 'Sturmberg Logistik',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'mail', ts: '2026-08-23 08:05', autor: 'TL', titel: 'Erstkontakt', text: 'Kurzvorstellung versendet, noch keine Antwort.' },
+    ],
+  },
+  {
+    id: 'v7', firmaId: 'f7', personIds: ['k8'], phase: 'lead', stufe: 'warm',
+    titel: 'Veritas Rechtsanwälte',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'notiz', ts: '2026-08-26 12:00', autor: 'PH', titel: 'Empfehlung', text: 'Über Kepler Labs empfohlen, kennt das Produkt bereits.' },
+    ],
+  },
+  {
+    id: 'v8', firmaId: 'f3', personIds: ['k4'], phase: 'kunde', stufe: 'onboarding',
+    titel: 'Nordlicht Medien – Pilotstandort',
+    dokumente: [], vertraege: [
+      { id: 'c4', status: 'aktiv', startdatum: '2026-08-15', mindestlaufzeit: null, waehrung: 'EUR', signiertesPdf: 'Pilot-Nordlicht-signiert.pdf',
+        positionen: [{ produktId: 'p5', preis: 140, rabatt: 0, abrechnung: 'verwendung' }] },
+    ],
+    historie: [
+      { typ: 'aufgabe', ts: '2026-08-26 09:00', autor: 'TL', titel: 'Datenimport CSV vorbereiten', text: 'Fällig 30.08.2026 · Verantwortlich Tobias Lenz' },
+    ],
+  },
+];
+
+const AUFGABEN = [
+  { id: 't1', titel: 'Nachfassen Angebot Brunner', beschreibung: 'Angebot AG-2026-041 telefonisch nachfassen.', faellig: '2026-09-02', verantwortlich: 'u1', status: 'offen', vorgangId: 'v2' },
+  { id: 't2', titel: 'Datenimport CSV vorbereiten', beschreibung: 'Kontaktliste von Nordlicht säubern und importieren.', faellig: '2026-08-30', verantwortlich: 'u3', status: 'offen', vorgangId: 'v8' },
+  { id: 't3', titel: 'Angebot Nordlicht erstellen', beschreibung: 'Enterprise + Onboarding, 40 Nutzer.', faellig: '2026-09-04', verantwortlich: 'u3', status: 'offen', vorgangId: 'v3' },
+  { id: 't4', titel: 'Wiedervorlage Hofstätter', beschreibung: 'Nach Geschäftsjahresabschluss erneut anrufen.', faellig: '2026-09-15', verantwortlich: 'u1', status: 'offen', vorgangId: 'v4' },
+  { id: 't5', titel: 'Teams-Termin Alpenquell bestätigen', beschreibung: '', faellig: '2026-08-28', verantwortlich: 'u2', status: 'offen', vorgangId: 'v5' },
+  { id: 't6', titel: 'Onboarding-Workshop nachbereiten', beschreibung: 'Protokoll versenden.', faellig: '2026-06-04', verantwortlich: 'u1', status: 'erledigt', vorgangId: 'v1' },
+];
+
+const THREADS = [
+  { id: 's1', betreff: 'Signiertes Angebot AG-2026-039 – Kepler Labs', status: 'abgeschlossen', vorgangId: 'v1', quelle: 'automatisch',
+    nachrichten: [{ von: 'system@openape.ai', ts: '2026-08-22 16:40', text: 'Das Angebot AG-2026-039 wurde von Julia Pfeiffer signiert. Das signierte PDF liegt am Vertrag.' }] },
+  { id: 's2', betreff: 'Frage zur Rechnungsstellung', status: 'warten_uns', vorgangId: 'v1', quelle: 'mail',
+    nachrichten: [
+      { von: 'julia@keplerlabs.io', ts: '2026-08-25 10:12', text: 'Können wir die Rechnung künftig auf eine Sammel-PDF pro Quartal umstellen?' },
+      { von: 'support@openape.ai', ts: '2026-08-25 11:30', text: 'Ich prüfe das mit der Buchhaltung und melde mich morgen.' },
+    ] },
+  { id: 's3', betreff: 'CRM mit Outlook-Anbindung gesucht', status: 'warten_kunde', vorgangId: 'v3', quelle: 'webformular',
+    nachrichten: [
+      { von: 'a.soelden@nordlicht.de', ts: '2026-08-10 17:02', text: 'Wir suchen ein CRM mit Outlook-Anbindung für 40 Mitarbeitende. Bitte um Rückmeldung.' },
+      { von: 'support@openape.ai', ts: '2026-08-11 08:20', text: 'Gerne – passt Ihnen ein Termin nächste Woche für eine Demo?' },
+    ] },
+  { id: 's4', betreff: 'Anfrage Testzugang', status: 'neu', vorgangId: null, quelle: 'webformular',
+    nachrichten: [{ von: 'office@thalhammer-immo.at', ts: '2026-08-26 14:48', text: 'Guten Tag, wir hätten Interesse an einem Testzugang für drei Personen. Thalhammer Immobilien GmbH, +43 1 202 44.' }] },
+  { id: 's5', betreff: 'Login funktioniert nicht mehr', status: 'neu', vorgangId: null, quelle: 'mail',
+    nachrichten: [{ von: 'buchhaltung@sturmberg-log.at', ts: '2026-08-26 07:55', text: 'Seit heute früh kommen wir nicht mehr in den Kundenbereich.' }] },
+];
+
+const THREAD_STATUS = {
+  neu: 'Neu',
+  warten_kunde: 'Beantwortet – warten auf Kunde',
+  warten_uns: 'Beantwortet – warten auf uns',
+  abgeschlossen: 'Abgeschlossen',
+};
+
+const VERTRAG_STATUS = {
+  offen: 'offen',
+  aktiv: 'aktiv laufend',
+  fertig: 'fertig abgeschlossen',
+  gekuendigt: 'gekündigt',
+};
+
+/* ---------- Fachlogik ---------- */
+
+const CRM = {
+  pipelines: PIPELINES, waehrungen: WAEHRUNGEN, abrechnung: ABRECHNUNG, users: USERS,
+  produkte: PRODUKTE, firmen: FIRMEN, personen: PERSONEN, vorgaenge: VORGAENGE,
+  aufgaben: AUFGABEN, threads: THREADS, threadStatus: THREAD_STATUS, vertragStatus: VERTRAG_STATUS,
+
+  firma: (v) => FIRMEN.find((f) => f.id === v.firmaId),
+  personenVon: (v) => v.personIds.map((id) => PERSONEN.find((p) => p.id === id)),
+  produkt: (id) => PRODUKTE.find((p) => p.id === id),
+  user: (id) => USERS.find((u) => u.id === id),
+  vorgang: (id) => VORGAENGE.find((v) => v.id === id),
+  stufe: (phase, id) => PIPELINES[phase].stufen.find((s) => s.id === id),
+  name: (p) => [p.titel, p.vorname, p.nachname].filter(Boolean).join(' '),
+  initialen: (p) => ((p.vorname || '')[0] || '') + ((p.nachname || '')[0] || ''),
+
+  geld(betrag, waehrung = 'EUR') {
+    return new Intl.NumberFormat('de-AT', { style: 'currency', currency: waehrung, maximumFractionDigits: 0 }).format(betrag);
+  },
+
+  datum(iso) {
+    if (!iso) return '—';
+    const [d] = iso.split(' ');
+    const [y, m, day] = d.split('-');
+    return `${day}.${m}.${y}`;
+  },
+
+  /* Vertragsende = Startdatum + Mindestlaufzeit, nur wenn Mindestlaufzeit gesetzt (Spec 3.4) */
+  vertragsende(vertrag) {
+    if (!vertrag.mindestlaufzeit) return null;
+    const d = new Date(vertrag.startdatum);
+    d.setMonth(d.getMonth() + vertrag.mindestlaufzeit);
+    return d.toISOString().slice(0, 10);
+  },
+
+  positionsSumme: (pos) => pos.preis - (pos.rabatt || 0),
+
+  /* Laufend/einmalig wird abgeleitet, nicht gespeichert (Spec 3.5 / A3) */
+  vertragsArt(vertrag) {
+    const arten = new Set(vertrag.positionen.map((p) => (p.abrechnung === 'einmalig' ? 'einmalig' : 'laufend')));
+    return arten.size > 1 ? 'gemischt' : [...arten][0];
+  },
+
+  vertragsWert(vertrag) {
+    return vertrag.positionen.reduce((s, p) => s + CRM.positionsSumme(p), 0);
+  },
+
+  /* Endmarker-Stufen ueberfuehren den Vorgang automatisch in die naechste Phase (Spec 4) */
+  setzeStufe(vorgang, stufeId) {
+    const stufe = CRM.stufe(vorgang.phase, stufeId);
+    if (stufe.endmarker) {
+      const zielPhase = stufe.endmarker;
+      vorgang.phase = zielPhase;
+      vorgang.stufe = PIPELINES[zielPhase].stufen[0].id;
+      CRM.log(vorgang, 'notiz', `Automatisch in Phase „${PIPELINES[zielPhase].label}“ überführt`,
+        `Endmarker „${stufe.label}“ erreicht → Landestufe „${PIPELINES[zielPhase].stufen[0].label}“.`);
+      return { konvertiert: true, phase: zielPhase };
+    }
+    vorgang.stufe = stufeId;
+    return { konvertiert: false };
+  },
+
+  log(vorgang, typ, titel, text) {
+    const now = new Date('2026-08-27T09:30:00');
+    const ts = `${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    vorgang.historie.unshift({ typ, ts, autor: 'PH', titel, text });
+  },
+
+  /* Angebot signiert → Vertrag aktiv + PDF + Support-Thread (Spec 6.4, Schritte 8/9) */
+  angebotAnlegen(vorgang, positionen, waehrung, startdatum, mindestlaufzeit) {
+    const vertrag = {
+      id: 'c' + (VORGAENGE.reduce((n, v) => n + v.vertraege.length, 0) + 1),
+      status: 'offen', startdatum, mindestlaufzeit, waehrung, signiertesPdf: null, positionen,
+    };
+    vorgang.vertraege.push(vertrag);
+    CRM.log(vorgang, 'mail', 'Angebot versendet', `Signaturlink an ${CRM.personenVon(vorgang)[0].emails[0]}, Vertrag im Status „offen“ angelegt.`);
+    return vertrag;
+  },
+
+  angebotSignieren(vorgang, vertrag) {
+    vertrag.status = 'aktiv';
+    vertrag.signiertesPdf = `Vertrag-${CRM.firma(vorgang).name.split(' ')[0]}-signiert.pdf`;
+    CRM.log(vorgang, 'dokument', `${vertrag.signiertesPdf} abgelegt`, 'Einfache elektronische Signatur (EES) durch den Kunden. Vertrag „offen“ → „aktiv laufend“.');
+    THREADS.unshift({
+      id: 's' + (THREADS.length + 1), betreff: `Signiertes Angebot – ${CRM.firma(vorgang).name}`,
+      status: 'neu', vorgangId: vorgang.id, quelle: 'automatisch',
+      nachrichten: [{ von: 'system@openape.ai', ts: '2026-08-27 09:30', text: `Das Angebot wurde signiert. Das PDF liegt am Vertrag ${vertrag.id}.` }],
+    });
+  },
+
+  suche(q) {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    const treffer = [];
+    VORGAENGE.forEach((v) => {
+      const hay = [v.titel, CRM.firma(v).name, ...CRM.personenVon(v).flatMap((p) => [CRM.name(p), ...p.emails]),
+        ...v.historie.map((h) => h.titel + ' ' + h.text)].join(' ').toLowerCase();
+      if (hay.includes(s)) treffer.push({ typ: 'Vorgang', id: v.id, label: v.titel, sub: `${PIPELINES[v.phase].label} · ${CRM.stufe(v.phase, v.stufe).label}` });
+    });
+    PERSONEN.forEach((p) => {
+      if ((CRM.name(p) + ' ' + p.emails.join(' ')).toLowerCase().includes(s)) {
+        treffer.push({ typ: 'Person', id: p.id, label: CRM.name(p), sub: p.emails[0] });
+      }
+    });
+    FIRMEN.forEach((f) => {
+      if (f.name.toLowerCase().includes(s)) treffer.push({ typ: 'Firma', id: f.id, label: f.name, sub: `${f.plz} ${f.ort}` });
+    });
+    return treffer.slice(0, 12);
+  },
+};
+
+window.CRM = CRM;
+
+</script>
+<script>
+const $ = (s,r=document)=>r.querySelector(s);
+const esc = (s)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let view = {page:'vorgaenge', phase:'deal', mode:'kanban', vorgangId:null, tab:'historie'};
+let wizard = null;
+
+const PAGES = [
+  {id:'vorgaenge', label:'Vorgänge', icon:'▦'},
+  {id:'aufgaben', label:'Offene Aufgaben', icon:'✓'},
+  {id:'support', label:'Support-Posteingang', icon:'✉'},
+  {id:'kontakte', label:'Firmen & Personen', icon:'👥'},
+  {id:'produkte', label:'Preiskatalog', icon:'≡'},
+];
+
+function renderNav(){
+  const offen = CRM.aufgaben.filter(a=>a.status==='offen').length;
+  const neu = CRM.threads.filter(t=>t.status==='neu').length;
+  const cnt = {aufgaben:offen, support:neu};
+  $('#nav').innerHTML = `
+    <div class="brand"><i>◑</i> OpenApe CRM</div>
+    <div class="nav-sec">Arbeiten</div>
+    ${PAGES.map(p=>`<a data-page="${p.id}" class="${view.page===p.id?'on':''}"><span>${p.icon}</span>${p.label}
+      ${cnt[p.id]?`<span class="cnt">${cnt[p.id]}</span>`:''}</a>`).join('')}
+    <div class="nav-sec">Daten</div>
+    <a data-page="import"><span>⤓</span>CSV-Import</a>
+    <div class="foot">Variante A · Klassik<br>Demo mit Beispieldaten</div>`;
+  $('#nav').onclick = e=>{ const a=e.target.closest('a[data-page]'); if(!a) return;
+    view.page=a.dataset.page; view.vorgangId=null; render(); };
+}
+
+/* ---------- Listen / Board ---------- */
+function pageVorgaenge(){
+  const pipe = CRM.pipelines[view.phase];
+  const items = CRM.vorgaenge.filter(v=>v.phase===view.phase);
+  return `
+  <div class="head">
+    <h1>Vorgänge</h1>
+    <div class="tabs">${Object.entries(CRM.pipelines).map(([id,p])=>
+      `<button data-phase="${id}" class="${view.phase===id?'on':''}">${p.label}
+        <span class="muted">${CRM.vorgaenge.filter(v=>v.phase===id).length}</span></button>`).join('')}</div>
+    <div class="right">
+      <div class="tabs">
+        <button data-mode="kanban" class="${view.mode==='kanban'?'on':''}">Kanban</button>
+        <button data-mode="liste" class="${view.mode==='liste'?'on':''}">Liste</button>
+      </div>
+      <button class="btn pri" id="neu">+ Vorgang</button>
+    </div>
+  </div>
+  ${view.mode==='kanban' ? board(pipe, items) : liste(items)}`;
+}
+
+function board(pipe, items){
+  return `<div class="board">${pipe.stufen.map(s=>{
+    const inS = items.filter(v=>v.stufe===s.id);
+    return `<div class="col ${s.endstufe||s.endmarker?'end':''}" data-stufe="${s.id}">
+      <h3>${esc(s.label)}${s.endmarker?'<span class="marker">↦ auto</span>':''}<b>${inS.length}</b></h3>
+      ${inS.map(kcard).join('')}
+    </div>`;}).join('')}</div>`;
+}
+const kcard = v=>{
+  const p = CRM.personenVon(v)[0];
+  const w = v.vertraege.reduce((s,c)=>s+CRM.vertragsWert(c),0);
+  return `<div class="kcard" draggable="true" data-v="${v.id}">
+    <b>${esc(CRM.firma(v).name)}</b>
+    <div class="m">${esc(CRM.name(p))}</div>
+    <div class="m" style="margin-top:5px">${v.vertraege.length?`<span class="tag grey">${v.vertraege.length} Vertrag${v.vertraege.length>1?'e':''} · ${CRM.geld(w)}</span>`:'<span class="muted">kein Vertrag</span>'}</div>
+  </div>`;};
+
+function liste(items){
+  return `<div class="card"><table>
+    <thead><tr><th>Firma</th><th>Vorgang</th><th>Ansprechpartner</th><th>Stufe</th><th>Verträge</th><th>Letzte Aktivität</th></tr></thead>
+    <tbody>${items.map(v=>`<tr data-v="${v.id}">
+      <td><b>${esc(CRM.firma(v).name)}</b><div class="muted">${esc(CRM.firma(v).ort)}</div></td>
+      <td>${esc(v.titel)}</td>
+      <td>${CRM.personenVon(v).map(p=>esc(CRM.name(p))).join(', ')}</td>
+      <td><span class="tag ${v.phase}">${esc(CRM.stufe(v.phase,v.stufe).label)}</span></td>
+      <td>${v.vertraege.length? CRM.geld(v.vertraege.reduce((s,c)=>s+CRM.vertragsWert(c),0)) : '<span class="muted">—</span>'}</td>
+      <td class="muted">${v.historie[0]? esc(v.historie[0].ts):'—'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+/* ---------- Detail ---------- */
+function pageDetail(){
+  const v = CRM.vorgang(view.vorgangId), f = CRM.firma(v), ps = CRM.personenVon(v);
+  const pipe = CRM.pipelines[v.phase];
+  return `
+  <button class="back" id="back">‹ Zurück zu ${esc(pipe.label)}</button>
+  <div class="head">
+    <h1>${esc(f.name)}</h1><span class="tag ${v.phase}">${esc(pipe.label)}</span>
+    <span class="sub">${esc(v.titel)}</span>
+    <div class="right">
+      <button class="btn" data-act="mail">✉ Mail senden</button>
+      <button class="btn" data-act="termin">📅 Termin</button>
+      <button class="btn pri" data-act="angebot">Angebot erstellen</button>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="stepper">${pipe.stufen.map(s=>`<button class="step ${v.stufe===s.id?'on':''} ${s.endmarker||s.endstufe?'end':''}" data-stufe="${s.id}">${esc(s.label)}${s.endmarker?' ↦':''}</button>`).join('')}</div>
+      <div class="sec" style="padding-bottom:0">
+        <div class="tabs" style="width:max-content">
+          ${['historie','vertraege','dokumente','aufgaben'].map(t=>`<button data-tab="${t}" class="${view.tab===t?'on':''}">${({historie:'Historie',vertraege:'Verträge',dokumente:'Dokumente',aufgaben:'Aufgaben'})[t]}</button>`).join('')}
+        </div>
+      </div>
+      ${view.tab==='historie'?tabHistorie(v):''}
+      ${view.tab==='vertraege'?tabVertraege(v):''}
+      ${view.tab==='dokumente'?tabDokumente(v):''}
+      ${view.tab==='aufgaben'?tabAufgaben(v):''}
+    </div>
+    <div class="card">
+      <div class="sec"><h4>Firma</h4><dl class="kv">
+        <dt>Name</dt><dd>${esc(f.name)}</dd>
+        <dt>Website</dt><dd>${esc(f.website)}</dd>
+        <dt>Adresse</dt><dd>${esc(f.adresse)}<br>${esc(f.plz)} ${esc(f.ort)}<br>${esc(f.land)}</dd></dl></div>
+      <div class="sec"><h4>Personen (${ps.length})</h4>
+        ${ps.map(p=>`<div style="margin-bottom:8px"><b>${esc(CRM.name(p))}</b>
+          <div class="muted">${p.emails.map(esc).join('<br>')}</div>
+          ${p.telefone.length?`<div class="muted">${p.telefone.map(esc).join(', ')}</div>`:''}</div>`).join('')}
+      </div>
+      <div class="sec"><h4>Kennzahlen</h4><dl class="kv">
+        <dt>Verträge</dt><dd>${v.vertraege.length}</dd>
+        <dt>Aktivitäten</dt><dd>${v.historie.length}</dd>
+        <dt>Offene Aufg.</dt><dd>${CRM.aufgaben.filter(a=>a.vorgangId===v.id&&a.status==='offen').length}</dd></dl></div>
+    </div>
+  </div>`;
+}
+const ICON = {mail:'✉',notiz:'✎',aufgabe:'✓',termin:'📅',dokument:'📄'};
+const tabHistorie = v=>`<div class="sec"><ul class="tl">${v.historie.map(h=>`<li>
+    <div class="ic ${h.typ}">${ICON[h.typ]}</div>
+    <div style="flex:1"><div style="display:flex"><b>${esc(h.titel)}</b><span class="ts">${esc(h.ts)} · ${esc(h.autor)}</span></div>
+    ${h.text?`<p>${esc(h.text)}</p>`:''}</div></li>`).join('')}</ul></div>
+  <div class="composer"><input id="note" placeholder="Notiz am Vorgang festhalten …"><button class="btn" data-act="note">Speichern</button></div>`;
+
+const tabVertraege = v=>`<div class="sec">${v.vertraege.length?v.vertraege.map(c=>`
+  <div class="vtr"><div class="h">
+    <b>${esc(c.id.toUpperCase())}</b>
+    <span class="tag ${c.status==='aktiv'?'kunde':c.status==='offen'?'deal':'grey'}">${CRM.vertragStatus[c.status]}</span>
+    <span class="tag grey">${CRM.vertragsArt(c)}</span>
+    <span class="muted" style="margin-left:auto">${CRM.datum(c.startdatum)} → ${c.mindestlaufzeit?CRM.datum(CRM.vertragsende(c))+' ('+c.mindestlaufzeit+' Mon.)':'kein Enddatum'}</span>
+  </div>
+  <table class="mini"><thead><tr><th>Position</th><th>Preis</th><th>Rabatt</th><th>Abrechnung</th></tr></thead><tbody>
+  ${c.positionen.map(p=>`<tr><td>${esc(CRM.produkt(p.produktId).name)}</td><td>${CRM.geld(p.preis,c.waehrung)}</td>
+    <td>${p.rabatt?'−'+CRM.geld(p.rabatt,c.waehrung):'—'}</td><td>${esc(p.abrechnung)}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="h" style="border-top:1px solid var(--line-soft);border-bottom:0">
+    ${c.signiertesPdf?`<span>📄 ${esc(c.signiertesPdf)}</span>`:`<span class="muted">noch nicht signiert</span>`}
+    <span style="margin-left:auto"><b>${CRM.geld(CRM.vertragsWert(c),c.waehrung)}</b></span>
+    ${c.status==='offen'?`<button class="btn pri" data-sign="${c.id}">Signatur simulieren</button>`:''}
+  </div></div>`).join(''):'<p class="muted">Noch kein Vertrag. Über „Angebot erstellen“ entsteht automatisch einer im Status „offen“.</p>'}</div>`;
+
+const tabDokumente = v=>`<div class="sec">
+  ${v.dokumente.length?v.dokumente.map(d=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-soft)">
+    📄 <b>${esc(d.name)}</b><span class="muted">${esc(d.groesse)}</span><span class="ts muted" style="margin-left:auto">${CRM.datum(d.datum)}</span></div>`).join('')
+    :'<p class="muted">Keine allgemeinen Dokumente am Vorgang.</p>'}
+  <button class="btn" style="margin-top:10px" data-act="upload">⤒ Datei hochladen</button></div>`;
+
+const tabAufgaben = v=>{const as=CRM.aufgaben.filter(a=>a.vorgangId===v.id);
+  return `<div class="sec">${as.length?as.map(a=>`<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft)">
+    <input type="checkbox" data-task="${a.id}" ${a.status==='erledigt'?'checked':''}>
+    <div><b style="${a.status==='erledigt'?'text-decoration:line-through;color:var(--ink-3)':''}">${esc(a.titel)}</b>
+    <div class="muted">${esc(a.beschreibung||'')}</div></div>
+    <span class="ts muted" style="margin-left:auto">fällig ${CRM.datum(a.faellig)} · ${esc(CRM.user(a.verantwortlich).kuerzel)}</span></div>`).join('')
+    :'<p class="muted">Keine Aufgaben.</p>'}</div>`;};
+
+/* ---------- Weitere Seiten ---------- */
+function pageAufgaben(){
+  const offen = CRM.aufgaben.filter(a=>a.status==='offen');
+  return `<div class="head"><h1>Offene Aufgaben</h1><span class="sub">${offen.length} offen · vorgangsübergreifend</span>
+    <div class="right"><select class="btn" id="fu"><option value="">Alle Verantwortlichen</option>
+      ${CRM.users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select></div></div>
+  <div class="card"><table><thead><tr><th></th><th>Aufgabe</th><th>Vorgang</th><th>Fällig</th><th>Verantwortlich</th><th>Status</th></tr></thead>
+  <tbody>${CRM.aufgaben.map(a=>{const v=CRM.vorgang(a.vorgangId);return `<tr data-v="${a.vorgangId}" data-u="${a.verantwortlich}">
+    <td><input type="checkbox" data-task="${a.id}" ${a.status==='erledigt'?'checked':''}></td>
+    <td><b>${esc(a.titel)}</b><div class="muted">${esc(a.beschreibung||'')}</div></td>
+    <td>${esc(CRM.firma(v).name)}</td><td>${CRM.datum(a.faellig)}</td>
+    <td>${esc(CRM.user(a.verantwortlich).name)}</td>
+    <td><span class="tag ${a.status==='offen'?'deal':'grey'}">${a.status}</span></td></tr>`}).join('')}</tbody></table></div>`;
+}
+
+function pageSupport(){
+  return `<div class="head"><h1>Support-Posteingang</h1><span class="sub">Mails an support@ und Webformular-Anfragen</span></div>
+  <div class="card"><table><thead><tr><th>Betreff</th><th>Von</th><th>Quelle</th><th>Vorgang</th><th>Status</th><th>Letzte Nachricht</th></tr></thead>
+  <tbody>${CRM.threads.map(t=>{const v=t.vorgangId&&CRM.vorgang(t.vorgangId);const last=t.nachrichten[t.nachrichten.length-1];
+  return `<tr data-thread="${t.id}"><td><b>${esc(t.betreff)}</b><div class="muted">${t.nachrichten.length} Nachricht(en)</div></td>
+    <td>${esc(t.nachrichten[0].von)}</td><td><span class="tag grey">${esc(t.quelle)}</span></td>
+    <td>${v?esc(CRM.firma(v).name):'<span class="muted">nicht zugeordnet</span>'}</td>
+    <td><span class="tag ${t.status==='neu'?'red':t.status==='abgeschlossen'?'grey':'deal'}">${CRM.threadStatus[t.status]}</span></td>
+    <td class="muted">${esc(last.ts)}</td></tr>`}).join('')}</tbody></table></div>`;
+}
+
+function pageKontakte(){
+  return `<div class="head"><h1>Firmen & Personen</h1><div class="right"><button class="btn">+ Person</button><button class="btn">+ Firma</button></div></div>
+  <div class="card"><table><thead><tr><th>Firma</th><th>Personen</th><th>Ort</th><th>Website</th><th>Vorgänge</th></tr></thead><tbody>
+  ${CRM.firmen.map(f=>{const ps=CRM.personen.filter(p=>p.firmaId===f.id);const vs=CRM.vorgaenge.filter(v=>v.firmaId===f.id);
+  return `<tr ${vs[0]?`data-v="${vs[0].id}"`:''}><td><b>${esc(f.name)}</b></td>
+    <td>${ps.map(p=>`${esc(CRM.name(p))} <span class="muted">${esc(p.emails[0])}</span>`).join('<br>')}</td>
+    <td>${esc(f.plz)} ${esc(f.ort)}</td><td class="muted">${esc(f.website)}</td>
+    <td>${vs.map(v=>`<span class="tag ${v.phase}">${CRM.pipelines[v.phase].label}</span>`).join(' ')||'<span class="muted">—</span>'}</td></tr>`}).join('')}
+  </tbody></table></div>`;
+}
+
+function pageProdukte(){
+  return `<div class="head"><h1>Preiskatalog</h1><div class="right"><button class="btn">+ Produkt</button></div></div>
+  <div class="card"><table><thead><tr><th>Produkt</th><th>Beschreibung</th><th>Standardpreis</th><th>Standard-Abrechnung</th></tr></thead><tbody>
+  ${CRM.produkte.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="muted">${esc(p.beschreibung)}</td>
+    <td>${CRM.geld(p.standardpreis)}</td><td>${esc(p.standardAbrechnung)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function pageImport(){
+  return `<div class="head"><h1>CSV-Import</h1><span class="sub">Personen und Firmen als Stammdaten importieren</span></div>
+  <div class="card" style="max-width:620px"><div class="sec">
+    <div class="sign">📥 CSV-Datei hierher ziehen<br><span class="muted">oder klicken zum Auswählen</span></div></div>
+    <div class="sec"><h4>Dublettenprüfung</h4>
+      <p>Personen werden über die <b>E-Mail-Adresse</b> geprüft, Firmen über den <b>Firmennamen</b>. Treffer werden vor dem Import zur Bestätigung angezeigt.</p>
+      <table class="mini"><thead><tr><th>Zeile</th><th>Name</th><th>Befund</th></tr></thead><tbody>
+        <tr><td>4</td><td>m.brunner@brunner-consulting.at</td><td><span class="tag red">Dublette – Person existiert</span></td></tr>
+        <tr><td>7</td><td>Nordlicht Medien GmbH</td><td><span class="tag red">Dublette – Firma existiert</span></td></tr>
+        <tr><td>12</td><td>t.wagner@thalhammer-immo.at</td><td><span class="tag kunde">neu</span></td></tr>
+      </tbody></table></div></div>`;
+}
+
+/* ---------- Angebots-Wizard (Spec 6.4) ---------- */
+function startWizard(v){
+  wizard = {schritt:1, vorgangId:v.id, positionen:[{produktId:'p1',preis:490,rabatt:0,abrechnung:'monatlich'}],
+    bedingungen:'', waehrung:'EUR', startdatum:'2026-09-15', laufzeit:12, vertrag:null};
+  renderWizard();
+}
+function renderWizard(){
+  const w = wizard, v = CRM.vorgang(w.vorgangId), f = CRM.firma(v), p = CRM.personenVon(v)[0];
+  const titel = ['Vorgang & Kundendaten','Produkte aus dem Preiskatalog','Besondere Bedingungen','Angebot & Versand','Signatur durch den Kunden'];
+  const summe = w.positionen.reduce((s,x)=>s+CRM.positionsSumme(x),0);
+  let body='';
+  if(w.schritt===1) body = `<p class="muted">Kundendaten werden aus dem Vorgang vorbefüllt.</p>
+    <div class="row"><div class="f"><label>Firma</label><input value="${esc(f.name)}" readonly></div>
+    <div class="f"><label>Ansprechpartner</label><input value="${esc(CRM.name(p))}" readonly></div></div>
+    <div class="f"><label>Adresse</label><input value="${esc(f.adresse+', '+f.plz+' '+f.ort+', '+f.land)}" readonly></div>
+    <div class="f"><label>E-Mail für Versand</label><input value="${esc(p.emails[0])}" readonly></div>`;
+  if(w.schritt===2) body = `
+    <div class="posrow muted" style="font-size:11px"><span>Produkt</span><span>Preis</span><span>Rabatt</span><span>Abrechnung</span><span></span></div>
+    ${w.positionen.map((x,i)=>`<div class="posrow">
+      <select data-pi="${i}" data-fld="produktId">${CRM.produkte.map(pr=>`<option value="${pr.id}" ${pr.id===x.produktId?'selected':''}>${esc(pr.name)}</option>`).join('')}</select>
+      <input type="number" data-pi="${i}" data-fld="preis" value="${x.preis}">
+      <input type="number" data-pi="${i}" data-fld="rabatt" value="${x.rabatt}">
+      <select data-pi="${i}" data-fld="abrechnung">${CRM.abrechnung.map(a=>`<option value="${a.id}" ${a.id===x.abrechnung?'selected':''}>${a.label}</option>`).join('')}</select>
+      <button class="x" data-del="${i}">×</button></div>`).join('')}
+    <button class="btn" id="addpos" style="margin-top:4px">+ Position</button>
+    <div class="row" style="margin-top:14px">
+      <div class="f"><label>Währung</label><select data-w="waehrung">${CRM.waehrungen.map(c=>`<option ${c===w.waehrung?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="f"><label>Startdatum</label><input type="date" data-w="startdatum" value="${w.startdatum}"></div>
+      <div class="f"><label>Mindestlaufzeit (Monate)</label><input type="number" data-w="laufzeit" value="${w.laufzeit}"></div>
+    </div>
+    <p class="muted">Art des Vertrags wird aus den Abrechnungsarten abgeleitet: <b>${CRM.vertragsArt({positionen:w.positionen})}</b> · Summe ${CRM.geld(summe,w.waehrung)}</p>`;
+  if(w.schritt===3) body = `<div class="f"><label>Besondere Bedingungen (Freitext)</label>
+    <textarea rows="5" data-w="bedingungen" placeholder="z. B. Rabatt gilt für die ersten 12 Monate …">${esc(w.bedingungen)}</textarea></div>
+    <div class="sec" style="border:1px solid var(--line);border-radius:6px"><h4>Anhang</h4>
+    📄 Lizenzvertrag_v4.pdf <span class="muted">wird automatisch angehängt</span></div>`;
+  if(w.schritt===4) body = `<div class="sign" style="text-align:left">
+      <b>Angebot AG-2026-042</b> — ${esc(f.name)}<br>
+      <span class="muted">${w.positionen.length} Position(en) · ${CRM.geld(summe,w.waehrung)} · Start ${CRM.datum(w.startdatum)}${w.laufzeit?` · ${w.laufzeit} Monate Mindestlaufzeit`:''}</span>
+      ${w.bedingungen?`<p>${esc(w.bedingungen)}</p>`:''}
+      <p class="muted">PDF aus Vorlage + angehängter Lizenzvertrag.</p></div>
+    <p style="margin-top:12px">Versand über die Outlook-Anbindung an <b>${esc(p.emails[0])}</b>, mit Link zur Signaturseite.
+    Gleichzeitig entsteht ein <b>Vertrag im Status „offen“</b>.</p>`;
+  if(w.schritt===5) body = `<div class="sign">
+      <div style="font-size:26px">✍️</div><b>Kundensicht: Signaturseite</b>
+      <p class="muted">Einfache elektronische Signatur (EES) – es signiert ausschließlich der Kunde.</p>
+      <button class="btn pri" id="dosign">Unterzeichnen</button></div>
+    <p class="muted" style="margin-top:12px">Danach: signiertes PDF am Vertrag, Status → „aktiv laufend“, automatische Mail an support@.</p>`;
+
+  $('#ov').innerHTML = `<div class="ov"><div class="modal">
+    <header><b>Angebot erstellen</b><span class="muted">${esc(f.name)}</span>
+      <button class="x" id="wclose" style="margin-left:auto">×</button></header>
+    <div class="body">
+      <div class="wsteps">${titel.map((t,i)=>`<span class="${i+1===w.schritt?'on':''}">${i+1}. ${t}</span>${i<4?'<span>›</span>':''}`).join('')}</div>
+      ${body}
+    </div>
+    <footer>${w.schritt>1?'<button class="btn" id="wback">Zurück</button>':''}
+      <span style="flex:1"></span>
+      <button class="btn" id="wcancel">Abbrechen</button>
+      ${w.schritt<4?'<button class="btn pri" id="wnext">Weiter</button>':''}
+      ${w.schritt===4?'<button class="btn pri" id="wsend">Angebot versenden</button>':''}
+    </footer></div></div>`;
+  bindWizard();
+}
+function bindWizard(){
+  const w = wizard, v = CRM.vorgang(w.vorgangId);
+  const close = ()=>{wizard=null;$('#ov').innerHTML='';render();};
+  $('#wclose').onclick = close; $('#wcancel').onclick = close;
+  if($('#wback')) $('#wback').onclick = ()=>{w.schritt--;renderWizard();};
+  if($('#wnext')) $('#wnext').onclick = ()=>{w.schritt++;renderWizard();};
+  if($('#addpos')) $('#addpos').onclick = ()=>{w.positionen.push({produktId:'p3',preis:2400,rabatt:0,abrechnung:'einmalig'});renderWizard();};
+  $('#ov').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(w.positionen.length>1){w.positionen.splice(+b.dataset.del,1);renderWizard();}});
+  $('#ov').querySelectorAll('[data-pi]').forEach(inp=>inp.onchange=()=>{
+    const p = w.positionen[+inp.dataset.pi], fld = inp.dataset.fld;
+    p[fld] = fld==='preis'||fld==='rabatt' ? +inp.value : inp.value;
+    if(fld==='produktId'){const pr=CRM.produkt(inp.value);p.preis=pr.standardpreis;p.abrechnung=pr.standardAbrechnung||p.abrechnung;}
+    renderWizard();});
+  $('#ov').querySelectorAll('[data-w]').forEach(inp=>inp.onchange=()=>{
+    const k=inp.dataset.w; w[k] = k==='laufzeit'? (+inp.value||null) : inp.value; if(k!=='bedingungen') renderWizard();});
+  if($('#wsend')) $('#wsend').onclick = ()=>{
+    w.vertrag = CRM.angebotAnlegen(v, w.positionen.map(p=>({...p})), w.waehrung, w.startdatum, w.laufzeit);
+    w.schritt = 5; renderWizard(); toast('Angebot versendet · Vertrag im Status „offen“ angelegt');};
+  if($('#dosign')) $('#dosign').onclick = ()=>{
+    CRM.angebotSignieren(v, w.vertrag);
+    if(v.phase==='deal') CRM.setzeStufe(v,'gewonnen');
+    close(); view.tab='vertraege'; render();
+    toast('Signiert · Vertrag aktiv · Mail an support@ · Vorgang → Phase Kunde');};
+}
+
+/* ---------- Shell ---------- */
+function toast(msg){
+  const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3200);
+}
+function render(){
+  renderNav();
+  const m=$('#main');
+  if(view.vorgangId) m.innerHTML = pageDetail();
+  else m.innerHTML = ({vorgaenge:pageVorgaenge,aufgaben:pageAufgaben,support:pageSupport,kontakte:pageKontakte,produkte:pageProdukte,import:pageImport})[view.page]();
+  bind();
+}
+function bind(){
+  const m=$('#main');
+  m.querySelectorAll('[data-phase]').forEach(b=>b.onclick=()=>{view.phase=b.dataset.phase;render();});
+  m.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{view.mode=b.dataset.mode;render();});
+  m.querySelectorAll('[data-v]').forEach(el=>el.onclick=(e)=>{
+    if(e.target.matches('input,button')) return;
+    view.vorgangId=el.dataset.v; view.tab='historie'; render();});
+  m.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render();});
+  m.querySelectorAll('[data-task]').forEach(cb=>cb.onchange=()=>{
+    const a=CRM.aufgaben.find(x=>x.id===cb.dataset.task); a.status=cb.checked?'erledigt':'offen'; render();});
+  if($('#back')) $('#back').onclick=()=>{view.vorgangId=null;render();};
+  if($('#neu')) $('#neu').onclick=()=>toast('Demo: Anlage-Dialog für einen neuen Vorgang');
+  m.querySelectorAll('[data-stufe]').forEach(b=>{ if(b.tagName!=='BUTTON') return;
+    b.onclick=()=>{const v=CRM.vorgang(view.vorgangId);const r=CRM.setzeStufe(v,b.dataset.stufe);
+      if(r.konvertiert){view.phase=r.phase;toast('Endmarker erreicht → automatisch in Phase „'+CRM.pipelines[r.phase].label+'“');}
+      render();};});
+  m.querySelectorAll('[data-sign]').forEach(b=>b.onclick=()=>{
+    const v=CRM.vorgang(view.vorgangId);const c=v.vertraege.find(x=>x.id===b.dataset.sign);
+    CRM.angebotSignieren(v,c);render();toast('Vertrag signiert · Status „aktiv laufend“ · Thread in support@');});
+  m.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
+    const v=CRM.vorgang(view.vorgangId);
+    const a=b.dataset.act;
+    if(a==='angebot') return startWizard(v);
+    if(a==='note'){const t=$('#note').value.trim(); if(!t) return; CRM.log(v,'notiz','Notiz',t); render(); return;}
+    if(a==='mail'){CRM.log(v,'mail','Mail über CRM gesendet','Absender wählbar: persönliches Postfach oder support@.');render();toast('Mail geloggt (nur über das CRM laufende Mails werden erfasst)');return;}
+    if(a==='termin'){CRM.log(v,'termin','Kalendereinladung versendet','Über Outlook, inkl. automatisch erzeugtem Teams-Link.');render();toast('Termin via Outlook + Teams-Link');return;}
+    if(a==='upload'){v.dokumente.push({name:'Neues-Dokument.pdf',groesse:'120 KB',datum:'2026-08-27'});render();return;}});
+  m.querySelectorAll('[data-thread]').forEach(r=>r.onclick=()=>{
+    const t=CRM.threads.find(x=>x.id===r.dataset.thread); openThread(t);});
+  // Drag & Drop im Kanban
+  m.querySelectorAll('.kcard').forEach(c=>c.ondragstart=e=>e.dataTransfer.setData('id',c.dataset.v));
+  m.querySelectorAll('.col').forEach(col=>{
+    col.ondragover=e=>{e.preventDefault();col.classList.add('over');};
+    col.ondragleave=()=>col.classList.remove('over');
+    col.ondrop=e=>{e.preventDefault();col.classList.remove('over');
+      const v=CRM.vorgang(e.dataTransfer.getData('id'));const r=CRM.setzeStufe(v,col.dataset.stufe);
+      if(r.konvertiert){view.phase=r.phase;toast('Endmarker → Vorgang jetzt in Phase „'+CRM.pipelines[r.phase].label+'“');}
+      render();};});
+  const fu=$('#fu'); if(fu) fu.onchange=()=>m.querySelectorAll('tbody tr').forEach(tr=>
+    tr.style.display = !fu.value||tr.dataset.u===fu.value?'':'none');
+}
+function openThread(t){
+  const v = t.vorgangId && CRM.vorgang(t.vorgangId);
+  $('#ov').innerHTML = `<div class="ov"><div class="modal"><header><b>${esc(t.betreff)}</b>
+    <span class="tag grey">${esc(t.quelle)}</span><button class="x" id="tc" style="margin-left:auto">×</button></header>
+    <div class="body">
+      <div class="f"><label>Thread-Status</label><select id="ts">${Object.entries(CRM.threadStatus).map(([k,l])=>
+        `<option value="${k}" ${t.status===k?'selected':''}>${l}</option>`).join('')}</select></div>
+      ${v?`<p>Zugeordnet zu <b>${esc(CRM.firma(v).name)}</b> — die Nachricht liegt zusätzlich am Vorgang.</p>`
+        :`<p class="muted">Absender keinem Kontakt zugeordnet. <button class="btn" id="mk">Vorgang/Lead daraus anlegen</button></p>`}
+      <ul class="tl">${t.nachrichten.map(n=>`<li><div class="ic mail">✉</div><div style="flex:1">
+        <div style="display:flex"><b>${esc(n.von)}</b><span class="ts">${esc(n.ts)}</span></div><p>${esc(n.text)}</p></div></li>`).join('')}</ul>
+      <div class="composer" style="padding-left:0;padding-right:0"><input placeholder="Antwort schreiben …"><button class="btn pri">Senden</button></div>
+    </div></div></div>`;
+  $('#tc').onclick=()=>{$('#ov').innerHTML='';render();};
+  $('#ts').onchange=e=>{t.status=e.target.value;toast('Thread-Status: '+CRM.threadStatus[t.status]);};
+  if($('#mk')) $('#mk').onclick=()=>{$('#ov').innerHTML='';toast('Demo: Vorgang wird nur manuell aus einer Anfrage angelegt');};
+}
+$('#q').oninput = e=>{
+  const r = CRM.suche(e.target.value);
+  $('#res').innerHTML = r.length? `<div class="results">${r.map(x=>
+    `<div data-t="${x.typ}" data-id="${x.id}"><span class="t">${x.typ}</span><span>${esc(x.label)}</span><span class="s">${esc(x.sub)}</span></div>`).join('')}</div>`:'';
+  $('#res').querySelectorAll('[data-id]').forEach(d=>d.onclick=()=>{
+    let id=d.dataset.id;
+    if(d.dataset.t==='Person'){const p=CRM.personen.find(x=>x.id===id);id=(CRM.vorgaenge.find(v=>v.personIds.includes(p.id))||{}).id;}
+    if(d.dataset.t==='Firma'){id=(CRM.vorgaenge.find(v=>v.firmaId===d.dataset.id)||{}).id;}
+    if(!id) return toast('Kein Vorgang zu diesem Treffer');
+    view.vorgangId=id;view.page='vorgaenge';view.tab='historie';$('#q').value='';$('#res').innerHTML='';render();});
+};
+render();
+</script>
+</body></html>

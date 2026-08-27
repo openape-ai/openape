@@ -22,6 +22,10 @@ export default defineNuxtConfig({
     tursoUrl: 'file:./dev.db',
     tursoAuthToken: '',
     publicUrl: 'https://crm.openape.ai',
+    graphClientId: '',
+    graphClientSecret: '',
+    graphTokenSecret: '',
+    graphWebhookUrl: '',
     public: {
       siteName: 'OpenApe CRM',
     },
@@ -43,12 +47,12 @@ export default defineNuxtConfig({
         {
           id: 'crm:read',
           description: 'Read your deals, contacts, organizations and notes.',
-          grants: ['GET /api/deals', 'GET /api/contacts', 'GET /api/organizations', 'GET /api/workspaces'],
+          grants: ['GET /api/deals', 'GET /api/contacts', 'GET /api/organizations', 'GET /api/workspaces', 'GET /api/products', 'GET /api/contracts', 'GET /api/tasks', 'GET /api/threads', 'GET /api/search'],
         },
         {
           id: 'crm:write',
           description: 'Create and change deals, contacts, organizations and notes.',
-          grants: ['POST /api/deals', 'PATCH /api/deals/:id', 'POST /api/deals/reorder', 'POST /api/contacts', 'POST /api/organizations'],
+          grants: ['POST /api/deals', 'PATCH /api/deals/:id', 'POST /api/deals/reorder', 'POST /api/contacts', 'POST /api/organizations', 'POST /api/products', 'POST /api/contracts', 'POST /api/tasks', 'POST /api/threads'],
         },
       ],
     },

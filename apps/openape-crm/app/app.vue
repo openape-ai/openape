@@ -3,7 +3,7 @@ useHead({
   htmlAttrs: { lang: 'de' },
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-    { name: 'theme-color', content: '#09090b' },
+    { name: 'theme-color', content: '#0c0e13' },
   ],
 })
 

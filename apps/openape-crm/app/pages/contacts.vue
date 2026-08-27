@@ -5,6 +5,8 @@ import { apiFetch } from '../utils/api'
 import { NO_SELECTION, selectionToId } from '../utils/board'
 import { problemMessage } from '../utils/problem-message'
 
+definePageMeta({ alias: ['/kontakte'] })
+
 interface Contact { id: string, name: string, email: string | null, phone: string | null, org_id: string | null, org_name: string | null }
 interface Organization { id: string, name: string, domain: string | null }
 
@@ -95,29 +97,30 @@ const orgItems = computed(() => [
 </script>
 
 <template>
-  <main class="mx-auto grid max-w-7xl gap-8 px-4 py-6 lg:grid-cols-3">
-    <section class="lg:col-span-2">
-      <h1 class="text-xl font-semibold">
-        Kontakte
-      </h1>
-
-      <p v-if="loadError" class="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
-        {{ loadError }}
-      </p>
-
-      <ul class="mt-4 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
-        <li v-if="loading" class="p-6 text-center text-sm text-zinc-500">
+  <div class="flex h-full">
+    <div class="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-r border-[var(--crm-line)] bg-[var(--crm-panel)]">
+      <header class="border-b border-[var(--crm-line)] px-3.5 py-3">
+        <h2 class="text-[13px] font-semibold">
+          Kontakte
+        </h2>
+      </header>
+      <div class="flex-1 overflow-auto p-1.5">
+        <p v-if="loadError" class="p-3 text-sm text-[var(--crm-rose)]">
+          {{ loadError }}
+        </p>
+        <p v-if="loading" class="p-3 text-[var(--crm-ink-3)]">
           Lade …
-        </li>
-        <li v-for="contact in contacts" :key="contact.id" class="flex items-center gap-4 p-3">
+        </p>
+        <div
+          v-for="contact in contacts"
+          :key="contact.id"
+          class="mb-0.5 flex items-center rounded-[7px] px-2.5 py-2 hover:bg-[var(--crm-panel-2)]"
+        >
           <div class="min-w-0 flex-1">
-            <p class="font-medium">
-              {{ contact.name }}
-            </p>
-            <p class="truncate text-xs text-zinc-400">
+            <b class="block font-medium">{{ contact.name }}</b>
+            <div class="truncate text-[11.5px] text-[var(--crm-ink-3)]">
               <span v-if="contact.org_name">{{ contact.org_name }} · </span>{{ contact.email || '—' }}
-              <span v-if="contact.phone"> · {{ contact.phone }}</span>
-            </p>
+            </div>
           </div>
           <UButton
             icon="i-lucide-trash-2"
@@ -127,41 +130,27 @@ const orgItems = computed(() => [
             :aria-label="`${contact.name} löschen`"
             @click="pendingDelete = contact"
           />
-        </li>
-        <li v-if="!loading && !contacts.length" class="p-6 text-center text-sm text-zinc-500">
-          Noch keine Kontakte. Leg den ersten an — dann kannst du Deals daran hängen.
-        </li>
-      </ul>
-
-      <h2 class="mt-10 text-lg font-semibold">
-        Firmen
-      </h2>
-      <ul class="mt-4 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
-        <li v-if="loading" class="p-6 text-center text-sm text-zinc-500">
-          Lade …
-        </li>
-        <li v-for="org in organizations" :key="org.id" class="p-3">
-          <p class="font-medium">
-            {{ org.name }}
-          </p>
-          <p class="text-xs text-zinc-400">
+        </div>
+        <p v-if="!loading && !contacts.length" class="p-3.5 text-[var(--crm-ink-3)]">
+          Noch keine Kontakte.
+        </p>
+        <h3 class="mt-4 px-2 text-[10.5px] uppercase tracking-wide text-[var(--crm-ink-3)]">
+          Firmen
+        </h3>
+        <div v-for="org in organizations" :key="org.id" class="px-2.5 py-2">
+          <b class="block font-medium">{{ org.name }}</b>
+          <div class="text-[11.5px] text-[var(--crm-ink-3)]">
             {{ org.domain || '—' }}
-          </p>
-        </li>
-        <li v-if="!loading && !organizations.length" class="p-6 text-center text-sm text-zinc-500">
-          Noch keine Firmen.
-        </li>
-      </ul>
-    </section>
-
-    <section class="space-y-8">
-      <UCard>
-        <template #header>
-          <h2 class="font-semibold">
-            Kontakt anlegen
-          </h2>
-        </template>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 overflow-auto p-6">
+      <div class="grid max-w-xl gap-8">
         <form class="space-y-3" @submit.prevent="addContact">
+          <h1 class="text-lg font-semibold">
+            Kontakt anlegen
+          </h1>
           <UFormField label="Name" required>
             <UInput v-model="newContact.name" maxlength="200" class="w-full" />
           </UFormField>
@@ -174,31 +163,26 @@ const orgItems = computed(() => [
           <UFormField label="Firma">
             <USelect v-model="newContact.org_id" :items="orgItems" class="w-full" />
           </UFormField>
-          <UButton type="submit" block :disabled="!newContact.name.trim()">
+          <UButton type="submit" :disabled="!newContact.name.trim()">
             Speichern
           </UButton>
         </form>
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <h2 class="font-semibold">
+        <form class="space-y-3" @submit.prevent="addOrganization">
+          <h2 class="text-lg font-semibold">
             Firma anlegen
           </h2>
-        </template>
-        <form class="space-y-3" @submit.prevent="addOrganization">
           <UFormField label="Name" required>
             <UInput v-model="newOrg.name" maxlength="200" class="w-full" />
           </UFormField>
           <UFormField label="Domain">
             <UInput v-model="newOrg.domain" placeholder="example.com" class="w-full" />
           </UFormField>
-          <UButton type="submit" block :disabled="!newOrg.name.trim()">
+          <UButton type="submit" :disabled="!newOrg.name.trim()">
             Speichern
           </UButton>
         </form>
-      </UCard>
-    </section>
+      </div>
+    </div>
 
     <ConfirmDialog
       :open="!!pendingDelete"
@@ -207,5 +191,5 @@ const orgItems = computed(() => [
       @update:open="pendingDelete = null"
       @confirm="removeContact"
     />
-  </main>
+  </div>
 </template>

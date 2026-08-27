@@ -32,7 +32,7 @@ onMounted(async () => {
       body: { token },
     })
     window.localStorage.setItem('openape-crm:workspace', accepted.workspace_id)
-    await navigateTo('/board', { replace: true })
+    await navigateTo('/vorgaenge', { replace: true })
   }
   catch (err: unknown) {
     const e = err as { data?: { title?: string }, message?: string }

@@ -1,49 +1,83 @@
 <script setup lang="ts">
 import { useOpenApeAuth } from '#imports'
+import { apiFetch } from '../utils/api'
 
 const { user } = useOpenApeAuth()
 const { list, activeId, select } = useWorkspaces()
+const route = useRoute()
+const router = useRouter()
+const { status: graphStatus, reload: reloadGraph, connect, disconnect } = useGraph()
+const unread = ref(0)
 
-const links = [
-  { label: 'Board', to: '/board' },
-  { label: 'Kontakte', to: '/contacts' },
-  { label: 'Workspace', to: '/workspace' },
-]
+const pane = computed(() => {
+  const path = route.path
+  if (path.startsWith('/aufgaben')) return 'aufgaben'
+  if (path.startsWith('/support')) return 'support'
+  if (path.startsWith('/kontakte') || path.startsWith('/contacts')) return 'kontakte'
+  if (path.startsWith('/katalog')) return 'katalog'
+  if (path.startsWith('/workspace')) return 'workspace'
+  return 'vorgaenge'
+})
+
+onMounted(() => void reloadGraph())
+watch(activeId, async (id) => {
+  if (!id) {
+    unread.value = 0
+    return
+  }
+  try {
+    const threads = await apiFetch<{ status: string }[]>(`/api/threads?workspace_id=${id}`)
+    unread.value = threads.filter(t => t.status === 'neu').length
+  }
+  catch {
+    unread.value = 0
+  }
+}, { immediate: true })
+
+function openSearch() {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+}
+
+async function onPick(hit: { deal_id?: string, phase?: string }) {
+  if (!hit.deal_id) return
+  await router.push({ path: '/vorgaenge', query: { phase: hit.phase || 'deal', id: hit.deal_id } })
+}
+
+const userItems = computed(() => [[
+  {
+    label: graphStatus.value.connected ? `Microsoft: ${graphStatus.value.mail}` : 'Microsoft verbinden',
+    onSelect: () => graphStatus.value.connected ? disconnect() : connect(),
+  },
+  { label: 'Mitglieder', to: '/workspace' },
+]])
 </script>
 
 <template>
-  <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header v-if="user" class="border-b border-zinc-800">
-      <div class="mx-auto max-w-7xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <NuxtLink to="/board" class="font-semibold tracking-tight">
-          OpenApe <span class="text-primary-400">CRM</span>
-        </NuxtLink>
-
-        <nav class="flex items-center gap-4 text-sm">
-          <NuxtLink
-            v-for="link in links"
-            :key="link.to"
-            :to="link.to"
-            class="text-zinc-400 hover:text-zinc-100"
-            active-class="text-zinc-100"
+  <div class="flex h-dvh overflow-hidden bg-[var(--crm-bg)] text-[var(--crm-ink)]">
+    <AppRail v-if="user" :pane="pane" :unread="unread" @search="openSearch">
+      <template #user>
+        <USelect
+          v-if="list.length > 1"
+          :model-value="activeId"
+          :items="list.map(w => ({ label: w.name, value: w.id }))"
+          size="xs"
+          class="w-[34px]"
+          @update:model-value="select($event as string)"
+        />
+        <UDropdownMenu :items="userItems">
+          <button
+            type="button"
+            class="grid size-[34px] place-items-center rounded-lg bg-[var(--crm-accent)] text-[11px] font-medium text-white"
+            :title="user.sub"
           >
-            {{ link.label }}
-          </NuxtLink>
-        </nav>
-
-        <div class="ms-auto flex items-center gap-3">
-          <USelect
-            v-if="list.length > 1"
-            :model-value="activeId"
-            :items="list.map(w => ({ label: w.name, value: w.id }))"
-            size="sm"
-            @update:model-value="select($event as string)"
-          />
-          <span class="text-xs text-zinc-500 hidden sm:inline">{{ user.sub }}</span>
-        </div>
-      </div>
-    </header>
-
-    <slot />
+            {{ user.sub.slice(0, 2).toUpperCase() }}
+          </button>
+        </UDropdownMenu>
+      </template>
+    </AppRail>
+    <div class="min-w-0 flex-1 overflow-hidden">
+      <slot />
+    </div>
+    <CommandPalette :workspace-id="activeId" @pick="onPick" />
   </div>
 </template>
