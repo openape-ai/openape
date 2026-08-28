@@ -9,6 +9,11 @@ import { newWebhookSecret } from '../../../../utils/webhooks'
  * POST /api/repos/:owner/:name/webhooks { url } — subscribe a consumer to
  * this repo's push events. Owner only; the generated secret is returned once
  * and only shown here, like any other credential.
+ *
+ * ponytail: no SSRF filter on the target URL. Only the authenticated repo
+ * owner can subscribe, and a delivery surfaces nothing but its status code —
+ * so the reach of a hostile URL is a blind POST. Add an address filter if
+ * webhooks ever become settable by a delegate.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)

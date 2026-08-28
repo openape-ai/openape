@@ -1,4 +1,4 @@
-import { createError, defineEventHandler, getRouterParam, readRawBody } from 'h3'
+import { createError, defineEventHandler, getHeader, getRouterParam, readRawBody } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../../../../database/drizzle'
 import { commitStatuses } from '../../../../../database/schema'
@@ -9,6 +9,10 @@ import { repoBySignedRequest } from '../../../../../utils/webhook-auth'
 // run cannot fill the registry database.
 const MAX_LOG_BYTES = 64 * 1024
 const STATES = ['pending', 'success', 'failure'] as const
+
+// The signature can only be checked once the body is read, so an unsigned
+// caller gets to send bytes first. Cap them before buffering.
+const MAX_BODY_BYTES = 256 * 1024
 
 /**
  * POST /api/repos/:owner/:name/statuses/:sha — a CI consumer reports its
@@ -22,6 +26,9 @@ export default defineEventHandler(async (event) => {
   const sha = getRouterParam(event, 'sha') ?? ''
   if (!isValidSha(sha))
     throw createError({ statusCode: 400, statusMessage: 'sha must be a full commit sha' })
+
+  if (Number(getHeader(event, 'content-length')) > MAX_BODY_BYTES)
+    throw createError({ statusCode: 413, statusMessage: 'status report too large' })
 
   const raw = (await readRawBody(event, 'utf8')) ?? ''
   const repo = await repoBySignedRequest(event, owner, name, raw)
