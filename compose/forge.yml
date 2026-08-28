@@ -1,0 +1,40 @@
+# Prod stack on the forge VM (repos.openape.ai). Synced by deploy-image.mjs to
+# /home/ubuntu/prod/docker-compose.yml. Caddy terminates TLS (Let's Encrypt via
+# TLS-ALPN-01 on 443 — port 80 stays closed, matching the firewall) and proxies
+# to the app on the compose network; no ports are published for the app itself.
+#
+# One-time files on the VM (not synced by the deployer):
+#   /home/ubuntu/prod/Caddyfile  — copy of compose/forge-Caddyfile
+#   /home/ubuntu/prod/app.env    — NUXT_OPENAPE_SP_SESSION_SECRET=<random>
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/ape-git/caddy/data:/data
+      - /srv/ape-git/caddy/config:/config
+  git:
+    image: registry.openape.ai/openape-git:${GIT_TAG:-unset}
+    restart: unless-stopped
+    # uid 1000 = ubuntu on the VM — owns /srv/ape-git, so git sees no
+    # "dubious ownership" and new repos get the right owner.
+    user: "1000:1000"
+    env_file: /home/ubuntu/prod/app.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      PORT: "3026"
+      NITRO_PORT: "3026"
+      NUXT_TURSO_URL: file:/srv/ape-git/registry.db
+      NUXT_GIT_DATA_DIR: /srv/ape-git
+    volumes:
+      - /srv/ape-git:/srv/ape-git
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3026/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s

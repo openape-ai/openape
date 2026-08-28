@@ -75,6 +75,8 @@ const TARGETS = {
   'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3022, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
   'crm': { filter: '@openape-crm/app', dir: 'apps/openape-crm', image: 'openape-crm', port: 3024, compose: 'crm', unit: 'openape-crm', domain: 'crm.openape.ai', envVar: 'CRM_TAG' },
   'secrets': { filter: '@openape-secrets/app', dir: 'apps/openape-secrets', image: 'openape-secrets', port: 3025, compose: 'secrets', unit: 'openape-secrets', domain: 'secrets.openape.ai', envVar: 'SECRETS_TAG' },
+  // ape-git needs git in the image (http-backend CGI) → own packaging Dockerfile.
+  'git': { filter: '@openape-git/app', dir: 'apps/openape-git', image: 'openape-git', port: 3026, compose: 'git', unit: 'openape-git', domain: 'repos.openape.ai', envVar: 'GIT_TAG', host: 'forge', dockerfile: 'compose/forge-package.Dockerfile' },
 }
 
 function sh(cmd, args, opts = {}) {
@@ -158,7 +160,7 @@ async function externalHealth(domain) {
 async function bake(name, sha) {
   const t = TARGETS[name]
   const tag = tagFor(t, sha)
-  shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
+  shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', t.dockerfile || 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
   await smokeTest(tag, t.port)
   shQuiet('docker', ['push', tag], { env: PUSH_ENV })
   console.log(`  ✓ baked ${name} (${tag})`)
