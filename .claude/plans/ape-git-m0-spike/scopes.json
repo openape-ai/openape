@@ -1,0 +1,4 @@
+{
+  "patrick/spike.git": { "patrick@hofmann.eco": "write" },
+  "patrick/monorepo.git": { "patrick@hofmann.eco": "read" }
+}
