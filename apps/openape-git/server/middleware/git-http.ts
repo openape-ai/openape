@@ -6,6 +6,7 @@ import { accessAllows, accessFromGrants, capAccess, parseGitHttpPath, requiredAc
 import { identityFromBasicAuth } from '../utils/git-auth'
 import { runGitHttpBackend } from '../utils/git-cgi'
 import { useGrantStore } from '../utils/grant-store'
+import { internalToken, pushEventUrl } from '../utils/internal-token'
 import { createRateLimiter } from '../utils/rate-limit'
 import { findRepo, reposRoot } from '../utils/repos'
 
@@ -87,6 +88,11 @@ export default defineEventHandler(async (event) => {
       APE_GIT_AUTH_ACT: identity.act,
       APE_GIT_DELEGATOR: identity.delegator ?? '',
       APE_GIT_ACCESS: access,
+      // Webhook firing (M5): post-receive reports back over loopback.
+      APE_GIT_REPO_OWNER: parsed.owner,
+      APE_GIT_REPO_NAME: parsed.name,
+      APE_GIT_EVENT_URL: pushEventUrl(),
+      APE_GIT_INTERNAL_TOKEN: internalToken(),
       // Central hooks dir — every repo gets the current hook, no migration.
       GIT_CONFIG_COUNT: '1',
       GIT_CONFIG_KEY_0: 'core.hooksPath',
