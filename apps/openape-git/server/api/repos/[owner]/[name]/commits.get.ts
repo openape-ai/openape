@@ -1,6 +1,7 @@
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
 import { isValidRef } from '../../../../utils/git-parse'
 import { listCommits, resolveCommit } from '../../../../utils/git-read'
+import { readPushLog } from '../../../../utils/push-log'
 import { requireRepoRead } from '../../../../utils/repo-access'
 import { repoDiskPath } from '../../../../utils/repos'
 
@@ -23,5 +24,12 @@ export default defineEventHandler(async (event) => {
   if (!sha)
     throw createError({ statusCode: 404, statusMessage: 'ref not found' })
 
-  return { ref, sha, commits: await listCommits(dir, sha, limit) }
+  // Identity binding (M4): the pre-receive hook records who pushed each
+  // commit; the UI shows human/agent plus the delegation chain from this.
+  const [commits, pushers] = await Promise.all([listCommits(dir, sha, limit), readPushLog(dir)])
+  return {
+    ref,
+    sha,
+    commits: commits.map(commit => ({ ...commit, pusher: pushers.get(commit.sha) ?? null })),
+  }
 })

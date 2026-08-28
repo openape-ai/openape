@@ -22,6 +22,11 @@ export default defineNuxtConfig({
     // IdP whose EdDSA JWTs the git smart-HTTP transport accepts
     // (HTTP Basic, password field = JWT — the x-access-token pattern).
     idpUrl: 'https://id.openape.ai',
+    // Transport rate limit: requests per window per client IP. Generous on
+    // purpose — one clone is 2 requests, and agents fetch often (see the
+    // idp-rate-limit-starves-owner lesson).
+    gitRateLimit: 240,
+    gitRateWindowSec: 60,
     public: { siteName: 'ape-git' },
   },
 
@@ -50,5 +55,10 @@ export default defineNuxtConfig({
     },
   },
 
-  nitro: { preset: 'node-server' },
+  nitro: {
+    preset: 'node-server',
+    // Ships the pre-receive hook inside the server bundle; a boot plugin
+    // installs it into `${gitDataDir}/hooks` (see plugins/03.git-hooks.ts).
+    serverAssets: [{ baseName: 'hooks', dir: './hooks' }],
+  },
 })
