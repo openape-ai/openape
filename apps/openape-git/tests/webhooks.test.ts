@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseRefUpdates } from '../server/hooks/post-receive.mjs'
 import { isValidSha } from '../server/utils/git-parse'
 import { summarizeStatuses } from '../server/utils/statuses'
-import { archivePayload, isFreshTimestamp, sign, verifySignature } from '../server/utils/webhooks'
+import { archivePayload, isFreshTimestamp, sign, verifySignature, webhookTargetError } from '../server/utils/webhooks'
 
 const SECRET = 'a'.repeat(64)
 
@@ -90,5 +90,21 @@ describe('summarizeStatuses', () => {
 
   it('ignores states it does not know', () => {
     expect(summarizeStatuses([{ sha: 'x', state: 'exploded', targetUrl: null }]).size).toBe(0)
+  })
+})
+
+describe('webhookTargetError', () => {
+  it('blocks the cloud metadata address', () => {
+    expect(webhookTargetError('http://169.254.169.254/latest/meta-data/')).toMatch(/link-local/)
+  })
+
+  it('leaves a consumer on the private network alone', () => {
+    expect(webhookTargetError('http://ci:8080/hook')).toBeNull()
+    expect(webhookTargetError('https://consumer.example/hook')).toBeNull()
+  })
+
+  it('rejects anything that is not http(s)', () => {
+    expect(webhookTargetError('file:///etc/passwd')).toMatch(/http/)
+    expect(webhookTargetError('not a url')).toMatch(/http/)
   })
 })
