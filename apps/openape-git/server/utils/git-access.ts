@@ -31,6 +31,11 @@ export function parseGitHttpPath(pathname: string): { owner: string, name: strin
   return { owner: owner!, name: name!, rest: rest ?? '' }
 }
 
+/** The lower of two access levels — a scoped token caps the granted access. */
+export function capAccess(access: GitAccess, cap: GitAccess): GitAccess {
+  return ACCESS_RANK[cap] < ACCESS_RANK[access] ? cap : access
+}
+
 /** receive-pack (push) needs write; everything else (clone/fetch) needs read. */
 export function requiredAccess(service: string | null): GitAccess {
   return service === 'git-receive-pack' ? 'write' : 'read'
