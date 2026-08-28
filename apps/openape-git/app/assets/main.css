@@ -1,2 +1,89 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+/* Rendered README/markdown (server-sanitized HTML, so no Tailwind classes). */
+.markdown-body {
+  color: var(--color-zinc-300);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  color: var(--color-zinc-100);
+  font-weight: 600;
+  margin: 1.5em 0 0.5em;
+  line-height: 1.25;
+}
+.markdown-body h1:first-child,
+.markdown-body h2:first-child,
+.markdown-body p:first-child {
+  margin-top: 0;
+}
+.markdown-body h1 { font-size: 1.5rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--color-zinc-800); }
+.markdown-body h2 { font-size: 1.25rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--color-zinc-800); }
+.markdown-body h3 { font-size: 1.1rem; }
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body table,
+.markdown-body pre {
+  margin: 0.75em 0;
+}
+.markdown-body ul { list-style: disc; padding-left: 1.5em; }
+.markdown-body ol { list-style: decimal; padding-left: 1.5em; }
+.markdown-body li { margin: 0.25em 0; }
+.markdown-body a { color: var(--color-amber-500); }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body code {
+  font-size: 0.875em;
+  background: var(--color-zinc-800);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.3rem;
+}
+.markdown-body pre {
+  background: var(--color-zinc-900);
+  border: 1px solid var(--color-zinc-800);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.markdown-body pre code { background: none; padding: 0; font-size: 0.85rem; }
+.markdown-body blockquote {
+  border-left: 3px solid var(--color-zinc-700);
+  padding-left: 1em;
+  color: var(--color-zinc-400);
+}
+.markdown-body table { border-collapse: collapse; display: block; overflow-x: auto; }
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--color-zinc-800);
+  padding: 0.375rem 0.75rem;
+}
+.markdown-body th { background: var(--color-zinc-900); }
+.markdown-body img { max-width: 100%; }
+.markdown-body hr { border-color: var(--color-zinc-800); margin: 1.5em 0; }
+
+/* Shiki blob view: line numbers via CSS counters, theme background kept. */
+.code-view pre {
+  padding: 0.75rem 0;
+  overflow-x: auto;
+  counter-reset: line;
+}
+.code-view .line {
+  display: inline-block;
+  width: 100%;
+  padding: 0 1rem 0 0;
+}
+.code-view .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3rem;
+  margin-right: 1rem;
+  text-align: right;
+  color: var(--color-zinc-600);
+  user-select: none;
+}
