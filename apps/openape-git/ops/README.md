@@ -34,17 +34,19 @@ ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519_backup -C ape-git-backup
 
 cat >> ~/.ssh/config <<'CFG'
 Host storagebox
-  HostName uXXXXXX-subN.your-storagebox.de
-  User uXXXXXX-subN
+  HostName u341157-sub2.your-storagebox.de
+  User u341157-sub2
   Port 23
   IdentityFile ~/.ssh/id_ed25519_backup
+  StrictHostKeyChecking accept-new
 CFG
 
-# restic credentials, root-readable only
+# restic credentials, owner-readable only. The password comes from 1Password
+# via secrets.openape.ai — it must exist somewhere the VM cannot lose it.
 umask 077
-openssl rand -base64 32 > ~/.config/ape-git/restic-password   # KEEP A COPY OFF-SITE
+mkdir -p ~/.config/ape-git
 cat > ~/.config/ape-git/backup.env <<'ENV'
-export RESTIC_REPOSITORY=sftp:storagebox:/ape-git
+export RESTIC_REPOSITORY=sftp:storagebox:/home/restic
 export RESTIC_PASSWORD_FILE=/home/ubuntu/.config/ape-git/restic-password
 ENV
 
@@ -52,15 +54,19 @@ ENV
 crontab -l 2>/dev/null | { cat; echo '17 3 * * * . $HOME/.config/ape-git/backup.env && /home/ubuntu/ops/backup.sh >> /home/ubuntu/ape-git-backup.log 2>&1'; } | crontab -
 ```
 
+The sub-account is chrooted, and its root shows up as `/home` over SFTP — the
+repository path is `/home/restic`, not `/restic` (which fails with a bare
+`SSH_FX_FAILURE`).
+
 Without the restic password the snapshots are unreadable — including by us.
-It belongs in 1Password, not only on the VM.
+It lives in 1Password ("ape-git restic backup"), not only on the VM.
 
 ## Restore
 
 On any machine with restic, the repository URL and the password:
 
 ```bash
-export RESTIC_REPOSITORY=sftp:storagebox:/ape-git RESTIC_PASSWORD_FILE=./pw
+export RESTIC_REPOSITORY=sftp:storagebox:/home/restic RESTIC_PASSWORD_FILE=./pw
 ops/restore-probe.sh patrick/m6proof
 ```
 
