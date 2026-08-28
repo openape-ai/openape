@@ -94,8 +94,18 @@ describe('summarizeStatuses', () => {
 })
 
 describe('webhookTargetError', () => {
-  it('blocks the cloud metadata address', () => {
-    expect(webhookTargetError('http://169.254.169.254/latest/meta-data/')).toMatch(/link-local/)
+  it('blocks the cloud metadata address, however it is spelled', () => {
+    // Decimal, octal and hex normalize to dotted-decimal in the URL parser;
+    // the IPv4-mapped IPv6 form does not, which is why it is checked apart.
+    for (const url of [
+      'http://169.254.169.254/latest/meta-data/',
+      'http://2852039166/',
+      'http://0xa9fea9fe/',
+      'http://0251.0376.0251.0376/',
+      'http://[::ffff:169.254.169.254]/',
+      'http://[::ffff:a9fe:a9fe]/',
+    ])
+      expect(webhookTargetError(url), url).toMatch(/link-local/)
   })
 
   it('leaves a consumer on the private network alone', () => {
