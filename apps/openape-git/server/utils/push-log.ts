@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { appendFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 // Reader for the per-repo push log the pre-receive hook appends
@@ -40,4 +40,13 @@ export async function readPushLog(repoDir: string): Promise<Map<string, PushReco
   catch {
     return new Map()
   }
+}
+
+/**
+ * Record who put a commit into a repo. The pre-receive hook writes this for
+ * pushes; a merge performed in the UI writes it for its merge commit, so the
+ * commit list shows the same identity badge either way.
+ */
+export async function appendPushRecord(repoDir: string, sha: string, record: PushRecord): Promise<void> {
+  await appendFile(join(repoDir, 'ape-pushes.jsonl'), `${JSON.stringify({ sha, ...record })}\n`)
 }
