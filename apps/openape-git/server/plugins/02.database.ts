@@ -50,6 +50,34 @@ export default defineNitroPlugin(async () => {
   )`)
   await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_status_repo_sha_context ON commit_statuses(repo_id, sha, context)`)
 
+  await db.run(sql`CREATE TABLE IF NOT EXISTS pulls (
+    id TEXT PRIMARY KEY,
+    repo_id TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    source_ref TEXT NOT NULL,
+    target_ref TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'open',
+    author_email TEXT NOT NULL,
+    merge_sha TEXT,
+    created_at INTEGER NOT NULL,
+    merged_at INTEGER
+  )`)
+  await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_pulls_repo_number ON pulls(repo_id, number)`)
+  await db.run(sql`CREATE INDEX IF NOT EXISTS idx_pulls_repo_state ON pulls(repo_id, state)`)
+
+  await db.run(sql`CREATE TABLE IF NOT EXISTS pull_comments (
+    id TEXT PRIMARY KEY,
+    pull_id TEXT NOT NULL,
+    author_email TEXT NOT NULL,
+    body TEXT NOT NULL,
+    path TEXT,
+    line INTEGER,
+    created_at INTEGER NOT NULL
+  )`)
+  await db.run(sql`CREATE INDEX IF NOT EXISTS idx_pull_comments_pull ON pull_comments(pull_id, created_at)`)
+
   await db.run(sql`CREATE TABLE IF NOT EXISTS grants (
     id TEXT PRIMARY KEY,
     status TEXT NOT NULL,

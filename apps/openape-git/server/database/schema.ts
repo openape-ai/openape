@@ -72,3 +72,36 @@ export const grants = sqliteTable('grants', {
   index('idx_grants_status').on(t.status),
   index('idx_grants_requester').on(t.requester),
 ])
+
+// Pull requests (plan M6). A PR is a ref pair plus review metadata — the diff,
+// the mergeability and the merge commit all come from git itself, so nothing
+// derived is stored here. `number` is per repo, like every forge.
+export const pulls = sqliteTable('pulls', {
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  number: integer('number').notNull(),
+  title: text('title').notNull(),
+  body: text('body'),
+  sourceRef: text('source_ref').notNull(),
+  targetRef: text('target_ref').notNull(),
+  state: text('state').notNull().default('open'),
+  authorEmail: text('author_email').notNull(),
+  mergeSha: text('merge_sha'),
+  createdAt: integer('created_at').notNull(),
+  mergedAt: integer('merged_at'),
+}, t => [
+  uniqueIndex('idx_pulls_repo_number').on(t.repoId, t.number),
+  index('idx_pulls_repo_state').on(t.repoId, t.state),
+])
+
+// Review comments. `path`+`line` anchor a comment to a diff line; both null
+// means a comment on the PR as a whole.
+export const pullComments = sqliteTable('pull_comments', {
+  id: text('id').primaryKey(),
+  pullId: text('pull_id').notNull(),
+  authorEmail: text('author_email').notNull(),
+  body: text('body').notNull(),
+  path: text('path'),
+  line: integer('line'),
+  createdAt: integer('created_at').notNull(),
+}, t => [index('idx_pull_comments_pull').on(t.pullId, t.createdAt)])
