@@ -27,6 +27,10 @@ export default defineNuxtConfig({
     // idp-rate-limit-starves-owner lesson).
     gitRateLimit: 240,
     gitRateWindowSec: 60,
+    // /api/health/backup turns red once the last off-site backup is older than
+    // this. 36h: a daily backup may skip one run (host reboot) before it counts
+    // as broken, but two missed days never pass unnoticed.
+    backupMaxAgeSec: 36 * 3600,
     public: { siteName: 'ape-git' },
   },
 
