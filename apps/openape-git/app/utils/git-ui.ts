@@ -1,7 +1,10 @@
-/** Clone command shown on the repo page — token comes from `apes token`. */
+/**
+ * Clone command shown on the repo page. The DDISA token lives in the file
+ * `apes login` writes — there is no `apes token` subcommand (M1 lesson).
+ */
 export function cloneCommand(origin: string, owner: string, name: string): string {
   const host = origin.replace(/^https?:\/\//, '')
-  return `git clone https://x-access-token:$(apes token)@${host}/${owner}/${name}.git`
+  return `git clone https://x-access-token:$(jq -r .access_token ~/.config/apes/auth.json)@${host}/${owner}/${name}.git`
 }
 
 /** Default owner namespace derived from the login email's local part. */
