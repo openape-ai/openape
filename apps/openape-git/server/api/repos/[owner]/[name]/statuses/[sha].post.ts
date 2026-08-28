@@ -1,4 +1,5 @@
-import { createError, defineEventHandler, getHeader, getRouterParam, readRawBody } from 'h3'
+import type { H3Event } from 'h3'
+import { createError, defineEventHandler, getRouterParam } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../../../../database/drizzle'
 import { commitStatuses } from '../../../../../database/schema'
@@ -11,8 +12,34 @@ const MAX_LOG_BYTES = 64 * 1024
 const STATES = ['pending', 'success', 'failure'] as const
 
 // The signature can only be checked once the body is read, so an unsigned
-// caller gets to send bytes first. Cap them before buffering.
+// caller gets to send bytes first.
 const MAX_BODY_BYTES = 256 * 1024
+
+/**
+ * Read the body, counting as it arrives. A Content-Length check would not do:
+ * a chunked request carries no length and would sail past it.
+ */
+function readCappedBody(event: H3Event, max: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = event.node.req
+    const chunks: Buffer[] = []
+    let size = 0
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size > max) {
+        // Stop reading and let h3 answer 413; node tears the connection down
+        // once the response ends with the request body unread.
+        req.pause()
+        req.removeAllListeners('data')
+        reject(createError({ statusCode: 413, statusMessage: 'status report too large' }))
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
+}
 
 /**
  * POST /api/repos/:owner/:name/statuses/:sha — a CI consumer reports its
@@ -27,10 +54,7 @@ export default defineEventHandler(async (event) => {
   if (!isValidSha(sha))
     throw createError({ statusCode: 400, statusMessage: 'sha must be a full commit sha' })
 
-  if (Number(getHeader(event, 'content-length')) > MAX_BODY_BYTES)
-    throw createError({ statusCode: 413, statusMessage: 'status report too large' })
-
-  const raw = (await readRawBody(event, 'utf8')) ?? ''
+  const raw = await readCappedBody(event, MAX_BODY_BYTES)
   const repo = await repoBySignedRequest(event, owner, name, raw)
 
   const body = JSON.parse(raw || '{}') as {
