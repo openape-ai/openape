@@ -6,6 +6,8 @@ export interface GitCgiOptions {
   pathInfo: string
   queryString: string
   remoteUser: string
+  /** Extra env for the CGI process — receive-pack and hooks inherit it. */
+  env?: Record<string, string>
 }
 
 /**
@@ -16,6 +18,7 @@ export interface GitCgiOptions {
 export function runGitHttpBackend(req: IncomingMessage, res: ServerResponse, options: GitCgiOptions): Promise<void> {
   const env: Record<string, string> = {
     ...process.env as Record<string, string>,
+    ...options.env,
     GIT_PROJECT_ROOT: options.projectRoot,
     GIT_HTTP_EXPORT_ALL: '1',
     PATH_INFO: options.pathInfo,

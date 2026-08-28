@@ -9,6 +9,11 @@ interface CommitInfo {
   email: string
   date: number
   subject: string
+  pusher: {
+    email: string
+    act: 'human' | 'agent'
+    delegator?: string
+  } | null
 }
 
 const route = useRoute()
@@ -86,8 +91,20 @@ function onBranchChange(branch: string) {
             <p class="text-sm text-zinc-100 truncate">
               {{ commit.subject }}
             </p>
-            <p class="text-xs text-zinc-500 mt-0.5">
-              {{ commit.author }} · {{ formatDate(commit.date) }}
+            <p class="text-xs text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{{ commit.author }} · {{ formatDate(commit.date) }}</span>
+              <UBadge
+                v-if="commit.pusher"
+                :color="commit.pusher.act === 'agent' ? 'primary' : 'neutral'"
+                variant="subtle"
+                size="sm"
+                class="font-mono"
+              >
+                <UIcon :name="commit.pusher.act === 'agent' ? 'i-lucide-bot' : 'i-lucide-user'" class="size-3" />
+                {{ commit.pusher.email }}<template v-if="commit.pusher.delegator">
+                  ⟵ {{ commit.pusher.delegator }}
+                </template>
+              </UBadge>
             </p>
           </div>
           <code class="font-mono text-xs text-amber-500 shrink-0 mt-0.5">{{ shortSha(commit.sha) }}</code>
