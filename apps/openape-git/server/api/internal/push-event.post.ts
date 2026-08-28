@@ -1,15 +1,7 @@
-import { eq } from 'drizzle-orm'
 import { createError, defineEventHandler, getHeader, readBody } from 'h3'
-import { ulid } from 'ulid'
-import { useDb } from '../../database/drizzle'
-import { webhookDeliveries, webhooks } from '../../database/schema'
-import { listPushedCommits } from '../../utils/git-read'
 import { isInternalToken } from '../../utils/internal-token'
-import { findRepo, repoDiskPath } from '../../utils/repos'
-import { deliver } from '../../utils/webhooks'
-
-const MAX_COMMITS_PER_EVENT = 20
-const ZERO_SHA = /^0+$/
+import { dispatchPushEvent } from '../../utils/push-dispatch'
+import { findRepo } from '../../utils/repos'
 
 interface PushEventBody {
   owner?: string
@@ -31,50 +23,10 @@ export default defineEventHandler(async (event) => {
   const repo = await findRepo(body?.owner ?? '', body?.name ?? '')
   if (!repo) throw createError({ statusCode: 404, statusMessage: 'repo not found' })
 
-  const db = useDb()
-  const subscriptions = await db.select().from(webhooks).where(eq(webhooks.repoId, repo.id))
-  if (subscriptions.length === 0) return { delivered: 0 }
-
-  const dir = repoDiskPath(repo.owner, repo.name)
-  const pusher = {
+  const delivered = await dispatchPushEvent(repo, body?.updates ?? [], {
     email: body?.pusher?.email ?? '',
     act: body?.pusher?.act ?? 'agent',
     ...(body?.pusher?.delegator ? { delegator: body.pusher.delegator } : {}),
-  }
-
-  let delivered = 0
-  for (const update of body?.updates ?? []) {
-    const commits = ZERO_SHA.test(update.after)
-      ? []
-      : await listPushedCommits(dir, update.before, update.after, MAX_COMMITS_PER_EVENT)
-
-    for (const subscription of subscriptions) {
-      const deliveryId = ulid()
-      const result = await deliver(subscription.url, subscription.secret, {
-        event: 'push',
-        repo: `${repo.owner}/${repo.name}`,
-        ref: update.ref,
-        before: update.before,
-        after: update.after,
-        commits: commits.map(c => ({ sha: c.sha, subject: c.subject, author: c.author, email: c.email })),
-        pusher,
-        deliveredAt: Math.floor(Date.now() / 1000),
-      }, deliveryId)
-
-      await db.insert(webhookDeliveries).values({
-        id: deliveryId,
-        webhookId: subscription.id,
-        repoId: repo.id,
-        event: 'push',
-        ref: update.ref,
-        statusCode: result.statusCode,
-        error: result.error,
-        durationMs: result.durationMs,
-        createdAt: Math.floor(Date.now() / 1000),
-      })
-      console.log(`[ape-git] webhook ${deliveryId} -> ${subscription.url} ${result.statusCode ?? result.error} (${result.durationMs}ms)`)
-      delivered++
-    }
-  }
+  })
   return { delivered }
 })

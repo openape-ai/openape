@@ -172,3 +172,78 @@ export function findReadme(entries: TreeEntry[]): TreeEntry | null {
     ?? entries.find(e => e.type === 'blob' && /^readme$/i.test(e.name))
     ?? null
 }
+
+// --- Pull requests (M6) -----------------------------------------------------
+
+export interface DiffLine {
+  type: 'add' | 'del' | 'ctx' | 'hunk'
+  text: string
+  oldLine: number | null
+  newLine: number | null
+}
+
+export interface DiffFile {
+  path: string
+  oldPath: string | null
+  binary: boolean
+  additions: number
+  deletions: number
+  lines: DiffLine[]
+}
+
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/
+
+/**
+ * Unified diff -> files with line numbers. Only the new-side line number is
+ * needed to anchor a comment, but both are kept so the view can show them.
+ * Anything git prints that is not a hunk line (index/mode/similarity headers)
+ * is dropped: the file header already carries the path.
+ */
+export function parsePatch(patch: string): DiffFile[] {
+  const files: DiffFile[] = []
+  let file: DiffFile | null = null
+  let oldLine = 0
+  let newLine = 0
+
+  for (const raw of patch.split('\n')) {
+    if (raw.startsWith('diff --git ')) {
+      const match = raw.match(/^diff --git a\/(.+) b\/(.+)$/)
+      file = {
+        path: match?.[2] ?? raw.slice('diff --git '.length),
+        oldPath: match && match[1] !== match[2] ? match[1]! : null,
+        binary: false,
+        additions: 0,
+        deletions: 0,
+        lines: [],
+      }
+      files.push(file)
+      continue
+    }
+    if (!file) continue
+    if (raw.startsWith('Binary files ') || raw.startsWith('GIT binary patch')) {
+      file.binary = true
+      continue
+    }
+    const hunk = raw.match(HUNK_HEADER)
+    if (hunk) {
+      oldLine = Number.parseInt(hunk[1]!)
+      newLine = Number.parseInt(hunk[2]!)
+      file.lines.push({ type: 'hunk', text: raw, oldLine: null, newLine: null })
+      continue
+    }
+    if (file.lines.length === 0) continue // still in the file header
+    if (raw.startsWith('+')) {
+      file.additions++
+      file.lines.push({ type: 'add', text: raw.slice(1), oldLine: null, newLine: newLine++ })
+    }
+    else if (raw.startsWith('-')) {
+      file.deletions++
+      file.lines.push({ type: 'del', text: raw.slice(1), oldLine: oldLine++, newLine: null })
+    }
+    else if (raw.startsWith(' ')) {
+      file.lines.push({ type: 'ctx', text: raw.slice(1), oldLine: oldLine++, newLine: newLine++ })
+    }
+    // '\ No newline at end of file' and the trailing empty element fall through
+  }
+  return files
+}
