@@ -4,9 +4,9 @@ import { cloneCommand, ownerSlugFromEmail } from '../app/utils/git-ui'
 describe('cloneCommand', () => {
   it('builds the x-access-token clone line from any origin', () => {
     expect(cloneCommand('https://repos.openape.ai', 'patrick', 'app'))
-      .toBe('git clone https://x-access-token:$(apes token)@repos.openape.ai/patrick/app.git')
+      .toBe('git clone https://x-access-token:$(jq -r .access_token ~/.config/apes/auth.json)@repos.openape.ai/patrick/app.git')
     expect(cloneCommand('http://localhost:3026', 'patrick', 'app'))
-      .toBe('git clone https://x-access-token:$(apes token)@localhost:3026/patrick/app.git')
+      .toBe('git clone https://x-access-token:$(jq -r .access_token ~/.config/apes/auth.json)@localhost:3026/patrick/app.git')
   })
 })
 
