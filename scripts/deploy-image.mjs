@@ -29,9 +29,24 @@ import { join } from 'node:path'
 import process from 'node:process'
 
 const REGISTRY = 'registry.openape.ai'
-const HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
-const USER = process.env.CHATTY_USER || 'openape'
-const PROD_DIR = '/home/openape/prod'
+
+// Deploy hosts. Every target names one via `host` (default 'chatty').
+// `composeFile` is synced to <prodDir>/docker-compose.yml during swap;
+// `unitGuard` covers the dormant systemd fallback units that only exist on chatty.
+const HOSTS = {
+  chatty: {
+    ssh: `${process.env.CHATTY_USER || 'openape'}@${process.env.CHATTY_HOST || 'chatty.delta-mind.at'}`,
+    prodDir: '/home/openape/prod',
+    composeFile: 'compose/chatty.yml',
+    unitGuard: true,
+  },
+  forge: {
+    ssh: `${process.env.FORGE_USER || 'ubuntu'}@${process.env.FORGE_HOST || 'repos.openape.ai'}`,
+    prodDir: '/home/ubuntu/prod',
+    composeFile: 'compose/forge.yml',
+    unitGuard: false,
+  },
+}
 
 // Registry auth for `docker push` from ANY session. The default
 // ~/.docker/config.json uses the osxkeychain credential helper, which is only
@@ -73,11 +88,20 @@ function shQuiet(cmd, args, opts = {}) {
 function out(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 }
-function ssh(script) {
-  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', `${USER}@${HOST}`, 'bash', '-s'], {
+function ssh(host, script) {
+  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', host.ssh, 'bash', '-s'], {
     input: script,
     encoding: 'utf8',
   }).trim()
+}
+function groupByHost(targets) {
+  const groups = new Map()
+  for (const t of targets) {
+    const key = t.host || 'chatty'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(t)
+  }
+  return groups
 }
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -174,16 +198,19 @@ async function main() {
     if (dirty) console.warn(`\n⚠ uncommitted changes will be baked into the image:\n${dirty}\n`)
   }
 
-  // 1. guard — all units inactive (single ssh)
-  const active = ssh(targets.map(t => `echo "${t.name}:$(systemctl is-active ${t.unit} 2>/dev/null || echo inactive)"`).join('\n'))
-    .split('\n')
-    .filter(l => l.endsWith(':active'))
-    .map(l => l.split(':')[0])
-  if (active.length) {
-    throw new Error(
-      `systemd unit(s) still active on chatty: ${active.join(', ')} — one-time cutover needed first:\n${
-        active.map(n => `  (as ubuntu) sudo systemctl stop ${TARGETS[n].unit} && sudo systemctl disable ${TARGETS[n].unit}`).join('\n')}`,
-    )
+  // 1. guard — all units inactive (one ssh per host with dormant units)
+  for (const [hostKey, group] of groupByHost(targets)) {
+    if (!HOSTS[hostKey].unitGuard) continue
+    const active = ssh(HOSTS[hostKey], group.map(t => `echo "${t.name}:$(systemctl is-active ${t.unit} 2>/dev/null || echo inactive)"`).join('\n'))
+      .split('\n')
+      .filter(l => l.endsWith(':active'))
+      .map(l => l.split(':')[0])
+    if (active.length) {
+      throw new Error(
+        `systemd unit(s) still active on ${hostKey}: ${active.join(', ')} — one-time cutover needed first:\n${
+          active.map(n => `  (as ubuntu) sudo systemctl stop ${TARGETS[n].unit} && sudo systemctl disable ${TARGETS[n].unit}`).join('\n')}`,
+      )
+    }
   }
 
   // 2. build — one turbo wave for all targets (parallel)
@@ -194,27 +221,30 @@ async function main() {
   console.log(`\n━━━ bake (package → smoke → push), concurrent`)
   await Promise.all(targets.map(t => bake(t.name, sha)))
 
-  // 4. swap — sync compose, pin all tags (capture PREV), one compose up
-  console.log(`\n━━━ swap on chatty (one compose up for all)`)
-  sh('scp', ['-q', 'compose/chatty.yml', `${USER}@${HOST}:${PROD_DIR}/docker-compose.yml`])
-  const composes = targets.map(t => t.compose).join(' ')
-  const pinScript = `
+  // 4. swap — per host: sync compose, pin all tags (capture PREV), one compose up
+  const prevMap = {}
+  for (const [hostKey, group] of groupByHost(targets)) {
+    const host = HOSTS[hostKey]
+    console.log(`\n━━━ swap on ${hostKey} (one compose up for ${group.map(t => t.name).join(', ')})`)
+    sh('scp', ['-q', host.composeFile, `${host.ssh}:${host.prodDir}/docker-compose.yml`])
+    const composes = group.map(t => t.compose).join(' ')
+    const pinScript = `
     set -euo pipefail
-    cd ${PROD_DIR}
+    cd ${host.prodDir}
     touch .env
     cp .env .env.bak
-${targets.map(t => `    OLD_${t.envVar}=$(grep -E '^${t.envVar}=' .env | cut -d= -f2- || true)
+${group.map(t => `    OLD_${t.envVar}=$(grep -E '^${t.envVar}=' .env | cut -d= -f2- || true)
     grep -vE '^${t.envVar}(_PREV)?=' .env > .env.new && mv .env.new .env
     [ -n "$OLD_${t.envVar}" ] && echo "${t.envVar}_PREV=$OLD_${t.envVar}" >> .env
     echo "${t.envVar}=prod-${sha}" >> .env`).join('\n')}
     docker compose --env-file .env -f docker-compose.yml pull -q ${composes}
     docker compose --env-file .env -f docker-compose.yml up -d ${composes}
-${targets.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
+${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
   `
-  const prevMap = {}
-  for (const line of ssh(pinScript).split('\n')) {
-    const m = line.match(/^PREV (\S+) (.*)$/)
-    if (m) prevMap[m[1]] = m[2].trim()
+    for (const line of ssh(host, pinScript).split('\n')) {
+      const m = line.match(/^PREV (\S+) (.*)$/)
+      if (m) prevMap[m[1]] = m[2].trim()
+    }
   }
 
   // 5. gate — external health per target in parallel; rollback failures
@@ -226,19 +256,21 @@ ${targets.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
   const failed = results.filter(r => !r.ok).map(r => r.name)
   if (failed.length) {
     console.error(`\n✗ health gate failed: ${failed.join(', ')} — rolling back`)
-    const rollScript = `
+    for (const [hostKey, group] of groupByHost(failed.map(n => ({ name: n, ...TARGETS[n] })))) {
+      const host = HOSTS[hostKey]
+      const rollScript = `
       set -euo pipefail
-      cd ${PROD_DIR}
-${failed.map((n) => {
-  const t = TARGETS[n]
-  const prev = prevMap[n]
-  if (!prev) return `      echo "${n}: no previous tag — emergency: (as ubuntu) sudo systemctl start ${t.unit}"`
+      cd ${host.prodDir}
+${group.map((t) => {
+  const prev = prevMap[t.name]
+  if (!prev) return `      echo "${t.name}: no previous tag — emergency: (as ubuntu) sudo systemctl start ${t.unit}"`
   return `      grep -vE '^${t.envVar}=' .env > .env.new && mv .env.new .env
       echo "${t.envVar}=${prev}" >> .env`
 }).join('\n')}
-      docker compose --env-file .env -f docker-compose.yml up -d ${failed.map(n => TARGETS[n].compose).join(' ')}
+      docker compose --env-file .env -f docker-compose.yml up -d ${group.map(t => t.compose).join(' ')}
     `
-    ssh(rollScript)
+      ssh(host, rollScript)
+    }
     console.error(`→ rolled back: ${failed.map(n => `${n}→${prevMap[n] || '(none)'}`).join(', ')}`)
     throw new Error(`deploy failed health gate: ${failed.join(', ')}`)
   }
