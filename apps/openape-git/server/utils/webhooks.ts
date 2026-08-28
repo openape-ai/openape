@@ -12,6 +12,29 @@ export const TIMESTAMP_HEADER = 'x-ape-timestamp'
 /** Skew allowed on a signed GET, in seconds — replay window of a read. */
 export const MAX_TIMESTAMP_SKEW_SEC = 300
 
+const LINK_LOCAL = /^169\.254\.\d{1,3}\.\d{1,3}$/
+
+/**
+ * Is this an acceptable webhook target? Private addresses stay allowed on
+ * purpose — the reference consumer runs on the compose network — so this is
+ * not a general SSRF filter. It blocks the one address that is never a
+ * webhook and always worth something: the cloud metadata service.
+ */
+export function webhookTargetError(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  }
+  catch {
+    return 'url must be an absolute http(s) URL'
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+    return 'url must be an absolute http(s) URL'
+  if (LINK_LOCAL.test(parsed.hostname))
+    return 'url must not point at link-local addresses'
+  return null
+}
+
 export function newWebhookSecret(): string {
   return randomBytes(32).toString('hex')
 }
