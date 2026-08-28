@@ -11,12 +11,30 @@ interface RepoGrant {
   expiresAt: number | null
 }
 
+interface Webhook {
+  id: string
+  url: string
+  createdAt: number
+}
+
+interface Delivery {
+  id: string
+  event: string
+  ref: string
+  statusCode: number | null
+  error: string | null
+  durationMs: number
+  createdAt: number
+}
+
 interface RepoDetail {
   id: string
   owner: string
   name: string
   defaultBranch: string
   grants: RepoGrant[]
+  webhooks: Webhook[]
+  deliveries: Delivery[]
 }
 
 const route = useRoute()
@@ -67,6 +85,50 @@ async function onGrant() {
   finally {
     granting.value = false
   }
+}
+
+const hookUrl = ref('')
+const newSecret = ref('')
+const subscribing = ref(false)
+
+async function onSubscribe() {
+  if (subscribing.value) return
+  subscribing.value = true
+  error.value = ''
+  try {
+    const hook = await $fetch<{ secret: string }>(`/api/repos/${owner}/${name}/webhooks`, {
+      method: 'POST',
+      body: { url: hookUrl.value.trim() },
+    })
+    // Shown once: the consumer needs it to verify deliveries and to sign back.
+    newSecret.value = hook.secret
+    hookUrl.value = ''
+    await load()
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
+    error.value = e.data?.statusMessage ?? e.message ?? 'Subscribe failed'
+  }
+  finally {
+    subscribing.value = false
+  }
+}
+
+async function onDeleteHook(id: string) {
+  error.value = ''
+  try {
+    await $fetch(`/api/webhooks/${id}`, { method: 'DELETE' })
+    await load()
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
+    error.value = e.data?.statusMessage ?? e.message ?? 'Delete failed'
+  }
+}
+
+function deliveryLabel(delivery: Delivery): string {
+  const outcome = delivery.error ?? `HTTP ${delivery.statusCode}`
+  return `${delivery.event} ${delivery.ref} - ${outcome} (${delivery.durationMs} ms)`
 }
 
 async function onRevoke(id: string) {
@@ -137,6 +199,67 @@ async function onRevoke(id: string) {
               >
                 Revoke
               </UButton>
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-semibold mb-3">
+            Webhooks
+          </h2>
+          <p class="mb-4 text-sm text-zinc-500">
+            Every push posts a signed event to these endpoints. The consumer verifies
+            <code>X-Ape-Signature-256</code> with the secret, and signs its commit-status
+            reports back with the same secret.
+          </p>
+          <form class="flex flex-col sm:flex-row gap-2 mb-4" @submit.prevent="onSubscribe">
+            <UInput v-model="hookUrl" type="url" placeholder="https://consumer.example/hook" class="flex-1" />
+            <UButton type="submit" color="primary" :loading="subscribing" :disabled="!hookUrl.trim()">
+              Subscribe
+            </UButton>
+          </form>
+
+          <UAlert
+            v-if="newSecret"
+            color="warning"
+            variant="subtle"
+            class="mb-4"
+            title="Secret — shown once"
+            :description="newSecret"
+            :close="true"
+            @update:open="newSecret = ''"
+          />
+
+          <p v-if="repo.webhooks.length === 0" class="text-zinc-500">
+            No webhooks — pushes fire nothing.
+          </p>
+          <ul v-else class="divide-y divide-zinc-800 border border-zinc-800 rounded-lg">
+            <li
+              v-for="hook in repo.webhooks"
+              :key="hook.id"
+              class="flex items-center justify-between gap-3 px-4 py-3"
+            >
+              <span class="font-mono text-sm truncate">{{ hook.url }}</span>
+              <UButton size="xs" color="error" variant="soft" @click="onDeleteHook(hook.id)">
+                Delete
+              </UButton>
+            </li>
+          </ul>
+
+          <h3 class="text-sm font-semibold mt-6 mb-2 text-zinc-300">
+            Recent deliveries
+          </h3>
+          <p v-if="repo.deliveries.length === 0" class="text-zinc-500 text-sm">
+            Nothing delivered yet.
+          </p>
+          <ul v-else class="text-xs font-mono space-y-1 text-zinc-400">
+            <li v-for="delivery in repo.deliveries" :key="delivery.id" class="flex gap-2">
+              <UIcon
+                :name="delivery.statusCode && delivery.statusCode < 400 ? 'i-lucide-check' : 'i-lucide-x'"
+                :class="delivery.statusCode && delivery.statusCode < 400 ? 'text-emerald-500' : 'text-red-500'"
+                class="size-3.5 shrink-0 mt-0.5"
+              />
+              <span class="truncate">{{ deliveryLabel(delivery) }}</span>
             </li>
           </ul>
         </section>
