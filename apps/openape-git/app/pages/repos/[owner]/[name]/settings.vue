@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
-import { cloneCommand } from '~/utils/git-ui'
 
 interface RepoGrant {
   id: string
@@ -31,9 +30,6 @@ const grantDelegate = ref('')
 const grantAccess = ref<'read' | 'write' | 'admin'>('read')
 const granting = ref(false)
 
-const clone = computed(() =>
-  cloneCommand(typeof window === 'undefined' ? 'repos.openape.ai' : window.location.origin, owner, name))
-
 onMounted(async () => {
   await fetchUser()
   if (!user.value) {
@@ -48,7 +44,7 @@ async function load() {
     repo.value = await $fetch<RepoDetail>(`/api/repos/${owner}/${name}`)
   }
   catch {
-    error.value = 'Repo not found (or not yours).'
+    error.value = 'Repo not found (or not yours). Grants are owner-only.'
   }
 }
 
@@ -88,12 +84,7 @@ async function onRevoke(id: string) {
 
 <template>
   <div class="min-h-dvh bg-zinc-950 text-zinc-100">
-    <header class="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-      <NuxtLink to="/repos" class="font-bold text-lg">
-        🦍 ape-git
-      </NuxtLink>
-      <span class="font-mono text-sm text-zinc-400">{{ owner }}/{{ name }}</span>
-    </header>
+    <RepoHeader :owner="owner" :name="name" tab="settings" />
 
     <main class="max-w-3xl mx-auto px-4 py-8 space-y-8">
       <UAlert v-if="error" color="error" :title="error" @close="error = ''" />
@@ -101,20 +92,11 @@ async function onRevoke(id: string) {
       <template v-if="repo">
         <section>
           <h2 class="text-xl font-semibold mb-3">
-            Clone
-          </h2>
-          <code class="block bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-sm overflow-x-auto whitespace-nowrap">
-            {{ clone }}
-          </code>
-          <p class="mt-2 text-sm text-zinc-500">
-            Authentication is your DDISA token from <code>apes login</code>. As the owner you have implicit admin access.
-          </p>
-        </section>
-
-        <section>
-          <h2 class="text-xl font-semibold mb-3">
             Access grants
           </h2>
+          <p class="mb-4 text-sm text-zinc-500">
+            Authentication is your DDISA token from <code>apes login</code>. As the owner you have implicit admin access.
+          </p>
           <form class="flex flex-col sm:flex-row gap-2 mb-4" @submit.prevent="onGrant">
             <UInput v-model="grantDelegate" type="email" placeholder="who@example.com" class="flex-1" />
             <USelect

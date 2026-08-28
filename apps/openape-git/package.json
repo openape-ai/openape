@@ -21,11 +21,15 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "catalog:",
     "jose": "catalog:",
+    "marked": "catalog:",
     "nuxt": "catalog:",
+    "sanitize-html": "^2.14.0",
+    "shiki": "^4.3.0",
     "tailwindcss": "catalog:",
     "ulid": "catalog:"
   },
   "devDependencies": {
+    "@types/sanitize-html": "^2.13.0",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "catalog:"
