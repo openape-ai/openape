@@ -54,6 +54,7 @@ apps/             # Deployable applications (private, not published)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
   openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
   openape-crm/        # crm.openape.ai — Deal-Pipeline, Kontakte, Notizen → self-hosted (chatty)
+  openape-git/        # repos.openape.ai — ape-git, DDISA-natives Git-Forge → self-hosted (Forge-VM)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -156,6 +157,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `pr`         | 3014 | openape-pr             |
 | `dashboard`  | 3022 | openape-dashboard      |
 | `crm`        | 3024 | openape-crm            |
+| `git`        | 3026 | openape-git (Host `forge` = eigene Forge-VM, `compose/forge.yml`, eigenes `compose/forge-package.Dockerfile` mit git) |
 
 **Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
 
