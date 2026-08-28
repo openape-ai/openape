@@ -1,9 +1,13 @@
+import { and, eq, inArray } from 'drizzle-orm'
 import { createError, defineEventHandler, getQuery, getRouterParam } from 'h3'
+import { useDb } from '../../../../database/drizzle'
+import { commitStatuses } from '../../../../database/schema'
 import { isValidRef } from '../../../../utils/git-parse'
 import { listCommits, resolveCommit } from '../../../../utils/git-read'
 import { readPushLog } from '../../../../utils/push-log'
 import { requireRepoRead } from '../../../../utils/repo-access'
 import { repoDiskPath } from '../../../../utils/repos'
+import { summarizeStatuses } from '../../../../utils/statuses'
 
 const MAX_COMMITS = 100
 
@@ -27,9 +31,23 @@ export default defineEventHandler(async (event) => {
   // Identity binding (M4): the pre-receive hook records who pushed each
   // commit; the UI shows human/agent plus the delegation chain from this.
   const [commits, pushers] = await Promise.all([listCommits(dir, sha, limit), readPushLog(dir)])
+
+  // CI results reported by webhook consumers (M5), one badge per commit.
+  const statusRows = commits.length === 0
+    ? []
+    : await useDb().select().from(commitStatuses).where(and(
+        eq(commitStatuses.repoId, repo.id),
+        inArray(commitStatuses.sha, commits.map(c => c.sha)),
+      ))
+  const statuses = summarizeStatuses(statusRows)
+
   return {
     ref,
     sha,
-    commits: commits.map(commit => ({ ...commit, pusher: pushers.get(commit.sha) ?? null })),
+    commits: commits.map(commit => ({
+      ...commit,
+      pusher: pushers.get(commit.sha) ?? null,
+      status: statuses.get(commit.sha) ?? null,
+    })),
   }
 })

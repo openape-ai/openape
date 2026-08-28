@@ -35,6 +35,11 @@ export function isValidRef(ref: string): boolean {
   return /^\w[\w./-]*$/.test(ref)
 }
 
+/** Full commit sha as it appears in webhook payloads and status reports. */
+export function isValidSha(sha: string): boolean {
+  return /^[0-9a-f]{40}$/.test(sha)
+}
+
 /** Tree paths from the URL: relative, no traversal, no NUL, no option look-alikes. */
 export function isValidTreePath(path: string): boolean {
   if (path.length > 4096 || path.includes('\0')) return false

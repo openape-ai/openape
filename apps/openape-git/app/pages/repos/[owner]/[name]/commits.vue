@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useOpenApeAuth } from '#imports'
+import { statusLook } from '~/utils/git-ui'
 import { formatDate, shortSha } from '~/utils/repo-browse'
 
 interface CommitInfo {
@@ -13,6 +14,10 @@ interface CommitInfo {
     email: string
     act: 'human' | 'agent'
     delegator?: string
+  } | null
+  status: {
+    state: 'pending' | 'success' | 'failure'
+    targetUrl: string | null
   } | null
 }
 
@@ -107,6 +112,14 @@ function onBranchChange(branch: string) {
               </UBadge>
             </p>
           </div>
+          <NuxtLink
+            v-if="commit.status"
+            :to="`/repos/${owner}/${name}/checks/${commit.sha}`"
+            class="shrink-0 mt-0.5"
+            :title="`CI: ${commit.status.state}`"
+          >
+            <UIcon :name="statusLook(commit.status.state).icon" :class="statusLook(commit.status.state).class" class="size-4" />
+          </NuxtLink>
           <code class="font-mono text-xs text-amber-500 shrink-0 mt-0.5">{{ shortSha(commit.sha) }}</code>
         </li>
       </ul>
