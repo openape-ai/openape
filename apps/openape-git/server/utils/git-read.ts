@@ -48,6 +48,22 @@ export async function listCommits(dir: string, sha: string, limit: number): Prom
   return parseCommits(stdout)
 }
 
+const ZERO_SHA = /^0+$/
+
+/**
+ * Commits a ref update added, for the webhook payload. A new branch has no
+ * `before`, so it reports its tip commits instead of the whole history.
+ */
+export async function listPushedCommits(dir: string, before: string, after: string, limit: number): Promise<CommitInfo[]> {
+  const range = ZERO_SHA.test(before) ? [after] : [after, `^${before}`]
+  const { stdout } = await run(
+    'git',
+    ['-C', dir, 'log', '-n', String(limit), '--format=%H%x00%an%x00%ae%x00%at%x00%s%x1e', ...range, '--'],
+    { maxBuffer: MAX_BUFFER },
+  )
+  return parseCommits(stdout)
+}
+
 /** Object type at `<sha>:<path>`, or null when the path doesn't exist. */
 export async function objectType(dir: string, spec: string): Promise<'commit' | 'tree' | 'blob' | null> {
   try {

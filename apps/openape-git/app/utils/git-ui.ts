@@ -7,6 +7,13 @@ export function cloneCommand(origin: string, owner: string, name: string): strin
   return `git clone https://x-access-token:$(jq -r .access_token ~/.config/apes/auth.json)@${host}/${owner}/${name}.git`
 }
 
+/** Icon and color for a CI status badge (M5). */
+export function statusLook(state: 'pending' | 'success' | 'failure'): { icon: string, class: string } {
+  if (state === 'success') return { icon: 'i-lucide-check-circle-2', class: 'text-emerald-500' }
+  if (state === 'failure') return { icon: 'i-lucide-x-circle', class: 'text-red-500' }
+  return { icon: 'i-lucide-loader-circle', class: 'text-amber-500' }
+}
+
 /** Default owner namespace derived from the login email's local part. */
 export function ownerSlugFromEmail(email: string): string {
   const local = email.split('@')[0] ?? ''
