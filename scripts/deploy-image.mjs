@@ -76,7 +76,9 @@ const TARGETS = {
   'crm': { filter: '@openape-crm/app', dir: 'apps/openape-crm', image: 'openape-crm', port: 3024, compose: 'crm', unit: 'openape-crm', domain: 'crm.openape.ai', envVar: 'CRM_TAG' },
   'secrets': { filter: '@openape-secrets/app', dir: 'apps/openape-secrets', image: 'openape-secrets', port: 3025, compose: 'secrets', unit: 'openape-secrets', domain: 'secrets.openape.ai', envVar: 'SECRETS_TAG' },
   // ape-git needs git in the image (http-backend CGI) → own packaging Dockerfile.
-  'git': { filter: '@openape-git/app', dir: 'apps/openape-git', image: 'openape-git', port: 3026, compose: 'git', unit: 'openape-git', domain: 'repos.openape.ai', envVar: 'GIT_TAG', host: 'forge', dockerfile: 'compose/forge-package.Dockerfile' },
+  // `compose: 'git ci'` — the CI consumer runs from the same image and is
+  // brought up with the app, so a deploy never leaves it on the old tag.
+  'git': { filter: '@openape-git/app', dir: 'apps/openape-git', image: 'openape-git', port: 3026, compose: 'git ci', unit: 'openape-git', domain: 'repos.openape.ai', envVar: 'GIT_TAG', host: 'forge', dockerfile: 'compose/forge-package.Dockerfile' },
 }
 
 function sh(cmd, args, opts = {}) {

@@ -6,6 +6,7 @@
 # One-time files on the VM (not synced by the deployer):
 #   /home/ubuntu/prod/Caddyfile  — copy of compose/forge-Caddyfile
 #   /home/ubuntu/prod/app.env    — NUXT_OPENAPE_SP_SESSION_SECRET=<random>
+#   /home/ubuntu/prod/ci.env     — APE_CI_SECRETS={"owner/repo":"<webhook secret>"}
 services:
   caddy:
     image: caddy:2
@@ -38,3 +39,18 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+  # Reference CI consumer (plan M5). Same image as the app — the script ships
+  # in it — but a separate process with no repo storage and no database: it
+  # only holds the webhook secrets from /home/ubuntu/prod/ci.env and talks to
+  # the forge over the API. Not reachable from outside; the forge posts to it
+  # on the compose network.
+  ci:
+    image: registry.openape.ai/openape-git:${GIT_TAG:-unset}
+    restart: unless-stopped
+    user: "1000:1000"
+    command: ["node", ".output/public/ci-consumer.mjs"]
+    env_file: /home/ubuntu/prod/ci.env
+    environment:
+      APE_CI_PORT: "8080"
+      APE_CI_FORGE: http://git:3026
+      APE_CI_PUBLIC_BASE: https://repos.openape.ai
