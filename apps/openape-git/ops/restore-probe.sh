@@ -18,7 +18,7 @@ bare=$(find "$dest" -type d -path "*/$owner/$name.git" | head -1)
 [ -n "$bare" ] || { echo "FAIL: $target not found in the snapshot"; exit 1; }
 
 echo "== registry from the backup"
-sqlite3 "$(find "$dest" -name registry.db | head -1)" 'select owner, name, visibility from repos'
+sqlite3 "$(find "$dest" -name registry.db | head -1)" 'select owner, name, owner_email from repos'
 
 echo "== cloning $bare"
 git clone "$bare" "$dest/clone"
