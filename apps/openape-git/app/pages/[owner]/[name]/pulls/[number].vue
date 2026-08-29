@@ -225,7 +225,9 @@ async function onMerge() {
             <div class="markdown-body text-sm mt-1" v-html="comment.bodyHtml" />
           </article>
 
-          <form id="comment-form" class="space-y-2" @submit.prevent="onComment">
+          <!-- flex-col, not space-y: Nuxt UI's input and button both render
+               inline, so they shared a line and the spacing never applied. -->
+          <form id="comment-form" class="flex flex-col gap-2" @submit.prevent="onComment">
             <p v-if="commentAnchor" class="text-xs text-zinc-400 flex flex-wrap items-center gap-2">
               <UIcon name="i-lucide-message-square-quote" class="size-3.5 shrink-0" />
               <!-- A file path has no break opportunities, so as a flex item it
@@ -235,10 +237,15 @@ async function onMerge() {
                 clear
               </UButton>
             </p>
-            <UTextarea v-model="commentBody" placeholder="Leave a review comment" :rows="3" size="sm" />
-            <UButton type="submit" size="sm" :loading="commenting" :disabled="!commentBody.trim()">
-              Comment
-            </UButton>
+            <UTextarea v-model="commentBody" class="w-full" placeholder="Leave a review comment" :rows="3" size="sm" />
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs text-zinc-500">
+                Markdown supported
+              </p>
+              <UButton type="submit" size="sm" :loading="commenting" :disabled="!commentBody.trim()">
+                Comment
+              </UButton>
+            </div>
           </form>
         </section>
       </template>
