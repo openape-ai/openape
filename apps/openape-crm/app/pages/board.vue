@@ -21,7 +21,7 @@ const deals = ref<Deal[]>([])
 const contacts = ref<ContactRow[]>([])
 const stages = ref<PipelineStage[]>([])
 const columns = computed(() => buildColumns(deals.value, stages.value))
-/** Die Pipeline ist Konfiguration — daran darf nur, wer auch einladen darf. */
+/** The pipeline is configuration — only someone who may invite may change it. */
 const canEditStages = computed(() => active.value?.role === 'owner' || active.value?.role === 'manager')
 const draggedId = ref<string | null>(null)
 
@@ -80,7 +80,7 @@ async function reload() {
   stages.value = s
 }
 
-/** Nach jeder Änderung: frisch vom Server, damit Positionen nicht auseinanderlaufen. */
+/** After every change: refetch, so positions cannot drift apart. */
 async function refresh() {
   await run(() => reload(), { failure: 'Board konnte nicht aktualisiert werden' })
 }
@@ -172,7 +172,7 @@ async function addStage(after: string | null) {
   await refresh()
 }
 
-/** Löschen fragt zwingend nach dem Ziel — kein Deal verschwindet mit seiner Spalte. */
+/** Deleting always asks for a target — no deal disappears with its column. */
 function askRemoveStage(stage: PipelineStage) {
   removingStage.value = stage
   moveTo.value = stages.value.find(s => s.key !== stage.key)?.key ?? ''
@@ -319,7 +319,7 @@ const deleteConsequence = computed(() =>
       </template>
     </UCard>
 
-    <!-- Erster Login: ohne Workspace gibt es nichts zu zeigen. -->
+    <!-- First login: with no workspace there is nothing to show. -->
     <UCard v-else-if="!workspaces.length" class="max-w-md">
       <template #header>
         <h1 class="text-lg font-semibold">
@@ -362,7 +362,7 @@ const deleteConsequence = computed(() =>
           @remove="askRemoveStage(column.stage)"
         />
 
-        <!-- Der sichtbare Beweis, dass die Spalten nichts Festes sind. -->
+        <!-- The visible proof that the columns are not fixed. -->
         <button
           v-if="canEditStages"
           type="button"

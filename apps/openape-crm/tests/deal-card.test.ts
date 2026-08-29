@@ -8,8 +8,8 @@ import { DEFAULT_STAGES } from '../shared/stages'
 
 const stages = DEFAULT_STAGES.map((stage, position) => ({ ...stage, position }))
 
-// Nuxt UI ist in der App global auto-importiert; hier als schlichtes Element
-// gestubbt, damit die Assertions den sichtbaren Text lesen, nicht das Design-System.
+// Nuxt UI is auto-imported globally in the app; stubbed as a plain element
+// here so the assertions read the visible text, not the design system.
 const global = {
   stubs: {
     USelect: { props: ['modelValue'], render: () => h('select') },

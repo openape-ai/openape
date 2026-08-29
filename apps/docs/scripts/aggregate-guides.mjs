@@ -36,7 +36,7 @@ const APPS = [
 
 /**
  * Kurzfassung an der letzten Wortgrenze — ein harter Schnitt endet mitten im
- * Wort, und dieser Text ist auch die OG-Beschreibung der Seite.
+ * word, and that text doubles as the page's OG description.
  */
 function summarize(text, max) {
   const flat = text.replace(/\n/g, ' ').trim()
@@ -82,7 +82,7 @@ APPS.forEach((app, i) => {
     `description: ${JSON.stringify(desc)}`,
     '---',
     '',
-    // Kein `# ${app.title}` im Body: das Frontmatter-`title` rendert bereits
+    // No `# ${app.title}` in the body: the frontmatter `title` already renders
     // als Seitenueberschrift, ein zweites H1 stellt denselben Namen doppelt.
     '::note',
     'Every step below is captured from a live end-to-end run on the local stack — the screenshots refresh on each capture, so this guide cannot drift from the real product.',
@@ -103,8 +103,8 @@ APPS.forEach((app, i) => {
   written++
 })
 
-// Ohne diese Seite ist /apps ein 404: die Sektion existiert sonst nur als
-// Navigationsgruppe, und genau diese URL verlinken README und run.sh.
+// Without this page /apps is a 404: the section otherwise exists only as a
+// navigation group, and README and run.sh link exactly that URL.
 const indexLines = [
   '---',
   'title: Overview',

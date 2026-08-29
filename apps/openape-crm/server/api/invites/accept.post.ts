@@ -5,7 +5,7 @@ import { workspaceInvites, workspaceMembers, workspaces } from '../../database/s
 import { createProblemError } from '../../utils/problem'
 import { resolveRole } from '../../utils/workspace-access'
 
-/** POST /api/invites/accept — Einladung einlösen. Body: { token: string } */
+/** POST /api/invites/accept — redeem an invitation. Body: { token: string } */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const body = await readBody<{ token?: string }>(event)
