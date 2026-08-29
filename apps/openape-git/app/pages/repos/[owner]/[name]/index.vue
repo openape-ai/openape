@@ -1,24 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { cloneCommand } from '~/utils/git-ui'
 
 const route = useRoute()
 const owner = route.params.owner as string
 const name = route.params.name as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const ready = ref(false)
 
 const clone = computed(() =>
   cloneCommand(typeof window === 'undefined' ? 'repos.openape.ai' : window.location.origin, owner, name))
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   ready.value = true
 })
 </script>
