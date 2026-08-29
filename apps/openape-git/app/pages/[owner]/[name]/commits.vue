@@ -107,7 +107,7 @@ function onBranchChange(branch: string) {
           </div>
           <NuxtLink
             v-if="commit.status"
-            :to="`/repos/${owner}/${name}/checks/${commit.sha}`"
+            :to="`/${owner}/${name}/checks/${commit.sha}`"
             class="shrink-0 mt-0.5"
             :title="`CI: ${commit.status.state}`"
           >
