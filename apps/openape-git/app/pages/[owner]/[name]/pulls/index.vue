@@ -93,19 +93,26 @@ async function onOpen() {
 
       <form
         v-if="showForm"
-        class="border border-zinc-800 rounded-lg p-4 space-y-3"
+        class="border border-zinc-800 rounded-lg p-4 flex flex-col gap-3"
         @submit.prevent="onOpen"
       >
-        <div class="flex items-center gap-2 text-sm">
-          <USelect v-model="source" :items="branches.map(b => b.name)" icon="i-lucide-git-branch" size="sm" class="w-44" />
-          <UIcon name="i-lucide-arrow-right" class="size-4 text-zinc-500" />
-          <USelect v-model="target" :items="branches.map(b => b.name)" icon="i-lucide-git-branch" size="sm" class="w-44" />
+        <!-- Two w-44 selects plus the arrow need ~384px; they stack below sm
+             so they do not run off a phone. The arrow turns with them. -->
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+          <USelect v-model="source" :items="branches.map(b => b.name)" icon="i-lucide-git-branch" size="sm" class="w-full sm:w-44" />
+          <UIcon name="i-lucide-arrow-right" class="size-4 text-zinc-500 rotate-90 sm:rotate-0 self-center shrink-0" />
+          <USelect v-model="target" :items="branches.map(b => b.name)" icon="i-lucide-git-branch" size="sm" class="w-full sm:w-44" />
         </div>
-        <UInput v-model="title" placeholder="Title" size="sm" />
-        <UTextarea v-model="body" placeholder="Describe the change (optional)" :rows="3" size="sm" />
-        <UButton type="submit" size="sm" :loading="opening" :disabled="!title || !source || !target">
-          Open pull request
-        </UButton>
+        <UInput v-model="title" class="w-full" placeholder="Title" size="sm" />
+        <UTextarea v-model="body" class="w-full" placeholder="Describe the change (optional)" :rows="3" size="sm" />
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-xs text-zinc-500">
+            Markdown supported
+          </p>
+          <UButton type="submit" size="sm" :loading="opening" :disabled="!title || !source || !target">
+            Open pull request
+          </UButton>
+        </div>
       </form>
 
       <p v-if="pulls.length === 0" class="text-zinc-500">
