@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { resolve } from 'node:path'
 import { defineEventHandler, getHeader, getQuery } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
-import { accessAllows, accessFromGrants, capAccess, parseGitHttpPath, requiredAccess } from '../utils/git-access'
+import { accessAllows, accessFromGrants, capAccess, parseGitHttpPath, requiredAccessFor } from '../utils/git-access'
 import { identityFromBasicAuth } from '../utils/git-auth'
 import { runGitHttpBackend } from '../utils/git-cgi'
 import { useGrantStore } from '../utils/grant-store'
@@ -64,7 +64,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const clientId = (config.openapeSp as { clientId?: string })?.clientId ?? 'repos.openape.ai'
   const service = (getQuery(event).service as string | undefined) ?? pathname.split('/').pop() ?? null
-  const required = requiredAccess(service)
+  const required = requiredAccessFor(pathname, service)
 
   const email = identity.email
   let access = repo.ownerEmail === email
