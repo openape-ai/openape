@@ -8,6 +8,7 @@ import {
   isValidRepoName,
   parseGitHttpPath,
   requiredAccess,
+  requiredAccessFor,
 } from '../server/utils/git-access'
 
 const AUD = 'repos.openape.ai'
@@ -125,5 +126,22 @@ describe('accessFromGrants — the refusals matter most', () => {
   it('takes the best of several grants', () => {
     const grants = [grant({}), grant({ scopes: ['git:write', 'repo:patrick/app'] })]
     expect(accessFromGrants(grants, 'agent@example.com', 'patrick', 'app', AUD, NOW)).toBe('write')
+  })
+})
+
+describe('requiredAccessFor', () => {
+  it('treats a receive-pack path as a write even when the service param says otherwise', () => {
+    // Regression: `?service=` used to win over the path, so a git:read grant
+    // could push via POST /o/r.git/git-receive-pack?service=git-upload-pack.
+    expect(requiredAccessFor('/o/r.git/git-receive-pack', 'git-upload-pack')).toBe('write')
+  })
+
+  it('treats the push advertisement as a write', () => {
+    expect(requiredAccessFor('/o/r.git/info/refs', 'git-receive-pack')).toBe('write')
+  })
+
+  it('leaves clone and fetch at read', () => {
+    expect(requiredAccessFor('/o/r.git/info/refs', 'git-upload-pack')).toBe('read')
+    expect(requiredAccessFor('/o/r.git/git-upload-pack', null)).toBe('read')
   })
 })
