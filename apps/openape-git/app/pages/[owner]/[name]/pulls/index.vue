@@ -61,7 +61,7 @@ async function onOpen() {
       method: 'POST',
       body: { title: title.value, body: body.value, source: source.value, target: target.value },
     })
-    await navigateTo(`/repos/${owner}/${name}/pulls/${created.number}`)
+    await navigateTo(`/${owner}/${name}/pulls/${created.number}`)
   }
   catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string }, message?: string }
@@ -120,7 +120,7 @@ async function onOpen() {
             class="size-4 mt-0.5 shrink-0"
           />
           <div class="min-w-0 flex-1">
-            <NuxtLink :to="`/repos/${owner}/${name}/pulls/${pull.number}`" class="text-sm text-zinc-100 hover:text-amber-400">
+            <NuxtLink :to="`/${owner}/${name}/pulls/${pull.number}`" class="text-sm text-zinc-100 hover:text-amber-400">
               {{ pull.title }}
             </NuxtLink>
             <p class="text-xs text-zinc-500 mt-0.5">
