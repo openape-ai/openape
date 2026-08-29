@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import process from 'node:process'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
@@ -7,22 +8,20 @@ const run = promisify(execFile)
 // bookkeeping and `refs/notes/*` rarely means anything on the far side.
 const MIRRORED_REF = /^refs\/(?:heads|tags)\//
 
+// The credential travels in the environment, never in argv: /proc/<pid>/cmdline
+// is world-readable, so a token in the remote URL would be visible to every
+// process on the host. argv only carries the shape of this helper.
+const CREDENTIAL_HELPER
+  = '!f() { echo "username=$APE_GIT_MIRROR_USER"; echo "password=$APE_GIT_MIRROR_TOKEN"; }; f'
+
 export function shouldMirrorRef(ref: string): boolean {
   return MIRRORED_REF.test(ref)
 }
 
-export function mirrorRemoteUrl(url: string, username: string, token: string): string {
-  const target = new URL(url)
-  target.username = encodeURIComponent(username)
-  target.password = encodeURIComponent(token)
-  return target.toString()
-}
-
 /**
- * Strips the credential from anything git wrote. Modern git already redacts
- * credentials from the URLs in its own messages, so in practice this rarely
- * fires — it stays because that behaviour is git's choice, not a guarantee we
- * control, and the value being guarded is a write token for another forge.
+ * Strips the credential from anything git wrote. With the token out of both
+ * argv and the URL this should never fire — it stays as the last net on a
+ * value that gets stored in `mirror_pushes.error` and rendered in the UI.
  */
 export function redactToken(text: string, token: string): string {
   if (!token) return text
@@ -35,15 +34,15 @@ export interface MirrorPushResult {
   durationMs: number
 }
 
+export type GitRunner = (args: string[], cwd: string, env: NodeJS.ProcessEnv) => Promise<unknown>
+
+const gitRunner: GitRunner = (args, cwd, env) => run('git', args, { cwd, env, timeout: 120_000 })
+
 /**
  * Pushes one ref to the mirror. Deliberately without `--force` and without
  * `--mirror`: the far side is written to directly as well, so a diverging
  * history has to fail loudly instead of being overwritten.
  */
-export type GitRunner = (args: string[], cwd: string) => Promise<unknown>
-
-const gitRunner: GitRunner = (args, cwd) => run('git', args, { cwd, timeout: 120_000 })
-
 export async function pushRefToMirror(
   repoDir: string,
   mirror: { url: string, username: string, token: string },
@@ -51,9 +50,26 @@ export async function pushRefToMirror(
   exec: GitRunner = gitRunner,
 ): Promise<MirrorPushResult> {
   const startedAt = Date.now()
-  const remote = mirrorRemoteUrl(mirror.url, mirror.username, mirror.token)
+  const args = [
+    // Empty value first: resets any helper inherited from system or global
+    // config, so only ours can answer.
+    '-c',
+    'credential.helper=',
+    '-c',
+    `credential.helper=${CREDENTIAL_HELPER}`,
+    'push',
+    mirror.url,
+    `${ref}:${ref}`,
+  ]
+  const env = {
+    ...process.env,
+    APE_GIT_MIRROR_USER: mirror.username,
+    APE_GIT_MIRROR_TOKEN: mirror.token,
+    // Never sit waiting for a prompt nobody can answer.
+    GIT_TERMINAL_PROMPT: '0',
+  }
   try {
-    await exec(['push', remote, `${ref}:${ref}`], repoDir)
+    await exec(args, repoDir, env)
     return { ok: true, durationMs: Date.now() - startedAt }
   }
   catch (err: unknown) {
