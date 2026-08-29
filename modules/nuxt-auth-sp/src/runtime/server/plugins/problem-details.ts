@@ -1,9 +1,17 @@
 import type { NitroApp } from 'nitropack'
+import { wantsHtmlErrorPage } from '@openape/core'
 import { setResponseHeader } from 'h3'
 
 export default (nitroApp: NitroApp) => {
   nitroApp.hooks.hook('error', (error: any, { event }) => {
     if (!event)
+      return
+
+    // A browser navigation gets the framework's error page, not this envelope.
+    // Ending the response here is what kept every SP app showing raw
+    // problem+json to a human: nitro considers the error handled and Nuxt
+    // never renders error.vue. API clients still get RFC 7807 below.
+    if (wantsHtmlErrorPage(event.node.req.headers))
       return
 
     // If the error was created via createProblemError, its data has RFC 7807 fields
