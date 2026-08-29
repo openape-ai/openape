@@ -8,6 +8,7 @@ import { diffPatch, mergePreview } from '../../../../../../utils/git-merge'
 import { requirePull } from '../../../../../../utils/pulls'
 import { repoDiskPath } from '../../../../../../utils/repos'
 import { accessAllows } from '../../../../../../utils/git-access'
+import { renderMarkdown } from '../../../../../../utils/render'
 
 // A big diff is a review problem, not a rendering problem — cap it and say so.
 const MAX_PATCH_BYTES = 1024 * 1024
@@ -45,6 +46,9 @@ export default defineEventHandler(async (event) => {
       number: pull.number,
       title: pull.title,
       body: pull.body,
+      // Rendered here, not in the client: the sanitize allowlist stays on the
+      // server, the same one repo READMEs go through.
+      bodyHtml: pull.body ? renderMarkdown(pull.body) : '',
       sourceRef: pull.sourceRef,
       targetRef: pull.targetRef,
       state: pull.state,
@@ -61,6 +65,9 @@ export default defineEventHandler(async (event) => {
     mergeable: merge.mergeable,
     conflicts: merge.conflicts,
     canMerge: pull.state === 'open' && accessAllows(access, 'write'),
-    comments: comments.map(({ pullId: _pullId, ...comment }) => comment),
+    comments: comments.map(({ pullId: _pullId, ...comment }) => ({
+      ...comment,
+      bodyHtml: renderMarkdown(comment.body),
+    })),
   }
 })
