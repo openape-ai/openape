@@ -15,7 +15,7 @@ interface Body {
   org_id?: string | null
 }
 
-/** PATCH /api/deals/:id — Felder ändern; ein Stufenwechsel hängt den Deal ans Spaltenende. */
+/** PATCH /api/deals/:id — change fields; a stage change moves the deal to the end of the column. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const id = getRouterParam(event, 'id')!

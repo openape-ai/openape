@@ -8,7 +8,7 @@ import { requireRole } from '../../utils/workspace-access'
 
 /**
  * DELETE /api/stages/:key?workspace_id=…&move_to=… — Stufe entfernen.
- * Sind Deals darin, ist `move_to` Pflicht: kein Deal verschwindet still.
+ * If deals sit in it, `move_to` is required: no deal disappears silently.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)

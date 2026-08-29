@@ -8,10 +8,10 @@ export interface ExtendedGrantStore extends GrantStore {
   findByDelegator: (delegator: string) => Promise<OpenApeGrant[]>
 }
 
-// Eine nie beantwortete Anfrage ist nach 48h keine Entscheidung mehr, sondern
-// Lärm: der Dev-Loop hat längst weiterprobiert, der CI-Poll von vorgestern ist
-// vorbei. Lazy auf 'expired' kippen — beim Lesen, kein Cron. Approve über einen
-// alten Push-Link scheitert dann sauber am Status-Check.
+// A request never answered stops being a decision after 48h and turns into
+// noise: the dev loop has long moved on, the CI poll from two days ago is over.
+// Flip it to 'expired' lazily — on read, no cron. Approving through an old push
+// link then fails cleanly at the status check.
 const PENDING_REQUEST_TTL_S = 48 * 3600
 
 export function createGrantStore(): ExtendedGrantStore {

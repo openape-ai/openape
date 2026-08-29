@@ -7,7 +7,7 @@ export type Role = 'owner' | 'manager' | 'member'
 
 const RANK: Record<Role, number> = { member: 1, manager: 2, owner: 3 }
 
-/** Reicht `role` für die geforderte Mindestrolle? Nicht-Mitglied = nein. */
+/** Is `role` enough for the required minimum? Non-member = no. */
 export function atLeast(role: Role | undefined, min: Role): boolean {
   return role !== undefined && RANK[role] >= RANK[min]
 }
@@ -24,9 +24,9 @@ export async function resolveRole(db: Db, workspaceId: string, email: string): P
 }
 
 /**
- * Der einzige Weg, an einen Workspace zu kommen: Mitgliedschaft aus der DB,
- * niemals eine Angabe aus dem Request-Body. Ohne Mitgliedschaft antwortet die
- * API mit 404 — ein Fremder erfährt nicht, ob es den Workspace gibt.
+ * The only way to reach a workspace: membership read from the DB, never a
+ * value from the request body. Without membership the API answers 404 — a
+ * stranger does not learn whether the workspace exists.
  */
 export async function requireRole(db: Db, workspaceId: string, email: string, min: Role = 'member'): Promise<Role> {
   const role = await resolveRole(db, workspaceId, email)
