@@ -6,8 +6,8 @@ import { info, printJson, printLine } from '../output.ts'
 interface Stage { key: string, name: string, outcome: 'open' | 'won' | 'lost', position: number }
 
 /**
- * Stufen sind pro Workspace konfigurierbar — ohne diesen Befehl wüsste ein
- * Nutzer die Schlüssel nicht, die `deals move` erwartet.
+ * Stages are configurable per workspace — without this command a user would
+ * not know the keys that `deals move` expects.
  */
 export const stagesCommand = defineCommand({
   meta: { name: 'stages', description: 'List the pipeline stages of a workspace.' },

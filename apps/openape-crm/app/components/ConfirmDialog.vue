@@ -2,7 +2,7 @@
 defineProps<{
   open: boolean
   title: string
-  /** Was der Nutzer verliert — der Grund, warum überhaupt gefragt wird. */
+  /** What the user loses — the reason for asking at all. */
   consequence: string
   confirmLabel?: string
 }>()

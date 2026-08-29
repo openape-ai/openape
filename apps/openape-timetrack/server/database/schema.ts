@@ -1,6 +1,6 @@
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-// Hierarchie: Company → Project → TimeEntry. Zweistufiges RBAC über
+// Hierarchy: Company → Project → TimeEntry. Two-level RBAC via
 // company_members (owner|manager|member) und project_members (manager|member).
 // Siehe docs/superpowers/specs/2026-05-15-timetrack-design.md §3/§4.
 
@@ -81,12 +81,12 @@ export const timeEntries = sqliteTable('time_entries', {
   companyId: text('company_id').notNull(),
   projectId: text('project_id').notNull(),
   userEmail: text('user_email').notNull(),
-  // Provenienz: ob der Eintrag von einem Agenten on-behalf-of erfasst wurde.
+  // Provenance: whether an agent recorded the entry on-behalf-of someone.
   act: text('act', { enum: ['human', 'agent'] }).notNull().default('human'),
-  // Tagesbucket (YYYY-MM-DD) für Reports — entkoppelt von started/ended.
+  // Day bucket (YYYY-MM-DD) for reports — decoupled from started/ended.
   entryDate: text('entry_date').notNull(),
   durationMinutes: integer('duration_minutes').notNull(),
-  // Optional: konkreter Zeitblock wenn bekannt (Agent loggt z.B. 14:00–14:45).
+  // Optional: the concrete time block when known (an agent logs e.g. 14:00–14:45).
   startedAt: integer('started_at'),
   endedAt: integer('ended_at'),
   description: text('description').notNull().default(''),
