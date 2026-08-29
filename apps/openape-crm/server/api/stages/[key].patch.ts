@@ -15,7 +15,7 @@ interface Body {
   position?: number
 }
 
-/** PATCH /api/stages/:key — umbenennen, Ergebnis ändern, verschieben. */
+/** PATCH /api/stages/:key — rename, change outcome, reorder. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const key = getRouterParam(event, 'key')!
@@ -40,8 +40,8 @@ export default defineEventHandler(async (event) => {
       .where(and(eq(pipelineStages.workspaceId, workspaceId), eq(pipelineStages.key, key)))
   }
 
-  // Wird aus einer offenen Stufe eine Abschlussstufe (oder umgekehrt), müssen
-  // die Deals darin mitziehen — sonst behauptet die Karte weiter, offen zu sein.
+  // When an open stage becomes a closing one (or the other way round), the
+  // deals in it have to follow — else the card keeps claiming to be open.
   if (patch.outcome && patch.outcome !== stage.outcome) {
     const closedAt = patch.outcome === 'open' ? null : Date.now()
     await db.update(deals)

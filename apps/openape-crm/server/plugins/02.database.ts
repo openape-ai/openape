@@ -3,9 +3,9 @@ import { useDb } from '../database/drizzle'
 import { pipelineStages, workspaces } from '../database/schema'
 import { defaultStageRows } from '../utils/stages'
 
-// Greenfield: CREATE TABLE IF NOT EXISTS beim Boot, wie in den Schwester-Apps.
-// Spätere Spalten brauchen hier ein explizites ALTER TABLE — sonst startet der
-// Container gegen eine alte Datei und die Endpunkte werfen `no such column`.
+// Greenfield: CREATE TABLE IF NOT EXISTS on boot, like the sibling apps.
+// Later columns need an explicit ALTER TABLE here — otherwise the container
+// starts against an old file and the endpoints throw `no such column`.
 export default defineNitroPlugin(async () => {
   const db = useDb()
 
@@ -71,8 +71,8 @@ export default defineNitroPlugin(async () => {
   )`)
 
   // Workspaces aus der Zeit fester Stufen bekommen die Default-Pipeline
-  // nachgereicht. Wer eigene Stufen hat, wird nicht angefasst — sonst käme
-  // eine gelöschte Stufe bei jedem Boot zurück.
+  // added later. Anyone with their own stages is left alone — otherwise a
+  // deleted stage would come back on every boot.
   const unseeded = await db
     .select({ id: workspaces.id })
     .from(workspaces)

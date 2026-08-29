@@ -61,8 +61,8 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'node-server',
-    // PFLICHT: ohne asyncContext fällt useEvent()/Store-Lookup in Nitro still
-    // auf Defaults zurück (leere Daten). Siehe OpenApe Memory-Lesson.
+    // REQUIRED: without asyncContext useEvent()/store lookup in Nitro silently
+    // falls back to defaults (empty data). See the OpenApe memory lesson.
     experimental: { asyncContext: true },
   },
 })

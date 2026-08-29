@@ -1,9 +1,9 @@
 import { problemMessage } from '../utils/problem-message'
 
 /**
- * Jede schreibende Aktion läuft hier durch: Erfolg wird quittiert, ein Fehler
- * wird sichtbar statt still verschluckt. Der Rückgabewert ist `null`, wenn es
- * schiefging — der Aufrufer bricht dann ab, statt weiterzumachen.
+ * Every write goes through here: success is acknowledged, a failure becomes
+ * visible instead of being swallowed. The return value is `null` when it went
+ * wrong, so the caller stops rather than carrying on.
  */
 export function useApiAction() {
   const toast = useToast()

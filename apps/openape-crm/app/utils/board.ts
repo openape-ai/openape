@@ -20,7 +20,7 @@ export interface Column {
   totalCents: number
 }
 
-/** Deals auf die Stufen des Workspaces verteilen, jede Spalte nach `position` sortiert. */
+/** Spread deals across the workspace stages, each column sorted by `position`. */
 export function buildColumns(deals: Deal[], stages: PipelineStage[]): Column[] {
   return stages.map((stage) => {
     const inStage = deals
@@ -35,9 +35,9 @@ export function buildColumns(deals: Deal[], stages: PipelineStage[]): Column[] {
 }
 
 /**
- * Die neue ID-Reihenfolge einer Spalte, nachdem `dealId` dort abgelegt wurde:
- * vor `beforeId`, oder am Ende, wenn auf die leere Spaltenfläche gezogen wurde.
- * Kam die Karte aus einer anderen Spalte, fügt sie sich einfach ein.
+ * The new id order of a column after `dealId` was dropped into it: before
+ * `beforeId`, or at the end when dropped on the column's empty area. A card
+ * coming from another column simply slots in.
  */
 export function dropInto(columnIds: string[], dealId: string, beforeId: string | null): string[] {
   const without = columnIds.filter(id => id !== dealId)
@@ -54,10 +54,10 @@ export function formatEuro(cents: number): string {
 }
 
 /**
- * Nuxt UIs Select verbietet einen Eintrag mit leerem Wert — der leere String
- * IST dort das Signal „nichts gewählt". Die Option „ohne …" braucht deshalb
- * einen eigenen Schlüssel, der an der API-Grenze wieder zu `null` wird.
- * Ein ULID kann damit nicht kollidieren.
+ * Nuxt UI's Select forbids an entry with an empty value — there the empty
+ * string IS the "nothing selected" signal. The "without …" option therefore
+ * needs a key of its own, turned back into `null` at the API boundary.
+ * A ULID cannot collide with it.
  */
 export const NO_SELECTION = 'none'
 
