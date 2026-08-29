@@ -41,6 +41,13 @@ export function requiredAccess(service: string | null): GitAccess {
   return service === 'git-receive-pack' ? 'write' : 'read'
 }
 
+// `git http-backend` dispatches POSTs via PATH_INFO and never reads `?service=`,
+// so deriving the level from the query parameter alone is fail-open.
+export function requiredAccessFor(pathname: string, serviceParam: string | null): GitAccess {
+  if (pathname.endsWith('/git-receive-pack')) return 'write'
+  return requiredAccess(serviceParam)
+}
+
 export function accessAllows(access: GitAccess, required: GitAccess): boolean {
   return ACCESS_RANK[access] >= ACCESS_RANK[required]
 }
