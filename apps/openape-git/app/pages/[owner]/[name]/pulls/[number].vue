@@ -23,6 +23,7 @@ interface Comment {
   id: string
   authorEmail: string
   body: string
+  bodyHtml: string
   path: string | null
   line: number | null
   createdAt: number
@@ -33,6 +34,7 @@ interface PullDetail {
     number: number
     title: string
     body: string | null
+    bodyHtml: string
     sourceRef: string
     targetRef: string
     state: string
@@ -152,9 +154,8 @@ async function onMerge() {
             <code class="font-mono text-amber-500">{{ detail.pull.targetRef }}</code>
             <span v-if="detail.pull.state === 'open'" class="text-zinc-600">· {{ detail.commits.length }} commits</span>
           </div>
-          <p v-if="detail.pull.body" class="text-sm text-zinc-300 whitespace-pre-wrap">
-            {{ detail.pull.body }}
-          </p>
+          <!-- eslint-disable-next-line vue/no-v-html -- sanitized server-side by renderMarkdown -->
+          <div v-if="detail.pull.bodyHtml" class="markdown-body text-sm mt-3" v-html="detail.pull.bodyHtml" />
         </header>
 
         <section v-if="detail.pull.state === 'merged'" class="border border-violet-900/60 bg-violet-950/20 rounded-lg px-4 py-3 text-sm">
@@ -220,15 +221,16 @@ async function onMerge() {
               {{ comment.authorEmail }} · {{ formatDate(comment.createdAt) }}
               <code v-if="comment.path" class="font-mono text-zinc-600">· {{ comment.path }}:{{ comment.line }}</code>
             </p>
-            <p class="text-sm text-zinc-200 whitespace-pre-wrap mt-1">
-              {{ comment.body }}
-            </p>
+            <!-- eslint-disable-next-line vue/no-v-html -- sanitized server-side by renderMarkdown -->
+            <div class="markdown-body text-sm mt-1" v-html="comment.bodyHtml" />
           </article>
 
           <form id="comment-form" class="space-y-2" @submit.prevent="onComment">
-            <p v-if="commentAnchor" class="text-xs text-zinc-400 flex items-center gap-2">
-              <UIcon name="i-lucide-message-square-quote" class="size-3.5" />
-              Commenting on <code class="font-mono">{{ commentAnchor.path }}:{{ commentAnchor.line }}</code>
+            <p v-if="commentAnchor" class="text-xs text-zinc-400 flex flex-wrap items-center gap-2">
+              <UIcon name="i-lucide-message-square-quote" class="size-3.5 shrink-0" />
+              <!-- A file path has no break opportunities, so as a flex item it
+                   refuses to shrink and pushes `clear` off a phone screen. -->
+              Commenting on <code class="font-mono break-all min-w-0">{{ commentAnchor.path }}:{{ commentAnchor.line }}</code>
               <UButton variant="ghost" size="xs" @click="commentAnchor = null">
                 clear
               </UButton>
