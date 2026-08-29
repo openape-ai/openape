@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useOpenApeAuth } from '#imports'
 
 const route = useRoute()
 const owner = route.params.owner as string
@@ -10,15 +9,9 @@ const path = computed(() => {
   return Array.isArray(raw) ? raw.join('/') : String(raw ?? '')
 })
 
-const { user, fetchUser } = useOpenApeAuth()
 const ready = ref(false)
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   ready.value = true
 })
 </script>

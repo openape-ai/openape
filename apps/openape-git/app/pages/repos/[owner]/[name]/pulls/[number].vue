@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { conversationComments, pullStateLook } from '~/utils/git-ui'
 import { formatDate, shortSha } from '~/utils/repo-browse'
 
@@ -58,7 +57,6 @@ const owner = route.params.owner as string
 const name = route.params.name as string
 const number = route.params.number as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const detail = ref<PullDetail | null>(null)
 const error = ref('')
 const merging = ref(false)
@@ -73,11 +71,6 @@ const conversation = computed(() =>
   conversationComments(detail.value?.comments ?? [], (detail.value?.files.length ?? 0) > 0))
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   await load()
 })
 
