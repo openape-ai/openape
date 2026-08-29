@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
+import { takeReturnPath } from '~/utils/return-to'
 
 const { user, fetchUser, login } = useOpenApeAuth()
 const email = ref('')
@@ -9,7 +10,7 @@ const error = ref('')
 
 onMounted(async () => {
   await fetchUser()
-  if (user.value) await navigateTo('/repos')
+  if (user.value) await navigateTo(takeReturnPath() ?? '/repos', { replace: true })
 })
 
 async function onSubmit() {

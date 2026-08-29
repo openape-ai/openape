@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { pullStateLook } from '~/utils/git-ui'
 import { formatDate } from '~/utils/repo-browse'
 
@@ -18,7 +17,6 @@ const route = useRoute()
 const owner = route.params.owner as string
 const name = route.params.name as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const pulls = ref<PullSummary[]>([])
 const branches = ref<{ name: string }[]>([])
 const defaultBranch = ref('main')
@@ -32,11 +30,6 @@ const source = ref('')
 const target = ref('')
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   await load()
 })
 
