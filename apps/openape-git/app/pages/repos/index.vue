@@ -11,7 +11,7 @@ interface Repo {
   createdAt: number
 }
 
-const { user, fetchUser, logout } = useOpenApeAuth()
+const { user, logout } = useOpenApeAuth()
 const repos = ref<Repo[]>([])
 const loading = ref(true)
 const newOwner = ref('')
@@ -25,11 +25,6 @@ const identity = computed(() => {
 })
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   newOwner.value = ownerSlugFromEmail(identity.value)
   await load()
 })
