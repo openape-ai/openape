@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { pullStateLook } from '~/utils/git-ui'
 import { formatDate } from '~/utils/repo-browse'
 
@@ -18,7 +17,6 @@ const route = useRoute()
 const owner = route.params.owner as string
 const name = route.params.name as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const pulls = ref<PullSummary[]>([])
 const branches = ref<{ name: string }[]>([])
 const defaultBranch = ref('main')
@@ -32,11 +30,6 @@ const source = ref('')
 const target = ref('')
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   await load()
 })
 
@@ -68,7 +61,7 @@ async function onOpen() {
       method: 'POST',
       body: { title: title.value, body: body.value, source: source.value, target: target.value },
     })
-    await navigateTo(`/repos/${owner}/${name}/pulls/${created.number}`)
+    await navigateTo(`/${owner}/${name}/pulls/${created.number}`)
   }
   catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string }, message?: string }
@@ -127,7 +120,7 @@ async function onOpen() {
             class="size-4 mt-0.5 shrink-0"
           />
           <div class="min-w-0 flex-1">
-            <NuxtLink :to="`/repos/${owner}/${name}/pulls/${pull.number}`" class="text-sm text-zinc-100 hover:text-amber-400">
+            <NuxtLink :to="`/${owner}/${name}/pulls/${pull.number}`" class="text-sm text-zinc-100 hover:text-amber-400">
               {{ pull.title }}
             </NuxtLink>
             <p class="text-xs text-zinc-500 mt-0.5">

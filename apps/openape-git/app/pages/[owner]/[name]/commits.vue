@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { statusLook } from '~/utils/git-ui'
 import { formatDate, shortSha } from '~/utils/repo-browse'
 
@@ -26,7 +25,6 @@ const router = useRouter()
 const owner = route.params.owner as string
 const name = route.params.name as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const ready = ref(false)
 const commits = ref<CommitInfo[]>([])
 const branches = ref<{ name: string }[]>([])
@@ -37,11 +35,6 @@ const currentRef = computed(() =>
   typeof route.query.ref === 'string' && route.query.ref ? route.query.ref : defaultBranch.value)
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   ready.value = true
 })
 
@@ -114,7 +107,7 @@ function onBranchChange(branch: string) {
           </div>
           <NuxtLink
             v-if="commit.status"
-            :to="`/repos/${owner}/${name}/checks/${commit.sha}`"
+            :to="`/${owner}/${name}/checks/${commit.sha}`"
             class="shrink-0 mt-0.5"
             :title="`CI: ${commit.status.state}`"
           >

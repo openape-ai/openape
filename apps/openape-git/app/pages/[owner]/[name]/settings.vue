@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 
 interface RepoGrant {
   id: string
@@ -41,7 +40,6 @@ const route = useRoute()
 const owner = route.params.owner as string
 const name = route.params.name as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const repo = ref<RepoDetail | null>(null)
 const error = ref('')
 const grantDelegate = ref('')
@@ -49,11 +47,6 @@ const grantAccess = ref<'read' | 'write' | 'admin'>('read')
 const granting = ref(false)
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   await load()
 })
 
