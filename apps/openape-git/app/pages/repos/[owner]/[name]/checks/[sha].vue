@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { statusLook } from '~/utils/git-ui'
 import { formatDate, shortSha } from '~/utils/repo-browse'
 
@@ -19,16 +18,10 @@ const owner = route.params.owner as string
 const name = route.params.name as string
 const sha = route.params.sha as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const statuses = ref<CommitStatus[]>([])
 const error = ref('')
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   try {
     const data = await $fetch<{ statuses: CommitStatus[] }>(`/api/repos/${owner}/${name}/statuses/${sha}`)
     statuses.value = data.statuses
