@@ -27,6 +27,39 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+
+// The source of truth is the ape-git forge (decided 2026-08-29; before that it
+// was Forgejo). Its remote is called `apegit` in this checkout but `origin` in
+// a fresh clone from the forge, so resolve it by URL host — matching on the
+// name would silently guard against the copy instead.
+const TRUTH_HOST = 'repos.openape.ai'
+
+function hostOf(url) {
+  const scp = url.match(/^[^/@]+@([^:]+):/)
+  if (scp) return scp[1]
+  try {
+    return new URL(url).hostname
+  }
+  catch {
+    return ''
+  }
+}
+
+export function resolveTruthRemote(remotes) {
+  for (const [name, url] of Object.entries(remotes)) {
+    if (hostOf(url) === TRUTH_HOST) return name
+  }
+  return 'origin'
+}
+
+function gitRemotes() {
+  const out_ = execFileSync('git', ['config', '--get-regexp', String.raw`^remote\..*\.url`], { encoding: 'utf8' })
+  return Object.fromEntries(out_.trim().split('\n').filter(Boolean).map((line) => {
+    const [key, url] = line.split(' ')
+    return [key.slice('remote.'.length, -'.url'.length), url]
+  }))
+}
 
 const REGISTRY = 'registry.openape.ai'
 
@@ -184,18 +217,19 @@ async function main() {
   // 2026-07-21: a deploy from a 5-day-old feature branch removed the entire
   // proactive-operators stack from prod overnight.
   if (!args.includes('--force')) {
+    const truth = resolveTruthRemote(gitRemotes())
     try {
-      out('git', ['fetch', '--quiet', 'origin', 'main'])
+      out('git', ['fetch', '--quiet', truth, 'main'])
     }
-    catch { /* offline — check against the last known origin/main below */ }
+    catch { /* offline — check against the last known ref below */ }
     try {
-      out('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD'])
+      out('git', ['merge-base', '--is-ancestor', `${truth}/main`, 'HEAD'])
     }
     catch {
-      const behind = out('git', ['rev-list', '--count', 'HEAD..origin/main'])
+      const behind = out('git', ['rev-list', '--count', `HEAD..${truth}/main`])
       throw new Error(
-        `HEAD does not contain origin/main (${behind} commit(s) behind) — deploying would roll prod back.\n`
-        + `Deploy from an up-to-date main (e.g. a worktree of origin/main), or override with --force.`,
+        `HEAD does not contain ${truth}/main (${behind} commit(s) behind) — deploying would roll prod back.\n`
+        + `Deploy from an up-to-date main (e.g. a worktree of ${truth}/main), or override with --force.`,
       )
     }
     const dirty = out('git', ['status', '--porcelain', '--', ...targets.map(t => t.dir), 'packages', 'modules'])
@@ -282,4 +316,7 @@ ${group.map((t) => {
   console.log(`\n✅ deployed via image path: ${names.join(', ')} (prod-${sha})`)
 }
 
-await main()
+// Only run when invoked directly, so deploy-image.test.mjs can import the
+// helpers without triggering a deploy.
+if (process.argv[1] === fileURLToPath(import.meta.url))
+  await main()
