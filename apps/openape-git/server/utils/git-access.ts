@@ -9,7 +9,15 @@ export type GitAccess = 'read' | 'write' | 'admin'
 
 const ACCESS_RANK: Record<GitAccess, number> = { read: 1, write: 2, admin: 3 }
 
+// Owners sit at the root of the URL space (`/<owner>/<repo>`), so a name that
+// matches a top-level route would shadow it for everyone. `_nuxt` and
+// `.well-known` need no entry — the pattern below already rejects a leading
+// underscore and any dot. tests/reserved-owners.test.ts derives the required
+// set from the pages directory, so a new top-level page fails there.
+const RESERVED_OWNERS = new Set(['api'])
+
 export function isValidOwner(value: string): boolean {
+  if (RESERVED_OWNERS.has(value.toLowerCase())) return false
   return /^[a-z0-9][a-z0-9-]{0,63}$/i.test(value)
 }
 
@@ -39,6 +47,13 @@ export function capAccess(access: GitAccess, cap: GitAccess): GitAccess {
 /** receive-pack (push) needs write; everything else (clone/fetch) needs read. */
 export function requiredAccess(service: string | null): GitAccess {
   return service === 'git-receive-pack' ? 'write' : 'read'
+}
+
+// `git http-backend` dispatches POSTs via PATH_INFO and never reads `?service=`,
+// so deriving the level from the query parameter alone is fail-open.
+export function requiredAccessFor(pathname: string, serviceParam: string | null): GitAccess {
+  if (pathname.endsWith('/git-receive-pack')) return 'write'
+  return requiredAccess(serviceParam)
 }
 
 export function accessAllows(access: GitAccess, required: GitAccess): boolean {

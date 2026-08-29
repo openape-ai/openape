@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { conversationComments, pullStateLook } from '~/utils/git-ui'
 import { formatDate, shortSha } from '~/utils/repo-browse'
 
@@ -58,7 +57,6 @@ const owner = route.params.owner as string
 const name = route.params.name as string
 const number = route.params.number as string
 
-const { user, fetchUser } = useOpenApeAuth()
 const detail = ref<PullDetail | null>(null)
 const error = ref('')
 const merging = ref(false)
@@ -73,11 +71,6 @@ const conversation = computed(() =>
   conversationComments(detail.value?.comments ?? [], (detail.value?.files.length ?? 0) > 0))
 
 onMounted(async () => {
-  await fetchUser()
-  if (!user.value) {
-    await navigateTo('/')
-    return
-  }
   await load()
 })
 
@@ -166,7 +159,7 @@ async function onMerge() {
 
         <section v-if="detail.pull.state === 'merged'" class="border border-violet-900/60 bg-violet-950/20 rounded-lg px-4 py-3 text-sm">
           Merged as
-          <NuxtLink :to="`/repos/${owner}/${name}/commits`" class="font-mono text-amber-500">
+          <NuxtLink :to="`/${owner}/${name}/commits`" class="font-mono text-amber-500">
             {{ shortSha(detail.pull.mergeSha ?? '') }}
           </NuxtLink>
           <span v-if="detail.pull.mergedAt" class="text-zinc-500"> · {{ formatDate(detail.pull.mergedAt) }}</span>
