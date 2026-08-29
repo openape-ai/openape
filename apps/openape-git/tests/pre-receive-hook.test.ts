@@ -99,6 +99,23 @@ describe('pre-receive hook (real git push)', () => {
     git(work, ['reset', '--hard', 'HEAD~1'])
   })
 
+  it('rejects a push that only carries read access', () => {
+    // The transport gate can be tricked into asking for the wrong level (that
+    // was the ?service= bypass), so the hook must not treat "it got here" as
+    // proof that writing was allowed.
+    commit('read-attempt', ME)
+    expect(() => push({ APE_GIT_AUTH_EMAIL: ME, APE_GIT_AUTH_ACT: 'human', APE_GIT_ACCESS: 'read' }))
+      .toThrow(/git:read.*needs write/s)
+    git(work, ['reset', '--hard', 'HEAD~1'])
+  })
+
+  it('rejects a push that carries no access level at all', () => {
+    commit('blank-access', ME)
+    expect(() => push({ APE_GIT_AUTH_EMAIL: ME, APE_GIT_AUTH_ACT: 'human', APE_GIT_ACCESS: '' }))
+      .toThrow(/needs write/)
+    git(work, ['reset', '--hard', 'HEAD~1'])
+  })
+
   it('lets an agent push commits committed by its delegator, recording the chain', () => {
     commit('made by the human, pushed by the agent', ME)
     push({ APE_GIT_AUTH_EMAIL: AGENT, APE_GIT_AUTH_ACT: 'agent', APE_GIT_DELEGATOR: ME, APE_GIT_ACCESS: 'write' })
