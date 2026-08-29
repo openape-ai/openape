@@ -3,21 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mirrorRemoteUrl, pushRefToMirror, redactToken, shouldMirrorRef } from '../server/utils/mirror'
+import { pushRefToMirror, redactToken, shouldMirrorRef } from '../server/utils/mirror'
 
 const TOKEN = 'abcdef0123456789abcdef0123456789abcdef01'
-
-describe('mirrorRemoteUrl', () => {
-  it('carries the credential in the URL git will use', () => {
-    const url = mirrorRemoteUrl('https://git.example/o/r.git', 'bot', TOKEN)
-    expect(url).toBe(`https://bot:${TOKEN}@git.example/o/r.git`)
-  })
-
-  it('percent-encodes a credential that would break the URL', () => {
-    expect(mirrorRemoteUrl('https://git.example/o/r.git', 'a b', 'p@ss/word'))
-      .toBe('https://a%20b:p%40ss%2Fword@git.example/o/r.git')
-  })
-})
 
 describe('redactToken', () => {
   it('removes the token from what git echoed back', () => {
@@ -77,6 +65,24 @@ describe('pushRefToMirror', () => {
     expect(result.ok).toBe(false)
     expect(result.error).not.toContain(TOKEN)
     expect(result.error).toContain('git.example')
+  })
+
+  it('keeps the token out of argv, where any process on the host could read it', async () => {
+    // /proc/<pid>/cmdline is world-readable. A credential in the remote URL —
+    // which is how this was first written — is visible to every process on the
+    // machine for the lifetime of the push.
+    let seen: { args: string[], env: NodeJS.ProcessEnv } | null = null
+    await pushRefToMirror(
+      '/tmp',
+      { url: 'https://git.example/o/r.git', username: 'bot', token: TOKEN },
+      'refs/heads/main',
+      (args, _cwd, env) => { seen = { args, env }; return Promise.resolve({}) },
+    )
+    const call = seen as unknown as { args: string[], env: NodeJS.ProcessEnv }
+    expect(call.args.join(' ')).not.toContain(TOKEN)
+    expect(call.args).toContain('https://git.example/o/r.git')
+    expect(call.env.APE_GIT_MIRROR_TOKEN).toBe(TOKEN)
+    expect(call.env.GIT_TERMINAL_PROMPT).toBe('0')
   })
 
   it('reports success without an error field', async () => {
