@@ -8,7 +8,7 @@ import { requireRole } from '../../../utils/workspace-access'
 
 const MAX_BODY = 5000
 
-/** POST /api/deals/:id/notes — Notiz anhängen. Body: { body: string } */
+/** POST /api/deals/:id/notes — append a note. Body: { body: string } */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const dealId = getRouterParam(event, 'id')!

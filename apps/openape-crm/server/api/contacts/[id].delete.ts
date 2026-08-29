@@ -5,7 +5,7 @@ import { contacts, deals } from '../../database/schema'
 import { createProblemError } from '../../utils/problem'
 import { requireRole } from '../../utils/workspace-access'
 
-/** DELETE /api/contacts/:id — Deals bleiben bestehen, verlieren nur die Verknüpfung. */
+/** DELETE /api/contacts/:id — deals survive, they only lose the link. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const id = getRouterParam(event, 'id')!

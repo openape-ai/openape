@@ -7,7 +7,7 @@ const props = defineProps<{
   stage: PipelineStage
   count: number
   total: string
-  /** Anzahl Stufen — die Ränder der Pipeline dürfen sich nicht weiter schieben. */
+  /** Number of stages — the ends of the pipeline must not move any further. */
   stageCount: number
   editable: boolean
 }>()
@@ -33,7 +33,7 @@ async function startRename() {
 }
 
 function commit() {
-  // Enter schließt das Feld und löst damit `blur` aus — ohne diese Sperre
+  // Enter closes the field and fires `blur` on the way out — without this guard
   // liefe das Umbenennen zweimal.
   if (!renaming.value) return
   renaming.value = false

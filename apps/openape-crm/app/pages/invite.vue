@@ -20,7 +20,7 @@ onMounted(async () => {
 
   await fetchUser()
   if (!user.value) {
-    // Nach dem Login bringt uns index.vue wieder hierher zurück.
+    // After login index.vue brings us back here.
     window.sessionStorage.setItem('openape-crm:returnTo', `/invite?token=${encodeURIComponent(token)}`)
     status.value = 'need-login'
     return

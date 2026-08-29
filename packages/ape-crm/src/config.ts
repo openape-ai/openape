@@ -3,9 +3,9 @@ import { ApiError } from '@openape/cli-auth'
 import { loadConfig, saveConfig } from './client.ts'
 
 /**
- * Alle Datenbefehle brauchen einen Workspace. Damit niemand ihn bei jedem
- * Aufruf tippt, merkt sich die CLI einen Default — gesetzt per
- * `ape-crm workspaces use <id>`, überschreibbar per `--workspace`.
+ * Every data command needs a workspace. So nobody has to type it on each
+ * call, the CLI remembers a default — set via `ape-crm workspaces use <id>`,
+ * overridable with `--workspace`.
  */
 export function setActiveWorkspaceId(workspaceId: unknown): void {
   const state = loadConfig() as CrmState

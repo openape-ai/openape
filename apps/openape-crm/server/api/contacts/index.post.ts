@@ -14,7 +14,7 @@ interface Body {
   org_id?: string
 }
 
-/** POST /api/contacts — Kontakt anlegen, optional an eine Firma gehängt. */
+/** POST /api/contacts — create a contact, optionally attached to a company. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const body = await readBody<Body>(event)
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   await requireRole(db, workspaceId, caller.email)
 
-  // Eine Firma aus einem fremden Workspace darf hier nicht landen.
+  // A company from someone else's workspace must not end up here.
   if (body?.org_id) {
     const org = await db
       .select({ id: organizations.id })

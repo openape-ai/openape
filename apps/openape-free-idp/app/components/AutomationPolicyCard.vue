@@ -28,9 +28,9 @@ interface FormState {
   /** Vollautomatik: default allow, Blockliste als Veto (wire: mode='deny-list'). */
   fullAuto: boolean
   denyRiskThreshold: 'low' | 'medium' | 'high' | 'critical' | ''
-  /** „Immer blockiert" — Veto in beiden Modi (wire: denyPatterns). */
+  /** „Immer blockiert" — the veto list, active in BOTH modes (wire: denyPatterns). */
   blockPatterns: PatternRow[]
-  /** „Ohne Rückfrage erlaubt" — wirkt nur ohne Vollautomatik (wire: allowPatterns). */
+  /** „Ohne Rückfrage erlaubt" — active only while Vollautomatik is off (wire: allowPatterns). */
   allowPatterns: PatternRow[]
   duration: string
 }
