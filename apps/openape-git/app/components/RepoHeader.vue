@@ -6,17 +6,17 @@ const props = defineProps<{
 }>()
 
 const tabs = computed(() => [
-  { key: 'code', label: 'Code', icon: 'i-lucide-folder-git-2', to: `/repos/${props.owner}/${props.name}` },
-  { key: 'commits', label: 'Commits', icon: 'i-lucide-history', to: `/repos/${props.owner}/${props.name}/commits` },
-  { key: 'pulls', label: 'Pulls', icon: 'i-lucide-git-pull-request', to: `/repos/${props.owner}/${props.name}/pulls` },
-  { key: 'settings', label: 'Access', icon: 'i-lucide-key-round', to: `/repos/${props.owner}/${props.name}/settings` },
+  { key: 'code', label: 'Code', icon: 'i-lucide-folder-git-2', to: `/${props.owner}/${props.name}` },
+  { key: 'commits', label: 'Commits', icon: 'i-lucide-history', to: `/${props.owner}/${props.name}/commits` },
+  { key: 'pulls', label: 'Pulls', icon: 'i-lucide-git-pull-request', to: `/${props.owner}/${props.name}/pulls` },
+  { key: 'settings', label: 'Access', icon: 'i-lucide-key-round', to: `/${props.owner}/${props.name}/settings` },
 ])
 </script>
 
 <template>
   <header class="border-b border-zinc-800 px-4 pt-3">
     <div class="flex items-center justify-between gap-3">
-      <NuxtLink to="/repos" class="font-bold text-lg shrink-0">
+      <NuxtLink to="/" class="font-bold text-lg shrink-0">
         🦍 ape-git
       </NuxtLink>
       <span class="font-mono text-sm text-zinc-400 truncate">

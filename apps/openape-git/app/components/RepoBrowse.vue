@@ -57,7 +57,7 @@ const refQuery = computed(() => {
 })
 
 const crumbs = computed(() => breadcrumbs(props.path))
-const base = computed(() => `/repos/${props.owner}/${props.name}`)
+const base = computed(() => `/${props.owner}/${props.name}`)
 
 function entryTarget(entry: TreeEntry): { path: string, query: Record<string, string> } {
   const entryPath = props.path ? `${props.path}/${entry.name}` : entry.name

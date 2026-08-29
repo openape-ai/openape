@@ -159,7 +159,7 @@ async function onMerge() {
 
         <section v-if="detail.pull.state === 'merged'" class="border border-violet-900/60 bg-violet-950/20 rounded-lg px-4 py-3 text-sm">
           Merged as
-          <NuxtLink :to="`/repos/${owner}/${name}/commits`" class="font-mono text-amber-500">
+          <NuxtLink :to="`/${owner}/${name}/commits`" class="font-mono text-amber-500">
             {{ shortSha(detail.pull.mergeSha ?? '') }}
           </NuxtLink>
           <span v-if="detail.pull.mergedAt" class="text-zinc-500"> · {{ formatDate(detail.pull.mergedAt) }}</span>
