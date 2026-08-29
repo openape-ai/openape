@@ -1,5 +1,5 @@
 // M0-Spike ape-git: grant-gated git smart HTTP via `git http-backend`.
-// Wegwerf-Code — beweist Transport + DDISA-JWT-Auth + Scope-Gate, mehr nicht.
+// Throwaway code — proves transport + DDISA JWT auth + scope gate, nothing else.
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -12,7 +12,7 @@ const GIT_PROJECT_ROOT = join(ROOT, 'repos')
 const PORT = 3300
 const JWKS = createRemoteJWKSet(new URL('https://id.openape.ai/.well-known/jwks.json'))
 
-// ponytail: scopes.json statt echter Grant-API — die kommt in M1
+// ponytail: scopes.json instead of the real grant API — that lands in M1
 function scopeFor(email, repo) {
   const scopes = JSON.parse(readFileSync(join(ROOT, 'scopes.json'), 'utf8'))
   return scopes[repo]?.[email] ?? null

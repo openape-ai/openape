@@ -1,9 +1,9 @@
-// Reine RBAC-Auflösung — keine Nitro/DB-Imports, damit unit-testbar.
+// Pure RBAC resolution — no Nitro/DB imports, so it stays unit-testable.
 // Spec: docs/superpowers/specs/2026-05-15-timetrack-design.md §4.
 //
-// Rechte = Maximum aus Company-Rolle (für die Company des Eintrags) und
-// Projekt-Rolle (für das Projekt des Eintrags). Der Aufrufer löst die
-// Mitgliedschaften vorher auf und übergibt sie hier.
+// Rights = the maximum of the company role (for the entry's company) and the
+// project role (for the entry's project). The caller resolves the memberships
+// beforehand and passes them in here.
 
 export type CompanyRole = 'owner' | 'manager' | 'member'
 export type ProjectRole = 'manager' | 'member'
@@ -26,8 +26,8 @@ export interface EntryRights {
 }
 
 /**
- * Darf der Betrachter Einträge auf ein Projekt loggen?
- * Projekt-Rolle (manager|member) ODER Company-owner. Company-manager NICHT
+ * May the viewer log entries against a project?
+ * Project role (manager|member) OR company owner. Company manager does NOT
  * (reines Reporting), Company-member nur via Projekt-Rolle.
  */
 export function canLogToProject(ctx: RoleContext): boolean {
@@ -37,13 +37,13 @@ export function canLogToProject(ctx: RoleContext): boolean {
 }
 
 /**
- * Sicht-/Editierrechte des Betrachters auf einen konkreten Eintrag E.
+ * The viewer's view/edit rights on one concrete entry E.
  *
  * canView:
- *  - Autor sieht eigene Einträge immer
- *  - Company owner|manager: alle Einträge der Company
- *  - Projekt manager: alle Einträge des Projekts
- *  - Projekt member: nur eigene Einträge des Projekts
+ *  - the author always sees their own entries
+ *  - company owner|manager: every entry of the company
+ *  - project manager: every entry of the project
+ *  - project member: only their own entries in the project
  *
  * canEdit (Spec §10-Annahme, Least-Privilege):
  *  - Autor (eigene) | Projekt-manager | Company-owner

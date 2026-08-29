@@ -23,7 +23,7 @@ export default defineNitroPlugin(async () => {
       created_at INTEGER NOT NULL
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_kpis_owner_created ON kpis(owner, created_at)`)
-    // Bestehende Prod-Tabelle nachziehen — SQLite kennt kein IF NOT EXISTS für Spalten.
+    // Catch up the existing prod table — SQLite has no IF NOT EXISTS for columns.
     await db.run(sql`ALTER TABLE kpis ADD COLUMN link TEXT`).catch(() => {})
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_kpis_owner_scope_key ON kpis(owner, scope, key)`)
   }
