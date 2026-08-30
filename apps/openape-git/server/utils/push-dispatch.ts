@@ -33,14 +33,7 @@ interface RepoRef {
   name: string
 }
 
-/**
- * Replicates the updated refs to this repo's mirrors (M8). Runs without
- * `--force`: the far side is written to directly as well, so a diverging
- * history fails visibly in `mirror_pushes` instead of being overwritten.
- *
- * A mirror that is down must never fail the push that triggered it — the
- * commits are already accepted at this point. Every attempt is recorded.
- */
+/** Replicates the updated refs to this repo's enabled mirrors, one row per attempt. */
 export async function dispatchMirrorPush(repo: RepoRef, updates: RefUpdate[]): Promise<void> {
   const db = useDb()
   const targets = await db.select().from(mirrors).where(eq(mirrors.repoId, repo.id))
@@ -50,6 +43,8 @@ export async function dispatchMirrorPush(repo: RepoRef, updates: RefUpdate[]): P
   const dir = repoDiskPath(repo.owner, repo.name)
   for (const update of updates) {
     if (!shouldMirrorRef(update.ref)) continue
+    // A failing mirror must not fail the push that triggered it — the commits
+    // are already accepted. Every attempt is recorded instead.
     for (const mirror of active) {
       const result = await pushRefToMirror(dir, mirror, update.ref)
       await db.insert(mirrorPushes).values({

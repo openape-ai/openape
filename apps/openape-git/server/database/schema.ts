@@ -39,23 +39,19 @@ export const webhookDeliveries = sqliteTable('webhook_deliveries', {
   createdAt: integer('created_at').notNull(),
 }, t => [index('idx_deliveries_repo').on(t.repoId, t.createdAt)])
 
-// A push mirror replicates refs to another forge after every push (M8). Shaped
-// like webhooks/webhook_deliveries because it is the same problem: a config row
-// plus the visible proof that each attempt happened.
+// One target this repo replicates its refs to after every push.
 export const mirrors = sqliteTable('mirrors', {
   id: text('id').primaryKey(),
   repoId: text('repo_id').notNull(),
   url: text('url').notNull(),
   username: text('username').notNull(),
-  // A write-capable credential for a FOREIGN forge. Kept small on purpose: the
-  // token is scoped to one repo there, so this row cannot become a master key.
+  // Write credential for the target forge; scope it to the one repo there.
   token: text('token').notNull(),
   enabled: integer('enabled').notNull().default(1),
   createdAt: integer('created_at').notNull(),
 }, t => [index('idx_mirrors_repo').on(t.repoId)])
 
-// One row per push attempt per ref. `error` is redacted before it lands here —
-// git echoes the remote URL on failure and that URL carries the token.
+// One row per push attempt per ref. `error` is redacted before it is stored.
 export const mirrorPushes = sqliteTable('mirror_pushes', {
   id: text('id').primaryKey(),
   mirrorId: text('mirror_id').notNull(),
