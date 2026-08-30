@@ -6,18 +6,9 @@ import { mirrors } from '../../../../database/schema'
 import { findRepo } from '../../../../utils/repos'
 
 /**
- * POST /api/repos/:owner/:name/mirrors { url, username, token } — replicate
- * every push of this repo to another forge (M8). Owner only.
- *
- * The token is a write credential for a FOREIGN system, so it is never echoed
- * back: the response carries the mirror without it. Scope it to the one repo
- * on the far side — this row is not a place for a broad token.
- *
- * The target must resolve to a public address. Webhooks deliberately allow
- * private ones because the reference CI consumer lives on the compose network;
- * a mirror has no such case — it points at another forge — and it reports git's
- * stderr into the UI, which is a far wider disclosure channel than a webhook's
- * status code. So this one is guarded, and webhooks stay as they are.
+ * POST /api/repos/:owner/:name/mirrors { url, username, token } — registers a
+ * forge to replicate this repo's pushes to. Owner only. The response omits the
+ * token.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
@@ -33,6 +24,8 @@ export default defineEventHandler(async (event) => {
   const username = body?.username?.trim() ?? ''
   const token = body?.token?.trim() ?? ''
 
+  // A mirror points at another forge and surfaces git's stderr in the UI, so an
+  // internal target would be a disclosure channel. Webhooks differ by design.
   try {
     await assertPublicUrl(url)
   }

@@ -7,8 +7,8 @@ import { findRepo } from '../../../../utils/repos'
 const RECENT_PUSHES = 20
 
 /**
- * GET /api/repos/:owner/:name/mirrors — the configured mirrors and their
- * recent attempts. Owner only, and the token never leaves the server.
+ * GET /api/repos/:owner/:name/mirrors — the configured mirrors and their most
+ * recent push attempts. Owner only. Tokens are not included.
  */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
