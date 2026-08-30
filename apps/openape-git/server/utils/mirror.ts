@@ -4,25 +4,17 @@ import { promisify } from 'node:util'
 
 const run = promisify(execFile)
 
-// Only what another forge can interpret. `refs/pull/*` is ape-git's own
-// bookkeeping and `refs/notes/*` rarely means anything on the far side.
 const MIRRORED_REF = /^refs\/(?:heads|tags)\//
 
-// The credential travels in the environment, never in argv: /proc/<pid>/cmdline
-// is world-readable, so a token in the remote URL would be visible to every
-// process on the host. argv only carries the shape of this helper.
 const CREDENTIAL_HELPER
   = '!f() { echo "username=$APE_GIT_MIRROR_USER"; echo "password=$APE_GIT_MIRROR_TOKEN"; }; f'
 
+/** Whether a ref belongs on another forge. Branches and tags do; internal refs do not. */
 export function shouldMirrorRef(ref: string): boolean {
   return MIRRORED_REF.test(ref)
 }
 
-/**
- * Strips the credential from anything git wrote. With the token out of both
- * argv and the URL this should never fire — it stays as the last net on a
- * value that gets stored in `mirror_pushes.error` and rendered in the UI.
- */
+/** Replaces every occurrence of `token` with `***`. */
 export function redactToken(text: string, token: string): string {
   if (!token) return text
   return text.split(token).join('***')
@@ -38,11 +30,7 @@ export type GitRunner = (args: string[], cwd: string, env: NodeJS.ProcessEnv) =>
 
 const gitRunner: GitRunner = (args, cwd, env) => run('git', args, { cwd, env, timeout: 120_000 })
 
-/**
- * Pushes one ref to the mirror. Deliberately without `--force` and without
- * `--mirror`: the far side is written to directly as well, so a diverging
- * history has to fail loudly instead of being overwritten.
- */
+/** Pushes one ref from `repoDir` to `mirror`, reporting the outcome instead of throwing. */
 export async function pushRefToMirror(
   repoDir: string,
   mirror: { url: string, username: string, token: string },
@@ -51,21 +39,23 @@ export async function pushRefToMirror(
 ): Promise<MirrorPushResult> {
   const startedAt = Date.now()
   const args = [
-    // Empty value first: resets any helper inherited from system or global
-    // config, so only ours can answer.
+    // Empty value first: resets any helper from system or global config, so
+    // only ours can answer.
     '-c',
     'credential.helper=',
     '-c',
     `credential.helper=${CREDENTIAL_HELPER}`,
+    // No --force, no --mirror: the target is written to directly as well, so a
+    // divergence must fail rather than overwrite, and its own refs must survive.
     'push',
     mirror.url,
     `${ref}:${ref}`,
   ]
   const env = {
     ...process.env,
+    // In the environment, not in argv: /proc/<pid>/cmdline is world-readable.
     APE_GIT_MIRROR_USER: mirror.username,
     APE_GIT_MIRROR_TOKEN: mirror.token,
-    // Never sit waiting for a prompt nobody can answer.
     GIT_TERMINAL_PROMPT: '0',
   }
   try {
@@ -76,6 +66,7 @@ export async function pushRefToMirror(
     const e = err as { stderr?: string, message?: string }
     const raw = (e.stderr || e.message || 'push failed').trim()
     return {
+      // The value is stored and rendered; redact in case git ever echoes it.
       ok: false,
       error: redactToken(raw, mirror.token).slice(0, 2000),
       durationMs: Date.now() - startedAt,
