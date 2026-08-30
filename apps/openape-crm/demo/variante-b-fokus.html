@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Variante B · Fokus — OpenApe CRM Demo</title>
+<style>
+:root{
+  --bg:#0c0e13; --panel:#12151c; --panel-2:#171b24; --line:#232936; --line-2:#2d3546;
+  --ink:#e7ecf3; --ink-2:#98a3b6; --ink-3:#65708a;
+  --accent:#7c6cff; --accent-2:#a99bff; --accent-soft:rgba(124,108,255,.14);
+  --lime:#a3e635; --cyan:#38bdf8; --amber:#fbbf24; --rose:#fb7185; --green:#34d399;
+  --r:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.55 ui-sans-serif,-apple-system,"Inter","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+kbd{background:var(--panel-2);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:4px;padding:0 4px;font:11px/16px ui-monospace,monospace;color:var(--ink-2)}
+.app{display:grid;grid-template-columns:52px 300px minmax(0,1fr);height:100vh;overflow:hidden}
+
+/* rail */
+.rail{background:#090b0f;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:6px}
+.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--cyan));display:grid;place-items:center;font-size:14px;margin-bottom:10px}
+.rail button{width:34px;height:34px;border:0;background:transparent;border-radius:8px;color:var(--ink-2);cursor:pointer;font-size:16px;position:relative}
+.rail button:hover{background:var(--panel-2);color:var(--ink)}
+.rail button.on{background:var(--accent-soft);color:var(--accent-2)}
+.rail .dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--rose)}
+.rail .sp{flex:1}
+
+/* list pane */
+.pane{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.pane header{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.pane header h2{margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:-.1px;display:flex;align-items:center;gap:8px}
+.k{margin-left:auto;color:var(--ink-3);font-size:11px}
+.seg{display:flex;background:#0b0d12;border:1px solid var(--line);border-radius:7px;padding:2px}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink-3);padding:4px 0;border-radius:5px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--panel-2);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.list{overflow:auto;flex:1;padding:6px}
+.grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);padding:12px 8px 5px;display:flex;gap:6px;align-items:center}
+.grp b{margin-left:auto;color:var(--ink-3);font-weight:500}
+.item{padding:8px 9px;border-radius:7px;cursor:pointer;border:1px solid transparent}
+.item:hover{background:var(--panel-2)}
+.item.on{background:var(--accent-soft);border-color:rgba(124,108,255,.3)}
+.item b{display:block;font-weight:550;letter-spacing:-.1px}
+.item .s{color:var(--ink-3);font-size:11.5px;display:flex;gap:6px;align-items:center;margin-top:2px}
+.pill{font-size:10.5px;padding:0 6px;border-radius:20px;border:1px solid var(--line-2);color:var(--ink-2);white-space:nowrap}
+.pill.lime{color:var(--lime);border-color:rgba(163,230,53,.3);background:rgba(163,230,53,.08)}
+.pill.cyan{color:var(--cyan);border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.08)}
+.pill.amber{color:var(--amber);border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.08)}
+.pill.rose{color:var(--rose);border-color:rgba(251,113,133,.3);background:rgba(251,113,133,.08)}
+.pill.acc{color:var(--accent-2);border-color:rgba(124,108,255,.35);background:var(--accent-soft)}
+
+/* detail */
+.det{overflow:auto;display:flex;flex-direction:column}
+.dhead{padding:16px 22px 0;position:sticky;top:0;background:var(--bg);z-index:5}
+.dhead h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-.4px;display:flex;align-items:center;gap:10px}
+.dhead .sub{color:var(--ink-3);margin-top:3px}
+.acts{display:flex;gap:6px;margin-left:auto}
+.btn{background:var(--panel-2);border:1px solid var(--line-2);color:var(--ink);padding:5px 11px;border-radius:7px;cursor:pointer}
+.btn:hover{background:#1e2331;border-color:#3a4457}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:#6b59ff}
+.btn.gh{background:transparent;border-color:transparent;color:var(--ink-2)}
+.btn.gh:hover{background:var(--panel-2);color:var(--ink)}
+
+.track{display:flex;gap:0;margin:16px 22px 0;background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.track button{flex:1;border:0;background:transparent;color:var(--ink-3);padding:9px 6px;cursor:pointer;font-size:11.5px;position:relative;border-right:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track button:last-child{border-right:0}
+.track button:hover{background:var(--panel-2);color:var(--ink)}
+.track button.done{color:var(--ink-2);background:rgba(124,108,255,.06)}
+.track button.on{background:var(--accent);color:#fff;font-weight:560}
+.track button.mark::after{content:"↦";margin-left:4px;opacity:.7}
+
+.cols{display:grid;grid-template-columns:1fr 292px;gap:18px;padding:18px 22px 40px;align-items:start}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.box h3{margin:0;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.box .in{padding:12px 14px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:5px 10px}
+.kv dt{color:var(--ink-3)}.kv dd{margin:0}
+
+.feed{list-style:none;margin:0;padding:4px 14px 12px}
+.feed li{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+.feed li:last-child{border-bottom:0}
+.dt{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;font-size:12px;background:var(--panel-2);border:1px solid var(--line-2)}
+.dt.mail{color:var(--cyan)}.dt.notiz{color:var(--amber)}.dt.aufgabe{color:var(--accent-2)}
+.dt.termin{color:var(--green)}.dt.dokument{color:var(--ink-2)}
+.feed b{font-weight:550}
+.feed .ts{margin-left:auto;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.feed p{margin:3px 0 0;color:var(--ink-2)}
+.write{display:flex;gap:7px;padding:10px 14px;border-top:1px solid var(--line)}
+.write input{flex:1;background:#0b0d12;border:1px solid var(--line-2);border-radius:7px;padding:7px 10px}
+.write input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.chips{display:flex;gap:5px;padding:0 14px 12px;flex-wrap:wrap}
+.chip{background:var(--panel-2);border:1px solid var(--line-2);border-radius:20px;padding:3px 10px;cursor:pointer;color:var(--ink-2);font-size:12px}
+.chip:hover{border-color:var(--accent);color:var(--accent-2)}
+
+.ctr{border:1px solid var(--line-2);border-radius:9px;margin:0 14px 10px;overflow:hidden;background:#0f1218}
+.ctr .h{display:flex;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line)}
+.ctr table{width:100%;border-collapse:collapse;font-size:12px}
+.ctr td,.ctr th{padding:6px 12px;text-align:left;border-bottom:1px solid var(--line)}
+.ctr th{color:var(--ink-3);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.ctr tr:last-child td{border-bottom:0}
+.tot{display:flex;padding:9px 12px;border-top:1px solid var(--line);align-items:center;gap:8px}
+
+/* command palette */
+.scrim{position:fixed;inset:0;background:rgba(5,7,10,.66);backdrop-filter:blur(3px);z-index:70;display:flex;justify-content:center;align-items:flex-start;padding-top:12vh}
+.pal{width:min(620px,92vw);background:var(--panel-2);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden}
+.pal input{width:100%;background:transparent;border:0;padding:15px 18px;font-size:15px;border-bottom:1px solid var(--line)}
+.pal input:focus{outline:none}
+.pal .r{padding:9px 18px;display:flex;gap:10px;align-items:center;cursor:pointer}
+.pal .r:hover,.pal .r.sel{background:var(--accent-soft)}
+.pal .r .ty{font-size:10px;text-transform:uppercase;color:var(--ink-3);width:54px;flex:none}
+.pal .r .sb{margin-left:auto;color:var(--ink-3);font-size:11.5px}
+.pal .hint{padding:8px 18px;border-top:1px solid var(--line);color:var(--ink-3);font-size:11.5px;display:flex;gap:12px}
+
+/* slide-over wizard */
+.over{position:fixed;inset:0;background:rgba(5,7,10,.6);z-index:70;display:flex;justify-content:flex-end}
+.sheet{width:min(560px,96vw);background:var(--panel);border-left:1px solid var(--line-2);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.5)}
+.sheet header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.sheet .bd{padding:16px 18px;overflow:auto;flex:1}
+.sheet footer{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;background:var(--panel-2)}
+.prog{display:flex;gap:4px;margin-bottom:16px}
+.prog i{flex:1;height:3px;border-radius:2px;background:var(--line-2)}
+.prog i.on{background:var(--accent)}
+label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:5px}
+.f{margin-bottom:13px}
+.f input,.f select,.f textarea{width:100%;background:#0b0d12;border:1px solid var(--line-2);border-radius:7px;padding:7px 10px}
+.f input:focus,.f select:focus,.f textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.pos{display:grid;grid-template-columns:1fr 86px 76px 106px 26px;gap:6px;margin-bottom:7px;align-items:center}
+.pos input,.pos select{background:#0b0d12;border:1px solid var(--line-2);border-radius:6px;padding:5px 7px;width:100%}
+.x{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:16px}
+.doc{border:1px dashed var(--line-2);border-radius:10px;padding:18px;background:#0b0d12}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line-2);
+  padding:10px 16px;border-radius:9px;z-index:90;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.muted{color:var(--ink-3)}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#242b38;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="rail" id="rail"></div>
+  <div class="pane"><header id="ph"></header><div class="list" id="pl"></div></div>
+  <div class="det" id="det"></div>
+</div>
+<div id="ov"></div>
+<script id="crm-data">
+/* AUTOMATISCH EINGEBETTET AUS data.js – dort aendern, dann "node build.mjs" */
+/* Gemeinsame Demo-Daten + Fachlogik fuer alle drei Design-Varianten.
+   Quelle: CRM_Anforderungsspezifikation.docx v1.0 (26.08.2026) */
+
+const PIPELINES = {
+  lead: {
+    label: 'Lead',
+    stufen: [
+      { id: 'kalt', label: 'Kalter Lead' },
+      { id: 'warm', label: 'Warmer Lead' },
+      { id: 'kontaktiert', label: 'Kontaktiert' },
+      { id: 'konvertiert', label: 'Zu Deal konvertiert', endmarker: 'deal' },
+      { id: 'disqualifiziert', label: 'Disqualifiziert', endstufe: true },
+      { id: 'blacklist', label: 'Blacklist', endstufe: true },
+    ],
+  },
+  deal: {
+    label: 'Deal',
+    stufen: [
+      { id: 'inbound', label: 'Inbound' },
+      { id: 'termin', label: 'Termin vereinbart' },
+      { id: 'demo', label: 'Demo durchgeführt' },
+      { id: 'followup', label: 'Follow-up-Phase' },
+      { id: 'angebot', label: 'Angebotsphase' },
+      { id: 'gewonnen', label: 'Gewonnen', endmarker: 'kunde' },
+      { id: 'spaet', label: 'Abschluss spät oder unwahrscheinlich' },
+      { id: 'verloren', label: 'Final verloren', endstufe: true },
+    ],
+  },
+  kunde: {
+    label: 'Kunde',
+    stufen: [
+      { id: 'onboarding', label: 'Onboarding' },
+      { id: 'zahlend', label: 'Zahlender Kunde' },
+      { id: 'abwehr', label: 'Kündigungsabwehr' },
+      { id: 'gekuendigt', label: 'Final gekündigt', endstufe: true },
+    ],
+  },
+};
+
+const WAEHRUNGEN = ['EUR', 'CHF', 'USD', 'GBP', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'CAD', 'AUD', 'JPY'];
+
+const ABRECHNUNG = [
+  { id: 'monatlich', label: 'monatlich' },
+  { id: 'jaehrlich', label: 'jährlich' },
+  { id: 'einmalig', label: 'einmalig' },
+  { id: 'verwendung', label: 'nach Verwendung' },
+];
+
+const USERS = [
+  { id: 'u1', name: 'Patrick Hofmann', kuerzel: 'PH' },
+  { id: 'u2', name: 'Sandra Weiss', kuerzel: 'SW' },
+  { id: 'u3', name: 'Tobias Lenz', kuerzel: 'TL' },
+];
+
+const PRODUKTE = [
+  { id: 'p1', name: 'OpenApe Platform – Basis', standardpreis: 490, standardAbrechnung: 'monatlich', beschreibung: 'Kernplattform, bis 25 Nutzer' },
+  { id: 'p2', name: 'OpenApe Platform – Enterprise', standardpreis: 1490, standardAbrechnung: 'monatlich', beschreibung: 'Unbegrenzte Nutzer, SSO, SLA' },
+  { id: 'p3', name: 'Onboarding & Setup', standardpreis: 2400, standardAbrechnung: 'einmalig', beschreibung: 'Einrichtung, Datenmigration, Schulung' },
+  { id: 'p4', name: 'Zusatzmodul Dokumentensafe', standardpreis: 180, standardAbrechnung: 'monatlich', beschreibung: 'Revisionssichere Ablage' },
+  { id: 'p5', name: 'Support-Kontingent', standardpreis: 140, standardAbrechnung: 'verwendung', beschreibung: 'Abrechnung je angefangene Stunde' },
+];
+
+const FIRMEN = [
+  { id: 'f1', name: 'Brunner Consulting GmbH', website: 'brunner-consulting.at', adresse: 'Mariahilfer Straße 88', plz: '1070', ort: 'Wien', land: 'Österreich' },
+  { id: 'f2', name: 'Hofstätter Bau AG', website: 'hofstaetter-bau.at', adresse: 'Industriestraße 4', plz: '4020', ort: 'Linz', land: 'Österreich' },
+  { id: 'f3', name: 'Nordlicht Medien GmbH', website: 'nordlicht.de', adresse: 'Elbchaussee 210', plz: '22605', ort: 'Hamburg', land: 'Deutschland' },
+  { id: 'f4', name: 'Alpenquell Getränke AG', website: 'alpenquell.ch', adresse: 'Seestrasse 12', plz: '8002', ort: 'Zürich', land: 'Schweiz' },
+  { id: 'f5', name: 'Kepler Labs GmbH', website: 'keplerlabs.io', adresse: 'Neubaugasse 3', plz: '1070', ort: 'Wien', land: 'Österreich' },
+  { id: 'f6', name: 'Sturmberg Logistik KG', website: 'sturmberg-log.at', adresse: 'Hafenweg 19', plz: '5020', ort: 'Salzburg', land: 'Österreich' },
+  { id: 'f7', name: 'Veritas Rechtsanwälte', website: 'veritas-ra.at', adresse: 'Schottenring 22', plz: '1010', ort: 'Wien', land: 'Österreich' },
+];
+
+const PERSONEN = [
+  { id: 'k1', vorname: 'Michael', nachname: 'Brunner', geschlecht: 'männlich', titel: 'Mag.', emails: ['m.brunner@brunner-consulting.at'], telefone: ['+43 1 555 8820'], firmaId: 'f1' },
+  { id: 'k2', vorname: 'Lena', nachname: 'Kastner', geschlecht: 'weiblich', titel: '', emails: ['l.kastner@brunner-consulting.at'], telefone: [], firmaId: 'f1' },
+  { id: 'k3', vorname: 'Georg', nachname: 'Hofstätter', geschlecht: 'männlich', titel: 'Ing.', emails: ['g.hofstaetter@hofstaetter-bau.at'], telefone: ['+43 732 44 12 90'], firmaId: 'f2' },
+  { id: 'k4', vorname: 'Anke', nachname: 'Sölden', geschlecht: 'weiblich', titel: 'Dr.', emails: ['a.soelden@nordlicht.de', 'anke@nordlicht.de'], telefone: ['+49 40 998 220'], firmaId: 'f3' },
+  { id: 'k5', vorname: 'Reto', nachname: 'Amrein', geschlecht: 'männlich', titel: '', emails: ['r.amrein@alpenquell.ch'], telefone: ['+41 44 220 11 08'], firmaId: 'f4' },
+  { id: 'k6', vorname: 'Julia', nachname: 'Pfeiffer', geschlecht: 'weiblich', titel: 'DI', emails: ['julia@keplerlabs.io'], telefone: ['+43 660 20 33 141'], firmaId: 'f5' },
+  { id: 'k7', vorname: 'Marek', nachname: 'Sturm', geschlecht: 'männlich', titel: '', emails: ['m.sturm@sturmberg-log.at'], telefone: [], firmaId: 'f6' },
+  { id: 'k8', vorname: 'Carolin', nachname: 'Vogl', geschlecht: 'weiblich', titel: 'Mag.', emails: ['c.vogl@veritas-ra.at'], telefone: ['+43 1 401 20'], firmaId: 'f7' },
+  { id: 'k9', vorname: 'Stefan', nachname: 'Radlmayr', geschlecht: 'männlich', titel: '', emails: ['s.radlmayr@keplerlabs.io'], telefone: [], firmaId: 'f5' },
+];
+
+const VORGAENGE = [
+  {
+    id: 'v1', firmaId: 'f5', personIds: ['k6', 'k9'], phase: 'kunde', stufe: 'zahlend',
+    titel: 'Kepler Labs – Plattform Enterprise',
+    dokumente: [{ name: 'Kickoff-Protokoll.pdf', groesse: '340 KB', datum: '2026-05-12' }],
+    vertraege: [
+      { id: 'c1', status: 'aktiv', startdatum: '2026-06-01', mindestlaufzeit: 24, waehrung: 'EUR', signiertesPdf: 'Vertrag-KeplerLabs-signiert.pdf',
+        positionen: [
+          { produktId: 'p2', preis: 1290, rabatt: 200, abrechnung: 'monatlich' },
+          { produktId: 'p3', preis: 2400, rabatt: 0, abrechnung: 'einmalig' },
+        ] },
+      { id: 'c2', status: 'aktiv', startdatum: '2026-08-01', mindestlaufzeit: 12, waehrung: 'EUR', signiertesPdf: 'Upsell-Dokumentensafe-signiert.pdf',
+        positionen: [{ produktId: 'p4', preis: 180, rabatt: 0, abrechnung: 'monatlich' }] },
+    ],
+    historie: [
+      { typ: 'mail', ts: '2026-08-24 09:12', autor: 'PH', titel: 'Upsell Dokumentensafe – Rechnung folgt', text: 'Danke für die schnelle Signatur. Die erste Rechnung geht Anfang September raus.' },
+      { typ: 'dokument', ts: '2026-08-22 16:40', autor: 'System', titel: 'Upsell-Dokumentensafe-signiert.pdf abgelegt', text: 'Vertrag von „offen“ auf „aktiv laufend“ gewechselt.' },
+      { typ: 'notiz', ts: '2026-08-14 11:05', autor: 'SW', titel: 'Interesse an Dokumentensafe', text: 'Julia fragt nach revisionssicherer Ablage für die Laborberichte. Upsell als zusätzlicher Vertrag am bestehenden Vorgang.' },
+      { typ: 'termin', ts: '2026-06-03 10:00', autor: 'PH', titel: 'Onboarding-Workshop (Teams)', text: 'Teams-Link automatisch erzeugt, 90 Minuten.' },
+      { typ: 'dokument', ts: '2026-05-28 14:22', autor: 'System', titel: 'Vertrag-KeplerLabs-signiert.pdf abgelegt', text: 'Signatur durch Kunde (EES).' },
+    ],
+  },
+  {
+    id: 'v2', firmaId: 'f1', personIds: ['k1', 'k2'], phase: 'deal', stufe: 'angebot',
+    titel: 'Brunner Consulting – Basis + Onboarding',
+    dokumente: [{ name: 'Anforderungen-Brunner.docx', groesse: '88 KB', datum: '2026-08-11' }],
+    vertraege: [
+      { id: 'c3', status: 'offen', startdatum: '2026-09-15', mindestlaufzeit: 12, waehrung: 'EUR', signiertesPdf: null,
+        positionen: [
+          { produktId: 'p1', preis: 490, rabatt: 40, abrechnung: 'monatlich' },
+          { produktId: 'p3', preis: 2400, rabatt: 400, abrechnung: 'einmalig' },
+        ] },
+    ],
+    historie: [
+      { typ: 'mail', ts: '2026-08-26 08:30', autor: 'PH', titel: 'Angebot AG-2026-041 versendet', text: 'Signaturlink verschickt, Lizenzvertrag als PDF angehängt.' },
+      { typ: 'aufgabe', ts: '2026-08-26 08:31', autor: 'PH', titel: 'Nachfassen Angebot Brunner', text: 'Fällig 02.09.2026 · Verantwortlich Patrick Hofmann' },
+      { typ: 'notiz', ts: '2026-08-20 15:10', autor: 'SW', titel: 'Budget bestätigt', text: 'Michael hat intern 8k Jahresbudget freigegeben, Rabatt auf Onboarding zugesagt.' },
+      { typ: 'termin', ts: '2026-08-13 14:00', autor: 'SW', titel: 'Demo durchgeführt', text: 'Beide Ansprechpartner dabei, Fokus auf Vorgangs-Historie.' },
+      { typ: 'mail', ts: '2026-08-05 09:44', autor: 'M. Brunner', titel: 'Re: Terminvorschlag', text: 'Passt uns am 13.8. um 14 Uhr – bitte Teams-Link.' },
+    ],
+  },
+  {
+    id: 'v3', firmaId: 'f3', personIds: ['k4'], phase: 'deal', stufe: 'demo',
+    titel: 'Nordlicht Medien – Enterprise-Evaluierung',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'termin', ts: '2026-08-25 11:00', autor: 'TL', titel: 'Demo durchgeführt', text: 'Sehr interessiert an Support-Threads, will Angebot bis KW 36.' },
+      { typ: 'notiz', ts: '2026-08-18 09:15', autor: 'TL', titel: 'Zwei Standorte', text: 'Hamburg und Berlin, ca. 40 Nutzer → Enterprise.' },
+      { typ: 'mail', ts: '2026-08-10 17:02', autor: 'A. Sölden', titel: 'Anfrage über Webformular', text: 'Wir suchen ein CRM mit Outlook-Anbindung für 40 Mitarbeitende.' },
+    ],
+  },
+  {
+    id: 'v4', firmaId: 'f2', personIds: ['k3'], phase: 'deal', stufe: 'followup',
+    titel: 'Hofstätter Bau – Basis',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'notiz', ts: '2026-08-19 10:30', autor: 'PH', titel: 'Entscheidung vertagt', text: 'Wartet auf Abschluss des Geschäftsjahres, Wiedervorlage Mitte September.' },
+      { typ: 'termin', ts: '2026-07-30 09:00', autor: 'PH', titel: 'Demo durchgeführt', text: '' },
+    ],
+  },
+  {
+    id: 'v5', firmaId: 'f4', personIds: ['k5'], phase: 'deal', stufe: 'termin',
+    titel: 'Alpenquell – Erstgespräch',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'termin', ts: '2026-09-02 15:00', autor: 'SW', titel: 'Erstgespräch (Teams)', text: 'Einladung über Outlook versendet.' },
+      { typ: 'mail', ts: '2026-08-21 13:20', autor: 'SW', titel: 'Terminvorschläge', text: 'Drei Slots vorgeschlagen, CHF als Währung angefragt.' },
+    ],
+  },
+  {
+    id: 'v6', firmaId: 'f6', personIds: ['k7'], phase: 'lead', stufe: 'kontaktiert',
+    titel: 'Sturmberg Logistik',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'mail', ts: '2026-08-23 08:05', autor: 'TL', titel: 'Erstkontakt', text: 'Kurzvorstellung versendet, noch keine Antwort.' },
+    ],
+  },
+  {
+    id: 'v7', firmaId: 'f7', personIds: ['k8'], phase: 'lead', stufe: 'warm',
+    titel: 'Veritas Rechtsanwälte',
+    dokumente: [], vertraege: [],
+    historie: [
+      { typ: 'notiz', ts: '2026-08-26 12:00', autor: 'PH', titel: 'Empfehlung', text: 'Über Kepler Labs empfohlen, kennt das Produkt bereits.' },
+    ],
+  },
+  {
+    id: 'v8', firmaId: 'f3', personIds: ['k4'], phase: 'kunde', stufe: 'onboarding',
+    titel: 'Nordlicht Medien – Pilotstandort',
+    dokumente: [], vertraege: [
+      { id: 'c4', status: 'aktiv', startdatum: '2026-08-15', mindestlaufzeit: null, waehrung: 'EUR', signiertesPdf: 'Pilot-Nordlicht-signiert.pdf',
+        positionen: [{ produktId: 'p5', preis: 140, rabatt: 0, abrechnung: 'verwendung' }] },
+    ],
+    historie: [
+      { typ: 'aufgabe', ts: '2026-08-26 09:00', autor: 'TL', titel: 'Datenimport CSV vorbereiten', text: 'Fällig 30.08.2026 · Verantwortlich Tobias Lenz' },
+    ],
+  },
+];
+
+const AUFGABEN = [
+  { id: 't1', titel: 'Nachfassen Angebot Brunner', beschreibung: 'Angebot AG-2026-041 telefonisch nachfassen.', faellig: '2026-09-02', verantwortlich: 'u1', status: 'offen', vorgangId: 'v2' },
+  { id: 't2', titel: 'Datenimport CSV vorbereiten', beschreibung: 'Kontaktliste von Nordlicht säubern und importieren.', faellig: '2026-08-30', verantwortlich: 'u3', status: 'offen', vorgangId: 'v8' },
+  { id: 't3', titel: 'Angebot Nordlicht erstellen', beschreibung: 'Enterprise + Onboarding, 40 Nutzer.', faellig: '2026-09-04', verantwortlich: 'u3', status: 'offen', vorgangId: 'v3' },
+  { id: 't4', titel: 'Wiedervorlage Hofstätter', beschreibung: 'Nach Geschäftsjahresabschluss erneut anrufen.', faellig: '2026-09-15', verantwortlich: 'u1', status: 'offen', vorgangId: 'v4' },
+  { id: 't5', titel: 'Teams-Termin Alpenquell bestätigen', beschreibung: '', faellig: '2026-08-28', verantwortlich: 'u2', status: 'offen', vorgangId: 'v5' },
+  { id: 't6', titel: 'Onboarding-Workshop nachbereiten', beschreibung: 'Protokoll versenden.', faellig: '2026-06-04', verantwortlich: 'u1', status: 'erledigt', vorgangId: 'v1' },
+];
+
+const THREADS = [
+  { id: 's1', betreff: 'Signiertes Angebot AG-2026-039 – Kepler Labs', status: 'abgeschlossen', vorgangId: 'v1', quelle: 'automatisch',
+    nachrichten: [{ von: 'system@openape.ai', ts: '2026-08-22 16:40', text: 'Das Angebot AG-2026-039 wurde von Julia Pfeiffer signiert. Das signierte PDF liegt am Vertrag.' }] },
+  { id: 's2', betreff: 'Frage zur Rechnungsstellung', status: 'warten_uns', vorgangId: 'v1', quelle: 'mail',
+    nachrichten: [
+      { von: 'julia@keplerlabs.io', ts: '2026-08-25 10:12', text: 'Können wir die Rechnung künftig auf eine Sammel-PDF pro Quartal umstellen?' },
+      { von: 'support@openape.ai', ts: '2026-08-25 11:30', text: 'Ich prüfe das mit der Buchhaltung und melde mich morgen.' },
+    ] },
+  { id: 's3', betreff: 'CRM mit Outlook-Anbindung gesucht', status: 'warten_kunde', vorgangId: 'v3', quelle: 'webformular',
+    nachrichten: [
+      { von: 'a.soelden@nordlicht.de', ts: '2026-08-10 17:02', text: 'Wir suchen ein CRM mit Outlook-Anbindung für 40 Mitarbeitende. Bitte um Rückmeldung.' },
+      { von: 'support@openape.ai', ts: '2026-08-11 08:20', text: 'Gerne – passt Ihnen ein Termin nächste Woche für eine Demo?' },
+    ] },
+  { id: 's4', betreff: 'Anfrage Testzugang', status: 'neu', vorgangId: null, quelle: 'webformular',
+    nachrichten: [{ von: 'office@thalhammer-immo.at', ts: '2026-08-26 14:48', text: 'Guten Tag, wir hätten Interesse an einem Testzugang für drei Personen. Thalhammer Immobilien GmbH, +43 1 202 44.' }] },
+  { id: 's5', betreff: 'Login funktioniert nicht mehr', status: 'neu', vorgangId: null, quelle: 'mail',
+    nachrichten: [{ von: 'buchhaltung@sturmberg-log.at', ts: '2026-08-26 07:55', text: 'Seit heute früh kommen wir nicht mehr in den Kundenbereich.' }] },
+];
+
+const THREAD_STATUS = {
+  neu: 'Neu',
+  warten_kunde: 'Beantwortet – warten auf Kunde',
+  warten_uns: 'Beantwortet – warten auf uns',
+  abgeschlossen: 'Abgeschlossen',
+};
+
+const VERTRAG_STATUS = {
+  offen: 'offen',
+  aktiv: 'aktiv laufend',
+  fertig: 'fertig abgeschlossen',
+  gekuendigt: 'gekündigt',
+};
+
+/* ---------- Fachlogik ---------- */
+
+const CRM = {
+  pipelines: PIPELINES, waehrungen: WAEHRUNGEN, abrechnung: ABRECHNUNG, users: USERS,
+  produkte: PRODUKTE, firmen: FIRMEN, personen: PERSONEN, vorgaenge: VORGAENGE,
+  aufgaben: AUFGABEN, threads: THREADS, threadStatus: THREAD_STATUS, vertragStatus: VERTRAG_STATUS,
+
+  firma: (v) => FIRMEN.find((f) => f.id === v.firmaId),
+  personenVon: (v) => v.personIds.map((id) => PERSONEN.find((p) => p.id === id)),
+  produkt: (id) => PRODUKTE.find((p) => p.id === id),
+  user: (id) => USERS.find((u) => u.id === id),
+  vorgang: (id) => VORGAENGE.find((v) => v.id === id),
+  stufe: (phase, id) => PIPELINES[phase].stufen.find((s) => s.id === id),
+  name: (p) => [p.titel, p.vorname, p.nachname].filter(Boolean).join(' '),
+  initialen: (p) => ((p.vorname || '')[0] || '') + ((p.nachname || '')[0] || ''),
+
+  geld(betrag, waehrung = 'EUR') {
+    return new Intl.NumberFormat('de-AT', { style: 'currency', currency: waehrung, maximumFractionDigits: 0 }).format(betrag);
+  },
+
+  datum(iso) {
+    if (!iso) return '—';
+    const [d] = iso.split(' ');
+    const [y, m, day] = d.split('-');
+    return `${day}.${m}.${y}`;
+  },
+
+  /* Vertragsende = Startdatum + Mindestlaufzeit, nur wenn Mindestlaufzeit gesetzt (Spec 3.4) */
+  vertragsende(vertrag) {
+    if (!vertrag.mindestlaufzeit) return null;
+    const d = new Date(vertrag.startdatum);
+    d.setMonth(d.getMonth() + vertrag.mindestlaufzeit);
+    return d.toISOString().slice(0, 10);
+  },
+
+  positionsSumme: (pos) => pos.preis - (pos.rabatt || 0),
+
+  /* Laufend/einmalig wird abgeleitet, nicht gespeichert (Spec 3.5 / A3) */
+  vertragsArt(vertrag) {
+    const arten = new Set(vertrag.positionen.map((p) => (p.abrechnung === 'einmalig' ? 'einmalig' : 'laufend')));
+    return arten.size > 1 ? 'gemischt' : [...arten][0];
+  },
+
+  vertragsWert(vertrag) {
+    return vertrag.positionen.reduce((s, p) => s + CRM.positionsSumme(p), 0);
+  },
+
+  /* Endmarker-Stufen ueberfuehren den Vorgang automatisch in die naechste Phase (Spec 4) */
+  setzeStufe(vorgang, stufeId) {
+    const stufe = CRM.stufe(vorgang.phase, stufeId);
+    if (stufe.endmarker) {
+      const zielPhase = stufe.endmarker;
+      vorgang.phase = zielPhase;
+      vorgang.stufe = PIPELINES[zielPhase].stufen[0].id;
+      CRM.log(vorgang, 'notiz', `Automatisch in Phase „${PIPELINES[zielPhase].label}“ überführt`,
+        `Endmarker „${stufe.label}“ erreicht → Landestufe „${PIPELINES[zielPhase].stufen[0].label}“.`);
+      return { konvertiert: true, phase: zielPhase };
+    }
+    vorgang.stufe = stufeId;
+    return { konvertiert: false };
+  },
+
+  log(vorgang, typ, titel, text) {
+    const now = new Date('2026-08-27T09:30:00');
+    const ts = `${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    vorgang.historie.unshift({ typ, ts, autor: 'PH', titel, text });
+  },
+
+  /* Angebot signiert → Vertrag aktiv + PDF + Support-Thread (Spec 6.4, Schritte 8/9) */
+  angebotAnlegen(vorgang, positionen, waehrung, startdatum, mindestlaufzeit) {
+    const vertrag = {
+      id: 'c' + (VORGAENGE.reduce((n, v) => n + v.vertraege.length, 0) + 1),
+      status: 'offen', startdatum, mindestlaufzeit, waehrung, signiertesPdf: null, positionen,
+    };
+    vorgang.vertraege.push(vertrag);
+    CRM.log(vorgang, 'mail', 'Angebot versendet', `Signaturlink an ${CRM.personenVon(vorgang)[0].emails[0]}, Vertrag im Status „offen“ angelegt.`);
+    return vertrag;
+  },
+
+  angebotSignieren(vorgang, vertrag) {
+    vertrag.status = 'aktiv';
+    vertrag.signiertesPdf = `Vertrag-${CRM.firma(vorgang).name.split(' ')[0]}-signiert.pdf`;
+    CRM.log(vorgang, 'dokument', `${vertrag.signiertesPdf} abgelegt`, 'Einfache elektronische Signatur (EES) durch den Kunden. Vertrag „offen“ → „aktiv laufend“.');
+    THREADS.unshift({
+      id: 's' + (THREADS.length + 1), betreff: `Signiertes Angebot – ${CRM.firma(vorgang).name}`,
+      status: 'neu', vorgangId: vorgang.id, quelle: 'automatisch',
+      nachrichten: [{ von: 'system@openape.ai', ts: '2026-08-27 09:30', text: `Das Angebot wurde signiert. Das PDF liegt am Vertrag ${vertrag.id}.` }],
+    });
+  },
+
+  suche(q) {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    const treffer = [];
+    VORGAENGE.forEach((v) => {
+      const hay = [v.titel, CRM.firma(v).name, ...CRM.personenVon(v).flatMap((p) => [CRM.name(p), ...p.emails]),
+        ...v.historie.map((h) => h.titel + ' ' + h.text)].join(' ').toLowerCase();
+      if (hay.includes(s)) treffer.push({ typ: 'Vorgang', id: v.id, label: v.titel, sub: `${PIPELINES[v.phase].label} · ${CRM.stufe(v.phase, v.stufe).label}` });
+    });
+    PERSONEN.forEach((p) => {
+      if ((CRM.name(p) + ' ' + p.emails.join(' ')).toLowerCase().includes(s)) {
+        treffer.push({ typ: 'Person', id: p.id, label: CRM.name(p), sub: p.emails[0] });
+      }
+    });
+    FIRMEN.forEach((f) => {
+      if (f.name.toLowerCase().includes(s)) treffer.push({ typ: 'Firma', id: f.id, label: f.name, sub: `${f.plz} ${f.ort}` });
+    });
+    return treffer.slice(0, 12);
+  },
+};
+
+window.CRM = CRM;
+
+</script>
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let view={pane:'vorgaenge',phase:'deal',vorgangId:'v2',tab:'feed'};
+let wizard=null, palette=null;
+const PHASE_PILL={lead:'amber',deal:'cyan',kunde:'lime'};
+
+const RAIL=[{id:'vorgaenge',ic:'◧',t:'Vorgänge'},{id:'aufgaben',ic:'✓',t:'Aufgaben'},
+  {id:'support',ic:'✉',t:'Support'},{id:'kontakte',ic:'⌾',t:'Kontakte'},{id:'produkte',ic:'≡',t:'Katalog'}];
+
+function renderRail(){
+  const neu=CRM.threads.filter(t=>t.status==='neu').length;
+  $('#rail').innerHTML=`<div class="logo">◑</div>
+    ${RAIL.map(r=>`<button data-p="${r.id}" title="${r.t}" class="${view.pane===r.id?'on':''}">${r.ic}
+      ${r.id==='support'&&neu?'<span class="dot"></span>':''}</button>`).join('')}
+    <div class="sp"></div>
+    <button title="Suche  ⌘K" id="cmdk">⌕</button>
+    <button title="Patrick Hofmann" style="background:var(--accent);color:#fff">PH</button>`;
+  $('#rail').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{view.pane=b.dataset.p;render();});
+  $('#cmdk').onclick=openPalette;
+}
+
+/* ---------- Liste links ---------- */
+function renderPane(){
+  if(view.pane==='vorgaenge'){
+    const pipe=CRM.pipelines[view.phase];
+    $('#ph').innerHTML=`<h2>Vorgänge <span class="k"><kbd>⌘</kbd><kbd>K</kbd></span></h2>
+      <div class="seg">${Object.entries(CRM.pipelines).map(([id,p])=>
+        `<button data-ph="${id}" class="${view.phase===id?'on':''}">${p.label}</button>`).join('')}</div>`;
+    $('#pl').innerHTML=pipe.stufen.map(s=>{
+      const items=CRM.vorgaenge.filter(v=>v.phase===view.phase&&v.stufe===s.id);
+      if(!items.length) return '';
+      return `<div class="grp">${esc(s.label)}${s.endmarker?' <span class="pill acc">Endmarker</span>':''}<b>${items.length}</b></div>
+        ${items.map(v=>{const p=CRM.personenVon(v)[0];
+        return `<div class="item ${view.vorgangId===v.id?'on':''}" data-v="${v.id}">
+          <b>${esc(CRM.firma(v).name)}</b>
+          <div class="s">${esc(CRM.name(p))}${v.vertraege.length?`<span class="pill">${CRM.geld(v.vertraege.reduce((a,c)=>a+CRM.vertragsWert(c),0))}</span>`:''}</div>
+        </div>`;}).join('')}`;}).join('') || '<p class="muted" style="padding:14px">Keine Vorgänge in dieser Phase.</p>';
+  }
+  if(view.pane==='aufgaben'){
+    $('#ph').innerHTML=`<h2>Aufgaben</h2><div class="seg"><button class="on">Offen</button><button>Alle</button></div>`;
+    $('#pl').innerHTML=CRM.aufgaben.map(a=>{const v=CRM.vorgang(a.vorgangId);
+      return `<div class="item" data-v="${a.vorgangId}"><b style="${a.status==='erledigt'?'text-decoration:line-through;color:var(--ink-3)':''}">${esc(a.titel)}</b>
+        <div class="s">${esc(CRM.firma(v).name)}<span class="pill ${new Date(a.faellig)<new Date('2026-08-27')&&a.status==='offen'?'rose':''}">${CRM.datum(a.faellig)}</span>
+        <span class="pill">${esc(CRM.user(a.verantwortlich).kuerzel)}</span></div></div>`;}).join('');
+  }
+  if(view.pane==='support'){
+    $('#ph').innerHTML=`<h2>Support-Posteingang</h2><div class="seg"><button class="on">Alle</button><button>Neu</button></div>`;
+    $('#pl').innerHTML=CRM.threads.map(t=>`<div class="item" data-t="${t.id}"><b>${esc(t.betreff)}</b>
+      <div class="s">${esc(t.nachrichten[0].von)}</div>
+      <div class="s"><span class="pill ${t.status==='neu'?'rose':t.status==='abgeschlossen'?'':'cyan'}">${CRM.threadStatus[t.status]}</span>
+      <span class="pill">${esc(t.quelle)}</span></div></div>`).join('');
+  }
+  if(view.pane==='kontakte'){
+    $('#ph').innerHTML=`<h2>Firmen & Personen</h2><div class="seg"><button class="on">Firmen</button><button>Personen</button></div>`;
+    $('#pl').innerHTML=CRM.firmen.map(f=>{const ps=CRM.personen.filter(p=>p.firmaId===f.id);
+      const v=CRM.vorgaenge.find(x=>x.firmaId===f.id);
+      return `<div class="item" ${v?`data-v="${v.id}"`:''}><b>${esc(f.name)}</b>
+        <div class="s">${ps.length} Person(en) · ${esc(f.ort)}</div></div>`;}).join('');
+  }
+  if(view.pane==='produkte'){
+    $('#ph').innerHTML=`<h2>Preiskatalog</h2>`;
+    $('#pl').innerHTML=CRM.produkte.map(p=>`<div class="item"><b>${esc(p.name)}</b>
+      <div class="s">${CRM.geld(p.standardpreis)} <span class="pill">${esc(p.standardAbrechnung)}</span></div></div>`).join('');
+  }
+  $('#ph').querySelectorAll('[data-ph]').forEach(b=>b.onclick=()=>{view.phase=b.dataset.ph;
+    const first=CRM.vorgaenge.find(v=>v.phase===view.phase); if(first)view.vorgangId=first.id; render();});
+  $('#pl').querySelectorAll('[data-v]').forEach(el=>el.onclick=()=>{view.vorgangId=el.dataset.v;view.tab='feed';render();});
+  $('#pl').querySelectorAll('[data-t]').forEach(el=>el.onclick=()=>openThread(CRM.threads.find(x=>x.id===el.dataset.t)));
+}
+
+/* ---------- Detail rechts ---------- */
+const ICON={mail:'✉',notiz:'✎',aufgabe:'✓',termin:'▣',dokument:'▤'};
+function renderDetail(){
+  const v=CRM.vorgang(view.vorgangId),f=CRM.firma(v),ps=CRM.personenVon(v),pipe=CRM.pipelines[v.phase];
+  const idx=pipe.stufen.findIndex(s=>s.id===v.stufe);
+  const aufg=CRM.aufgaben.filter(a=>a.vorgangId===v.id);
+  $('#det').innerHTML=`
+  <div class="dhead"><div style="display:flex;align-items:flex-start">
+    <div><h1>${esc(f.name)} <span class="pill ${PHASE_PILL[v.phase]}">${pipe.label}</span></h1>
+      <div class="sub">${esc(v.titel)} · ${ps.map(p=>esc(CRM.name(p))).join(', ')}</div></div>
+    <div class="acts">
+      <button class="btn gh" data-act="mail">✉ Mail</button>
+      <button class="btn gh" data-act="termin">▣ Termin</button>
+      <button class="btn pri" data-act="angebot">Angebot erstellen</button></div>
+  </div></div>
+  <div class="track">${pipe.stufen.map((s,i)=>`<button data-stufe="${s.id}"
+      class="${s.id===v.stufe?'on':i<idx?'done':''} ${s.endmarker?'mark':''}">${esc(s.label)}</button>`).join('')}</div>
+  <div class="cols">
+    <div class="stack">
+      <div class="box"><h3>Historie <span class="muted" style="text-transform:none;letter-spacing:0">alles am Vorgang, chronologisch</span></h3>
+        <div class="chips">
+          <button class="chip" data-act="notiz">+ Notiz</button>
+          <button class="chip" data-act="aufgabe">+ Aufgabe</button>
+          <button class="chip" data-act="upload">+ Dokument</button></div>
+        <ul class="feed">${v.historie.map(h=>`<li><div class="dt ${h.typ}">${ICON[h.typ]}</div>
+          <div style="flex:1"><div style="display:flex"><b>${esc(h.titel)}</b><span class="ts">${esc(h.ts)} · ${esc(h.autor)}</span></div>
+          ${h.text?`<p>${esc(h.text)}</p>`:''}</div></li>`).join('')}</ul>
+        <div class="write"><input id="note" placeholder="Notiz schreiben … (⏎ zum Speichern)"><button class="btn" data-act="note">Speichern</button></div>
+      </div>
+      <div class="box"><h3>Verträge <span class="muted" style="margin-left:auto;text-transform:none;letter-spacing:0">${v.vertraege.length} am Vorgang</span></h3>
+        ${v.vertraege.length?v.vertraege.map(c=>`
+        <div class="ctr"><div class="h"><b>${esc(c.id.toUpperCase())}</b>
+          <span class="pill ${c.status==='aktiv'?'lime':c.status==='offen'?'amber':''}">${CRM.vertragStatus[c.status]}</span>
+          <span class="pill">${CRM.vertragsArt(c)}</span>
+          <span class="muted" style="margin-left:auto">${CRM.datum(c.startdatum)} → ${c.mindestlaufzeit?CRM.datum(CRM.vertragsende(c)):'offen'}</span></div>
+          <table><thead><tr><th>Position</th><th>Preis</th><th>Rabatt</th><th>Abrechnung</th></tr></thead><tbody>
+          ${c.positionen.map(p=>`<tr><td>${esc(CRM.produkt(p.produktId).name)}</td><td>${CRM.geld(p.preis,c.waehrung)}</td>
+            <td>${p.rabatt?'−'+CRM.geld(p.rabatt,c.waehrung):'—'}</td><td>${esc(p.abrechnung)}</td></tr>`).join('')}</tbody></table>
+          <div class="tot">${c.signiertesPdf?`<span class="muted">▤ ${esc(c.signiertesPdf)}</span>`:'<span class="muted">nicht signiert</span>'}
+            <b style="margin-left:auto">${CRM.geld(CRM.vertragsWert(c),c.waehrung)}</b>
+            ${c.status==='offen'?`<button class="btn pri" data-sign="${c.id}">Signatur simulieren</button>`:''}</div>
+        </div>`).join(''):'<div class="in muted">Noch kein Vertrag – „Angebot erstellen“ legt automatisch einen im Status „offen“ an.</div>'}
+      </div>
+    </div>
+    <div class="stack">
+      <div class="box"><h3>Firma</h3><div class="in"><dl class="kv">
+        <dt>Website</dt><dd>${esc(f.website)}</dd><dt>Adresse</dt><dd>${esc(f.adresse)}<br>${esc(f.plz)} ${esc(f.ort)}<br>${esc(f.land)}</dd></dl></div></div>
+      <div class="box"><h3>Personen</h3><div class="in">${ps.map(p=>`<div style="margin-bottom:9px">
+        <b>${esc(CRM.name(p))}</b><div class="muted">${p.emails.map(esc).join('<br>')}</div>
+        ${p.telefone.length?`<div class="muted">${p.telefone.map(esc).join(', ')}</div>`:''}</div>`).join('')}</div></div>
+      <div class="box"><h3>Aufgaben</h3><div class="in">${aufg.length?aufg.map(a=>`
+        <label style="display:flex;gap:8px;text-transform:none;letter-spacing:0;color:var(--ink);font-size:13px;margin-bottom:7px;cursor:pointer">
+        <input type="checkbox" data-task="${a.id}" ${a.status==='erledigt'?'checked':''} style="width:auto">
+        <span style="${a.status==='erledigt'?'text-decoration:line-through;color:var(--ink-3)':''}">${esc(a.titel)}
+        <span class="muted" style="display:block;font-size:11.5px">${CRM.datum(a.faellig)} · ${esc(CRM.user(a.verantwortlich).kuerzel)}</span></span></label>`).join('')
+        :'<span class="muted">Keine Aufgaben.</span>'}</div></div>
+      <div class="box"><h3>Dokumente</h3><div class="in">${v.dokumente.length?v.dokumente.map(d=>
+        `<div>▤ ${esc(d.name)} <span class="muted">${esc(d.groesse)}</span></div>`).join(''):'<span class="muted">Keine Dokumente.</span>'}</div></div>
+    </div>
+  </div>`;
+  bindDetail();
+}
+function bindDetail(){
+  const v=CRM.vorgang(view.vorgangId);
+  $('#det').querySelectorAll('[data-stufe]').forEach(b=>b.onclick=()=>{
+    const r=CRM.setzeStufe(v,b.dataset.stufe);
+    if(r.konvertiert){view.phase=r.phase;toast('Endmarker erreicht → Phase „'+CRM.pipelines[r.phase].label+'“, Landestufe „'+CRM.pipelines[r.phase].stufen[0].label+'“');}
+    render();});
+  $('#det').querySelectorAll('[data-task]').forEach(cb=>cb.onchange=()=>{
+    const a=CRM.aufgaben.find(x=>x.id===cb.dataset.task);a.status=cb.checked?'erledigt':'offen';render();});
+  $('#det').querySelectorAll('[data-sign]').forEach(b=>b.onclick=()=>{
+    CRM.angebotSignieren(v,v.vertraege.find(c=>c.id===b.dataset.sign));render();
+    toast('Signiert · Vertrag „aktiv laufend“ · Thread in support@');});
+  $('#det').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.act;
+    if(a==='angebot') return startWizard(v);
+    if(a==='note'){saveNote(v);return;}
+    if(a==='notiz'){$('#note').focus();return;}
+    if(a==='mail'){CRM.log(v,'mail','Mail über CRM gesendet','Absender: persönliches Postfach oder support@ – nur über das CRM laufende Mails werden geloggt.');render();return;}
+    if(a==='termin'){CRM.log(v,'termin','Kalendereinladung versendet','Über Outlook inkl. automatisch erzeugtem Teams-Link.');render();return;}
+    if(a==='aufgabe'){CRM.aufgaben.push({id:'t'+CRM.aufgaben.length,titel:'Neue Aufgabe',beschreibung:'',faellig:'2026-09-05',verantwortlich:'u1',status:'offen',vorgangId:v.id});
+      CRM.log(v,'aufgabe','Neue Aufgabe','Fällig 05.09.2026 · Verantwortlich Patrick Hofmann');render();return;}
+    if(a==='upload'){v.dokumente.push({name:'Upload.pdf',groesse:'96 KB',datum:'2026-08-27'});
+      CRM.log(v,'dokument','Upload.pdf abgelegt','Allgemeines Dokument am Vorgang.');render();return;}});
+  const n=$('#note'); if(n) n.onkeydown=e=>{if(e.key==='Enter')saveNote(v);};
+}
+function saveNote(v){const t=$('#note').value.trim();if(!t)return;CRM.log(v,'notiz','Notiz',t);render();}
+
+/* ---------- Command palette (⌘K) ---------- */
+function openPalette(){
+  palette={q:'',sel:0};
+  $('#ov').innerHTML=`<div class="scrim"><div class="pal">
+    <input id="pq" placeholder="Suche Vorgang, Person, Firma, Volltext …" autocomplete="off">
+    <div id="pr"></div>
+    <div class="hint"><span><kbd>↑</kbd><kbd>↓</kbd> navigieren</span><span><kbd>⏎</kbd> öffnen</span><span><kbd>esc</kbd> schließen</span></div>
+  </div></div>`;
+  $('#pq').focus();
+  $('#pq').oninput=()=>{palette.q=$('#pq').value;palette.sel=0;paletteResults();};
+  $('#pq').onkeydown=e=>{
+    const r=CRM.suche(palette.q);
+    if(e.key==='ArrowDown'){palette.sel=Math.min(palette.sel+1,r.length-1);paletteResults();e.preventDefault();}
+    if(e.key==='ArrowUp'){palette.sel=Math.max(palette.sel-1,0);paletteResults();e.preventDefault();}
+    if(e.key==='Enter'&&r[palette.sel])goto(r[palette.sel]);
+    if(e.key==='Escape')closeOv();};
+  $('.scrim').onclick=e=>{if(e.target.classList.contains('scrim'))closeOv();};
+  paletteResults();
+}
+function paletteResults(){
+  const r=CRM.suche(palette.q);
+  $('#pr').innerHTML=r.length?r.map((x,i)=>`<div class="r ${i===palette.sel?'sel':''}" data-i="${i}">
+    <span class="ty">${x.typ}</span><span>${esc(x.label)}</span><span class="sb">${esc(x.sub)}</span></div>`).join('')
+    :(palette.q?'<div class="r muted">Keine Treffer</div>':'<div class="r muted">Tippen zum Suchen …</div>');
+  $('#pr').querySelectorAll('[data-i]').forEach(d=>d.onclick=()=>goto(r[+d.dataset.i]));
+}
+function goto(t){
+  let id=t.id;
+  if(t.typ==='Person')id=(CRM.vorgaenge.find(v=>v.personIds.includes(t.id))||{}).id;
+  if(t.typ==='Firma')id=(CRM.vorgaenge.find(v=>v.firmaId===t.id)||{}).id;
+  if(!id)return toast('Kein Vorgang zu diesem Treffer');
+  const v=CRM.vorgang(id);view.phase=v.phase;view.pane='vorgaenge';view.vorgangId=id;closeOv();render();
+}
+
+/* ---------- Angebots-Workflow als Slide-over ---------- */
+function startWizard(v){
+  wizard={schritt:1,vorgangId:v.id,positionen:[{produktId:'p1',preis:490,rabatt:0,abrechnung:'monatlich'}],
+    bedingungen:'',waehrung:'EUR',startdatum:'2026-09-15',laufzeit:12,vertrag:null};
+  renderWizard();
+}
+function renderWizard(){
+  const w=wizard,v=CRM.vorgang(w.vorgangId),f=CRM.firma(v),p=CRM.personenVon(v)[0];
+  const T=['Kundendaten','Produkte','Bedingungen','Versand','Signatur'];
+  const summe=w.positionen.reduce((s,x)=>s+CRM.positionsSumme(x),0);
+  let bd='';
+  if(w.schritt===1)bd=`<p class="muted">Aus dem Vorgang übernommen – Firma, Ansprechpartner und Adresse sind vorbefüllt.</p>
+    <div class="row"><div class="f"><label>Firma</label><input value="${esc(f.name)}" readonly></div>
+    <div class="f"><label>Ansprechpartner</label><input value="${esc(CRM.name(p))}" readonly></div></div>
+    <div class="f"><label>Adresse</label><input value="${esc(f.adresse+', '+f.plz+' '+f.ort)}" readonly></div>
+    <div class="f"><label>Empfänger</label><input value="${esc(p.emails[0])}" readonly></div>`;
+  if(w.schritt===2)bd=`
+    <div class="pos muted" style="font-size:11px"><span>Produkt</span><span>Preis</span><span>Rabatt</span><span>Abrechnung</span><span></span></div>
+    ${w.positionen.map((x,i)=>`<div class="pos">
+      <select data-pi="${i}" data-fld="produktId">${CRM.produkte.map(pr=>`<option value="${pr.id}" ${pr.id===x.produktId?'selected':''}>${esc(pr.name)}</option>`).join('')}</select>
+      <input type="number" data-pi="${i}" data-fld="preis" value="${x.preis}">
+      <input type="number" data-pi="${i}" data-fld="rabatt" value="${x.rabatt}">
+      <select data-pi="${i}" data-fld="abrechnung">${CRM.abrechnung.map(a=>`<option value="${a.id}" ${a.id===x.abrechnung?'selected':''}>${a.label}</option>`).join('')}</select>
+      <button class="x" data-del="${i}">×</button></div>`).join('')}
+    <button class="btn" id="addpos">+ Position</button>
+    <div class="row" style="margin-top:16px"><div class="f"><label>Währung</label>
+      <select data-w="waehrung">${CRM.waehrungen.map(c=>`<option ${c===w.waehrung?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="f"><label>Start</label><input type="date" data-w="startdatum" value="${w.startdatum}"></div>
+      <div class="f"><label>Mindestlaufzeit (Mon.)</label><input type="number" data-w="laufzeit" value="${w.laufzeit}"></div></div>
+    <p class="muted">Abgeleitete Vertragsart: <b>${CRM.vertragsArt({positionen:w.positionen})}</b> · Summe <b>${CRM.geld(summe,w.waehrung)}</b></p>`;
+  if(w.schritt===3)bd=`<div class="f"><label>Besondere Bedingungen (Freitext)</label>
+    <textarea rows="6" data-w="bedingungen" placeholder="z. B. Rabatt gilt für die ersten 12 Monate …">${esc(w.bedingungen)}</textarea></div>
+    <div class="doc">▤ <b>Lizenzvertrag_v4.pdf</b> <span class="muted">wird dem Angebot automatisch angehängt</span></div>`;
+  if(w.schritt===4)bd=`<div class="doc"><b>Angebot AG-2026-042</b> — ${esc(f.name)}
+    <p class="muted">${w.positionen.length} Position(en) · ${CRM.geld(summe,w.waehrung)} · Start ${CRM.datum(w.startdatum)}${w.laufzeit?` · ${w.laufzeit} Monate`:''}</p>
+    ${w.bedingungen?`<p>${esc(w.bedingungen)}</p>`:''}
+    <p class="muted">Signierbares PDF aus Vorlage + Lizenzvertrag.</p></div>
+    <p style="margin-top:14px">Versand über Outlook an <b>${esc(p.emails[0])}</b> mit Link zur Signaturseite. Gleichzeitig entsteht ein Vertrag im Status <b>„offen“</b>.</p>`;
+  if(w.schritt===5)bd=`<div class="doc" style="text-align:center"><div style="font-size:30px">✍</div>
+    <b>Signaturseite (Kundensicht)</b><p class="muted">Einfache elektronische Signatur – nur der Kunde signiert, keine Gegenzeichnung.</p>
+    <button class="btn pri" id="dosign">Unterzeichnen</button></div>
+    <p class="muted" style="margin-top:14px">Danach: signiertes PDF am Vertrag · Status „aktiv laufend“ · automatische Mail an support@.</p>`;
+
+  $('#ov').innerHTML=`<div class="over"><div class="sheet">
+    <header><b>Angebot erstellen</b><span class="muted">${esc(f.name)}</span>
+      <button class="x" id="wclose" style="margin-left:auto">×</button></header>
+    <div class="bd"><div class="prog">${T.map((_,i)=>`<i class="${i<w.schritt?'on':''}"></i>`).join('')}</div>
+      <h3 style="margin:0 0 12px;font-size:15px">${w.schritt}. ${T[w.schritt-1]}</h3>${bd}</div>
+    <footer>${w.schritt>1?'<button class="btn" id="wback">Zurück</button>':''}<span style="flex:1"></span>
+      ${w.schritt<4?'<button class="btn pri" id="wnext">Weiter</button>':''}
+      ${w.schritt===4?'<button class="btn pri" id="wsend">Angebot versenden</button>':''}</footer>
+  </div></div>`;
+  bindWizard();
+}
+function bindWizard(){
+  const w=wizard,v=CRM.vorgang(w.vorgangId);
+  $('#wclose').onclick=()=>{wizard=null;closeOv();render();};
+  $('.over').onclick=e=>{if(e.target.classList.contains('over')){wizard=null;closeOv();render();}};
+  if($('#wback'))$('#wback').onclick=()=>{w.schritt--;renderWizard();};
+  if($('#wnext'))$('#wnext').onclick=()=>{w.schritt++;renderWizard();};
+  if($('#addpos'))$('#addpos').onclick=()=>{w.positionen.push({produktId:'p3',preis:2400,rabatt:0,abrechnung:'einmalig'});renderWizard();};
+  $('#ov').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(w.positionen.length>1){w.positionen.splice(+b.dataset.del,1);renderWizard();}});
+  $('#ov').querySelectorAll('[data-pi]').forEach(inp=>inp.onchange=()=>{
+    const p=w.positionen[+inp.dataset.pi],fld=inp.dataset.fld;
+    p[fld]=fld==='preis'||fld==='rabatt'?+inp.value:inp.value;
+    if(fld==='produktId'){const pr=CRM.produkt(inp.value);p.preis=pr.standardpreis;p.abrechnung=pr.standardAbrechnung||p.abrechnung;}
+    renderWizard();});
+  $('#ov').querySelectorAll('[data-w]').forEach(inp=>inp.onchange=()=>{
+    const k=inp.dataset.w;w[k]=k==='laufzeit'?(+inp.value||null):inp.value;if(k!=='bedingungen')renderWizard();});
+  if($('#wsend'))$('#wsend').onclick=()=>{
+    w.vertrag=CRM.angebotAnlegen(v,w.positionen.map(p=>({...p})),w.waehrung,w.startdatum,w.laufzeit);
+    w.schritt=5;renderWizard();toast('Angebot versendet · Vertrag „offen“ angelegt');};
+  if($('#dosign'))$('#dosign').onclick=()=>{
+    CRM.angebotSignieren(v,w.vertrag);
+    if(v.phase==='deal')CRM.setzeStufe(v,'gewonnen');
+    wizard=null;closeOv();view.phase=v.phase;render();
+    toast('Signiert · Vertrag aktiv · Mail an support@ · Vorgang jetzt Phase „Kunde“');};
+}
+
+function openThread(t){
+  const v=t.vorgangId&&CRM.vorgang(t.vorgangId);
+  $('#ov').innerHTML=`<div class="over"><div class="sheet">
+    <header><b>${esc(t.betreff)}</b><span class="pill">${esc(t.quelle)}</span>
+      <button class="x" id="tc" style="margin-left:auto">×</button></header>
+    <div class="bd">
+      <div class="f"><label>Thread-Status</label><select id="ts">${Object.entries(CRM.threadStatus).map(([k,l])=>
+        `<option value="${k}" ${t.status===k?'selected':''}>${l}</option>`).join('')}</select></div>
+      ${v?`<p class="muted">Absender ist zugeordnet → Nachricht liegt zusätzlich am Vorgang <b style="color:var(--ink)">${esc(CRM.firma(v).name)}</b>.</p>`
+        :`<p class="muted">Absender keinem Kontakt zugeordnet. <button class="btn" id="mk">Manuell Vorgang anlegen</button></p>`}
+      <ul class="feed">${t.nachrichten.map(n=>`<li><div class="dt mail">✉</div><div style="flex:1">
+        <div style="display:flex"><b>${esc(n.von)}</b><span class="ts">${esc(n.ts)}</span></div><p>${esc(n.text)}</p></div></li>`).join('')}</ul>
+    </div>
+    <footer><input class="btn" style="flex:1;text-align:left" placeholder="Antwort über support@ …"><button class="btn pri">Senden</button></footer>
+  </div></div>`;
+  $('#tc').onclick=()=>{closeOv();render();};
+  $('.over').onclick=e=>{if(e.target.classList.contains('over')){closeOv();render();}};
+  $('#ts').onchange=e=>{t.status=e.target.value;toast('Status: '+CRM.threadStatus[t.status]);renderPane();};
+  if($('#mk'))$('#mk').onclick=()=>{closeOv();toast('Aus einer Anfrage wird nur manuell ein Vorgang angelegt');};
+}
+
+function closeOv(){$('#ov').innerHTML='';palette=null;}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3400);}
+function render(){renderRail();renderPane();renderDetail();}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}
+  if(e.key==='Escape'&&!wizard)closeOv();});
+render();
+</script>
+</body></html>

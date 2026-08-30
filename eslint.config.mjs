@@ -18,6 +18,7 @@ export default antfu({
     '**/*.vue.d.ts',
     '**/*.generated.ts',
     '**/modules/*/src/runtime/**/*.js',
+    'apps/openape-crm/demo/**',
   ],
   rules: {
     'node/prefer-global/process': 'off',

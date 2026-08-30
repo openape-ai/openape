@@ -3,21 +3,29 @@ import { defineEventHandler, getRouterParam, readBody, setResponseStatus } from 
 import { ulid } from 'ulid'
 import { useDb } from '../../../database/drizzle'
 import { deals, notes } from '../../../database/schema'
+import { parseNoteKind, parseNoteTitle } from '../../../utils/notes'
 import { createProblemError } from '../../../utils/problem'
 import { requireRole } from '../../../utils/workspace-access'
 
 const MAX_BODY = 5000
 
-/** POST /api/deals/:id/notes — Notiz anhängen. Body: { body: string } */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const dealId = getRouterParam(event, 'id')!
-  const input = await readBody<{ body?: string }>(event)
+  const input = await readBody<{ body?: string, title?: string, kind?: string }>(event)
 
   const text = input?.body?.trim()
   if (!text || text.length > MAX_BODY) {
     throw createProblemError({ status: 400, title: `body must be 1–${MAX_BODY} chars` })
   }
+  let kind
+  try {
+    kind = parseNoteKind(input?.kind)
+  }
+  catch {
+    throw createProblemError({ status: 400, title: 'unknown kind' })
+  }
+  const title = parseNoteTitle(input?.title)
 
   const db = useDb()
   const deal = await db.select().from(deals).where(eq(deals.id, dealId)).get()
@@ -31,10 +39,12 @@ export default defineEventHandler(async (event) => {
     workspaceId: deal.workspaceId,
     dealId,
     authorEmail: caller.email,
+    kind,
+    title,
     body: text,
     createdAt: now,
   })
 
   setResponseStatus(event, 201)
-  return { id, body: text, author_email: caller.email, created_at: now }
+  return { id, kind, title, body: text, author_email: caller.email, created_at: now }
 })

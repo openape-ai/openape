@@ -1,21 +1,23 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
+import { ulid } from 'ulid'
 import { useDb } from '../../database/drizzle'
-import { deals } from '../../database/schema'
+import { deals, notes } from '../../database/schema'
 import { parseTitle, parseValueCents } from '../../utils/deal-shape'
-import { requireStage } from '../../utils/stages'
+import { applyStufePatch, parseStufe } from '../../utils/pipelines'
 import { createProblemError } from '../../utils/problem'
 import { requireRole } from '../../utils/workspace-access'
+import type { Phase } from '#shared/pipelines'
+import { isPhase } from '#shared/pipelines'
 
 interface Body {
   title?: string
   value_cents?: number
-  stage?: string
+  stufe?: string
   contact_id?: string | null
   org_id?: string | null
 }
 
-/** PATCH /api/deals/:id — Felder ändern; ein Stufenwechsel hängt den Deal ans Spaltenende. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const id = getRouterParam(event, 'id')!
@@ -32,22 +34,42 @@ export default defineEventHandler(async (event) => {
   if (body?.contact_id !== undefined) patch.contactId = body.contact_id
   if (body?.org_id !== undefined) patch.orgId = body.org_id
 
-  if (body?.stage !== undefined) {
-    const stage = await requireStage(db, deal.workspaceId, body.stage)
-    if (stage.key !== deal.stage) {
+  if (body?.stufe !== undefined) {
+    const phase: Phase = isPhase(deal.phase) ? deal.phase : 'deal'
+    parseStufe(phase, body.stufe)
+    const applied = applyStufePatch({ phase, stufe: deal.stufe }, body.stufe)
+    if (applied.fields.stufe !== deal.stufe || applied.fields.phase !== deal.phase) {
       const last = await db
         .select({ max: sql<number | null>`max(${deals.position})` })
         .from(deals)
-        .where(and(eq(deals.workspaceId, deal.workspaceId), eq(deals.stage, stage.key)))
+        .where(and(
+          eq(deals.workspaceId, deal.workspaceId),
+          eq(deals.phase, applied.fields.phase),
+          eq(deals.stufe, applied.fields.stufe),
+        ))
         .get()
       patch.position = (last?.max ?? -1) + 1
-      patch.closedAt = stage.outcome === 'open' ? null : Date.now()
     }
-    patch.stage = stage.key
+    patch.phase = applied.fields.phase
+    patch.stufe = applied.fields.stufe
+    patch.stage = applied.fields.stufe
+    patch.closedAt = applied.fields.closedAt
+    if (applied.log) {
+      await db.insert(notes).values({
+        id: ulid(),
+        workspaceId: deal.workspaceId,
+        dealId: deal.id,
+        authorEmail: caller.email,
+        kind: 'notiz',
+        title: applied.log.title,
+        body: applied.log.body,
+        createdAt: Date.now(),
+      })
+    }
   }
 
   if (Object.keys(patch).length === 0) throw createProblemError({ status: 400, title: 'nothing to update' })
 
   await db.update(deals).set(patch).where(eq(deals.id, id))
-  return { ...deal, ...patch }
+  return { ...deal, ...patch, phase: patch.phase ?? deal.phase, stufe: patch.stufe ?? deal.stufe }
 })

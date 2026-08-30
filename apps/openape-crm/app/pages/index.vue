@@ -15,7 +15,7 @@ onMounted(async () => {
     // invite.vue merkt sich das Ziel vor dem Login; der OIDC-Callback landet hier.
     const stored = window.sessionStorage.getItem('openape-crm:returnTo')
     window.sessionStorage.removeItem('openape-crm:returnTo')
-    await navigateTo(stored?.startsWith('/') ? stored : '/board', { replace: true })
+    await navigateTo(stored?.startsWith('/') ? stored : '/vorgaenge', { replace: true })
   }
 })
 

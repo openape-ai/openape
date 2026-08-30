@@ -1,2 +1,20 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+:root {
+  --crm-bg: #0c0e13;
+  --crm-panel: #12151c;
+  --crm-panel-2: #171b24;
+  --crm-line: #232936;
+  --crm-line-2: #2d3546;
+  --crm-ink: #e7ecf3;
+  --crm-ink-2: #98a3b6;
+  --crm-ink-3: #65708a;
+  --crm-accent: #7c6cff;
+  --crm-accent-2: #a99bff;
+  --crm-accent-soft: rgba(124, 108, 255, 0.14);
+  --crm-lime: #a3e635;
+  --crm-cyan: #38bdf8;
+  --crm-amber: #fbbf24;
+  --crm-rose: #fb7185;
+}

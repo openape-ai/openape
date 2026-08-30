@@ -18,6 +18,8 @@ export default defineEventHandler(async (event) => {
   return await db
     .select({
       id: notes.id,
+      kind: notes.kind,
+      title: notes.title,
       body: notes.body,
       author_email: notes.authorEmail,
       created_at: notes.createdAt,

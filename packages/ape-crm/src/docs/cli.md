@@ -18,26 +18,24 @@ commands need no `--workspace`. Switch with `ape-crm workspaces use <id>`.
 
 ```bash
 ape-crm deals                              # every deal in the workspace
-ape-crm deals --stage proposal             # one column
-ape-crm deals new --title "Website" --value 18000 --stage lead
-ape-crm deals move 01J…  won               # change the stage
+ape-crm deals --phase deal --stufe angebot
+ape-crm deals new --title "Website" --value 18000 --phase lead --stufe kalt
+ape-crm deals move 01J…  gewonnen          # stufe; endmarkers may change phase
 ape-crm deals rm 01J…                      # delete deal and its notes
 ```
 
-Values are given in euros and stored as cents.
+Values are given in euros and stored as cents. New deals default to phase
+`lead`, stufe `kalt`.
 
 ## Stages
 
 ```bash
-ape-crm stages                             # key, name and outcome per column
+ape-crm stages                             # fixed keys for lead / deal / kunde
 ```
 
-Each workspace has its own pipeline; rename, reorder, add and delete columns in
-the web app. A deal carries the stage **key**, so renaming a column leaves every
-deal where it is. A stage whose outcome is `won` or `lost` stamps the closing
-date — a workspace can hold several of each, e.g. "Verloren – Preis" and
-"Verloren – Timing". New workspaces start with `lead`, `qualified`, `proposal`,
-`won`, `lost`.
+Pipelines are code, not per-workspace data. `gewonnen` moves a deal into
+phase `kunde` / `onboarding`. `konvertiert` moves a lead into `deal` /
+`inbound`.
 
 ## Contacts and organizations
 
