@@ -13,7 +13,7 @@ export interface GitCgiOptions {
 /**
  * Bridge one smart-HTTP request to `git http-backend` (CGI). Git's own binary
  * speaks the entire wire protocol; we only translate HTTP <-> CGI and stream
- * both directions. Proven against the 74 MB monorepo in the M0 spike.
+ * both directions.
  */
 export function runGitHttpBackend(req: IncomingMessage, res: ServerResponse, options: GitCgiOptions): Promise<void> {
   const env: Record<string, string> = {

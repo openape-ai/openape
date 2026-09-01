@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ape-git pre-receive hook — the identity binding (plan M4).
+// ape-git pre-receive hook — the identity binding.
 //
 // The transport middleware authenticates the pusher (DDISA JWT) and passes
 // the verified identity down via APE_GIT_* env; git inherits env through
@@ -54,7 +54,7 @@ function main() {
 
   // Second gate, independent of the transport. The middleware already checks
   // the grant, but it derives the required level from the request — and a
-  // request can lie about what it is (the ?service= bypass did exactly that).
+  // request can lie about what it is.
   // Reaching this hook is not proof that writing was allowed, so re-check the
   // level the transport actually resolved.
   if (access !== 'write' && access !== 'admin') {

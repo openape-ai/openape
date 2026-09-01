@@ -1,13 +1,13 @@
 /**
  * Clone command shown on the repo page. The DDISA token lives in the file
- * `apes login` writes — there is no `apes token` subcommand (M1 lesson).
+ * `apes login` writes — there is no `apes token` subcommand.
  */
 export function cloneCommand(origin: string, owner: string, name: string): string {
   const host = origin.replace(/^https?:\/\//, '')
   return `git clone https://x-access-token:$(jq -r .access_token ~/.config/apes/auth.json)@${host}/${owner}/${name}.git`
 }
 
-/** Icon and color for a CI status badge (M5). */
+/** Icon and color for a CI status badge. */
 export function statusLook(state: 'pending' | 'success' | 'failure'): { icon: string, class: string } {
   if (state === 'success') return { icon: 'i-lucide-check-circle-2', class: 'text-emerald-500' }
   if (state === 'failure') return { icon: 'i-lucide-x-circle', class: 'text-red-500' }
@@ -21,7 +21,7 @@ export function ownerSlugFromEmail(email: string): string {
   return slug.slice(0, 64)
 }
 
-/** Icon and color for a pull request's state (M6). */
+/** Icon and color for a pull request's state. */
 export function pullStateLook(state: string): { icon: string, class: string } {
   if (state === 'merged') return { icon: 'i-lucide-git-merge', class: 'text-violet-400' }
   return { icon: 'i-lucide-git-pull-request', class: 'text-emerald-500' }
@@ -32,7 +32,7 @@ export interface PullComment {
   line: number | null
 }
 
-/** Anchored comments keyed `<path>:<line>` — what a diff row looks up (M6). */
+/** Anchored comments keyed `<path>:<line>` — what a diff row looks up. */
 export function commentsByAnchor<T extends PullComment>(comments: T[]): Map<string, T[]> {
   const byLine = new Map<string, T[]>()
   for (const comment of comments) {

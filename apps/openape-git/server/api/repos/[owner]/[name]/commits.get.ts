@@ -28,11 +28,11 @@ export default defineEventHandler(async (event) => {
   if (!sha)
     throw createError({ statusCode: 404, statusMessage: 'ref not found' })
 
-  // Identity binding (M4): the pre-receive hook records who pushed each
+  // Identity binding: the pre-receive hook records who pushed each
   // commit; the UI shows human/agent plus the delegation chain from this.
   const [commits, pushers] = await Promise.all([listCommits(dir, sha, limit), readPushLog(dir)])
 
-  // CI results reported by webhook consumers (M5), one badge per commit.
+  // CI results reported by webhook consumers, one badge per commit.
   const statusRows = commits.length === 0
     ? []
     : await useDb().select().from(commitStatuses).where(and(

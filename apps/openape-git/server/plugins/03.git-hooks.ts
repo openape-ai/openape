@@ -9,8 +9,8 @@ import { defineNitroPlugin, useRuntimeConfig, useStorage } from 'nitropack/runti
  * hooks without per-repo installation or migration. Rewritten on every boot:
  * deploying a new image upgrades them.
  *
- * pre-receive is the identity binding (M4) and must exist or pushes would be
- * unguarded; post-receive fires webhooks (M5).
+ * pre-receive is the identity binding and must exist or pushes would be
+ * unguarded; post-receive fires webhooks.
  */
 const HOOKS = ['pre-receive', 'post-receive'] as const
 

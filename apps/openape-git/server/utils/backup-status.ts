@@ -1,5 +1,5 @@
 /**
- * Off-site backup status (plan M7). The backup runs outside the app — a cron
+ * Off-site backup status. The backup runs outside the app — a cron
  * job on the VM writes `${gitDataDir}/backup-status.json` after every run —
  * so the app only reads that file and judges whether the backup is current.
  * That judgement is what monitor.openape.ai polls.
