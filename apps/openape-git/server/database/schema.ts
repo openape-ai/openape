@@ -15,7 +15,7 @@ export const repos = sqliteTable('repos', {
   index('idx_repos_owner_email').on(t.ownerEmail),
 ])
 
-// Webhook subscriptions per repo (plan M5). `secret` is the shared HMAC key:
+// Webhook subscriptions per repo. `secret` is the shared HMAC key:
 // the forge signs outgoing deliveries with it, and the consumer signs its
 // commit-status and archive requests back with the same key.
 export const webhooks = sqliteTable('webhooks', {
@@ -98,7 +98,7 @@ export const grants = sqliteTable('grants', {
   index('idx_grants_requester').on(t.requester),
 ])
 
-// Pull requests (plan M6). A PR is a ref pair plus review metadata — the diff,
+// Pull requests. A PR is a ref pair plus review metadata — the diff,
 // the mergeability and the merge commit all come from git itself, so nothing
 // derived is stored here. `number` is per repo, like every forge.
 export const pulls = sqliteTable('pulls', {

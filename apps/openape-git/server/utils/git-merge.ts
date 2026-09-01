@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-// Write-side git plumbing for pull requests (plan M6). Everything a PR shows
+// Write-side git plumbing for pull requests. Everything a PR shows
 // is computed here from the repo itself — diff, mergeability, merge commit —
 // so the database only ever holds the ref pair and the review metadata.
 //
