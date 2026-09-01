@@ -1,0 +1,73 @@
+{
+  "name": "@openape/openclaw-grant-gate",
+  "version": "0.1.0",
+  "turbo": {
+    "tags": [
+      "publishable"
+    ]
+  },
+  "description": "OpenClaw plugin that routes every agent exec through the DDISA grant flow. Requests with the agent's identity, approves with the owner's, fails closed.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openape-ai/openape.git",
+    "directory": "packages/openclaw-grant-gate"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/plugin.js"
+    ]
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --no-coverage"
+  },
+  "dependencies": {
+    "@openape/cli-auth": "workspace:*",
+    "@openape/shapes": "workspace:*",
+    "shell-quote": "catalog:"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.8.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/shell-quote": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "openape",
+    "openclaw",
+    "ddisa",
+    "grants",
+    "agent-security"
+  ]
+}

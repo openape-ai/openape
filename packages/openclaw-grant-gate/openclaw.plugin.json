@@ -1,0 +1,25 @@
+{
+  "id": "openape-grant-gate",
+  "activation": { "onStartup": true },
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["agents"],
+    "properties": {
+      "agents": {
+        "type": "object",
+        "description": "Map of OpenClaw agent id to that agent's apes auth home (the directory containing .config/apes/auth.json). Agents missing here are blocked.",
+        "additionalProperties": { "type": "string" }
+      },
+      "apeShellPath": {
+        "type": "string",
+        "description": "Absolute path to the ape-shell binary."
+      },
+      "waitTimeoutMs": {
+        "type": "number",
+        "description": "How long to wait for a grant decision before failing closed."
+      }
+    }
+  }
+}
