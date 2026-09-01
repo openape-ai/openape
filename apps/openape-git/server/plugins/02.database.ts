@@ -95,4 +95,28 @@ export default defineNitroPlugin(async () => {
   )`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status)`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_grants_requester ON grants(requester)`)
+
+  await db.run(sql`CREATE TABLE IF NOT EXISTS mirrors (
+    id TEXT PRIMARY KEY,
+    repo_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    username TEXT NOT NULL,
+    token TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+  )`)
+  await db.run(sql`CREATE INDEX IF NOT EXISTS idx_mirrors_repo ON mirrors(repo_id)`)
+
+  await db.run(sql`CREATE TABLE IF NOT EXISTS mirror_pushes (
+    id TEXT PRIMARY KEY,
+    mirror_id TEXT NOT NULL,
+    repo_id TEXT NOT NULL,
+    ref TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    error TEXT,
+    duration_ms INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`)
+  await db.run(sql`CREATE INDEX IF NOT EXISTS idx_mirror_pushes_repo ON mirror_pushes(repo_id, created_at)`)
 })
