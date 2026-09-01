@@ -7,6 +7,26 @@ export {
   type GateConfig,
 } from './config.js'
 export {
+  DEFAULT_IDP_URL,
+  preflightExec,
+  relayApproval,
+  type PreflightOutcome,
+} from './gate.js'
+export {
+  approveGrant,
+  buildGrantRequestFor,
+  createGrant,
+  denyGrant,
+  grantTypeForDecision,
+  isDecided,
+  readGrantStatus,
+  waitForDecision,
+  type CreatedGrant,
+  type GrantDecision,
+  type GrantType,
+} from './grants.js'
+export { resolveIdentity, type Identity } from './identity.js'
+export {
   decideExec,
   isAlreadyWrapped,
   wrapWithApeShell,

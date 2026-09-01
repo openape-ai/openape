@@ -45,3 +45,20 @@ describe('authFileFor', () => {
     expect(authFileFor(readGateConfig(MINIMAL), 'stranger')).toBeUndefined()
   })
 })
+
+describe('approvalSurface', () => {
+  // Polling the IdP is the default because it is the only surface that works
+  // for an unattended agent: OpenClaw rejects requireApproval outright with
+  // "no approval route" when the session has no interactive channel.
+  it('defaults to the IdP', () => {
+    expect(readGateConfig(MINIMAL).approvalSurface).toBe('idp')
+  })
+
+  it('accepts the in-session surface', () => {
+    expect(readGateConfig({ ...MINIMAL, approvalSurface: 'openclaw' }).approvalSurface).toBe('openclaw')
+  })
+
+  it('rejects an unknown surface rather than guessing', () => {
+    expect(() => readGateConfig({ ...MINIMAL, approvalSurface: 'telegram' })).toThrow(GateConfigError)
+  })
+})

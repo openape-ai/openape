@@ -1,7 +1,7 @@
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry'
 import {  readGateConfig } from './config.js'
 import type { GateConfig } from './config.js'
-import { decideExec } from './wrap.js'
+import { preflightExec, relayApproval } from './gate.js'
 
 /**
  * OpenClaw entry point. Deliberately thin: every decision lives in pure
@@ -35,17 +35,45 @@ export default definePluginEntry({
 
     api.on(
       'before_tool_call',
-      (event, ctx) => {
+      async (event, ctx) => {
         if (event.toolName !== 'exec') return
         if (config === undefined) {
           return { block: true, blockReason: `openape-grant-gate: misconfigured, exec blocked. ${configError}` }
         }
 
-        const decision = decideExec({ agentId: ctx?.agentId, command: event.params?.command, config })
-        if (decision.kind === 'block') return { block: true, blockReason: decision.reason }
-        if (decision.kind === 'rewrite') return { params: { ...event.params, command: decision.command } }
+        try {
+          const outcome = await preflightExec({
+            agentId: ctx?.agentId,
+            command: event.params?.command,
+            config,
+          })
+
+          if (outcome.kind === 'pass') return
+          if (outcome.kind === 'block') return { block: true, blockReason: outcome.reason }
+          if (outcome.kind === 'allow') return { params: { ...event.params, command: outcome.command } }
+
+          return {
+            params: { ...event.params, command: outcome.command },
+            requireApproval: {
+              title: outcome.display,
+              description: `${String(event.params?.command ?? '')}\n\nGrant ${outcome.grantId}. Approving here records the decision at the IdP under your identity; you can also approve at ${outcome.approveUrl}.`,
+              severity: 'warning' as const,
+              timeoutMs: config.waitTimeoutMs,
+              allowedDecisions: ['allow-once', 'allow-always', 'deny'],
+              onResolution: async (decision) => {
+                await relayApproval(decision, outcome.grantId)
+              },
+            },
+          }
+        }
+        catch (err) {
+          // An unreachable IdP, an expired operator token, an adapter registry
+          // that times out: none of these are permission to run the command.
+          const message = err instanceof Error ? err.message : String(err)
+          return { block: true, blockReason: `openape-grant-gate: could not obtain a grant — exec blocked. ${message}` }
+        }
       },
-      { matcher: ['exec'], priority: 100 },
+      { matcher: ['exec'], priority: 100, timeoutMs: config?.waitTimeoutMs },
     )
   },
 })

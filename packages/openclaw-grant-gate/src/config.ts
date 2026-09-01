@@ -11,6 +11,20 @@ export interface GateConfig {
   apeShellPath: string
   /** How long to wait for a grant decision before failing closed. */
   waitTimeoutMs: number
+  /**
+   * Where the human is asked.
+   *
+   * `idp` (default) polls the grant until it is decided, so the decision can
+   * come from any surface the IdP already reaches — push, mail, Telegram. It
+   * is the only option that works for unattended agents.
+   *
+   * `openclaw` returns `requireApproval` so the prompt appears in the session
+   * itself. That is nicer when someone is watching, but OpenClaw rejects the
+   * call outright with "Plugin approval unavailable (no approval route)" when
+   * the session has no interactive channel — which is the normal case for a
+   * background operator.
+   */
+  approvalSurface: 'idp' | 'openclaw'
 }
 
 export const DEFAULT_APE_SHELL_PATH = '/usr/local/bin/ape-shell'
@@ -63,7 +77,12 @@ export function readGateConfig(raw: unknown): GateConfig {
     throw new GateConfigError('openape-grant-gate: `waitTimeoutMs` must be a positive number')
   }
 
-  return { agents, apeShellPath, waitTimeoutMs }
+  const approvalSurface = cfg.approvalSurface ?? 'idp'
+  if (approvalSurface !== 'idp' && approvalSurface !== 'openclaw') {
+    throw new GateConfigError('openape-grant-gate: `approvalSurface` must be "idp" or "openclaw"')
+  }
+
+  return { agents, apeShellPath, waitTimeoutMs, approvalSurface }
 }
 
 /**
