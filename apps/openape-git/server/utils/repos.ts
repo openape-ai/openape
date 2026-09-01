@@ -26,7 +26,7 @@ export async function createBareRepo(owner: string, name: string): Promise<void>
   const dir = repoDiskPath(owner, name)
   await mkdir(dirname(dir), { recursive: true })
   // -b main: a bare repo's HEAD defaults to master; the first push to main
-  // would otherwise leave HEAD dangling and clones check nothing out (M2 lesson).
+  // would otherwise leave HEAD dangling and clones check nothing out.
   await run('git', ['init', '--bare', '-b', 'main', dir])
 }
 
