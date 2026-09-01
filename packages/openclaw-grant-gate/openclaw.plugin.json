@@ -1,16 +1,22 @@
 {
   "id": "openape-grant-gate",
-  "activation": { "onStartup": true },
+  "activation": {
+    "onStartup": true
+  },
   "enabledByDefault": false,
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["agents"],
+    "required": [
+      "agents"
+    ],
     "properties": {
       "agents": {
         "type": "object",
         "description": "Map of OpenClaw agent id to that agent's apes auth home (the directory containing .config/apes/auth.json). Agents missing here are blocked.",
-        "additionalProperties": { "type": "string" }
+        "additionalProperties": {
+          "type": "string"
+        }
       },
       "apeShellPath": {
         "type": "string",
@@ -19,6 +25,14 @@
       "waitTimeoutMs": {
         "type": "number",
         "description": "How long to wait for a grant decision before failing closed."
+      },
+      "approvalSurface": {
+        "type": "string",
+        "enum": [
+          "idp",
+          "openclaw"
+        ],
+        "description": "Where the human is asked. \"idp\" (default) polls the grant so any IdP surface can decide and works for unattended agents; \"openclaw\" prompts in-session but requires an interactive channel."
       }
     }
   }
