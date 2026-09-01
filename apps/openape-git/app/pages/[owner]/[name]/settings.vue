@@ -26,6 +26,24 @@ interface Delivery {
   createdAt: number
 }
 
+interface Mirror {
+  id: string
+  url: string
+  username: string
+  enabled: number
+  createdAt: number
+}
+
+interface MirrorPush {
+  id: string
+  ref: string
+  sha: string
+  ok: number
+  error: string | null
+  durationMs: number
+  createdAt: number
+}
+
 interface RepoDetail {
   id: string
   owner: string
@@ -46,8 +64,49 @@ const grantDelegate = ref('')
 const grantAccess = ref<'read' | 'write' | 'admin'>('read')
 const granting = ref(false)
 
+const mirrors = ref<Mirror[]>([])
+const mirrorPushes = ref<MirrorPush[]>([])
+const mirrorUrl = ref('')
+const mirrorUser = ref('')
+const mirrorToken = ref('')
+const addingMirror = ref(false)
+
+async function loadMirrors() {
+  const data = await $fetch<{ mirrors: Mirror[], pushes: MirrorPush[] }>(`/api/repos/${owner}/${name}/mirrors`)
+  mirrors.value = data.mirrors
+  mirrorPushes.value = data.pushes
+}
+
+async function onAddMirror() {
+  if (addingMirror.value) return
+  addingMirror.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/repos/${owner}/${name}/mirrors`, {
+      method: 'POST',
+      body: { url: mirrorUrl.value.trim(), username: mirrorUser.value.trim(), token: mirrorToken.value },
+    })
+    mirrorUrl.value = ''
+    mirrorUser.value = ''
+    mirrorToken.value = ''
+    await loadMirrors()
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
+    error.value = e.data?.statusMessage ?? e.message ?? 'Could not add the mirror.'
+  }
+  finally {
+    addingMirror.value = false
+  }
+}
+
+async function onDeleteMirror(id: string) {
+  await $fetch(`/api/mirrors/${id}`, { method: 'DELETE' })
+  await loadMirrors()
+}
+
 onMounted(async () => {
-  await load()
+  await Promise.all([load(), loadMirrors()])
 })
 
 async function load() {
@@ -192,6 +251,68 @@ async function onRevoke(id: string) {
               >
                 Revoke
               </UButton>
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-semibold mb-3">
+            Push mirrors
+          </h2>
+          <p class="mb-4 text-sm text-zinc-500">
+            Every push is replicated to these forges, ref by ref. Without
+            <code>--force</code>: if the far side has commits this repo does not, the push
+            fails and is listed below instead of overwriting them. Use a token scoped to
+            the one repository over there.
+          </p>
+          <form class="flex flex-col gap-2 mb-4" @submit.prevent="onAddMirror">
+            <UInput v-model="mirrorUrl" type="url" class="w-full" placeholder="https://git.example/owner/repo.git" />
+            <div class="flex flex-col sm:flex-row gap-2">
+              <UInput v-model="mirrorUser" class="w-full sm:w-52" placeholder="username" />
+              <UInput v-model="mirrorToken" type="password" class="w-full flex-1" placeholder="token (write access)" autocomplete="off" />
+            </div>
+            <UButton
+              class="self-start"
+              type="submit"
+              color="primary"
+              :loading="addingMirror"
+              :disabled="!mirrorUrl.trim() || !mirrorUser.trim() || !mirrorToken"
+            >
+              Add mirror
+            </UButton>
+          </form>
+
+          <p v-if="mirrors.length === 0" class="text-zinc-500">
+            No mirrors — pushes stay here.
+          </p>
+          <ul v-else class="divide-y divide-zinc-800 border border-zinc-800 rounded-lg">
+            <li
+              v-for="mirror in mirrors"
+              :key="mirror.id"
+              class="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+            >
+              <span class="font-mono text-sm break-all min-w-0">{{ mirror.username }}@{{ mirror.url }}</span>
+              <UButton size="xs" color="error" variant="soft" @click="onDeleteMirror(mirror.id)">
+                Delete
+              </UButton>
+            </li>
+          </ul>
+
+          <h3 class="text-sm font-semibold mt-6 mb-2 text-zinc-300">
+            Recent pushes
+          </h3>
+          <p v-if="mirrorPushes.length === 0" class="text-zinc-500 text-sm">
+            Nothing mirrored yet.
+          </p>
+          <ul v-else class="text-xs font-mono space-y-1 text-zinc-400">
+            <li v-for="push in mirrorPushes" :key="push.id" class="flex flex-wrap gap-2">
+              <UIcon
+                :name="push.ok ? 'i-lucide-check' : 'i-lucide-x'"
+                :class="push.ok ? 'size-4 text-emerald-500 shrink-0' : 'size-4 text-red-500 shrink-0'"
+              />
+              <span class="break-all">{{ push.ref }}</span>
+              <span class="text-zinc-600">{{ push.sha.slice(0, 8) }} · {{ push.durationMs }}ms</span>
+              <span v-if="push.error" class="text-red-400 break-all">{{ push.error.split('\n')[0] }}</span>
             </li>
           </ul>
         </section>

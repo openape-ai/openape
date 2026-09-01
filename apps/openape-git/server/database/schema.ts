@@ -39,6 +39,31 @@ export const webhookDeliveries = sqliteTable('webhook_deliveries', {
   createdAt: integer('created_at').notNull(),
 }, t => [index('idx_deliveries_repo').on(t.repoId, t.createdAt)])
 
+// One target this repo replicates its refs to after every push.
+export const mirrors = sqliteTable('mirrors', {
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  url: text('url').notNull(),
+  username: text('username').notNull(),
+  // Write credential for the target forge; scope it to the one repo there.
+  token: text('token').notNull(),
+  enabled: integer('enabled').notNull().default(1),
+  createdAt: integer('created_at').notNull(),
+}, t => [index('idx_mirrors_repo').on(t.repoId)])
+
+// One row per push attempt per ref. `error` is redacted before it is stored.
+export const mirrorPushes = sqliteTable('mirror_pushes', {
+  id: text('id').primaryKey(),
+  mirrorId: text('mirror_id').notNull(),
+  repoId: text('repo_id').notNull(),
+  ref: text('ref').notNull(),
+  sha: text('sha').notNull(),
+  ok: integer('ok').notNull(),
+  error: text('error'),
+  durationMs: integer('duration_ms').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, t => [index('idx_mirror_pushes_repo').on(t.repoId, t.createdAt)])
+
 // CI results reported back by a webhook consumer, one row per (sha, context).
 export const commitStatuses = sqliteTable('commit_statuses', {
   id: text('id').primaryKey(),
