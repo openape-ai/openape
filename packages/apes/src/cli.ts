@@ -40,6 +40,7 @@ import { dnsCheckCommand } from './commands/dns-check'
 import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
+import { dispatchExternalSubcommand } from './subcommand-dispatch'
 import { CliError, CliExit } from './errors'
 import { maybeWarnStaleVersion } from './version-check'
 
@@ -245,6 +246,8 @@ else {
     // code — let runMain render proper usage instead of a bare message.
     const code = (err as { code?: unknown })?.code
     if (typeof code === 'string' && code.startsWith('E_')) {
+      const external = dispatchExternalSubcommand(rawArgs)
+      if (external !== null) process.exit(external)
       runMain(main).catch(handleCliError)
       return
     }
