@@ -1,0 +1,40 @@
+{
+  "name": "@openape/apes-openclaw",
+  "version": "0.0.0",
+  "description": "apes subcommand: set up openape-gated OpenClaw agents (identity, grant gate, sandbox)",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "apes-openclaw": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "openclaw",
+    "openape",
+    "cli",
+    "agent",
+    "ddisa"
+  ]
+}
