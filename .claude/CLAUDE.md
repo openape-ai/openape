@@ -224,6 +224,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 1. **Nie Source-Code auf `main` editieren** — `/issue-start <nr>` zum Starten verwenden
 2. **Branch-Naming:** `<type>/issue-<nr>-<kurzbeschreibung>`
 3. **PRs required** — CI muss grün sein vor Merge
+4. **Hosts (Stand 2026-08-29):** Code + Push + PRs auf **repos.openape.ai** (ape-git, `patrick/monorepo`); **Issues** weiterhin auf git.openape.ai (ape-git hat keinen Tracker); **CI** weiterhin Forgejo Actions auf dem Mirror. GitHub ist überall nur Mirror. `gh` funktioniert gegen keinen der beiden.
 4. **Ausnahmen für direct-to-main:** `.claude/`, `.github/`, `.githooks/`, `scripts/`, Config-Dateien
 
 **Enforcement:** Claude-Hook blockiert Edit/Write auf `main` für Source-Dateien. Pre-Commit-Hook und GitHub Ruleset als zusätzliche Barrieren.
@@ -254,7 +255,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 
 ## DDISA Protocol Compliance
 
-OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol` auf **git.openape.ai** (lokal: `~/Companies/private/repos/openape/protocol`). Wie bei allen OpenApe-Repos ist Forgejo das Original und GitHub nur der Mirror — Spec-Änderungen gehen als PR nach git.openape.ai, nie nach GitHub.
+OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol` auf **git.openape.ai** (lokal: `~/Companies/private/repos/openape/protocol`) — das Protokoll-Repo ist noch nicht nach ape-git umgezogen, anders als das Monorepo. Spec-Änderungen gehen als PR nach git.openape.ai, nie nach GitHub (GitHub ist überall nur Mirror).
 
 **Pflicht bei jeder Änderung an protokollrelevanten Dateien:**
 
