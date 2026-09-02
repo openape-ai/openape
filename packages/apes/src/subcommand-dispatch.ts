@@ -14,16 +14,19 @@ const SUBCOMMAND_NAME = /^[a-z0-9][a-z0-9-]*$/i
  * `npm rm -g`. The child reads the same `~/.config/apes/auth.json` through
  * `@openape/cli-auth`, so it needs nothing from this process.
  *
- * Returns the child's exit code, or `null` when no such executable exists and
- * the caller should fall back to rendering usage.
+ * Runs before citty sees the args, because otherwise `apes openclaw --help`
+ * would be answered with apes' own usage instead of the child's.
+ *
+ * Returns the child's exit code, or `null` when this is not an external
+ * subcommand and the caller should continue with normal dispatch.
  *
  * ponytail: POSIX only — `spawnSync` does not apply PATHEXT, so a Windows
  * `apes-foo.cmd` shim would not resolve. Add a `.cmd` probe if apes ever
  * ships for Windows.
  */
-export function dispatchExternalSubcommand(rawArgs: string[]): number | null {
+export function dispatchExternalSubcommand(rawArgs: string[], builtins: ReadonlySet<string>): number | null {
   const sub = rawArgs[0]
-  if (!sub || !SUBCOMMAND_NAME.test(sub)) return null
+  if (!sub || builtins.has(sub) || !SUBCOMMAND_NAME.test(sub)) return null
 
   const result = spawnSync(`apes-${sub}`, rawArgs.slice(1), { stdio: 'inherit' })
   const code = (result.error as NodeJS.ErrnoException | undefined)?.code

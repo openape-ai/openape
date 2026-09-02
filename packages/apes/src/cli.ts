@@ -237,6 +237,11 @@ const flagScan = dashDash === -1 ? rawArgs : rawArgs.slice(0, dashDash)
 const wantsBuiltin = rawArgs.length === 0
   || flagScan.some(a => a === '-h' || a === '--help' || a === '-v' || a === '--version')
 
+// External subcommands are resolved before citty, so `apes openclaw --help`
+// reaches the child instead of printing apes' own usage.
+const external = dispatchExternalSubcommand(rawArgs, new Set(Object.keys(main.subCommands ?? {})))
+if (external !== null) process.exit(external)
+
 if (wantsBuiltin) {
   runMain(main).catch(handleCliError)
 }
@@ -246,8 +251,6 @@ else {
     // code — let runMain render proper usage instead of a bare message.
     const code = (err as { code?: unknown })?.code
     if (typeof code === 'string' && code.startsWith('E_')) {
-      const external = dispatchExternalSubcommand(rawArgs)
-      if (external !== null) process.exit(external)
       runMain(main).catch(handleCliError)
       return
     }
