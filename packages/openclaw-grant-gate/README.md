@@ -47,3 +47,21 @@ for that agent's operator identity.
 Every uncertainty rejects the tool call: an agent with no mapped identity, a malformed
 config, a hook timeout, an unreachable IdP. This matches OpenClaw's own default for
 `before_tool_call` and is not configurable — a gate that fails open is not a gate.
+
+## Publishing
+
+Publish the **packed tarball**, never the folder:
+
+```bash
+pnpm --filter @openape/openclaw-grant-gate pack --pack-destination /tmp
+clawhub package publish /tmp/openape-openclaw-grant-gate-<version>.tgz \
+  --owner openape \
+  --source-repo openape-ai/openape \
+  --source-commit "$(git rev-parse HEAD)" \
+  --source-path packages/openclaw-grant-gate
+```
+
+`clawhub package publish .` packs the working directory verbatim, including
+this package.json's `workspace:*` and `catalog:` dependency protocols. Both are
+pnpm-only, so the release would publish successfully and then fail to install
+for everyone. `pnpm pack` rewrites them to the published versions first.
