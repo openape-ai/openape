@@ -20,7 +20,15 @@
   "openclaw": {
     "extensions": [
       "./dist/plugin.js"
-    ]
+    ],
+    "compat": {
+      "pluginApi": ">=2026.8.0",
+      "minGatewayVersion": "2026.8.0"
+    },
+    "build": {
+      "openclawVersion": "2026.8.1",
+      "pluginSdkVersion": "2026.8.1"
+    }
   },
   "exports": {
     ".": {
