@@ -35,6 +35,17 @@ if [ ! -t 0 ]; then
   chmod 700 "$DOCKER_CONFIG"
   trap 'rm -rf "$DOCKER_CONFIG"' EXIT
   docker login ghcr.io --username openape-ai --password-stdin >/dev/null
+  # The isolated config has no cli-plugins directory, and `docker buildx` is a
+  # plugin — without this the build fails with a bare "unknown flag: --file".
+  python3 - "$DOCKER_CONFIG/config.json" "$HOME/.docker/cli-plugins" <<'PYEOF'
+import json, sys
+path, plugins = sys.argv[1], sys.argv[2]
+with open(path) as fh:
+    config = json.load(fh)
+config["cliPluginsExtraDirs"] = [plugins]
+with open(path, "w") as fh:
+    json.dump(config, fh)
+PYEOF
   echo "✓ authenticated to ghcr.io"
 fi
 
