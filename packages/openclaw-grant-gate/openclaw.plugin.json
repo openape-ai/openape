@@ -1,5 +1,7 @@
 {
   "id": "openape-grant-gate",
+  "name": "OpenApe Grant Gate",
+  "description": "Routes every agent exec through the DDISA grant flow. Requests with the agent identity, approves with the owner identity, fails closed.",
   "activation": {
     "onStartup": true
   },
