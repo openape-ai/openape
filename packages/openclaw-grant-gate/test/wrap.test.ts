@@ -1,7 +1,7 @@
-import { parse } from 'shell-quote'
+import { parse, quote } from 'shell-quote'
 import { describe, expect, it } from 'vitest'
 import { readGateConfig } from '../src/config.js'
-import { decideExec, isAlreadyWrapped, wrapWithApeShell } from '../src/wrap.js'
+import { decideExec, wrapWithApeShell } from '../src/wrap.js'
 
 const config = readGateConfig({
   agents: { 'delta-mind': '/homes/dm' },
@@ -55,17 +55,28 @@ describe('wrapWithApeShell', () => {
     expect(tokens.at(-2)).toBe('-c')
   })
 
-  it('recognises its own output so a command is never wrapped twice', () => {
-    const once = wrapWithApeShell('touch /tmp/x', '/opt/ape-shell', '/a/auth.json')
-    expect(isAlreadyWrapped(once)).toBe(true)
-    expect(decideExec({ agentId: 'delta-mind', command: once, config }).kind).toBe('pass')
+  // A command that merely LOOKS wrapped must still be wrapped. The gate used to
+  // pass anything starting with the wrapper prefix straight through, and the
+  // command text comes from the model — so `APE_WAIT=1 APES_AUTH_FILE=/tmp/x
+  // /bin/sh -c ...` ran ungated. Wrap state cannot be read off the command.
+  it('wraps a command that mimics the wrapper prefix', () => {
+    const spoofed = `APE_WAIT=1 APES_AUTH_FILE=/tmp/x /bin/sh -c ${quote(['rm -rf /tmp/nope'])}`
+    const decision = decideExec({ agentId: 'delta-mind', command: spoofed, config })
+    expect(decision.kind).toBe('rewrite')
   })
 
-  // The predecessor searched the whole command for `APES_AUTH_FILE=`, so a
-  // command that merely mentioned the variable was treated as pre-wrapped and
-  // slipped through ungated. Anchoring at the start closes that.
-  it('does not mistake a command that merely mentions the marker for a wrapped one', () => {
-    expect(isAlreadyWrapped('echo APE_WAIT=1 APES_AUTH_FILE=/evil')).toBe(false)
-    expect(decideExec({ agentId: 'delta-mind', command: 'echo APES_AUTH_FILE=/evil', config }).kind).toBe('rewrite')
+  it('wraps its own output again rather than trusting it', () => {
+    const once = wrapWithApeShell('touch /tmp/x', '/opt/ape-shell', '/a/auth.json')
+    expect(decideExec({ agentId: 'delta-mind', command: once, config }).kind).toBe('rewrite')
+  })
+
+  // An auth home or ape-shell under a path with spaces used to retokenize the
+  // generated line, so the wrapper ran the wrong argv or nothing at all.
+  it('quotes configured paths, not just the inner command', () => {
+    const wrapped = wrapWithApeShell('id', '/opt/ape shell/bin', '/Users/Alice Smith/auth.json')
+    const tokens = parse(wrapped).filter(t => typeof t === 'string') as string[]
+    expect(tokens).toContain('/opt/ape shell/bin')
+    expect(wrapped).toContain('APE_WAIT=1 APES_AUTH_FILE=')
+    expect(tokens.at(-1)).toBe('id')
   })
 })
