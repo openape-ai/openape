@@ -360,8 +360,22 @@ export async function findExistingGrant(
 
   for (const grant of response.data) {
     const req = grant.request
-    if (req.grant_type === 'once')
-      continue
+    if (req.grant_type === 'once') {
+      // An approved `once` grant is still worth exactly one run: single use is
+      // enforced at /consume, which flips it to `used` and answers
+      // `already_consumed` afterwards — and this query only asks for
+      // `approved`, so a spent grant never reaches here. Skipping them outright
+      // meant a human could approve a once grant and be asked to approve a
+      // second one for the very same command.
+      //
+      // Matched on argv_hash rather than the looser coverage rules below,
+      // because verifyAndConsume enforces argv_hash for once grants: a grant
+      // that merely *covers* this command would fail the run instead of
+      // prompting for a new one.
+      const argvHash = resolved.executionContext.argv_hash
+      if (!argvHash || req.execution_context?.argv_hash !== argvHash)
+        continue
+    }
     if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
       continue
     if (req.audience !== expectedAudience)
@@ -454,8 +468,22 @@ export async function findExistingCompoundGrant(
 
   for (const grant of response.data) {
     const req = grant.request
-    if (req.grant_type === 'once')
-      continue
+    if (req.grant_type === 'once') {
+      // An approved `once` grant is still worth exactly one run: single use is
+      // enforced at /consume, which flips it to `used` and answers
+      // `already_consumed` afterwards — and this query only asks for
+      // `approved`, so a spent grant never reaches here. Skipping them outright
+      // meant a human could approve a once grant and be asked to approve a
+      // second one for the very same command.
+      //
+      // Matched on argv_hash rather than the looser coverage rules below,
+      // because verifyAndConsume enforces argv_hash for once grants: a grant
+      // that merely *covers* this command would fail the run instead of
+      // prompting for a new one.
+      const argvHash = compound.executionContext.argv_hash
+      if (!argvHash || req.execution_context?.argv_hash !== argvHash)
+        continue
+    }
     if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
       continue
     if (req.audience !== compound.audience)
