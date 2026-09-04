@@ -1,5 +1,12 @@
 # @openape/agent-runtime
 
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [b48b952]
+  - @openape/core@0.21.0
+
 ## 0.2.8
 
 ### Patch Changes
