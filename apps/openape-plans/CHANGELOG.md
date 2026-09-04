@@ -1,5 +1,12 @@
 # @openape-plans/app
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [b48b952]
+  - @openape/nuxt-auth-sp@0.16.0
+
 ## 0.0.6
 
 ### Patch Changes
