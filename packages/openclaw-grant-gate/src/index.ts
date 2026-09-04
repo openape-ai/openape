@@ -28,7 +28,7 @@ export {
 export { resolveIdentity, type Identity } from './identity.js'
 export {
   decideExec,
-  isAlreadyWrapped,
+
   wrapWithApeShell,
   type GateDecision,
 } from './wrap.js'
