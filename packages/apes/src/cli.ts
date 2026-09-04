@@ -40,6 +40,7 @@ import { dnsCheckCommand } from './commands/dns-check'
 import { healthCommand } from './commands/health'
 import { workflowsCommand } from './commands/workflows'
 import { ApiError } from './http'
+import { dispatchExternalSubcommand } from './subcommand-dispatch'
 import { CliError, CliExit } from './errors'
 import { maybeWarnStaleVersion } from './version-check'
 
@@ -235,6 +236,11 @@ const dashDash = rawArgs.indexOf('--')
 const flagScan = dashDash === -1 ? rawArgs : rawArgs.slice(0, dashDash)
 const wantsBuiltin = rawArgs.length === 0
   || flagScan.some(a => a === '-h' || a === '--help' || a === '-v' || a === '--version')
+
+// External subcommands are resolved before citty, so `apes openclaw --help`
+// reaches the child instead of printing apes' own usage.
+const external = dispatchExternalSubcommand(rawArgs, new Set(Object.keys(main.subCommands ?? {})))
+if (external !== null) process.exit(external)
 
 if (wantsBuiltin) {
   runMain(main).catch(handleCliError)
