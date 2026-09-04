@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-crm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI for crm.openape.ai — deal pipeline, contacts and notes for humans and AI agents",
   "type": "module",
   "license": "MIT",

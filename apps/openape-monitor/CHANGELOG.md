@@ -1,5 +1,13 @@
 # @openape-monitor/app
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [b48b952]
+  - @openape/core@0.21.0
+  - @openape/nuxt-auth-sp@0.16.0
+
 ## 0.0.4
 
 ### Patch Changes

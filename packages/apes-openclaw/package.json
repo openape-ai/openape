@@ -1,6 +1,6 @@
 {
   "name": "@openape/apes-openclaw",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "apes subcommand: set up openape-gated OpenClaw agents (identity, grant gate, sandbox)",
   "type": "module",
   "license": "MIT",

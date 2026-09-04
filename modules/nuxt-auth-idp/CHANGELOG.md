@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.36.0
+
+### Minor Changes
+
+- 249d1db: QR sign-in: a browser without a passkey (public computer, kiosk) shows a QR code on the login page; a signed-in phone scans it, reviews the requester and approves; the kiosk claims the session. Two-token design (channelId in the QR, claimSecret only at the kiosk), approve is human-cookie-only and unchainable, channels are single-use with a 120s TTL in their own rate-limit bucket, and transferred sessions are marked, capped at one hour and remotely revocable from the account page.
+- 7f1f058: Session transfer: a signed-in browser can mint a single-use link that signs the
+  same user in on a browser without a platform authenticator. `POST
+/api/session/transfer` returns the link, `GET /api/session/transfer/:token`
+  consumes it (once, within 60 seconds) and starts the session there. The account
+  hub carries the button.
+
+### Patch Changes
+
+- b48b952: SP apps now show a real error page to browsers instead of raw `application/problem+json`. The nitro `problem-details` hook ended every error response as JSON, so Nuxt never got to render `error.vue` — a human hitting a 404 was handed a JSON document.
+
+  The content negotiation that decides this (Accept q-values, `X-Requested-With`, `Sec-Fetch-Mode`) moves to `@openape/core` as `wantsHtmlErrorPage`. It already existed in `@openape/nuxt-auth-idp` and now has one home instead of two; the IdP module re-exports it, so its API is unchanged.
+
+  API clients are unaffected: anything that is not a browser navigation still receives RFC 7807 with the same status.
+
+- Updated dependencies [b48b952]
+  - @openape/core@0.21.0
+  - @openape/auth@0.13.3
+  - @openape/grants@0.13.1
+
 ## 0.35.1
 
 ### Patch Changes
@@ -628,7 +652,6 @@
       ⚡ marker on rows that were auto-approved by a standing grant.
 
   ## Helper utilities (new)
-
   - `modules/nuxt-auth-idp/src/runtime/utils/standing-grants.ts`
     - `formatStandingGrantScope(sg)` — render scope as a human string
     - `formatResourceChainTemplate(chain)` — summarise wildcards/selectors
