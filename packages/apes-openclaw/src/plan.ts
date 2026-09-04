@@ -51,6 +51,7 @@ export interface AgentPatch {
 export function buildAgentPatch(setup: AgentSetup): AgentPatch {
   const { agentId, agentHome } = setup
   const apesConfig = path.join(agentHome, '.config', 'apes')
+  const sandboxApes = `${SANDBOX_HOME}/.config/apes`
 
   return {
     agents: {
@@ -62,7 +63,18 @@ export function buildAgentPatch(setup: AgentSetup): AgentPatch {
             docker: {
               image: setup.image ?? DEFAULT_IMAGE,
               binds: [
-                `${apesConfig}:${SANDBOX_HOME}/.config/apes:ro`,
+                `${apesConfig}:${sandboxApes}:ro`,
+                // auth.json must stay immutable, but the identity still has to
+                // be usable: @openape/cli-auth writes every exchanged SP token
+                // into sp-tokens/, and under a purely read-only mount the
+                // first authenticated call dies with EROFS. This rw mount
+                // covers exactly that subdirectory. Docker can only place it
+                // because the directory already exists in the read-only
+                // source — `apes openclaw add` creates it on the host.
+                `${path.join(apesConfig, 'sp-tokens')}:${sandboxApes}/sp-tokens:rw`,
+                // The enrolment key, so cli-auth can still do challenge-response
+                // once the agent token expires. Read-only: refresh only reads it.
+                `${path.join(agentHome, '.ssh')}:${SANDBOX_HOME}/.ssh:ro`,
                 ...(setup.binds ?? []),
               ],
               // The identity lives outside the agent workspace, which OpenClaw
