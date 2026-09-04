@@ -47,12 +47,41 @@ function enroll(agentId: string, agentHome: string): void {
   run('apes', ['enroll', '--name', agentId], { env: { ...process.env, HOME: agentHome } })
 }
 
+const GATE_PLUGIN_ID = 'openape-grant-gate'
+
+/**
+ * Refuse to set the agent up unless the grant gate is actually installed.
+ *
+ * The patch enables elevated exec, and OpenClaw silently ignores a
+ * `plugins.entries` record whose plugin is not installed. Writing it anyway
+ * would hand the agent a host escape with no gate behind it — the exact
+ * inverse of what this command promises, and invisible afterwards.
+ */
+function requireGatePlugin(): void {
+  const probe = spawnSync('openclaw', ['plugins', 'inspect', GATE_PLUGIN_ID, '--json'], { stdio: 'ignore' })
+  if ((probe.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT')
+    throw new Error('openclaw not found on PATH.')
+  if (probe.status !== 0) {
+    throw new Error(
+      `${GATE_PLUGIN_ID} is not installed — refusing to enable elevated exec without it.\n`
+      + `  Install it first:  openclaw plugins install clawhub:@openape/${GATE_PLUGIN_ID}`,
+    )
+  }
+}
+
 function add(agentId: string, options: { home: string, image?: string, binds: string[], dryRun: boolean, skipEnroll: boolean }): void {
   const agentHome = path.join(options.home, agentId)
-  const authFile = path.join(agentHome, '.config', 'apes', 'auth.json')
+  const apesConfig = path.join(agentHome, '.config', 'apes')
+  const authFile = path.join(apesConfig, 'auth.json')
 
-  if (!options.dryRun)
-    mkdirSync(path.dirname(authFile), { recursive: true })
+  requireGatePlugin()
+
+  if (!options.dryRun) {
+    // sp-tokens must exist before the sandbox starts: Docker cannot create the
+    // mountpoint for the writable overlay inside a read-only parent mount.
+    mkdirSync(path.join(apesConfig, 'sp-tokens'), { recursive: true })
+    mkdirSync(path.join(agentHome, '.ssh'), { recursive: true, mode: 0o700 })
+  }
 
   if (!existsSync(authFile) && !options.skipEnroll && !options.dryRun) {
     console.log(`No identity at ${authFile} — enrolling ${agentId}.`)
@@ -68,6 +97,10 @@ function add(agentId: string, options: { home: string, image?: string, binds: st
     return
   }
 
+  // `config patch` only writes the file. Changes under `plugins.entries` need a
+  // restart before the gate knows about this agent, so claiming success without
+  // one would announce a gate that is not loaded yet.
+  run('openclaw', ['gateway', 'restart'])
   run('openclaw', ['sandbox', 'recreate', '--agent', agentId])
   console.log(`\nAgent ${agentId} is gated.`)
   console.log(`  identity: ${authFile}`)

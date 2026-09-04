@@ -33,12 +33,25 @@ describe('agent config patch', () => {
     expect(sandboxOf(buildAgentPatch(setup)).mode).toBe('all')
   })
 
+  // The identity has to be usable, not just present: cli-auth writes every
+  // exchanged SP token into sp-tokens/, and a purely read-only mount made the
+  // first authenticated call in the sandbox die with EROFS.
+  it('gives sp-tokens a writable overlay while auth.json stays read-only', () => {
+    const binds = sandboxOf(buildAgentPatch(setup)).docker.binds
+    expect(binds).toContain('/Users/p/agent-identities/iurio/.config/apes:/home/sandbox/.config/apes:ro')
+    expect(binds).toContain('/Users/p/agent-identities/iurio/.config/apes/sp-tokens:/home/sandbox/.config/apes/sp-tokens:rw')
+  })
+
+  // Without the key, cli-auth cannot do challenge-response once the agent
+  // token expires, and every authenticated call in the sandbox stops working.
+  it('mounts the enrolment key read-only', () => {
+    expect(sandboxOf(buildAgentPatch(setup)).docker.binds)
+      .toContain('/Users/p/agent-identities/iurio/.ssh:/home/sandbox/.ssh:ro')
+  })
+
   it('keeps extra binds after the identity mount', () => {
     const patch = buildAgentPatch({ ...setup, binds: ['/srv/ref:/reference:ro'] })
-    expect(sandboxOf(patch).docker.binds).toEqual([
-      '/Users/p/agent-identities/iurio/.config/apes:/home/sandbox/.config/apes:ro',
-      '/srv/ref:/reference:ro',
-    ])
+    expect(sandboxOf(patch).docker.binds.at(-1)).toBe('/srv/ref:/reference:ro')
   })
 
   it('defaults to the published sandbox image and honours an override', () => {
