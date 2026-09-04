@@ -4,26 +4,38 @@
 
 - Node.js >= 22
 - pnpm (latest)
-- An account on **git.openape.ai** (Forgejo) — issues and PRs live there
+- An account on **repos.openape.ai** (ape-git) — the source of truth for code
+- An account on **git.openape.ai** (Forgejo) — issues and CI live there (ape-git has no issue tracker)
 
 ## Setup
 
 ```bash
-git clone https://git.openape.ai/openape-ai/openape.git
+git clone https://repos.openape.ai/patrick/monorepo.git openape
 cd openape
 pnpm install
 ```
 
-> **Canonical host is git.openape.ai (Forgejo)** — issues, PRs and CI all live there.
-> `github.com/openape-ai/openape` is a **read-only mirror** (code only): never open issues/PRs
-> or push there. If you cloned the mirror, point `origin` at Forgejo:
-> `git remote set-url origin https://git.openape.ai/openape-ai/openape.git`.
+> **The source of truth is repos.openape.ai (ape-git)** since 2026-08-29 — push there.
+> It mirrors to `git.openape.ai/openape-ai/openape` (Forgejo), which in turn mirrors to
+> `github.com/openape-ai/openape`. Both are **copies**: never push to either.
+>
+> The split is not clean yet, so know which host does what:
+>
+> | Concern | Host |
+> |---|---|
+> | Code, branches, pushes | **repos.openape.ai** (ape-git) |
+> | Issues | **git.openape.ai** — ape-git has no issue tracker |
+> | CI (`CI / ci`) | **git.openape.ai** — Forgejo Actions, `.forgejo/workflows/` |
+>
+> If you cloned a mirror, repoint `origin`:
+> `git remote set-url origin https://repos.openape.ai/patrick/monorepo.git`.
 
 ## Development Workflow
 
 ### 1. Pick an Issue
 
-All work starts with an issue on git.openape.ai. Browse open issues:
+All work starts with an issue on git.openape.ai — issues stay on Forgejo because ape-git
+does not have an issue tracker. Browse open issues:
 https://git.openape.ai/openape-ai/openape/issues
 
 ### 2. Create a Feature Branch
@@ -65,10 +77,10 @@ The pre-commit hook enforces this automatically.
 git push -u origin <branch>
 ```
 
-Then open the PR on git.openape.ai (the push prints a "Create a new pull request" link, or use the web UI / API). `gh` does not work against Forgejo.
+Then open the PR on repos.openape.ai — web UI, or `POST /api/repos/patrick/monorepo/pulls` with `{ title, body, source, target }` and a bearer from the SP token exchange (`@openape/cli-auth`'s `getAuthorizedBearer({ endpoint: 'https://repos.openape.ai', aud: 'repos.openape.ai' })`). `gh` works against neither host.
 
 - Link the issue: `Closes #<nr>` in the PR body
-- The **pre-push hook** runs the full gate (build + audit + lint + typecheck + test) locally before the push leaves your machine. CI also runs server-side as **Forgejo Actions** on git.openape.ai — the `CI / ci` check must be green before merge. Emergency bypass of the local hook: `SKIP_HOOKS=1 git push`.
+- The **pre-push hook** runs the full gate (build + audit + lint + typecheck + test) locally before the push leaves your machine. Server-side CI is still **Forgejo Actions** on the git.openape.ai mirror (`.forgejo/workflows/`); this repo has no `.ape-ci.sh`, so ape-git's own webhook CI does not run for it. Emergency bypass of the local hook: `SKIP_HOOKS=1 git push`.
 - Add a changeset if publishable packages changed: `pnpm changeset`
 
 ### 6. After Merge — Release
@@ -101,7 +113,7 @@ Requires local SSH access to chatty (`openape@chatty.delta-mind.at`) and a `dock
 
 ## Branch Policy
 
-- **`main` is protected** — work on feature branches, open PRs; the `CI / ci` check on git.openape.ai must be green before merge, and the local pre-push gate catches most failures before the push
+- **`main` is protected** — work on feature branches, open PRs on repos.openape.ai; the `CI / ci` check on the git.openape.ai mirror must be green before merge, and the local pre-push gate catches most failures before the push
 - **Source changes on `main` are blocked** by pre-commit hook
 - **Infrastructure exceptions** (direct-to-main OK): `.claude/`, `.github/`, `.githooks/`, `scripts/`, config files, docs
 - **Emergency bypass:** `SKIP_HOOKS=1 git commit ...`
