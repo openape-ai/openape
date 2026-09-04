@@ -47,7 +47,6 @@ export async function preflightExec(params: {
   idpUrl?: string
 }): Promise<PreflightOutcome> {
   const { agentId, command, config } = params
-  const idp = params.idpUrl ?? DEFAULT_IDP_URL
 
   const local = decideExec({ agentId, command, config })
   if (local.kind === 'block') return local
@@ -57,6 +56,8 @@ export async function preflightExec(params: {
   const wrapped = wrapWithApeShell(command as string, config.apeShellPath, authFileFor(config, agentId!)!)
 
   const identity = await resolveIdentity(authHome)
+  // The agent's own IdP, never a global default — see Identity.idp.
+  const idp = params.idpUrl ?? identity.idp
   const request = await buildGrantRequestFor(command as string, identity.email)
   // Compound lines and binaries without a shapes adapter have no faithful
   // shape. ape-shell already owns those cases; pre-flighting a grant that
@@ -108,16 +109,17 @@ export async function preflightExec(params: {
 export async function relayApproval(
   decision: string,
   grantId: string,
-  idpUrl: string = DEFAULT_IDP_URL,
+  idpUrl?: string,
 ): Promise<void> {
   const grantType = grantTypeForDecision(decision)
   const owner = await resolveIdentity()
+  const idp = idpUrl ?? owner.idp
 
   if (grantType !== null) {
-    await approveGrant(grantId, grantType, { idp: idpUrl, token: owner.bearer })
+    await approveGrant(grantId, grantType, { idp, token: owner.bearer })
     return
   }
   if (decision === 'deny') {
-    await denyGrant(grantId, { idp: idpUrl, token: owner.bearer })
+    await denyGrant(grantId, { idp, token: owner.bearer })
   }
 }

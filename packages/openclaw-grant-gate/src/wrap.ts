@@ -13,10 +13,13 @@ export type GateDecision =
   | { kind: 'block', reason: string }
 
 /**
- * Env prefix the wrapper emits. It doubles as the marker that recognises an
- * already-wrapped command: a plain `startsWith` on this exact prefix cannot be
- * spoofed into a false *negative* the way a substring search could, because
- * only a command that genuinely begins with our wrapper matches.
+ * Env prefix the wrapper emits.
+ *
+ * This is NOT a marker for "already wrapped". It used to be, and that was a
+ * full bypass of the gate: the command text comes from the model, so an agent
+ * that prefixed its own command with this exact string was passed through
+ * unwrapped — no preflight, no ape-shell, no grant. Wrap state can never be
+ * inferred from attacker-controlled text.
  */
 const WRAP_PREFIX = 'APE_WAIT=1 APES_AUTH_FILE='
 
@@ -30,11 +33,9 @@ const WRAP_PREFIX = 'APE_WAIT=1 APES_AUTH_FILE='
  * one identity and why the direct-API path does not use it.
  */
 export function wrapWithApeShell(command: string, apeShellPath: string, authFile: string): string {
-  return `${WRAP_PREFIX}${authFile} ${apeShellPath} -c ${quote([command])}`
-}
-
-export function isAlreadyWrapped(command: string): boolean {
-  return command.startsWith(WRAP_PREFIX)
+  // The paths are quoted too, not just the inner command: an auth home or
+  // ape-shell under `/Users/Alice Smith` would otherwise retokenize the line.
+  return `${WRAP_PREFIX}${quote([authFile])} ${quote([apeShellPath])} -c ${quote([command])}`
 }
 
 /**
@@ -65,7 +66,6 @@ export function decideExec(params: {
   }
 
   if (typeof command !== 'string' || command.trim().length === 0) return { kind: 'pass' }
-  if (isAlreadyWrapped(command)) return { kind: 'pass' }
 
   return { kind: 'rewrite', command: wrapWithApeShell(command, config.apeShellPath, authFile) }
 }

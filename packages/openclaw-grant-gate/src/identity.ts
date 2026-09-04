@@ -1,9 +1,16 @@
 import { ensureFreshIdpAuth } from '@openape/cli-auth'
 
-/** An identity resolved to a bearer token plus the email it belongs to. */
+/** An identity resolved to a bearer token plus the email and IdP it belongs to. */
 export interface Identity {
   bearer: string
   email: string
+  /**
+   * The IdP that issued this token. Carried per identity rather than taken
+   * from a global default: an agent enrolled against a self-hosted IdP would
+   * otherwise have its bearer sent to id.openape.ai, which both fails and
+   * hands the token to an unrelated service.
+   */
+  idp: string
 }
 
 /**
@@ -19,5 +26,5 @@ export interface Identity {
  */
 export async function resolveIdentity(authHome?: string): Promise<Identity> {
   const auth = await ensureFreshIdpAuth(Math.floor(Date.now() / 1000), authHome)
-  return { bearer: auth.access_token, email: auth.email }
+  return { bearer: auth.access_token, email: auth.email, idp: auth.idp }
 }
