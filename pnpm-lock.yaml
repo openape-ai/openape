@@ -303,7 +303,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
   apps/openape-chat:
     dependencies:
@@ -1717,6 +1717,21 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/apes-openclaw:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.0
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/attention-events:
     dependencies:
@@ -20269,7 +20284,7 @@ snapshots:
     optionalDependencies:
       '@typescript-eslint/eslint-plugin': 8.62.0(@typescript-eslint/parser@8.62.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       typescript: 5.9.3
-      vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
     transitivePeerDependencies:
       - supports-color
 
