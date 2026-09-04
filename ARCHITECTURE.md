@@ -157,10 +157,13 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 ## How code gets to production
 
 1. **Issue-first development** (`CONTRIBUTING.md`): every change starts from an
-   issue on git.openape.ai, on a `<type>/issue-<nr>-…` branch, lands via PR. Git hooks
-   (`.githooks/`) and a Claude hook block source edits directly on `main`.
-2. **CI on git.openape.ai** (Forgejo — the canonical remote; GitHub is a
-   read-only mirror. Workflows in `.forgejo/workflows/`): `ci.yml` runs
+   issue on git.openape.ai, on a `<type>/issue-<nr>-…` branch, lands via PR on
+   repos.openape.ai. Git hooks (`.githooks/`) and a Claude hook block source
+   edits directly on `main`. Code lives on repos.openape.ai (ape-git); issues
+   stay on Forgejo, which has the tracker ape-git lacks.
+2. **CI on git.openape.ai** (Forgejo — a mirror of repos.openape.ai since
+   2026-08-29, and still where CI runs; GitHub mirrors from there in turn.
+   Workflows in `.forgejo/workflows/`): `ci.yml` runs
    lint/typecheck/test/build with turbo
    `--affected` (only changed packages + dependents); `e2e.yml` runs the
    self-contained `examples/e2e` suite; `preview.yml` builds per-app PR
@@ -178,7 +181,7 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 ## Non-obvious decisions (read before changing things)
 
 - **Work enters as an issue and a plan.** Every change starts from an issue on
-  git.openape.ai and lands via PR (`CONTRIBUTING.md`); anything larger than a
+  git.openape.ai and lands via PR on repos.openape.ai (`CONTRIBUTING.md`); anything larger than a
   session is written up first as a plan in `.claude/plans/` (mirrored on
   plans.openape.ai) and kept current while the work runs. `stories/` and the
   story agents in `.claude/agents/` are a frozen experiment from June 2026 —
