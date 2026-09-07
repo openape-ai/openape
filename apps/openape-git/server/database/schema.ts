@@ -130,3 +130,15 @@ export const pullComments = sqliteTable('pull_comments', {
   line: integer('line'),
   createdAt: integer('created_at').notNull(),
 }, t => [index('idx_pull_comments_pull').on(t.pullId, t.createdAt)])
+
+// Durable per-ref observations survive restarts and identify owned deletions.
+export const mirrorRefStates = sqliteTable('mirror_ref_states', {
+  mirrorId: text('mirror_id').notNull(),
+  ref: text('ref').notNull(),
+  sourceSha: text('source_sha'),
+  targetSha: text('target_sha'),
+  lastSuccessfulSha: text('last_successful_sha'),
+  checkedAt: integer('checked_at').notNull(),
+  syncedAt: integer('synced_at'),
+  error: text('error'),
+}, t => [uniqueIndex('idx_mirror_state_ref').on(t.mirrorId, t.ref)])

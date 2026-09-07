@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { pushRefToMirror, redactToken, shouldMirrorRef } from '../server/utils/mirror'
+import { mayDeleteMirrorRef, parseMirrorRefs, pushRefToMirror, redactToken, shouldMirrorRef } from '../server/utils/mirror'
 
 const TOKEN = 'abcdef0123456789abcdef0123456789abcdef01'
 
@@ -124,6 +124,19 @@ describe('pushRefToMirror against a real remote', () => {
     expect(headOf(remote)).toBe('first')
   })
 
+  it('replicates annotated tags and deletes only the expected target SHA', async () => {
+    git(src, ['tag', '-a', 'v1', '-m', 'version 1'])
+    const tagSha = git(src, ['rev-parse', 'refs/tags/v1']).trim()
+    expect((await pushRefToMirror(src, noCreds(`file://${remote}`), 'refs/tags/v1', undefined, { sourceSha: tagSha, targetSha: null })).ok).toBe(true)
+    expect(git(remote, ['rev-parse', 'refs/tags/v1']).trim()).toBe(tagSha)
+    const refused = await pushRefToMirror(src, noCreds(`file://${remote}`), 'refs/tags/v1', undefined, { sourceSha: null, targetSha: 'a'.repeat(40) })
+    expect(refused.ok).toBe(false)
+    expect(git(remote, ['rev-parse', 'refs/tags/v1']).trim()).toBe(tagSha)
+    const deleted = await pushRefToMirror(src, noCreds(`file://${remote}`), 'refs/tags/v1', undefined, { sourceSha: null, targetSha: tagSha })
+    expect(deleted.ok).toBe(true)
+    expect(git(remote, ['for-each-ref', 'refs/tags/v1']).trim()).toBe('')
+  })
+
   it('fails and changes nothing when the far side has diverged', async () => {
     // The situation this mirror cannot resolve and must not paper over:
     // someone pushed to the target directly. Without --force git refuses, and
@@ -138,5 +151,18 @@ describe('pushRefToMirror against a real remote', () => {
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/rejected|fetch first/)
     expect(headOf(remote)).toBe('written directly on the target')
+  })
+})
+
+describe('mirror reconciliation primitives', () => {
+  it('preserves annotated tag object IDs and ignores peeled and internal refs', () => {
+    const sha = 'a'.repeat(40)
+    expect([...parseMirrorRefs(`${sha} refs/tags/v1\n${'b'.repeat(40)} refs/tags/v1^{}\n${sha} refs/pull/1/head`)]).toEqual([['refs/tags/v1', sha]])
+  })
+  it('refuses to delete an unknown or independently changed target', () => {
+    expect(mayDeleteMirrorRef(null, 'a')).toBe(false)
+    expect(mayDeleteMirrorRef('a', 'b')).toBe(false)
+    expect(mayDeleteMirrorRef('a', 'a')).toBe(true)
+    expect(mayDeleteMirrorRef('a', null)).toBe(true)
   })
 })
