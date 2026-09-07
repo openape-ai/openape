@@ -167,34 +167,7 @@ async function onMerge() {
           <span v-if="detail.pull.mergedAt" class="text-zinc-500"> · {{ formatDate(detail.pull.mergedAt) }}</span>
         </section>
 
-        <section v-else class="border border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap">
-          <p v-if="detail.gate?.blockers.length" class="text-amber-400 text-sm">
-            Required checks: {{ detail.gate.blockers.join('; ') }}
-          </p>
-          <template v-if="detail.mergeable">
-            <UIcon name="i-lucide-check-circle-2" class="size-4 text-emerald-500" />
-            <span class="text-sm">This branch merges cleanly.</span>
-          </template>
-          <template v-else>
-            <UIcon name="i-lucide-x-circle" class="size-4 text-red-500" />
-            <span class="text-sm">
-              Conflicts<template v-if="detail.conflicts.length"> in
-                <code class="font-mono">{{ detail.conflicts.join(', ') }}</code></template>.
-            </span>
-          </template>
-          <UButton
-            v-if="detail.canMerge"
-            class="ml-auto"
-            size="sm"
-            icon="i-lucide-git-merge"
-            :color="detail.mergeable ? 'primary' : 'neutral'"
-            :disabled="!detail.mergeable"
-            :loading="merging"
-            @click="onMerge"
-          >
-            Merge pull request
-          </UButton>
-        </section>
+        <PullMergeGate v-else :gate="detail.gate" :mergeable="detail.mergeable" :conflicts="detail.conflicts" :can-merge="detail.canMerge" :busy="merging" @merge="onMerge" />
 
         <ul class="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
           <li v-for="commit in detail.commits" :key="commit.sha" class="px-4 py-2 flex items-center gap-3 text-sm">
