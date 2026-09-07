@@ -55,6 +55,7 @@ export function checkCommands(packages, selected, suites, policy = contract) {
   steps.push({ name: 'prebuild', command: 'pnpm', args: ['turbo', 'run', 'build', '--filter=./packages/*', '--filter=./modules/*', ...policy.consumedApps.map(n => `--filter=${n}`), '--concurrency=1'] })
   if (suites.includes('unit')) {
     steps.push({ name: 'audit', command: 'pnpm', args: ['audit', '--prod', '--audit-level=high'] })
+    steps.push({ name: 'workspace-docs', command: 'node', args: ['scripts/workspace-map.mjs', '--check'] })
     steps.push({ name: 'tooling', command: 'node', args: ['--test', ...readdirSync(join(root, 'scripts')).filter(n => n.endsWith('.test.mjs')).sort().map(n => `scripts/${n}`)] })
     for (const task of ['lint', 'typecheck', 'test']) {
       const targets = selected.filter(p => p.scripts[task] && !policy.unitExceptions[`${p.name}:${task}`])
