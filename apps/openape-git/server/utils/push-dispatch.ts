@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { useDb } from '../database/drizzle'
-import { mirrorPushes, mirrors, webhookDeliveries, webhooks } from '../database/schema'
-import { pushRefToMirror, shouldMirrorRef } from './mirror'
+import { webhookDeliveries, webhooks } from '../database/schema'
+import { reconcileMirrors } from './mirror-reconcile'
 import { listPushedCommits } from './git-read'
 import { repoDiskPath } from './repos'
 import { deliver } from './webhooks'
@@ -33,35 +33,9 @@ interface RepoRef {
   name: string
 }
 
-/** Replicates the updated refs to this repo's enabled mirrors, one row per attempt. */
-export async function dispatchMirrorPush(repo: RepoRef, updates: RefUpdate[]): Promise<void> {
-  const db = useDb()
-  const targets = await db.select().from(mirrors).where(eq(mirrors.repoId, repo.id))
-  const active = targets.filter(m => m.enabled)
-  if (active.length === 0) return
-
-  const dir = repoDiskPath(repo.owner, repo.name)
-  for (const update of updates) {
-    if (!shouldMirrorRef(update.ref)) continue
-    // A failing mirror must not fail the push that triggered it — the commits
-    // are already accepted. Every attempt is recorded instead.
-    for (const mirror of active) {
-      const result = await pushRefToMirror(dir, mirror, update.ref)
-      await db.insert(mirrorPushes).values({
-        id: ulid(),
-        mirrorId: mirror.id,
-        repoId: repo.id,
-        ref: update.ref,
-        sha: update.after,
-        ok: result.ok ? 1 : 0,
-        error: result.error ?? null,
-        durationMs: result.durationMs,
-        createdAt: Math.floor(Date.now() / 1000),
-      })
-      const outcome = result.ok ? 'ok' : `FAILED: ${result.error?.split('\n')[0]}`
-      console.log(`[ape-git] mirror ${mirror.url} ${update.ref} ${outcome} (${result.durationMs}ms)`)
-    }
-  }
+/** Events trigger a current-state scan; obsolete events never overwrite newer refs. */
+export async function dispatchMirrorPush(repo: RepoRef, _updates: RefUpdate[]): Promise<void> {
+  await reconcileMirrors(repo)
 }
 
 export async function dispatchPushEvent(repo: RepoRef, updates: RefUpdate[], pusher: Pusher): Promise<number> {

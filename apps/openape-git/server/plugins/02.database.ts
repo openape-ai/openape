@@ -119,4 +119,10 @@ export default defineNitroPlugin(async () => {
     created_at INTEGER NOT NULL
   )`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_mirror_pushes_repo ON mirror_pushes(repo_id, created_at)`)
+  await db.run(sql`CREATE TABLE IF NOT EXISTS mirror_ref_states (
+    mirror_id TEXT NOT NULL, ref TEXT NOT NULL, source_sha TEXT, target_sha TEXT,
+    last_successful_sha TEXT, checked_at INTEGER NOT NULL, synced_at INTEGER, error TEXT
+  )`)
+  await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_mirror_state_ref ON mirror_ref_states(mirror_id, ref)`)
+
 })
