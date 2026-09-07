@@ -9,7 +9,10 @@ sibling repositories and linked worktrees have their own checkout state.
   `https://repos.openape.ai/patrick/monorepo.git`. Forgejo and GitHub are mirrors.
 - Issues remain at `https://git.openape.ai/openape-ai/openape/issues`.
   Always link the full issue URL across forges; a bare `Closes #N` is ambiguous.
-- Run `git status --short`, `git branch --show-current` and `pnpm doctor`.
+- Run `git status --short`, `git branch --show-current` and `pnpm run doctor`.
+  Use the explicit `run`: `pnpm doctor` is pnpm's own command. For restricted
+  sessions, prepare the [local toolchain](docs/operations/session-toolchain.md)
+  before running package scripts; a version-manager download is not a repo test.
   [Native CLI and diagnosis](docs/operations/native-cli.md) cover PRs, checks, logs
   and merge commands. `pnpm repo:status` prints the canonical repository identity.
   Preserve existing tracked and untracked work. Never switch another worktree's
