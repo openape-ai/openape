@@ -1,3 +1,5 @@
 .worktrees/
 *.worktrees/
 .fallow/
+.claude/plans/
+docs/superpowers/plans/
