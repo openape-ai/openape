@@ -93,7 +93,12 @@ git pull
 pnpm release:local
 ```
 
-This script (`scripts/release-local.mjs`) consumes pending changesets, bumps versions, builds, publishes to npm in dependency order, and pushes the version commit. Versioning and publishing happen entirely on your machine — there is no publish workflow on a CI server.
+Prepare the version bump on a feature branch with `pnpm version-packages`, then merge
+that PR on repos.openape.ai. `pnpm release:local` publishes only from a clean main
+checkout whose HEAD equals the canonical remote main and has no pending changesets.
+It never creates a commit or pushes a branch. `pnpm release:local --dry-run` checks
+these preconditions without publishing. Repository identity is defined once in
+`.openape/repository.json`; deploy and push guards use the same configuration.
 
 ### 7. Deploy
 
