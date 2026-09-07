@@ -34,6 +34,16 @@ interface Mirror {
   createdAt: number
 }
 
+interface MirrorState {
+  mirrorId: string
+  ref: string
+  sourceSha: string | null
+  targetSha: string | null
+  checkedAt: number
+  syncedAt: number | null
+  error: string | null
+}
+
 interface MirrorPush {
   id: string
   ref: string
@@ -66,15 +76,28 @@ const granting = ref(false)
 
 const mirrors = ref<Mirror[]>([])
 const mirrorPushes = ref<MirrorPush[]>([])
+const mirrorStates = ref<MirrorState[]>([])
+const reconciling = ref(false)
 const mirrorUrl = ref('')
 const mirrorUser = ref('')
 const mirrorToken = ref('')
 const addingMirror = ref(false)
 
 async function loadMirrors() {
-  const data = await $fetch<{ mirrors: Mirror[], pushes: MirrorPush[] }>(`/api/repos/${owner}/${name}/mirrors`)
+  const data = await $fetch<{ mirrors: Mirror[], pushes: MirrorPush[], states: MirrorState[] }>(`/api/repos/${owner}/${name}/mirrors`)
   mirrors.value = data.mirrors
   mirrorPushes.value = data.pushes
+  mirrorStates.value = data.states
+}
+
+async function onReconcile() {
+  reconciling.value = true
+  try {
+    await $fetch(`/api/repos/${owner}/${name}/mirrors/reconcile`, { method: 'POST' })
+    await loadMirrors()
+  }
+  catch { error.value = 'Could not queue mirror reconciliation.' }
+  finally { reconciling.value = false }
 }
 
 async function onAddMirror() {
@@ -260,7 +283,7 @@ async function onRevoke(id: string) {
             Push mirrors
           </h2>
           <p class="mb-4 text-sm text-zinc-500">
-            Every push is replicated to these forges, ref by ref. Without
+            Pushes and merges are replicated to these forges, ref by ref. A scan every five minutes recovers missed events. Without
             <code>--force</code>: if the far side has commits this repo does not, the push
             fails and is listed below instead of overwriting them. Use a token scoped to
             the one repository over there.
@@ -295,6 +318,27 @@ async function onRevoke(id: string) {
               <UButton size="xs" color="error" variant="soft" @click="onDeleteMirror(mirror.id)">
                 Delete
               </UButton>
+            </li>
+          </ul>
+
+          <div v-if="mirrors.length" class="mt-4 flex gap-2">
+            <UButton size="xs" :loading="reconciling" @click="onReconcile">
+              Reconcile now
+            </UButton>
+            <UButton size="xs" variant="soft" @click="loadMirrors">
+              Refresh status
+            </UButton>
+          </div>
+          <ul class="mt-4 space-y-3 text-xs">
+            <li v-for="state in mirrorStates" :key="`${state.mirrorId}:${state.ref}`" class="border border-zinc-800 rounded p-3 break-all">
+              <p class="font-mono">
+                {{ state.ref }} · {{ mirrors.find(m => m.id === state.mirrorId)?.url }}
+              </p>
+              <p>Source: {{ state.sourceSha ?? 'deleted' }} · Target: {{ state.targetSha ?? 'absent or unavailable' }}</p>
+              <p>Checked: {{ new Date(state.checkedAt * 1000).toLocaleString() }} · Last synchronized: {{ state.syncedAt ? new Date(state.syncedAt * 1000).toLocaleString() : 'never' }}</p>
+              <p :class="state.error ? 'text-red-400' : 'text-emerald-500'">
+                {{ state.error ?? 'Synchronized' }}
+              </p>
             </li>
           </ul>
 

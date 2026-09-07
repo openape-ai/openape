@@ -6,7 +6,7 @@ import { createMergeCommit, mergeBase, mergeMessage, mergePreview } from '../../
 import { resolveCommit } from '../../../../../../utils/git-read'
 import { requirePull } from '../../../../../../utils/pulls'
 import { appendPushRecord } from '../../../../../../utils/push-log'
-import { dispatchPushEvent } from '../../../../../../utils/push-dispatch'
+import { dispatchMirrorPush, dispatchPushEvent } from '../../../../../../utils/push-dispatch'
 import { repoDiskPath } from '../../../../../../utils/repos'
 
 /**
@@ -56,6 +56,9 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   await appendPushRecord(dir, sha, { email: caller.email, act: caller.act, ts: now })
   await useDb().update(pulls).set({ state: 'merged', mergeSha: sha, mergedAt: now }).where(eq(pulls.id, pull.id))
+
+  void dispatchMirrorPush(repo, [{ ref: targetRef, before: targetSha, after: sha }])
+    .catch(err => console.error('[ape-git] merge mirror dispatch failed', err))
 
   // A merge moves a branch: CI consumers hear about it like any other push.
   await dispatchPushEvent(repo, [{ ref: targetRef, before: targetSha, after: sha }], {
