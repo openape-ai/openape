@@ -20,8 +20,16 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Restore check cache
+        uses: actions/cache@v3
+        with:
+          path: .turbo-cache
+          key: checks-${{ runner.os }}-layout-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: checks-${{ runner.os }}-layout-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Shared layout contract
         run: pnpm check:ci --suite layout
+        env:
+          TURBO_CACHE_DIR: .turbo-cache
       - name: Preserve complete check logs and summary
         if: always()
         uses: actions/upload-artifact@v3
@@ -29,3 +37,9 @@ jobs:
           name: layout-check-results
           path: .openape/check-results/
           if-no-files-found: warn
+      - name: Report checked SHA and log excerpts to ape-git
+        if: always() && github.event_name == 'push'
+        env:
+          APE_GIT_STATUS_SECRET: ${{ secrets.APE_GIT_STATUS_SECRET }}
+          APE_CHECK_JOB_STATUS: ${{ job.status }}
+        run: git show "$GITHUB_SHA:scripts/report-check.mjs" | node --input-type=module - layout

@@ -330,16 +330,7 @@ async function onRevoke(id: string) {
             </UButton>
           </div>
           <ul class="mt-4 space-y-3 text-xs">
-            <li v-for="state in mirrorStates" :key="`${state.mirrorId}:${state.ref}`" class="border border-zinc-800 rounded p-3 break-all">
-              <p class="font-mono">
-                {{ state.ref }} · {{ mirrors.find(m => m.id === state.mirrorId)?.url }}
-              </p>
-              <p>Source: {{ state.sourceSha ?? 'deleted' }} · Target: {{ state.targetSha ?? 'absent or unavailable' }}</p>
-              <p>Checked: {{ new Date(state.checkedAt * 1000).toLocaleString() }} · Last synchronized: {{ state.syncedAt ? new Date(state.syncedAt * 1000).toLocaleString() : 'never' }}</p>
-              <p :class="state.error ? 'text-red-400' : 'text-emerald-500'">
-                {{ state.error ?? 'Synchronized' }}
-              </p>
-            </li>
+            <MirrorRefStatus v-for="state in mirrorStates" :key="`${state.mirrorId}:${state.ref}`" :state="state" :url="mirrors.find(m => m.id === state.mirrorId)?.url" />
           </ul>
 
           <h3 class="text-sm font-semibold mt-6 mb-2 text-zinc-300">
