@@ -8,6 +8,7 @@ import { diffPatch, mergePreview } from '../../../../../../utils/git-merge'
 import { requirePull } from '../../../../../../utils/pulls'
 import { repoDiskPath } from '../../../../../../utils/repos'
 import { accessAllows } from '../../../../../../utils/git-access'
+import { branchGate } from '../../../../../../utils/branch-protection'
 import { renderMarkdown } from '../../../../../../utils/render'
 
 // A big diff is a review problem, not a rendering problem — cap it and say so.
@@ -41,7 +42,10 @@ export default defineEventHandler(async (event) => {
       ])
     : [{ patch: '', truncated: false }, { mergeable: false, tree: null, conflicts: [] }, []]
 
+  const gate = live ? await branchGate(repo.id, pull.targetRef, sourceSha) : null
+
   return {
+    gate,
     pull: {
       number: pull.number,
       title: pull.title,
@@ -64,7 +68,7 @@ export default defineEventHandler(async (event) => {
     truncated: diff.truncated,
     mergeable: merge.mergeable,
     conflicts: merge.conflicts,
-    canMerge: pull.state === 'open' && accessAllows(access, 'write'),
+    canMerge: pull.state === 'open' && accessAllows(access, 'write') && !gate?.blockers.length,
     comments: comments.map(({ pullId: _pullId, ...comment }) => ({
       ...comment,
       bodyHtml: renderMarkdown(comment.body),

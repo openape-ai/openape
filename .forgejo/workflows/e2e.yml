@@ -20,8 +20,16 @@ jobs:
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Restore check cache
+        uses: actions/cache@v3
+        with:
+          path: .turbo-cache
+          key: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Shared e2e contract
         run: pnpm check:ci --suite e2e
+        env:
+          TURBO_CACHE_DIR: .turbo-cache
       - name: Preserve complete check logs and summary
         if: always()
         uses: actions/upload-artifact@v3
@@ -82,3 +90,9 @@ jobs:
           cd "$(mktemp -d)"
           npx -y @openape/apes login "$TESTRUN_CI_EMAIL" --key /tmp/testrun-ci-key ${TESTRUN_CI_IDP:+--idp "$TESTRUN_CI_IDP"}
           npx -y @openape/ape-testruns upload /tmp/e2e-run
+      - name: Report checked SHA and log excerpts to ape-git
+        if: always() && github.event_name == 'push'
+        env:
+          APE_GIT_STATUS_SECRET: ${{ secrets.APE_GIT_STATUS_SECRET }}
+          APE_CHECK_JOB_STATUS: ${{ job.status }}
+        run: git show "$GITHUB_SHA:scripts/report-check.mjs" | node --input-type=module - e2e
