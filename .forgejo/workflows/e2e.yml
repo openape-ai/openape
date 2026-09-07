@@ -16,6 +16,9 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
       - name: Enable pnpm
         run: corepack enable
       - name: Install
@@ -24,8 +27,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .turbo-cache
-          key: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml') }}-
+          key: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-${{ github.sha }}
+          restore-keys: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-
       - name: Shared e2e contract
         run: pnpm check:ci --suite e2e
         env:

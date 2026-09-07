@@ -20,6 +20,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { releaseOptions } from './release-options.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 
@@ -64,7 +65,9 @@ const PACKAGES = [
   { name: '@openape/ape-crm', dir: 'packages/ape-crm' },
 ]
 
-const dryRun = process.argv.includes('--dry-run')
+const { dryRun, filter } = releaseOptions(process.argv.slice(2))
+if (filter && !PACKAGES.some(pkg => pkg.name === filter)) throw new Error(`Unknown publishable package: ${filter}`)
+const selectedPackages = filter ? PACKAGES.filter(pkg => pkg.name === filter) : PACKAGES
 
 function getLocalVersion(dir) {
   const pkg = JSON.parse(readFileSync(resolve(ROOT, dir, 'package.json'), 'utf-8'))
@@ -113,7 +116,7 @@ console.log(dryRun ? '\n🔍 Dry run — nothing will be published\n' : '\n📦 
 
 const toPublish = []
 
-for (const pkg of PACKAGES) {
+for (const pkg of selectedPackages) {
   const local = getLocalVersion(pkg.dir)
   const npm = getNpmVersion(pkg.name)
 
