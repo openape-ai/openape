@@ -37,3 +37,6 @@ docs/local-stack/manifest-*.json
 
 # Linked working directories are local, never project input.
 .worktrees/
+
+# Local check logs and machine-readable results.
+.openape/check-results/

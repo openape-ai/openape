@@ -49,7 +49,7 @@ if [ -n "$staged_package_jsons" ]; then
 
     git checkout-index --prefix="$tmpdir/" -a 2>/dev/null
 
-    if ! (cd "$tmpdir" && pnpm install --lockfile-only 2>/dev/null); then
+    if ! (cd "$tmpdir" && pnpm install --lockfile-only --frozen-lockfile --ignore-scripts 2>/dev/null); then
       echo "[pre-commit] ERROR: pnpm-lock.yaml is out of sync."
       echo "  Run: pnpm install && git add pnpm-lock.yaml"
       errors=1
@@ -65,21 +65,10 @@ if [ -n "$staged_package_jsons" ]; then
   fi
 fi
 
-# --- Lint + Typecheck (affected packages only) ---
-staged_src=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|vue)$' || true)
-
+# --- Same contract as CI; only affected consumers before a commit. ---
+staged_src=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|mjs|vue)$' || true)
 if [ -n "$staged_src" ]; then
-  echo "[pre-commit] Running lint on affected packages..."
-  if ! pnpm turbo run lint --affected --concurrency=4 2>&1 | tail -5; then
-    echo "[pre-commit] ERROR: lint failed"
-    errors=1
-  fi
-
-  echo "[pre-commit] Running typecheck on affected packages..."
-  if ! pnpm turbo run typecheck --affected --concurrency=4 2>&1 | tail -5; then
-    echo "[pre-commit] ERROR: typecheck failed"
-    errors=1
-  fi
+  if ! pnpm check:affected --suite unit; then errors=1; fi
 fi
 
 if [ "$errors" -ne 0 ]; then
