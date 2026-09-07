@@ -29,7 +29,8 @@
     "seed:shapes": "tsx scripts/seed-shapes.ts",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy:docs-site": "node scripts/deploy-docs-site.mjs",
-    "guides": "bash compose/demo/run.sh"
+    "guides": "bash compose/demo/run.sh",
+    "repo:status": "node scripts/repository.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

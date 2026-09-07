@@ -24,13 +24,13 @@ describe('resolveTruthRemote', () => {
     assert.equal(resolveTruthRemote(remotes), 'origin')
   })
 
-  it('falls back to origin when no remote points at the forge', () => {
+  it('rejects a mirror when no remote points at the forge', () => {
     const remotes = { origin: 'git@github.com:openape-ai/openape.git' }
-    assert.equal(resolveTruthRemote(remotes), 'origin')
+    assert.throws(() => resolveTruthRemote(remotes), /No remote/)
   })
 
   it('ignores a host that merely contains the forge name', () => {
     const remotes = { origin: 'https://evil-repos.openape.ai.attacker.test/x.git' }
-    assert.equal(resolveTruthRemote(remotes), 'origin')
+    assert.throws(() => resolveTruthRemote(remotes), /No remote/)
   })
 })
