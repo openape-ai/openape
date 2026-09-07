@@ -1,118 +1,50 @@
+# Shared with the local pre-push gate: scripts/check.mjs + .openape/checks.json.
+# Every mirrored branch is checked at its exact pushed commit. No main-vs-main diff.
 name: e2e
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   e2e:
     runs-on: docker
-    # `--affected` (like ci.yml): a PR that touches no app skips that app's
-    # dev-boot suite entirely. Each suite boots a real Nuxt server, so skipping
-    # the untouched ones is where the minutes are — this job ran ~15 min while
-    # `ci` ran ~5 on the same commit. TURBO_SCM_BASE + fetch-depth:0 give turbo
-    # the base ref to diff against; e2e-manifest.mjs records a suite whose
-    # report file is missing as "skipped", so the proof link stays honest.
-    env:
-      TURBO_SCM_BASE: origin/main
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Ensure base ref for --affected
-        run: git fetch --no-tags origin main
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Enable pnpm
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
-      # The three test steps are teed to /tmp so the failure step below can
-      # post the failing step's log tail to the PR (#1050). Each suite also
-      # writes a vitest JSON report (turbo passes the extra flags through to
-      # vitest, only for the named task — dependency builds are unaffected)
-      # that the manifest step below turns into a testrun.openape.ai proof.
-      - name: Build consumed workspaces (serial)
-        # The suites boot `nuxt dev` in examples/idp and examples/sp, which need
-        # the module dists. ci.yml pre-builds for the same reason (#934 dts race)
-        # — without it here the dev server hung silently for 300s and every
-        # boot timed out with an empty log (run 3258).
-        run: |
-          set -o pipefail
-          pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --concurrency=1 2>&1 | tee /tmp/e2e-build.log
-      - name: E2E (self-contained idp+sp, fresh, no prod)
-        run: |
-          set -o pipefail
-          pnpm turbo run test --affected --filter=openape-e2e -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-core.json 2>&1 | tee /tmp/e2e-core.log
-      - name: E2E proof-link round-trip (testrun, dev-mode boot)
-        run: |
-          set -o pipefail
-          pnpm turbo run test:e2e --affected --filter=@openape-testrun/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-testrun.json 2>&1 | tee /tmp/e2e-testrun.log
-      - name: E2E proof-link round-trip (ape-pr, dev-mode boot)
-        run: |
-          set -o pipefail
-          pnpm turbo run test:e2e --affected --filter=@openape-pr/app -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-apepr.json 2>&1 | tee /tmp/e2e-apepr.log
-      - name: E2E free-idp admin/login flows (nuxt-dev boot)
-        # yolo-policy / shapes-e2e / ssh-key-human-login each boot a real
-        # nuxt-dev server. Moved out of free-idp's fast unit suite (#936 CI work)
-        # so the per-PR `ci` job stays deterministic under load.
-        run: |
-          set -o pipefail
-          pnpm turbo run test:e2e --affected --filter=openape-free-idp -- --reporter=default --reporter=json --outputFile.json=/tmp/e2e-report-freeidp.json 2>&1 | tee /tmp/e2e-freeidp.log
-      - name: Post failure log tail as PR comment (#1050)
-        # The docker runner's logs are not reachable from outside, so on failure
-        # the tail of the failing step's log is posted to the PR. The last log
-        # written is the step that failed (steps run in order, a failed step
-        # stops the job). Push builds (no PR) skip via the `if` guard.
-        if: failure() && github.event.pull_request.number
-        env:
-          FJ_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          python3 - <<'PYEOF'
-          import json, os, urllib.request
-          logs = [
-              ('E2E free-idp admin/login flows', '/tmp/e2e-freeidp.log'),
-              ('E2E proof-link round-trip (ape-pr)', '/tmp/e2e-apepr.log'),
-              ('E2E proof-link round-trip (testrun)', '/tmp/e2e-testrun.log'),
-              ('E2E idp+sp', '/tmp/e2e-core.log'),
-          ]
-          section = 'Kein Log erfasst — Fehler lag vor den instrumentierten Steps (checkout/install?).'
-          for name, path in logs:
-              if os.path.exists(path):
-                  tail = open(path, 'rb').read()[-12000:].decode('utf-8', 'replace')
-                  section = f"Fehlgeschlagener Step: **{name}** (letzte 12 KB von `{path}`):\n\n```\n{tail}\n```"
-                  break
-          body = 'CI-Fehlerlog (letzter Abschnitt)\n\n' + section
-          req = urllib.request.Request(
-              f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{os.environ['PR_NUMBER']}/comments",
-              data=json.dumps({'body': body}).encode(),
-              headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'})
-          print(urllib.request.urlopen(req).status)
-          PYEOF
-      # ------------------------------------------------------------------
-      # Test reporting: one testrun.openape.ai manifest per run, built from
-      # the vitest JSON reports above. Suites that never ran (an earlier step
-      # failed) appear as explicit "skipped" entries; tests that passed only
-      # after a vitest retry are marked flaky. This step is the only reporting
-      # step allowed to fail the job — a broken manifest script must be loud.
+      - name: Shared e2e contract
+        run: pnpm check:ci --suite e2e
+      - name: Preserve complete check logs and summary
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e-check-results
+          path: .openape/check-results/
+          if-no-files-found: warn
       - name: Build testrun manifest
         if: always()
         # --series is the per-branch stability key: re-runs on the same branch
         # (or PR head branch) update ONE proof link, version-counted, instead
         # of minting a new link per CI run.
         run: |
+          REPORT_DIR=$(find .openape/check-results -mindepth 1 -maxdepth 1 -type d -name "*-e2e" | sort | tail -1)
           node --test scripts/e2e-manifest.test.mjs
           node scripts/e2e-manifest.mjs --out /tmp/e2e-run \
             --sha "$GITHUB_SHA" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_NUMBER" \
             --series "e2e-${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" \
-            core=/tmp/e2e-report-core.json \
-            testrun=/tmp/e2e-report-testrun.json \
-            apepr=/tmp/e2e-report-apepr.json \
-            free-idp=/tmp/e2e-report-freeidp.json \
+            core="$REPORT_DIR/openape-e2e.json" \
+            testrun="$REPORT_DIR/-openape-testrun-app.json" \
+            apepr="$REPORT_DIR/-openape-pr-app.json" \
+            free-idp="$REPORT_DIR/openape-free-idp.json" \
             --allow-empty
       - name: Attach manifest as workflow artifact
         if: always()

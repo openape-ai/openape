@@ -30,7 +30,9 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy:docs-site": "node scripts/deploy-docs-site.mjs",
     "guides": "bash compose/demo/run.sh",
-    "repo:status": "node scripts/repository.mjs"
+    "repo:status": "node scripts/repository.mjs",
+    "check:affected": "node scripts/check.mjs affected",
+    "check:ci": "node scripts/check.mjs ci"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
