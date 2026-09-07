@@ -14,7 +14,7 @@
     "test": "turbo run test",
     "e2e": "node scripts/e2e.mjs",
     "dev": "turbo run dev",
-    "graph": "node scripts/dependency-graph.mjs",
+    "graph": "node scripts/workspace-map.mjs",
     "knip": "node scripts/knip-workspaces.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
@@ -32,7 +32,10 @@
     "guides": "bash compose/demo/run.sh",
     "repo:status": "node scripts/repository.mjs",
     "check:affected": "node scripts/check.mjs affected",
-    "check:ci": "node scripts/check.mjs ci"
+    "check:ci": "node scripts/check.mjs ci",
+    "docs:check": "node scripts/workspace-map.mjs --check",
+    "git:cli": "node scripts/ape-git.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
