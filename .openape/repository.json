@@ -1,0 +1,9 @@
+{
+  "url": "https://repos.openape.ai/patrick/monorepo.git",
+  "defaultBranch": "main",
+  "issueUrl": "https://git.openape.ai/openape-ai/openape/issues",
+  "mirrors": [
+    "https://git.openape.ai/openape-ai/openape.git",
+    "https://github.com/openape-ai/openape.git"
+  ]
+}

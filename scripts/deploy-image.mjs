@@ -28,38 +28,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { gitRemotes, repository, resolveTruthRemote } from './repository.mjs'
 
-// The source of truth is the ape-git forge (decided 2026-08-29; before that it
-// was Forgejo). Its remote is called `apegit` in this checkout but `origin` in
-// a fresh clone from the forge, so resolve it by URL host — matching on the
-// name would silently guard against the copy instead.
-const TRUTH_HOST = 'repos.openape.ai'
-
-function hostOf(url) {
-  const scp = url.match(/^[^/@]+@([^:]+):/)
-  if (scp) return scp[1]
-  try {
-    return new URL(url).hostname
-  }
-  catch {
-    return ''
-  }
-}
-
-export function resolveTruthRemote(remotes) {
-  for (const [name, url] of Object.entries(remotes)) {
-    if (hostOf(url) === TRUTH_HOST) return name
-  }
-  return 'origin'
-}
-
-function gitRemotes() {
-  const out_ = execFileSync('git', ['config', '--get-regexp', String.raw`^remote\..*\.url`], { encoding: 'utf8' })
-  return Object.fromEntries(out_.trim().split('\n').filter(Boolean).map((line) => {
-    const [key, url] = line.split(' ')
-    return [key.slice('remote.'.length, -'.url'.length), url]
-  }))
-}
+export { resolveTruthRemote } from './repository.mjs'
 
 const REGISTRY = 'registry.openape.ai'
 
@@ -210,6 +181,12 @@ async function main() {
   }
   const sha = out('git', ['rev-parse', '--short', 'HEAD'])
   const targets = names.map(n => ({ name: n, ...TARGETS[n] }))
+  const truth = resolveTruthRemote(gitRemotes())
+  const base = `${truth}/${repository.defaultBranch}`
+  if (args.includes('--dry-run')) {
+    console.log(JSON.stringify({ repository: repository.url, remote: truth, baseRef: base, sha, targets: names, dryRun: true }, null, 2))
+    return
+  }
 
   // Guard: the image is built from the WORKING TREE. Deploying from a checkout
   // that lags origin/main silently rolls prod back to that older state — the
@@ -217,13 +194,9 @@ async function main() {
   // 2026-07-21: a deploy from a 5-day-old feature branch removed the entire
   // proactive-operators stack from prod overnight.
   if (!args.includes('--force')) {
-    const truth = resolveTruthRemote(gitRemotes())
+    out('git', ['fetch', '--quiet', truth, repository.defaultBranch])
     try {
-      out('git', ['fetch', '--quiet', truth, 'main'])
-    }
-    catch { /* offline — check against the last known ref below */ }
-    try {
-      out('git', ['merge-base', '--is-ancestor', `${truth}/main`, 'HEAD'])
+      out('git', ['merge-base', '--is-ancestor', base, 'HEAD'])
     }
     catch {
       const behind = out('git', ['rev-list', '--count', `HEAD..${truth}/main`])
