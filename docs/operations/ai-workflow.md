@@ -32,3 +32,27 @@ From a clean main checkout identical to canonical main, use
 `pnpm release:local --dry-run`, then `pnpm release:local` to publish. This command
 never commits or pushes. Deploy previews can be inspected without network mutations
 with `pnpm deploy:image git --dry-run`.
+
+## Completed rollout evidence
+
+- M1: native PR #14, canonical merge `d2cf5378`; full 157-task local gate.
+- M2: native PRs #15 and #16, deployed `e03a5ed5`; 125 forge tests.
+  The runtime image now includes CA certificates for verified HTTPS mirrors.
+- Isolated acceptance repo: `patrick/ai-workflow-validation` on ape-git and
+  `openape-ai/ai-workflow-validation` on Forgejo. Native PR #1 merged as
+  `44a8faf76aa5349e5b36d5661bf625cf5b220fb3`; source/target match.
+  Branch, annotated tag, web merge, tag deletion and branch deletion verified.
+  A failed HTTPS attempt recovered after deployment without a new push.
+- Empty mirror destinations must use the intended default branch (`main`);
+  Forgejo can select whichever branch is pushed first. Default branches cannot
+  be deleted there. Configure the destination before validating branch deletion.
+- Monorepo mirror: dedicated `ape-git-mirror` identity with repository write
+  scope. The previously lagging Forgejo main matches canonical `e03a5ed5`.
+- Observe: native repo settings or `GET /api/repos/patrick/monorepo/mirrors`.
+  Owner-triggered retry: `POST /api/repos/patrick/monorepo/mirrors/reconcile`.
+  Automatic scans run after startup and every five minutes. Deletion requires
+  the target to equal the last successful replicated SHA; unknown/diverged refs
+  survive. Updates never force an alternative history over the destination.
+
+The server CI gap remains open until M4. Local results used for bootstrap PRs
+are identified as local results; they are not presented as external CI runs.

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mayDeleteMirrorRef, parseMirrorRefs, pushRefToMirror, redactToken, shouldMirrorRef } from '../server/utils/mirror'
 
 const TOKEN = 'abcdef0123456789abcdef0123456789abcdef01'
@@ -107,16 +107,16 @@ describe('pushRefToMirror against a real remote', () => {
   const noCreds = (url: string) => ({ url, username: '', token: '' })
   const headOf = (dir: string) => git(dir, ['log', '--format=%s', '-1']).trim()
 
-  beforeAll(() => {
+  beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'ape-git-m8-'))
     remote = join(root, 'remote.git')
     src = join(root, 'src')
-    git(root, ['init', '-q', '--bare', 'remote.git'])
+    git(root, ['init', '-q', '--bare', '-b', 'main', 'remote.git'])
     git(root, ['init', '-q', '-b', 'main', 'src'])
     git(src, ['commit', '-q', '--allow-empty', '-m', 'first'])
   })
 
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  afterEach(() => rmSync(root, { recursive: true, force: true }))
 
   it('replicates a ref to the far side', async () => {
     const result = await pushRefToMirror(src, noCreds(`file://${remote}`), 'refs/heads/main')
@@ -138,6 +138,7 @@ describe('pushRefToMirror against a real remote', () => {
   })
 
   it('fails and changes nothing when the far side has diverged', async () => {
+    expect((await pushRefToMirror(src, noCreds(`file://${remote}`), 'refs/heads/main')).ok).toBe(true)
     // The situation this mirror cannot resolve and must not paper over:
     // someone pushed to the target directly. Without --force git refuses, and
     // the foreign commit has to survive.
