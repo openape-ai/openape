@@ -49,7 +49,8 @@ project diagnosis prints JSON with `readOnly: true`, the checkout `root`, a
 [session toolchain setup](session-toolchain.md). Calling the Node script directly
 does not fix a broken pnpm on PATH: its workspace inventory still uses pnpm.
 
-The doctor reports Node/pnpm, canonical remote and branch upstream, checkout
+The doctor checks exact Node from `.nvmrc` and pnpm from `package.json`, and reports
+canonical remote and branch upstream, checkout
 state, installation and CLI build presence, generated-map freshness and conflicting explicit dev ports.
 It does not infer dependency integrity or build freshness from file existence.
 App mode shows the actual start command, configuration source and whether
