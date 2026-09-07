@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { createError, defineEventHandler, getRouterParam } from 'h3'
 import { useDb } from '../../../../database/drizzle'
-import { mirrorPushes, mirrors } from '../../../../database/schema'
+import { mirrorPushes, mirrorRefStates, mirrors } from '../../../../database/schema'
 import { findRepo } from '../../../../utils/repos'
 
 const RECENT_PUSHES = 20
@@ -26,5 +26,8 @@ export default defineEventHandler(async (event) => {
   return {
     mirrors: configured.map(({ token: _token, ...m }) => m),
     pushes,
+    states: configured.length
+      ? await db.select().from(mirrorRefStates).where(inArray(mirrorRefStates.mirrorId, configured.map(m => m.id)))
+      : [],
   }
 })
