@@ -1,8 +1,32 @@
 # Toolchain for a new session
 
-Select the checkout and read its `package.json` first. It pins pnpm 10.29.3 and
-requires Node >=22. The pnpm launcher on PATH may be a different version that
+Select the checkout and read `.nvmrc` and `package.json` first. Development and
+the three required CI suites use exact Node 24.15.0 from `.nvmrc`; pnpm is pinned
+to 10.29.3. Package engine minimums and production images remain separate
+compatibility/runtime settings. The pnpm launcher on PATH may be a different version that
 downloads the pinned version before executing even a local command.
+
+## Select the same Node in terminal and tool shells
+
+In an interactive terminal using NVM, run `nvm install` once during preparation,
+then `nvm use` in this checkout. An existing NVM directory-change hook can select
+the `.nvmrc` automatically. A non-interactive login shell does not normally load
+`.zshrc`, so it may select Homebrew Node instead.
+
+In each bash/zsh tool shell, select the installed project version explicitly:
+
+```sh
+. ./scripts/activate-node.sh
+node --version
+```
+
+The script reads this checkout's `.nvmrc`, uses the matching installation under
+`NVM_DIR` (default `~/.nvm`) or an already matching Node on PATH, and updates only
+the current process PATH. With another version manager, set `OPENAPE_NODE_BIN`
+to the installed version's bin directory. An invalid override fails immediately.
+Missing versions fail with a preparation instruction; the script never downloads
+Node or sources interactive shell profiles. The Doctor reports a version mismatch
+as a failure, including actual/expected versions and the executable path.
 
 ## Prepare before a restricted session
 
@@ -11,6 +35,7 @@ cache, verify the pinned version and locate the executable actually selected
 inside the project:
 
 ```sh
+. ./scripts/activate-node.sh
 node --version
 pnpm --version
 pnpm exec sh -c 'command -v pnpm'
@@ -36,6 +61,8 @@ For example, if the recorded executable is `/absolute/path/to/bin/pnpm`:
 ```sh
 export OPENAPE_PNPM_BIN=/absolute/path/to/bin
 export PATH="$OPENAPE_PNPM_BIN:$PATH"
+. ./scripts/activate-node.sh
+node --version
 command -v pnpm
 pnpm --version
 pnpm run doctor
