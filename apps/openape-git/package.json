@@ -30,6 +30,9 @@
   },
   "devDependencies": {
     "@types/sanitize-html": "^2.13.0",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "catalog:"

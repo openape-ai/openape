@@ -125,4 +125,15 @@ export default defineNitroPlugin(async () => {
   )`)
   await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_mirror_state_ref ON mirror_ref_states(mirror_id, ref)`)
 
+  await db.run(sql`CREATE TABLE IF NOT EXISTS branch_protections (
+    repo_id TEXT NOT NULL, branch TEXT NOT NULL, mirror_id TEXT NOT NULL,
+    contexts TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL
+  )`)
+  await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_protection_branch ON branch_protections(repo_id, branch)`)
+  await db.run(sql`CREATE TABLE IF NOT EXISTS protection_events (
+    id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, branch TEXT NOT NULL,
+    actor TEXT NOT NULL, reason TEXT NOT NULL, configuration TEXT NOT NULL, created_at INTEGER NOT NULL
+  )`)
+
 })
