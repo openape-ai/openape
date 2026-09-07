@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "consumedApps": ["@openape/ape-agent", "@openape/ape-chat", "@openape/nest"],
+  "unitExceptions": {
+    "@openape/ape-chat:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
+    "@openape-question-service/app:test": "No unit suite yet; app lint and typecheck remain mandatory.",
+    "@openape/ape-secrets:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
+    "openape-idp-example:test": "Covered by the dedicated openape-e2e suite.",
+    "openape-sp-example:test": "Covered by the dedicated openape-e2e suite.",
+    "openape-e2e:typecheck": "The fixture workspace has no standalone typecheck script.",
+    "openape-e2e:test": "Executed as test:e2e in the e2e suite, not twice."
+  },
+  "e2e": ["openape-e2e", "openape-free-idp", "@openape-testrun/app", "@openape-pr/app"],
+  "layout": ["@openape/troop", "@openape/nuxt-auth-sp", "@openape-testrun/app"]
+}

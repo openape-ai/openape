@@ -1,128 +1,31 @@
+# Shared with the local pre-push gate: scripts/check.mjs + .openape/checks.json.
+# Every mirrored branch is checked at its exact pushed commit. No main-vs-main diff.
 name: CI
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   ci:
     runs-on: docker
-    # `--affected`: turbo runs each task only for packages changed vs main (+
-    # their dependents). A leaf-package PR (e.g. sp-tasks) then skips every Nuxt
-    # app build entirely → seconds, not 20 min on the 4-core runner. TURBO_SCM_BASE
-    # + fetch-depth:0 give turbo the base ref to diff against.
-    env:
-      TURBO_SCM_BASE: origin/main
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Ensure base ref for --affected
-        # Guarantee origin/main is present so turbo can diff against it. Without
-        # a resolvable base, --affected falls back to building everything.
-        run: git fetch --no-tags origin main
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Enable pnpm
         run: corepack enable
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Build consumed workspaces (serial — deterministic .d.ts before the checks)
-        # Build every workspace whose `build` output a check can consume, BEFORE
-        # the checks, serially, and NOT --affected. Why each of those matters:
-        #   1. Race fix (#934): `typecheck`/`test`'s internal `^build` emits a
-        #      dependency's `.d.ts` (tsup does dts in a separate pass) while a
-        #      consumer's tsc/tsup is already running → the consumer loses the
-        #      fs-flush race and fails with a spurious TS7016
-        #      "no declaration file for @openape/apes". Building everything a check
-        #      consumes to completion in a SEPARATE turbo process first makes every
-        #      such `^build` a cache HIT during the checks — nothing builds fresh,
-        #      so nothing races. `--concurrency=1` removes the same race *between*
-        #      these builds (a build's dts pass reading a sibling's fresh dts).
-        #   2. Scope = packages + modules + the non-Nuxt (tsup) apps. The tsup apps
-        #      (ape-agent, ape-chat, nest) ARE pulled as `^build` deps by affected
-        #      checks (e.g. nest#test → ape-agent#build → reads @openape/apes dts):
-        #      libs-only (#935) left ape-agent#build executing fresh in the checks,
-        #      which is exactly what re-surfaced the race on #937. Verified: with
-        #      these three added, ape-agent#build is a cache hit during the checks.
-        #   3. Not --affected: an app-only change leaves a lib (e.g. apes)
-        #      "unaffected", so an affected-scoped pre-build would skip it — the
-        #      original trigger. Building all of these cold is ~20-30s; cheap next
-        #      to the Nuxt app builds we still skip.
-        # Deployable Nuxt apps are intentionally NOT built here (and are never
-        # `^build` deps — nothing consumes them):
-        #   - their full Nitro `.output` build is a deploy-time concern
-        #     (`pnpm run deploy:image` builds + health-gates + auto-rolls-back);
-        #   - building their Nitro output on the runner triggers the pnpm + Nitro
-        #     `.output/server/node_modules` ELOOP symlink cycle
-        #     (vue↔@vue/server-renderer; nuxt#30539 / #12012) — no reliable fix.
-        # Teed to /tmp so the failure step below can post the log tail (#1050).
-        run: |
-          set -o pipefail
-          pnpm turbo run build --filter='./packages/*' --filter='./modules/*' --filter='@openape/ape-agent' --filter='@openape/ape-chat' --filter='@openape/nest' --concurrency=1 2>&1 | tee /tmp/ci-build.log
-      - name: Lint · Typecheck · Test (affected)
-        # e2e needs a running stack (dedicated job); docs prerenders OG images
-        # (fragile, own deploy) — both excluded from per-PR CI. Libs are already
-        # built above, so every `^build` here is a cache hit — no fresh dts writes
-        # race the typechecks.
-        # Preserve the tail for the failure step below so flaky runner failures
-        # leave actionable context on the PR instead of only "CI:failure".
-        run: |
-          set -o pipefail
-          pnpm turbo run lint typecheck test --affected --filter='!openape-e2e' --filter='!docs' 2>&1 | tee /tmp/ci-checks.log
-      - name: Post failure log tail as PR comment (#1050)
-        # The docker runner's logs are not reachable from outside, so on failure
-        # the tail of the failing step's log is posted to the PR. The last log
-        # written is the step that failed (a failed build never reaches the
-        # checks). Push builds (no PR) skip via the `if` guard.
-        if: failure() && github.event.pull_request.number
-        env:
-          FJ_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          python3 - <<'PYEOF'
-          import json, os, re, urllib.request
-          # A blind tail is the wrong tool here: turbo interleaves many tasks, so
-          # the last 12 KB are usually another task's compile chatter while the
-          # actual error scrolled past. Search for the failure instead, and only
-          # fall back to a tail when nothing matches.
-          FAILURE = re.compile(
-              r'ERROR|error TS\d+|Error:|FAIL |✗|✘|failed|Failed:|npm ERR|ELIFECYCLE|AssertionError',
-              re.IGNORECASE)
-          ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
-          CONTEXT = 6
-          logs = [('Lint · Typecheck · Test', '/tmp/ci-checks.log'), ('Build', '/tmp/ci-build.log')]
-          section = 'Kein Log erfasst — Fehler lag vor den instrumentierten Steps (checkout/install?).'
-          for name, path in logs:
-              if not os.path.exists(path):
-                  continue
-              lines = ANSI.sub('', open(path, 'rb').read().decode('utf-8', 'replace')).splitlines()
-              keep = set()
-              for i, line in enumerate(lines):
-                  if FAILURE.search(line):
-                      keep.update(range(max(0, i - CONTEXT), min(len(lines), i + CONTEXT + 1)))
-              if keep:
-                  out, last = [], None
-                  for i in sorted(keep):
-                      if last is not None and i > last + 1:
-                          out.append(f'  … {i - last - 1} Zeilen …')
-                      out.append(lines[i])
-                      last = i
-                  # Keep the END of the excerpt: turbo's own summary lands there.
-                  body_text = '\n'.join(out)[-14000:]
-                  section = (f"Fehlgeschlagener Step: **{name}** — Treffer auf Fehlermuster "
-                             f"in `{path}`, mit {CONTEXT} Zeilen Kontext:\n\n```\n{body_text}\n```")
-              else:
-                  tail = '\n'.join(lines)[-12000:]
-                  section = (f"Fehlgeschlagener Step: **{name}** — kein Fehlermuster gefunden, "
-                             f"deshalb die letzten 12 KB von `{path}`:\n\n```\n{tail}\n```")
-              break
-          body = 'CI-Fehlerlog\n\n' + section
-          req = urllib.request.Request(
-              f"https://git.openape.ai/api/v1/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{os.environ['PR_NUMBER']}/comments",
-              data=json.dumps({'body': body}).encode(),
-              headers={'Authorization': f"token {os.environ['FJ_TOKEN']}", 'Content-Type': 'application/json'})
-          print(urllib.request.urlopen(req).status)
-          PYEOF
+      - name: Shared unit contract
+        run: pnpm check:ci --suite unit
+      - name: Preserve complete check logs and summary
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-check-results
+          path: .openape/check-results/
+          if-no-files-found: warn
