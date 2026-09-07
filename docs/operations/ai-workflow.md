@@ -54,5 +54,30 @@ with `pnpm deploy:image git --dry-run`.
   the target to equal the last successful replicated SHA; unknown/diverged refs
   survive. Updates never force an alternative history over the destination.
 
-The server CI gap remains open until M4. Local results used for bootstrap PRs
-are identified as local results; they are not presented as external CI runs.
+- M3: PR #17, source `dbaea29a`, external CI/E2E/layout runs 4323/4324/4325;
+  merge `e5cf0d1a`. Local and external jobs use the same check contract.
+- M4: PR #18, source `bdfa60c7`, external runs 4329/4330/4331;
+  merge/deployment `3f52d59a`. Main requires the exact source's three Forgejo
+  contexts. Direct, force and deletion pushes are denied even for the owner.
+  Policy changes require the human owner and an audit reason.
+- Isolated protected PR #2: missing, pending, failed and stale check evidence
+  and stale reviewed heads were refused with HTTP 409. After the independent
+  green run on `c0cd4e26`, the native CLI merged it as `742333ae`; both forges
+  matched. [Acceptance PR](https://repos.openape.ai/patrick/ai-workflow-validation/pulls/2).
+- M5/M6: PR #19, source `52579f61`, external runs 4338/4339/4340;
+  merge `a4921e2f`. Shared AGENTS, a checked 50-workspace map, native JSON CLI,
+  read-only doctor and compatible legacy authentication caches are on main.
+- M7 checkpoint: a fresh shallow clone from the canonical server installed
+  frozen dependencies and built consumed workspaces. Tasks started before the
+  fix on 3004. After correction, Tasks on 3005 and ape-pr on 3014 each returned
+  `{"ok":true}` from `/api/health` and HTTP 200 from `/`, using separate temporary
+  databases and generated session secrets. Processes were stopped afterward.
+  The doctor detected both original port collisions and the absent stack;
+  after correction it finds no explicit dev-port collision and includes the
+  selected app when checking actual Compose services.
+
+Final M7 PR, source/check URLs, merge/mirror SHAs and the independent follow-up
+session are recorded in the live plan linked above. That tracker decides whether
+acceptance is complete; this file records the reproducible checkpoint without
+pretending its own future commit SHA is already known. Initial bootstrap results
+remain labelled local; later external results are linked to their exact source.

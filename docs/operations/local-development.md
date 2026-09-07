@@ -11,8 +11,11 @@ For a browser login with real DNS/TLS and an isolated IdP, use the existing
 docker compose -f compose/local-stack.yml up -d --build
 ```
 
-That stack currently contains IdP, troop and chat. Its DNS/resolver and local CA
-setup are documented there. Do not point local experiments at production data,
+The stack defines IdP, troop, chat, tasks, plans, testrun, timetrack, CRM, ape-pr
+and the public docs site, plus DNS/TLS infrastructure. The authoritative list
+is `docker compose -f compose/local-stack.yml config --services`. The optional
+demo and agent-lifecycle profiles add test drivers. Its DNS/resolver and local
+CA setup are documented there. Do not point local experiments at production data,
 disable authentication to enter a private UI, or reset existing stack volumes
 merely to run a test.
 
@@ -41,10 +44,10 @@ mount components with Nuxt-UI stubs; geometry tests use a real browser.
 | `@openape-monitor/app` | `pnpm --filter @openape-monitor/app dev` → `nuxt dev --port 3018` | [apps/openape-monitor/nuxt.config.ts](../../apps/openape-monitor/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape/nest` | `pnpm --filter @openape/nest dev` → `tsup --watch` | [apps/openape-nest/package.json](../../apps/openape-nest/package.json) | Kein SP-Login; Laufzeit-/CLI-Konfiguration im Paket lesen. | `test`, `typecheck` |
 | `@openape-plans/app` | `pnpm --filter @openape-plans/app dev` → `nuxt dev --port 3004` | [apps/openape-plans/nuxt.config.ts](../../apps/openape-plans/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
-| `@openape-pr/app` | `pnpm --filter @openape-pr/app dev` → `nuxt dev --port 3006` | [apps/openape-pr/nuxt.config.ts](../../apps/openape-pr/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:e2e`, `typecheck` |
+| `@openape-pr/app` | `pnpm --filter @openape-pr/app dev` → `nuxt dev --port 3014` | [apps/openape-pr/nuxt.config.ts](../../apps/openape-pr/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:e2e`, `typecheck` |
 | `@openape-question-service/app` | `pnpm --filter @openape-question-service/app dev` → `nuxt dev --port 3017` | [apps/openape-question-service/nuxt.config.ts](../../apps/openape-question-service/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `typecheck` |
 | `@openape-secrets/app` | `pnpm --filter @openape-secrets/app dev` → `nuxt dev --port 3025` | [apps/openape-secrets/nuxt.config.ts](../../apps/openape-secrets/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
-| `@openape-tasks/app` | `pnpm --filter @openape-tasks/app dev` → `nuxt dev --port 3004` | [apps/openape-tasks/nuxt.config.ts](../../apps/openape-tasks/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
+| `@openape-tasks/app` | `pnpm --filter @openape-tasks/app dev` → `nuxt dev --port 3005` | [apps/openape-tasks/nuxt.config.ts](../../apps/openape-tasks/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-testrun/app` | `pnpm --filter @openape-testrun/app dev` → `nuxt dev --port 3006` | [apps/openape-testrun/nuxt.config.ts](../../apps/openape-testrun/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:e2e`, `test:layout`, `typecheck` |
 | `@openape-timetrack/app` | `pnpm --filter @openape-timetrack/app dev` → `nuxt dev --port 3011` | [apps/openape-timetrack/nuxt.config.ts](../../apps/openape-timetrack/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape/troop` | `pnpm --filter @openape/troop dev` → `nuxt dev --port 3010` | [apps/openape-troop/nuxt.config.ts](../../apps/openape-troop/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:layout`, `typecheck` |
@@ -69,7 +72,8 @@ fixture's temporary data directory and management API. Mail, payments, DNS
 provisioning and other integrations are optional/external dependencies: configure
 only the capability being exercised and never copy production .env files.
 
-Known start-port collision in the inspected scripts: tasks/plans both use 3004,
-and ape-pr/testrun both use 3006. Until the doctor/startup acceptance change is
-merged, override the selected app's port explicitly when starting both together.
-The final acceptance will align these dev commands with their documented ports.
+Tasks uses 3005 and ape-pr uses 3014, matching their deployment port allocation.
+Plans remains on 3004 and testrun on 3006. `pnpm doctor -- --services --app NAME`
+reports whether the selected explicit port already has a TCP listener. It does
+not assume that listener belongs to the intended app. Choose another explicit
+port for parallel instances of the same app.

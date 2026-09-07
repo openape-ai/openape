@@ -17,6 +17,13 @@ export function portCollisions(packages) {
   return [...ports].filter(([, names]) => names.length > 1).map(([port, names]) => ({ port: Number(port), workspaces: names }))
 }
 
+export function requiredStackServices(services, appName) {
+  const regular = Object.entries(services).filter(([, config]) => !config.profiles?.length)
+  if (!appName) return { required: regular.map(([name]) => name), appService: null }
+  const match = regular.find(([, config]) => config.build?.args?.APP_FILTER === appName)
+  return { required: [...new Set(['dns', 'proxy', ...(appName === 'docs' ? [] : ['idp']), ...(match ? [match[0]] : [])])], appService: match?.[0] ?? null }
+}
+
 export function listening(port) {
   return new Promise((resolve) => {
     const socket = createConnection({ host: '127.0.0.1', port })
@@ -44,6 +51,10 @@ export async function diagnose(args = []) {
     add('repository', 'pass', { remote, url: repository.url, branch: run('git', ['branch', '--show-current']), sha: run('git', ['rev-parse', 'HEAD']) })
   }
   catch { add('repository', 'fail', 'Canonical remote missing or ambiguous', `Inspect git remote -v; canonical URL: ${repository.url}`) }
+  let upstream = null
+  try { upstream = run('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']) }
+  catch { /* A new feature branch may not have an upstream yet. */ }
+  add('upstream', remote && upstream?.startsWith(`${remote}/`) ? 'pass' : 'warn', upstream, !upstream || !upstream.startsWith(`${remote}/`) ? 'Inspect git branch -vv; use a canonical upstream for this branch, never a mirror' : undefined)
   const dirty = run('git', ['status', '--porcelain']).split('\n').filter(Boolean)
   add('working-tree', dirty.length ? 'warn' : 'pass', { changedPaths: dirty.length }, dirty.length ? 'Inspect git status --short; preserve existing work' : undefined)
   const installed = existsSync(join(root, 'node_modules/.modules.yaml'))
@@ -71,7 +82,9 @@ export async function diagnose(args = []) {
     if (port) add('app-port', 'info', { port, listening: await listening(port), note: 'TCP listener presence only; application identity and health are not inferred' }, 'Use an unused explicit port for an isolated startup')
     try {
       const rows = run('docker', ['compose', '-f', 'compose/local-stack.yml', 'ps', '--format', 'json']).split('\n').filter(Boolean).map(line => JSON.parse(line))
-      const required = ['dns', 'proxy', 'idp', 'troop', 'chat']
+      const config = JSON.parse(run('docker', ['compose', '-f', 'compose/local-stack.yml', 'config', '--format', 'json', '--no-interpolate']))
+      const { required, appService } = requiredStackServices(config.services, app?.name)
+      if (app && !appService) add('app-stack-service', 'warn', `${app.name} is not provided by the local stack`, 'Use the app command and isolated IdP fixtures from docs/operations/local-development.md')
       const missing = required.filter(name => !rows.some(r => r.Service === name && r.State === 'running' && (!r.Health || r.Health === 'healthy')))
       add('local-stack', missing.length ? 'fail' : 'pass', { missing, services: rows.map(r => ({ name: r.Service, state: r.State, health: r.Health })) }, missing.length ? 'Read docs/local-stack/README.md; start with docker compose -f compose/local-stack.yml up -d --build (no reset)' : undefined)
     }

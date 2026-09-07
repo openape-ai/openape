@@ -42,14 +42,14 @@ pnpm doctor -- --network
 pnpm doctor -- --services --app @openape-tasks/app
 ```
 
-The doctor reports Node/pnpm, canonical remote, checkout state, installation and
-CLI build presence, generated-map freshness and conflicting explicit dev ports.
+The doctor reports Node/pnpm, canonical remote and branch upstream, checkout
+state, installation and CLI build presence, generated-map freshness and conflicting explicit dev ports.
 It does not infer dependency integrity or build freshness from file existence.
 App mode shows the actual start command, configuration source and whether
 isolated database/session variables are present, never their values.
 
-`--services` checks the local Docker stack and the selected app’s explicit TCP
-port. Missing/stopped services include a startup remedy; port presence alone is
+`--services` derives services from the actual Compose file, includes the selected
+app when available, and checks its explicit TCP port. Missing/stopped services include a startup remedy; port presence alone is
 not an application health check. This mode is optional when using in-process
 IdP fixtures instead of Docker.
 
