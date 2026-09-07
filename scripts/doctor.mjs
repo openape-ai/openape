@@ -39,7 +39,8 @@ export async function diagnose(args = []) {
   const add = (name, state, detail, remedy) => checks.push({ name, state, detail, ...(remedy ? { remedy } : {}) })
   const run = (cmd, argv) => execFileSync(cmd, argv, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 }).trim()
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-  add('node', Number(process.versions.node.split('.')[0]) >= 22 ? 'pass' : 'fail', process.versions.node, 'Use Node >=22')
+  const nodeVersion = readFileSync(join(root, '.nvmrc'), 'utf8').trim()
+  add('node', process.versions.node === nodeVersion ? 'pass' : 'fail', { actual: process.versions.node, expected: nodeVersion, executable: process.execPath }, 'From the checkout: . ./scripts/activate-node.sh; then pnpm run doctor')
   try {
     const version = run('pnpm', ['--version'])
     add('pnpm', pkg.packageManager === `pnpm@${version}` ? 'pass' : 'fail', version, `Use ${pkg.packageManager}`)

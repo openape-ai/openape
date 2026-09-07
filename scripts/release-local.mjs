@@ -11,8 +11,11 @@ import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { gitRemotes, repository, resolveTruthRemote } from './repository.mjs'
+import { releaseOptions } from './release-options.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
+const { dryRun, filter } = releaseOptions(process.argv.slice(2))
+const selection = filter ? ['--filter', filter] : []
 
 const RED = '\x1B[31m'
 const GREEN = '\x1B[32m'
@@ -57,8 +60,10 @@ if (head !== capture('git', ['rev-parse', base])) fail(`HEAD must equal ${base}.
 const csFiles = readdirSync(resolve(ROOT, '.changeset')).filter(f => f.endsWith('.md') && f !== 'README.md')
 if (csFiles.length > 0) fail('Pending changesets: run pnpm version-packages on a feature branch, then merge the version PR before publishing.')
 
-console.log(JSON.stringify({ repository: repository.url, remote, branch, sha: head, dryRun: process.argv.includes('--dry-run') }))
-if (process.argv.includes('--dry-run')) process.exit(0)
+console.log(JSON.stringify({ repository: repository.url, remote, branch, sha: head, dryRun, filter: filter ?? null }))
+// Validate the requested package and show its exact publication scope first.
+run('node', ['scripts/publish-chain.mjs', '--dry-run', ...selection])
+if (dryRun) process.exit(0)
 try {
   console.log(`npm identity: ${capture('npm', ['whoami'])}`)
 }
@@ -69,11 +74,11 @@ catch {
 // --- 3. Build publishable packages -----------------------------------------
 
 step('Build publishable packages')
-run('pnpm', ['turbo', 'run', 'build', '--filter=./packages/*', '--filter=./modules/*'])
+run('pnpm', ['turbo', 'run', 'build', ...(filter ? [`--filter=${filter}...`] : ['--filter=./packages/*', '--filter=./modules/*']), '--concurrency=1'])
 
 // --- 4. Publish ------------------------------------------------------------
 
 step('Publish (only packages where local > npm)')
-run('node', ['scripts/publish-chain.mjs'])
+run('node', ['scripts/publish-chain.mjs', ...selection])
 
 console.log(`\n${GREEN}Release complete from ${head}.${RESET}\n`)

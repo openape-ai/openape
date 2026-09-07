@@ -9,7 +9,8 @@ sibling repositories and linked worktrees have their own checkout state.
   `https://repos.openape.ai/patrick/monorepo.git`. Forgejo and GitHub are mirrors.
 - Issues remain at `https://git.openape.ai/openape-ai/openape/issues`.
   Always link the full issue URL across forges; a bare `Closes #N` is ambiguous.
-- Run `git status --short`, `git branch --show-current` and `pnpm run doctor`.
+- Run `git status --short` and `git branch --show-current`. In each tool shell,
+  run `. ./scripts/activate-node.sh` from the checkout before `pnpm run doctor`.
   Use the explicit `run`: `pnpm doctor` is pnpm's own command. For restricted
   sessions, prepare the [local toolchain](docs/operations/session-toolchain.md)
   before running package scripts; a version-manager download is not a repo test.
@@ -27,7 +28,8 @@ sibling repositories and linked worktrees have their own checkout state.
 
 ## Build and verify
 
-Use the pinned pnpm version from `package.json` and Node >=22.
+Use Node from `.nvmrc` and the pinned pnpm version from `package.json`.
+The Node engine minimum describes compatibility; `.nvmrc` fixes development/CI.
 `pnpm install --frozen-lockfile` installs without re-resolving versions. Preserve
 supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
