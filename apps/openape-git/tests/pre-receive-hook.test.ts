@@ -132,6 +132,17 @@ describe('pre-receive hook (real git push)', () => {
     expect(last.email).toBe(ME)
   })
 
+  it('blocks direct, forced and deletion pushes to protected branches even for admin', () => {
+    commit('protected attempt', ME)
+    for (const access of ['write', 'admin']) {
+      const env = { APE_GIT_AUTH_EMAIL: ME, APE_GIT_ACCESS: access, APE_GIT_PROTECTED_REFS: '["refs/heads/main"]' }
+      for (const spec of ['HEAD:refs/heads/main', '+HEAD:refs/heads/main', ':refs/heads/main']) {
+        expect(() => push(env, spec)).toThrow(/protected branch/)
+      }
+    }
+    git(work, ['reset', '--hard', 'HEAD~1'])
+  })
+
   it('checks only NEW commits - existing foreign history does not block a push', () => {
     // The foreign commit from the admin push is now reachable from main;
     // pushing a new branch containing it plus one own commit must pass.

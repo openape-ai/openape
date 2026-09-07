@@ -50,6 +50,7 @@ interface PullDetail {
   truncated: boolean
   mergeable: boolean
   conflicts: string[]
+  gate?: { protected: boolean, blockers: string[] } | null
   canMerge: boolean
   comments: Comment[]
 }
@@ -118,7 +119,7 @@ async function onMerge() {
   merging.value = true
   error.value = ''
   try {
-    await $fetch(`/api/repos/${owner}/${name}/pulls/${number}/merge`, { method: 'POST' })
+    await $fetch(`/api/repos/${owner}/${name}/pulls/${number}/merge`, { method: 'POST', body: { expectedSourceSha: detail.value?.sourceSha, expectedTargetSha: detail.value?.targetSha } })
     await load()
   }
   catch (err: unknown) {
@@ -167,6 +168,9 @@ async function onMerge() {
         </section>
 
         <section v-else class="border border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap">
+          <p v-if="detail.gate?.blockers.length" class="text-amber-400 text-sm">
+            Required checks: {{ detail.gate.blockers.join('; ') }}
+          </p>
           <template v-if="detail.mergeable">
             <UIcon name="i-lucide-check-circle-2" class="size-4 text-emerald-500" />
             <span class="text-sm">This branch merges cleanly.</span>
