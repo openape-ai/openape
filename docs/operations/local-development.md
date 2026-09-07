@@ -1,6 +1,7 @@
 # Local development and fixtures
 
-Install the pinned dependencies and use the shared pre-build/check contract.
+Prepare the [session toolchain](session-toolchain.md), install the pinned
+dependencies and use the shared pre-build/check contract.
 Every command below comes from the app's package.json. CLI watch commands build
 code; they do not imply an HTTP service is listening.
 
@@ -73,7 +74,7 @@ provisioning and other integrations are optional/external dependencies: configur
 only the capability being exercised and never copy production .env files.
 
 Tasks uses 3005 and ape-pr uses 3014, matching their deployment port allocation.
-Plans remains on 3004 and testrun on 3006. `pnpm doctor -- --services --app NAME`
+Plans remains on 3004 and testrun on 3006. `pnpm run doctor -- --services --app NAME`
 reports whether the selected explicit port already has a TCP listener. It does
 not assume that listener belongs to the intended app. Choose another explicit
 port for parallel instances of the same app.

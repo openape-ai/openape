@@ -36,11 +36,18 @@ to the run and its complete artifacts. A missing excerpt is not a fabricated log
 ## Read-only diagnosis
 
 ```sh
-pnpm doctor
-pnpm doctor -- --app @openape-tasks/app
-pnpm doctor -- --network
-pnpm doctor -- --services --app @openape-tasks/app
+pnpm run doctor
+pnpm run doctor -- --app @openape-tasks/app
+pnpm run doctor -- --network
+pnpm run doctor -- --services --app @openape-tasks/app
 ```
+
+The explicit `run` is required: `pnpm doctor` invokes pnpm's built-in doctor,
+which can exit successfully without running any OpenApe checks. A successful
+project diagnosis prints JSON with `readOnly: true`, the checkout `root`, a
+`checks` array and `ok: true`. If pnpm itself cannot start, follow
+[session toolchain setup](session-toolchain.md). Calling the Node script directly
+does not fix a broken pnpm on PATH: its workspace inventory still uses pnpm.
 
 The doctor reports Node/pnpm, canonical remote and branch upstream, checkout
 state, installation and CLI build presence, generated-map freshness and conflicting explicit dev ports.
