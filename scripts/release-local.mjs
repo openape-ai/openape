@@ -1,33 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Local release orchestrator.
- *
- *   pnpm release:local
- *
- * Why this exists
- * ---------------
- * The default `changesets/action@v1` flow needs four sequential CI cycles for
- * one publish (feature PR, post-merge main CI, version-PR, post-merge main CI
- * again). For a small monorepo that's many minutes of waiting per patch and
- * extra surface for flakes. This script runs the same steps locally, in one
- * pass:
- *
- *   1. preflight         (clean tree, on main, in sync, npm logged in)
- *   2. changeset version (consume `.changeset/*.md`, bump versions, write CHANGELOGs)
- *   3. commit            ("chore: version packages")
- *   4. build             (publishable packages only — same filter CI uses)
- *   5. publish-chain     (publish whatever's not yet on npm, in dep order)
- *   6. push              (so origin/main reflects the new versions)
- *
- * The CI-side `release.yml` is the safety net: if a contributor forgets to
- * run this and pushes raw changesets to main, the workflow fails loudly
- * instead of silently opening a version-PR. Versioning is local-only.
+ * Publish versions already merged into the canonical main branch.
+ * Prepare version changes with pnpm version-packages on a feature branch,
+ * merge that PR, then run this from a clean, up-to-date main checkout.
+ * --dry-run validates the repository/commit without publishing or changing git.
  */
 
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { gitRemotes, repository, resolveTruthRemote } from './repository.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 
@@ -60,59 +43,27 @@ function step(label) {
 step('Preflight')
 
 const branch = capture('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
-if (branch !== 'main') fail(`Must be on main, currently on '${branch}'.`)
+if (branch !== repository.defaultBranch) fail(`Must be on ${repository.defaultBranch}, currently on '${branch}'.`)
 
 const dirty = capture('git', ['status', '--porcelain'])
 if (dirty) fail(`Working tree not clean:\n${dirty}\n\nCommit or stash first.`)
 
-run('git', ['fetch', 'origin', 'main'])
-const behind = Number(capture('git', ['rev-list', '--count', 'HEAD..origin/main']))
-if (behind > 0) fail(`Local main is ${behind} commit(s) behind origin/main. Pull first.`)
+const remote = resolveTruthRemote(gitRemotes(ROOT))
+run('git', ['fetch', remote, repository.defaultBranch])
+const base = `${remote}/${repository.defaultBranch}`
+const head = capture('git', ['rev-parse', 'HEAD'])
+if (head !== capture('git', ['rev-parse', base])) fail(`HEAD must equal ${base}. Merge the version PR and update this checkout first.`)
 
-const ahead = Number(capture('git', ['rev-list', '--count', 'origin/main..HEAD']))
-if (ahead > 0) {
-  console.log(`${DIM}  ${ahead} local commit(s) ahead of origin/main — will be pushed after publish.${RESET}`)
-}
+const csFiles = readdirSync(resolve(ROOT, '.changeset')).filter(f => f.endsWith('.md') && f !== 'README.md')
+if (csFiles.length > 0) fail('Pending changesets: run pnpm version-packages on a feature branch, then merge the version PR before publishing.')
 
+console.log(JSON.stringify({ repository: repository.url, remote, branch, sha: head, dryRun: process.argv.includes('--dry-run') }))
+if (process.argv.includes('--dry-run')) process.exit(0)
 try {
-  const who = capture('npm', ['whoami'])
-  console.log(`${DIM}  npm whoami: ${who}${RESET}`)
+  console.log(`npm identity: ${capture('npm', ['whoami'])}`)
 }
 catch {
-  fail('npm whoami failed — run `npm login` first or set NPM_TOKEN in your shell.')
-}
-
-// --- 2. Detect pending changesets ------------------------------------------
-
-step('Detect pending changesets')
-
-const csDir = resolve(ROOT, '.changeset')
-const csFiles = readdirSync(csDir).filter(f => f.endsWith('.md') && f !== 'README.md')
-console.log(`${DIM}  found ${csFiles.length} pending changeset file(s)${RESET}`)
-
-if (csFiles.length > 0) {
-  step('changeset version')
-  run('pnpm', ['changeset', 'version'])
-
-  const newDirty = capture('git', ['status', '--porcelain'])
-  if (newDirty) {
-    step('Commit version bump')
-    run('git', ['add', '-A'])
-    // The repo's pre-commit hook blocks source edits on `main` to keep humans
-    // off the branch (CONTRIBUTING.md "Branch Policy"). The version-bump
-    // commit produced by `changeset version` is mechanical — generated
-    // CHANGELOG entries plus a single `version` field per package.json — so
-    // it falls under the documented `SKIP_HOOKS=1` exception. The hook
-    // itself prints this exact bypass.
-    run('git', ['commit', '-m', 'chore: version packages'], {
-      env: { ...process.env, SKIP_HOOKS: '1' },
-    })
-  }
-  else {
-    // All changesets target ignored packages → nothing to commit. publish-chain
-    // will still detect drift if any local version > npm.
-    console.log(`${DIM}  changeset version produced no changes (ignored packages?) — skipping commit.${RESET}`)
-  }
+  fail('npm whoami failed — run npm login first.')
 }
 
 // --- 3. Build publishable packages -----------------------------------------
@@ -125,9 +76,4 @@ run('pnpm', ['turbo', 'run', 'build', '--filter=./packages/*', '--filter=./modul
 step('Publish (only packages where local > npm)')
 run('node', ['scripts/publish-chain.mjs'])
 
-// --- 5. Push ---------------------------------------------------------------
-
-step('Push to origin/main')
-run('git', ['push', 'origin', 'main'])
-
-console.log(`\n${GREEN}✅ Release complete.${RESET}\n`)
+console.log(`\n${GREEN}Release complete from ${head}.${RESET}\n`)
