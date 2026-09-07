@@ -142,3 +142,21 @@ export const mirrorRefStates = sqliteTable('mirror_ref_states', {
   syncedAt: integer('synced_at'),
   error: text('error'),
 }, t => [uniqueIndex('idx_mirror_state_ref').on(t.mirrorId, t.ref)])
+
+// Protected branches and their trusted external status source. Native HMAC
+// statuses cannot impersonate these required Forgejo contexts.
+export const branchProtections = sqliteTable('branch_protections', {
+  repoId: text('repo_id').notNull(),
+  branch: text('branch').notNull(),
+  mirrorId: text('mirror_id').notNull(),
+  contexts: text('contexts', { mode: 'json' }).$type<string[]>().notNull(),
+  enabled: integer('enabled').notNull().default(1),
+  updatedAt: integer('updated_at').notNull(),
+  updatedBy: text('updated_by').notNull(),
+}, t => [uniqueIndex('idx_protection_branch').on(t.repoId, t.branch)])
+
+export const protectionEvents = sqliteTable('protection_events', {
+  id: text('id').primaryKey(), repoId: text('repo_id').notNull(), branch: text('branch').notNull(),
+  actor: text('actor').notNull(), reason: text('reason').notNull(),
+  configuration: text('configuration').notNull(), createdAt: integer('created_at').notNull(),
+})
