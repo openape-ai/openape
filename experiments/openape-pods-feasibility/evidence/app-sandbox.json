@@ -1,0 +1,135 @@
+{
+  "scope": "M0a ad-hoc signed App Sandbox development comparison; not Developer ID/notarization proof",
+  "runId": "8eab9a03-5a81-435b-8530-efa1d841314b",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+  "architecture": "arm64",
+  "signature": "codesign --sign -; codesign --verify --strict passed for both bundles",
+  "nativeSha256": "7e88084203f9ea864bbf2d39df6b662f2e44c52c72edab532afde7bf8a895aba",
+  "sourceSha256": "4e2f5858d1b2307a3162c6edd24054669fbd7ede406eea784e515c629dd9ca21",
+  "harnessSha256": "79e00b2e2e0966f7a1e8e75a9a7d59391a4ff2c6de85fd280f993e028d8f43ce",
+  "observations": [
+    {
+      "id": "host-file-read",
+      "expected": "deny",
+      "status": "PASS",
+      "exit": 1,
+      "started": true,
+      "record": {
+        "errno": 1,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "read-outside",
+        "result": -1
+      },
+      "stdout": "{\"errno\": 1, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"read-outside\", \"result\": -1}",
+      "stderr": "HELPER_STARTED pid=42187 ppid=42083\n"
+    },
+    {
+      "id": "first-run-container-write",
+      "expected": "allow",
+      "status": "PASS",
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "write-shared",
+        "result": 0
+      },
+      "stdout": "{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"write-shared\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42188 ppid=42083\n"
+    },
+    {
+      "id": "second-run-same-identity-read",
+      "expected": "deny",
+      "status": "FAIL",
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "read-shared",
+        "result": 0
+      },
+      "stdout": "SYNTHETIC_POD_A_ONLY\n{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"read-shared\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42189 ppid=42083\n"
+    },
+    {
+      "id": "unassigned-host-executable",
+      "expected": "deny",
+      "status": "FAIL",
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "unassigned-executable",
+        "result": 0
+      },
+      "stdout": "{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"unassigned-executable\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42196 ppid=42083\n"
+    },
+    {
+      "id": "network-disabled",
+      "expected": "deny",
+      "status": "PASS",
+      "exit": 1,
+      "started": true,
+      "record": {
+        "errno": 1,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "network",
+        "result": -1
+      },
+      "stdout": "{\"errno\": 1, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"network\", \"result\": -1}",
+      "stderr": "HELPER_STARTED pid=42199 ppid=42083\n"
+    },
+    {
+      "id": "assigned-network",
+      "expected": "allow",
+      "status": "PASS",
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.online/Data",
+        "operation": "network",
+        "result": 0
+      },
+      "stdout": "{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.online/Data\", \"operation\": \"network\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42219 ppid=42083\n"
+    },
+    {
+      "id": "unassigned-network",
+      "expected": "deny",
+      "status": "FAIL",
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.online/Data",
+        "operation": "network",
+        "result": 0
+      },
+      "stdout": "{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.online/Data\", \"operation\": \"network\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42222 ppid=42083\n"
+    }
+  ],
+  "cleanup": [
+    {
+      "exit": 0,
+      "started": true,
+      "record": {
+        "errno": 0,
+        "home": "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data",
+        "operation": "cleanup",
+        "result": 0
+      },
+      "stdout": "{\"errno\": 0, \"home\": \"<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline/Data\", \"operation\": \"cleanup\", \"result\": 0}",
+      "stderr": "HELPER_STARTED pid=42223 ppid=42083\n"
+    }
+  ],
+  "containers": [
+    "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.offline",
+    "<host-home>/Library/Containers/ai.openape.pods.m0a.helper6e_g64z2.online"
+  ]
+}
