@@ -17,6 +17,7 @@
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/unstorage-s3-driver": "workspace:*",
     "aws4fetch": "catalog:",
+    "h3": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:"
   },
