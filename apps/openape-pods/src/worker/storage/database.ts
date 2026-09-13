@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 5
+const schemaVersion = 6
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -142,6 +142,14 @@ export class PodDatabase {
           CREATE TABLE run_inputs(run_id TEXT PRIMARY KEY REFERENCES runs(id),reason TEXT NOT NULL,event_ids TEXT NOT NULL);
           CREATE TABLE reference_observations(pod_id TEXT NOT NULL REFERENCES pods(id),resource_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,generation INTEGER NOT NULL,error TEXT,PRIMARY KEY(pod_id,resource_id));
           PRAGMA user_version=5;
+        `)
+      }
+      if (version < 6) {
+        this.db.exec(`
+          CREATE TABLE execution_domains(path TEXT PRIMARY KEY,run_id TEXT NOT NULL REFERENCES runs(id),owner_pid INTEGER NOT NULL);
+          CREATE TABLE recovery_reviews(run_id TEXT PRIMARY KEY REFERENCES runs(id),state TEXT NOT NULL,error TEXT,checked_at INTEGER NOT NULL,request_event_id TEXT);
+          CREATE TABLE effect_ledger(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
+          PRAGMA user_version=6;
         `)
       }
 
