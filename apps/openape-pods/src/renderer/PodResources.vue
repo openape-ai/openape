@@ -7,7 +7,7 @@ import type { ResourceCommand, ResourceState } from '../contracts/resources'
 export default defineComponent({
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
-  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '' } },
+  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: '', credentialValue: '' } },
   async mounted() {
     try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
@@ -20,7 +20,11 @@ export default defineComponent({
       catch (error) { this.error = error instanceof Error ? error.message : 'Resource operation failed' }
       finally { this.busy = false }
     },
-    async load() { await this.act({ type: 'list', podId: this.podId }) },
+    async saveCredential() {
+      const value = this.credentialValue; this.credentialValue = ''
+      await this.act({ type: 'saveCredential', podId: this.podId, alias: this.credentialAlias, value, epoch: this.state.epoch })
+    },
+    async load() { this.credentialValue = ''; await this.act({ type: 'list', podId: this.podId }) },
   },
 })
 </script>
@@ -46,6 +50,17 @@ export default defineComponent({
           {{ t("Preview next snapshot") }}
         </button>
       </div>
+      <form class="credential-form" @submit.prevent="saveCredential">
+        <h3>{{ t('Script credentials') }}</h3>
+        <p class="muted">
+          {{ t('Store an encrypted value for this pod. The alias is visible; the value is never shown again. Saving or replacing pauses the pod and requires script validation and credential approval again.') }}
+        </p>
+        <label>{{ t('Credential alias') }}<input v-model="credentialAlias" name="credential-alias" pattern="[a-z][a-z0-9_-]{0,63}" maxlength="64" required :disabled="busy" autocomplete="off"></label>
+        <label>{{ t('Credential value') }}<input v-model="credentialValue" name="credential-value" type="password" maxlength="16384" required :disabled="busy" autocomplete="new-password"></label>
+        <button class="secondary" :disabled="busy || !credentialAlias || !credentialValue">
+          {{ t('Save or replace credential') }}
+        </button>
+      </form>
       <p v-if="!state.resources.length" class="muted">
         {{ t("Nothing assigned. This pod cannot read reference files.") }}
       </p>
@@ -79,9 +94,11 @@ export default defineComponent({
 <style scoped>
 .resource-panel { max-width: 840px; }
 label { display: grid; gap: 8px; margin-top: 20px; }
-select { padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }
+select, input { min-width:0; padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }
+.credential-form { border-top:1px solid #81908355; padding:16px 0; } .credential-form button { margin-top:16px; }
 .resource-actions { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
 .resource-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid #81908355; padding: 20px 0; }
+.resource-row > div { min-width:0; overflow-wrap:anywhere; }
 .resource-path { overflow-wrap: anywhere; font-size: 13px; opacity: .75; }
 .snapshot-result { border-top: 1px solid #81908355; padding-top: 12px; }
 </style>

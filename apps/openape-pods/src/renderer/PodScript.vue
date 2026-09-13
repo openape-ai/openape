@@ -26,16 +26,18 @@ export default defineComponent({
     dirty(): boolean { return isDirty(this.buffer) },
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
-    canActivate(): boolean { return !this.dirty && !!this.buffer.source?.validated && !!this.buffer.source.hash && this.buffer.source.hash !== this.buffer.view?.pod.activeScript && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
+    needsCredentialApproval(): boolean { return !!this.buffer.source?.capabilities.some(item => item.startsWith('credential.')) && !this.buffer.source.credentialAccessApproved },
+    canApprove(): boolean { return this.needsCredentialApproval && !this.dirty && !!this.buffer.source?.validated && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
+    canActivate(): boolean { return !this.needsCredentialApproval && !this.dirty && !!this.buffer.source?.validated && !!this.buffer.source.hash && this.buffer.source.hash !== this.buffer.view?.pod.activeScript && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
     sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? t('Version {id}', { id: source.id.slice(0, 12) }) : source ? t('Draft {id} · revision {revision}', { id: source.id.slice(0, 8), revision: source.revision }) : t('New script') },
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
   watch: { 'buffer.source': { handler() { this.syncChoice() } } },
-  async mounted() { if (!this.buffer.view && !this.buffer.busy) await this.load(); this.syncChoice() },
+  async mounted() { if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice() },
   methods: {
     t, diagnostic, number,
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
-    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.mail = view.source?.capabilities.includes('mail.read') ?? false; this.buffer.editing = view.source?.kind === 'draft'; this.buffer.compare = null; this.syncChoice() },
+    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.mail = view.source?.capabilities.includes('mail.read') ?? false; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = view.source?.kind === 'draft'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
       this.buffer.busy = true; this.buffer.error = ''
       try { this.apply(await window.pods.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
@@ -56,17 +58,21 @@ export default defineComponent({
       if (this.buffer.busy) return
       this.pending = null; this.buffer.message = ''
       if (selection !== 'new') { await this.load(selection); return }
-      this.buffer.source = null; this.buffer.code = starter; this.buffer.mail = false; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
+      this.buffer.source = null; this.buffer.code = starter; this.buffer.mail = false; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
     },
     async save(asNew = false) {
       const state = this.buffer
       if (state.busy || !state.editing || !state.code.trim() || this.pod.lifecycle === 'archived') return
       const source = state.source
-      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, capabilities: state.mail ? ['mail.read'] : [] }, 'Draft saved. Validate it before activation.')
+      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, capabilities: [...(state.mail ? ['mail.read'] : []), ...state.credentialAliases.map(alias => `credential.${alias}`)] }, 'Draft saved. Validate it before activation.')
     },
     async validate() {
       const source = this.buffer.source; if (!this.canValidate || !source) return
       await this.command({ type: 'validate', podId: this.pod.id, revision: this.buffer.view!.pod.revision, draftId: source.id, draftRevision: source.revision }, 'Synthetic sandbox check passed. Review the validated source, then activate it.')
+    },
+    async approveCredentials() {
+      const source = this.buffer.source; if (!this.canApprove || !source?.hash) return
+      await this.command({ type: 'approveCredentials', podId: this.pod.id, revision: this.buffer.view!.pod.revision, hash: source.hash, epoch: this.buffer.view!.resourceEpoch }, '')
     },
     async activate() {
       const source = this.buffer.source; if (!this.canActivate || !source?.hash) return
@@ -79,9 +85,9 @@ export default defineComponent({
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Script operation failed' }
       finally { this.buffer.busy = false }
     },
-    async refresh() {
+    async refresh(announce = true) {
       this.buffer.busy = true; this.buffer.error = ''
-      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id }); this.buffer.view = view; this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
+      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id }); if (this.buffer.source && (view.resourceEpoch !== this.buffer.view?.resourceEpoch || view.pod.revision !== this.buffer.view?.pod.revision)) { this.buffer.source.credentialAccessApproved = false; this.buffer.source.validated = false; this.buffer.source.evidence = null } this.buffer.view = view; if (announce) this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not refresh scripts' }
       finally { this.buffer.busy = false }
     },
@@ -112,7 +118,7 @@ export default defineComponent({
       <label>{{ t("Versions and drafts") }}<select v-model="choice" :disabled="buffer.busy" @change="choose"><option value="" disabled>{{ t("Select a script") }}</option><optgroup :label="t('Versions')"><option v-for="version in buffer.view?.versions" :key="version.hash" :value="`version:${version.hash}`">{{ version.active ? t("Active · ") : '' }}{{ version.hash.slice(0, 12) }} · {{ version.validated ? t("validated") : t("needs validation") }}</option></optgroup><optgroup :label="t('Drafts')"><option v-for="draft in buffer.view?.drafts" :key="draft.id" :value="`draft:${draft.id}`">{{ t("{p0} · revision {p1}", { p0: draft.id.slice(0, 8), p1: draft.revision }) }}</option></optgroup></select></label>
       <button class="secondary" :disabled="buffer.busy || pod.lifecycle === 'archived'" @click="requestSelection('new')">
         {{ t("New script") }}
-      </button><button class="text-button" :disabled="buffer.busy" @click="refresh">
+      </button><button class="text-button" :disabled="buffer.busy" @click="refresh()">
         {{ t("Refresh history") }}
       </button>
     </div>
@@ -144,6 +150,8 @@ export default defineComponent({
           {{ t("Save as new draft") }}
         </button><button class="secondary" :disabled="!canValidate" @click="validate">
           {{ buffer.busy ? t("Working…") : t("Validate draft") }}
+        </button><button v-if="needsCredentialApproval" class="secondary" :disabled="!canApprove" @click="approveCredentials">
+          {{ t('Review credential access') }}
         </button><button class="primary" :disabled="!canActivate" @click="activate">
           {{ t("Activate for next run") }}
         </button>
@@ -154,6 +162,16 @@ export default defineComponent({
       </p>
       <label class="capability"><input v-model="buffer.mail" type="checkbox" :disabled="readOnly || buffer.busy">{{ t("Declare read-only mail calls (requires assigned mail permissions)") }}</label>
 
+      <fieldset v-if="buffer.view?.credentialAliases.length || buffer.credentialAliases.length">
+        <legend>{{ t('Script credentials') }}</legend>
+        <p class="muted">
+          {{ t('Select assigned aliases used by context.credentials.get(alias). Validation uses synthetic values; real access needs approval of the exact script version.') }}
+        </p>
+        <label v-for="alias in [...new Set([...(buffer.view?.credentialAliases ?? []), ...buffer.credentialAliases])]" :key="alias" class="capability"><input v-model="buffer.credentialAliases" type="checkbox" :value="alias" :disabled="readOnly || buffer.busy">{{ alias }} {{ buffer.view?.credentialAliases.includes(alias) ? '' : t('(requires reassignment)') }}</label>
+        <p v-if="buffer.source?.credentialAccessApproved" role="status">
+          {{ t('Credential access approved for this version and current resources.') }}
+        </p>
+      </fieldset>
       <p class="muted">
         {{ t("Validation runs for up to five seconds in the sandbox with synthetic services. It does not prove real mail or model results. Activation keeps existing permissions and leaves running versions unchanged.") }}
       </p>
@@ -189,7 +207,8 @@ export default defineComponent({
 .script-tools label { display:grid; gap:6px; min-width:0; flex:1; }
 select { width:100%; min-width:0; padding:9px; font:inherit; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:8px; }
 .script-heading { justify-content:space-between; }
-.capability { display:flex; align-items:flex-start; gap:8px; font-size:13px; margin:16px 0; }
+fieldset { min-width:0; }
+.capability { overflow-wrap:anywhere; display:flex; align-items:flex-start; gap:8px; font-size:13px; margin:16px 0; }
 .source-preview { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.6 ui-monospace, monospace; background:var(--surface); padding:14px; border:1px solid var(--border); border-radius:8px; }
 .script-hash { font:11px/1.6 ui-monospace, monospace; overflow-wrap:anywhere; color:var(--muted); }
 .discard-prompt { border:1px solid var(--accent); padding:12px; border-radius:8px; } .discard-prompt button { margin-right:8px; }
