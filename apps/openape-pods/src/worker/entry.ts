@@ -1,3 +1,6 @@
+import { parseScheduleCommand } from '../contracts/scheduling'
+import { Scheduler } from './scheduling/scheduler'
+import { ReferenceWatcher } from './scheduling/references'
 import { RunDispatcher } from './runs/dispatcher'
 import { parseRunCommand } from '../contracts/runs'
 import { join, dirname } from 'node:path'
@@ -19,15 +22,40 @@ dispatcher = new RunDispatcher(store, registry, {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 })
+const scheduler = new Scheduler(store, dispatcher)
+const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
+let scanAt = 0
+let ticking: Promise<void> | null = null
+const timer = setInterval(() => {
+  if (ticking) return
+  ticking = (async () => {
+    try {
+      if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
+      scheduler.tick()
+    }
+    catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
+    finally { ticking = null }
+  })()
+}, 1000)
 port.on('message', async (event) => {
-  if (event.data === 'stop') { await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { clearInterval(timer); await ticking; await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'schedule' in request.command) {
+      const command = parseScheduleCommand(request.command.schedule)
+      store.getPod(command.podId)
+      if (command.type === 'save') scheduler.save(command.podId, command.revision, command.spec, command.enabled)
+      if (command.type === 'concurrency') scheduler.concurrency(command.maximum)
+      if (command.type === 'lifecycle') scheduler.lifecycle(command.podId, command.revision, command.lifecycle)
+      port.postMessage({ id: request.id, state: scheduler.view(command.podId) })
+      return
+    }
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
-      const id = command.type === 'start' ? dispatcher.start(command.podId) : 'runId' in command ? command.runId : undefined
+      if (command.type === 'start') scheduler.requestManual(command.podId)
+      const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })
       return

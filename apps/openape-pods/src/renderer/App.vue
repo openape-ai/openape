@@ -171,7 +171,7 @@ export default defineComponent({
         </section>
       </div>
       <footer class="footer">
-        <span><span class="status-dot" :class="{ warning: attention }" /> Worker {{ workerLabel.toLowerCase() }}</span><span>No mailbox access · No scheduled runs</span>
+        <span><span class="status-dot" :class="{ warning: attention }" /> Worker {{ workerLabel.toLowerCase() }}</span><span>Local workspace · No mailbox connected</span>
       </footer>
     </main>
   </div>

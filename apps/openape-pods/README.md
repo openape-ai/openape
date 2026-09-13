@@ -1,6 +1,6 @@
 # OpenApe Pods
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pod assignments, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Live provider connections, mail and automatic schedules are not enabled.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pod assignments, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Live provider connections and mail are not connected. Schedules default to disabled, and new pods are paused.
 
 ## Run and verify
 
@@ -65,7 +65,7 @@ and v1 migration. Five Electron cases include save/restart/reopen and packaged
 worker startup. The initial packaged worker failure exposed tsup stripping the
 mandatory `node:sqlite` prefix; `removeNodeProtocol: false` fixes that path.
 
-Scheduling, mail and connected master chat remain later implementation milestones. M2's local pod editor is a development
+Mail and connected master chat remain later implementation milestones. M2's local pod editor is a development
 surface inside the selected workspace, not the completed onboarding flow.
 
 ## Native resources increment (M3A)
@@ -170,3 +170,35 @@ allowed ape_shell routing, forced forbidden built-ins, capability isolation,
 script protocol failures, stalled provider cancellation, group cleanup, ordered
 replay and real manual-run UI. Authenticated provider streaming and signed
 release acceptance remain separately authorized gates.
+
+## M5: durable schedules and local events
+
+Settings stores interval or daily schedules with a separate enabled flag, pod
+pause/resume and a global concurrency limit (default two, range one to sixteen).
+Pausing prevents new automatic dispatch and allows an existing run to finish.
+Daily schedules name an IANA timezone, choose the first repeated wall-clock time
+and move a missing time to the next available local minute. Interval schedules
+retain their phase across clock jumps. Missed slots create one catch-up, with at
+most one additional pending schedule event while a pod is already running.
+
+Accepted events have source-specific idempotency keys and independent identities;
+identical payloads with different keys remain distinct. Intake caps payloads at
+32 KiB, pending/held inputs at 1,000 per pod and 10,000 globally, and batches at
+50. A FIFO ready-pod dispatcher reserves events together with the run lease.
+Only completed input IDs transition to processed with the terminal run commit.
+Failed/incomplete inputs remain blocked for explicit recovery, preventing silent
+loss and repeated automatic failure loops. Run history and Settings show backlog.
+
+The worker rescans assigned references every fifteen seconds while a pod is
+active, including the first tick after restart. Native descriptor-based capture
+bounds reads; fingerprints and accepted change events commit together. Returning
+to earlier bytes creates another generation/event. Scanning failures are visible
+and retried; revoked references no longer participate. This records observed
+changes, not every transient filesystem mutation between scans.
+
+Verification uses a controlled clock with actual SQLite leases and real native
+script execution. It covers DST, clock jumps, catch-up coalescing, duplicate and
+conflicting event IDs, queue overflow, restart before acknowledgement, FIFO
+capacity, held failures, cross-pod event binding and reference changes across a
+database restart. Owner schedules remain unconfigured during implementation;
+only isolated synthetic test profiles exercise automatic dispatch.
