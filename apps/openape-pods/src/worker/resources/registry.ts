@@ -43,6 +43,17 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
+  replaceMail(podId: string, resources: { kind: 'tool' | 'connection', name: string, configuration: Record<string, unknown> }[]): void {
+    this.store.getPod(podId)
+    this.store.transaction(() => {
+      this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE pod_id=? AND kind IN (\'tool\',\'connection\') AND state!=\'revoked\'').run(podId)
+      for (const resource of resources) this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, resource.kind, 'ready', resource.name, JSON.stringify(resource.configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
   assertCurrent(podId: string, epoch: number): void {
     if (this.epoch(podId) !== epoch) throw new Error('Resource permissions changed; stop this run')
   }

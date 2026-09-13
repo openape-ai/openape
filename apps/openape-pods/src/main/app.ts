@@ -1,21 +1,23 @@
+import { parseOnboardingCommand } from '../contracts/onboarding'
 import { parseMasterCommand } from '../contracts/master'
 import { parseDetailsCommand } from '../contracts/details'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, shell, Tray } from 'electron'
 import { readFile, realpath } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
 import type { PodStatus } from '../contracts/ipc'
-import { fixtureDirectory } from './fixture'
+import { fixtureDirectory, localDirectory } from './fixture'
 import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL } from './security'
 import { FixtureWorker } from './worker'
 
-app.setName('OpenApe Pods Fixture')
+const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
+app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 app.enableSandbox()
-const root = fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR)
+const root = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
 protocol.registerSchemesAsPrivileged([{ scheme: 'pods', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -23,7 +25,7 @@ let window: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let stopped = false
-const status: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
+const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 const worker = new FixtureWorker((next) => {
   status.worker = next
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
@@ -66,6 +68,22 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
   })
+  ipcMain.handle(channels.onboarding, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseOnboardingCommand(value)
+    if (command.type === 'openLogin') {
+      const state = await worker.onboarding({ type: 'list' }); const login = state.connections.find(item => item.id === command.id && item.state === 'connecting')?.login
+      if (!login) throw new Error('Sign-in expired; start again')
+      await shell.openExternal(login.url); return state
+    }
+    if (command.type === 'assign') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const setup = command.setup
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Assign read-only mail', message: `Allow this pod to read ${setup.account}?`, detail: `Folders: ${setup.folders.map(folder => folder.name).join(', ')}\nHistory: ${setup.since ?? 'All available history'}\nAttachments: ${setup.attachments ? 'Allowed for in-scope messages' : 'Not allowed'}\n\nRead content may be sent to your connected ChatGPT account for analysis. A separate OpenApe agent receives these read permissions. The pod stays paused.`, buttons: ['Cancel', 'Assign read-only mail'], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.onboarding({ type: 'list' })
+    }
+    return worker.onboarding(command)
+  })
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.master(parseMasterCommand(command))
@@ -102,7 +120,7 @@ async function start(): Promise<void> {
     return worker.resources({ type: 'assignReference', podId: pod.id, name: basename(path), path })
   })
   window = createWindow()
-  tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods · Fixture mode')
+  tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip(fixture ? 'OpenApe Pods · Fixture mode' : 'OpenApe Pods')
   tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Pods', click: showWindow }, { label: 'Pause automatic runs', click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox('Could not pause Pods', error instanceof Error ? error.message : 'Worker unavailable')) } }, { label: 'Quit Pods', click: () => app.quit() }]))
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: 'Open Pods', click: showWindow }, { role: 'quit' }] }, { role: 'editMenu' }, { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'close' }] }]))
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))

@@ -24,3 +24,12 @@ it('rejects anonymous and foreign CONNECT targets before opening any upstream', 
     expect(status).toBe(403)
   }
 })
+it('requires the exact history filter on message reads and keeps attachment filtering out of CLI arguments', () => {
+  const bounded = { ...scope, since: '2026-06-01T00:00:00Z', attachments: true }
+  expect(() => parseMailRequest(request, bounded)).toThrow('history')
+  expect(parseMailRequest({ ...request, argv: [...request.argv, '--since', bounded.since] }, bounded).read.operation).toBe('messages')
+  expect(() => parseMailRequest({ ...request, argv: [...request.argv, '--since', '2026-05-01T00:00:00Z'] }, bounded)).toThrow('history')
+  const attachments = [...request.argv.map(value => value === 'messages' ? 'attachments' : value), '--message', 'm1']
+  expect(parseMailRequest({ ...request, argv: attachments }, bounded).read.message).toBe('m1')
+  expect(() => parseMailRequest({ ...request, argv: [...attachments, '--since', bounded.since] }, bounded)).toThrow('history')
+})
