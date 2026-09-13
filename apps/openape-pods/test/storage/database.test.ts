@@ -82,7 +82,7 @@ describe('durable pod state', () => {
   })
   it('backs up and migrates a v1 database with existing pod state', () => {
     let store = fixture(); const pod = store.createPod({ name: 'Previous', assignment: 'Preserve me' })
-    store.db.exec('DROP TABLE settings; DROP TABLE validations; PRAGMA user_version=1')
+    store.db.exec('DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
     store = reopen(store)
     expect(store.getPod(pod.id).assignment).toBe('Preserve me')
     expect(store.db.prepare('SELECT concurrency FROM settings').get()?.concurrency).toBe(2)
