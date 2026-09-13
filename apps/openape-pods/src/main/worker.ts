@@ -1,3 +1,7 @@
+import { ConnectionManager } from './connections/manager'
+import type { SetupInternal } from '../worker/onboarding/control'
+import { startAgentGateway } from '../worker/agent/gateway'
+import type { OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 import { parseMasterView } from '../contracts/master'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
@@ -22,10 +26,14 @@ import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
 import { utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 export class FixtureWorker {
+  private connections: ConnectionManager | null = null
+  private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
+  private providerAbort = new AbortController()
+  private setupReady: Promise<void> | null = null
   private child: UtilityProcess | null = null
   private stopping = false
   private root = ''
@@ -64,7 +72,8 @@ export class FixtureWorker {
         catch (error) { request.reject(error instanceof Error ? error : new Error('Invalid worker response')) }
         return
       }
-      this.state = { state: 'ready', pid: child.pid ?? null, error: null }; this.publish(this.state)
+      this.state = { state: 'ready', pid: child.pid ?? null, error: null }
+      this.setupReady = (async () => { await this.initializeConnections(); this.publish(this.state) })().catch((error: unknown) => { reportError(error instanceof Error ? error.message : 'Connection setup failed') })
     })
     child.on('exit', (code) => {
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
@@ -74,6 +83,24 @@ export class FixtureWorker {
       this.child = null; this.publish(this.state)
     })
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
+  }
+
+  private async initializeConnections(): Promise<void> {
+    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+    const runtime = { helper: join(dist, 'native/pods-helper'), executable: process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(process.execPath))], environment: { ELECTRON_RUN_AS_NODE: '1' }, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
+    this.connections = new ConnectionManager(this.root, runtime, this.credentials!, command => this.dispatch({ setup: command }), async () => {
+      const ready = await this.connections!.providerReady()
+      await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
+    })
+    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }) })
+  }
+
+  async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connection setup is not ready')
+    const view = await this.connections.execute(command)
+    return command.type === 'folders' ? { ...view, folders: { connectionId: command.id, items: await this.connections.folders(command.id) } } : view
   }
 
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
@@ -88,12 +115,12 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'run' in command && command.run.type === 'recover' ? 30000 : 10000)
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
       this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
     })
   }
@@ -123,6 +150,10 @@ export class FixtureWorker {
   lifecycle(event: 'suspend' | 'resume'): void { if (this.state.state === 'ready' && !this.stopping) this.child?.postMessage(event) }
 
   async stop(): Promise<void> {
+    await this.setupReady
+    await this.connections?.stop()
+    this.providerAbort.abort()
+    await this.providerGateway?.close()
     this.stopping = true
     const child = this.child
     if (!child) return

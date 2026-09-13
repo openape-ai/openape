@@ -50,6 +50,8 @@ describe('pod identity credential isolation', () => {
   it('persists a unique key before provisioning and refreshes only that agent through signed challenges', async () => {
     const fixture = await setup()
     await expect(fixture.identity.prepare(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')).rejects.toThrow('already exists')
+    await fixture.identity.ensurePrepared(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')
+    await expect(fixture.identity.ensurePrepared(fixture.connectionId, randomUUID(), fixture.issuer, 'owner@example.test')).rejects.toThrow('different setup')
     const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
     const connection = fixture.identity.connection(reference, 'fixture-mac')
     expect(await connection.accessToken()).toBe('SYNTHETIC_POD_TOKEN_1')
@@ -64,6 +66,8 @@ describe('pod identity credential isolation', () => {
   })
   it('fails closed on cross-pod cache references and denied refresh without using owner credentials', async () => {
     const fixture = await setup()
+    await fixture.identity.ensurePrepared(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')
+    await expect(fixture.identity.ensurePrepared(fixture.connectionId, randomUUID(), fixture.issuer, 'owner@example.test')).rejects.toThrow('different setup')
     const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
     await expect(fixture.identity.connection({ ...reference, podId: randomUUID() }, 'fixture-mac').accessToken()).rejects.toThrow('binding mismatch')
     fixture.state.denied = true
