@@ -9,6 +9,7 @@
   "apps/openape-git": "Native Git-Forge, PRs, Mirrors und Commit-Checks.",
   "apps/openape-monitor": "Uptime-Überwachung und Benachrichtigungen.",
   "apps/openape-nest": "Lokaler Steuerungsdienst für Agenten.",
+  "apps/openape-pods": "Installable macOS pod workspace with isolated fixture execution and narrow Electron IPC.",
   "apps/openape-plans": "Gemeinsam gepflegte HTML-Pläne.",
   "apps/openape-pr": "PR-Review und prüfbare Review-Ergebnisse.",
   "apps/openape-question-service": "Fragen und Antworten als Service-Agent.",
