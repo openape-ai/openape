@@ -561,3 +561,18 @@ save before quitting. Source changes require explicit discard when edits are
 unsaved. Saved drafts survive restart. Refresh history preserves editor text;
 reopen a draft to load its latest revision, or save as a new draft after a
 conflict. No new editor dependency or database migration is introduced.
+
+## Pod groups
+
+The sidebar supports up to fifty named flat groups. Owners can create, rename,
+collapse and remove groups, or move pods by dragging onto a group heading or
+using the selected pod's group picker. Removing a group keeps its pods under
+Ungrouped. New pods are ungrouped; groups and pods retain creation order.
+
+Schema 11 stores organization separately from pod assignment revisions. Group
+changes preserve script validation, active versions, permissions and schedules.
+A separate revision rejects stale organization writes. Group membership and
+collapsed state survive restart and backup/restore; deleting a pod removes its
+membership. Migration retains existing pods and creates a pre-migration SQLite
+copy. Older binaries reject the newer schema; rollback requires a compatible
+backup. See the handbook's grouping chapter for the owner workflow.
