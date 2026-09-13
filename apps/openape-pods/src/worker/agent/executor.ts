@@ -7,7 +7,7 @@ import { startAgentGateway } from './gateway'
 import type { AgentGatewayServices } from './gateway'
 
 export interface AgentRuntime extends ScriptRuntime { binary: string, catalog: string, manifest: string, sdkHost: string }
-const disabledFeatures = ['shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'plugins', 'remote_plugin', 'browser_use', 'computer_use', 'in_app_browser', 'code_mode', 'code_mode_host', 'multi_agent', 'multi_agent_v2', 'hooks', 'memories', 'image_generation', 'view_image', 'goals', 'skill_search', 'skill_mcp_dependency_install', 'workspace_dependencies', 'enable_request_compression', 'sleep_tool']
+export const disabledFeatures = ['shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'plugins', 'remote_plugin', 'browser_use', 'computer_use', 'in_app_browser', 'code_mode', 'code_mode_host', 'multi_agent', 'multi_agent_v2', 'hooks', 'memories', 'image_generation', 'view_image', 'goals', 'skill_search', 'skill_mcp_dependency_install', 'workspace_dependencies', 'enable_request_compression', 'sleep_tool']
 const quote = (value: string) => `'${value.replaceAll('\'', '\'\\\'\'')}'`
 export async function executeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void): Promise<{ threadId: string, response: string }> {
   if (!prompt.trim() || prompt.length > 128 * 1024) throw new Error('Invalid agent prompt')
