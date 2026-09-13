@@ -1,10 +1,11 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import PodSettings from './PodSettings.vue'
+import PodResources from './PodResources.vue'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodSettings },
+  components: { PodSettings, PodResources },
   data() {
     return {
       selected: 'Overview',
@@ -152,6 +153,9 @@ export default defineComponent({
           </p><h2>Master chat</h2><p class="muted">
             {{ panelDescription }}
           </p><span class="badge">Not connected</span>
+        </section>
+        <section v-else-if="selected === 'Resources'" id="panel-Resources" role="tabpanel" aria-labelledby="tab-Resources">
+          <PodResources />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
           <PodSettings />
