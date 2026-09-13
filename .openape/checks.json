@@ -11,5 +11,5 @@
     "openape-e2e:test": "Executed as test:e2e in the e2e suite, not twice."
   },
   "e2e": ["openape-e2e", "openape-free-idp", "@openape-testrun/app", "@openape-pr/app"],
-  "layout": ["@openape/troop", "@openape/nuxt-auth-sp", "@openape-testrun/app"]
+  "layout": ["@openape/troop", "@openape/nuxt-auth-sp", "@openape-testrun/app", "@openape/pods"]
 }
