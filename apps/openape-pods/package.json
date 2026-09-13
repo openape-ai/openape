@@ -24,6 +24,9 @@
     "vue": "catalog:"
   },
   "devDependencies": {
+    "@openai/codex": "0.153.4",
+    "@openai/codex-sdk": "0.153.4",
+    "@openape/apes": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
@@ -36,7 +39,6 @@
     "typescript": "catalog:",
     "vite": "8.2.1",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:",
-    "@openape/apes": "workspace:*"
+    "vue-tsc": "catalog:"
   }
 }

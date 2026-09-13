@@ -6,6 +6,7 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. Runs shows its persisted result, checkpoint revision and ordered events.'],
   ['resources-packaged.png', 'Assigned reference snapshots', 'The packaged app lists the chosen file, its permission revision and the hash of a separate snapshot. Access can be revoked from the same view.'],
   ['storage-settings.png', 'Saved local assignments', 'A pod assignment is committed by the SQLite worker and reopens after restarting the application. New pods remain paused.'],
   ['foundation-light.png', 'Your pod workspace', 'The sample pod shows its assignment and the actual local worker status. No mailbox or tools are connected.'],
