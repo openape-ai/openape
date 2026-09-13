@@ -44,3 +44,27 @@ SQLite storage starts in M2. Resource/identity/snapshot enforcement starts in M3
 - Dependency prerequisite: https://repos.openape.ai/patrick/monorepo/pulls/23
 - Electron security guidance: https://www.electronjs.org/docs/latest/tutorial/security
 - electron-builder 26 configuration: https://www.electron.build/v26/docs/configuration/
+
+## Durable local state (M2)
+
+The worker owns `control.sqlite`, using the bundled Node SQLite API, WAL,
+foreign keys and full synchronous commits. Settings creates paused local pods
+and edits their versioned assignments. IPC accepts only the typed list/create/
+update operations; it exposes no SQL, filesystem paths or credentials.
+
+Scripts are content addressed with immutable manifests. Registering an artifact
+does not activate it. Source blobs are flushed and atomically published before a
+single transaction commits citations, append-only claims and the checkpoint.
+Uncommitted blobs remain unreachable; retries cannot silently change a source
+version or claim. Future-schema databases are rejected before modification;
+migration preserves a pre-upgrade SQLite backup.
+
+Verification: 19 unit/component tests, including four actual subprocess SIGKILL
+points around blob/transaction publication, source conflicts, revision conflicts,
+and v1 migration. Five Electron cases include save/restart/reopen and packaged
+worker startup. The initial packaged worker failure exposed tsup stripping the
+mandatory `node:sqlite` prefix; `removeNodeProtocol: false` fixes that path.
+
+Resource enforcement, active scripts, scheduling, mail and connected master chat
+remain later implementation milestones. M2's local pod editor is a development
+surface inside the selected workspace, not the completed onboarding flow.
