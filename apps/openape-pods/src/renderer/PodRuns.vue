@@ -4,11 +4,13 @@ import type { StoredPod } from '../contracts/control'
 import type { RunCommand, RunView } from '../contracts/runs'
 
 export default defineComponent({
+  props: { selectedPodId: { type: String, default: '' } },
+  emits: ['selected'],
   data() {
     return { pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
   },
   async mounted() {
-    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.pods[0]?.id ?? ''; if (this.podId) await this.load() }
+    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load runs' }
     this.scheduleRefresh()
   },
@@ -47,7 +49,7 @@ export default defineComponent({
       Create a pod in Settings to run its first script.
     </p>
     <template v-else>
-      <label>Pod<select v-model="podId" :disabled="busy" @change="changePod"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
+      <label v-if="!selectedPodId">Pod<select v-model="podId" :disabled="busy" @change="changePod"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
       <p class="muted">
         The local example increments a durable checkpoint. The agent example also needs a connected Codex provider.
       </p>
@@ -73,11 +75,12 @@ export default defineComponent({
       </p>
       <article v-for="run in view.runs" :key="run.id" class="run-row">
         <button class="text-button" :aria-pressed="runId === run.id" @click="runId = run.id; load()">
-          {{ run.summary || 'Run in progress' }}
+          {{ run.summary || (run.state === 'running' ? 'Run in progress' : 'Interrupted run') }}
         </button>
         <span class="badge">{{ run.state }}</span>
         <p class="muted">
           {{ new Date(run.startedAt).toLocaleString() }} · checkpoint {{ run.checkpointRevision }}
+          <span class="pinned-version">Pinned script <code>{{ run.scriptHash }}</code></span>
         </p>
         <p v-if="run.error" class="error-message">
           {{ run.error }}
@@ -112,6 +115,7 @@ export default defineComponent({
 </template>
 
 <style scoped>
+.pinned-version { display:block; overflow-wrap:anywhere; } code { font-size:10px; }
 .runs-panel { max-width: 900px; }
 label { display: grid; gap: 8px; margin-top: 20px; }
 select { padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }

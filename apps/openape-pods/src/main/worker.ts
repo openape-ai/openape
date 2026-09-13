@@ -1,3 +1,5 @@
+import { parsePodDetails } from '../contracts/details'
+import type { DetailsCommand, PodDetails } from '../contracts/details'
 import { parseScheduleView } from '../contracts/scheduling'
 import type { ScheduleCommand, ScheduleView } from '../contracts/scheduling'
 import { parseRunView } from '../contracts/runs'
@@ -43,6 +45,8 @@ export class FixtureWorker {
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
   }
 
+  async details(command: DetailsCommand): Promise<PodDetails> { return parsePodDetails(await this.dispatch({ details: command })) }
+
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> { return parseResourceState(await this.dispatch({ resource: command })) }
@@ -51,7 +55,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

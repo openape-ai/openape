@@ -7,7 +7,7 @@ const resource = { id: '00000000-0000-4000-8000-000000000002', podId, name: 'Ref
 describe('pod resource view', () => {
   it('shows exact assigned scope and issues revision-bound revocation', async () => {
     const resources = vi.fn().mockResolvedValueOnce({ resources: [resource], epoch: 1 }).mockResolvedValueOnce({ resources: [{ ...resource, revision: 2, state: 'revoked' }], epoch: 2 })
-    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), getStatus: vi.fn(), onStatus: vi.fn(), workspace: async () => ({ pods: [{ id: podId, name: 'Pod', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: null }] }), resources }
+    window.pods = { details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), getStatus: vi.fn(), onStatus: vi.fn(), workspace: async () => ({ pods: [{ id: podId, name: 'Pod', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: null }] }), resources }
     const wrapper = mount(PodResources); await flushPromises()
     expect(wrapper.get('.resource-path').text()).toBe('/fixture/Reference.txt')
     await wrapper.get('.resource-row button').trigger('click'); await flushPromises()
