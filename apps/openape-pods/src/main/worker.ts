@@ -1,3 +1,5 @@
+import { parseRunView } from '../contracts/runs'
+import type { RunCommand, RunView } from '../contracts/runs'
 import { parseResourceState } from '../contracts/resources'
 import type { InternalResourceCommand, ResourceState } from '../contracts/resources'
 import { randomUUID } from 'node:crypto'
@@ -15,7 +17,7 @@ export class FixtureWorker {
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin' }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
@@ -43,7 +45,9 @@ export class FixtureWorker {
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> { return parseResourceState(await this.dispatch({ resource: command })) }
 
-  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand }): Promise<unknown> {
+  async runs(command: RunCommand): Promise<RunView> { return parseRunView(await this.dispatch({ run: command })) }
+
+  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand } | { run: RunCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
@@ -58,7 +62,7 @@ export class FixtureWorker {
     const child = this.child
     if (!child) return
     await new Promise<void>((resolve) => {
-      const deadline = setTimeout(() => child.kill(), 2000)
+      const deadline = setTimeout(() => child.kill(), 10000)
       child.once('exit', () => { clearTimeout(deadline); resolve() })
       child.postMessage('stop')
     })

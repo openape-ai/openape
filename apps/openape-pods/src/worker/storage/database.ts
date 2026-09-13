@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 3
+const schemaVersion = 4
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -126,6 +126,15 @@ export class PodDatabase {
         PRAGMA user_version=3;
       `)
       }
+      if (version < 4) {
+        this.db.exec(`
+        CREATE TABLE runs(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT NOT NULL, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, summary TEXT NOT NULL, error TEXT, checkpoint_revision INTEGER NOT NULL, assignment_revision INTEGER NOT NULL);
+        CREATE TABLE run_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), boot_id TEXT NOT NULL, heartbeat INTEGER NOT NULL, process_id INTEGER);
+        CREATE TABLE run_events(run_id TEXT NOT NULL REFERENCES runs(id), sequence INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(run_id,sequence));
+        PRAGMA user_version=4;
+        `)
+      }
+
     })
   }
 
