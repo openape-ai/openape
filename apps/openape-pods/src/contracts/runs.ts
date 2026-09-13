@@ -1,15 +1,16 @@
 export type RunState = 'running' | 'completed' | 'completedWithGaps' | 'failed' | 'cancelled' | 'blocked' | 'interrupted'
-export interface RunRecord { id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number }
+export interface RunRecord { id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number, recovery: { state: 'ready' | 'needsReview' | 'retryQueued', error: string | null } | null }
 export interface RunEvent { sequence: number, type: string, data: unknown, at: number }
 export interface RunView { runs: RunRecord[], events: RunEvent[] }
-export type RunCommand = { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string } | { type: 'cancel', podId: string, runId: string }
+export type RunCommand = { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string } | { type: 'cancel', podId: string, runId: string } | { type: 'recover', podId: string, runId: string, action: 'inspect' | 'retry' } | { type: 'retryQueue', podId: string }
 export function parseRunCommand(value: unknown): RunCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid run command')
   const item = value as Record<string, unknown>
-  const keys = item.type === 'list' ? ['type', 'podId', 'runId', 'after'] : item.type === 'installExample' ? ['type', 'podId', 'variant'] : item.type === 'start' ? ['type', 'podId'] : item.type === 'cancel' ? ['type', 'podId', 'runId'] : []
+  const keys = item.type === 'list' ? ['type', 'podId', 'runId', 'after'] : item.type === 'installExample' ? ['type', 'podId', 'variant'] : ['start', 'retryQueue'].includes(item.type as string) ? ['type', 'podId'] : item.type === 'recover' ? ['type', 'podId', 'runId', 'action'] : item.type === 'cancel' ? ['type', 'podId', 'runId'] : []
   if (!keys.length || Object.keys(item).some(key => !keys.includes(key)) || typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId)) throw new Error('Unsupported run command')
-  if ((item.type === 'cancel' || item.runId !== undefined) && (typeof item.runId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.runId))) throw new Error('Invalid run identity')
+  if ((['cancel', 'recover'].includes(item.type as string) || item.runId !== undefined) && (typeof item.runId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.runId))) throw new Error('Invalid run identity')
   if (item.after !== undefined && (!Number.isSafeInteger(item.after) || (item.after as number) < 0)) throw new Error('Invalid event cursor')
+  if (item.type === 'recover' && !['inspect', 'retry'].includes(item.action as string)) throw new Error('Invalid recovery action')
   if (item.type === 'installExample' && !['deterministic', 'agent'].includes(item.variant as string)) throw new Error('Invalid example version')
   return structuredClone(item) as RunCommand
 }
@@ -18,7 +19,7 @@ export function parseRunView(value: unknown): RunView {
   const view = value as RunView
   if (!Array.isArray(view.runs) || view.runs.length > 100 || !Array.isArray(view.events) || view.events.length > 500) throw new Error('Invalid run view collections')
   for (const run of view.runs) {
-    if (!run || !/^[a-f0-9-]{36}$/.test(run.id) || !/^[a-f0-9-]{36}$/.test(run.podId) || !/^[a-f0-9]{64}$/.test(run.scriptHash)
+    if (!run || (run.recovery !== null && (!run.recovery || !['ready', 'needsReview', 'retryQueued'].includes(run.recovery.state) || (run.recovery.error !== null && typeof run.recovery.error !== 'string'))) || !/^[a-f0-9-]{36}$/.test(run.id) || !/^[a-f0-9-]{36}$/.test(run.podId) || !/^[a-f0-9]{64}$/.test(run.scriptHash)
       || !['running', 'completed', 'completedWithGaps', 'failed', 'cancelled', 'blocked', 'interrupted'].includes(run.state)
       || !Number.isSafeInteger(run.startedAt) || (run.finishedAt !== null && !Number.isSafeInteger(run.finishedAt))
       || typeof run.summary !== 'string' || (run.error !== null && typeof run.error !== 'string') || !Number.isSafeInteger(run.checkpointRevision) || run.checkpointRevision < 0) {

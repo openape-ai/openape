@@ -65,6 +65,9 @@ export default defineComponent({
       <p v-if="pending || blocked" class="muted">
         {{ pending }} inputs queued · {{ blocked }} awaiting recovery
       </p>
+      <button v-if="blocked" class="secondary" :disabled="busy" @click="act({ type: 'retryQueue', podId })">
+        Retry unstarted inputs
+      </button>
       <p v-if="!view.runs.length" class="muted">
         No runs yet. Choose a version, then start it manually.
       </p>
@@ -79,6 +82,17 @@ export default defineComponent({
         <p v-if="run.error" class="error-message">
           {{ run.error }}
         </p>
+        <div v-if="['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state)" class="recovery-actions">
+          <p v-if="run.recovery" class="muted">
+            Recovery: {{ run.recovery.state }}<span v-if="run.recovery.error"> · {{ run.recovery.error }}</span>
+          </p>
+          <button class="secondary" :disabled="busy" @click="act({ type: 'recover', podId, runId: run.id, action: 'inspect' })">
+            Check stopped execution
+          </button>
+          <button class="secondary" :disabled="busy || run.recovery?.state === 'needsReview' || run.recovery?.state === 'retryQueued'" @click="act({ type: 'recover', podId, runId: run.id, action: 'retry' })">
+            Retry remaining inputs
+          </button>
+        </div>
         <button v-if="run.state === 'running'" class="secondary" :disabled="busy" @click="act({ type: 'cancel', podId, runId: run.id })">
           Cancel run
         </button>
@@ -103,6 +117,7 @@ label { display: grid; gap: 8px; margin-top: 20px; }
 select { padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }
 .run-actions { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
 .run-row { border-top: 1px solid #81908355; padding: 16px 0; }
+.recovery-actions { display: flex; gap: 10px; flex-wrap: wrap; } .recovery-actions p { width: 100%; }
 .run-row .badge { margin-left: 12px; }
 .event-list { padding-left: 24px; } pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 </style>

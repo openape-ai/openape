@@ -1,10 +1,11 @@
+import { confirmDomainsStopped } from '../recovery/domains'
+import type { RunState, RunInput, RunView  } from '../../contracts/runs'
 import type { RunTrigger } from './store'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import { parseManifest } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
-import type { RunInput, RunView } from '../../contracts/runs'
 import { RunStore } from './store'
 import { executeScript } from './runner'
 import { executeAgent } from '../agent/executor'
@@ -18,7 +19,11 @@ export class RunDispatcher {
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: AgentGatewayServices) {
     this.runs = new RunStore(store)
-    store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\' WHERE id IN (SELECT run_id FROM run_leases)').run()
+    store.transaction(() => {
+      store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
+      store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
+      store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
+    })
   }
 
   view(podId: string, id?: string, after = 0): RunView { return { runs: this.runs.list(podId), events: id ? this.runs.events(podId, id, after) : [] } }
@@ -59,6 +64,7 @@ export class RunDispatcher {
     const run = this.runs.get(id); const pod = this.store.getPod(run.podId)
     const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).revision !== pod.revision) throw new Error('Assignment changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
+    const pendingAgents = new Set<Promise<unknown>>()
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
@@ -72,7 +78,8 @@ export class RunDispatcher {
       const checkpoint = this.store.checkpoint(pod.id)
       const input: RunInput = { version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.revision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
-      const result = await executeScript(this.runtime, directory, artifact, input, signal, {
+      const runtime = { ...this.runtime, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
+      const result = await executeScript(runtime, directory, artifact, input, signal, {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
@@ -84,7 +91,10 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             if (!this.services) throw new Error('Codex is not connected; connect the pod provider before using this script')
             if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
-            return executeAgent(this.runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: async (body, toolSignal) => { assertCurrent(); return this.services!.tool(body, toolSignal) } }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
+            const operation = executeAgent(runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: async (body, toolSignal) => { assertCurrent(); return this.services!.tool(body, toolSignal) } }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
+            pendingAgents.add(operation)
+            try { return await operation }
+            finally { pendingAgents.delete(operation) }
           }
           throw new Error('No tool capability is assigned to this pod')
         },
@@ -93,12 +103,23 @@ export class RunDispatcher {
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
-      this.runs.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds)
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds)
     }
     catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed'
-      this.runs.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message)
+      await Promise.allSettled(pendingAgents)
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message)
     }
     finally { this.active.delete(pod.id) }
   }
+
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = []): Promise<void> {
+    try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
+    catch (failure) {
+      this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
+      return
+    }
+    this.runs.finish(id, state, summary, error, completedInputIds)
+  }
+
 }
