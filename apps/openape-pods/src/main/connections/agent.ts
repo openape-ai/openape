@@ -42,6 +42,16 @@ export class PodIdentityManager {
     await this.credentials.create(connectionId, JSON.stringify(identity))
   }
 
+  async ensurePrepared(connectionId: string, podId: string, issuer: string, owner: string): Promise<void> {
+    try {
+      await this.credentials.withCache(connectionId, async (file) => {
+        const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
+        if (identity.podId !== podId || identity.issuer !== origin(issuer) || identity.owner !== owner || typeof identity.privateKey !== 'string' || typeof identity.publicKey !== 'string') throw new Error('Existing pod identity belongs to a different setup')
+      })
+    }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await this.prepare(connectionId, podId, issuer, owner) }
+  }
+
   async provision(connectionId: string, name: string, ownerBearer: string): Promise<PodIdentityReference> {
     return this.credentials.withCache(connectionId, async (file) => {
       const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
