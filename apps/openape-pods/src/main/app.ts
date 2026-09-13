@@ -1,3 +1,7 @@
+import { LanguagePreference } from './language'
+import { parseLanguageCommand } from '../contracts/language'
+import { translate, translateDiagnostic } from '../i18n'
+import type { MessageKey, Parameters } from '../i18n'
 import { parseScriptCommand } from '../contracts/scripts'
 import { verifyUpdate } from './update'
 import { selectedProfile, selectProfile } from './profile'
@@ -32,6 +36,8 @@ let window: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let stopped = false
+let preference: LanguagePreference
+function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 const worker = new FixtureWorker((next) => {
   status.worker = next
@@ -54,8 +60,20 @@ function createWindow(): BrowserWindow {
   void view.loadURL(rendererURL).catch((error: unknown) => { console.error('Pods UI failed to load', error); app.quit() })
   return view
 }
+function updateMenus(): void {
+  tray?.setToolTip(fixture ? t('OpenApe Pods · Fixture mode') : 'OpenApe Pods')
+  tray?.setContextMenu(Menu.buildFromTemplate([{ label: t('Open Pods'), click: showWindow }, { label: t('Pause automatic runs'), click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox(t('Could not pause Pods'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Worker unavailable'))) } }, { label: t('Quit Pods'), click: () => app.quit() }]))
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: t('Open Pods'), click: showWindow }, { label: t('Quit Pods'), role: 'quit' }] }, { label: t('Edit'), submenu: [{ label: t('Undo'), role: 'undo' }, { label: t('Redo'), role: 'redo' }, { type: 'separator' }, { label: t('Cut'), role: 'cut' }, { label: t('Copy'), role: 'copy' }, { label: t('Paste'), role: 'paste' }, { label: t('Paste and match style'), role: 'pasteAndMatchStyle' }, { label: t('Delete'), role: 'delete' }, { label: t('Select all'), role: 'selectAll' }] }, { label: t('Window'), submenu: [{ label: t('Minimize'), role: 'minimize' }, { label: t('Close window'), role: 'close' }] }]))
+}
 async function start(): Promise<void> {
   await app.whenReady()
+  preference = new LanguagePreference(root, fixture ? 'en' : app.getPreferredSystemLanguages()[0] ?? app.getLocale())
+  ipcMain.handle(channels.language, (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseLanguageCommand(value)
+    if (command.type === 'set') { preference.set(command.language); updateMenus() }
+    return preference.language
+  })
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
   session.defaultSession.on('will-download', event => event.preventDefault())
@@ -80,15 +98,15 @@ async function start(): Promise<void> {
     const command = parseDataCommand(value)
     if (!window) throw new Error('Owner window is unavailable')
     if (command.type === 'deletePod') {
-      const answer = await dialog.showMessageBox(window, { type: 'warning', title: 'Delete local pod', message: `Permanently delete ${command.name}?`, detail: 'This removes this archived pod’s local workspace, scripts, knowledge, source history, run history and pod key. Shared account connections and original reference files remain. OpenApe remote identities/grants are not deleted. Export a backup first if you need this history.', buttons: ['Cancel', 'Delete local pod'], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('Delete local pod'), message: t('Permanently delete {p0}?', { p0: command.name }), detail: t('This removes this archived pod’s local workspace, scripts, knowledge, source history, run history and pod key. Shared account connections and original reference files remain. OpenApe remote identities/grants are not deleted. Export a backup first if you need this history.'), buttons: [t('Cancel'), t('Delete local pod')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.data({ type: 'status' })
     }
     if (command.type === 'backup' || command.type === 'restore') {
-      const selected = await dialog.showOpenDialog(window, { title: command.type === 'backup' ? 'Choose backup destination' : 'Choose an OpenApe Pods backup folder', properties: ['openDirectory'] })
+      const selected = await dialog.showOpenDialog(window, { title: command.type === 'backup' ? t('Choose backup destination') : t('Choose an OpenApe Pods backup folder'), properties: ['openDirectory'] })
       if (selected.canceled || selected.filePaths.length !== 1) return worker.data({ type: 'status' })
       const path = await realpath(selected.filePaths[0])
       if (command.type === 'backup') return worker.data({ type: 'backup', parent: path })
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Restore and restart', message: 'Restore this backup into a new profile?', detail: 'The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.', buttons: ['Cancel', 'Restore and restart'], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Restore and restart'), message: t('Restore this backup into a new profile?'), detail: t('The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.'), buttons: [t('Cancel'), t('Restore and restart')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.data({ type: 'status' })
       if (status.worker.state === 'starting') throw new Error('Wait for startup to finish before restoring')
       const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
@@ -99,15 +117,16 @@ async function start(): Promise<void> {
     if (command.type === 'update') {
       const state = await worker.data({ type: 'status' })
       if (state.busy) throw new Error('Finish or recover active work before preparing an update')
-      const selection = await dialog.showOpenDialog(window, { title: 'Choose a signed OpenApe Pods update', properties: ['openFile'], filters: [{ name: 'Application', extensions: ['app'] }] })
+      const selection = await dialog.showOpenDialog(window, { title: t('Choose a signed OpenApe Pods update'), properties: ['openFile'], filters: [{ name: t('Application'), extensions: ['app'] }] })
       if (selection.canceled || selection.filePaths.length !== 1) return state
       const candidate = await realpath(selection.filePaths[0]); const installed = dirname(dirname(dirname(process.execPath)))
       const update = await verifyUpdate(installed, candidate)
-      const destination = await dialog.showOpenDialog(window, { title: 'Choose the pre-update backup destination', properties: ['openDirectory'] })
+      const destination = await dialog.showOpenDialog(window, { title: t('Choose the pre-update backup destination'), properties: ['openDirectory'] })
       if (destination.canceled || destination.filePaths.length !== 1) return state
       const result = await worker.data({ type: 'backup', parent: await realpath(destination.filePaths[0]) })
       await verifyUpdate(installed, candidate)
-      const answer = await dialog.showMessageBox(window, { type: 'info', title: 'Update verified', message: `Version ${update.version} is ready for manual installation`, detail: `Backup: ${result.result?.path}\n\nQuit Pods, then replace the installed app with the verified app. Keep the previous app and this backup for rollback. This verification does not install or launch the update.`, buttons: ['Keep working', 'Quit Pods'], defaultId: 0, cancelId: 0 }); if (answer.response === 1) app.quit()
+      if (result.result?.kind !== 'backup') throw new Error('Backup result is missing')
+      const answer = await dialog.showMessageBox(window, { type: 'info', title: t('Update verified'), message: t('Version {p0} is ready for manual installation', { p0: update.version }), detail: t('Backup: {p0}\n\nQuit Pods, then replace the installed app with the verified app. Keep the previous app and this backup for rollback. This verification does not install or launch the update.', { p0: result.result.path }), buttons: [t('Keep working'), t('Quit Pods')], defaultId: 0, cancelId: 0 }); if (answer.response === 1) app.quit()
       return result
     }
     return worker.data(command)
@@ -123,7 +142,7 @@ async function start(): Promise<void> {
     if (command.type === 'assign') {
       if (!window) throw new Error('Owner window is unavailable')
       const setup = command.setup
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Assign read-only mail', message: `Allow this pod to read ${setup.account}?`, detail: `Folders: ${setup.folders.map(folder => folder.name).join(', ')}\nHistory: ${setup.since ?? 'All available history'}\nAttachments: ${setup.attachments ? 'Allowed for in-scope messages' : 'Not allowed'}\n\nRead content may be sent to your connected ChatGPT account for analysis. A separate OpenApe agent receives these read permissions. The pod stays paused.`, buttons: ['Cancel', 'Assign read-only mail'], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Assign read-only mail'), message: t('Allow this pod to read {p0}?', { p0: setup.account }), detail: t('Folders: {p0}\nHistory: {p1}\nAttachments: {p2}\n\nRead content may be sent to your connected ChatGPT account for analysis. A separate OpenApe agent receives these read permissions. The pod stays paused.', { p0: setup.folders.map(folder => folder.name).join(', '), p1: setup.since ?? t('All available history'), p2: setup.attachments ? t('Allowed for in-scope messages') : t('Not allowed') }), buttons: [t('Cancel'), t('Assign read-only mail')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.onboarding({ type: 'list' })
     }
     return worker.onboarding(command)
@@ -160,17 +179,16 @@ async function start(): Promise<void> {
     const pods = await worker.request({ type: 'list' })
     const pod = pods.pods.find(candidate => candidate.id === command.podId)
     if (!pod) throw new Error('Pod not found')
-    const selection = await dialog.showOpenDialog(window, { title: 'Choose a read-only reference', properties: ['openFile'] })
+    const selection = await dialog.showOpenDialog(window, { title: t('Choose a read-only reference'), properties: ['openFile'] })
     if (selection.canceled || selection.filePaths.length !== 1) return worker.resources({ type: 'list', podId: pod.id })
     const path = await realpath(selection.filePaths[0])
-    const approval = await dialog.showMessageBox(window, { type: 'question', title: 'Assign read-only reference', message: `Allow ${pod.name} to read snapshots of this file?`, detail: `${path}\n\nEach run receives a separate read-only copy. Later source changes apply to later runs. The original file is never edited.`, buttons: ['Cancel', 'Assign reference'], defaultId: 0, cancelId: 0 })
+    const approval = await dialog.showMessageBox(window, { type: 'question', title: t('Assign read-only reference'), message: t('Allow {p0} to read snapshots of this file?', { p0: pod.name }), detail: t('{p0}\n\nEach run receives a separate read-only copy. Later source changes apply to later runs. The original file is never edited.', { p0: path }), buttons: [t('Cancel'), t('Assign reference')], defaultId: 0, cancelId: 0 })
     if (approval.response !== 1) return worker.resources({ type: 'list', podId: pod.id })
     return worker.resources({ type: 'assignReference', podId: pod.id, name: basename(path), path })
   })
   window = createWindow()
-  tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip(fixture ? 'OpenApe Pods · Fixture mode' : 'OpenApe Pods')
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Pods', click: showWindow }, { label: 'Pause automatic runs', click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox('Could not pause Pods', error instanceof Error ? error.message : 'Worker unavailable')) } }, { label: 'Quit Pods', click: () => app.quit() }]))
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: 'Open Pods', click: showWindow }, { role: 'quit' }] }, { role: 'editMenu' }, { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'close' }] }]))
+  tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods')
+  updateMenus()
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
@@ -193,5 +211,5 @@ else {
     event.preventDefault()
     void shutdown()
   })
-  void start().catch((error: unknown) => { console.error('Pods startup failed', error); app.exit(1) })
+  void start().catch((error: unknown) => { console.error('Pods startup failed', error); dialog.showErrorBox('OpenApe Pods', `Start fehlgeschlagen / Startup failed:\n${error instanceof Error ? error.message : String(error)}`); app.exit(1) })
 }

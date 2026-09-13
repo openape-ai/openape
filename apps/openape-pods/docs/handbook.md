@@ -1,8 +1,10 @@
 # OpenApe Pods · User handbook
 
+[Deutsch](handbook.de.md)
+
 Your pods, their scripts and the evidence they keep.
 
-Generated from handbook.json with `pnpm --filter @openape/pods handbook`. Screenshots come from the packaged script-editor and grouping Electron scenarios.
+Generated from handbook.json. Screenshots use the packaged app with synthetic data.
 
 ## Start here
 
@@ -13,6 +15,14 @@ This handbook covers the unsigned 0.1.0 development app. Screenshots use synthet
 The app bundles Electron, Node.js and Codex. You do not need a separate Node installation for packaged runs. Mount the supplied DMG and copy OpenApe Pods to Applications. An unsigned test build is subject to macOS security review; it is not a notarized release.
 
 Closing the window keeps the app available through its menu-bar presence. Quitting stops local execution; the Mac cannot run schedules while asleep. Reopen the app to inspect interrupted work. Normal data lives in ~/Library/Application Support/OpenApe Pods.
+
+## Choose your language
+
+Use Language in the sidebar to switch between Deutsch and English immediately. The selected tab and unsaved editor text stay open. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs after restart. A new profile starts in German when your preferred system language is German; otherwise it starts in English.
+
+Pod and group names, assignments, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
+
+The handbook is available as complete English and German offline editions with matching app screenshots. Use the link to the other edition in the handbook navigation. Keep both HTML files together when using those links. The language preference is local display configuration; a restored profile starts from its system default until you choose again.
 
 ## Your first local run
 

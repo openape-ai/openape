@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t } from './i18n'
 import { defineComponent } from 'vue'
 
 export default defineComponent({
@@ -7,6 +8,7 @@ export default defineComponent({
   data() { return { scrollTop: 0 } },
   computed: { lines(): number { return this.modelValue.split('\n').length } },
   methods: {
+    t,
     key(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key === 's') { event.preventDefault(); this.$emit('save'); return }
       if (event.key !== 'Tab' || event.shiftKey || this.readonly || this.disabled) return
@@ -26,7 +28,7 @@ export default defineComponent({
     <div class="line-gutter" aria-hidden="true">
       <pre :style="{ transform: `translateY(-${scrollTop}px)` }">{{ Array.from({ length: lines }, (_, index) => index + 1).join('\n') }}</pre>
     </div>
-    <textarea :value="modelValue" :readonly="readonly" :disabled="disabled" aria-label="Script source" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" maxlength="150000" @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)" @scroll="scrollTop = ($event.target as HTMLTextAreaElement).scrollTop" @keydown="key" />
+    <textarea :value="modelValue" :readonly="readonly" :disabled="disabled" :aria-label="t('Script source')" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" maxlength="150000" @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)" @scroll="scrollTop = ($event.target as HTMLTextAreaElement).scrollTop" @keydown="key" />
   </div>
 </template>
 
