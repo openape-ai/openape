@@ -355,3 +355,37 @@ contradictory dates, receipt rollback, permission changes and interrupted invent
 the complete versioned script → SDK → parser → SQLite path with recorded model
 outputs. UI tests follow extracted citations to original bytes. This is synthetic
 fixture evidence, not a live mailbox or real-model quality claim.
+
+
+## M10: confined master chat and reviewed actions
+
+The master uses the pinned Codex 0.153.4 app-server over stdio. Build-time hashes
+verify the nine experimental protocol schemas in
+`runtime-sources/master-protocol.json`. The trusted relay belongs to the same
+native guardian domain as its sandboxed Codex child. Codex can access only its
+private conversation home, the pinned model catalog and the capability-bound
+provider gateway. Built-in execution and unrelated tools remain disabled.
+Only the typed `pods_control` dynamic tool reaches the control database.
+
+SQLite schema 8 retains independent chat history, input identities, action
+receipts, drafts and pending access proposals. Repeated completed actions return
+their stored result; uncertain actions require inspection. Each new chat process
+resumes its retained thread only after prior process domains are verified stopped.
+Cancellation and provider failure remain visible, and availability is published
+after process cleanup. The default limits are 20 actions and two minutes per turn,
+1 MiB transport frames, 256 KiB action results and 100 visible recent messages.
+Steering binds the expected active turn. The fixture provider is available only
+through an explicit test-mode loopback port in a private fixture profile.
+
+Draft validation executes the real native script boundary with empty synthetic
+services and a five-second limit. Assignment, resource epoch, dependency lock and
+draft revision bind its evidence and immutable artifact. Validation establishes a
+bounded contract check; it does not prove arbitrary program semantics or real
+model quality. Activation and rollback retain the previous version; permission
+changes invalidate activation and automatic resumption. New resource access is
+an exact owner-review proposal and cannot be approved by the model.
+
+The workspace shows contextual input, action results, script code, validation
+facts and readable account/folder/attachment proposals. ChatGPT/OpenApe/Microsoft
+onboarding remains the next milestone. No real account or provider was used for
+these tests.

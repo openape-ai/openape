@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 7
+const schemaVersion = 8
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -72,6 +72,7 @@ export class PodDatabase {
   readonly db: DatabaseSync
   readonly blobs: string
   readonly path: string
+  private transactionDepth = 0
   constructor(readonly root: string) {
     this.path = join(root, 'control.sqlite')
     if (existsSync(this.path)) {
@@ -164,14 +165,38 @@ CREATE TABLE source_derivations(pod_id TEXT NOT NULL REFERENCES pods(id), source
 PRAGMA user_version=7;
 `)
       }
+      if (version < 8) {
+        this.db.exec(`
+CREATE TABLE master_inputs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL);
+CREATE TABLE master_domains(path TEXT PRIMARY KEY, owner_pid INTEGER NOT NULL);
+CREATE TABLE master_session(id INTEGER PRIMARY KEY CHECK(id=1),thread_id TEXT,active_turn TEXT,state TEXT NOT NULL,error TEXT);
+INSERT INTO master_session VALUES(1,NULL,NULL,'idle',NULL);
+CREATE TABLE master_messages(id TEXT PRIMARY KEY,role TEXT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE TABLE master_actions(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,result TEXT,error TEXT);
+CREATE TABLE script_drafts(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),revision INTEGER NOT NULL,assignment_revision INTEGER NOT NULL,code TEXT NOT NULL,capabilities TEXT NOT NULL,validation TEXT,script_hash TEXT);
+CREATE TABLE access_proposals(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),body TEXT NOT NULL,state TEXT NOT NULL);
+PRAGMA user_version=8;
+`)
+      }
 
     })
   }
 
   transaction<T>(operation: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE')
-    try { const result = operation(); this.db.exec('COMMIT'); return result }
-    catch (error) { this.db.exec('ROLLBACK'); throw error }
+    const depth = this.transactionDepth
+    const savepoint = `pods_transaction_${depth}`
+    this.db.exec(depth ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+    this.transactionDepth++
+    try {
+      const result = operation()
+      this.db.exec(depth ? `RELEASE ${savepoint}` : 'COMMIT')
+      return result
+    }
+    catch (error) {
+      this.db.exec(depth ? `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}` : 'ROLLBACK')
+      throw error
+    }
+    finally { this.transactionDepth-- }
   }
 
   close(): void { this.db.close() }

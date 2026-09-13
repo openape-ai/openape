@@ -538,3 +538,15 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-vi
   .footer { flex-wrap:wrap; gap:7px; }
   .primary,.secondary { white-space:normal; }
 }
+
+.master-history { display: grid; gap: 12px; max-height: 480px; overflow-y: auto; margin: 20px 0; }
+.master-message { border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-width: 0; }
+.master-message.user { margin-left: 24px; }
+.master-text, .master-message pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
+.master-message pre { max-height: 300px; overflow: auto; }
+.master-compose { display: grid; gap: 10px; margin-bottom: 24px; }
+.master-compose textarea { width: 100%; resize: vertical; font: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: inherit; background: var(--surface); }
+
+.proposal-scope { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 8px 16px; font-size: 13px; line-height: 1.6; }
+.proposal-scope dt { color: var(--muted); }
+.proposal-scope dd { margin: 0; overflow-wrap: anywhere; }
