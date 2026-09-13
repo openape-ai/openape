@@ -1,0 +1,200 @@
+# OpenApe Pods · User handbook
+
+Your pods, their scripts and the evidence they keep.
+
+Generated from handbook.json with `pnpm --filter @openape/pods handbook`. Screenshots come from the packaged script-editor Electron scenario.
+
+## Start here
+
+OpenApe Pods gives each recurring task an assignment, script, workspace, durable knowledge and explicitly assigned resources. Choose a pod in the sidebar, then use Overview, Knowledge, Resources, Runs and Settings to inspect and control it. The master chat helps prepare pods and scripts.
+
+This handbook covers the unsigned 0.1.0 development app. Screenshots use synthetic orders and local reference files. Actual ChatGPT/OpenApe/Microsoft sign-in, live mail and signed distribution still need release acceptance. Runtime execution currently requires Apple Silicon and Darwin 25.6.0, verified on macOS 26.6.2. An unsupported host displays an error and blocks execution.
+
+The app bundles Electron, Node.js and Codex. You do not need a separate Node installation for packaged runs. Mount the supplied DMG and copy OpenApe Pods to Applications. An unsigned test build is subject to macOS security review; it is not a notarized release.
+
+Closing the window keeps the app available through its menu-bar presence. Quitting stops local execution; the Mac cannot run schedules while asleep. Reopen the app to inspect interrupted work. Normal data lives in ~/Library/Application Support/OpenApe Pods.
+
+## Your first local run
+
+Try this with a new pod. The local example needs no account connection and increments a durable counter. Installing an example also makes that example the active script, so use your new pod rather than replacing a configured business script.
+
+1. Choose + New pod. In the local pod form below the master chat, enter a Pod name and Assignment, then choose Save pod. The new pod is paused.
+2. Choose the Runs tab, then Use local example. Choose Start run, or use Run once at the top of the workspace.
+3. Wait for Local example completed (1). Select that result and expand Persisted events to inspect the trace.
+4. Run it again to see the counter advance. A script run can record progress without producing business findings.
+5. Open Settings and scroll to Script to inspect the active JavaScript. Automatic runs remain disabled until you explicitly configure and enable them.
+
+## Overview
+
+Overview answers what this pod does, what happened most recently and what happens next. The assignment card shows the saved task and its revision. Edit assignment opens Settings.
+
+Latest result shows the last run state, summary, checkpoint and errors. View run trace opens Runs. Run once requests the active script even when automatic execution is paused. It is unavailable without an active script, while this pod is already running, or when the pod is archived or the worker is unavailable.
+
+NEXT RUN shows the next scheduled time or Manual only, plus queued inputs and inputs awaiting recovery. Resume automatic runs and Pause automatic runs control the pod lifecycle; enabling a schedule is a separate Settings action.
+
+The knowledge summary distinguishes findings, open questions and verification gaps. Open master chat carries the selected pod as context.
+
+![Overview](images/handbook-overview.png)
+
+## Knowledge
+
+Knowledge contains durable statements with supporting evidence. Findings describe supported business facts. Open questions need a business answer. Verification gaps identify missing or unreadable evidence; a gap is not automatically an unanswered business question.
+
+Filter by kind, and enable Include superseded history to inspect earlier statements. Current statements can replace earlier ones while retaining their source history. Additional entries are paginated.
+
+Expand an entry and choose its source to view the retained content, version and digest. Extracted text can link to its retained original. Long source previews are explicitly marked as truncated. Source text is displayed literally.
+
+Use the contextual discussion action to ask the master about the selected pod. Statements and source history stay in the pod independently of the chat.
+
+![Knowledge](images/handbook-knowledge.png)
+
+## Resources
+
+Resources lists the files, tool access and connections assigned to this pod, including their current state and scope. Ready, expired, missing and revoked states tell you which access is usable.
+
+Choose a reference file through the native file picker. The pod receives a read-only snapshot; the original stays outside its writable workspace. Each run records the reference version it used. A changed original becomes input for a later run.
+
+Capture a snapshot to inspect its recorded digest. Revoke an assignment to remove its permission. Resource changes invalidate older validation evidence and can stop affected execution; review and validate a script against the new scope.
+
+Manage accounts and mail scope opens Connections & setup. A capability declared in a script is a request to use existing permissions, not permission to access an account.
+
+![Resources](images/handbook-resources.png)
+
+## Runs and recovery
+
+Runs lists persisted execution states and summaries. Select a run to inspect its pinned script version, checkpoint, error and ordered Persisted events. The local example is deterministic; the agent example additionally needs a connected Codex provider.
+
+Cancel stops an active run. Interrupted work remains visible after a crash or restart. Choose Check stopped execution to reconcile the previous execution, then Retry remaining inputs when the result permits it. If the outcome needs review, resolve that uncertainty before retrying. Retry unstarted inputs becomes available for a blocked queue.
+
+At most one run executes per pod. Additional accepted inputs stay queued. Distinct events are preserved, while missed schedule occurrences are coalesced into one catch-up. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
+
+Changing or rolling back a script only affects subsequent runs. It does not undo results or effects from earlier runs.
+
+![Runs and recovery](images/handbook-runs.png)
+
+## Settings and assignments
+
+Settings contains the saved pod assignment, Script, Schedule and limits, and Pod lifecycle. Select a local pod or choose New local pod to create another assignment.
+
+Edit Pod name and Assignment, then choose Save pod. Saving an assignment advances its revision and pauses automatic execution. Script validation is tied to the assignment revision: save and validate a draft for the new assignment before activation.
+
+Archive pod stops new intake and retains knowledge and history. An archived pod remains inspectable. Delete local pod… requires a separate native confirmation and permanently removes that pod’s local data and key. Back up first. Shared accounts, original reference files, global chat and remote identity/grant records remain.
+
+![Settings and assignments](images/handbook-settings.png)
+
+## Inspect and edit your script
+
+Under Settings → Script, the editor initially shows the exact active run.mjs source. Versions and drafts selects retained versions or saved drafts. The SHA-256 identifies immutable execution source. Drafts prepared by the master also appear here after Refresh history.
+
+Edit as draft makes a copy editable; New script starts a minimal local script. This is a direct JavaScript source editor with line numbers, horizontal scrolling, two-space Tab insertion, Shift+Tab to leave the editor, and Cmd+S (Ctrl+S) to save. Code is plain text and is not executed in the user interface.
+
+Unsaved changes survive tab and pod navigation within this app session. Save before quitting. Choosing another source while edits are unsaved asks whether to discard them. Keep editing preserves the current text. Saved drafts survive an app restart.
+
+Declare read-only mail calls only when the script needs mail access. The pod must already have the matching account and folder permission. Editing source or checking this box never expands access.
+
+1. Select a version, choose Edit as draft, and change the JavaScript. Choose Save draft. This stores a draft without changing the active script.
+2. Choose Validate draft. The code executes in the existing sandbox for up to five seconds with synthetic services and separate validation data. An error leaves your text and the active version intact. Fix the code and save again.
+3. After success, expand Validation details. View exact validated source shows the immutable execution artifact, including the runtime binding comment appended during validation. Synthetic checks do not establish correctness for all real mail or model responses.
+4. Choose Compare with active version to display the currently active source below your selected text. Then choose Activate for next run. Existing runs keep their original version.
+5. Choose Run once and verify the result in Runs. To roll back, select a retained validated version and choose Activate for next run. Versions needing validation can be copied into a draft and validated for the current assignment and permissions.
+
+![Inspect and edit your script](images/handbook-script.png)
+
+## Resolve editing conflicts
+
+The master and owner share versioned drafts. If either has changed the same draft, saving an older revision reports a conflict instead of overwriting the newer content. Changed assignments, resources and active versions can also reject validation or activation.
+
+Copy important unsaved text if needed, then choose Refresh history. It refreshes the available versions and current pod metadata while preserving your editor text. Choose Reload selected source to load the latest revision, or choose Save as new draft to preserve your alternative as a separate draft. Revalidate before activation.
+
+While a save or validation is running, editor mutations are disabled. If a worker response times out, reload the stored state before retrying; a timeout alone does not prove that the operation failed.
+
+## A small script you can adapt
+
+A pod script is a JavaScript ES module exporting async run(context). Await every asynchronous operation before returning. The result includes status, summary, completedInputIds and gapIds. A completedWithGaps result needs committed gap claims.
+
+context.input contains the frozen assignment/run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event.
+
+context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh regular-run context and the pod’s existing access boundary. context.tools.invoke and the bundled context.mail API accept only their defined read contracts and assigned scope; they are not a generic host shell.
+
+The following example adds a checkpoint flag and returns a visible summary. It uses no mail or model service. Keep input completion IDs limited to work the script actually completed.
+
+```javascript
+export async function run(context) {
+  await context.progress.commit({
+    expectedRevision: context.input.checkpointRevision,
+    checkpoint: { ...context.input.checkpoint, reviewed: true },
+    sources: [],
+    claims: [],
+  })
+  return {
+    status: 'completed',
+    summary: 'Local review completed',
+    completedInputIds: context.input.eventIds,
+    gapIds: [],
+  }
+}
+```
+
+## Schedules, events and limits
+
+Under Schedule and limits, choose At an interval or Daily. Enter Interval in minutes, or Local time and an IANA timezone such as Europe/Vienna. Save the schedule with its explicit enabled setting. A paused pod still requires Resume automatic runs.
+
+The application-wide concurrency limit defaults to two active pods and can be configured from one to sixteen. Each individual pod still has one active run at most. Pausing prevents new automatic starts and allows an existing run to finish; use Cancel in Runs to stop it.
+
+The app watches assigned reference changes and supports persisted events internally. This version has no generic webhook or event-rule designer in the UI. New inputs are recorded and deduplicated according to the source contract.
+
+After sleep or downtime, one catch-up processes remaining input from saved progress. Scheduling requires the app to be running and the Mac awake.
+
+## Connections and read-only mail
+
+Connections & setup manages three separate connections: ChatGPT for model execution, OpenApe for pod identity and permissions, and Microsoft 365 for read-only mail. Follow each provider’s login flow. Connection cards show progress and allow cancellation or disconnection.
+
+For mail, select the OpenApe owner and Microsoft account, load folders, and choose the exact folder scope. Select an initial UTC date or All available history. Attachment access is a separate choice. Review the scope and provider data use, then confirm the native assignment dialog.
+
+The read-only mail recipe can consider received messages, sent replies and permitted attachments. It keeps knowledge with sources and records processing progress. Content used for analysis may be sent to the connected model provider. Unsupported attachments become verification gaps.
+
+Assigned mail reads are non-mutating: they do not send, move, label or mark messages read. Each pod has an agent identity and scoped access. Authentication refresh is handled by the trusted connection/tool boundary; secrets do not belong in scripts.
+
+The current test build has synthetic acceptance evidence. Actual provider sign-in, tenant token refresh and live mail behavior remain release acceptance work. No live access is required to follow the local script tutorial.
+
+![Connections and read-only mail](images/handbook-setup.png)
+
+## Master chat
+
+Open Master chat from the sidebar or the selected pod’s context. The context label tells you which pod the conversation concerns. Messages and streamed responses remain in the app’s conversation history.
+
+Ask the master to create or revise assignments, prepare a script, validate it or activate a validated version within the current assignment and permissions. It can inspect runs, request a manual run and control the pod lifecycle. The master cannot approve its own requests for more resources or enable schedules.
+
+Script drafts can be expanded to inspect code and validation evidence. To edit directly, open the pod’s Settings → Script and choose Refresh history. Resource access proposals remain pending until owner review; decline an unwanted proposal or open Resources to review it.
+
+Cancel interrupts an active master turn. Steering sends another instruction to the current conversation. Regular pod executions use fresh Codex contexts; durable sourced knowledge stays with the pod rather than relying on master chat memory.
+
+![Master chat](images/handbook-master.png)
+
+## Data, backups and updates
+
+Data & backups shows application data usage, available disk space and pending local deletions. The storage limit defaults to 10 GiB and accepts 1–1,024 GiB. Usage is sampled every five seconds: execution stops at the limit or below 256 MiB free space. Temporary usage can exceed the limit between checks.
+
+Clean unused files removes unreferenced local files while retaining knowledge, cited evidence, history and pending inputs. Backups and previously restored profiles remain separate.
+
+Finish the master turn and stop or recover runs before maintenance. Export backup… includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials are excluded, but personal content or secrets you wrote into source or files remain part of that data.
+
+Restore backup and restart… verifies checksums and switches to a new profile while retaining the current profile. Reconnect accounts, review resources, validate scripts and explicitly enable schedules before resuming automated use.
+
+Verify update and back up… checks a downloaded signed app and prepares a backup. Installation is manual after quitting. Keep the previous app and a compatible backup for rollback. Never open a newer migrated database with an older app. The unsigned development DMG is not a signed update candidate.
+
+![Data, backups and updates](images/handbook-data.png)
+
+## Troubleshooting
+
+Worker unavailable or Needs attention: read the displayed error. Reopen the app after resolving the cause, then inspect interrupted runs. An unsupported OS or CPU cannot be fixed by editing a script.
+
+Validate this version for the current assignment and permissions: reopen the source, save a draft for the current assignment, validate and activate it. Revoked resources must be explicitly reassigned before use.
+
+Syntax or contract errors: correct the JavaScript and ensure run(context) returns the required result. Await asynchronous calls and keep returned gap IDs tied to committed gaps. The active script remains unchanged after a failed check.
+
+No automatic run: check the active script, enabled schedule, pod lifecycle, next-run time, worker status, resource state, queued recovery and whether the Mac is awake.
+
+No mail findings: check account and folder scope, initial history, attachment access, connection readiness and run errors. Empty findings alone do not establish that all evidence was read.
+
+Storage limit reached: export a backup if needed, remove unwanted archived pods through the confirmation flow, clean unused files or increase the configured limit. Then inspect recovery before retrying interrupted work.
