@@ -37,13 +37,13 @@ export class MailKnowledge {
 
   private receiptKey(scope: MailScope): string { return digest(JSON.stringify([this.recipeIdentity, this.store.getPod(this.podId).revision, scope])) }
   pending(scope: MailScope): MailItem | undefined {
-    const row = this.store.db.prepare(`SELECT metadata FROM mail_items i WHERE pod_id=? AND account=? AND folder IN (${scope.folders.map(() => '?').join(',')}) AND NOT EXISTS(SELECT 1 FROM mail_receipts r WHERE r.pod_id=i.pod_id AND r.source_id=i.source_id AND r.recipe=?) ORDER BY i.rowid LIMIT 1`).get(this.podId, scope.account, ...scope.folders, this.receiptKey(scope))
+    const row = this.store.db.prepare(`SELECT metadata FROM mail_items i WHERE pod_id=? AND account=? AND folder IN (${scope.folders.map(() => '?').join(',')}) AND (? IS NULL OR julianday(json_extract(metadata,'$.receivedAt'))>=julianday(?)) AND NOT EXISTS(SELECT 1 FROM mail_receipts r WHERE r.pod_id=i.pod_id AND r.source_id=i.source_id AND r.recipe=?) ORDER BY i.rowid LIMIT 1`).get(this.podId, scope.account, ...scope.folders, scope.since ?? null, scope.since ?? null, this.receiptKey(scope))
     return row ? JSON.parse(row.metadata as string) as MailItem : undefined
   }
 
   conversation(item: MailItem, scope: MailScope): { items: MailItem[], omitted: boolean } {
     const rows = item.conversationId
-      ? this.store.db.prepare(`SELECT metadata FROM mail_items WHERE pod_id=? AND account=? AND folder IN (${scope.folders.map(() => '?').join(',')}) AND conversation=? ORDER BY rowid DESC LIMIT 11`).all(this.podId, scope.account, ...scope.folders, item.conversationId)
+      ? this.store.db.prepare(`SELECT metadata FROM mail_items WHERE pod_id=? AND account=? AND folder IN (${scope.folders.map(() => '?').join(',')}) AND conversation=? AND (? IS NULL OR julianday(json_extract(metadata,'$.receivedAt'))>=julianday(?)) ORDER BY rowid DESC LIMIT 11`).all(this.podId, scope.account, ...scope.folders, item.conversationId, scope.since ?? null, scope.since ?? null)
       : this.store.db.prepare('SELECT metadata FROM mail_items WHERE pod_id=? AND source_id=?').all(this.podId, item.sourceId)
     const items = rows.slice(0, 10).map(row => JSON.parse(row.metadata as string) as MailItem)
     if (!items.some(candidate => candidate.sourceId === item.sourceId)) items[items.length - 1] = item

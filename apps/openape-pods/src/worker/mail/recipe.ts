@@ -8,6 +8,7 @@ import type { Extraction } from './parsers/extract'
 
 export function mailToolRequest(scope: MailScope, request: MailRead) {
   const argv = ['o365-cli', 'pods', 'read', '--account', scope.account, '--operation', request.operation, '--folder', request.folder]
+  if (request.operation === 'messages' && scope.since) argv.push('--since', scope.since)
   for (const key of ['message', 'attachment', 'cursor'] as const) {
     if (request[key]) argv.push(`--${key}`, request[key])
   }

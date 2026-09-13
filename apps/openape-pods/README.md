@@ -1,6 +1,6 @@
 # OpenApe Pods
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pod assignments, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Live provider connections and mail are not connected. Schedules default to disabled, and new pods are paused.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pod assignments, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT, OpenApe and Microsoft connection flows are implemented; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
 ## Run and verify
 
@@ -25,7 +25,7 @@ pnpm --filter @openape/pods report
 
 ## Fixture state and lifecycle
 
-The default data directory is `openape-pods-fixture-<uid>` inside the OS temporary directory. `OPENAPE_PODS_FIXTURE_DIR` can select a private absolute test directory. The app checks directory ownership, private mode, leaf symlinks and its fixture marker before using it. No owner authentication cache is resolved. The trusted application is not an OS sandbox for arbitrary scripts; do not interpret this path guard as M3 enforcement.
+Normal launches use `~/Library/Application Support/OpenApe Pods`. `OPENAPE_PODS_FIXTURE_DIR` explicitly selects a separate private absolute test directory. The app checks directory ownership, private mode, leaf symlinks and its fixture marker before using it. No owner authentication cache is resolved. The trusted application is not an OS sandbox for arbitrary scripts; do not interpret this path guard as M3 enforcement.
 
 Instances sharing that directory share Electron's single-instance lock. Closing the window hides it and keeps the worker/tray alive. Open Pods from the menu bar or launch the same instance again to restore it. Quit Pods asks the worker to stop, then kills it if it fails to stop within ten seconds. Unexpected worker exit is shown as Needs attention; reopen the application for explicit recovery. There is no timer-based simulation of successful work.
 
@@ -37,9 +37,9 @@ The worker receives an explicitly constructed environment with a fixture HOME/TM
 
 Electron supplies desktop APIs and Node. electron-builder supplies the macOS development bundle; both versions passed the repository's seven-day publication quarantine at introduction. Vue/Vite/TypeScript are confirmed product dependencies; tsup bundles sandbox-compatible CommonJS main/preload/worker entrypoints. Vitest/Vue Test Utils verify state/contracts; Playwright drives actual Electron and captures light/dark/compact/error evidence. The established catalog supplies shared dependencies. No Bootstrap-Vue Vue 2 dependency is introduced into the confirmed Vue 3 application.
 
-SQLite, resource boundaries and manual SDK runs are implemented through M4. Master integration belongs to M10. M0's known o365 defects remain assigned to M8; signing and distribution remain M12 requirements.
+Storage, resource boundaries, scheduling, recovery, mail knowledge and master chat are implemented. Connection setup is verified with synthetic cases; destructive data cleanup, backup/restore and distribution remain the final milestone.
 
-- Issue: https://git.openape.ai/openape-ai/openape/issues/1348
+- Issue: https://git.openape.ai/openape-ai/openape/issues/1349
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
 - Dependency prerequisite: https://repos.openape.ai/patrick/monorepo/pulls/23
 - Electron security guidance: https://www.electronjs.org/docs/latest/tutorial/security
@@ -387,5 +387,71 @@ an exact owner-review proposal and cannot be approved by the model.
 
 The workspace shows contextual input, action results, script code, validation
 facts and readable account/folder/attachment proposals. ChatGPT/OpenApe/Microsoft
-onboarding remains the next milestone. No real account or provider was used for
+onboarding is described below. No real account or provider was used for
 these tests.
+
+
+## M11: account onboarding and exact mail scope
+
+Normal first launch opens Connections & setup in a durable private profile.
+The existing five pod views remain unchanged. ChatGPT model login, OpenApe human
+identity and Microsoft Mail.Read consent are separate connections. The renderer
+can select a provider, expected email and HTTPS OpenApe issuer, but cannot supply
+tokens, executables or arbitrary provider endpoints. Browser opening uses only a
+currently pending, driver-validated sign-in URL. No startup code logs in or reads
+mail automatically.
+
+The pinned Codex auth-only app-server accepts initialize, account/login/start,
+account/login/cancel and account/read requests. Model turns and command requests
+are rejected by its trusted transport. Its process domain is registered durably
+before execution. Device sign-in uses the supported chatgptDeviceCode flow;
+managed file credentials are isolated inside the encrypted connection transaction.
+Refresh uses account/read with refreshToken=true. The unstable internal
+chatgptAuthTokens interface is not used. Main owns provider authorization and
+forwards bounded streaming responses through a capability gateway; neither the
+utility worker nor the confined Codex child receives the account token.
+
+OpenApe uses the existing apes-cli public client with PKCE S256 and the registered
+http://localhost:9876/callback redirect. Callback method, host, path, state and code
+are checked; Ed25519 signature, issuer, audience, human role, nonce, expiry and
+expected email bind the returned identity. A busy callback port fails visibly.
+The live identity service must allow this registered client/redirect; compatibility
+has not been inferred from local source tests. Owner and model credentials remain
+separate from each pod's generated Ed25519 agent identity.
+
+Microsoft device sign-in and owner-requested folder inventory run the pinned
+read-only Go CLI in a native sandbox with only their isolated writable cache and
+public CA bundle. Folder traversal is bounded to 200 pages and 1,000 folders;
+at most 100 can be assigned. The default history selection is 90 days, rounded to
+a UTC calendar day; all history and attachments require explicit choices.
+The reviewed upstream history change is ac04293166dda43ca35cc67bd77108d2fe6911c9,
+merged through https://git.openape.ai/delta-mind/o365-cli/pulls/6. Message pagination
+preserves the exact receivedDateTime boundary. An attachment parent must already
+be recorded within that boundary. Existing durable knowledge is retained when
+read permissions narrow.
+
+The owner reviews account, folders, history, attachments and provider data use,
+then confirms a native permission dialog. Only the per-pod agent requests grants;
+only the human owner approves them. Already-approved reusable grants are handled
+without an invalid second approval. A replacement revokes old resources, advances
+the permission epoch, pauses the pod and cancels affected work. Shared connections
+remain separate; disconnect invalidates every assignment that uses them. Existing
+pod keys survive interrupted provisioning. Interrupted sign-ins become failed
+on restart; a retry creates a separate isolated connection. Startup inspects old
+authentication and tool domains before clearing abandoned plaintext cache files.
+
+Verification covers 82 unit/component and 78 native/Electron cases, including the
+actual auth-only Codex process, local and packaged setup, exact history/attachment
+boundaries, owner-token signature checks, cancelled/retried sign-in, wrong account,
+offline/expired login, locked store and wrong architecture. The UI was inspected
+at desktop and 560px dark sizes. Native startup checks exposed an async readiness
+race in two older tests; explicit status polling now covers the longer startup.
+No actual browser sign-in, tenant, grant provisioning or model inference was used.
+Physical sleep/wake, real authentication/refresh/provider compatibility, signed
+release and clean-machine acceptance remain external gates. Pod deletion and
+reachability cleanup are completed with M12 backup/retention, so this milestone
+record does not claim those operations yet.
+
+Pinned auth/provider source contract:
+https://github.com/openai/codex/tree/rust-v0.153.4/codex-rs/login and
+https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/core/src/client.rs.

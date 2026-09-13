@@ -1,9 +1,12 @@
+import { SetupControl } from './onboarding/control'
+import type { SetupInternal } from './onboarding/control'
+import { inspectDomainRecords } from './recovery/domains'
 import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
 import type { AgentRuntime } from './agent/executor'
 import type { ServiceCheck } from '../contracts/services'
-import { authorizeMailService } from './mail/authorization'
+import { authorizeMailService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
 import { parseMailRequest } from '../main/mail/contract'
@@ -15,6 +18,7 @@ import { Recovery } from './recovery/reconcile'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { Scheduler } from './scheduling/scheduler'
 import { ReferenceWatcher } from './scheduling/references'
+import type { RunServices } from './runs/dispatcher'
 import { RunDispatcher } from './runs/dispatcher'
 import { parseRunCommand } from '../contracts/runs'
 import { join, dirname } from 'node:path'
@@ -37,24 +41,29 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-dispatcher = new RunDispatcher(store, registry, runtime, { tool: async (body, signal, scope) => {
+const runServices: RunServices = { tool: async (body, signal, scope) => {
   const assignment = assignedMail(registry.list(scope.podId))
   const { read } = parseMailRequest(body, assignment.mail)
+  assertMailHistory(store, scope.podId, assignment.mail, read)
   const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
   if (!value || typeof value !== 'object' || typeof (value as MailArtifact).path !== 'string' || typeof (value as MailArtifact).hash !== 'string') throw new Error('Invalid mail broker artifact')
   return ingestMailPage(store, scope.podId, scope.root, value as MailArtifact, assignment.mail, read, scope.assertCurrent)
-} })
+} }
+dispatcher = new RunDispatcher(store, registry, runtime, runServices)
+const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
+runServices.provider = fixtureProvider
 const master = new MasterService(store, runtime, new MasterControl(store, registry, dispatcher, scheduler, runtime), fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
 let suspended = false
+let startupReady = false
 let ticking: Promise<void> | null = null
 const timer = setInterval(() => {
-  if (ticking || suspended) return
+  if (ticking || suspended || !startupReady) return
   ticking = (async () => {
     try {
       if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
@@ -72,6 +81,23 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
+      const endpoint = request.command.provider as { port: number, capability: string } | null
+      if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
+      const provider = endpoint ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }) : fixtureProvider
+      runServices.provider = provider; master.setProvider(provider); startupReady = true
+      if (!provider) {
+        for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, 'Model connection was removed')
+      }
+      port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'setup' in request.command) {
+      port.postMessage({ id: request.id, state: setup.execute(request.command.setup as SetupInternal) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
+      await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
     }

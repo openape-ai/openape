@@ -16,13 +16,15 @@ export class MasterService {
   private finish: ((error?: Error) => void) | null = null
   private actions = 0
   private tools = new Set<Promise<void>>()
-  constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private readonly provider?: AgentGatewayServices['provider']) {
+  constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private provider?: AgentGatewayServices['provider']) {
     store.transaction(() => {
       store.db.prepare('UPDATE master_session SET state=\'interrupted\',error=\'Previous chat was interrupted. Inspect its actions before continuing.\',active_turn=NULL WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
       store.db.prepare('UPDATE master_actions SET state=\'interrupted\',error=\'Action interrupted; inspect the current pod and draft before retrying\' WHERE state=\'running\'').run()
     })
   }
+
+  setProvider(provider?: AgentGatewayServices['provider']): void { this.provider = provider; if (!provider) this.controller?.abort(new Error('Model connection was removed')) }
 
   view(): MasterView {
     const session = this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()!

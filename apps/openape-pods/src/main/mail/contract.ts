@@ -1,4 +1,6 @@
-export interface MailScope { account: string, folders: string[], attachments: boolean }
+import { parseSince } from '../../contracts/onboarding'
+
+export interface MailScope { account: string, folders: string[], attachments: boolean, since?: string | null }
 export interface MailRead { operation: 'messages' | 'attachments' | 'attachment', folder: string, message?: string, attachment?: string, cursor?: string }
 const identifier = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 2048 && !/[\0\r\n/\\]/.test(value) && !['.', '..'].includes(value)
 
@@ -11,11 +13,13 @@ export function parseMailRequest(value: unknown, scope: MailScope): { read: Mail
   const flags: Record<string, string> = {}
   for (let index = 3; index < argv.length; index += 2) {
     const flag = argv[index].slice(2)
-    if (!argv[index].startsWith('--') || !['operation', 'account', 'folder', 'message', 'attachment', 'cursor'].includes(flag) || flag in flags) throw new Error('Unsupported or duplicate mail argument')
+    if (!argv[index].startsWith('--') || !['operation', 'account', 'folder', 'message', 'attachment', 'cursor', 'since'].includes(flag) || flag in flags) throw new Error('Unsupported or duplicate mail argument')
     flags[flag] = argv[index + 1]
   }
   if (flags.account !== scope.account || !identifier(flags.folder) || !scope.folders.includes(flags.folder)) throw new Error('Mail account or folder is outside this pod assignment')
   if (!['messages', 'attachments', 'attachment'].includes(flags.operation)) throw new Error('Only non-mutating mail reads are assigned')
+  const since = parseSince(scope.since ?? null)
+  if (flags.since !== (flags.operation === 'messages' ? since ?? undefined : undefined)) throw new Error('Mail history is outside this pod assignment')
   if (flags.operation !== 'messages' && (!scope.attachments || !identifier(flags.message))) throw new Error('Message attachments are not assigned')
   if (flags.operation === 'messages' && (flags.message || flags.attachment)) throw new Error('Unexpected message read arguments')
   if (flags.operation === 'attachments' && flags.attachment) throw new Error('Unexpected attachment id')
