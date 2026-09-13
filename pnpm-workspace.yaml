@@ -4,44 +4,26 @@ packages:
   - apps/*
   - examples/*
 
-# Supply-chain quarantine: neu publizierte npm-Versionen erst nach 7 Tagen
-# installierbar (kompromittierte Frisch-Releases werden meist binnen Tagen
-# gezogen). Eigene Packages ausgenommen — Publish→Konsum bleibt sofort möglich.
+# Quarantine new npm releases for seven days. First-party packages are exempt.
 minimumReleaseAge: 10080
-# Jeder Eintrag hebelt die Quarantäne für ein Paket aus und gehört wieder raus,
-# sobald die aufgelöste Version 7 Tage alt ist. Das Freigabe-Datum NICHT
-# schätzen, sondern ausrechnen — geschätzte Daten haben socket.io-parser drei
-# Wochen länger als nötig stehen lassen:
-#
-#   1. Aufgelöste Version aus pnpm-lock.yaml holen, NICHT aus dem Kommentar
-#      hier (der driftet: bei ip-address stand 10.3.1, aufgelöst war 10.4.0):
-#        grep -oE '^  <pkg>@[0-9][^:]*' pnpm-lock.yaml | sort -u
-#   2. Publish-Zeitpunkt genau dieser Version abfragen:
-#        npm view <pkg> time --json
-#
-# Freigabe = Publish + 7 Tage, unten als UTC notiert.
+# Remove exceptions after the exact resolved lockfile version passes quarantine.
+# Verify its npm publication timestamp; eligibility is publication + seven days.
 minimumReleaseAgeExclude:
   - '@openape/*'
-  # Eigenes Package (unscoped veröffentlicht), gleiche Kategorie wie @openape/*:
-  # keine Quarantäne, kein Freigabe-Datum — bleibt dauerhaft hier.
+  # First-party unscoped package; permanent exemption like @openape/*.
   - test2docs
-  # brace-expansion 1.1.18/2.1.4/5.0.9 (Security-Override gegen
-  # GHSA-rgw5-rvv9-x895).
-  # Publish 2026-07-30 10:17 UTC → frei ab 2026-08-06 10:17 UTC.
+  # brace-expansion 1.1.18/2.1.4/5.0.9: GHSA-rgw5-rvv9-x895.
+  # Published 2026-07-30 10:17 UTC; eligible 2026-08-06 10:17 UTC.
   - brace-expansion
-  # fast-uri 4.1.2 (Security-Override gegen das Advisory vom 2026-08-04).
-  # Publish 2026-07-31 09:09 UTC → frei ab 2026-08-07 09:09 UTC.
+  # fast-uri 4.1.2: security advisory from 2026-08-04.
+  # Published 2026-07-31 09:09 UTC; eligible 2026-08-07 09:09 UTC.
   - fast-uri
-  # ip-address 10.4.0 (Security-Override >=10.3.1, aufgelöst wird 10.4.0).
-  # Publish 2026-07-31 05:07 UTC → frei ab 2026-08-07 05:07 UTC.
+  # ip-address 10.4.0 resolved under the >=10.3.1 override.
+  # Published 2026-07-31 05:07 UTC; eligible 2026-08-07 05:07 UTC.
   - ip-address
-  # hono 4.12.34 (Security-Override gegen GHSA-8j4g-w8fx-2239, ReDoS in der
-  # CORS-Middleware). Der Fix existiert erst ab 4.12.34, die Version ist damit
-  # selbst noch jung. Der Override pinnt deshalb exakt 4.12.34 statt
-  # '>=4.12.34' — ohne Quarantäne käme sonst das 1,6 Tage alte 4.13.0 herein,
-  # also genau das, wovor die Quarantäne schützt. Fällt die Ausnahme weg, darf
-  # der Pin wieder zur Range werden.
-  # Publish 2026-08-03 02:36 UTC → frei ab 2026-08-10 02:36 UTC.
+  # hono 4.12.34: GHSA-8j4g-w8fx-2239, CORS middleware ReDoS.
+  # Exact pin prevents this exception admitting newer, unquarantined releases.
+  # Published 2026-08-03 02:36 UTC; eligible 2026-08-10 02:36 UTC.
   - hono
 
 catalog:
@@ -72,10 +54,8 @@ catalog:
   'marked': ^18.0.5
   'nuxt': ^4.5.2
   'ofetch': ^1.5.1
-  # Beide Playwright-Pakete aus derselben Quelle: die CLI und @playwright/test
-  # teilen sich eine Test-Registry. Laufen sie auseinander, registriert
-  # `test.use` auf der einen Kopie und der Runner liest die andere — sichtbar
-  # nur als "No tests found", nicht als Versionswarnung.
+  # Keep Playwright identical: CLI and tests share a registry. Duplicate versions
+  # can report "No tests found" instead of a version warning.
   '@playwright/test': 1.62.1
   'playwright': 1.62.1
   'shell-quote': ^1.9.0
@@ -115,16 +95,12 @@ overrides:
   ip-address: '>=10.3.1'
   flatted: '>=3.4.2'
   hono: 4.12.34
-  # Beide über transitive Ketten aus apps/docs (@nuxt/content bzw. @nuxt/ui),
-  # auf ihren Major begrenzt: js-yaml 5 und nanoid 5 existieren und wären ein
-  # Major-Sprung, den kein Advisory verlangt.
+  # Transitive apps/docs dependencies stay on their current majors;
+  # the advisories do not require js-yaml 5 or nanoid 5.
   'js-yaml@4': '>=4.3.1'
   'nanoid@3': '>=3.3.18'
-  # Eine einzige Vue-Kopie im Baum. nuxt 4.5.2 verlangt 3.5.41, während
-  # Workspaces auf 3.5.39 stünden — zwei Kopien nebeneinander lassen
-  # `resolveComponent` ins Leere greifen, weil die eine Kopie die aktuelle
-  # Instanz der anderen nicht kennt. Sichtbar wurde das als sechs rote
-  # Komponententests in openape-crm, nicht als Versionswarnung.
+  # A single Vue instance is required: Nuxt 4.5.2 needs 3.5.41.
+  # Duplicate instances broke six CRM component tests through resolveComponent.
   vue: '>=3.5.41'
   lodash: ^4.17.21
   node-forge: '>=1.4.0'
@@ -132,9 +108,57 @@ overrides:
   picomatch: '>=4.0.4'
   postcss: '>=8.5.18'
   serialize-javascript: '>=7.0.3'
-  sharp: '>=0.35.0'
+  # Patched releases verified on 2026-09-12; all exceed the seven-day quarantine.
+  # Tiptap declares exact peer versions, so its package family moves together.
+  '@tiptap/core': 3.30.5
+  '@tiptap/extension-blockquote': 3.30.5
+  '@tiptap/extension-bold': 3.30.5
+  '@tiptap/extension-bubble-menu': 3.30.5
+  '@tiptap/extension-bullet-list': 3.30.5
+  '@tiptap/extension-code': 3.30.5
+  '@tiptap/extension-code-block': 3.30.5
+  '@tiptap/extension-collaboration': 3.30.5
+  '@tiptap/extension-document': 3.30.5
+  '@tiptap/extension-drag-handle': 3.30.5
+  '@tiptap/extension-drag-handle-vue-3': 3.30.5
+  '@tiptap/extension-dropcursor': 3.30.5
+  '@tiptap/extension-floating-menu': 3.30.5
+  '@tiptap/extension-gapcursor': 3.30.5
+  '@tiptap/extension-hard-break': 3.30.5
+  '@tiptap/extension-heading': 3.30.5
+  '@tiptap/extension-horizontal-rule': 3.30.5
+  '@tiptap/extension-image': 3.30.5
+  '@tiptap/extension-italic': 3.30.5
+  '@tiptap/extension-link': 3.30.5
+  '@tiptap/extension-list': 3.30.5
+  '@tiptap/extension-list-item': 3.30.5
+  '@tiptap/extension-list-keymap': 3.30.5
+  '@tiptap/extension-mention': 3.30.5
+  '@tiptap/extension-node-range': 3.30.5
+  '@tiptap/extension-ordered-list': 3.30.5
+  '@tiptap/extension-paragraph': 3.30.5
+  '@tiptap/extension-placeholder': 3.30.5
+  '@tiptap/extension-strike': 3.30.5
+  '@tiptap/extension-text': 3.30.5
+  '@tiptap/extension-underline': 3.30.5
+  '@tiptap/extensions': 3.30.5
+  '@tiptap/markdown': 3.30.5
+  '@tiptap/pm': 3.30.5
+  '@tiptap/starter-kit': 3.30.5
+  '@tiptap/suggestion': 3.30.5
+  '@tiptap/vue-3': 3.30.5
+  '@tiptap/y-tiptap': 3.0.7
+  sharp: 0.35.4
+  smol-toml: 1.7.1
   shell-quote: '>=1.8.4'
   simple-git: '>=3.36.0'
   socket.io-parser: '>=4.2.7'
-  svgo: '>=4.0.2'
+  svgo: 4.1.0
   ws: '>=8.21.0'
+
+# Nuxt Content 3.14 imports H3 at runtime but omits it from its manifest.
+# Its Nitro 2 integration requires H3 1, regardless of the public hoist order.
+packageExtensions:
+  '@nuxt/content@3.14.0':
+    dependencies:
+      h3: 1.15.11

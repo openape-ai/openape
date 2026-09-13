@@ -20,6 +20,7 @@
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
