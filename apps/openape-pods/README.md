@@ -233,3 +233,28 @@ knowledge after retry, stale PID identity, unknown effects and a frozen SDK
 supervisor during cancellation. Synthetic power-monitor signals exercise resume;
 physical macOS sleep/wake and signed-build acceptance remain unverified release
 gates and are not implied by these tests.
+
+## M7: concept B with persisted state
+
+The shared pod selection drives Overview, Knowledge, Resources, Runs and Settings.
+The sidebar and header show stored pods and their lifecycle; an empty profile has
+no invented pod or counts. Overview shows the assignment, next dispatch, queued
+inputs, actual result and current findings/questions/gaps. Header Run once starts
+the selected pod. Contextual actions and New pod open the same master area with
+explicit pod/creation context; live master streaming is implemented in M10.
+
+Knowledge distinguishes current findings, open questions, verification gaps and
+superseded history. Sources open their pinned provider version and verified blob,
+rendered as plain text. The worker binds every source lookup to the selected pod;
+a caller cannot choose a filesystem path. The view loads knowledge in bounded
+pages and filters the loaded entries. Script Settings lists retained versions;
+activation/rollback checks validation, resource epoch, assignment revision and
+expected active hash atomically. Existing runs retain their original script.
+
+Component/SQLite tests cover hostile source text, exact historical citations,
+foreign-source denial, immutable-version activation races and validation invalidation.
+Packaged concept-B tests exercise selected-pod actions, source expansion, history,
+expired/missing resource states, reference revocation, assignment edits, manual
+execution, pause/resume and archived inspection. Geometry checks and inspected
+screenshots cover all five views at 1060×850, 760×700 and 560×700 in light/dark,
+including keyboard tabs, horizontal overflow and a reachable fixed footer.

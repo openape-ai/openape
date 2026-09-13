@@ -1,3 +1,5 @@
+import { parseDetailsCommand } from '../contracts/details'
+import { WorkspaceDetails } from './workspace/details'
 import { Recovery } from './recovery/reconcile'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { Scheduler } from './scheduling/scheduler'
@@ -23,6 +25,7 @@ dispatcher = new RunDispatcher(store, registry, {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 })
+const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -47,6 +50,9 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'details' in request.command) {
+      port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
+    }
     if (request.command && typeof request.command === 'object' && 'schedule' in request.command) {
       const command = parseScheduleCommand(request.command.schedule)
       store.getPod(command.podId)

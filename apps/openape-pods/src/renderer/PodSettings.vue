@@ -1,13 +1,17 @@
 <script lang="ts">
+import PodVersions from './PodVersions.vue'
 import PodSchedule from './PodSchedule.vue'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
-  components: { PodSchedule },
+  components: { PodSchedule, PodVersions },
+  props: { selectedPodId: { type: String, default: '' } },
+  emits: ['selected'],
   data() { return { pods: [] as StoredPod[], selectedId: '', name: '', assignment: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
-  async mounted() { await this.reload() },
+  watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
+  async mounted() { await this.reload(); const selected = this.pods.find(pod => pod.id === this.selectedPodId); if (selected) this.select(selected) },
   methods: {
     async reload() {
       this.busy = true
@@ -15,8 +19,15 @@ export default defineComponent({
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load pods' }
       finally { this.busy = false }
     },
-    select(pod: StoredPod) { this.selectedId = pod.id; this.name = pod.name; this.assignment = pod.assignment; this.revision = pod.revision; this.message = ''; this.error = '' },
-    newPod() { this.selectedId = ''; this.name = ''; this.assignment = ''; this.revision = 0; this.message = ''; this.error = '' },
+    select(pod: StoredPod) { this.selectedId = pod.id; this.name = pod.name; this.assignment = pod.assignment; this.revision = pod.revision; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
+    newPod() { this.selectedId = ''; this.name = ''; this.assignment = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
+    async archive() {
+      const pod = this.selectedPod; if (!pod) return
+      this.busy = true; this.error = ''
+      try { this.pods = (await window.pods.workspace({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, assignment: pod.assignment, lifecycle: 'archived' })).pods; this.select(this.pods.find(item => item.id === pod.id)!); this.message = 'Archived. History is retained.' }
+      catch (error) { this.error = error instanceof Error ? error.message : 'Could not archive pod' }
+      finally { this.busy = false }
+    },
     async save() {
       this.busy = true; this.error = ''; this.message = ''
       try {
@@ -66,10 +77,19 @@ export default defineComponent({
       </button>
     </form>
   </article>
-  <PodSchedule v-if="selectedPod" :pod="selectedPod" @changed="reload" />
+  <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
+  <PodVersions v-if="selectedPod" :key="`${selectedPod.id}:${selectedPod.activeScript}`" :pod="selectedPod" @changed="reload" />
+  <article v-if="selectedPod" class="card lifecycle-panel">
+    <h2>Pod lifecycle</h2><p class="muted">
+      Archiving stops intake and preserves knowledge and run history.
+    </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">
+      Archive pod
+    </button>
+  </article>
 </template>
 
 <style scoped>
+.lifecycle-panel { margin-top:20px; } .lifecycle-panel button { margin-top:12px; }
 .pod-settings { max-width: 780px; }
 .saved-pods { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
 form, label { display: grid; gap: 10px; }

@@ -114,7 +114,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['details', 'getStatus', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -200,6 +200,6 @@ describe('foundation', () => {
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.runtime).toEqual({ electron: '40.9.3', node: '24.14.1' })
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
-    expect(await page.getByRole('button', { name: 'Run once' }).isDisabled()).toBe(false)
+    expect(await page.getByRole('button', { name: 'Run once' }).isDisabled()).toBe(true)
   })
 })
