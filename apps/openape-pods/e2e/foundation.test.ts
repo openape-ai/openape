@@ -69,6 +69,24 @@ describe('foundation', () => {
     const view = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
     expect(view.runs[0]).toMatchObject({ state: 'completed', checkpointRevision: 1, error: null })
   })
+  it('scheduling: persists a disabled daily schedule and an explicit concurrency limit', async () => {
+    const { page } = await launch()
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example', assignment: 'Synthetic local scripts only.' }))).pods[0]!
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
+    await page.getByRole('button', { name: 'Scheduled example', exact: true }).click()
+    await page.getByLabel('Repeat', { exact: true }).selectOption('daily')
+    await page.getByLabel('Local time', { exact: true }).fill('08:30')
+    await page.getByRole('button', { name: 'Save schedule', exact: true }).click()
+    await page.getByText('Saved on this Mac.', { exact: true }).waitFor()
+    expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
+    await page.getByLabel('Concurrent pods on this Mac').fill('3')
+    await page.getByRole('button', { name: 'Save concurrency limit' }).click()
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).concurrency).toBe(3)
+    await mkdir(artifacts, { recursive: true })
+    await page.getByRole('heading', { name: 'Schedule and limits' }).scrollIntoViewIfNeeded()
+    await page.locator('.schedule-panel').screenshot({ path: join(artifacts, 'schedule-settings.png') })
+    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]!.lifecycle).toBe('paused')
+  })
   it('storage: saves a pod assignment in the worker and reopens it after app restart', async () => {
     const { app, page, root, binary } = await launch()
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
@@ -96,7 +114,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'runs', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }

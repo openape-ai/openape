@@ -1,9 +1,12 @@
 <script lang="ts">
+import PodSchedule from './PodSchedule.vue'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
+  components: { PodSchedule },
   data() { return { pods: [] as StoredPod[], selectedId: '', name: '', assignment: '', revision: 0, error: '', message: '', busy: false } },
+  computed: { selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
   async mounted() { await this.reload() },
   methods: {
     async reload() {
@@ -50,7 +53,7 @@ export default defineComponent({
       <label>Pod name<input v-model="name" required maxlength="100" :disabled="busy"></label>
       <label>Assignment<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label>
       <p v-if="revision" class="muted">
-        Assignment revision {{ revision }} · Manual only
+        Assignment revision {{ revision }} · {{ selectedPod?.lifecycle }}
       </p>
       <p v-if="error" role="alert" class="error-message">
         {{ error }}
@@ -63,6 +66,7 @@ export default defineComponent({
       </button>
     </form>
   </article>
+  <PodSchedule v-if="selectedPod" :pod="selectedPod" @changed="reload" />
 </template>
 
 <style scoped>
