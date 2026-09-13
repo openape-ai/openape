@@ -1,3 +1,4 @@
+import { parseResourceCommand, parseResourceState } from '../contracts/resources'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { parseCommand, parseWorkspace } from '../contracts/control'
@@ -5,6 +6,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async resources(command) { return parseResourceState(await ipcRenderer.invoke(channels.resources, parseResourceCommand(command))) },
   async workspace(command) { return parseWorkspace(await ipcRenderer.invoke(channels.workspace, parseCommand(command))) },
   async getStatus() {
     const value: unknown = await ipcRenderer.invoke(channels.status)
