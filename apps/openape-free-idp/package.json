@@ -28,6 +28,7 @@
     "@sentry/nuxt": "^10.62.0",
     "@vite-pwa/nuxt": "catalog:",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",

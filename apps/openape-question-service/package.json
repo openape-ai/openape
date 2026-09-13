@@ -19,6 +19,7 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "@openape/sp-tasks": "workspace:*",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:"
   },
