@@ -1,3 +1,5 @@
+import { parseResourceState } from '../contracts/resources'
+import type { InternalResourceCommand, ResourceState } from '../contracts/resources'
 import { randomUUID } from 'node:crypto'
 import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
@@ -9,7 +11,7 @@ import type { WorkerStatus } from '../contracts/ipc'
 export class FixtureWorker {
   private child: UtilityProcess | null = null
   private stopping = false
-  private pending = new Map<string, { resolve: (state: WorkspaceState) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
+  private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
@@ -22,7 +24,7 @@ export class FixtureWorker {
         const request = reply && typeof reply.id === 'string' ? this.pending.get(reply.id) : undefined
         if (!request || !reply.id) { reportError('Unexpected worker message'); child.kill(); return }
         this.pending.delete(reply.id); clearTimeout(request.timer)
-        try { if (reply.error) throw new Error(reply.error); request.resolve(parseWorkspace(reply.state)) }
+        try { if (reply.error) throw new Error(reply.error); request.resolve(reply.state) }
         catch (error) { request.reject(error instanceof Error ? error : new Error('Invalid worker response')) }
         return
       }
@@ -37,7 +39,11 @@ export class FixtureWorker {
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
   }
 
-  request(command: WorkspaceCommand): Promise<WorkspaceState> {
+  async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
+
+  async resources(command: InternalResourceCommand): Promise<ResourceState> { return parseResourceState(await this.dispatch({ resource: command })) }
+
+  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

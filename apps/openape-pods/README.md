@@ -68,3 +68,38 @@ mandatory `node:sqlite` prefix; `removeNodeProtocol: false` fixes that path.
 Resource enforcement, active scripts, scheduling, mail and connected master chat
 remain later implementation milestones. M2's local pod editor is a development
 surface inside the selected workspace, not the completed onboarding flow.
+
+## Native resources increment (M3A)
+
+Resources offers a native file picker and an explicit owner confirmation before
+assigning a read-only reference. The renderer cannot supply an assignment path.
+The resource registry scopes each assignment to one pod and advances a persisted
+permission epoch on assignment/revocation. Snapshot previews run through the real
+worker in both development and packaged builds.
+
+`native/pods-helper.c` traverses every source component with descriptor-relative
+`openat` and `O_NOFOLLOW`, accepts bounded regular files, compares source identity
+and metadata after copying, and flushes the result. Snapshot sets publish with an
+atomic rename and a manifest of exact content hashes. This is per-file capture,
+not an atomic transaction across unrelated source files. Scripts get access to
+copies through the OS policy; file modes alone are not the access boundary.
+
+The same helper supervises a separate process group, confirms group registration
+before publishing its PID, and terminates a no-fork runtime when its controlling
+lease closes or times out. Six native cases include packaged Electron-as-Node,
+cross-pod/auth/symlink denial, reference write/fork/network denial, valid allowed
+reads, frozen-process termination and actual controller SIGKILL. This supervisor
+assumes fork is denied; it is not arbitrary daemon/process-tree containment.
+Custom SBPL remains the owner-accepted, unsupported native candidate from M0.
+
+Credential cache support serializes refresh transactions per connection,
+persists encrypted JSON atomically, removes tool-only plaintext on completion,
+and retains a successfully rotated token when a subsequent read fails. Tests
+use a clearly synthetic cipher and fake values. A macOS safeStorage adapter is
+provided but no real Keychain/provider credential operation has been performed.
+Actual broker delivery, identity provisioning and grant/revocation integration
+are M3B. No script dispatcher or live connection is enabled by this increment.
+
+Local evidence: 24 unit/component cases and 13 native/Electron cases. The
+snapshot/revocation view was personally inspected in the packaged app. Full
+repository gate evidence and native PR state are maintained in the linked plan.
