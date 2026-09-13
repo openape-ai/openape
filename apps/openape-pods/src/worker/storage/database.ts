@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 2
+const schemaVersion = 3
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -116,6 +116,14 @@ export class PodDatabase {
         INSERT INTO settings VALUES(1,1,2);
         CREATE TABLE validations(pod_id TEXT NOT NULL, script_hash TEXT NOT NULL, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(pod_id,script_hash,assignment_revision,resource_epoch), FOREIGN KEY(pod_id,script_hash) REFERENCES scripts(pod_id,hash));
         PRAGMA user_version=2;
+      `)
+      }
+      if (version < 3) {
+        this.db.exec(`
+        CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
+        CREATE TABLE resource_epochs(pod_id TEXT PRIMARY KEY REFERENCES pods(id), epoch INTEGER NOT NULL);
+        CREATE TABLE snapshot_sets(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), epoch INTEGER NOT NULL, manifest TEXT NOT NULL);
+        PRAGMA user_version=3;
       `)
       }
     })

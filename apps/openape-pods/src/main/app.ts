@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, protocol, session, Tray } from 'electron'
-import { readFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { parseResourceCommand } from '../contracts/resources'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, Tray } from 'electron'
+import { readFile, realpath } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
 import type { PodStatus } from '../contracts/ipc'
@@ -64,6 +65,21 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.request(parseCommand(command))
+  })
+  ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseResourceCommand(value)
+    if (command.type !== 'pickReference') return worker.resources(command)
+    if (!window) throw new Error('Owner window is unavailable')
+    const pods = await worker.request({ type: 'list' })
+    const pod = pods.pods.find(candidate => candidate.id === command.podId)
+    if (!pod) throw new Error('Pod not found')
+    const selection = await dialog.showOpenDialog(window, { title: 'Choose a read-only reference', properties: ['openFile'] })
+    if (selection.canceled || selection.filePaths.length !== 1) return worker.resources({ type: 'list', podId: pod.id })
+    const path = await realpath(selection.filePaths[0])
+    const approval = await dialog.showMessageBox(window, { type: 'question', title: 'Assign read-only reference', message: `Allow ${pod.name} to read snapshots of this file?`, detail: `${path}\n\nEach run receives a separate read-only copy. Later source changes apply to later runs. The original file is never edited.`, buttons: ['Cancel', 'Assign reference'], defaultId: 0, cancelId: 0 })
+    if (approval.response !== 1) return worker.resources({ type: 'list', podId: pod.id })
+    return worker.resources({ type: 'assignReference', podId: pod.id, name: basename(path), path })
   })
   window = createWindow()
   tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods · Fixture mode')
