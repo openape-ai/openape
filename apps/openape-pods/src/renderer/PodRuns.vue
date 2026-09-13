@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { RunCommand, RunView } from '../contracts/runs'
@@ -16,6 +17,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
+    t, diagnostic, label, dateTime,
     scheduleRefresh() {
       if (this.closed) return
       this.timer = setTimeout(async () => {
@@ -43,65 +45,65 @@ export default defineComponent({
 <template>
   <article class="card runs-panel">
     <div class="card-heading">
-      <h2>Runs</h2><span class="badge">Manual execution</span>
+      <h2>{{ t("Runs") }}</h2><span class="badge">{{ t("Manual execution") }}</span>
     </div>
     <p v-if="!pods.length" class="muted">
-      Create a pod in Settings to run its first script.
+      {{ t("Create a pod in Settings to run its first script.") }}
     </p>
     <template v-else>
-      <label v-if="!selectedPodId">Pod<select v-model="podId" :disabled="busy" @change="changePod"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
+      <label v-if="!selectedPodId">{{ t("Pod") }}<select v-model="podId" :disabled="busy" @change="changePod"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
       <p class="muted">
-        The local example increments a durable checkpoint. The agent example also needs a connected Codex provider.
+        {{ t("The local example increments a durable checkpoint. The agent example also needs a connected Codex provider.") }}
       </p>
       <div class="run-actions">
         <button class="secondary" :disabled="busy || view.runs.some(run => run.state === 'running')" @click="act({ type: 'installExample', podId, variant: 'deterministic' })">
-          Use local example
+          {{ t("Use local example") }}
         </button>
         <button class="secondary" :disabled="busy || view.runs.some(run => run.state === 'running')" @click="act({ type: 'installExample', podId, variant: 'agent' })">
-          Use agent example
+          {{ t("Use agent example") }}
         </button>
         <button class="primary" :disabled="busy || view.runs.some(run => run.state === 'running')" @click="act({ type: 'start', podId })">
-          Start run
+          {{ t("Start run") }}
         </button>
       </div>
       <p v-if="pending || blocked" class="muted">
-        {{ pending }} inputs queued · {{ blocked }} awaiting recovery
+        {{ t("{p0} inputs queued · {p1} awaiting recovery", { p0: pending, p1: blocked }) }}
       </p>
       <button v-if="blocked" class="secondary" :disabled="busy" @click="act({ type: 'retryQueue', podId })">
-        Retry unstarted inputs
+        {{ t("Retry unstarted inputs") }}
       </button>
       <p v-if="!view.runs.length" class="muted">
-        No runs yet. Choose a version, then start it manually.
+        {{ t("No runs yet. Choose a version, then start it manually.") }}
       </p>
       <article v-for="run in view.runs" :key="run.id" class="run-row">
         <button class="text-button" :aria-pressed="runId === run.id" @click="runId = run.id; load()">
-          {{ run.summary || (run.state === 'running' ? 'Run in progress' : 'Interrupted run') }}
+          {{ run.summary || (run.state === 'running' ? t("Run in progress") : t("Interrupted run")) }}
         </button>
-        <span class="badge">{{ run.state }}</span>
+        <span class="badge">{{ label(run.state) }}</span>
         <p class="muted">
-          {{ new Date(run.startedAt).toLocaleString() }} · checkpoint {{ run.checkpointRevision }}
-          <span class="pinned-version">Pinned script <code>{{ run.scriptHash }}</code></span>
+          {{ t("{p0} · checkpoint {p1}", { p0: dateTime(run.startedAt), p1: run.checkpointRevision }) }}
+          <span class="pinned-version">{{ t("Pinned script") }} <code>{{ run.scriptHash }}</code></span>
         </p>
         <p v-if="run.error" class="error-message">
-          {{ run.error }}
+          {{ diagnostic(run.error) }}
         </p>
         <div v-if="['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state)" class="recovery-actions">
           <p v-if="run.recovery" class="muted">
-            Recovery: {{ run.recovery.state }}<span v-if="run.recovery.error"> · {{ run.recovery.error }}</span>
+            {{ t("Recovery: {p0}", { p0: label(run.recovery.state) }) }}<span v-if="run.recovery.error"> · {{ diagnostic(run.recovery.error) }}</span>
           </p>
           <button class="secondary" :disabled="busy" @click="act({ type: 'recover', podId, runId: run.id, action: 'inspect' })">
-            Check stopped execution
+            {{ t("Check stopped execution") }}
           </button>
           <button class="secondary" :disabled="busy || run.recovery?.state === 'needsReview' || run.recovery?.state === 'retryQueued'" @click="act({ type: 'recover', podId, runId: run.id, action: 'retry' })">
-            Retry remaining inputs
+            {{ t("Retry remaining inputs") }}
           </button>
         </div>
         <button v-if="run.state === 'running'" class="secondary" :disabled="busy" @click="act({ type: 'cancel', podId, runId: run.id })">
-          Cancel run
+          {{ t("Cancel run") }}
         </button>
       </article>
       <details v-if="view.events.length">
-        <summary>Persisted events</summary><ol class="event-list">
+        <summary>{{ t("Persisted events") }}</summary><ol class="event-list">
           <li v-for="event in view.events" :key="event.sequence">
             <strong>{{ event.sequence }} · {{ event.type }}</strong><pre>{{ JSON.stringify(event.data, null, 2) }}</pre>
           </li>
@@ -109,7 +111,7 @@ export default defineComponent({
       </details>
     </template>
     <p v-if="error" class="error-message" role="alert">
-      {{ error }}
+      {{ diagnostic(error) }}
     </p>
   </article>
 </template>

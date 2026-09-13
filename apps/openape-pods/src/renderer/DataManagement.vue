@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t, diagnostic, label, number } from './i18n'
 import { defineComponent } from 'vue'
 import type { DataCommand, DataView } from '../contracts/data'
 
@@ -6,7 +7,8 @@ export default defineComponent({
   data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '' } },
   async mounted() { await this.perform({ type: 'status' }) },
   methods: {
-    size(bytes: number): string { return `${(bytes / 1024 ** 3).toFixed(2)} GiB` },
+    t, diagnostic, label, number,
+    size(bytes: number): string { return `${number(bytes / 1024 ** 3, 2)} GiB` },
     async perform(command: DataCommand) {
       this.busy = true; this.error = ''; this.notice = ''
       try {
@@ -22,66 +24,66 @@ export default defineComponent({
 </script>
 
 <template>
-  <section class="data-management" aria-label="Data and backups">
+  <section class="data-management" :aria-label="t('Data and backups')">
     <article class="card">
       <div class="card-heading">
-        <h2>Data &amp; backups</h2><button class="text-button" :disabled="busy" @click="perform({ type: 'status' })">
-          Refresh
+        <h2>{{ t("Data & backups") }}</h2><button class="text-button" :disabled="busy" @click="perform({ type: 'status' })">
+          {{ t("Refresh") }}
         </button>
       </div>
       <p class="muted">
-        Your workspace stays on this Mac. Stop or recover active runs and finish the master turn before maintenance.
+        {{ t("Your workspace stays on this Mac. Stop or recover active runs and finish the master turn before maintenance.") }}
       </p>
       <p v-if="error || view?.error" role="alert" class="error-message">
-        {{ error || view?.error }}
+        {{ diagnostic(error || view?.error) }}
       </p>
       <p v-if="notice" role="status">
-        {{ notice }}
+        {{ diagnostic(notice) }}
       </p>
       <p v-if="busy" role="status">
-        Working…
+        {{ t("Working…") }}
       </p>
       <template v-if="view">
-        <dl><div><dt>Application data</dt><dd>{{ size(view.usedBytes) }}</dd></div><div><dt>Disk available</dt><dd>{{ size(view.freeBytes) }}</dd></div><div><dt>Pending local deletions</dt><dd>{{ view.pendingDeletion }}</dd></div></dl>
+        <dl><div><dt>{{ t("Application data") }}</dt><dd>{{ size(view.usedBytes) }}</dd></div><div><dt>{{ t("Disk available") }}</dt><dd>{{ size(view.freeBytes) }}</dd></div><div><dt>{{ t("Pending local deletions") }}</dt><dd>{{ view.pendingDeletion }}</dd></div></dl>
         <form @submit.prevent="perform({ type: 'limit', bytes: Math.round(limitGiB * 1024 ** 3) })">
-          <label>Storage limit (GiB)<input v-model.number="limitGiB" type="number" min="1" max="1024" step="1" required :disabled="busy"></label>
+          <label>{{ t("Storage limit (GiB)") }}<input v-model.number="limitGiB" type="number" min="1" max="1024" step="1" required :disabled="busy"></label>
           <button class="secondary" :disabled="busy">
-            Save storage limit
+            {{ t("Save storage limit") }}
           </button>
         </form>
         <p class="muted">
-          Checked every five seconds. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.
+          {{ t("Checked every five seconds. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.") }}
         </p>
         <button class="secondary" :disabled="busy || view.busy" @click="perform({ type: 'cleanup' })">
-          Clean unused files
+          {{ t("Clean unused files") }}
         </button>
         <p class="muted">
-          Knowledge, cited evidence, run history and pending inputs are kept until you explicitly delete their pod. Backups and old restored profiles are retained separately.
+          {{ t("Knowledge, cited evidence, run history and pending inputs are kept until you explicitly delete their pod. Backups and old restored profiles are retained separately.") }}
         </p>
       </template>
     </article>
     <article class="card">
-      <h2>Backup and recovery</h2>
-      <p>Export pod settings, scripts, workspaces, knowledge, source snapshots and run history. Backups contain your data; choose a private destination. Account credentials are excluded.</p>
+      <h2>{{ t("Backup and recovery") }}</h2>
+      <p>{{ t("Export pod settings, scripts, workspaces, knowledge, source snapshots and run history. Backups contain your data; choose a private destination. Account credentials are excluded.") }}</p>
       <div class="actions">
         <button class="primary" :disabled="busy || !view || view.busy" @click="perform({ type: 'backup' })">
-          Export backup…
+          {{ t("Export backup…") }}
         </button><button class="secondary" :disabled="busy || view?.busy" @click="perform({ type: 'restore' })">
-          Restore backup and restart…
+          {{ t("Restore backup and restart…") }}
         </button>
       </div>
       <p class="muted">
-        Restoration verifies checksums and creates a new profile. The current profile is retained. Reconnect accounts, review resources and explicitly enable schedules after restoring.
+        {{ t("Restoration verifies checksums and creates a new profile. The current profile is retained. Reconnect accounts, review resources and explicitly enable schedules after restoring.") }}
       </p>
       <p v-if="view?.result" class="result" role="status">
-        {{ view.result.kind }}: {{ view.result.path }}
+        {{ label(view.result.kind) }}: {{ view.result.path }}
       </p>
     </article>
     <article class="card">
-      <h2>Manual updates</h2><p>Choose a downloaded, signed OpenApe Pods app. Verification checks its publisher, version and database compatibility, then exports a backup before you install it.</p><button class="secondary" :disabled="busy || !view || view.busy" @click="perform({ type: 'update' })">
-        Verify update and back up…
+      <h2>{{ t("Manual updates") }}</h2><p>{{ t("Choose a downloaded, signed OpenApe Pods app. Verification checks its publisher, version and database compatibility, then exports a backup before you install it.") }}</p><button class="secondary" :disabled="busy || !view || view.busy" @click="perform({ type: 'update' })">
+        {{ t("Verify update and back up…") }}
       </button><p class="muted">
-        Quit Pods before replacing the app. To return to an earlier version, restore its compatible pre-update backup; never reuse a database migrated by a newer version.
+        {{ t("Quit Pods before replacing the app. To return to an earlier version, restore its compatible pre-update backup; never reuse a database migrated by a newer version.") }}
       </p>
     </article>
   </section>
