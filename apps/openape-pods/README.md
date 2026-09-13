@@ -17,7 +17,7 @@ pnpm --filter @openape/pods test:e2e
 pnpm --filter @openape/pods report
 ```
 
-`dev` builds once and opens Electron with bundled renderer assets; restart it after changing source. No HTTP development server or remote content is exposed. `package:mac` creates the unsigned arm64 development bundle at `release/mac-arm64/OpenApe Pods Fixture.app`. It runs with its own Node runtime and does not require system Node. Developer ID signing, hardened-runtime distribution configuration and notarization belong to M12; this is not a distributable release.
+`dev` builds once and opens Electron with bundled renderer assets; restart it after changing source. No HTTP development server or remote content is exposed. `package:mac` creates the unsigned arm64 development bundle at `release/mac-arm64/OpenApe Pods Fixture.app`. It runs with its own Node runtime and does not require system Node. M12 also supplies explicit signed-candidate/release pipelines and an unsigned DMG; release acceptance remains pending.
 
 `test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages and runs the complete Electron suite. It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate.
 
@@ -37,7 +37,7 @@ The worker receives an explicitly constructed environment with a fixture HOME/TM
 
 Electron supplies desktop APIs and Node. electron-builder supplies the macOS development bundle; both versions passed the repository's seven-day publication quarantine at introduction. Vue/Vite/TypeScript are confirmed product dependencies; tsup bundles sandbox-compatible CommonJS main/preload/worker entrypoints. Vitest/Vue Test Utils verify state/contracts; Playwright drives actual Electron and captures light/dark/compact/error evidence. The established catalog supplies shared dependencies. No Bootstrap-Vue Vue 2 dependency is introduced into the confirmed Vue 3 application.
 
-Storage, resource boundaries, scheduling, recovery, mail knowledge and master chat are implemented. Connection setup is verified with synthetic cases; destructive data cleanup, backup/restore and distribution remain the final milestone.
+Storage, resource boundaries, scheduling, recovery, mail knowledge and master chat are implemented. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
 
 - Issue: https://git.openape.ai/openape-ai/openape/issues/1349
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
@@ -455,3 +455,86 @@ record does not claim those operations yet.
 Pinned auth/provider source contract:
 https://github.com/openai/codex/tree/rust-v0.153.4/codex-rs/login and
 https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/core/src/client.rs.
+
+## M12: data maintenance and distribution
+
+Data & backups is available from the sidebar, including when a damaged/newer database
+prevents normal startup. Exports use a quiescent SQLite `VACUUM INTO` snapshot and copy
+only referenced source/script blobs, retained file snapshots and pod workspaces.
+SHA-256, file size, source change detection, no-link paths, file/directory fsync and
+atomic publication reject partial or corrupt copies. Limits are 100,000 files,
+256 MiB per file/database and 10 GiB per export. A failed export keeps the last good
+backup. Backups contain sensitive pod content but exclude the application credential
+cache, login homes and execution capabilities. Scripts can themselves contain
+owner-written sensitive literals; the exporter cannot identify those as credentials.
+
+Restore verifies a backup in a new private profile and switches an atomic profile
+pointer only after successful publication. The previous profile remains available;
+normal quit/relaunch opens the restored profile. Connections are revoked, resources
+require review, validations are discarded and schedules remain disabled. Running
+work becomes interrupted and pending inputs require review. Older binaries reject a
+newer database and can still restore a compatible backup through Data & backups.
+Checksums detect corruption; an owner-selected backup is not authenticated by a
+publisher signature. Treat imported backups as trusted owner data.
+
+The default 10 GiB pod-data limit is configurable from 1 GiB to 1 TiB. Five-second
+scans stop runs/master work at the limit or below 256 MiB of free disk space. Blob
+publication checks available space first. This is a sampled application limit, not
+a hard filesystem quota: active work can overshoot between scans. Chromium caches,
+authentication files, external backups and previous profiles are separate from the
+reported pod-data usage. Cleanup removes only unreachable blobs/snapshot staging;
+all referenced evidence, committed history and pending events are retained.
+
+An archived pod can be deleted after a native owner confirmation bound to its current
+name and revision. Deletion journals pending filesystem/key cleanup, preserves shared
+account connections and original reference files, and erases only keys bound to that
+pod. Cleanup retries after restart or through Clean unused files. Global master chat
+may retain earlier discussion of the pod. Remote OpenApe agents/grants remain visible
+in OpenApe; local deletion does not use administrator APIs or claim remote revocation.
+
+### Build artifacts and release gates
+
+`pnpm --filter @openape/pods package:distribution` creates a versioned unsigned DMG
+and app under `release/distribution`, with SHA256SUMS, a conservative runtime npm
+closure, pinned native build metadata and collected license notices. No package is
+uploaded. This local artifact is for evaluation, not a release. Its signed-manifest
+flag is false and the manual updater rejects it as an approved update.
+
+The current execution pilot is Apple silicon / Darwin 25.6.0 (verified locally on
+macOS 26.6.2, build 25G83). Other kernel/CPU combinations show an explicit startup
+error and cannot execute pods. The Electron packaging minimum of macOS 14 describes
+the shell, not a tested execution support promise. Expand `main/support.ts` only
+with recorded packaged boundary acceptance on the additional matrix entry.
+
+`package:signed-candidate` and `package:signed` are opt-in pipelines. Neither ran in
+this task. Both require explicit Developer ID identity and a preconfigured notary
+keychain profile, plus an external review JSON selected by
+`OPENAPE_PODS_RELEASE_REVIEW`, bound to the exact source SHA and dependency lock.
+The checked-in `runtime-sources/distribution-review.json` is a pending template.
+The licensed native/supplemental texts must be present at
+`runtime-sources/licenses/REVIEWED-NOTICES.txt` with the reviewed SHA-256.
+Candidates require license review; approved releases additionally require signed
+boundary, clean-machine, actual provider/tenant refresh, physical sleep/wake and
+OS/CPU evidence. This separation permits testing a signed candidate before approving
+a release. The release review is an operator attestation, not an automated proof.
+
+The signing pipeline signs the three native executables before packaging, updates
+their runtime hashes, and prevents the packager from signing them a second time.
+Electron receives only the JIT entitlement; there is no full-disk, root or App Sandbox
+entitlement. The app is verified, notarized and stapled before DMG generation; the
+DMG is then signed/notarized/stapled and checksummed. Actual hardened-runtime behavior
+and entitlements remain unverified until the candidate suite runs with Developer ID.
+
+The upstream o365 revision declares MIT without shipping LICENSE. Codex native Rust
+and Go dependency notices and the build-host public CA bundle require redistribution
+review. Npm metadata and collected text do not close those native license gates.
+No invented license text or real signing/provider secret is included.
+
+Manual update preparation uses fixed `codesign`, `spctl` and `plutil` calls to verify
+both installed and candidate apps, the same Developer ID team, application identity,
+a newer version and a compatible schema. It exports a pre-update backup and verifies
+the candidate again. It never installs or launches the candidate. Quit before manual
+replacement and keep the old app and backup together. For rollback, reinstall the old
+signed app and restore its compatible backup into a fresh profile; never open the
+migrated database with an incompatible old binary. No background updater, release
+tag, publication or deployment is part of this increment.

@@ -1,0 +1,35 @@
+{
+  "sourceRevision": null,
+  "dependencyLockHash": null,
+  "gates": {
+    "licenses": {
+      "status": "pending",
+      "evidence": null
+    },
+    "signedBoundaries": {
+      "status": "pending",
+      "evidence": null
+    },
+    "cleanMachine": {
+      "status": "pending",
+      "evidence": null
+    },
+    "realProvider": {
+      "status": "pending",
+      "evidence": null
+    },
+    "realTenantRefresh": {
+      "status": "pending",
+      "evidence": null
+    },
+    "physicalSleepWake": {
+      "status": "pending",
+      "evidence": null
+    },
+    "osCpuMatrix": {
+      "status": "pending",
+      "evidence": null
+    }
+  },
+  "supplementalNoticesSha256": null
+}
