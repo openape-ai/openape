@@ -42,7 +42,7 @@ it.each([false, true])('onboarding: empty setup, explicit continuation and no im
     await page.screenshot({ path: resolve('.artifacts/onboarding-narrow-dark.png') })
     await page.getByRole('button', { name: 'Continue to workspace' }).click()
     expect((await page.evaluate(() => window.pods.onboarding({ type: 'list' })))).toMatchObject({ complete: true, connections: [] })
-    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' })))).toEqual({ pods: [] })
+    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' })))).toEqual({ pods: [], organization: { revision: 1, groups: [] } })
     expect(await page.evaluate(async () => {
       try { await window.pods.onboarding({ type: 'save', token: 'not-allowed' } as never); return 'allowed' }
       catch { return 'denied' }

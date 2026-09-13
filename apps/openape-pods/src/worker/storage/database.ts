@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 10
+export const schemaVersion = 11
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -192,6 +192,17 @@ CREATE TABLE data_settings(id INTEGER PRIMARY KEY CHECK(id=1),limit_bytes INTEGE
 INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
 CREATE TABLE deletion_jobs(pod_id TEXT PRIMARY KEY,payload TEXT NOT NULL,error TEXT);
 PRAGMA user_version=10;
+`)
+      }
+
+      if (version < 11) {
+        this.db.exec(`
+CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL);
+INSERT INTO pod_organization VALUES(1,1);
+CREATE TABLE pod_groups(id TEXT PRIMARY KEY,name TEXT NOT NULL,collapsed INTEGER NOT NULL CHECK(collapsed IN (0,1)));
+CREATE TABLE pod_memberships(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,group_id TEXT NOT NULL REFERENCES pod_groups(id) ON DELETE CASCADE);
+CREATE INDEX group_members ON pod_memberships(group_id);
+PRAGMA user_version=11;
 `)
       }
 

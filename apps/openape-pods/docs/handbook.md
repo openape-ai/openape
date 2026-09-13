@@ -2,7 +2,7 @@
 
 Your pods, their scripts and the evidence they keep.
 
-Generated from handbook.json with `pnpm --filter @openape/pods handbook`. Screenshots come from the packaged script-editor Electron scenario.
+Generated from handbook.json with `pnpm --filter @openape/pods handbook`. Screenshots come from the packaged script-editor and grouping Electron scenarios.
 
 ## Start here
 
@@ -23,6 +23,20 @@ Try this with a new pod. The local example needs no account connection and incre
 3. Wait for Local example completed (1). Select that result and expand Persisted events to inspect the trace.
 4. Run it again to see the counter advance. A script run can record progress without producing business findings.
 5. Open Settings and scroll to Script to inspect the active JavaScript. Automatic runs remain disabled until you explicitly configure and enable them.
+
+## Organize pods in groups
+
+Use groups in the sidebar to organize related pods. Every pod belongs to one flat group or Ungrouped. Group names, membership and collapsed state are saved on this Mac and included in backups. Groups appear in creation order; pods keep their original creation order within each group.
+
+Grouping does not share resources or permissions, change an assignment, invalidate a script or alter a running task. New pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
+
+1. Choose + Group beside YOUR PODS, enter a Group name and choose Create group. Names contain 1–100 characters; up to fifty groups are supported.
+2. Select a pod and choose its destination under Group for [pod name]. You can also drag a pod onto a group heading, including a collapsed group. Choose Ungrouped to remove its membership.
+3. Choose a group heading to collapse or expand it. The selected pod stays open in the workspace while its group is collapsed.
+4. Choose the three-dot button beside a group to rename it. To remove the group, choose Remove group and confirm that its pods move to Ungrouped.
+5. If another edit changed the groups, keep your entered text, wait for the sidebar to refresh and try again.
+
+![Organize pods in groups](images/handbook-groups.png)
 
 ## Overview
 
