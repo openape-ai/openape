@@ -25,7 +25,9 @@ export class WorkspaceDetails {
     if (command.type === 'source') {
       const citation = this.store.db.prepare('SELECT id,version,hash,locator FROM sources WHERE pod_id=? AND id=? AND version=?').get(pod.id, command.id, command.version) as unknown as Citation | undefined
       if (!citation) throw new Error('Source is not assigned to this pod')
-      source = { citation, content: this.store.readBlob(citation.hash).toString('utf8') }
+      const content = this.store.readBlob(citation.hash).toString('utf8')
+      const original = this.store.db.prepare('SELECT s.id,s.version,s.hash,s.locator FROM source_derivations d JOIN sources s ON s.pod_id=d.pod_id AND s.id=d.original_id WHERE d.pod_id=? AND d.source_id=? ORDER BY s.rowid DESC LIMIT 1').get(pod.id, citation.id) as unknown as Citation | undefined
+      source = { citation, content: content.slice(0, 200000), truncated: content.length > 200000, ...(original ? { original } : {}) }
     }
     const active = this.store.getPod(pod.id).activeScript
     const versions = this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(pod.id).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(pod.id, row.hash as string, pod.revision), active: row.hash === active }))

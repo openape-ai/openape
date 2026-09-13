@@ -1,3 +1,7 @@
+import { MailRecipeSession, mailToolRequest } from '../mail/recipe'
+import { extractSource } from '../mail/extraction'
+import { assignedMail } from '../../main/mail/assigned'
+import type { MailPage } from '../mail/ingestion'
 import { confirmDomainsStopped } from '../recovery/domains'
 import type { RunState, RunInput, RunView  } from '../../contracts/runs'
 import type { RunTrigger } from './store'
@@ -105,10 +109,31 @@ export class RunDispatcher {
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
+      let mail: MailRecipeSession | undefined
       const result = await executeScript(runtime, directory, artifact, input, signal, {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
+          if (operation === 'mail.next' || operation === 'mail.commit') {
+            if (!manifest.capabilities.includes('mail.read')) throw new Error('Mail recipe permission is not assigned')
+            if (!mail) {
+              const assignment = assignedMail(this.resources.list(pod.id)).mail
+              mail = new MailRecipeSession(this.store, pod.id, assignment, async request => await invokeTool(mailToolRequest(assignment, request), operationSignal) as MailPage, async (source) => {
+                const extraction = extractSource(runtime, directory, source, operationSignal, runtime.registerDomain)
+                pendingAgents.add(extraction)
+                try { return await extraction }
+                finally { pendingAgents.delete(extraction) }
+              }, assertCurrent, run.scriptHash)
+            }
+            if (operation === 'mail.commit') {
+              const result = mail.commit(payload)
+              this.runs.append(id, 'checkpoint', { revision: result.revision, kind: 'mail-knowledge', gaps: result.gapIds.length })
+              return result
+            }
+            const result = await mail.next() as { type: string, hash?: string, sources?: number, omissions?: string[], revision?: number, count?: number }
+            this.runs.append(id, 'mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
+            return result
+          }
           if (operation === 'progress.commit') {
             const progress = parseProgress(payload)
             const revision = this.store.commitProgress({ ...progress, podId: pod.id })
