@@ -49,3 +49,29 @@ describe('tool-only credential cache', () => {
     expect(await readdir(join(root, 'temporary'))).toEqual([])
   })
 })
+
+it('does not expose credential fragments in corrupt JSON diagnostics', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
+  const cache = new CredentialCache(root, cipher)
+  let message = ''
+  try { await cache.connect(randomUUID(), 'SYNTHETIC_SECRET_LEAK') }
+  catch (error) { message = (error as Error).message }
+  expect(message).toContain('JSON')
+  expect(message).not.toContain('SYNTHETIC_')
+})
+
+it('cancels a queued connection read without entering the credential workspace', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
+  const cache = new CredentialCache(root, cipher); const id = randomUUID()
+  await cache.connect(id, '{"refresh":"SYNTHETIC_INITIAL"}')
+  let release: () => void = () => {}; let started: () => void = () => {}
+  const held = new Promise<void>((resolve) => { release = resolve }); const entered = new Promise<void>((resolve) => { started = resolve })
+  const first = cache.withCache(id, async () => { started(); await held })
+  await entered
+  const controller = new AbortController(); let secondEntered = false
+  const second = cache.withCache(id, async () => { secondEntered = true }, controller.signal)
+  const cancelled = expect(second).rejects.toThrow('cancelled')
+  controller.abort(new Error('cancelled'))
+  try { await cancelled; expect(secondEntered).toBe(false) }
+  finally { release(); await first }
+})

@@ -25,3 +25,17 @@ describe('agent capability gateway', () => {
     finally { await first.close(); await second.close() }
   })
 })
+
+it('rejects oversized provider streams and releases their producer', async () => {
+  let cancelled = false; let chunks = 0
+  const gateway = await startAgentGateway({ tool: async () => ({}), provider: async () => new Response(new ReadableStream({ pull(controller) { if (chunks++ >= 20) controller.close(); else controller.enqueue(new Uint8Array(1024 * 1024)) }, cancel() { cancelled = true } })) }, new AbortController().signal)
+  try {
+    const response = await fetch(`http://127.0.0.1:${gateway.port}/v1/responses`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: '{}' })
+    let rejected = false
+    try { await response.arrayBuffer() }
+    catch { rejected = true }
+    expect(rejected).toBe(true)
+    expect(cancelled).toBe(true)
+  }
+  finally { await gateway.close() }
+})
