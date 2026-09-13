@@ -9,7 +9,7 @@ function fixture() {
   const hash = 'a'.repeat(64)
   const view: ScriptView = { pod: { id: randomUUID(), name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}' } }
   const scripts = vi.fn().mockResolvedValue(structuredClone(view))
-  window.pods = { scripts } as unknown as typeof window.pods
+  window.pods = { language: async () => 'en' as const, scripts } as unknown as typeof window.pods
   return { view, scripts }
 }
 it('shows literal immutable source and preserves unsaved edits across navigation with discard protection', async () => {

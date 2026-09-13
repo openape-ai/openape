@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t, diagnostic, label } from './i18n'
 import PodScript from './PodScript.vue'
 import PodSchedule from './PodSchedule.vue'
 import { defineComponent } from 'vue'
@@ -13,6 +14,7 @@ export default defineComponent({
   watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() { await this.reload(); const selected = this.pods.find(pod => pod.id === this.selectedPodId); if (selected) this.select(selected) },
   methods: {
+    t, diagnostic, label,
     async reload() {
       this.busy = true
       try { this.pods = (await window.pods.workspace({ type: 'list' })).pods }
@@ -59,12 +61,12 @@ export default defineComponent({
 <template>
   <article class="card pod-settings">
     <div class="card-heading">
-      <h2>Local pods</h2><button class="text-button" :disabled="busy" @click="newPod">
-        New local pod
+      <h2>{{ t("Local pods") }}</h2><button class="text-button" :disabled="busy" @click="newPod">
+        {{ t("New local pod") }}
       </button>
     </div>
     <p class="muted">
-      Assignments are saved on this Mac. No accounts or schedules are activated.
+      {{ t("Assignments are saved on this Mac. No accounts or schedules are activated.") }}
     </p>
     <div class="saved-pods">
       <button v-for="pod in pods" :key="pod.id" class="secondary" :aria-pressed="selectedId === pod.id" @click="select(pod)">
@@ -72,34 +74,34 @@ export default defineComponent({
       </button>
     </div>
     <form @submit.prevent="save">
-      <label>Pod name<input v-model="name" required maxlength="100" :disabled="busy"></label>
-      <label>Assignment<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label>
+      <label>{{ t("Pod name") }}<input v-model="name" required maxlength="100" :disabled="busy"></label>
+      <label>{{ t("Assignment") }}<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label>
       <p v-if="revision" class="muted">
-        Assignment revision {{ revision }} · {{ selectedPod?.lifecycle }}
+        {{ t("Assignment revision {p0} · {p1}", { p0: revision, p1: label(selectedPod?.lifecycle) }) }}
       </p>
       <p v-if="error" role="alert" class="error-message">
-        {{ error }}
+        {{ diagnostic(error) }}
       </p>
       <p v-if="message" role="status">
-        {{ message }}
+        {{ diagnostic(message) }}
       </p>
       <button class="primary" type="submit" :disabled="busy || !name.trim() || !assignment.trim()">
-        {{ busy ? 'Saving…' : 'Save pod' }}
+        {{ busy ? t("Saving…") : t("Save pod") }}
       </button>
     </form>
   </article>
   <PodScript v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <article v-if="selectedPod" class="card lifecycle-panel">
-    <h2>Pod lifecycle</h2><p class="muted">
-      Archiving stops intake and preserves knowledge and run history.
+    <h2>{{ t("Pod lifecycle") }}</h2><p class="muted">
+      {{ t("Archiving stops intake and preserves knowledge and run history.") }}
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">
-      Archive pod
+      {{ t("Archive pod") }}
     </button><button v-if="selectedPod.lifecycle === 'archived'" class="secondary" :disabled="busy" @click="remove">
-      Delete local pod…
+      {{ t("Delete local pod…") }}
     </button>
     <p v-if="selectedPod.lifecycle === 'archived'" class="muted">
-      Deletion permanently removes this pod’s local data and key. Export a backup first. A separate confirmation follows.
+      {{ t("Deletion permanently removes this pod’s local data and key. Export a backup first. A separate confirmation follows.") }}
     </p>
   </article>
 </template>
