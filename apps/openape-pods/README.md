@@ -258,3 +258,45 @@ expired/missing resource states, reference revocation, assignment edits, manual
 execution, pause/resume and archived inspection. Geometry checks and inspected
 screenshots cover all five views at 1060×850, 760×700 and 560×700 in light/dark,
 including keyboard tabs, horizontal overflow and a reachable fixed footer.
+
+
+## M8 — Confined read-only mail integration
+
+The bundled o365 CLI is built from the reviewed source archive recorded in
+`runtime-sources/o365-cli.json`, using Go 1.26.0. Its upstream PR is
+https://git.openape.ai/delta-mind/o365-cli/pulls/4, merged at
+`b8b0446660955d15a1fcb109eb20e47db2a67e53`. Runtime execution resolves the packaged
+binary and public CA snapshot by absolute path and checks their recorded hashes.
+No user-installed CLI or ambient home configuration is used by the pod process.
+The existing CLI worktree and its mail-vault branch remain unchanged.
+
+Scripts and SDK calls share the declared tool capability and frozen run scope.
+The main broker verifies the pod's signed ape-shell grant, holds a serialized
+connection cache, registers the native domain with the worker before spawning,
+and delivers credentials only to the separate tool sandbox. The script cannot
+supply a cache path, executable, proxy, CA file or unassigned account/folder.
+The broker's authenticated CONNECT endpoint permits only the fixed Microsoft
+login and Graph hosts. The CLI additionally restricts methods, redirects,
+projections and pagination paths. OAuth results must retain the requested account
+and Mail.Read boundary after refresh.
+
+The worker imports exact source blobs before returning bounded excerpts and
+explicit continuation/completeness. This import does not advance the script's
+checkpoint or claim that a business matter is processed. Claims and progress
+still commit through the script contract. Full folder inventories and matter
+processing use this protocol in M9. Onboarding assigns real identities, grants
+and connections in M11; none were provisioned during implementation.
+
+Synthetic tests exercise actual TLS, cache refresh across process restart,
+non-mutating paginated reads, wrong accounts, invalid refreshes, cancellation,
+foreign endpoints, traversal/symlink output, cache conflict/redaction, split UTF-8,
+and native domain registration. A composed test combines the signed grant,
+encrypted cache and actual packaged o365 binary against a local TLS fixture.
+The fixture changes only its public CA snapshot and network dial target; product
+code and the CLI binary are used directly. No live Microsoft request is made.
+Provider streams now respect downstream backpressure and a 16 MiB response bound.
+
+The upstream README declares MIT, but the source revision lacks its referenced
+LICENSE file. The package records that missing notice explicitly; complete
+license notices, Apple signing/notarization, physical sleep/wake, supported OS
+coverage and live tenant/provider acceptance remain distribution gates.

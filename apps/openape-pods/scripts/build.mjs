@@ -1,3 +1,4 @@
+import { bundleO365 } from './o365-runtime.mjs'
 import { bundleCodex } from './codex-runtime.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
@@ -11,4 +12,5 @@ if (process.platform === 'darwin') {
 }
 await buildScripts({ entry: { 'runtime/script-entry': 'src/worker/runs/script-entry.ts', 'runtime/sdk-host': 'src/worker/agent/sdk-host.ts' }, format: ['esm'], platform: 'node', target: 'node24', outDir: 'dist', clean: false, splitting: false, removeNodeProtocol: false, noExternal: ['@openai/codex-sdk'], outExtension: () => ({ js: '.mjs' }) })
 bundleCodex()
+bundleO365()
 await buildRenderer()

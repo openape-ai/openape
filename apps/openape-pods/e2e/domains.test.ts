@@ -39,3 +39,17 @@ describe('durable native process identity', () => {
     expect(await inspect(join(root, 'missing.record'))).toEqual({ quiescent: false, reason: 'registration-missing' })
   })
 })
+
+it('waits for durable registration before allowing the executable to start', async () => {
+  const root = await fixture(); const marker = join(root, 'executed'); const script = join(root, 'write.mjs')
+  await writeFile(script, `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(marker)},'done')`)
+  let release: () => void = () => {}; let entered = false
+  const gate = new Promise<void>((resolveGate) => { release = resolveGate })
+  const launching = launchSandbox(helper, root, { executable: process.execPath, workspace: root, readFiles: [script], runtimeDirectories: [] }, [script], {}, async () => { entered = true; await gate })
+  await expect.poll(() => entered).toBe(true)
+  await expect(access(marker)).rejects.toThrow()
+  release()
+  const domain = await launching; domains.push(domain)
+  await domain.processId; expect(await domain.completed).toBe(0)
+  expect(await readFile(marker, 'utf8')).toBe('done')
+})

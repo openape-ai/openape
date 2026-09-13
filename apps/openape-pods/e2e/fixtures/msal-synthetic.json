@@ -1,0 +1,38 @@
+{
+  "AccessToken": {},
+  "RefreshToken": {
+    "fixture-user.fixture-tenant-login.microsoftonline.com-refreshtoken-5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd": {
+      "home_account_id": "fixture-user.fixture-tenant",
+      "environment": "login.microsoftonline.com",
+      "credential_type": "RefreshToken",
+      "client_id": "5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd",
+      "secret": "synthetic-refresh"
+    }
+  },
+  "IdToken": {
+    "fixture-user.fixture-tenant-login.microsoftonline.com-idtoken-5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd-common": {
+      "home_account_id": "fixture-user.fixture-tenant",
+      "environment": "login.microsoftonline.com",
+      "realm": "common",
+      "credential_type": "IDToken",
+      "client_id": "5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd",
+      "secret": "header.eyJhdWQiOiI1YWE2ZDg5NS0xMDcyLTQxYzQtYmViNi1kOGUzZmRmMGU3Y2QiLCJleHAiOjE3ODkzMDA2MTEsImlhdCI6MTc4OTI5NzAxMSwiaXNzIjoiaHR0cHM6Ly9sb2dpbi5taWNyb3NvZnRvbmxpbmUuY29tL2NvbW1vbi92Mi4wIiwib2lkIjoiZml4dHVyZS11c2VyIiwicHJlZmVycmVkX3VzZXJuYW1lIjoicG9kQGV4YW1wbGUuaW52YWxpZCIsInN1YiI6ImZpeHR1cmUtdXNlciIsInRpZCI6ImZpeHR1cmUtdGVuYW50In0.signature"
+    }
+  },
+  "Account": {
+    "fixture-user.fixture-tenant-login.microsoftonline.com-common": {
+      "home_account_id": "fixture-user.fixture-tenant",
+      "environment": "login.microsoftonline.com",
+      "realm": "common",
+      "local_account_id": "fixture-user",
+      "authority_type": "MSSTS",
+      "username": "pod@example.invalid"
+    }
+  },
+  "AppMetadata": {
+    "appmetadata-login.microsoftonline.com-5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd": {
+      "client_id": "5aa6d895-1072-41c4-beb6-d8e3fdf0e7cd",
+      "environment": "login.microsoftonline.com"
+    }
+  }
+}
