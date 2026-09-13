@@ -72,6 +72,7 @@ catalog:
   'zod': ^4.4.3
 
 onlyBuiltDependencies:
+  - electron
   - '@parcel/watcher'
   - better-sqlite3
   - esbuild

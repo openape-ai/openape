@@ -1,0 +1,41 @@
+{
+  "name": "@openape/pods",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenApe Pods desktop workspace",
+  "author": "OpenApe",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/app.cjs",
+  "scripts": {
+    "dev": "pnpm build && electron .",
+    "build": "node scripts/build.mjs",
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.electron.config.ts --reporter=default --reporter=json --outputFile.json=.artifacts/electron-tests.json",
+    "test:boundaries": "vitest run --config vitest.electron.config.ts -t boundary",
+    "package:mac": "node scripts/package.mjs",
+    "test:packaged": "vitest run --config vitest.electron.config.ts -t packaged",
+    "test:layout": "pnpm build && pnpm package:mac && pnpm test:e2e",
+    "report": "node scripts/report.mjs"
+  },
+  "dependencies": {
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "electron": "40.9.3",
+    "electron-builder": "26.15.3",
+    "eslint": "catalog:",
+    "happy-dom": "catalog:",
+    "playwright": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vite": "8.2.1",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}
