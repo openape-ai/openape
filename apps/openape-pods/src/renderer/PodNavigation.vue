@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t, diagnostic, label } from './i18n'
 import { computed, ref } from 'vue'
 import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { GroupAction, Organization, PodGroup } from '../contracts/groups'
@@ -11,7 +12,7 @@ const selected = computed(() => props.pods.find(pod => pod.id === props.podId))
 const selectedGroup = computed(() => props.organization.groups.find(group => group.podIds.includes(props.podId))?.id ?? '')
 const sections = computed(() => [
   ...props.organization.groups.map(group => ({ ...group, pods: props.pods.filter(pod => group.podIds.includes(pod.id)) })),
-  { id: '', name: 'Ungrouped', collapsed: false, pods: props.pods.filter(pod => !props.organization.groups.some(group => group.podIds.includes(pod.id))) },
+  { id: '', name: t('Ungrouped'), collapsed: false, pods: props.pods.filter(pod => !props.organization.groups.some(group => group.podIds.includes(pod.id))) },
 ])
 function edit(group?: PodGroup) { editRevision.value = props.organization.revision; editing.value = group?.id ?? ''; name.value = group?.name ?? ''; removing.value = false; error.value = '' }
 async function apply(action: GroupAction, revision = props.organization.revision): Promise<boolean> {
@@ -51,58 +52,58 @@ async function drop(groupId: string) {
 <template>
   <div class="pod-navigation">
     <div class="group-tools">
-      <span class="mini-label">YOUR PODS · {{ pods.length }}</span>
-      <button :disabled="busy || !available" aria-label="New group" @click="edit()">
-        ＋ Group
+      <span class="mini-label">{{ t("YOUR PODS · {p0}", { p0: pods.length }) }}</span>
+      <button :disabled="busy || !available" :aria-label="t('New group')" @click="edit()">
+        {{ t("＋ Group") }}
       </button>
     </div>
-    <form v-if="editing !== null" class="group-form" aria-label="Edit group" @submit.prevent="save">
-      <label>Group name<input v-model="name" maxlength="100" required :disabled="busy" autocomplete="off"></label>
+    <form v-if="editing !== null" class="group-form" :aria-label="t('Edit group')" @submit.prevent="save">
+      <label>{{ t("Group name") }}<input v-model="name" maxlength="100" required :disabled="busy" autocomplete="off"></label>
       <div class="group-actions">
         <button class="secondary" type="submit" :disabled="busy || !available">
-          {{ editing ? 'Save group' : 'Create group' }}
+          {{ editing ? t("Save group") : t("Create group") }}
         </button>
         <button type="button" :disabled="busy" @click="editing = null">
-          Cancel
+          {{ t("Cancel") }}
         </button>
         <button v-if="editing" type="button" :disabled="busy || !available" @click="removing = true">
-          Remove group
+          {{ t("Remove group") }}
         </button>
       </div>
       <div v-if="removing" class="group-confirm">
-        <p>Remove this group? Its pods will move to Ungrouped.</p>
+        <p>{{ t("Remove this group? Its pods will move to Ungrouped.") }}</p>
         <button class="secondary" type="button" :disabled="busy || !available" @click="remove">
-          Confirm removal
+          {{ t("Confirm removal") }}
         </button>
       </div>
     </form>
     <p v-if="error" role="alert" class="error-message">
-      {{ error }}
+      {{ diagnostic(error) }}
     </p>
     <div class="pod-list">
-      <section v-for="group in sections" :key="group.id" :aria-label="`${group.name} group`" class="pod-group" @dragover.prevent @drop.prevent="drop(group.id)">
+      <section v-for="group in sections" :key="group.id" :aria-label="t('{group} group', { group: group.name })" class="pod-group" @dragover.prevent @drop.prevent="drop(group.id)">
         <div class="group-heading">
           <button v-if="group.id" :aria-expanded="!group.collapsed" :aria-controls="`group-${group.id}`" :disabled="busy || !available" class="group-toggle" @click="apply({ action: 'collapse', id: group.id, collapsed: !group.collapsed })">
             <span aria-hidden="true">{{ group.collapsed ? '▸' : '▾' }}</span><span class="group-name">{{ group.name }}</span><span>{{ group.pods.length }}</span>
           </button>
-          <span v-else class="group-toggle"><span class="group-name">Ungrouped</span><span>{{ group.pods.length }}</span></span>
-          <button v-if="group.id" :aria-label="`Edit ${group.name} group`" :disabled="busy || !available" class="group-edit" @click="edit(organization.groups.find(item => item.id === group.id))">
+          <span v-else class="group-toggle"><span class="group-name">{{ t("Ungrouped") }}</span><span>{{ group.pods.length }}</span></span>
+          <button v-if="group.id" :aria-label="t('Edit {group} group', { group: group.name })" :disabled="busy || !available" class="group-edit" @click="edit(organization.groups.find(item => item.id === group.id))">
             ⋯
           </button>
         </div>
         <div v-show="!group.collapsed" :id="`group-${group.id}`">
           <button v-for="pod in group.pods" :key="pod.id" class="pod-button" :class="{ active: pod.id === podId && highlight }" :aria-pressed="pod.id === podId" :draggable="available && !busy" @dragstart="startDrag($event, pod.id)" @dragend="dragging = null" @click="emit('select', pod.id)">
-            <span class="pod-icon" aria-hidden="true">↗</span><span class="pod-name">{{ pod.name }}<small>{{ pod.lifecycle }}</small></span>
+            <span class="pod-icon" aria-hidden="true">↗</span><span class="pod-name">{{ pod.name }}<small>{{ label(pod.lifecycle) }}</small></span>
           </button>
           <p v-if="!group.pods.length" class="group-empty muted">
-            {{ pods.length ? 'No pods in this group' : 'No pods yet' }}
+            {{ pods.length ? t("No pods in this group") : t("No pods yet") }}
           </p>
         </div>
       </section>
     </div>
-    <label v-if="selected" class="group-picker">Group for {{ selected.name }}
-      <select :aria-label="`Group for ${selected.name}`" :value="selectedGroup" :disabled="busy || !available" @change="move">
-        <option value="">Ungrouped</option>
+    <label v-if="selected" class="group-picker">{{ t("Group for {p0}", { p0: selected.name }) }}
+      <select :aria-label="t('Group for {p0}', { p0: selected.name })" :value="selectedGroup" :disabled="busy || !available" @change="move">
+        <option value="">{{ t("Ungrouped") }}</option>
         <option v-for="group in organization.groups" :key="group.id" :value="group.id">{{ group.name }}</option>
       </select>
     </label>

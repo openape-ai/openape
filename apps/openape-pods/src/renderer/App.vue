@@ -1,5 +1,7 @@
 <script lang="ts">
+import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
+import LanguageSwitcher from './LanguageSwitcher.vue'
 import PodNavigation from './PodNavigation.vue'
 import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
@@ -16,16 +18,16 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodNavigation, DataManagement, Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
     return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
-    workerLabel(): string { if (this.connectionError) return 'Unavailable'; return { starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting'] },
+    workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
-    nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return 'Manual only'; return this.schedule.nextAt ? new Date(this.schedule.nextAt).toLocaleString() : 'No scheduled time' },
+    nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
   async mounted() {
     try { this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
@@ -34,6 +36,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
+    t, diagnostic, label, dateTime,
     workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
@@ -77,57 +80,58 @@ export default defineComponent({
 
 <template>
   <div class="workspace">
-    <aside class="sidebar" aria-label="Pod navigation">
+    <aside class="sidebar" :aria-label="t('Pod navigation')">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">o.</span><span>OpenApe <strong>Pods</strong></span>
+        <span class="brand-mark" aria-hidden="true">{{ t("o.") }}</span><span>{{ t("OpenApe") }} <strong>{{ t("Pods") }}</strong></span>
       </div>
       <button class="nav-button" :class="{ active: selected === 'Master chat' }" @click="master()">
-        <span aria-hidden="true">✦</span> Master chat <span class="nav-arrow" aria-hidden="true">↗</span>
+        <span aria-hidden="true">✦</span> {{ t("Master chat") }} <span class="nav-arrow" aria-hidden="true">↗</span>
       </button>
       <button class="nav-button" :class="{ active: selected === 'Setup' }" @click="selected = 'Setup'">
-        Connections &amp; setup
+        {{ t("Connections & setup") }}
       </button>
       <button class="nav-button" :class="{ active: selected === 'Data' }" @click="selected = 'Data'">
-        Data &amp; backups
+        {{ t("Data & backups") }}
       </button>
       <PodNavigation :pods="pods" :pod-id="podId" :organization="organization" :available="status?.worker.state === 'ready' && !attention" :highlight="selected !== 'Master chat'" @select="selectPod" @updated="workspaceChanged" />
       <button class="new-pod" @click="master(true)">
-        ＋ New pod
+        {{ t("＋ New pod") }}
       </button>
+      <LanguageSwitcher />
       <div class="sidebar-bottom">
-        <span class="status-dot" :class="{ warning: attention }" /><span>Running on this Mac<small>{{ pods.length }} local pods</small></span>
+        <span class="status-dot" :class="{ warning: attention }" /><span>{{ t("Running on this Mac") }}<small>{{ t(pods.length === 1 ? '{p0} local pod' : '{p0} local pods', { p0: pods.length }) }}</small></span>
       </div>
     </aside>
     <main class="main">
       <header class="toolbar">
-        <span>Pods <span class="crumb" aria-hidden="true">/</span> {{ selected === 'Master chat' ? 'Master chat' : pod?.name ?? 'Your workspace' }}</span><span class="fixture-label">{{ status?.mode === 'fixture' ? 'Fixture mode' : 'On this Mac' }}</span>
+        <span>{{ t("Pods") }} <span class="crumb" aria-hidden="true">/</span> {{ selected === 'Master chat' ? t("Master chat") : pod?.name ?? t("Your workspace") }}</span><span class="fixture-label">{{ status?.mode === 'fixture' ? t("Fixture mode") : t("On this Mac") }}</span>
       </header>
       <div class="content">
         <div class="page-heading">
           <div>
             <p class="eyebrow">
-              YOUR WORKSPACE
-            </p><h1>{{ selected === 'Master chat' ? 'Master chat' : pod?.name ?? 'Your pods' }}</h1><p class="subtitle">
-              A place for context that lasts beyond a conversation.
+              {{ t("YOUR WORKSPACE") }}
+            </p><h1>{{ selected === 'Master chat' ? t("Master chat") : pod?.name ?? t("Your pods") }}</h1><p class="subtitle">
+              {{ t("A place for context that lasts beyond a conversation.") }}
             </p>
           </div><button class="primary" :disabled="!pod || !pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
-            Run once <span aria-hidden="true">↗</span>
+            {{ t("Run once") }} <span aria-hidden="true">↗</span>
           </button>
         </div>
         <div v-if="attention" class="fixture-note">
           <strong role="status">{{ workerLabel }}</strong><p role="alert">
-            {{ connectionError || status?.worker.error }}
+            {{ diagnostic(connectionError || status?.worker.error) }}
           </p>
         </div>
         <div v-else class="fixture-note">
-          <span aria-hidden="true">◌</span><p><strong>{{ pod ? `${pod.lifecycle} · ${resourceCount} resource${resourceCount === 1 ? '' : 's'} ready` : 'Create your first pod.' }}</strong> {{ pod ? 'Knowledge and progress are saved on this Mac.' : 'Start with an assignment, then review resources and run manually.' }}</p><span class="badge" role="status">{{ workerLabel }}</span>
+          <span aria-hidden="true">◌</span><p><strong>{{ pod ? t(resourceCount === 1 ? '{state} · {count} resource ready' : '{state} · {count} resources ready', { state: label(pod.lifecycle), count: resourceCount }) : t("Create your first pod.") }}</strong> {{ pod ? t("Knowledge and progress are saved on this Mac.") : t("Start with an assignment, then review resources and run manually.") }}</p><span class="badge" role="status">{{ workerLabel }}</span>
         </div>
         <p v-if="dataError" role="alert" class="error-message">
-          {{ dataError }}
+          {{ diagnostic(dataError) }}
         </p>
-        <nav class="tabs" role="tablist" aria-label="Pod sections">
+        <nav class="tabs" role="tablist" :aria-label="t('Pod sections')">
           <button v-for="(tab, index) in tabs" :id="`tab-${tab}`" ref="tabButtons" :key="tab" role="tab" :aria-selected="selected === tab" :aria-controls="`panel-${tab}`" :tabindex="selected === tab || (selected === 'Master chat' && index === 0) ? 0 : -1" @click="selectTab(tab)" @keydown="moveTab($event, index)">
-            {{ tab }}
+            {{ label(tab) }}
           </button>
         </nav>
         <DataManagement v-if="selected === 'Data'" />
@@ -137,71 +141,71 @@ export default defineComponent({
             <div class="overview-grid">
               <article class="card assignment">
                 <div class="card-heading">
-                  <h2>What this pod is here for</h2><span class="badge">Revision {{ pod.revision }}</span>
+                  <h2>{{ t("What this pod is here for") }}</h2><span class="badge">{{ t("Revision {p0}", { p0: pod.revision }) }}</span>
                 </div><p class="assignment-text">
                   {{ pod.assignment }}
                 </p><button class="text-button" @click="selectTab('Settings')">
-                  Edit assignment
+                  {{ t("Edit assignment") }}
                 </button><div class="card-footer">
-                  <span class="mini-label">NEXT RUN</span><span>{{ nextRun }}</span><span>{{ schedule?.pending ?? 0 }} queued · {{ schedule?.blocked ?? 0 }} awaiting recovery</span>
+                  <span class="mini-label">{{ t("NEXT RUN") }}</span><span>{{ nextRun }}</span><span>{{ t("{p0} queued · {p1} awaiting recovery", { p0: schedule?.pending ?? 0, p1: schedule?.blocked ?? 0 }) }}</span>
                 </div>
               </article>
               <article class="card">
                 <div class="card-heading">
-                  <h2>Latest result</h2><span class="badge">{{ runs[0]?.state ?? 'Not run yet' }}</span>
+                  <h2>{{ t("Latest result") }}</h2><span class="badge">{{ label(runs[0]?.state ?? t("Not run yet")) }}</span>
                 </div><p class="assignment-text">
-                  {{ runs[0]?.summary || 'Ready for its first manual run.' }}
+                  {{ runs[0]?.summary || t("Ready for its first manual run.") }}
                 </p><p v-if="runs[0]?.error" class="error-message">
-                  {{ runs[0].error }}
+                  {{ diagnostic(runs[0].error) }}
                 </p><p class="muted">
-                  Checkpoint {{ details?.checkpointRevision ?? 0 }}
+                  {{ t("Checkpoint {p0}", { p0: details?.checkpointRevision ?? 0 }) }}
                 </p><div class="overview-actions">
                   <button class="text-button" @click="selectTab('Runs')">
-                    View run trace
+                    {{ t("View run trace") }}
                   </button><button class="secondary" :disabled="pod.lifecycle === 'archived'" @click="pause">
-                    {{ pod.lifecycle === 'active' ? 'Pause automatic runs' : 'Resume automatic runs' }}
+                    {{ pod.lifecycle === 'active' ? t("Pause automatic runs") : t("Resume automatic runs") }}
                   </button>
                 </div>
               </article>
             </div>
             <article class="card first-run">
               <span class="empty-icon" aria-hidden="true">⌁</span><div>
-                <h2>{{ details?.total ? 'Sourced knowledge' : 'No knowledge collected yet' }}</h2><p class="muted">
-                  {{ details?.counts.finding ?? 0 }} findings · {{ details?.counts.question ?? 0 }} open questions · {{ details?.counts.gap ?? 0 }} verification gaps
+                <h2>{{ details?.total ? t("Sourced knowledge") : t("No knowledge collected yet") }}</h2><p class="muted">
+                  {{ t(details?.counts.finding === 1 ? '{count} finding' : '{count} findings', { count: details?.counts.finding ?? 0 }) }} · {{ t(details?.counts.question === 1 ? '{count} open question' : '{count} open questions', { count: details?.counts.question ?? 0 }) }} · {{ t(details?.counts.gap === 1 ? '{count} verification gap' : '{count} verification gaps', { count: details?.counts.gap ?? 0 }) }}
                 </p>
               </div><button class="text-button" @click="selectTab('Knowledge')">
-                View knowledge →
+                {{ t("View knowledge →") }}
               </button>
             </article>
             <div class="next-step">
               <div>
                 <p class="eyebrow">
-                  CONTEXT · {{ pod.name }}
-                </p><h2>Keep the assignment and evidence together.</h2>
+                  {{ t("CONTEXT · {p0}", { p0: pod.name }) }}
+                </p><h2>{{ t("Keep the assignment and evidence together.") }}</h2>
               </div><button class="secondary" @click="master()">
-                Open master chat ↗
+                {{ t("Open master chat ↗") }}
               </button>
             </div>
           </template>
           <article v-else class="card empty-panel">
-            <span class="empty-icon" aria-hidden="true">⌁</span><h2>No pods yet</h2><p class="muted">
-              Create a pod with its own assignment, workspace and explicitly assigned resources.
+            <span class="empty-icon" aria-hidden="true">⌁</span><h2>{{ t("No pods yet") }}</h2><p class="muted">
+              {{ t("Create a pod with its own assignment, workspace and explicitly assigned resources.") }}
             </p><button class="secondary" @click="master(true)">
-              Create your first pod
+              {{ t("Create your first pod") }}
             </button>
           </article>
         </section>
-        <section v-else-if="selected === 'Master chat'" class="card master-panel" aria-label="Master chat">
+        <section v-else-if="selected === 'Master chat'" class="card master-panel" :aria-label="t('Master chat')">
           <p class="eyebrow">
-            CONTEXT · {{ creating ? 'NEW POD' : pod?.name ?? 'WORKSPACE' }}
-          </p><h2>Master chat</h2><MasterChat :pod-id="creating ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Resources' }" /><PodSettings v-if="creating" key="new" @selected="changed" />
+            {{ t("CONTEXT · {p0}", { p0: creating ? t("NEW POD") : pod?.name ?? t("WORKSPACE") }) }}
+          </p><h2>{{ t("Master chat") }}</h2><MasterChat :pod-id="creating ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Resources' }" /><PodSettings v-if="creating" key="new" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
           <PodSettings :selected-pod-id="podId" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Resources'" id="panel-Resources" role="tabpanel" aria-labelledby="tab-Resources">
           <button class="secondary" @click="selected = 'Setup'">
-            Manage accounts and mail scope
+            {{ t("Manage accounts and mail scope") }}
           </button>
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
@@ -210,14 +214,14 @@ export default defineComponent({
         </section>
         <section v-else id="panel-Knowledge" role="tabpanel" aria-labelledby="tab-Knowledge">
           <PodKnowledge v-if="pod" :key="podId" :pod-id="podId" @discuss="master()" /><article v-else class="card empty-panel">
-            <h2>Supported findings</h2><p class="muted">
-              Create a pod to collect knowledge with sources.
+            <h2>{{ t("Supported findings") }}</h2><p class="muted">
+              {{ t("Create a pod to collect knowledge with sources.") }}
             </p>
           </article>
         </section>
       </div>
       <footer class="footer">
-        <span><span class="status-dot" :class="{ warning: attention }" /> Worker {{ workerLabel.toLowerCase() }}</span><span>{{ currentRun ? 'A run is active' : 'Local workspace' }} · {{ pods.length }} pods</span>
+        <span><span class="status-dot" :class="{ warning: attention }" /> {{ t("Worker {p0}", { p0: workerLabel.toLowerCase() }) }}</span><span>{{ t(pods.length === 1 ? '{p0} · {p1} pod' : '{p0} · {p1} pods', { p0: currentRun ? t("A run is active") : t("Local workspace"), p1: pods.length }) }}</span>
       </footer>
     </main>
   </div>

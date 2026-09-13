@@ -114,7 +114,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['data', 'details', 'getStatus', 'master', 'onStatus', 'onboarding', 'resources', 'runs', 'scheduling', 'scripts', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'resources', 'runs', 'scheduling', 'scripts', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -126,11 +126,11 @@ describe('foundation', () => {
       const other = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: `${app.getAppPath()}/dist/preload/index.cjs` } })
       try {
         await other.loadURL('pods://app/index.html')
-        return await other.webContents.executeJavaScript('window.pods.master({type:"list"}).then(() => "allowed", () => "denied")')
+        return await other.webContents.executeJavaScript('(async () => { const results = []; for (const request of [() => window.pods.master({type:"list"}), () => window.pods.language({type:"set", language:"de"})]) { try { await request(); results.push("allowed") } catch { results.push("denied") } } return results })()')
       }
       finally { other.destroy() }
     })
-    expect(result).toBe('denied')
+    expect(result).toEqual(['denied', 'denied'])
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.executionEnabled).toBe(true)
     expect(status.worker.pid).toBeGreaterThan(0)

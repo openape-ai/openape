@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t, diagnostic, number } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
@@ -26,12 +27,13 @@ export default defineComponent({
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
     canActivate(): boolean { return !this.dirty && !!this.buffer.source?.validated && !!this.buffer.source.hash && this.buffer.source.hash !== this.buffer.view?.pod.activeScript && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
-    sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? `Version ${source.id.slice(0, 12)}` : source ? `Draft ${source.id.slice(0, 8)} · revision ${source.revision}` : 'New script' },
+    sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? t('Version {id}', { id: source.id.slice(0, 12) }) : source ? t('Draft {id} · revision {revision}', { id: source.id.slice(0, 8), revision: source.revision }) : t('New script') },
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
   watch: { 'buffer.source': { handler() { this.syncChoice() } } },
   async mounted() { if (!this.buffer.view && !this.buffer.busy) await this.load(); this.syncChoice() },
   methods: {
+    t, diagnostic, number,
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
     apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.mail = view.source?.capabilities.includes('mail.read') ?? false; this.buffer.editing = view.source?.kind === 'draft'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
@@ -95,87 +97,87 @@ export default defineComponent({
 </script>
 
 <template>
-  <article class="card script-panel" aria-label="Script editor">
+  <article class="card script-panel" :aria-label="t('Script editor')">
     <div class="card-heading">
       <div>
-        <h2>Script</h2><p class="muted">
-          JavaScript · Node.js · run.mjs
+        <h2>{{ t("Script") }}</h2><p class="muted">
+          {{ t("JavaScript · Node.js · run.mjs") }}
         </p>
-      </div><span class="badge">{{ dirty ? 'Unsaved changes' : buffer.editing && buffer.source?.kind === 'version' ? 'Editing copy' : buffer.source?.hash === buffer.view?.pod.activeScript && buffer.source?.hash ? 'Active version' : buffer.source?.validated ? 'Validated' : 'Draft' }}</span>
+      </div><span class="badge">{{ dirty ? t("Unsaved changes") : buffer.editing && buffer.source?.kind === 'version' ? t("Editing copy") : buffer.source?.hash === buffer.view?.pod.activeScript && buffer.source?.hash ? t("Active version") : buffer.source?.validated ? t("Validated") : t("Draft") }}</span>
     </div>
     <p class="muted">
-      Inspect the exact version used by this pod, or edit a draft for its next run.
+      {{ t("Inspect the exact version used by this pod, or edit a draft for its next run.") }}
     </p>
     <div class="script-tools">
-      <label>Versions and drafts<select v-model="choice" :disabled="buffer.busy" @change="choose"><option value="" disabled>Select a script</option><optgroup label="Versions"><option v-for="version in buffer.view?.versions" :key="version.hash" :value="`version:${version.hash}`">{{ version.active ? 'Active · ' : '' }}{{ version.hash.slice(0, 12) }} · {{ version.validated ? 'validated' : 'needs validation' }}</option></optgroup><optgroup label="Drafts"><option v-for="draft in buffer.view?.drafts" :key="draft.id" :value="`draft:${draft.id}`">{{ draft.id.slice(0, 8) }} · revision {{ draft.revision }}</option></optgroup></select></label>
+      <label>{{ t("Versions and drafts") }}<select v-model="choice" :disabled="buffer.busy" @change="choose"><option value="" disabled>{{ t("Select a script") }}</option><optgroup :label="t('Versions')"><option v-for="version in buffer.view?.versions" :key="version.hash" :value="`version:${version.hash}`">{{ version.active ? t("Active · ") : '' }}{{ version.hash.slice(0, 12) }} · {{ version.validated ? t("validated") : t("needs validation") }}</option></optgroup><optgroup :label="t('Drafts')"><option v-for="draft in buffer.view?.drafts" :key="draft.id" :value="`draft:${draft.id}`">{{ t("{p0} · revision {p1}", { p0: draft.id.slice(0, 8), p1: draft.revision }) }}</option></optgroup></select></label>
       <button class="secondary" :disabled="buffer.busy || pod.lifecycle === 'archived'" @click="requestSelection('new')">
-        New script
+        {{ t("New script") }}
       </button><button class="text-button" :disabled="buffer.busy" @click="refresh">
-        Refresh history
+        {{ t("Refresh history") }}
       </button>
     </div>
     <div v-if="pending" class="discard-prompt" role="alert">
-      <p>Discard unsaved edits and open the selected script?</p><button class="secondary" @click="open(pending)">
-        Discard edits
+      <p>{{ t("Discard unsaved edits and open the selected script?") }}</p><button class="secondary" @click="open(pending)">
+        {{ t("Discard edits") }}
       </button><button class="primary" @click="pending = null">
-        Keep editing
+        {{ t("Keep editing") }}
       </button>
     </div>
     <button v-if="buffer.source" class="text-button" :disabled="buffer.busy" @click="requestSelection({ kind: buffer.source.kind, id: buffer.source.id })">
-      Reload selected source
+      {{ t("Reload selected source") }}
     </button>
     <p v-if="buffer.error" class="error-message" role="alert">
-      {{ buffer.error }}
+      {{ diagnostic(buffer.error) }}
     </p><p v-if="buffer.message" role="status">
-      {{ buffer.message }}
+      {{ diagnostic(buffer.message) }}
     </p>
     <template v-if="buffer.source || buffer.editing">
       <div class="script-heading">
         <strong>{{ sourceLabel }}</strong><button v-if="readOnly && pod.lifecycle !== 'archived'" class="secondary" :disabled="buffer.busy" @click="buffer.editing = true">
-          Edit as draft
+          {{ t("Edit as draft") }}
         </button>
       </div>
       <div class="script-actions">
         <button class="primary" :disabled="readOnly || buffer.busy || !buffer.code.trim()" @click="save()">
-          Save draft
+          {{ t("Save draft") }}
         </button><button v-if="buffer.source?.kind === 'draft' && buffer.editing" class="text-button" :disabled="buffer.busy || pod.lifecycle === 'archived'" @click="save(true)">
-          Save as new draft
+          {{ t("Save as new draft") }}
         </button><button class="secondary" :disabled="!canValidate" @click="validate">
-          {{ buffer.busy ? 'Working…' : 'Validate draft' }}
+          {{ buffer.busy ? t("Working…") : t("Validate draft") }}
         </button><button class="primary" :disabled="!canActivate" @click="activate">
-          Activate for next run
+          {{ t("Activate for next run") }}
         </button>
       </div>
       <ScriptCode v-model="buffer.code" :readonly="readOnly" :disabled="buffer.busy" @save="save()" />
       <p class="muted">
-        {{ buffer.code.split('\n').length }} lines · {{ buffer.code.length.toLocaleString() }} / 150,000 characters{{ dirty ? ' · Save before quitting. Edits are kept while navigating this app session.' : '' }}
+        {{ t("{p0} lines · {p1} / 150,000 characters{p2}", { p0: buffer.code.split('\n').length, p1: number(buffer.code.length), p2: dirty ? t(" · Save before quitting. Edits are kept while navigating this app session.") : '' }) }}
       </p>
-      <label class="capability"><input v-model="buffer.mail" type="checkbox" :disabled="readOnly || buffer.busy">Declare read-only mail calls (requires assigned mail permissions)</label>
+      <label class="capability"><input v-model="buffer.mail" type="checkbox" :disabled="readOnly || buffer.busy">{{ t("Declare read-only mail calls (requires assigned mail permissions)") }}</label>
 
       <p class="muted">
-        Validation runs for up to five seconds in the sandbox with synthetic services. It does not prove real mail or model results. Activation keeps existing permissions and leaves running versions unchanged.
+        {{ t("Validation runs for up to five seconds in the sandbox with synthetic services. It does not prove real mail or model results. Activation keeps existing permissions and leaves running versions unchanged.") }}
       </p>
       <details v-if="evidence">
-        <summary>Validation details</summary><pre class="source-preview">{{ evidence }}</pre><button v-if="buffer.source?.kind === 'draft' && buffer.source.hash" class="text-button" :disabled="buffer.busy || dirty" @click="requestSelection({ kind: 'version', id: buffer.source.hash })">
-          View exact validated source
+        <summary>{{ t("Validation details") }}</summary><pre class="source-preview">{{ evidence }}</pre><button v-if="buffer.source?.kind === 'draft' && buffer.source.hash" class="text-button" :disabled="buffer.busy || dirty" @click="requestSelection({ kind: 'version', id: buffer.source.hash })">
+          {{ t("View exact validated source") }}
         </button>
       </details>
       <div class="script-actions">
         <button class="text-button" :disabled="buffer.busy || !buffer.view?.pod.activeScript" @click="compare">
-          Compare with active version
+          {{ t("Compare with active version") }}
         </button>
       </div>
       <details v-if="buffer.compare !== null" open>
-        <summary>Active version for comparison</summary><p class="muted">
-          The editor above contains your selected source; this is the currently active source.
+        <summary>{{ t("Active version for comparison") }}</summary><p class="muted">
+          {{ t("The editor above contains your selected source; this is the currently active source.") }}
         </p><pre class="source-preview">{{ buffer.compare }}</pre>
       </details>
       <p v-if="buffer.source?.hash" class="script-hash">
-        {{ buffer.editing ? 'Base source SHA-256' : 'SHA-256' }} · {{ buffer.source.hash }}
+        {{ buffer.editing ? t("Base source SHA-256") : t("SHA-256") }} · {{ buffer.source.hash }}
       </p>
     </template>
     <p v-else class="muted">
-      No script yet. Choose New script to start locally, or ask the master to prepare a draft.
+      {{ t("No script yet. Choose New script to start locally, or ask the master to prepare a draft.") }}
     </p>
   </article>
 </template>
