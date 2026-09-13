@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, realpath, readdir, rm, symlink, writeFile, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotSet } from '../src/worker/resources/snapshots'
 import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
@@ -33,6 +33,13 @@ async function runProbe(root: Awaited<ReturnType<typeof fixture>>, script: strin
   return { exit, output, error, pid }
 }
 describe('native resource boundary', () => {
+  it('treats repeated cancellation as one lease close without write errors', async () => {
+    const root = await fixture(); const error = vi.spyOn(console, 'error')
+    const script = join(root.broker, 'waiting.mjs'); await writeFile(script, 'setInterval(() => {}, 1000)')
+    const domain = await launchSandbox(helper, root.broker, { executable: process.execPath, workspace: root.workspace, readFiles: [script], runtimeDirectories: [] }, [script]); domains.push(domain)
+    try { await domain.processId; domain.cancel(); domain.cancel(); await domain.completed; expect(error).not.toHaveBeenCalled() }
+    finally { error.mockRestore() }
+  })
   it('captures immutable per-run copies and rejects source symlinks including parent components', async () => {
     const root = await fixture(); const source = join(root.root, 'reference.txt'); const destination = join(root.broker, 'snapshots')
     await writeFile(source, 'version one')
@@ -121,4 +128,18 @@ describe('native resource boundary', () => {
     await writeFile(file, 'changed')
     await expect(verifyExecutable(file, hash)).rejects.toThrow('integrity')
   })
+  it('cleans a trusted SDK host descendant even when its parent exits normally', async () => {
+    const code = `const {spawn}=require('node:child_process');const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});child.unref();setTimeout(()=>{process.kill(child.pid,'SIGSTOP');console.log(child.pid);process.exit(0)},50)`
+    const guardian = spawn(helper, ['supervise', process.execPath, '-e', code], { stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+    let output = ''; let error = ''
+    guardian.stdout!.on('data', bytes => output += bytes.toString()); guardian.stderr!.on('data', bytes => error += bytes.toString())
+    const codeResult = await new Promise<number | null>((resolve, reject) => { guardian.once('error', reject); guardian.once('close', resolve) })
+    expect(codeResult, error).toBe(0)
+    const child = Number(output.trim()); expect(child).toBeGreaterThan(1)
+    await expect.poll(() => {
+      try { process.kill(child, 0); return false }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; return true }
+    }).toBe(true)
+  })
+
 })

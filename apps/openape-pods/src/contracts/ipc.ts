@@ -1,17 +1,19 @@
+import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources' } as const
+export const channels = { status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
   version: 1
   mode: 'fixture'
-  executionEnabled: false
+  executionEnabled: true
   worker: WorkerStatus
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  runs: (command: RunCommand) => Promise<RunView>
   resources: (command: ResourceCommand) => Promise<ResourceState>
   workspace: (command: WorkspaceCommand) => Promise<WorkspaceState>
   getStatus: () => Promise<PodStatus>
@@ -21,7 +23,7 @@ export function isPodStatus(value: unknown): value is PodStatus {
   if (!value || typeof value !== 'object') return false
   const status = value as Partial<PodStatus>
   const worker = status.worker
-  return status.version === 1 && status.mode === 'fixture' && status.executionEnabled === false
+  return status.version === 1 && status.mode === 'fixture' && status.executionEnabled === true
     && !!worker && ['starting', 'ready', 'error', 'stopped'].includes(worker.state)
     && (worker.pid === null || (Number.isSafeInteger(worker.pid) && worker.pid > 0))
     && (worker.error === null || typeof worker.error === 'string')
