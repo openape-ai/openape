@@ -7,7 +7,7 @@ const saved: WorkspaceState = { pods: [{ id: '00000000-0000-4000-8000-0000000000
 describe('local pod settings', () => {
   it('loads saved assignments, saves revisioned edits and surfaces stale conflicts', async () => {
     const workspace = vi.fn().mockResolvedValueOnce(saved).mockRejectedValueOnce(new Error('Stale pod revision'))
-    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace, getStatus: vi.fn(), onStatus: vi.fn() }
+    window.pods = { details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace, getStatus: vi.fn(), onStatus: vi.fn() }
     const wrapper = mount(PodSettings); await flushPromises()
     await wrapper.get('.saved-pods button').trigger('click')
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('Read assigned order evidence.')
@@ -20,7 +20,7 @@ describe('local pod settings', () => {
   })
   it('creates a pod and makes persistence and paused execution explicit', async () => {
     const workspace = vi.fn().mockResolvedValueOnce({ pods: [] }).mockResolvedValueOnce(saved)
-    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace, getStatus: vi.fn(), onStatus: vi.fn() }
+    window.pods = { details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace, getStatus: vi.fn(), onStatus: vi.fn() }
     const wrapper = mount(PodSettings); await flushPromises()
     await wrapper.get('input').setValue('Orders'); await wrapper.get('textarea').setValue('Read assigned order evidence.')
     await wrapper.get('form').trigger('submit'); await flushPromises()

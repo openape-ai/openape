@@ -1,3 +1,4 @@
+import { parseDetailsCommand } from '../contracts/details'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
@@ -32,7 +33,7 @@ function showWindow(): void {
   window.show(); window.focus()
 }
 function createWindow(): BrowserWindow {
-  const view = new BrowserWindow({ width: 1280, height: 840, minWidth: 880, minHeight: 640, show: false, title: 'OpenApe Pods', backgroundColor: '#f5f6f3', titleBarStyle: 'hiddenInset', webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, webviewTag: false, spellcheck: false } })
+  const view = new BrowserWindow({ width: 1280, height: 840, minWidth: 560, minHeight: 560, show: false, title: 'OpenApe Pods', backgroundColor: '#f5f6f3', titleBarStyle: 'hiddenInset', webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, webviewTag: false, spellcheck: false } })
   view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   view.webContents.on('will-navigate', event => event.preventDefault())
   view.webContents.on('will-frame-navigate', event => event.preventDefault())
@@ -63,6 +64,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
+  })
+  ipcMain.handle(channels.details, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.details(parseDetailsCommand(command))
   })
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

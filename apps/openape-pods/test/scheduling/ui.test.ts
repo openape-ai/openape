@@ -7,7 +7,7 @@ const state = { spec: null, enabled: false, revision: 0, nextAt: null, error: nu
 describe('schedule settings', () => {
   it('defaults to disabled, saves exact scope and requires a separate resume action', async () => {
     const scheduling = vi.fn().mockResolvedValue(state)
-    window.pods = { scheduling, runs: vi.fn(), workspace: vi.fn(), resources: vi.fn(), getStatus: vi.fn(), onStatus: vi.fn() }
+    window.pods = { details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling, runs: vi.fn(), workspace: vi.fn(), resources: vi.fn(), getStatus: vi.fn(), onStatus: vi.fn() }
     const wrapper = mount(PodSchedule, { props: { pod } }); await flushPromises()
     expect((wrapper.get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
     await wrapper.get('form').trigger('submit'); await flushPromises()
