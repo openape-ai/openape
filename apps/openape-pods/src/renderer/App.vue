@@ -1,5 +1,6 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
+import Onboarding from './Onboarding.vue'
 import MasterChat from './MasterChat.vue'
 import PodSettings from './PodSettings.vue'
 import PodResources from './PodResources.vue'
@@ -12,9 +13,9 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
@@ -35,6 +36,7 @@ export default defineComponent({
       if (this.busy || this.status?.worker.state !== 'ready') return
       this.busy = true
       try {
+        if (!this.setupChecked && this.status?.mode === 'local') { const setup = await window.pods.onboarding({ type: 'list' }); this.setupChecked = true; if (!setup.complete) this.selected = 'Setup' }
         this.pods = (await window.pods.workspace({ type: 'list' })).pods
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
@@ -78,6 +80,9 @@ export default defineComponent({
       <button class="nav-button" :class="{ active: selected === 'Master chat' }" @click="master()">
         <span aria-hidden="true">✦</span> Master chat <span class="nav-arrow" aria-hidden="true">↗</span>
       </button>
+      <button class="nav-button" :class="{ active: selected === 'Setup' }" @click="selected = 'Setup'">
+        Connections &amp; setup
+      </button>
       <div class="sidebar-label">
         YOUR PODS <span>{{ pods.length }}</span>
       </div>
@@ -97,7 +102,7 @@ export default defineComponent({
     </aside>
     <main class="main">
       <header class="toolbar">
-        <span>Pods <span class="crumb" aria-hidden="true">/</span> {{ selected === 'Master chat' ? 'Master chat' : pod?.name ?? 'Your workspace' }}</span><span class="fixture-label">Fixture mode</span>
+        <span>Pods <span class="crumb" aria-hidden="true">/</span> {{ selected === 'Master chat' ? 'Master chat' : pod?.name ?? 'Your workspace' }}</span><span class="fixture-label">{{ status?.mode === 'fixture' ? 'Fixture mode' : 'On this Mac' }}</span>
       </header>
       <div class="content">
         <div class="page-heading">
@@ -127,6 +132,7 @@ export default defineComponent({
             {{ tab }}
           </button>
         </nav>
+        <Onboarding v-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @assigned="refresh" @reference="selected = 'Resources'" />
         <section v-if="selected === 'Overview'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
             <div class="overview-grid">
@@ -195,6 +201,9 @@ export default defineComponent({
           <PodSettings :selected-pod-id="podId" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Resources'" id="panel-Resources" role="tabpanel" aria-labelledby="tab-Resources">
+          <button class="secondary" @click="selected = 'Setup'">
+            Manage accounts and mail scope
+          </button>
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'Runs'" id="panel-Runs" role="tabpanel" aria-labelledby="tab-Runs">

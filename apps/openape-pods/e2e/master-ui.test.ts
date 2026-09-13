@@ -32,7 +32,7 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_MODEL_PORT: String(address.port), NODE_ENV: 'test' } })
   try {
     const page = await app.firstWindow(); await page.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
-    await page.locator('.nav-button').click(); await page.getByLabel('Message the master').fill('Create a synthetic mail knowledge pod and prepare a script. Propose the mailbox access for review.')
+    await page.getByRole('button', { name: 'Master chat', exact: false }).click(); await page.getByLabel('Message the master').fill('Create a synthetic mail knowledge pod and prepare a script. Propose the mailbox access for review.')
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await page.getByText('Your pod and validated draft are ready. Microsoft access awaits your review; automatic runs remain disabled.', { exact: true }).waitFor()
     await expect.poll(async () => (await page.evaluate(() => window.pods.master({ type: 'list' }))).state).toBe('idle')

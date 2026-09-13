@@ -17,3 +17,11 @@ export function fixtureDirectory(override?: string): string {
   }
   return root
 }
+
+export function localDirectory(root: string): string {
+  if (!isAbsolute(root)) throw new Error('Application directory must be absolute')
+  mkdirSync(root, { recursive: true, mode: 0o700 })
+  const info = lstatSync(root)
+  if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== userInfo().uid || (info.mode & 0o077) !== 0) throw new Error('Application directory must be private and owned by the current user')
+  return root
+}
