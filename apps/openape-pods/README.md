@@ -300,3 +300,58 @@ The upstream README declares MIT, but the source revision lacks its referenced
 LICENSE file. The package records that missing notice explicitly; complete
 license notices, Apple signing/notarization, physical sleep/wake, supported OS
 coverage and live tenant/provider acceptance remain distribution gates.
+
+## M9: sourced mail recipe
+
+`mail-knowledge-v1` is a bundled, versioned read-only script. It inventories every
+selected folder before analysis, checkpoints each durable page and continues a
+bounded batch on the next run. Every subsequent run starts a fresh full inventory;
+this intentionally favors correctness for moved old messages over an unproven
+short lookback/delta optimization. A failed page retains its cursor. Stable item
+IDs and immutable source snapshots are separate, so folder moves retain both
+versions without a hash conflict. Permission, assignment or recipe changes
+invalidate processing receipts. No owner schedule is enabled by installation.
+
+The recipe uses `mail.next`, the existing SDK `agent.run`, and `mail.commit`.
+Trusted host operations still use the assigned ape-shell authorization boundary.
+Model calls retain the single effectful ape-shell gateway; they receive no new
+filesystem, shell or credential access. Prepared contexts record source IDs,
+parser fingerprints, current claims, omissions and the authoritative assignment.
+Provider conversation IDs group matters; missing IDs produce an association gap.
+No subject-only merge is inferred. Selected sent folders participate in the same
+inventory and can provide evidence that resolves an earlier question.
+
+The proposed bounded defaults are ten messages and twenty current claim excerpts
+per context, 48 KB of serialized evidence text, three attachments from the first
+attachment page per message, twenty recipe units per run, 20 MiB per file and
+100 MiB of attachment bytes per run. Omitted pages/documents, unsupported types,
+truncation and uncertain association create explicit verification gaps. These
+limits do not imply that omitted attachments have been examined. The model's
+structured claims must quote supplied source text and may supersede only supplied
+current claims from that matter. Quotes establish provenance, not semantic truth:
+real model quality evaluation remains a separate acceptance gate.
+
+Text/HTML/PDF/DOCX extraction executes in its own no-fork/no-network native sandbox,
+with a 192 MiB V8 heap cap, 15-second process deadline, bounded input/output and
+only the selected source plus pinned parser files readable. PDFs allow at most
+100 pages; no rendering, XFA, WebAssembly, remote assets or OCR is enabled. DOCX
+streams only `word/document.xml` in 1 KiB compressed chunks, with a 2 MiB expanded
+text cap and no entity declarations. Unsupported, scanned, encrypted or malformed
+sources remain unexamined gaps. The complete extracted source links back to the
+original retained bytes in Knowledge; large raw previews are labelled truncated.
+
+New pinned build dependencies are `pdfjs-dist@6.3.289` (Apache-2.0),
+`html-to-text@10.0.1` and `fflate@0.8.3` (MIT). They replace unsafe ad-hoc document
+parsing and have passed the repository quarantine. The PDF worker uses the
+upstream legacy build's compatibility polyfills because pinned Node 24.15.0 lacks
+`Uint8Array.toHex`, while Electron already supplies it. Both parser files are
+checksummed and bundled; no system document converter is invoked. Existing
+workspace dependency resolutions are preserved.
+
+Verification: `test/mail/knowledge.test.ts` covers rule folders, sent resolutions,
+attachment citations, hostile fabricated evidence, unsupported-only gaps,
+contradictory dates, receipt rollback, permission changes and interrupted inventory.
+`e2e/mail-knowledge.test.ts` exercises actual local/packaged parser processes and
+the complete versioned script → SDK → parser → SQLite path with recorded model
+outputs. UI tests follow extracted citations to original bytes. This is synthetic
+fixture evidence, not a live mailbox or real-model quality claim.

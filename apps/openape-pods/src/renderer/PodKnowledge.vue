@@ -71,6 +71,12 @@ export default defineComponent({
       </div><p class="muted">
         {{ source.citation.locator }} · version {{ source.citation.version }}
       </p><code>{{ source.citation.hash }}</code><pre>{{ source.content }}</pre>
+      <p v-if="source.truncated" class="muted">
+        Preview truncated. The complete immutable source remains stored.
+      </p>
+      <button v-if="source.original" class="text-button" :disabled="busy" @click="inspect(source.original)">
+        Inspect original retained source
+      </button>
     </article>
     <p v-if="error" role="alert" class="error-message">
       {{ error }}

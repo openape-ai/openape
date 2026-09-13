@@ -20,6 +20,18 @@ describe('knowledge and version views', () => {
     expect(wrapper.get('pre').text()).toContain('<script>unsafe()</script>'); expect(wrapper.find('script').exists()).toBe(false)
     wrapper.unmount()
   })
+  it('follows an extracted quotation to its retained original and labels truncated previews', async () => {
+    const original = { ...citation, id: 'raw', locator: 'fixture:original' }
+    const details = vi.fn().mockImplementation(async command => ({ ...structuredClone(state), source: command.type === 'source' ? command.id === 'source' ? { citation, content: 'Extracted text', original } : { citation: original, content: 'Retained raw source', truncated: true } : null }))
+    window.pods = { details } as unknown as typeof window.pods
+    const wrapper = mount(PodKnowledge, { props: { podId } }); await flushPromises()
+    await wrapper.findAll('details button')[0]!.trigger('click'); await flushPromises()
+    await wrapper.get('.source-content button.text-button').trigger('click'); await flushPromises()
+    expect(details).toHaveBeenLastCalledWith({ type: 'source', podId, id: 'raw', version: '1' })
+    expect(wrapper.get('pre').text()).toBe('Retained raw source')
+    expect(wrapper.text()).toContain('Preview truncated')
+    wrapper.unmount()
+  })
   it('only offers validated retained versions and surfaces stale activation errors', async () => {
     const details = vi.fn().mockResolvedValueOnce({ ...state, versions: [{ hash: 'a'.repeat(64), assignmentRevision: 1, active: true, validated: true }, { hash: 'b'.repeat(64), assignmentRevision: 1, active: false, validated: false }, { hash: 'c'.repeat(64), assignmentRevision: 1, active: false, validated: true }] }).mockRejectedValueOnce(new Error('Active version changed'))
     window.pods = { details } as unknown as typeof window.pods
