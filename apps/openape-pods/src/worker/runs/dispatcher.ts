@@ -53,6 +53,7 @@ export class RunDispatcher {
   }
 
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): string {
+    this.store.assertStorage()
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
     const epoch = this.resources.epoch(podId)
