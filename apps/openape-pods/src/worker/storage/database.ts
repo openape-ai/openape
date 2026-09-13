@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 6
+const schemaVersion = 7
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -152,6 +152,18 @@ export class PodDatabase {
           PRAGMA user_version=6;
         `)
       }
+      if (version < 7) {
+        this.db.exec(`
+CREATE TABLE mail_inventory(pod_id TEXT PRIMARY KEY REFERENCES pods(id), scope TEXT NOT NULL, phase TEXT NOT NULL, folder_index INTEGER NOT NULL, cursor TEXT, completed_at INTEGER);
+CREATE TABLE mail_items(pod_id TEXT NOT NULL REFERENCES pods(id), account TEXT NOT NULL, id TEXT NOT NULL, folder TEXT NOT NULL, source_id TEXT NOT NULL, conversation TEXT NOT NULL, metadata TEXT NOT NULL, PRIMARY KEY(pod_id,account,id));
+CREATE INDEX mail_conversation ON mail_items(pod_id,conversation);
+CREATE TABLE mail_receipts(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, recipe TEXT NOT NULL, context_hash TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(pod_id,source_id,recipe));
+CREATE TABLE mail_extractions(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, parser TEXT NOT NULL, text_source_id TEXT NOT NULL, gap TEXT, PRIMARY KEY(pod_id,source_id,parser));
+CREATE TABLE mail_contexts(pod_id TEXT NOT NULL REFERENCES pods(id), hash TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(pod_id,hash));
+CREATE TABLE source_derivations(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, original_id TEXT NOT NULL, operation TEXT NOT NULL, PRIMARY KEY(pod_id,source_id));
+PRAGMA user_version=7;
+`)
+      }
 
     })
   }
@@ -234,7 +246,7 @@ export class PodDatabase {
     return { revision: row.revision as number, body: JSON.parse(row.body as string) }
   }
 
-  commitProgress(input: ProgressInput, observe: (point: CommitPoint) => void = () => {}): number {
+  commitProgress(input: ProgressInput, observe: (point: CommitPoint) => void = () => {}, publish: (revision: number) => void = () => {}): number {
     this.getPod(input.podId)
     if (JSON.stringify(input).length > 1024 * 1024) throw new Error('Progress exceeds frame limit')
     const sources = input.sources.map((source) => {
@@ -250,6 +262,7 @@ export class PodDatabase {
       }
       for (const claim of input.claims) this.insertClaim(input.podId, input.expectedRevision + 1, claim)
       this.db.prepare('UPDATE checkpoints SET revision=revision+1,body=? WHERE pod_id=?').run(JSON.stringify(input.checkpoint), input.podId)
+      publish(input.expectedRevision + 1)
       observe('beforeCommit')
       return input.expectedRevision + 1
     })

@@ -26,3 +26,18 @@ it('retains exact source versions across pagination retries and moved old messag
   expect(store.readBlob(first.items[0].sourceHash).toString()).toContain('Retained evidence')
   await expect(ingest('v3', 'unassigned')).rejects.toThrow('outside')
 })
+
+it('retains moved messages without colliding with the original source version', async () => {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'pods-mail-move-'))); store = new PodDatabase(root)
+  const pod = store.createPod({ name: 'Moved mail', assignment: 'Read two folders' })
+  const scope = { account: 'pod@example.invalid', folders: ['inbox', 'rules'], attachments: false }
+  const ids: string[] = []
+  for (const folder of scope.folders) {
+    const body = JSON.stringify({ version: 1, operation: 'messages', account: scope.account, folder, complete: true, items: [{ id: 'stable-id', changeKey: 'same-version', parentFolderId: folder, body: { contentType: 'text', content: 'Original evidence' } }] })
+    const path = join(root, `mail-${randomUUID()}.json`); await writeFile(path, body)
+    const page = await ingestMailPage(store, pod.id, root, { path, hash: digest(body) }, scope, { operation: 'messages', folder }, () => {})
+    ids.push(page.items[0].sourceId)
+  }
+  expect(new Set(ids).size).toBe(2)
+  expect(store.db.prepare('SELECT COUNT(*) AS count FROM sources').get()!.count).toBe(2)
+})
