@@ -14,6 +14,16 @@
       "steps": []
     },
     {
+      "id": "language",
+      "title": "Choose your language",
+      "paragraphs": [
+        "Use Language in the sidebar to switch between Deutsch and English immediately. The selected tab and unsaved editor text stay open. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs after restart. A new profile starts in German when your preferred system language is German; otherwise it starts in English.",
+        "Pod and group names, assignments, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.",
+        "The handbook is available as complete English and German offline editions with matching app screenshots. Use the link to the other edition in the handbook navigation. Keep both HTML files together when using those links. The language preference is local display configuration; a restored profile starts from its system default until you choose again."
+      ],
+      "steps": []
+    },
+    {
       "id": "first-run",
       "title": "Your first local run",
       "paragraphs": [

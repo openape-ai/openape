@@ -576,3 +576,11 @@ collapsed state survive restart and backup/restore; deleting a pod removes its
 membership. Migration retains existing pods and creates a pre-migration SQLite
 copy. Older binaries reject the newer schema; rollback requires a compatible
 backup. See the handbook's grouping chapter for the owner workflow.
+
+## Languages and handbooks
+
+Use the sidebar Language / Sprache selector for immediate English/German switching. The profile stores the explicit choice in `language.json`; new profiles use German when the preferred system language is German, otherwise English. The renderer loads the choice before mounting, and the same choice updates native menus and app-owned dialogs. Display dates/numbers use `de-AT` or `en-GB`. Switching retains selected views and unsaved text. User content, script source, model prompts and raw audit payloads are unchanged. Known app diagnostics are translated; unknown external diagnostics retain their original text with a localized label. Restored profiles start with the system default because language is excluded from data backups.
+
+The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
+
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have seventeen chapters and ten locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/language.test.ts` scenario with `pnpm --filter @openape/pods handbook --refresh-images`.

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
@@ -10,6 +11,7 @@ export default defineComponent({
   data() { return { view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, concurrency: 2, error: '', message: '', busy: false } },
   watch: { 'pod.id': { immediate: true, handler() { void this.load() } } },
   methods: {
+    t, diagnostic, label, dateTime,
     async load() {
       this.busy = true; this.error = ''
       try {
@@ -43,49 +45,49 @@ export default defineComponent({
 <template>
   <article class="card schedule-panel">
     <div class="card-heading">
-      <h2>Schedule and limits</h2><span class="badge">{{ pod.lifecycle }}</span>
+      <h2>{{ t("Schedule and limits") }}</h2><span class="badge">{{ label(pod.lifecycle) }}</span>
     </div>
     <p class="muted">
-      Schedules run while Pods is open. Missed times produce one catch-up. Pausing stops new automatic runs; an existing run can finish.
+      {{ t("Schedules run while Pods is open. Missed times produce one catch-up. Pausing stops new automatic runs; an existing run can finish.") }}
     </p>
     <form @submit.prevent="save">
-      <label for="schedule-repeat">Repeat</label><select id="schedule-repeat" v-model="kind" :disabled="busy">
+      <label for="schedule-repeat">{{ t("Repeat") }}</label><select id="schedule-repeat" v-model="kind" :disabled="busy">
         <option value="interval">
-          At an interval
+          {{ t("At an interval") }}
         </option><option value="daily">
-          Daily
+          {{ t("Daily") }}
         </option>
       </select>
-      <label v-if="kind === 'interval'">Interval in minutes<input v-model.number="minutes" type="number" min="1" max="43200" step="1" required :disabled="busy"></label>
+      <label v-if="kind === 'interval'">{{ t("Interval in minutes") }}<input v-model.number="minutes" type="number" min="1" max="43200" step="1" required :disabled="busy"></label>
       <template v-else>
-        <label>Local time<input v-model="time" type="time" required :disabled="busy"></label><label>Time zone<input v-model="timezone" required :disabled="busy"></label><p class="muted">
-          A repeated clock time runs once. A missing clock time moves to the next available local time.
+        <label>{{ t("Local time") }}<input v-model="time" type="time" required :disabled="busy"></label><label>{{ t("Time zone") }}<input v-model="timezone" required :disabled="busy"></label><p class="muted">
+          {{ t("A repeated clock time runs once. A missing clock time moves to the next available local time.") }}
         </p>
       </template>
-      <label class="check"><input v-model="enabled" type="checkbox" :disabled="busy">Enable this schedule</label>
+      <label class="check"><input v-model="enabled" type="checkbox" :disabled="busy">{{ t("Enable this schedule") }}</label>
       <button class="secondary" :disabled="busy || !view || pod.lifecycle === 'archived'">
-        Save schedule
+        {{ t("Save schedule") }}
       </button>
     </form>
     <p v-if="view?.nextAt" class="muted">
-      {{ view.enabled && pod.lifecycle === 'active' ? 'Next scheduled time' : 'Saved next time · automatic execution paused' }}: {{ new Date(view.nextAt).toLocaleString() }}
+      {{ view.enabled && pod.lifecycle === 'active' ? t("Next scheduled time") : t("Saved next time · automatic execution paused") }}: {{ dateTime(view.nextAt) }}
     </p>
     <button class="secondary" :disabled="busy || pod.lifecycle === 'archived'" @click="act({ type: 'lifecycle', podId: pod.id, revision: pod.revision, lifecycle: pod.lifecycle === 'active' ? 'paused' : 'active' })">
-      {{ pod.lifecycle === 'active' ? 'Pause automatic execution' : 'Resume automatic execution' }}
+      {{ pod.lifecycle === 'active' ? t("Pause automatic execution") : t("Resume automatic execution") }}
     </button>
     <form class="limit-form" @submit.prevent="act({ type: 'concurrency', podId: pod.id, maximum: concurrency })">
-      <label>Concurrent pods on this Mac<input v-model.number="concurrency" type="number" min="1" max="16" required :disabled="busy"></label><button class="secondary" :disabled="busy">
-        Save concurrency limit
+      <label>{{ t("Concurrent pods on this Mac") }}<input v-model.number="concurrency" type="number" min="1" max="16" required :disabled="busy"></label><button class="secondary" :disabled="busy">
+        {{ t("Save concurrency limit") }}
       </button>
     </form>
     <p v-if="view" class="muted">
-      {{ view.pending }} pending inputs · {{ view.blocked }} inputs awaiting recovery
+      {{ t("{p0} pending inputs · {p1} inputs awaiting recovery", { p0: view.pending, p1: view.blocked }) }}
     </p>
     <p v-if="error || view?.error" class="error-message" role="alert">
-      {{ error || view?.error }}
+      {{ diagnostic(error || view?.error) }}
     </p>
     <p v-if="message" role="status">
-      {{ message }}
+      {{ diagnostic(message) }}
     </p>
   </article>
 </template>
