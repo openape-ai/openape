@@ -2,7 +2,7 @@ import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
 import { spawn, execFileSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -29,6 +29,33 @@ afterEach(async () => {
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('foundation', () => {
+  it.each([false, true])('resources: reviews, snapshots and revokes a reference through the owner window (packaged=%s)', async (packaged) => {
+    const { app, page, root } = await launch(packaged)
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod', assignment: 'Read the assigned synthetic reference only.' }))).pods[0]!
+    const source = join(root, 'synthetic-reference.txt'); await writeFile(source, 'SYNTHETIC_REFERENCE')
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
+    }, source)
+    await page.getByRole('tab', { name: 'Resources', exact: true }).click()
+    await page.getByRole('button', { name: 'Assign reference file' }).click()
+    await page.getByText('synthetic-reference.txt', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Preview next snapshot' }).click()
+    await page.getByRole('heading', { name: 'Snapshot ready' }).waitFor()
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, packaged ? 'resources-packaged.png' : 'resources-reference.png') })
+    const before = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
+    expect(before.resources).toHaveLength(1)
+    expect(await page.evaluate(async (podId) => {
+      try { await window.pods.resources({ type: 'assignReference', podId, name: 'Unapproved', path: '/unassigned' } as never); return 'allowed' }
+      catch { return 'denied' }
+    }, pod.id)).toBe('denied')
+    await page.getByRole('button', { name: 'Revoke access' }).click()
+    await page.getByText('revoked · revision 2', { exact: true }).waitFor()
+    expect(await readFile(source, 'utf8')).toBe('SYNTHETIC_REFERENCE')
+    const after = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
+    expect(after.epoch).toBe(before.epoch + 1)
+  })
   it('storage: saves a pod assignment in the worker and reopens it after app restart', async () => {
     const { app, page, root, binary } = await launch()
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
@@ -56,7 +83,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
