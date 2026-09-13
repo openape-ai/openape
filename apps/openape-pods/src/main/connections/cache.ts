@@ -2,6 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+export function parseCredentialJSON(cache: string): Record<string, unknown> {
+  let value: unknown
+  try { value = JSON.parse(cache) }
+  catch { throw new Error('Invalid credential cache JSON; reconnect this connection') }
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Buffer.byteLength(cache) > 10 * 1024 * 1024) throw new Error('Invalid credential cache JSON')
+  return value as Record<string, unknown>
+}
+
 export interface CredentialCipher { available: () => boolean, encrypt: (value: string) => Buffer, decrypt: (value: Buffer) => string }
 export class CredentialCache {
   private queues = new Map<string, (() => void)[]>()
@@ -13,10 +21,17 @@ export class CredentialCache {
     return join(this.root, `${id}.encrypted`)
   }
 
-  private async acquire(id: string): Promise<void> {
+  private async acquire(id: string, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     const queue = this.queues.get(id)
-    if (queue) { await new Promise<void>(resolve => queue.push(resolve)); return }
-    this.queues.set(id, [])
+    if (!queue) { this.queues.set(id, []); return }
+    await new Promise<void>((resolve, reject) => {
+      let enter: () => void
+      const stop = () => { const index = queue.indexOf(enter); if (index >= 0) queue.splice(index, 1); reject(signal?.reason ?? new Error('Connection read cancelled')) }
+      enter = () => { signal?.removeEventListener('abort', stop); resolve() }
+      queue.push(enter); signal?.addEventListener('abort', stop, { once: true })
+      if (signal?.aborted) stop()
+    })
   }
 
   private release(id: string): void {
@@ -26,8 +41,7 @@ export class CredentialCache {
   }
 
   private async persist(id: string, cache: string): Promise<void> {
-    const value: unknown = JSON.parse(cache)
-    if (!value || typeof value !== 'object' || Array.isArray(value) || cache.length > 10 * 1024 * 1024) throw new Error('Invalid credential cache JSON')
+    parseCredentialJSON(cache)
     const target = this.path(id)
     await mkdir(this.root, { recursive: true, mode: 0o700 })
     const staging = join(this.root, `.stage-${randomUUID()}`)
@@ -56,12 +70,13 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
-  async withCache<T>(id: string, operation: (file: string) => Promise<T>): Promise<T> {
-    this.path(id); await this.acquire(id)
+  async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    this.path(id); await this.acquire(id, signal)
     let temporary: string | undefined
     try {
+      signal?.throwIfAborted()
       const plaintext = this.cipher.decrypt(await readFile(this.path(id)))
-      JSON.parse(plaintext)
+      parseCredentialJSON(plaintext)
       const temporaryRoot = join(this.root, 'temporary'); await mkdir(temporaryRoot, { recursive: true, mode: 0o700 })
       temporary = await mkdtemp(join(temporaryRoot, `${id}-`))
       const path = join(temporary, 'token.json'); await writeFile(path, plaintext, { flag: 'wx', mode: 0o600 })
