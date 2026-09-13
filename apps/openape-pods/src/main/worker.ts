@@ -1,3 +1,4 @@
+import { parseCredentialRead } from '../contracts/credentials'
 import { parseScriptView } from '../contracts/scripts'
 import type { ScriptCommand, ScriptView } from '../contracts/scripts'
 import { assertPilotRuntime } from './support'
@@ -102,6 +103,7 @@ export class FixtureWorker {
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
     })
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[])
     await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.finishDeletions() })
   }
 
@@ -133,13 +135,37 @@ export class FixtureWorker {
 
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
 
-  async resources(command: InternalResourceCommand): Promise<ResourceState> { return parseResourceState(await this.dispatch({ resource: command })) }
+  async resources(command: InternalResourceCommand): Promise<ResourceState> {
+    await this.setupReady
+    if (command.type === 'saveCredential') {
+      if (!this.credentials) throw new Error('Credential store is unavailable')
+      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+      if (before.epoch !== command.epoch) throw new Error('Pod or resources changed; reload before assigning credentials')
+      const id = await this.credentials.createScriptSecret(command.podId, command.alias, command.value)
+      let view: ResourceState
+      try { view = parseResourceState(await this.dispatch({ resource: { type: 'assignCredential', podId: command.podId, alias: command.alias, credentialId: id, epoch: command.epoch } })) }
+      catch (error) {
+        const current = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+        if (!current.resources.some(item => item.kind === 'credential' && item.state === 'ready' && item.configuration.credentialId === id)) await this.credentials.erasePodKey(id, command.podId)
+        throw error
+      }
+      for (const old of before.resources.filter(item => item.kind === 'credential' && item.configuration.alias === command.alias)) await this.credentials.erasePodKey(old.configuration.credentialId as string, command.podId)
+      return view
+    }
+    const before = command.type === 'revoke' ? parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } })).resources.find(item => item.id === command.id) : undefined
+    const view = parseResourceState(await this.dispatch({ resource: command }))
+    if (before?.kind === 'credential') {
+      if (!this.credentials) throw new Error('Credential store is unavailable')
+      await this.credentials.erasePodKey(before.configuration.credentialId as string, command.podId)
+    }
+    return view
+  }
 
   async runs(command: RunCommand): Promise<RunView> { return parseRunView(await this.dispatch({ run: command })) }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
@@ -151,10 +177,23 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
+    if (request.kind !== undefined && request.kind !== 'credential') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
     try {
+      if (request.kind === 'credential') {
+        const alias = parseCredentialRead(request.body)
+        if (!this.credentials) throw new Error('Credential store is unavailable')
+        const id = await this.dispatch({ credentialCheck: { scope, alias } })
+        if (typeof id !== 'string') throw new Error('Invalid credential broker binding')
+        controller.signal.throwIfAborted()
+        const value = await this.credentials.readScriptSecret(id, scope.podId, alias)
+        const current = await this.dispatch({ credentialCheck: { scope, alias } })
+        controller.signal.throwIfAborted()
+        if (current !== id) throw new Error('Credential changed during access')
+        return value
+      }
       const state = await check()
       const assignment = assignedMail(state.resources)
       if (assignment.identity.podId !== scope.podId) throw new Error('Agent identity belongs to another pod')

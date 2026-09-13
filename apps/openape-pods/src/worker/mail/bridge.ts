@@ -14,7 +14,7 @@ export class MailBridge {
     else pending.resolve(reply.value)
   }
 
-  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal): Promise<unknown> {
+  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: 'credential'): Promise<unknown> {
     signal.throwIfAborted()
     if (this.pending.size >= 16) throw new Error('Mail broker queue is full')
     const id = randomUUID()
@@ -22,7 +22,7 @@ export class MailBridge {
     const timeout = setTimeout(cancel, 90000)
     signal.addEventListener('abort', cancel, { once: true })
     try {
-      return await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.send({ service: { id, scope, body } }); if (signal.aborted) cancel() })
+      return await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.send({ service: { id, scope, body, ...(kind ? { kind } : {}) } }); if (signal.aborted) cancel() })
     }
     finally { clearTimeout(timeout); signal.removeEventListener('abort', cancel) }
   }

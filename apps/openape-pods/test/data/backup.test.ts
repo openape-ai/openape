@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
+import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodGroups } from '../../src/worker/workspace/groups'
 import { DataRetention } from '../../src/worker/data/retention'
 
@@ -30,9 +31,13 @@ async function fixture() {
 it('restores settings, checkpoint, knowledge, citations, script, workspace and run history into a fresh paused profile', async () => {
   const { store, exports, pod, runId } = await fixture()
   const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', revision: 1, name: 'Clients' }); groups.execute({ type: 'organize', action: 'move', revision: 2, podId: pod.id, groupId: groups.view().groups[0]!.id })
+  new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'crm', randomUUID(), 0)
+  store.db.prepare('INSERT INTO script_credential_approvals VALUES(?,?,?,?)').run(pod.id, store.getPod(pod.id).activeScript!, 1, 1)
   const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
   const restored = new PodDatabase(target); stores.push(restored)
   expect(new PodGroups(restored).view()).toEqual(groups.view())
+  expect(restored.db.prepare('SELECT * FROM script_credential_approvals').all()).toEqual([])
+  expect(new ResourceRegistry(restored, () => {}).list(pod.id)[0]?.state).toBe('refreshRequired')
   expect(restored.getPod(pod.id)).toMatchObject({ name: 'Orders', lifecycle: 'paused', activeScript: store.getPod(pod.id).activeScript })
   expect(restored.checkpoint(pod.id)).toEqual(store.checkpoint(pod.id)); expect(restored.knowledge(pod.id)).toEqual(store.knowledge(pod.id))
   const source = restored.db.prepare('SELECT hash FROM sources').get()!.hash as string; expect(restored.readBlob(source).toString()).toBe('Delivery Friday')
@@ -76,6 +81,7 @@ it('retains referenced evidence and pending events while deleting only orphan bl
 })
 it('deletes an archived pod locally without deleting shared connections or original files', async () => {
   const { store, pod, root, exports, base } = await fixture(); const original = join(base, 'original.txt'); await writeFile(original, 'OWNER_FILE')
+  const credentialId = randomUUID(); new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'crm', credentialId, 0)
   const retention = new DataRetention(store, 'unused-helper')
   await expect(retention.deletePod(pod.id, pod.revision, pod.name)).rejects.toThrow('Archive')
   store.updatePod(pod.id, 1, { name: pod.name, assignment: pod.assignment, lifecycle: 'archived' })
@@ -83,6 +89,7 @@ it('deletes an archived pod locally without deleting shared connections or origi
   expect(store.listPods()).toEqual([]); expect(store.db.prepare('SELECT * FROM connections').all()).toHaveLength(1)
   expect(await readFile(original, 'utf8')).toBe('OWNER_FILE'); expect(await readdir(exports)).toEqual([])
   await expect(readFile(join(root, 'pods', pod.id, 'workspace/notes.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(JSON.stringify(retention.jobs())).toContain(credentialId)
   expect(retention.jobs()).toHaveLength(1); retention.finishDeletion(pod.id); expect(retention.jobs()).toHaveLength(0)
 })
 it('blocks new storage at the sampled limit and clears the block after space is available', async () => {

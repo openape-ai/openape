@@ -1,3 +1,4 @@
+import { parseCredentialAlias } from '../../contracts/credentials'
 import type { PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -32,6 +33,22 @@ export class ResourceRegistry {
     })
     this.revokeActive(podId)
     return this.list(podId).find(resource => resource.id === id) as PodResource
+  }
+
+  assignCredential(podId: string, value: string, credentialId: string, expectedEpoch: number): void {
+    const alias = parseCredentialAlias(value)
+    if (!/^[a-f0-9-]{36}$/.test(credentialId)) throw new Error('Invalid credential record identity')
+    this.store.transaction(() => {
+      const pod = this.store.getPod(podId)
+      if (pod.lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or resources changed; reload before assigning credentials')
+      const current = this.list(podId).filter(resource => resource.kind === 'credential' && resource.state !== 'revoked')
+      if (!current.some(resource => resource.configuration.alias === alias) && current.length >= 32) throw new Error('This pod already has 32 named credentials')
+      for (const resource of current.filter(resource => resource.configuration.alias === alias)) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(resource.id)
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, 'credential', 'ready', alias, JSON.stringify({ alias, credentialId }))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
   }
 
   revoke(podId: string, id: string, revision: number): void {

@@ -7,7 +7,7 @@ import type { ScriptView } from '../../src/contracts/scripts'
 
 function fixture() {
   const hash = 'a'.repeat(64)
-  const view: ScriptView = { pod: { id: randomUUID(), name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}' } }
+  const view: ScriptView = { resourceEpoch: 0, credentialAliases: [], pod: { id: randomUUID(), name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}', credentialAccessApproved: false } }
   const scripts = vi.fn().mockResolvedValue(structuredClone(view))
   window.pods = { language: async () => 'en' as const, scripts } as unknown as typeof window.pods
   return { view, scripts }
@@ -20,7 +20,7 @@ it('shows literal immutable source and preserves unsaved edits across navigation
   expect(wrapper.text()).toContain('Unsaved changes')
   expect(wrapper.findAll('button').find(button => button.text() === 'Activate for next run')!.attributes('disabled')).toBeDefined()
   wrapper.unmount(); wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
-  expect(wrapper.get('textarea').element.value).toContain('edited: true'); expect(scripts).toHaveBeenCalledTimes(1)
+  expect(wrapper.get('textarea').element.value).toContain('edited: true'); expect(scripts).toHaveBeenCalledTimes(2)
   await wrapper.findAll('button').find(button => button.text() === 'New script')!.trigger('click')
   expect(wrapper.get('[role="alert"]').text()).toContain('Discard unsaved edits')
   await wrapper.findAll('button').find(button => button.text() === 'Keep editing')!.trigger('click')

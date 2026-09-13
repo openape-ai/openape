@@ -1,3 +1,5 @@
+import { ScriptCredentials } from '../resources/script-credentials'
+import { parseCredentialAlias } from '../../contracts/credentials'
 import type { MailRead, MailScope } from '../../main/mail/contract'
 import { parseServiceScope } from '../../contracts/services'
 import type { ServiceCheck } from '../../contracts/services'
@@ -7,7 +9,7 @@ import type { PodDatabase } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import type { RunStore } from '../runs/store'
 
-export function authorizeMailService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
+function authorizeRunService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
   const scope = parseServiceScope(check.scope)
   runs.assertLease(scope.runId)
   const run = runs.get(scope.runId)
@@ -17,9 +19,24 @@ export function authorizeMailService(store: PodDatabase, registry: ResourceRegis
   const row = store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(scope.podId, run.scriptHash)
   if (!row) throw new Error('Pinned service script is missing')
   const manifest = parseManifest(JSON.parse(row.manifest as string))
-  if (!scope.capabilities.includes('mail.read') || JSON.stringify(manifest.capabilities) !== JSON.stringify(scope.capabilities)) throw new Error('Service capability is not declared by the pinned script')
+  if (JSON.stringify(manifest.capabilities) !== JSON.stringify(scope.capabilities)) throw new Error('Service capability is not declared by the pinned script')
   if (check.domain) runs.registerDomain(scope.runId, check.domain.path, check.domain.ownerPid)
   return { resources: registry.list(scope.podId), epoch: registry.epoch(scope.podId) }
+}
+
+export function authorizeMailService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
+  const state = authorizeRunService(store, registry, runs, check)
+  if (!check.scope.capabilities.includes('mail.read')) throw new Error('Service capability is not declared by the pinned script')
+  return state
+}
+export function authorizeCredentialService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck, value: string): string {
+  const alias = parseCredentialAlias(value)
+  authorizeRunService(store, registry, runs, check)
+  const { scope } = check
+  if (!scope.capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')
+  const authority = new ScriptCredentials(store, registry)
+  authority.assertApproved(scope.podId, runs.get(scope.runId).scriptHash, scope.capabilities)
+  return authority.assigned(scope.podId, alias).configuration.credentialId as string
 }
 
 export function assertMailHistory(store: PodDatabase, podId: string, scope: MailScope, read: MailRead): void {
