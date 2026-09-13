@@ -5,7 +5,7 @@ import type { RunCommand, RunView } from '../contracts/runs'
 
 export default defineComponent({
   data() {
-    return { pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', timer: null as ReturnType<typeof setTimeout> | null, closed: false }
+    return { pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
   },
   async mounted() {
     try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.pods[0]?.id ?? ''; if (this.podId) await this.load() }
@@ -21,16 +21,18 @@ export default defineComponent({
         this.scheduleRefresh()
       }, 1000)
     },
-    async act(command: RunCommand) {
-      this.busy = true; this.error = ''
+    async act(command: RunCommand, preserveError = false) {
+      this.busy = true; if (!preserveError) this.error = ''
       try {
-        this.view = await window.pods.runs(command)
+        const [view, schedule] = await Promise.all([window.pods.runs(command), window.pods.scheduling({ type: 'list', podId: this.podId })])
+        this.view = view; this.pending = schedule.pending; this.blocked = schedule.blocked
+        if (schedule.error) this.error = schedule.error
         this.runId = this.view.runs.find(run => run.id === this.runId)?.id ?? this.view.runs[0]?.id ?? ''
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Run operation failed' }
       finally { this.busy = false }
     },
-    async load() { await this.act({ type: 'list', podId: this.podId, ...(this.runId ? { runId: this.runId } : {}) }) },
+    async load() { await this.act({ type: 'list', podId: this.podId, ...(this.runId ? { runId: this.runId } : {}) }, true) },
     async changePod() { this.runId = ''; await this.load() },
   },
 })
@@ -60,6 +62,9 @@ export default defineComponent({
           Start run
         </button>
       </div>
+      <p v-if="pending || blocked" class="muted">
+        {{ pending }} inputs queued · {{ blocked }} awaiting recovery
+      </p>
       <p v-if="!view.runs.length" class="muted">
         No runs yet. Choose a version, then start it manually.
       </p>

@@ -1,3 +1,4 @@
+import type { RunTrigger } from './store'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
@@ -27,14 +28,14 @@ export class RunDispatcher {
     installExample(this.store, this.resources, podId, variant, manifest.dependencyLockHash)
   }
 
-  start(podId: string): string {
+  start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): string {
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
     const epoch = this.resources.epoch(podId)
-    const reservation = this.runs.reserve(podId, pod.activeScript, epoch)
+    const reservation = this.runs.reserve(podId, pod.activeScript, epoch, trigger)
     if (reservation.existing) return reservation.run.id
     const controller = new AbortController()
-    const work = this.execute(reservation.run.id, epoch, controller.signal)
+    const work = this.execute(reservation.run.id, epoch, controller.signal, trigger)
     this.active.set(podId, { controller, work })
     return reservation.run.id
   }
@@ -54,7 +55,7 @@ export class RunDispatcher {
     await Promise.all(active.map(run => run.work))
   }
 
-  private async execute(id: string, epoch: number, signal: AbortSignal): Promise<void> {
+  private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger): Promise<void> {
     const run = this.runs.get(id); const pod = this.store.getPod(run.podId)
     const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).revision !== pod.revision) throw new Error('Assignment changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
@@ -63,12 +64,13 @@ export class RunDispatcher {
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
+      if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       if (manifest.capabilities.length || manifest.effects !== 'readOnly') throw new Error('No tool assignments are available for this script')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
       const checkpoint = this.store.checkpoint(pod.id)
-      const input: RunInput = { version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.revision, reason: 'manual', eventIds: [], checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const input: RunInput = { version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.revision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
       const result = await executeScript(this.runtime, directory, artifact, input, signal, {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
@@ -91,7 +93,7 @@ export class RunDispatcher {
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
-      this.runs.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null)
+      this.runs.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds)
     }
     catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed'
