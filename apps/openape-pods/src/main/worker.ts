@@ -1,3 +1,5 @@
+import { parseScriptView } from '../contracts/scripts'
+import type { ScriptCommand, ScriptView } from '../contracts/scripts'
 import { assertPilotRuntime } from './support'
 import { parseDataView } from '../contracts/data'
 import type { DataView } from '../contracts/data'
@@ -125,6 +127,8 @@ export class FixtureWorker {
 
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
 
+  async scripts(command: ScriptCommand): Promise<ScriptView> { return parseScriptView(await this.dispatch({ scripts: command })) }
+
   async details(command: DetailsCommand): Promise<PodDetails> { return parsePodDetails(await this.dispatch({ details: command })) }
 
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
@@ -135,7 +139,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

@@ -1,3 +1,5 @@
+import { ScriptWorkspace } from './workspace/scripts'
+import { parseScriptCommand } from '../contracts/scripts'
 import { DataControl } from './data/control'
 import type { DataInternal } from './data/control'
 import { SetupControl } from './onboarding/control'
@@ -58,7 +60,10 @@ const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
-const master = new MasterService(store, runtime, new MasterControl(store, registry, dispatcher, scheduler, runtime), fixtureProvider)
+const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime)
+const scripts = new ScriptWorkspace(store, registry, masterControl)
+const scriptController = new AbortController()
+const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
@@ -89,7 +94,7 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { suspended = true; clearInterval(timer); await ticking; await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -126,6 +131,9 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       port.postMessage({ id: request.id, state: authorizeMailService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
+      port.postMessage({ id: request.id, state: await scripts.execute(parseScriptCommand(request.command.scripts), scriptController.signal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
