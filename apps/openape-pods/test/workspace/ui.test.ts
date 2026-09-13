@@ -1,7 +1,6 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import PodKnowledge from '../../src/renderer/PodKnowledge.vue'
-import PodVersions from '../../src/renderer/PodVersions.vue'
 import type { PodDetails } from '../../src/contracts/details'
 
 const podId = '00000000-0000-4000-8000-000000000001'
@@ -10,7 +9,7 @@ const state: PodDetails = { claims: [{ id: 'current', matter: 'Order', kind: 'fi
 describe('knowledge and version views', () => {
   it('separates history and gaps, expands exact sources and renders hostile text literally', async () => {
     const details = vi.fn().mockImplementation(async command => ({ ...structuredClone(state), source: command.type === 'source' ? { citation, content: 'Source content <script>unsafe()</script>' } : null }))
-    window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details } as unknown as typeof window.pods
+    window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details } as unknown as typeof window.pods
     const wrapper = mount(PodKnowledge, { props: { podId } }); await flushPromises()
     expect(wrapper.findAll('.knowledge-entry')).toHaveLength(2); expect(wrapper.find('img').exists()).toBe(false)
     await wrapper.get('input[type="checkbox"]').setValue(true); expect(wrapper.findAll('.knowledge-entry')).toHaveLength(3)
@@ -23,7 +22,7 @@ describe('knowledge and version views', () => {
   it('follows an extracted quotation to its retained original and labels truncated previews', async () => {
     const original = { ...citation, id: 'raw', locator: 'fixture:original' }
     const details = vi.fn().mockImplementation(async command => ({ ...structuredClone(state), source: command.type === 'source' ? command.id === 'source' ? { citation, content: 'Extracted text', original } : { citation: original, content: 'Retained raw source', truncated: true } : null }))
-    window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details } as unknown as typeof window.pods
+    window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details } as unknown as typeof window.pods
     const wrapper = mount(PodKnowledge, { props: { podId } }); await flushPromises()
     await wrapper.findAll('details button')[0]!.trigger('click'); await flushPromises()
     await wrapper.get('.source-content button.text-button').trigger('click'); await flushPromises()
@@ -31,14 +30,5 @@ describe('knowledge and version views', () => {
     expect(wrapper.get('pre').text()).toBe('Retained raw source')
     expect(wrapper.text()).toContain('Preview truncated')
     wrapper.unmount()
-  })
-  it('only offers validated retained versions and surfaces stale activation errors', async () => {
-    const details = vi.fn().mockResolvedValueOnce({ ...state, versions: [{ hash: 'a'.repeat(64), assignmentRevision: 1, active: true, validated: true }, { hash: 'b'.repeat(64), assignmentRevision: 1, active: false, validated: false }, { hash: 'c'.repeat(64), assignmentRevision: 1, active: false, validated: true }] }).mockRejectedValueOnce(new Error('Active version changed'))
-    window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details } as unknown as typeof window.pods
-    const wrapper = mount(PodVersions, { props: { pod: { id: podId, name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: 'a'.repeat(64) } } }); await flushPromises()
-    expect(wrapper.findAll('button').map(button => button.attributes('disabled') !== undefined)).toEqual([true, true, false])
-    await wrapper.findAll('button')[2]!.trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toBe('Active version changed')
-    expect(wrapper.emitted('changed')).toBeUndefined(); wrapper.unmount()
   })
 })

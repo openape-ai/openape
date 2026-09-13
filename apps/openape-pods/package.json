@@ -22,7 +22,8 @@
     "package:distribution": "node scripts/package.mjs --distribution",
     "package:signed": "node scripts/package.mjs --distribution --signed",
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
-    "test:distribution": "node scripts/verify-distribution.mjs"
+    "test:distribution": "node scripts/verify-distribution.mjs",
+    "handbook": "node scripts/handbook.mjs"
   },
   "dependencies": {
     "vue": "catalog:"
