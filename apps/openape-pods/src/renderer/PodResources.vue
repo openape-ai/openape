@@ -4,9 +4,11 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
+  props: { selectedPodId: { type: String, default: '' } },
+  emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '' } },
   async mounted() {
-    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.pods[0]?.id ?? ''; if (this.podId) await this.load() }
+    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
   },
   methods: {
@@ -24,16 +26,16 @@ export default defineComponent({
 <template>
   <article class="card resource-panel">
     <div class="card-heading">
-      <h2>Resources</h2><span class="badge">Read-only references</span>
+      <h2>Resources</h2><span class="badge">Explicit pod access</span>
     </div>
     <p class="muted">
-      No accounts or tools are connected. Reference access is assigned separately to each pod.
+      {{ state.resources.some(resource => resource.kind !== 'reference') ? 'Connections and tools use the scope assigned to this pod.' : 'No accounts or tools are connected.' }} Reference access is assigned separately to each pod.
     </p>
     <p v-if="!pods.length" class="muted">
       Create a local pod in Settings to assign its first reference.
     </p>
     <template v-else>
-      <label>Pod<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
+      <label v-if="!selectedPodId">Pod<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
       <div class="resource-actions">
         <button class="secondary" :disabled="busy" @click="act({ type: 'pickReference', podId })">
           Assign reference file
@@ -48,8 +50,12 @@ export default defineComponent({
       <article v-for="resource in state.resources" :key="resource.id" class="resource-row">
         <div>
           <strong>{{ resource.name }}</strong><p class="resource-path">
-            {{ resource.configuration.path }}
-          </p><span class="badge">{{ resource.state }} · revision {{ resource.revision }}</span>
+            {{ resource.configuration.path ?? resource.configuration.account ?? resource.configuration.scope }}
+          </p><span class="badge">{{ resource.state }} · revision {{ resource.revision }}</span><p v-if="resource.kind !== 'reference'" class="muted">
+            {{ resource.configuration.scope }}
+          </p><button v-if="['expired', 'missing', 'refreshRequired'].includes(resource.state)" class="text-button" @click="$emit('discuss')">
+            Resolve access in master chat
+          </button>
         </div>
         <button class="text-button" :disabled="busy || resource.state === 'revoked'" @click="act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })">
           Revoke access
