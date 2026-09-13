@@ -19,3 +19,5 @@ writeFileSync('dist/runtime/parser-manifest.json', JSON.stringify({ entry: parse
 bundleCodex()
 bundleO365()
 await buildRenderer()
+
+writeFileSync('dist/build-inputs.json', JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), clean: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim() === '', dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex') }, null, 2))

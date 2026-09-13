@@ -1,6 +1,6 @@
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
-import { mkdtemp, realpath, rm, readFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, readFile, mkdir, writeFile, truncate } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -49,6 +49,18 @@ async function seed() {
   finally { store.close() }
 }
 describe('checkpoint recovery in Electron', () => {
+  it('stops an active run at the sampled storage limit and retains its last checkpoint', async () => {
+    const { root, podId } = await seed(); const { page } = await launch(root, true)
+    await page.evaluate(() => window.pods.data({ type: 'limit', bytes: 1024 ** 3 }))
+    await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), podId)
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision).toBe(1)
+    expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).busy).toBe(true)
+    const path = join(root, 'pods', podId, 'workspace', 'synthetic-sparse-file'); await writeFile(path, ''); await truncate(path, 1024 ** 3)
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state, { timeout: 15000 }).toBe('cancelled')
+    expect((await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision).toBe(1)
+    expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).error).toContain('limit reached')
+    await rm(path); expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).error).toBeNull()
+  })
   it('pauses intake during a suspend signal and coalesces missed slots on resume', async () => {
     const { root, podId } = await seed(); const { app, page } = await launch(root, true)
     await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), podId)
