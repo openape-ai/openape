@@ -21,7 +21,7 @@ async function launch(packaged = false) {
   const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: fixtureEnv(root), timeout: 20000 })
   active.push({ app, root, process: app.process() })
   const page = await app.firstWindow()
-  await page.waitForFunction(async () => (await window.pods.getStatus()).worker.state !== 'starting')
+  await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   expect((await page.evaluate(() => window.pods.getStatus())).worker).toMatchObject({ state: 'ready', error: null })
   return { app, page, root, binary }
 }
@@ -114,7 +114,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['details', 'getStatus', 'master', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['details', 'getStatus', 'master', 'onStatus', 'onboarding', 'resources', 'runs', 'scheduling', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
