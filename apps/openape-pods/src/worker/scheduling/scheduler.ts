@@ -79,8 +79,8 @@ export class Scheduler {
     const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
     for (const row of ready) {
       if (!available()) break
-      const podId = row.pod_id as string; const pod = this.store.getPod(podId)
-      const events = this.store.db.prepare('SELECT id,source FROM accepted_events WHERE pod_id=? AND state=\'pending\' AND (?=\'active\' OR source=\'manual\') ORDER BY sequence LIMIT 50').all(podId, pod.lifecycle)
+      const podId = row.pod_id as string
+      const events = this.store.db.prepare('SELECT id,source FROM accepted_events WHERE pod_id=? AND state=\'pending\' ORDER BY (source=\'manual\') DESC,sequence LIMIT 50').all(podId)
       const reason = events.some(event => event.source === 'manual') ? 'manual' : events.every(event => event.source === 'schedule') ? 'schedule' : 'event'
       try { this.driver.start(podId, { reason, eventIds: events.map(event => event.id as string) }) }
       catch (error) {

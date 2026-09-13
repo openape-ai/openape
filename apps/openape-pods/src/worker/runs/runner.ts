@@ -5,7 +5,7 @@ import type { RunInput, ScriptResult } from '../../contracts/runs'
 import { launchSandbox } from '../runtime/sandbox'
 import type { RuntimePolicy } from '../runtime/sandbox'
 
-export interface ScriptRuntime { helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
+export interface ScriptRuntime { registerDomain?: (path: string, ownerPid: number) => void, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
 export interface ScriptServices { request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
@@ -20,7 +20,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   await writeFile(config, JSON.stringify({ entry: artifact, input }), { flag: 'wx', mode: 0o400 })
   await readFile(artifact)
   const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories }
-  const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], runtime.environment)
+  const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], runtime.environment, runtime.registerDomain)
   const local = new AbortController()
   const activeSignal = AbortSignal.any([signal, local.signal])
   let requesting = false

@@ -122,28 +122,109 @@ static void terminate_group(pid_t child, int *status) {
   }
   while (waitpid(child, status, 0) < 0) if (errno != EINTR) fail("Reap isolated process");
 }
-static int supervise(char **command) {
+struct domain_record {
+  pid_t guardian, child;
+  unsigned long long guardian_sec, guardian_usec, child_sec, child_usec;
+  int closed;
+};
+static int process_info(pid_t pid, struct proc_bsdinfo *info) {
+  int bytes = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, info, sizeof(*info));
+  if (!bytes && errno == ESRCH) return 0;
+  if (bytes != sizeof(*info)) fail("Inspect process birth identity");
+  return 1;
+}
+static int same_live_process(pid_t pid, unsigned long long sec, unsigned long long usec) {
+  if (!pid) return 0;
+  struct proc_bsdinfo info;
+  return process_info(pid, &info) && info.pbi_start_tvsec == sec && info.pbi_start_tvusec == usec && info.pbi_status != SZOMB;
+}
+static void write_domain(const char *path, const struct domain_record *record) {
+  if (!path) return;
+  char staging[PATH_MAX], parent[PATH_MAX];
+  if (path[0] != '/' || strlen(path) > PATH_MAX - 40) { errno = EINVAL; fail("Invalid domain record path"); }
+  snprintf(staging, sizeof(staging), "%s.stage-%d", path, getpid());
+  int fd = open(staging, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+  if (fd < 0) fail("Create domain record");
+  if (dprintf(fd, "PODS_DOMAIN_V1 %d %llu %llu %d %llu %llu %d\n", record->guardian, record->guardian_sec, record->guardian_usec, record->child, record->child_sec, record->child_usec, record->closed) < 0 || fsync(fd) < 0) fail("Flush domain record");
+  if (close(fd) < 0 || rename(staging, path) < 0) fail("Publish domain record");
+  strcpy(parent, path); char *slash = strrchr(parent, '/'); if (slash == parent) slash[1] = '\0'; else *slash = '\0';
+  int directory = open(parent, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (directory < 0 || fsync(directory) < 0 || close(directory) < 0) fail("Flush domain directory");
+}
+static int read_domain(const char *path, struct domain_record *record) {
+  int fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0 && errno == ENOENT) return 0;
+  if (fd < 0) fail("Read domain record");
+  struct stat status;
+  if (fstat(fd, &status) < 0 || !S_ISREG(status.st_mode) || status.st_uid != getuid() || (status.st_mode & 077) || status.st_size < 1 || status.st_size > 1000) { errno = EINVAL; fail("Invalid private domain record"); }
+  char body[1024]; ssize_t size = read(fd, body, sizeof(body) - 1); close(fd);
+  if (size != status.st_size) { errno = EIO; fail("Incomplete domain record"); }
+  body[size] = '\0'; int end = 0;
+  if (sscanf(body, "PODS_DOMAIN_V1 %d %llu %llu %d %llu %llu %d%n", &record->guardian, &record->guardian_sec, &record->guardian_usec, &record->child, &record->child_sec, &record->child_usec, &record->closed, &end) != 7 || body[end] != '\n' || body[end + 1] != '\0' || record->guardian < 2 || record->child < 0 || record->guardian_sec == 0 || (record->child && !record->child_sec) || (record->closed != 0 && record->closed != 1)) { errno = EINVAL; fail("Malformed domain identity"); }
+  return 1;
+}
+static int inspect_domain(const char *path) {
+  for (int attempt = 0; attempt < 3; attempt++) {
+    struct domain_record record, latest; memset(&record, 0, sizeof(record)); memset(&latest, 0, sizeof(latest));
+    if (!read_domain(path, &record)) { puts("{\"quiescent\":false,\"reason\":\"registration-missing\"}"); return 0; }
+    if (record.closed) { puts("{\"quiescent\":true,\"reason\":\"confirmed-closed\"}"); return 0; }
+    if (same_live_process(record.guardian, record.guardian_sec, record.guardian_usec) || same_live_process(record.child, record.child_sec, record.child_usec) || (record.child && group_alive(record.child))) {
+      puts("{\"quiescent\":false,\"reason\":\"previous-domain-still-present\"}"); return 0;
+    }
+    if (!read_domain(path, &latest) || memcmp(&record, &latest, sizeof(record))) continue;
+    puts("{\"quiescent\":true,\"reason\":\"previous-processes-gone\"}"); return 0;
+  }
+  puts("{\"quiescent\":false,\"reason\":\"registration-changing\"}"); return 0;
+}
+static int lease_open(void) {
+  struct pollfd lease = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
+  int ready = poll(&lease, 1, 0);
+  if (ready < 0) fail("Inspect startup lease");
+  if (!ready) return 1;
+  char bytes[128]; ssize_t count = read(STDIN_FILENO, bytes, sizeof(bytes));
+  if (count <= 0) return 0;
+  for (ssize_t i = 0; i < count; i++) if (bytes[i] != 'H') return 0;
+  return 1;
+}
+static int supervise(char **command, const char *record_path) {
   signal(SIGPIPE, SIG_IGN);
+  struct domain_record record; memset(&record, 0, sizeof(record));
+  struct proc_bsdinfo guardian_info;
+  if (!process_info(getpid(), &guardian_info)) fail("Missing guardian identity");
+  record.guardian = getpid(); record.guardian_sec = guardian_info.pbi_start_tvsec; record.guardian_usec = guardian_info.pbi_start_tvusec;
+  write_domain(record_path, &record);
+  if (!lease_open()) { record.closed = 1; write_domain(record_path, &record); return 125; }
+  int permission[2]; if (pipe(permission) < 0) fail("Create execution gate");
   int readiness[2];
   if (pipe(readiness) < 0) fail("Create process registration pipe");
   pid_t child = fork();
   if (child < 0) fail("Start isolated process");
   if (!child) {
-    close(readiness[0]);
+    close(readiness[0]); close(permission[1]);
     if (setsid() < 0) fail("Own process group");
     if (write(readiness[1], "R", 1) != 1) fail("Register process group");
     close(readiness[1]);
+    char approved;
+    if (read(permission[0], &approved, 1) != 1 || approved != 'G') _exit(125);
+    close(permission[0]);
     int input = open("/dev/null", O_RDONLY);
     if (input < 0 || dup2(input, STDIN_FILENO) < 0) fail("Close inherited input");
     close_descriptors(4);
     execv(command[0], command); fail("Execute isolated process");
   }
-  close(readiness[1]);
+  close(readiness[1]); close(permission[0]);
   char registered;
   if (read(readiness[0], &registered, 1) != 1 || registered != 'R') {
     kill(child, SIGKILL); waitpid(child, NULL, 0); fail("Process group registration failed");
   }
   close(readiness[0]);
+  struct proc_bsdinfo child_info;
+  if (!process_info(child, &child_info)) fail("Missing child identity");
+  record.child = child; record.child_sec = child_info.pbi_start_tvsec; record.child_usec = child_info.pbi_start_tvusec;
+  write_domain(record_path, &record);
+  if (!lease_open()) { close(permission[1]); int status; terminate_group(child, &status); record.closed = 1; write_domain(record_path, &record); return 125; }
+  if (write(permission[1], "G", 1) != 1) fail("Open execution gate");
+  close(permission[1]);
   close(3);
   dprintf(4, "{\"pid\":%d}\n", child);
   int status = 0; int64_t deadline = monotonic_ms() + 30000;
@@ -165,14 +246,18 @@ static int supervise(char **command) {
     }
     if (stop) {
       terminate_group(child, &status);
+      record.closed = 1; write_domain(record_path, &record);
       dprintf(4, "{\"stopped\":true}\n"); close(4); return 125;
     }
   }
+  record.closed = 1; write_domain(record_path, &record);
   close(4);
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 int main(int argc, char **argv) {
   if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4]); return 0; }
-  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2);
+  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2]);
+  if (argc == 3 && !strcmp(argv[1], "inspect-domain") && argv[2][0] == '/') { close_descriptors(3); return inspect_domain(argv[2]); }
   fprintf(stderr, "Expected capture SOURCE STAGING LIMIT or supervise ABSOLUTE_EXECUTABLE ARGS\n"); return 2;
 }

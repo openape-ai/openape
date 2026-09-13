@@ -6,6 +6,7 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['recovery-packaged.png', 'Explicit recovery after an app crash', 'The packaged app preserves a committed fact and checkpoint. Inspection confirms previous execution has stopped before an explicit retry completes the remaining inputs.'],
   ['schedule-settings.png', 'Explicit schedules and concurrency', 'A disabled daily schedule records its local time and timezone. Activation, pause/resume and the global concurrency limit are separate owner controls.'],
   ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. Runs shows its persisted result, checkpoint revision and ordered events.'],
   ['resources-packaged.png', 'Assigned reference snapshots', 'The packaged app lists the chosen file, its permission revision and the hash of a separate snapshot. Access can be revoked from the same view.'],
