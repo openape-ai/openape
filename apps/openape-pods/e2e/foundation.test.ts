@@ -21,16 +21,42 @@ async function launch(packaged = false) {
   const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: fixtureEnv(root), timeout: 20000 })
   active.push({ app, root, process: app.process() })
   const page = await app.firstWindow()
-  await page.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
+  await page.waitForFunction(async () => (await window.pods.getStatus()).worker.state !== 'starting')
+  expect((await page.evaluate(() => window.pods.getStatus())).worker).toMatchObject({ state: 'ready', error: null })
   return { app, page, root, binary }
 }
 afterEach(async () => {
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('foundation', () => {
+  it('storage: saves a pod assignment in the worker and reopens it after app restart', async () => {
+    const { app, page, root, binary } = await launch()
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
+    await page.getByLabel('Pod name').fill('Fixture orders')
+    await page.getByLabel('Assignment', { exact: true }).fill('Read synthetic order evidence only.')
+    await page.getByRole('button', { name: 'Save pod', exact: true }).click()
+    await page.getByRole('status').filter({ hasText: 'Saved locally' }).waitFor()
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, 'storage-settings.png') })
+    const first = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
+    expect(first.pods).toHaveLength(1); expect(first.pods[0]!.activeScript).toBeNull()
+    expect(await page.evaluate(async () => {
+      try { await window.pods.workspace({ type: 'create', name: 'bad', assignment: 'bad', credential: 'unassigned' } as never); return 'allowed' }
+      catch { return 'denied' }
+    })).toBe('denied')
+    await app.close()
+    const next = await electron.launch({ executablePath: binary, args: ['.'], cwd: resolve('.'), env: fixtureEnv(root) })
+    active.push({ app: next, root, process: next.process() })
+    const reopened = await next.firstWindow()
+    await reopened.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
+    await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
+    await reopened.getByRole('button', { name: 'Fixture orders', exact: true }).click()
+    expect(await reopened.getByLabel('Assignment', { exact: true }).inputValue()).toBe('Read synthetic order evidence only.')
+    expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
+  })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }

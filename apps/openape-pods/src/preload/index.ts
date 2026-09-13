@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
+import { parseCommand, parseWorkspace } from '../contracts/control'
 import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async workspace(command) { return parseWorkspace(await ipcRenderer.invoke(channels.workspace, parseCommand(command))) },
   async getStatus() {
     const value: unknown = await ipcRenderer.invoke(channels.status)
     if (!isPodStatus(value)) throw new Error('Invalid Pods status response')
