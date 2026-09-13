@@ -1,5 +1,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
+import PodNavigation from './PodNavigation.vue'
+import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
 import Onboarding from './Onboarding.vue'
 import MasterChat from './MasterChat.vue'
@@ -7,16 +9,16 @@ import PodSettings from './PodSettings.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
 import PodKnowledge from './PodKnowledge.vue'
-import type { StoredPod } from '../contracts/control'
+import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
 import type { RunRecord } from '../contracts/runs'
 import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { DataManagement, Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { PodNavigation, DataManagement, Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
@@ -32,13 +34,14 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
+    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
       if (this.busy || this.status?.worker.state !== 'ready') return
       this.busy = true
       try {
         if (!this.setupChecked && this.status?.mode === 'local') { const setup = await window.pods.onboarding({ type: 'list' }); this.setupChecked = true; if (!setup.complete) this.selected = 'Setup' }
-        this.pods = (await window.pods.workspace({ type: 'list' })).pods
+        this.workspaceChanged(await window.pods.workspace({ type: 'list' }))
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
@@ -87,16 +90,7 @@ export default defineComponent({
       <button class="nav-button" :class="{ active: selected === 'Data' }" @click="selected = 'Data'">
         Data &amp; backups
       </button>
-      <div class="sidebar-label">
-        YOUR PODS <span>{{ pods.length }}</span>
-      </div>
-      <div class="pod-list">
-        <button v-for="item in pods" :key="item.id" class="pod-button" :class="{ active: item.id === podId && selected !== 'Master chat' }" :aria-pressed="item.id === podId" @click="selectPod(item.id)">
-          <span class="pod-icon" aria-hidden="true">↗</span><span>{{ item.name }}<small>{{ item.lifecycle }}</small></span>
-        </button><p v-if="!pods.length" class="muted">
-          No pods yet
-        </p>
-      </div>
+      <PodNavigation :pods="pods" :pod-id="podId" :organization="organization" :available="status?.worker.state === 'ready' && !attention" :highlight="selected !== 'Master chat'" @select="selectPod" @updated="workspaceChanged" />
       <button class="new-pod" @click="master(true)">
         ＋ New pod
       </button>
