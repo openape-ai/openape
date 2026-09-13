@@ -863,6 +863,9 @@ importers:
         specifier: '>=3.5.41'
         version: 3.5.41(typescript@5.9.3)
     devDependencies:
+      '@openape/apes':
+        specifier: workspace:*
+        version: link:../../packages/apes
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0

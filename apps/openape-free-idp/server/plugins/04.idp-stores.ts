@@ -17,6 +17,7 @@ export default defineNitroPlugin(() => {
 
   // Users (unified — no separate agent store)
   defineUserStore(() => createDrizzleUserStore())
+  definePodIdentityStore(() => createDrizzlePodIdentityStore())
 
   // Milestone 2: Auth Tokens
   defineRefreshTokenStore(() => createDrizzleRefreshTokenStore())
