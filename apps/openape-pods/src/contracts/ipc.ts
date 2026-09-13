@@ -1,8 +1,9 @@
+import type { ScheduleCommand, ScheduleView } from './scheduling'
 import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs' } as const
+export const channels = { status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -13,6 +14,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  scheduling: (command: ScheduleCommand) => Promise<ScheduleView>
   runs: (command: RunCommand) => Promise<RunView>
   resources: (command: ResourceCommand) => Promise<ResourceState>
   workspace: (command: WorkspaceCommand) => Promise<WorkspaceState>

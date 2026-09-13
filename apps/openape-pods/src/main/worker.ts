@@ -1,3 +1,5 @@
+import { parseScheduleView } from '../contracts/scheduling'
+import type { ScheduleCommand, ScheduleView } from '../contracts/scheduling'
 import { parseRunView } from '../contracts/runs'
 import type { RunCommand, RunView } from '../contracts/runs'
 import { parseResourceState } from '../contracts/resources'
@@ -47,7 +49,9 @@ export class FixtureWorker {
 
   async runs(command: RunCommand): Promise<RunView> { return parseRunView(await this.dispatch({ run: command })) }
 
-  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand } | { run: RunCommand }): Promise<unknown> {
+  async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
+
+  private dispatch(command: WorkspaceCommand | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

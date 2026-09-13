@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 4
+const schemaVersion = 5
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -132,6 +132,16 @@ export class PodDatabase {
         CREATE TABLE run_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), boot_id TEXT NOT NULL, heartbeat INTEGER NOT NULL, process_id INTEGER);
         CREATE TABLE run_events(run_id TEXT NOT NULL REFERENCES runs(id), sequence INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(run_id,sequence));
         PRAGMA user_version=4;
+        `)
+      }
+      if (version < 5) {
+        this.db.exec(`
+          CREATE TABLE schedules(pod_id TEXT PRIMARY KEY REFERENCES pods(id),revision INTEGER NOT NULL,spec TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,next_at INTEGER,error TEXT);
+          CREATE TABLE accepted_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,pod_id TEXT NOT NULL REFERENCES pods(id),source TEXT NOT NULL,dedupe_key TEXT NOT NULL,payload TEXT NOT NULL,accepted_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'pending',run_id TEXT,error TEXT,UNIQUE(pod_id,source,dedupe_key));
+          CREATE INDEX ready_events ON accepted_events(state,pod_id,sequence);
+          CREATE TABLE run_inputs(run_id TEXT PRIMARY KEY REFERENCES runs(id),reason TEXT NOT NULL,event_ids TEXT NOT NULL);
+          CREATE TABLE reference_observations(pod_id TEXT NOT NULL REFERENCES pods(id),resource_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,generation INTEGER NOT NULL,error TEXT,PRIMARY KEY(pod_id,resource_id));
+          PRAGMA user_version=5;
         `)
       }
 
