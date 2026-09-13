@@ -16,6 +16,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./assigned": {
+      "import": "./dist/shapes/assigned.js",
+      "types": "./dist/shapes/assigned.d.ts"
     }
   },
   "files": [

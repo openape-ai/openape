@@ -164,14 +164,24 @@ function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
  * Split out so the interactive shell can re-use the verify + consume path
  * without being forced into the `execFileSync`-based one-shot execution.
  */
-export async function verifyAndConsume(token: string, resolved: ResolvedCommand): Promise<void> {
+export interface AssignedGrantScope {
+  issuer: string
+  subject: string
+  targetHost: string
+  grantId: string
+  jwksUri: string
+  grantsEndpoint: string
+  runAs?: string
+  signal?: AbortSignal
+}
+export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
-  const issuer = String(payload.iss ?? '')
+  const issuer = scope?.issuer ?? String(payload.iss ?? '')
   if (!issuer)
     throw new Error('Grant token is missing issuer')
 
-  const discovery = await discoverEndpoints(issuer)
-  const jwksUri = String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const discovery = scope ? {} : await discoverEndpoints(issuer)
+  const jwksUri = scope?.jwksUri ?? String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
   const result = await verifyAuthzJWT(token, {
     expectedIss: issuer,
     expectedAud: resolved.adapter.cli.audience ?? 'shapes',
@@ -183,6 +193,7 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
   }
 
   const claims = result.claims
+  if (scope && (claims.sub !== scope.subject || claims.target_host !== scope.targetHost || claims.grant_id !== scope.grantId || claims.run_as !== scope.runAs || claims.execution_context?.adapter_digest !== resolved.digest)) throw new Error('Grant does not match the assigned identity, host or adapter')
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
 
   if (claims.execution_context?.adapter_digest && claims.execution_context.adapter_digest !== resolved.digest) {
@@ -222,9 +233,10 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     }
   }
 
-  const grantsEndpoint = await getGrantsEndpoint(issuer)
-  const consume = await fetch(`${grantsEndpoint}/${claims.grant_id}/consume`, {
+  const grantsEndpoint = scope?.grantsEndpoint ?? await getGrantsEndpoint(issuer)
+  const consume = await fetch(`${grantsEndpoint}/${encodeURIComponent(claims.grant_id)}/consume`, {
     method: 'POST',
+    ...(scope ? { redirect: 'error' as const, signal: scope.signal ?? AbortSignal.timeout(10000) } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -234,10 +246,11 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     throw new Error(`Consume failed: ${consume.status} ${consume.statusText}`)
   }
 
-  const consumeResult = await consume.json() as { error?: string }
+  const consumeResult = await consume.json() as { error?: string, status?: string }
   if (consumeResult.error) {
     throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
   }
+  if (scope && !['valid', 'consumed'].includes(consumeResult.status ?? '')) throw new Error('Unrecognized grant consume response')
 }
 
 /**
