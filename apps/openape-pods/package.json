@@ -36,6 +36,7 @@
     "typescript": "catalog:",
     "vite": "8.2.1",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:"
+    "vue-tsc": "catalog:",
+    "@openape/apes": "workspace:*"
   }
 }

@@ -103,3 +103,39 @@ are M3B. No script dispatcher or live connection is enabled by this increment.
 Local evidence: 24 unit/component cases and 13 native/Electron cases. The
 snapshot/revocation view was personally inspected in the packaged app. Full
 repository gate evidence and native PR state are maintained in the linked plan.
+
+## M3B: assigned identities and tool authorization
+
+`PodIdentityManager` creates an encrypted per-pod Ed25519 key before requesting
+an owner-scoped account. Retries retain that key, and token renewal signs a new
+challenge as that exact pod. It has no ambient owner-key or global CLI-cache
+fallback. The IdP route requires a human owner and an explicitly registered
+atomic provisioning store; the Free IdP uses one SQL transaction for account
+and key creation. Disabled or conflicting identities require explicit recovery.
+The route creates no grants and does not invoke the normal safe-command seeder.
+
+The `@openape/apes/assigned` entry reuses ape-shell's Shapes resolution and grant
+verification, with fixed issuer, subject, host, adapter, operation and grant
+bindings. It neither requests new grants nor installs adapters, invokes generic
+fallback or executes shell text. The private app broker starts a separate native
+tool sandbox after that check. Its first contract accepts exact assigned argv;
+mailbox-specific parameter handling belongs to M8. Scripts must declare the
+capability and retain a current resource/assignment lease.
+
+Only the authorized tool gets its connection cache. Cache updates are serialized,
+encrypted and flushed before cleanup, including refresh followed by a failed
+read. The broker bounds execution time and output, redacts original/rotated cache
+strings and polls identity/key/grant liveness during execution. Revocation or
+an unavailable authority cancels the tool. These controls do not make arbitrary
+third-party tools trustworthy: the assigned executable and entry files must be
+pinned and reviewed. Production provider network access is still unwired.
+
+Verification uses actual Ed25519 signatures, local HTTP IdP fixtures, SQLite
+transactions, native deny-default policies and development/packaged Electron
+runtimes. No real identities, Keychain items, provider credentials or grants have
+been accessed. The existing resource UI remains the M3A view; script dispatch and
+owner connection onboarding are M4 and M11.
+
+The app adds only the existing `@openape/apes` workspace as a build dependency
+for its narrowly exported assigned-command entry. No second grant engine or new
+third-party authentication dependency is introduced.
