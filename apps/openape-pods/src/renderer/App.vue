@@ -1,5 +1,6 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
+import MasterChat from './MasterChat.vue'
 import PodSettings from './PodSettings.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
@@ -11,7 +12,7 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
     return { selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
@@ -188,9 +189,7 @@ export default defineComponent({
         <section v-else-if="selected === 'Master chat'" class="card master-panel" aria-label="Master chat">
           <p class="eyebrow">
             CONTEXT · {{ creating ? 'NEW POD' : pod?.name ?? 'WORKSPACE' }}
-          </p><h2>Master chat</h2><p class="muted">
-            Chat is not connected yet. Your selected pod provides the context for this conversation.
-          </p><PodSettings v-if="creating" key="new" @selected="changed" /><span v-else class="badge">Not connected</span>
+          </p><h2>Master chat</h2><MasterChat :pod-id="creating ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Resources' }" /><PodSettings v-if="creating" key="new" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
           <PodSettings :selected-pod-id="podId" @selected="changed" />

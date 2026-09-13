@@ -1,0 +1,32 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import type { MasterView } from '../../src/contracts/master'
+import MasterChat from '../../src/renderer/MasterChat.vue'
+
+const empty: MasterView = { connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }
+describe('reviewable master chat', () => {
+  it('sends contextual input, steers the active turn, cancels and keeps permissions as owner proposals', async () => {
+    const podId = '00000000-0000-4000-8000-000000000001'
+    const view: MasterView = { ...empty, proposals: [{ id: podId, podId, state: 'pending', body: { provider: 'microsoft', description: 'Read synthetic inbox', folders: ['Inbox'] } }], drafts: [{ id: podId, podId, name: 'Mail knowledge', revision: 1, code: 'export async function run() {}', capabilities: [], validation: null, hash: null }] }
+    const master = vi.fn().mockImplementation(async (command) => { if (command.type === 'send') view.state = 'running'; if (command.type === 'cancel') view.state = 'interrupted'; if (command.type === 'decline') view.proposals[0]!.state = 'declined'; return structuredClone(view) })
+    window.pods = { master, details: vi.fn(), scheduling: vi.fn(), runs: vi.fn(), resources: vi.fn(), workspace: vi.fn(), getStatus: vi.fn(), onStatus: vi.fn() }
+    const wrapper = mount(MasterChat, { props: { podId } }); await flushPromises()
+    await wrapper.get('textarea').setValue('Inspect this pod'); await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'send', podId, text: 'Inspect this pod' })); expect(wrapper.text()).toContain('Steer the current turn')
+    await wrapper.get('textarea').setValue('Stop after inspecting'); await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'steer', podId }))
+    const button = (name: string) => wrapper.findAll('button').find(button => button.text() === name)!
+    await button('Cancel turn').trigger('click'); await flushPromises(); expect(master).toHaveBeenCalledWith({ type: 'cancel' })
+    expect(wrapper.text()).toContain('Unvalidated draft'); expect(wrapper.text()).toContain('export async function run()')
+    expect(wrapper.text()).not.toContain('Approve access')
+    await button('Review resources').trigger('click'); expect(wrapper.emitted('resources')).toEqual([[podId]])
+    await button('Decline').trigger('click'); await flushPromises(); expect(wrapper.text()).toContain('declined')
+    wrapper.unmount()
+  })
+  it('retains interrupted history offline and disables sending', async () => {
+    window.pods = { master: vi.fn().mockResolvedValue({ ...empty, connected: false, state: 'interrupted', error: 'Previous action needs inspection', messages: [{ id: '1', role: 'tool', text: '{"result":"created"}', state: 'completed', at: 1 }] }), details: vi.fn(), scheduling: vi.fn(), runs: vi.fn(), resources: vi.fn(), workspace: vi.fn(), getStatus: vi.fn(), onStatus: vi.fn() }
+    const wrapper = mount(MasterChat, { props: { podId: null } }); await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('needs inspection'); expect(wrapper.text()).toContain('created')
+    await wrapper.get('textarea').setValue('Continue'); expect(wrapper.get('button.primary').attributes('disabled')).toBeDefined(); wrapper.unmount()
+  })
+})
