@@ -1,0 +1,14 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "o365-cli"
+executable = "o365-cli"
+audience = "shapes"
+version = "pods-1"
+[[operation]]
+id = "pods.read"
+command = ["pods", "read"]
+required_options = ["account", "folder", "operation"]
+display = "Read {operation} in {folder} for {account}"
+action = "read"
+risk = "low"
+resource_chain = ["mail-account:email={account}", "mail-folder:id={folder}", "mail-operation:name={operation}"]

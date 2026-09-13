@@ -1,3 +1,10 @@
+import type { ServiceCheck } from '../contracts/services'
+import { authorizeMailService } from './mail/authorization'
+import { MailBridge } from './mail/bridge'
+import { assignedMail } from '../main/mail/assigned'
+import { parseMailRequest } from '../main/mail/contract'
+import { ingestMailPage } from './mail/ingestion'
+import type { MailArtifact } from '../main/mail/service'
 import { parseDetailsCommand } from '../contracts/details'
 import { WorkspaceDetails } from './workspace/details'
 import { Recovery } from './recovery/reconcile'
@@ -15,6 +22,7 @@ import { PodDatabase } from './storage/database'
 const port = process.parentPort
 if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = new PodDatabase(process.cwd())
+const mailBridge = new MailBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
 const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId, 'Resource permissions changed'))
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
@@ -24,7 +32,13 @@ dispatcher = new RunDispatcher(store, registry, {
   helper: join(dist, 'native/pods-helper'), executable, entry: join(dist, 'runtime/script-entry.mjs'),
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
-})
+}, { tool: async (body, signal, scope) => {
+  const assignment = assignedMail(registry.list(scope.podId))
+  const { read } = parseMailRequest(body, assignment.mail)
+  const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
+  if (!value || typeof value !== 'object' || typeof (value as MailArtifact).path !== 'string' || typeof (value as MailArtifact).hash !== 'string') throw new Error('Invalid mail broker artifact')
+  return ingestMailPage(store, scope.podId, scope.root, value as MailArtifact, assignment.mail, read, scope.assertCurrent)
+} })
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -44,12 +58,16 @@ const timer = setInterval(() => {
   })()
 }, 1000)
 port.on('message', async (event) => {
+  if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
   if (event.data === 'stop') { suspended = true; clearInterval(timer); await ticking; await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
+      port.postMessage({ id: request.id, state: authorizeMailService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
+    }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
     }

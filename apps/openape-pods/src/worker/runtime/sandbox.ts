@@ -48,17 +48,17 @@ export interface ProcessDomain {
   completed: Promise<number>
   cancel: () => void
 }
-export async function launchSandbox(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string> = {}, register?: (path: string, ownerPid: number) => void): Promise<ProcessDomain> {
+export async function launchSandbox(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string> = {}, register?: (path: string, ownerPid: number) => void | Promise<void>): Promise<ProcessDomain> {
   if (process.platform !== 'darwin') throw new Error('Native pod execution requires macOS')
   const profile = join(privateDirectory, `policy-${randomUUID()}.sb`)
   const canonical = { ...policy, executable: await realpath(policy.executable), workspace: await realpath(policy.workspace) }
   await writeFile(profile, sandboxPolicy(canonical), { flag: 'wx', mode: 0o600 })
   return superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, environment, privateDirectory, register)
 }
-export function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void): ProcessDomain {
+export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>): Promise<ProcessDomain> {
   literal(executable); literal(workspace)
   const recordPath = join(privateDirectory, `domain-${randomUUID()}.record`)
-  register?.(recordPath, process.pid)
+  await register?.(recordPath, process.pid)
   const guardian = spawn(helper, ['supervise-record', recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
   const lease = guardian.stdin as Writable
   const channel = guardian.stdio[3] as Duplex

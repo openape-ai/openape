@@ -5,7 +5,7 @@ import type { RunInput, ScriptResult } from '../../contracts/runs'
 import { launchSandbox } from '../runtime/sandbox'
 import type { RuntimePolicy } from '../runtime/sandbox'
 
-export interface ScriptRuntime { registerDomain?: (path: string, ownerPid: number) => void, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
+export interface ScriptRuntime { registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
 export interface ScriptServices { request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
