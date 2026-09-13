@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { StringDecoder } from 'node:string_decoder'
+import { parseCredentialJSON } from '../connections/cache'
 import type { CredentialCache } from '../connections/cache'
 import { launchSandbox, verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AgentAuthority, AssignedAuthorization } from './authorization'
@@ -13,22 +15,26 @@ export interface ToolAssignment extends AssignedAuthorization {
   entryFiles: { path: string, hash: string }[]
   prefix: string[]
   connectionId?: string
+  cacheArgument?: '--cache-dir'
+  maxOutputBytes?: number
   runtimeDirectories: string[]
   environment: Record<string, string>
   networkPorts: number[]
 }
 export interface BrokerLease {
-  registerDomain?: (path: string, ownerPid: number) => void
+  registerDomain?: (path: string, ownerPid: number) => void | Promise<void>
   capabilities: string[]
   assertCurrent: () => void
   signal: AbortSignal
 }
 export interface ToolReply { exitCode: number, stdout: string, stderr: string }
-function secretStrings(value: unknown): string[] {
-  if (typeof value === 'string') return value.length >= 8 ? [value] : []
+function secretStrings(value: unknown, key = ''): string[] {
+  const credentialKeys = ['secret', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'refresh', 'privatekey', 'clientsecret', 'password', 'authorization']
+  if (typeof value === 'string') return value && credentialKeys.includes(key.toLowerCase().replaceAll('_', '')) ? [value, JSON.stringify(value).slice(1, -1)] : []
   if (!value || typeof value !== 'object') return []
-  return Object.values(value).flatMap(secretStrings)
+  return Object.entries(value).flatMap(([childKey, child]) => secretStrings(child, childKey))
 }
+
 export class PodToolBroker {
   constructor(private readonly helper: string, private readonly root: string, private readonly authority: AgentAuthority, private readonly credentials: CredentialCache) {}
   async execute(assignment: ToolAssignment, request: unknown, lease: BrokerLease): Promise<ToolReply> {
@@ -46,7 +52,7 @@ export class PodToolBroker {
       return this.credentials.withCache(assignment.connectionId, async (cache) => {
         lease.assertCurrent(); lease.signal.throwIfAborted()
         return this.run(assignment, lease, dirname(cache), cache)
-      })
+      }, lease.signal)
     }
     const workspace = await mkdtemp(join(this.root, 'tool-'))
     try { return await this.run(assignment, lease, workspace) }
@@ -56,16 +62,22 @@ export class PodToolBroker {
   private async run(assignment: ToolAssignment, lease: BrokerLease, workspace: string, cache?: string): Promise<ToolReply> {
     await this.authority.assertActive(assignment.grantId, lease.signal)
     lease.assertCurrent(); lease.signal.throwIfAborted()
-    const secrets = cache ? secretStrings(JSON.parse(await readFile(cache, 'utf8'))) : []
-    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(workspace), readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, [...assignment.prefix, ...assignment.command.argv.slice(1)], { ...assignment.environment, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
+    const secrets = [...Object.values(assignment.environment).filter(Boolean), ...[assignment.environment.HTTPS_PROXY, assignment.environment.HTTP_PROXY].filter(Boolean).flatMap(url => new URL(url).password ? [new URL(url).password] : []), ...(cache ? secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))) : [])]
+    const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
+    const limit = assignment.maxOutputBytes ?? 256 * 1024
+    if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
+    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(workspace), readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, args, { ...assignment.environment, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined
+    let outputBytes = 0
+    const outDecoder = new StringDecoder('utf8'); const errDecoder = new StringDecoder('utf8')
     const stop = () => { failure ??= new Error('Tool call cancelled'); domain.cancel() }
     lease.signal.addEventListener('abort', stop, { once: true })
     if (lease.signal.aborted) stop()
     const append = (which: 'stdout' | 'stderr', bytes: Buffer) => {
-      if (stdout.length + stderr.length + bytes.length > 256 * 1024) { failure = new Error('Tool output exceeded its limit'); domain.cancel(); return }
-      if (which === 'stdout') stdout += bytes.toString()
-      else stderr += bytes.toString()
+      outputBytes += bytes.length
+      if (outputBytes > limit) { failure = new Error('Tool output exceeded its limit'); domain.cancel(); return }
+      if (which === 'stdout') stdout += outDecoder.write(bytes)
+      else stderr += errDecoder.write(bytes)
     }
     domain.stdout.on('data', bytes => append('stdout', bytes)); domain.stderr.on('data', bytes => append('stderr', bytes))
     const monitoring = new AbortController()
@@ -87,10 +99,11 @@ export class PodToolBroker {
     try {
       await domain.processId
       const exitCode = await domain.completed
+      stdout += outDecoder.end(); stderr += errDecoder.end()
       if (failure) throw failure
       await this.authority.assertActive(assignment.grantId, lease.signal)
       lease.assertCurrent(); lease.signal.throwIfAborted()
-      if (cache) secrets.push(...secretStrings(JSON.parse(await readFile(cache, 'utf8'))))
+      if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
       for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
       return { exitCode, stdout, stderr }
     }

@@ -14,10 +14,25 @@ import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { installExample } from './examples'
 
+export interface RunServiceScope {
+  podId: string
+  runId: string
+  epoch: number
+  assignmentRevision: number
+  capabilities: string[]
+  root: string
+  assertCurrent: () => void
+  registerDomain: (path: string, ownerPid: number) => void
+}
+export interface RunServices {
+  provider?: AgentGatewayServices['provider']
+  tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+}
+
 export class RunDispatcher {
   readonly runs: RunStore
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
-  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: AgentGatewayServices) {
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
     store.transaction(() => {
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
@@ -71,7 +86,9 @@ export class RunDispatcher {
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
-      if (manifest.capabilities.length || manifest.effects !== 'readOnly') throw new Error('No tool assignments are available for this script')
+      if (manifest.effects !== 'readOnly') throw new Error('Effectful scripts are not enabled')
+      const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
+      if (manifest.capabilities.some(capability => !assigned.includes(capability)) || (manifest.capabilities.length && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
@@ -79,6 +96,15 @@ export class RunDispatcher {
       const input: RunInput = { version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.revision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
       const runtime = { ...this.runtime, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
+      const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.revision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
+      const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
+        assertCurrent()
+        if (!manifest.capabilities.length || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        const operation = this.services.tool(body, toolSignal, scope)
+        pendingAgents.add(operation)
+        try { const reply = await operation; assertCurrent(); return reply }
+        finally { pendingAgents.delete(operation) }
+      }
       const result = await executeScript(runtime, directory, artifact, input, signal, {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
@@ -89,14 +115,15 @@ export class RunDispatcher {
             this.runs.append(id, 'checkpoint', { revision }); return { revision }
           }
           if (operation === 'agent.run') {
-            if (!this.services) throw new Error('Codex is not connected; connect the pod provider before using this script')
+            if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
-            const operation = executeAgent(runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: async (body, toolSignal) => { assertCurrent(); return this.services!.tool(body, toolSignal) } }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
+            const operation = executeAgent(runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
             pendingAgents.add(operation)
             try { return await operation }
             finally { pendingAgents.delete(operation) }
           }
-          throw new Error('No tool capability is assigned to this pod')
+          if (operation === 'tools.invoke') return invokeTool(payload, operationSignal)
+          throw new Error('Unsupported script operation')
         },
       })
       assertCurrent()

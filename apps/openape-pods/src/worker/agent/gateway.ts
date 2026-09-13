@@ -1,3 +1,4 @@
+import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -16,14 +17,34 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
     const expected = Buffer.from(`Bearer ${capability}`)
     if (received.length !== expected.length || !timingSafeEqual(received, expected) || signal.aborted || request.headers.origin) { response.statusCode = 403; json(response, { error: 'Run capability rejected' }); return }
     if (request.method !== 'POST' || !['/mcp', '/v1/responses'].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
+    const closed = new AbortController()
+    response.once('close', () => closed.abort(new Error('Agent connection closed')))
+    const activeSignal = AbortSignal.any([signal, closed.signal])
     const value = await body(request)
     if (request.url === '/v1/responses') {
-      const upstream = await services.provider(value, signal)
+      const upstream = await services.provider(value, activeSignal)
       response.statusCode = upstream.status; response.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'text/event-stream')
       if (upstream.body) {
         const reader = upstream.body.getReader()
-        try { for (;;) { const next = await reader.read(); if (next.done) break; response.write(next.value) } }
-        finally { await reader.cancel(); reader.releaseLock() }
+        const cancel = () => { void reader.cancel().catch((error: unknown) => response.destroy(error instanceof Error ? error : new Error('Provider stream cancellation failed'))) }
+        activeSignal.addEventListener('abort', cancel, { once: true })
+        let bytes = 0
+        try {
+          for (;;) {
+            activeSignal.throwIfAborted()
+            const next = await reader.read()
+            if (next.done) break
+            bytes += next.value.byteLength
+            if (bytes > 16 * 1024 * 1024) throw new Error('Provider stream exceeds its 16 MiB limit')
+            if (!response.write(next.value)) await once(response, 'drain', { signal: activeSignal })
+          }
+          activeSignal.throwIfAborted()
+        }
+        finally {
+          activeSignal.removeEventListener('abort', cancel)
+          try { await reader.cancel() }
+          finally { reader.releaseLock() }
+        }
       }
       response.end(); return
     }
@@ -43,7 +64,11 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
       result = { tools: [{ name: 'ape_shell', description: 'Invoke one explicitly assigned tool command for this pod.', inputSchema: { type: 'object', properties: { toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['toolId', 'argv'], additionalProperties: false } }] }
     }
     else if (rpc.method === 'tools/call' && rpc.params?.name === 'ape_shell') {
-      try { result = { content: [{ type: 'text', text: JSON.stringify(await services.tool(rpc.params.arguments, signal)) }] } }
+      try {
+        const text = JSON.stringify(await services.tool(rpc.params.arguments, activeSignal))
+        if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Tool reply exceeds its size limit')
+        result = { content: [{ type: 'text', text }] }
+      }
       catch (error) { result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Assigned tool call failed' }] } }
     }
     else { json(response, { jsonrpc: '2.0', id: rpc.id, error: { code: -32601, message: 'Only the assigned ape-shell tool is available' } }); return }
