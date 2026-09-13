@@ -7,7 +7,7 @@ const podId = '00000000-0000-4000-8000-000000000001'
 describe('manual runs view', () => {
   it('selects a bounded example and presents runner failures', async () => {
     const runs = vi.fn().mockResolvedValue({ runs: [], events: [] })
-    window.pods = { runs, getStatus: vi.fn(), onStatus: vi.fn(), resources: vi.fn(), workspace: async () => ({ pods: [{ id: podId, name: 'Example pod', assignment: 'Synthetic', revision: 1, lifecycle: 'paused', activeScript: null }] }) }
+    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs, getStatus: vi.fn(), onStatus: vi.fn(), resources: vi.fn(), workspace: async () => ({ pods: [{ id: podId, name: 'Example pod', assignment: 'Synthetic', revision: 1, lifecycle: 'paused', activeScript: null }] }) }
     const wrapper = mount(PodRuns); await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Use local example')!.trigger('click'); await flushPromises()
     expect(runs).toHaveBeenLastCalledWith({ type: 'installExample', podId, variant: 'deterministic' })

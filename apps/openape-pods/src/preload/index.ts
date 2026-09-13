@@ -1,3 +1,4 @@
+import { parseScheduleCommand, parseScheduleView } from '../contracts/scheduling'
 import { parseRunCommand, parseRunView } from '../contracts/runs'
 import { parseResourceCommand, parseResourceState } from '../contracts/resources'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -7,6 +8,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async scheduling(command) { return parseScheduleView(await ipcRenderer.invoke(channels.scheduling, parseScheduleCommand(command))) },
   async runs(command) { return parseRunView(await ipcRenderer.invoke(channels.runs, parseRunCommand(command))) },
   async resources(command) { return parseResourceState(await ipcRenderer.invoke(channels.resources, parseResourceCommand(command))) },
   async workspace(command) { return parseWorkspace(await ipcRenderer.invoke(channels.workspace, parseCommand(command))) },

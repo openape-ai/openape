@@ -5,6 +5,7 @@ import type { PodDatabase } from '../storage/database'
 function fromRow(row: Record<string, unknown>): RunRecord {
   return { id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number }
 }
+export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[] }
 export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
@@ -17,7 +18,7 @@ export class RunStore {
     return fromRow(row)
   }
 
-  reserve(podId: string, scriptHash: string, epoch: number): { run: RunRecord, existing: boolean } {
+  reserve(podId: string, scriptHash: string, epoch: number, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): { run: RunRecord, existing: boolean } {
     return this.store.transaction(() => {
       const active = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
       if (active) return { run: this.get(active.run_id as string), existing: true }
@@ -31,6 +32,11 @@ export class RunStore {
       const id = randomUUID(); const now = Date.now()
       const checkpoint = this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(podId)!.revision as number
       this.store.db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, podId, scriptHash, 'running', now, null, '', null, checkpoint, pod.revision)
+      this.store.db.prepare('INSERT INTO run_inputs VALUES(?,?,?)').run(id, trigger.reason, JSON.stringify(trigger.eventIds))
+      for (const eventId of trigger.eventIds) {
+        const claimed = this.store.db.prepare('UPDATE accepted_events SET state=\'claimed\',run_id=? WHERE id=? AND pod_id=? AND state=\'pending\'').run(id, eventId, podId)
+        if (claimed.changes !== 1) throw new Error('Event is no longer available for this run')
+      }
       this.store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,?)').run(podId, id, this.bootId, now, null)
       this.append(id, 'started', { scriptHash, assignmentRevision: pod.revision, resourceEpoch: epoch })
       return { run: this.get(id), existing: false }
@@ -53,12 +59,17 @@ export class RunStore {
     return this.store.db.prepare('SELECT * FROM run_events WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT 500').all(id, after).map(row => ({ sequence: row.sequence as number, type: row.type as string, data: JSON.parse(row.data as string), at: row.at as number }))
   }
 
-  finish(id: string, state: RunState, summary: string, error: string | null): void {
+  finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = []): void {
     this.store.transaction(() => {
       this.assertLease(id)
       const run = this.get(id)
       const revision = this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(run.podId)!.revision as number
       this.store.db.prepare('UPDATE runs SET state=?,summary=?,error=?,finished_at=?,checkpoint_revision=? WHERE id=?').run(state, summary, error, Date.now(), revision, id)
+      for (const eventId of completedInputIds) {
+        const result = this.store.db.prepare('UPDATE accepted_events SET state=\'processed\' WHERE id=? AND run_id=? AND state=\'claimed\'').run(eventId, id)
+        if (result.changes !== 1) throw new Error('Completed input is not assigned to this run')
+      }
+      this.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE run_id=? AND state=\'claimed\'').run(error ?? 'Input was not completed; explicit retry is required', id)
       this.append(id, 'finished', { state, summary, error, checkpointRevision: revision })
       this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND boot_id=?').run(id, this.bootId)
     })
