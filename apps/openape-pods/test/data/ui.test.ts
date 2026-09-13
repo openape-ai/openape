@@ -21,7 +21,7 @@ it('shows storage limits, preserves recovery access after an unavailable worker 
   unavailable.unmount()
 })
 it('disables maintenance while work is active', async () => {
-  window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: true, error: null }) } as unknown as typeof window.pods
+  window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: true, error: null }) } as unknown as typeof window.pods
   const wrapper = mount(DataManagement); await flushPromises()
   for (const text of ['Export backup…', 'Clean unused files', 'Verify update and back up…']) expect(wrapper.findAll('button').find(item => item.text() === text)!.attributes('disabled')).toBeDefined()
   wrapper.unmount()

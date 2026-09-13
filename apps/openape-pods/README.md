@@ -538,3 +538,26 @@ replacement and keep the old app and backup together. For rollback, reinstall th
 signed app and restore its compatible backup into a fresh profile; never open the
 migrated database with an incompatible old binary. No background updater, release
 tag, publication or deployment is part of this increment.
+
+## Direct script editor and user handbook
+
+Read the [illustrated user handbook](docs/handbook.md) for every pod tab, global
+view and the local script tutorial. `pnpm --filter @openape/pods handbook` builds
+an offline, standalone `.artifacts/handbook.html` from `docs/handbook.json` and
+reviewed screenshots. After the packaged `script-editor` scenario, pass
+`--refresh-images` to deliberately refresh the committed illustrations.
+
+Settings → Script shows exact content-addressed source and retained drafts.
+Owners edit plain JavaScript, save a draft, run the bounded synthetic sandbox
+validation and explicitly activate the validated version. Drafts are shared with
+master chat and use revision checks to reject conflicting saves. Validation and
+activation retain assignment/resource checks; running scripts keep their pinned
+version. Failed validation leaves active code intact. The viewer includes the
+runtime binding comment appended during validation. Source text never executes
+in the renderer.
+
+Unsaved edits remain in memory across tab/pod navigation within an app session;
+save before quitting. Source changes require explicit discard when edits are
+unsaved. Saved drafts survive restart. Refresh history preserves editor text;
+reopen a draft to load its latest revision, or save as a new draft after a
+conflict. No new editor dependency or database migration is introduced.
