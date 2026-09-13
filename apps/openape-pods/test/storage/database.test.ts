@@ -25,6 +25,16 @@ function manifest(artifact: string): ScriptManifest {
   return { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash: digest('empty'), runtimeVersion: 'node24', capabilities: [], triggers: ['manual'], inputSchemaHash: digest('input'), outputSchemaHash: digest('output'), checkpointSchemaVersion: 1, assignmentRevision: 1, effects: 'readOnly' }
 }
 describe('durable pod state', () => {
+  it('rolls back nested mutations and their action receipt as one transaction', () => {
+    const store = fixture()
+    expect(() => store.transaction(() => { store.createPod({ name: 'Uncommitted', assignment: 'Synthetic' }); throw new Error('Receipt failed') })).toThrow('Receipt failed')
+    expect(store.listPods()).toHaveLength(0)
+    store.transaction(() => {
+      store.createPod({ name: 'Kept', assignment: 'Synthetic' })
+      expect(() => store.transaction(() => { store.createPod({ name: 'Rolled back', assignment: 'Synthetic' }); throw new Error('Inner failure') })).toThrow('Inner failure')
+    })
+    expect(store.listPods().map(pod => pod.name)).toEqual(['Kept'])
+  })
   it('creates a manual-only pod, persists edits and rejects stale/excess authority', () => {
     let store = fixture()
     expect(() => store.createPod({ name: 'Mail', assignment: 'Read', token: 'never-store' })).toThrow('schema')
@@ -82,7 +92,7 @@ describe('durable pod state', () => {
   })
   it('backs up and migrates a v1 database with existing pod state', () => {
     let store = fixture(); const pod = store.createPod({ name: 'Previous', assignment: 'Preserve me' })
-    store.db.exec('DROP TABLE mail_inventory; DROP TABLE mail_items; DROP TABLE mail_receipts; DROP TABLE mail_extractions; DROP TABLE mail_contexts; DROP TABLE source_derivations; DROP TABLE effect_ledger; DROP TABLE recovery_reviews; DROP TABLE execution_domains; DROP TABLE reference_observations; DROP TABLE run_inputs; DROP TABLE accepted_events; DROP TABLE schedules; DROP TABLE run_events; DROP TABLE run_leases; DROP TABLE runs; DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
+    store.db.exec('DROP TABLE access_proposals; DROP TABLE script_drafts; DROP TABLE master_actions; DROP TABLE master_messages; DROP TABLE master_session; DROP TABLE master_domains; DROP TABLE master_inputs; DROP TABLE mail_inventory; DROP TABLE mail_items; DROP TABLE mail_receipts; DROP TABLE mail_extractions; DROP TABLE mail_contexts; DROP TABLE source_derivations; DROP TABLE effect_ledger; DROP TABLE recovery_reviews; DROP TABLE execution_domains; DROP TABLE reference_observations; DROP TABLE run_inputs; DROP TABLE accepted_events; DROP TABLE schedules; DROP TABLE run_events; DROP TABLE run_leases; DROP TABLE runs; DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
     store = reopen(store)
     expect(store.getPod(pod.id).assignment).toBe('Preserve me')
     expect(store.db.prepare('SELECT concurrency FROM settings').get()?.concurrency).toBe(2)

@@ -1,10 +1,11 @@
+import type { MasterCommand, MasterView } from './master'
 import type { DetailsCommand, PodDetails } from './details'
 import type { ScheduleCommand, ScheduleView } from './scheduling'
 import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
+export const channels = { master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -15,6 +16,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  master: (command: MasterCommand) => Promise<MasterView>
   details: (command: DetailsCommand) => Promise<PodDetails>
   scheduling: (command: ScheduleCommand) => Promise<ScheduleView>
   runs: (command: RunCommand) => Promise<RunView>
