@@ -2,10 +2,11 @@
 import { defineComponent } from 'vue'
 import PodSettings from './PodSettings.vue'
 import PodResources from './PodResources.vue'
+import PodRuns from './PodRuns.vue'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodSettings, PodResources },
+  components: { PodSettings, PodResources, PodRuns },
   data() {
     return {
       selected: 'Overview',
@@ -87,7 +88,7 @@ export default defineComponent({
             </p><h1>Mail knowledge</h1><p class="subtitle">
               A place for context that lasts beyond a conversation.
             </p>
-          </div><button class="primary" disabled title="Execution is disabled in fixture mode">
+          </div><button class="primary" @click="selectTab('Runs')">
             Run once <span aria-hidden="true">↗</span>
           </button>
         </div>
@@ -122,7 +123,7 @@ export default defineComponent({
               </p><p v-if="attention" class="error-message" role="alert">
                 {{ connectionError || status?.worker.error }}
               </p><p v-else class="muted">
-                The local worker is available.<br>Pod execution is disabled in this build.
+                The local worker is available.<br>Local example scripts can be run from Runs.
               </p>
             </article>
           </div>
@@ -156,6 +157,9 @@ export default defineComponent({
         </section>
         <section v-else-if="selected === 'Resources'" id="panel-Resources" role="tabpanel" aria-labelledby="tab-Resources">
           <PodResources />
+        </section>
+        <section v-else-if="selected === 'Runs'" id="panel-Runs" role="tabpanel" aria-labelledby="tab-Runs">
+          <PodRuns />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
           <PodSettings />
