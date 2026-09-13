@@ -30,6 +30,7 @@
     "@openape/prompt-injection-detector": "workspace:*",
     "croner": "^10.0.1",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "highlight.js": "^11.11.1",
     "idb-keyval": "^6.3.0",
     "jose": "catalog:",
