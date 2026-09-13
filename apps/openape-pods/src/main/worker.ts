@@ -1,3 +1,5 @@
+import { parseMasterView } from '../contracts/master'
+import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
 import { parseServiceScope } from '../contracts/services'
 import type { ServiceCheck, ServiceRequest } from '../contracts/services'
@@ -35,7 +37,9 @@ export class FixtureWorker {
   start(root: string): void {
     this.root = realpathSync(root)
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
+    if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
@@ -72,6 +76,8 @@ export class FixtureWorker {
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
   }
 
+  async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
+
   async details(command: DetailsCommand): Promise<PodDetails> { return parsePodDetails(await this.dispatch({ details: command })) }
 
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
@@ -82,7 +88,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
