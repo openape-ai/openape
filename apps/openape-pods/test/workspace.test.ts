@@ -9,7 +9,7 @@ describe('pod workspace shell', () => {
   it('shows actual worker updates, contextual navigation and manual execution navigation', async () => {
     let listener = (_status: PodStatus) => {}
     const unsubscribe = vi.fn()
-    window.pods = { runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
+    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
     const wrapper = mount(App)
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Ready')
@@ -25,7 +25,7 @@ describe('pod workspace shell', () => {
     wrapper.unmount(); expect(unsubscribe).toHaveBeenCalledOnce()
   })
   it('surfaces IPC connection failure instead of claiming readiness', async () => {
-    window.pods = { runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
+    window.pods = { scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
     const wrapper = mount(App); await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Unavailable')
     expect(wrapper.get('[role="alert"]').text()).toBe('Connection rejected')

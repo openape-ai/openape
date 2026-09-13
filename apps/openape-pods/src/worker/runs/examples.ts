@@ -7,7 +7,7 @@ export const resultSchema = { type: 'object', additionalProperties: false, requi
 export function installExample(store: PodDatabase, resources: ResourceRegistry, podId: string, variant: 'deterministic' | 'agent', dependencyLockHash: string): void {
   const pod = store.getPod(podId)
   if (store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('Wait for the current run or recover it before changing versions')
-  const artifact = `export const assignmentRevision=${pod.revision};
+  const artifact = `export const contractVersion=2; export const assignmentRevision=${pod.revision};
 export async function run(context) {
   const count = Number(context.input.checkpoint.exampleRuns ?? 0) + 1;
   context.log('Starting local example '+count);
@@ -15,7 +15,7 @@ export async function run(context) {
   await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{...context.input.checkpoint,exampleRuns:count},sources:[],claims:[]});
   return {status:'completed',summary:'Local example completed ('+count+')',completedInputIds:context.input.eventIds,gapIds:[]};
 }`
-  const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities: [], triggers: ['manual'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.revision, effects: 'readOnly' }, artifact)
+  const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities: [], triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.revision, effects: 'readOnly' }, artifact)
   store.transaction(() => {
     if (store.getPod(podId).revision !== pod.revision) throw new Error('Assignment changed during example installation')
     store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, manifest.contentHash, pod.revision, resources.epoch(podId), JSON.stringify({ kind: 'bundled-example', variant, contract: 1, dependencyLockHash }))
