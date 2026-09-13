@@ -11,10 +11,13 @@ function ownerGone(pid: number): boolean {
 }
 export async function confirmDomainsStopped(store: PodDatabase, runId: string, helper: string): Promise<void> {
   const domains = store.db.prepare('SELECT * FROM execution_domains WHERE run_id=?').all(runId)
+  await inspectDomainRecords(domains, join(store.root, 'runs', runId), helper)
+}
+export async function inspectDomainRecords(domains: Record<string, unknown>[], root: string, helper: string): Promise<void> {
   const deadline = Date.now() + 10000
   for (const domain of domains) {
     const path = domain.path as string
-    if (!path.startsWith(join(store.root, 'runs', runId) + sep)) throw new Error('Execution domain belongs to another run')
+    if (!path.startsWith(root + sep)) throw new Error('Execution domain belongs to another run')
     for (;;) {
       const { stdout } = await execute(helper, ['inspect-domain', path], { env: { PATH: '/usr/bin:/bin' }, timeout: 3000, maxBuffer: 1024 })
       const result = JSON.parse(stdout) as { quiescent?: boolean, reason?: string }

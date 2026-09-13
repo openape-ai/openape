@@ -19,6 +19,14 @@ export function bundleCodex() {
   copyFileSync(binary, join(destination, 'codex'))
   const home = mkdtempSync(join(tmpdir(), 'pods-build-codex-'))
   try {
+    const protocol = JSON.parse(readFileSync('runtime-sources/master-protocol.json', 'utf8'))
+    if (protocol.codex !== '0.153.4') throw new Error('Unsupported master protocol pin')
+    const schemas = join(home, 'schemas')
+    execFileSync(binary, ['app-server', 'generate-json-schema', '--experimental', '--out', schemas], { timeout: 15000, maxBuffer: 1024 * 1024, env: { HOME: home, CODEX_HOME: home, PATH: '/usr/bin:/bin' } })
+    for (const [path, hash] of Object.entries(protocol.schemas)) {
+      if (createHash('sha256').update(readFileSync(join(schemas, path))).digest('hex') !== hash) throw new Error(`Master protocol drift: ${path}`)
+    }
+    copyFileSync('runtime-sources/master-protocol.json', join(destination, 'master-protocol.json'))
     const raw = execFileSync(binary, ['debug', 'models', '--bundled'], { encoding: 'utf8', timeout: 10000, maxBuffer: 8 * 1024 * 1024, env: { HOME: home, CODEX_HOME: home, PATH: '/usr/bin:/bin' } })
     const catalog = JSON.parse(raw)
     const model = catalog.models.find(item => item.slug === 'gpt-5.5')

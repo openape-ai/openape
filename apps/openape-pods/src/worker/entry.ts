@@ -1,3 +1,7 @@
+import { parseMasterCommand } from '../contracts/master'
+import { MasterControl } from './master/control'
+import { MasterService } from './master/service'
+import type { AgentRuntime } from './agent/executor'
 import type { ServiceCheck } from '../contracts/services'
 import { authorizeMailService } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
@@ -28,11 +32,12 @@ const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
 if (!executable) throw new Error('Trusted runtime executable is missing')
-dispatcher = new RunDispatcher(store, registry, {
+const runtime: AgentRuntime = {
   helper: join(dist, 'native/pods-helper'), executable, entry: join(dist, 'runtime/script-entry.mjs'),
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
-}, { tool: async (body, signal, scope) => {
+}
+dispatcher = new RunDispatcher(store, registry, runtime, { tool: async (body, signal, scope) => {
   const assignment = assignedMail(registry.list(scope.podId))
   const { read } = parseMailRequest(body, assignment.mail)
   const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
@@ -41,6 +46,8 @@ dispatcher = new RunDispatcher(store, registry, {
 } })
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
+const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
+const master = new MasterService(store, runtime, new MasterControl(store, registry, dispatcher, scheduler, runtime), fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
@@ -61,10 +68,13 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { suspended = true; clearInterval(timer); await ticking; await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { suspended = true; clearInterval(timer); await ticking; await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'master' in request.command) {
+      port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
+    }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       port.postMessage({ id: request.id, state: authorizeMailService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
     }

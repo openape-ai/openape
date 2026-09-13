@@ -114,7 +114,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['details', 'getStatus', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['details', 'getStatus', 'master', 'onStatus', 'resources', 'runs', 'scheduling', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -126,7 +126,7 @@ describe('foundation', () => {
       const other = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: `${app.getAppPath()}/dist/preload/index.cjs` } })
       try {
         await other.loadURL('pods://app/index.html')
-        return await other.webContents.executeJavaScript('window.pods.getStatus().then(() => "allowed", () => "denied")')
+        return await other.webContents.executeJavaScript('window.pods.master({type:"list"}).then(() => "allowed", () => "denied")')
       }
       finally { other.destroy() }
     })
