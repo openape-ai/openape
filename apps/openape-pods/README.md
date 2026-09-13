@@ -202,3 +202,34 @@ conflicting event IDs, queue overflow, restart before acknowledgement, FIFO
 capacity, held failures, cross-pod event binding and reference changes across a
 database restart. Owner schedules remain unconfigured during implementation;
 only isolated synthetic test profiles exercise automatic dispatch.
+
+## M6: explicit recovery and lifecycle
+
+Startup fences every retained run lease before accepting commands. Old workers
+cannot register execution domains or commit progress. Native supervisors persist
+process birth identities before opening the execution gate and publish a closed
+record only after the owned process group is gone. Recovery inspects those
+records; it never signals a saved PID. Missing or ambiguous process evidence
+keeps the run blocked. A closed owning pipe prevents a late supervisor from
+starting its executable after the worker has died.
+
+Cancellation waits for actual SDK cleanup before releasing the pod and global
+slot. Runs offers inspection and explicit retry using the latest validated
+assignment and resources. Committed checkpoints and cited facts survive; remaining
+inputs are requeued atomically with an idempotent recovery request. Each manual
+request handles up to fifty inputs, with additional backlog visible for another
+manual request. Paused pods stay paused.
+
+The effect ledger records intent, completed receipts and unknown outcomes. An
+unknown outcome prevents recovery until a trusted adapter reconciles it; scripts
+cannot assert their own reconciliation. Effectful scripts remain disabled until
+such an adapter is registered. This is tested with synthetic effects only.
+
+Closing the window keeps a running fixture alive; quit cancels its process domain.
+Suspend signals pause automatic intake and resume signals request a rescan and
+coalesced catch-up. The tray can pause all automatic execution. Native and packaged
+fixtures cover script/worker/app termination after a committed unit, no duplicate
+knowledge after retry, stale PID identity, unknown effects and a frozen SDK
+supervisor during cancellation. Synthetic power-monitor signals exercise resume;
+physical macOS sleep/wake and signed-build acceptance remain unverified release
+gates and are not implied by these tests.

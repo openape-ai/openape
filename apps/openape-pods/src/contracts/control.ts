@@ -1,12 +1,12 @@
 export interface StoredPod { id: string, name: string, assignment: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null }
 export interface WorkspaceState { pods: StoredPod[] }
-export type WorkspaceCommand = { type: 'list' } | { type: 'create', name: string, assignment: string } | { type: 'update', id: string, revision: number, name: string, assignment: string, lifecycle: StoredPod['lifecycle'] }
+export type WorkspaceCommand = { type: 'list' } | { type: 'pauseAll' } | { type: 'create', name: string, assignment: string } | { type: 'update', id: string, revision: number, name: string, assignment: string, lifecycle: StoredPod['lifecycle'] }
 export function parseCommand(value: unknown): WorkspaceCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid workspace command')
   const command = value as Record<string, unknown>
-  const keys = command.type === 'list' ? ['type'] : command.type === 'create' ? ['type', 'name', 'assignment'] : command.type === 'update' ? ['type', 'id', 'revision', 'name', 'assignment', 'lifecycle'] : []
+  const keys = ['list', 'pauseAll'].includes(command.type as string) ? ['type'] : command.type === 'create' ? ['type', 'name', 'assignment'] : command.type === 'update' ? ['type', 'id', 'revision', 'name', 'assignment', 'lifecycle'] : []
   if (!keys.length || Object.keys(command).some(key => !keys.includes(key))) throw new Error('Unsupported workspace command')
-  if (command.type !== 'list') {
+  if (!['list', 'pauseAll'].includes(command.type as string)) {
     for (const key of ['name', 'assignment']) {
       const text = command[key]
       if (typeof text !== 'string' || !text.trim() || text.includes('\0') || text.length > (key === 'name' ? 100 : 20000)) throw new Error(`Invalid ${key}`)

@@ -1,3 +1,4 @@
+import { Recovery } from './recovery/reconcile'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { Scheduler } from './scheduling/scheduler'
 import { ReferenceWatcher } from './scheduling/references'
@@ -23,22 +24,26 @@ dispatcher = new RunDispatcher(store, registry, {
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 })
 const scheduler = new Scheduler(store, dispatcher)
+const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
+let suspended = false
 let ticking: Promise<void> | null = null
 const timer = setInterval(() => {
-  if (ticking) return
+  if (ticking || suspended) return
   ticking = (async () => {
     try {
       if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
-      scheduler.tick()
+      if (!suspended) scheduler.tick()
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
     finally { ticking = null }
   })()
 }, 1000)
 port.on('message', async (event) => {
-  if (event.data === 'stop') { clearInterval(timer); await ticking; await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'suspend') { suspended = true; return }
+  if (event.data === 'resume') { suspended = false; scanAt = 0; return }
+  if (event.data === 'stop') { suspended = true; clearInterval(timer); await ticking; await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -54,6 +59,8 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
+      if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
+      if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId)
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
@@ -70,6 +77,7 @@ port.on('message', async (event) => {
       return
     }
     const command = parseCommand(request.command)
+    if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name, assignment: command.assignment })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, assignment: command.assignment, lifecycle: command.lifecycle }); dispatcher.cancelPod(command.id, 'Pod assignment changed') }
     port.postMessage({ id: request.id, state: { pods: store.listPods() } })
