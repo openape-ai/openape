@@ -50,6 +50,11 @@ export class DataRetention {
       if (config.identity.podId !== podId || !config.identity.connectionId || !validId(config.identity.connectionId)) throw new Error('Invalid pod key binding')
       return [config.identity.connectionId]
     })
+    for (const row of this.store.db.prepare('SELECT configuration FROM resources WHERE pod_id=? AND kind=\'credential\'').all(podId)) {
+      const id = (JSON.parse(row.configuration as string) as { credentialId?: string }).credentialId
+      if (!id || !validId(id)) throw new Error('Invalid credential deletion binding')
+      keyIds.push(id)
+    }
     this.store.transaction(() => {
       const current = this.store.getPod(podId)
       if (current.revision !== revision || current.lifecycle !== 'archived' || current.name !== name) throw new Error('Pod changed during deletion review')
