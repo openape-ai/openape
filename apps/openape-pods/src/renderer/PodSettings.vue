@@ -21,6 +21,17 @@ export default defineComponent({
     },
     select(pod: StoredPod) { this.selectedId = pod.id; this.name = pod.name; this.assignment = pod.assignment; this.revision = pod.revision; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
     newPod() { this.selectedId = ''; this.name = ''; this.assignment = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
+    async remove() {
+      const pod = this.selectedPod; if (!pod || pod.lifecycle !== 'archived') return
+      this.busy = true; this.error = ''
+      try {
+        await window.pods.data({ type: 'deletePod', podId: pod.id, revision: pod.revision, name: pod.name })
+        await this.reload()
+        if (!this.pods.some(item => item.id === pod.id)) { this.newPod(); this.message = 'Local pod deleted.' }
+      }
+      catch (error) { this.error = error instanceof Error ? error.message : 'Could not delete pod' }
+      finally { this.busy = false }
+    },
     async archive() {
       const pod = this.selectedPod; if (!pod) return
       this.busy = true; this.error = ''
@@ -84,7 +95,12 @@ export default defineComponent({
       Archiving stops intake and preserves knowledge and run history.
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">
       Archive pod
+    </button><button v-if="selectedPod.lifecycle === 'archived'" class="secondary" :disabled="busy" @click="remove">
+      Delete local pod…
     </button>
+    <p v-if="selectedPod.lifecycle === 'archived'" class="muted">
+      Deletion permanently removes this pod’s local data and key. Export a backup first. A separate confirmation follows.
+    </p>
   </article>
 </template>
 

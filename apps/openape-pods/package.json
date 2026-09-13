@@ -18,7 +18,11 @@
     "package:mac": "node scripts/package.mjs",
     "test:packaged": "vitest run --config vitest.electron.config.ts -t packaged",
     "test:layout": "pnpm build && pnpm package:mac && pnpm test:e2e",
-    "report": "node scripts/report.mjs"
+    "report": "node scripts/report.mjs",
+    "package:distribution": "node scripts/package.mjs --distribution",
+    "package:signed": "node scripts/package.mjs --distribution --signed",
+    "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
+    "test:distribution": "node scripts/verify-distribution.mjs"
   },
   "dependencies": {
     "vue": "catalog:"

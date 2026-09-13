@@ -1,3 +1,5 @@
+import { DataControl } from './data/control'
+import type { DataInternal } from './data/control'
 import { SetupControl } from './onboarding/control'
 import type { SetupInternal } from './onboarding/control'
 import { inspectDomainRecords } from './recovery/domains'
@@ -50,6 +52,7 @@ const runServices: RunServices = { tool: async (body, signal, scope) => {
   return ingestMailPage(store, scope.podId, scope.root, value as MailArtifact, assignment.mail, read, scope.assertCurrent)
 } }
 dispatcher = new RunDispatcher(store, registry, runtime, runServices)
+const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
@@ -59,13 +62,22 @@ const master = new MasterService(store, runtime, new MasterControl(store, regist
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
+let storageAt = 0
+let maintenance = false
 let suspended = false
 let startupReady = false
 let ticking: Promise<void> | null = null
 const timer = setInterval(() => {
-  if (ticking || suspended || !startupReady) return
+  if (ticking || suspended || !startupReady || maintenance) return
   ticking = (async () => {
     try {
+      if (Date.now() >= storageAt) {
+        storageAt = Date.now() + 5000
+        try { await data.retention.view() }
+        catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
+      }
+      const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
+      if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await master.stop(); return }
       if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
       if (!suspended) scheduler.tick()
     }
@@ -81,6 +93,16 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'data' in request.command) {
+      const command = request.command.data as DataInternal
+      if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')
+      if (command.type === 'status') { const view = await data.execute(command) as import('../contracts/data').DataView; port.postMessage({ id: request.id, state: { ...view, busy: view.busy || maintenance } }); return }
+      maintenance = true
+      try { await ticking; port.postMessage({ id: request.id, state: await data.execute(command) }) }
+      finally { maintenance = false }
+      return
+    }
+    if (maintenance) throw new Error('Application data is being maintained; retry when it finishes')
     if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
@@ -96,6 +118,7 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
+      await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
