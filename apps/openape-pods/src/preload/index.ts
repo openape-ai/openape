@@ -1,3 +1,4 @@
+import { parseScriptCommand, parseScriptView } from '../contracts/scripts'
 import { parseDataCommand, parseDataView } from '../contracts/data'
 import { parseOnboardingCommand, parseOnboardingView } from '../contracts/onboarding'
 import { parseMasterCommand, parseMasterView } from '../contracts/master'
@@ -12,6 +13,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async scripts(command) { return parseScriptView(await ipcRenderer.invoke(channels.scripts, parseScriptCommand(command))) },
   async data(command) { return parseDataView(await ipcRenderer.invoke(channels.data, parseDataCommand(command))) },
   async onboarding(command) { return parseOnboardingView(await ipcRenderer.invoke(channels.onboarding, parseOnboardingCommand(command))) },
   async master(command) { return parseMasterView(await ipcRenderer.invoke(channels.master, parseMasterCommand(command))) },

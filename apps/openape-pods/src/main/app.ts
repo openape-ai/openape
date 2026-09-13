@@ -1,3 +1,4 @@
+import { parseScriptCommand } from '../contracts/scripts'
 import { verifyUpdate } from './update'
 import { selectedProfile, selectProfile } from './profile'
 import { parseDataCommand } from '../contracts/data'
@@ -130,6 +131,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.master(parseMasterCommand(command))
+  })
+  ipcMain.handle(channels.scripts, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.scripts(parseScriptCommand(command))
   })
   ipcMain.handle(channels.details, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
