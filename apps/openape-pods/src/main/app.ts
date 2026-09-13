@@ -1,7 +1,7 @@
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, Tray } from 'electron'
 import { readFile, realpath } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
@@ -93,8 +93,10 @@ async function start(): Promise<void> {
   })
   window = createWindow()
   tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods · Fixture mode')
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Pods', click: showWindow }, { label: 'Quit Pods', click: () => app.quit() }]))
+  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Pods', click: showWindow }, { label: 'Pause automatic runs', click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox('Could not pause Pods', error instanceof Error ? error.message : 'Worker unavailable')) } }, { label: 'Quit Pods', click: () => app.quit() }]))
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: 'Open Pods', click: showWindow }, { role: 'quit' }] }, { role: 'editMenu' }, { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'close' }] }]))
+  powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
+  powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
 }
 async function shutdown(): Promise<void> {

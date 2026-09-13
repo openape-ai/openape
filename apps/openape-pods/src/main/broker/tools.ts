@@ -18,6 +18,7 @@ export interface ToolAssignment extends AssignedAuthorization {
   networkPorts: number[]
 }
 export interface BrokerLease {
+  registerDomain?: (path: string, ownerPid: number) => void
   capabilities: string[]
   assertCurrent: () => void
   signal: AbortSignal
@@ -56,7 +57,7 @@ export class PodToolBroker {
     await this.authority.assertActive(assignment.grantId, lease.signal)
     lease.assertCurrent(); lease.signal.throwIfAborted()
     const secrets = cache ? secretStrings(JSON.parse(await readFile(cache, 'utf8'))) : []
-    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(workspace), readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, [...assignment.prefix, ...assignment.command.argv.slice(1)], { ...assignment.environment, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) })
+    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(workspace), readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, [...assignment.prefix, ...assignment.command.argv.slice(1)], { ...assignment.environment, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined
     const stop = () => { failure ??= new Error('Tool call cancelled'); domain.cancel() }
     lease.signal.addEventListener('abort', stop, { once: true })

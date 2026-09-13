@@ -56,6 +56,14 @@ describe('persistent scheduling and intake', () => {
     expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(2)
     f.scheduler.concurrency(1); f.scheduler.tick(); expect(f.started).toHaveLength(3)
   })
+  it('includes accepted input in an explicitly requested run while keeping automatic execution paused', () => {
+    const f = fixture(); const pod = f.pod(false)
+    const input = f.scheduler.acceptEvent(pod, 'fixture', 'paused-input', {})
+    f.scheduler.tick(); expect(f.started).toHaveLength(0)
+    f.scheduler.requestManual(pod)
+    expect(f.started[0]!.trigger.eventIds).toContain(input)
+    expect(f.store.getPod(pod).lifecycle).toBe('paused')
+  })
   it('keeps paused schedules inert and catches up once after explicit resume', () => {
     const f = fixture(); const pod = f.pod(false)
     f.scheduler.save(pod, 0, { kind: 'interval', seconds: 60 }, true)
