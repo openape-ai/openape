@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   const token = authHeader.slice(7)
 
   // Verify JWT signature
-  const { keyStore } = useIdpStores()
+  const { keyStore, userStore } = useIdpStores()
   const signingKey = await keyStore.getSigningKey()
   const result = await verifyAuthzJWT(token, {
     publicKey: signingKey.publicKey,
@@ -56,6 +56,10 @@ export default defineEventHandler(async (event) => {
   if (!grant) {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
+
+  if (result.claims.sub !== grant.request.requester) throw createProblemError({ status: 403, title: 'Grant requester does not match the token subject' })
+  const requester = await userStore.findByEmail(grant.request.requester)
+  if (!requester?.isActive) throw createProblemError({ status: 403, title: 'Grant requester is inactive or missing' })
 
   // Check grant status
   switch (grant.status) {
