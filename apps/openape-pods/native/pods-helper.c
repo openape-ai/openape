@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/proc.h>
 #include <sys/poll.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -85,13 +86,40 @@ static int64_t monotonic_ms(void) {
   if (clock_gettime(CLOCK_MONOTONIC, &value) < 0) fail("Monotonic clock");
   return (int64_t)value.tv_sec * 1000 + value.tv_nsec / 1000000;
 }
+static int group_alive(pid_t group) {
+  int size = proc_listpids(PROC_PGRP_ONLY, (uint32_t)group, NULL, 0);
+  if (size < 0) fail("Inspect owned group");
+  if (!size) return 0;
+  size += 32 * (int)sizeof(pid_t);
+  pid_t *members = calloc(1, (size_t)size);
+  if (!members) fail("Allocate owned group list");
+  int actual = proc_listpids(PROC_PGRP_ONLY, (uint32_t)group, members, size);
+  if (actual < 0 || actual >= size) fail("Read owned group list");
+  int alive = 0;
+  for (int index = 0; index < actual / (int)sizeof(pid_t); index++) {
+    struct proc_bsdinfo info;
+    if (!members[index]) continue;
+    int bytes = proc_pidinfo(members[index], PROC_PIDTBSDINFO, 0, &info, sizeof(info));
+    if (!bytes && errno == ESRCH) continue;
+    if (bytes != sizeof(info)) fail("Inspect owned group member");
+    if (info.pbi_pgid == (uint32_t)group && info.pbi_status != SZOMB) alive = 1;
+  }
+  free(members); return alive;
+}
+static void signal_group(pid_t child, int signal_number) {
+  if (kill(-child, signal_number) == 0 || errno == ESRCH) return;
+  if (errno == EPERM && !group_alive(child)) return;
+  fail("Signal owned process group");
+}
 static void terminate_group(pid_t child, int *status) {
-  if (kill(-child, SIGTERM) < 0 && errno != ESRCH) fail("Terminate child group");
+  signal_group(child, SIGTERM);
   struct timespec grace = { .tv_sec = 0, .tv_nsec = 200000000 }; nanosleep(&grace, NULL);
-  pid_t result = waitpid(child, status, WNOHANG);
-  if (result == child) return;
-  if (result < 0) fail("Inspect terminating child");
-  if (kill(-child, SIGKILL) < 0 && errno != ESRCH) fail("Kill child group");
+  signal_group(child, SIGKILL);
+  int64_t deadline = monotonic_ms() + 5000;
+  while (group_alive(child)) {
+    if (monotonic_ms() > deadline) { errno = ETIMEDOUT; fail("Process group cleanup remains unresolved"); }
+    struct timespec pause = { .tv_sec = 0, .tv_nsec = 10000000 }; nanosleep(&pause, NULL);
+  }
   while (waitpid(child, status, 0) < 0) if (errno != EINTR) fail("Reap isolated process");
 }
 static int supervise(char **command) {
@@ -120,9 +148,9 @@ static int supervise(char **command) {
   dprintf(4, "{\"pid\":%d}\n", child);
   int status = 0; int64_t deadline = monotonic_ms() + 30000;
   for (;;) {
-    pid_t result = waitpid(child, &status, WNOHANG);
-    if (result == child) break;
-    if (result < 0) { if (errno == EINTR) continue; fail("Wait for isolated process"); }
+    siginfo_t exited; memset(&exited, 0, sizeof(exited));
+    if (waitid(P_PID, (id_t)child, &exited, WEXITED | WNOHANG | WNOWAIT) < 0) { if (errno == EINTR) continue; fail("Inspect isolated process"); }
+    if (exited.si_pid == child) { terminate_group(child, &status); break; }
     struct pollfd lease = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
     int readable = poll(&lease, 1, 100);
     if (readable < 0 && errno != EINTR) fail("Watch supervisor lease");

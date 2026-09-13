@@ -1,3 +1,4 @@
+import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, Tray } from 'electron'
 import { readFile, realpath } from 'node:fs/promises'
@@ -19,7 +20,7 @@ let window: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let stopped = false
-const status: PodStatus = { version: 1, mode: 'fixture', executionEnabled: false, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
+const status: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 const worker = new FixtureWorker((next) => {
   status.worker = next
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
@@ -65,6 +66,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.request(parseCommand(command))
+  })
+  ipcMain.handle(channels.runs, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.runs(parseRunCommand(command))
   })
   ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
