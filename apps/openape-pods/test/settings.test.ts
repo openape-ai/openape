@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import PodSettings from '../src/renderer/PodSettings.vue'
 import type { WorkspaceState } from '../src/contracts/control'
 
-const saved: WorkspaceState = { pods: [{ id: '00000000-0000-4000-8000-000000000001', name: 'Orders', assignment: 'Read assigned order evidence.', revision: 1, lifecycle: 'paused', activeScript: null }] }
+const saved: WorkspaceState = { organization: { revision: 1, groups: [] }, pods: [{ id: '00000000-0000-4000-8000-000000000001', name: 'Orders', assignment: 'Read assigned order evidence.', revision: 1, lifecycle: 'paused', activeScript: null }] }
 describe('local pod settings', () => {
   it('loads saved assignments, saves revisioned edits and surfaces stale conflicts', async () => {
     const workspace = vi.fn().mockResolvedValueOnce(saved).mockRejectedValueOnce(new Error('Stale pod revision'))
@@ -19,7 +19,7 @@ describe('local pod settings', () => {
     wrapper.unmount()
   })
   it('creates a pod and makes persistence and paused execution explicit', async () => {
-    const workspace = vi.fn().mockResolvedValueOnce({ pods: [] }).mockResolvedValueOnce(saved)
+    const workspace = vi.fn().mockResolvedValueOnce({ organization: { revision: 1, groups: [] }, pods: [] }).mockResolvedValueOnce(saved)
     window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace, getStatus: vi.fn(), onStatus: vi.fn() }
     const wrapper = mount(PodSettings); await flushPromises()
     await wrapper.get('input').setValue('Orders'); await wrapper.get('textarea').setValue('Read assigned order evidence.')

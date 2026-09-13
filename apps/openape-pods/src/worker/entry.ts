@@ -1,3 +1,4 @@
+import { PodGroups } from './workspace/groups'
 import { ScriptWorkspace } from './workspace/scripts'
 import { parseScriptCommand } from '../contracts/scripts'
 import { DataControl } from './data/control'
@@ -168,10 +169,11 @@ port.on('message', async (event) => {
       return
     }
     const command = parseCommand(request.command)
+    if (command.type === 'organize') new PodGroups(store).execute(command)
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name, assignment: command.assignment })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, assignment: command.assignment, lifecycle: command.lifecycle }); dispatcher.cancelPod(command.id, 'Pod assignment changed') }
-    port.postMessage({ id: request.id, state: { pods: store.listPods() } })
+    port.postMessage({ id: request.id, state: { pods: store.listPods(), organization: new PodGroups(store).view() } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

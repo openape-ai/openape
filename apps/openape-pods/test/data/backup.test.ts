@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
+import { PodGroups } from '../../src/worker/workspace/groups'
 import { DataRetention } from '../../src/worker/data/retention'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
@@ -28,8 +29,10 @@ async function fixture() {
 }
 it('restores settings, checkpoint, knowledge, citations, script, workspace and run history into a fresh paused profile', async () => {
   const { store, exports, pod, runId } = await fixture()
+  const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', revision: 1, name: 'Clients' }); groups.execute({ type: 'organize', action: 'move', revision: 2, podId: pod.id, groupId: groups.view().groups[0]!.id })
   const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
   const restored = new PodDatabase(target); stores.push(restored)
+  expect(new PodGroups(restored).view()).toEqual(groups.view())
   expect(restored.getPod(pod.id)).toMatchObject({ name: 'Orders', lifecycle: 'paused', activeScript: store.getPod(pod.id).activeScript })
   expect(restored.checkpoint(pod.id)).toEqual(store.checkpoint(pod.id)); expect(restored.knowledge(pod.id)).toEqual(store.knowledge(pod.id))
   const source = restored.db.prepare('SELECT hash FROM sources').get()!.hash as string; expect(restored.readBlob(source).toString()).toBe('Delivery Friday')
