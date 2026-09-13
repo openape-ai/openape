@@ -36,7 +36,7 @@ describe('pod-workspace concept B', () => {
   it('uses persisted pods, separates knowledge states, expands sources and opens contextual master chat', async () => {
     const { app, page, pod } = await launch()
     await page.getByRole('heading', { name: 'Mail knowledge', exact: true }).waitFor()
-    await page.getByText('1 findings · 1 open questions · 1 verification gaps', { exact: true }).waitFor()
+    await page.getByText('1 finding · 1 open question · 1 verification gap', { exact: true }).waitFor()
     expect(await page.locator('.pod-button').count()).toBe(2)
     await page.getByRole('tab', { name: 'Knowledge', exact: true }).click()
     await page.getByText('Delivery is confirmed for Tuesday.', { exact: true }).waitFor()

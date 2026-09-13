@@ -1,0 +1,218 @@
+{
+  "title": "OpenApe Pods · Benutzerhandbuch",
+  "subtitle": "Deine Pods, ihre Skripte und die Belege, die sie bewahren.",
+  "sections": [
+    {
+      "id": "start",
+      "title": "Hier beginnen",
+      "paragraphs": [
+        "OpenApe Pods gibt jeder wiederkehrenden Aufgabe einen Auftrag, ein Skript, einen Arbeitsbereich, dauerhaftes Wissen und ausdrücklich zugewiesene Ressourcen. Wähle einen Pod in der Seitenleiste und verwende Übersicht, Wissen, Ressourcen, Läufe und Einstellungen, um ihn zu prüfen und zu steuern. Der Master-Chat hilft bei der Vorbereitung von Pods und Skripten.",
+        "Dieses Handbuch beschreibt die unsignierte Entwicklungsversion 0.1.0. Die Abbildungen zeigen synthetische Aufträge und lokale Referenzdateien. Echte Anmeldungen bei ChatGPT, OpenApe und Microsoft, Live-Mail-Zugriffe und die signierte Distribution benötigen noch eine Freigabeprüfung. Die Ausführung erfordert derzeit Apple Silicon und Darwin 25.6.0, geprüft unter macOS 26.6.2. Ein nicht unterstützter Rechner zeigt einen Fehler und blockiert die Ausführung.",
+        "Die App enthält Electron, Node.js und Codex. Für Läufe in der gepackten App ist keine separate Node-Installation nötig. Öffne das bereitgestellte DMG und kopiere OpenApe Pods nach Programme. Eine unsignierte Testversion unterliegt der macOS-Sicherheitsprüfung; sie ist keine notarisierte Veröffentlichung.",
+        "Das Schließen des Fensters lässt die App über die Menüleiste verfügbar. Beenden stoppt lokale Ausführungen; im Ruhezustand kann der Mac keine Zeitpläne ausführen. Öffne die App erneut, um unterbrochene Arbeit zu prüfen. Reguläre Daten liegen unter ~/Library/Application Support/OpenApe Pods."
+      ],
+      "steps": []
+    },
+    {
+      "id": "language",
+      "title": "Sprache wählen",
+      "paragraphs": [
+        "Verwende Sprache in der Seitenleiste, um sofort zwischen Deutsch und English zu wechseln. Der gewählte Tab und ungespeicherter Editorinhalt bleiben geöffnet. Die Auswahl wird pro lokalem Profil gespeichert und gilt auch nach einem Neustart für Oberfläche, native Menüs und app-eigene Dialoge. Ein neues Profil startet auf Deutsch, wenn deine bevorzugte Systemsprache Deutsch ist, sonst auf Englisch.",
+        "Pod- und Gruppennamen, Aufgaben, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.",
+        "Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit passenden App-Abbildungen vor. Nutze den Link zur anderen Ausgabe in der Handbuchnavigation. Bewahre beide HTML-Dateien zusammen auf, damit diese Links funktionieren. Die Sprache ist eine lokale Anzeigeeinstellung. Ein wiederhergestelltes Profil beginnt mit der Systemvorgabe, bis du erneut eine Sprache wählst."
+      ],
+      "steps": []
+    },
+    {
+      "id": "first-run",
+      "title": "Dein erster lokaler Lauf",
+      "paragraphs": [
+        "Probiere dies mit einem neuen Pod. Das lokale Beispiel benötigt keine Kontoverbindung und erhöht einen dauerhaft gespeicherten Zähler. Beim Installieren wird das Beispiel zugleich zum aktiven Skript. Verwende deshalb einen neuen Pod, um kein eingerichtetes Arbeitsskript zu ersetzen."
+      ],
+      "steps": [
+        "Wähle + Neuer Pod. Gib im lokalen Pod-Formular unter dem Master-Chat einen Pod-Namen und eine Aufgabe ein und wähle Pod speichern. Der neue Pod ist pausiert.",
+        "Wähle den Tab Läufe und dann Lokales Beispiel verwenden. Wähle Lauf starten oder oben im Arbeitsbereich Einmal ausführen.",
+        "Warte auf Local example completed (1). Diese Zusammenfassung stammt aus dem Beispielskript und bleibt im Original. Wähle das Ergebnis und öffne Gespeicherte Ereignisse, um das Protokoll zu prüfen.",
+        "Führe das Skript erneut aus, um den Zähler zu erhöhen. Ein Skriptlauf kann Fortschritt speichern, ohne fachliche Erkenntnisse zu erzeugen.",
+        "Öffne Einstellungen und scrolle zu Skript, um das aktive JavaScript zu prüfen. Automatische Läufe bleiben deaktiviert, bis du sie ausdrücklich konfigurierst und aktivierst."
+      ]
+    },
+    {
+      "id": "groups",
+      "title": "Pods in Gruppen organisieren",
+      "paragraphs": [
+        "Verwende Gruppen in der Seitenleiste, um zusammengehörige Pods zu ordnen. Jeder Pod gehört zu genau einer flachen Gruppe oder zu Nicht gruppiert. Gruppennamen, Zuordnungen und Einklappzustand werden auf diesem Mac gespeichert und in Sicherungen aufgenommen. Gruppen erscheinen in Erstellungsreihenfolge; Pods behalten innerhalb jeder Gruppe ihre ursprüngliche Erstellungsreihenfolge.",
+        "Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung."
+      ],
+      "steps": [
+        "Wähle + Gruppe neben DEINE PODS, gib einen Gruppennamen ein und wähle Gruppe erstellen. Namen enthalten 1–100 Zeichen; bis zu fünfzig Gruppen werden unterstützt.",
+        "Wähle einen Pod und unter Gruppe für [Pod-Name] sein Ziel. Du kannst einen Pod auch auf eine Gruppenüberschrift ziehen, einschließlich eingeklappter Gruppen. Wähle Nicht gruppiert, um seine Zuordnung zu entfernen.",
+        "Wähle eine Gruppenüberschrift zum Ein- oder Ausklappen. Der gewählte Pod bleibt im Arbeitsbereich geöffnet, während seine Gruppe eingeklappt ist.",
+        "Wähle die Schaltfläche mit drei Punkten neben einer Gruppe, um sie umzubenennen. Zum Entfernen wähle Gruppe entfernen und bestätige, dass ihre Pods nach Nicht gruppiert verschoben werden.",
+        "Falls eine andere Bearbeitung die Gruppen geändert hat, bleibt dein eingegebener Text erhalten. Warte auf die Aktualisierung der Seitenleiste und versuche es erneut."
+      ],
+      "image": "handbook-groups-de.png"
+    },
+    {
+      "id": "overview",
+      "title": "Übersicht",
+      "paragraphs": [
+        "Die Übersicht zeigt, was dieser Pod tut, was zuletzt passiert ist und was als Nächstes ansteht. Die Aufgabenkarte zeigt den gespeicherten Auftrag und seine Revision. Aufgabe bearbeiten öffnet die Einstellungen.",
+        "Letztes Ergebnis zeigt Zustand, Zusammenfassung, Fortschrittsstand und Fehler des letzten Laufs. Laufprotokoll ansehen öffnet Läufe. Einmal ausführen startet das aktive Skript auch bei pausierter automatischer Ausführung. Die Aktion ist ohne aktives Skript, bei bereits laufendem Pod, archiviertem Pod oder nicht verfügbarem Hintergrundprozess gesperrt.",
+        "NÄCHSTER LAUF zeigt den nächsten geplanten Zeitpunkt oder Nur manuell sowie vorgemerkte Eingaben und Eingaben, die auf Wiederherstellung warten. Automatische Läufe fortsetzen und Automatische Läufe pausieren steuern den Pod-Lebenszyklus. Einen Zeitplan aktivierst du separat unter Einstellungen.",
+        "Die Wissensübersicht unterscheidet Erkenntnisse, offene Fragen und Nachweislücken. Master-Chat öffnen übernimmt den gewählten Pod als Kontext."
+      ],
+      "steps": [],
+      "image": "handbook-overview-de.png"
+    },
+    {
+      "id": "knowledge",
+      "title": "Wissen",
+      "paragraphs": [
+        "Wissen enthält dauerhafte Aussagen mit zugehörigen Belegen. Erkenntnisse beschreiben belegte fachliche Tatsachen. Offene Fragen benötigen eine fachliche Antwort. Nachweislücken kennzeichnen fehlende oder unlesbare Belege; eine Lücke ist nicht automatisch eine unbeantwortete fachliche Frage.",
+        "Filtere nach Art und aktiviere Ersetzte Versionen einbeziehen, um frühere Aussagen zu prüfen. Aktuelle Aussagen können frühere ersetzen und dabei ihren Quellenverlauf bewahren. Weitere Einträge werden seitenweise geladen.",
+        "Öffne einen Eintrag und wähle seine Quelle, um gespeicherten Inhalt, Version und Prüfsumme anzusehen. Extrahierter Text kann auf sein gespeichertes Original verweisen. Lange Vorschauen sind ausdrücklich als gekürzt gekennzeichnet. Quellentext wird unverändert angezeigt.",
+        "Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod zu befragen. Aussagen und Quellenverlauf bleiben unabhängig vom Chat im Pod."
+      ],
+      "steps": [],
+      "image": "handbook-knowledge-de.png"
+    },
+    {
+      "id": "resources",
+      "title": "Ressourcen",
+      "paragraphs": [
+        "Ressourcen zeigt Dateien, Werkzeugzugriffe und Verbindungen dieses Pods mit aktuellem Zustand und Zugriffsbereich. Bereit, abgelaufen, fehlt und widerrufen zeigen an, welche Zugriffe nutzbar sind.",
+        "Wähle eine Referenzdatei über den nativen Dateidialog. Der Pod erhält eine schreibgeschützte Kopie; das Original bleibt außerhalb seines beschreibbaren Arbeitsbereichs. Jeder Lauf protokolliert die verwendete Referenzversion. Ein geändertes Original wird zur Eingabe eines späteren Laufs.",
+        "Erstelle eine Quellenkopie, um ihre gespeicherte Prüfsumme zu prüfen. Widerrufe eine Zuweisung, um ihre Berechtigung zu entfernen. Ressourcenänderungen machen ältere Validierungsnachweise ungültig und können betroffene Ausführungen stoppen. Prüfe und validiere das Skript für den neuen Zugriffsbereich.",
+        "Konten und Mail-Zugriff verwalten öffnet Verbindungen & Einrichtung. Eine im Skript deklarierte Fähigkeit fordert die Nutzung vorhandener Berechtigungen an; sie erteilt keinen Kontozugriff."
+      ],
+      "steps": [],
+      "image": "handbook-resources-de.png"
+    },
+    {
+      "id": "runs",
+      "title": "Läufe und Wiederherstellung",
+      "paragraphs": [
+        "Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.",
+        "Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.",
+        "Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.",
+        "Ein Skriptwechsel oder eine Rückkehr zu einer älteren Version betrifft nur spätere Läufe. Ergebnisse und Wirkungen früherer Läufe werden nicht rückgängig gemacht."
+      ],
+      "steps": [],
+      "image": "handbook-runs-de.png"
+    },
+    {
+      "id": "settings",
+      "title": "Einstellungen und Aufgaben",
+      "paragraphs": [
+        "Einstellungen enthält die gespeicherte Pod-Aufgabe, Skript, Zeitplan und Limits sowie Pod-Lebenszyklus. Wähle einen lokalen Pod oder Neuer lokaler Pod, um eine weitere Aufgabe anzulegen.",
+        "Bearbeite Pod-Name und Aufgabe und wähle Pod speichern. Das Speichern erhöht die Aufgabenrevision und pausiert automatische Ausführungen. Die Skriptvalidierung ist an diese Revision gebunden: Speichere und validiere vor der Aktivierung einen Entwurf für die neue Aufgabe.",
+        "Pod archivieren stoppt neue Eingaben und bewahrt Wissen und Verlauf. Ein archivierter Pod bleibt einsehbar. Lokalen Pod löschen … erfordert eine separate native Bestätigung und entfernt lokale Daten und Schlüssel dauerhaft. Sichere sie vorher. Geteilte Konten, Originalreferenzen, globaler Chat und entfernte Identitäts- und Berechtigungsdatensätze bleiben erhalten."
+      ],
+      "steps": [],
+      "image": "handbook-settings-de.png"
+    },
+    {
+      "id": "script",
+      "title": "Dein Skript ansehen und bearbeiten",
+      "paragraphs": [
+        "Unter Einstellungen → Skript zeigt der Editor zunächst den exakten aktiven run.mjs-Quelltext. Versionen und Entwürfe wählt gespeicherte Versionen oder Entwürfe. Die SHA-256-Prüfsumme identifiziert den unveränderlichen Ausführungsquelltext. Vom Master vorbereitete Entwürfe erscheinen nach Verlauf aktualisieren ebenfalls hier.",
+        "Als Entwurf bearbeiten macht eine Kopie bearbeitbar; Neues Skript beginnt mit einem minimalen lokalen Skript. Dies ist ein direkter JavaScript-Quelltexteditor mit Zeilennummern, horizontalem Scrollen, Einfügen von zwei Leerzeichen per Tab, Umschalt+Tab zum Verlassen und Cmd+S (Strg+S) zum Speichern. Code ist Klartext und wird nicht in der Oberfläche ausgeführt.",
+        "Ungespeicherte Änderungen bleiben beim Wechsel zwischen Tabs und Pods innerhalb dieser App-Sitzung erhalten. Speichere vor dem Beenden. Wenn du bei ungespeicherten Änderungen eine andere Quelle wählst, fragt die App nach dem Verwerfen. Weiter bearbeiten behält den aktuellen Text. Gespeicherte Entwürfe überstehen einen Neustart.",
+        "Deklariere Mail-Leseaufrufe nur, wenn das Skript Mail-Zugriff benötigt. Der Pod muss bereits die passende Konto- und Ordnerberechtigung besitzen. Weder eine Quelltextänderung noch das Aktivieren dieses Felds erweitert Zugriffe."
+      ],
+      "steps": [
+        "Wähle eine Version, klicke auf Als Entwurf bearbeiten und ändere das JavaScript. Wähle Entwurf speichern. Dies speichert einen Entwurf, ohne das aktive Skript zu ändern.",
+        "Wähle Entwurf validieren. Der Code läuft bis zu fünf Sekunden in der bestehenden Sandbox mit synthetischen Diensten und getrennten Validierungsdaten. Bei einem Fehler bleiben dein Text und die aktive Version erhalten. Korrigiere den Code und speichere erneut.",
+        "Öffne nach Erfolg die Validierungsdetails. Exakten validierten Quelltext ansehen zeigt das unveränderliche Ausführungsartefakt einschließlich des bei der Validierung angehängten Laufzeitbindungskommentars. Synthetische Prüfungen belegen keine Korrektheit für alle echten Mail- oder Modellantworten.",
+        "Wähle Mit aktiver Version vergleichen, um den aktiven Quelltext unter dem gewählten Text anzuzeigen. Wähle dann Für nächsten Lauf aktivieren. Bestehende Läufe behalten ihre ursprüngliche Version.",
+        "Wähle Einmal ausführen und prüfe das Ergebnis unter Läufe. Für eine Rückkehr wähle eine gespeicherte validierte Version und Für nächsten Lauf aktivieren. Versionen mit ausstehender Validierung kannst du als Entwurf kopieren und für die aktuelle Aufgabe und Berechtigungen validieren."
+      ],
+      "image": "handbook-script-de.png"
+    },
+    {
+      "id": "conflicts",
+      "title": "Bearbeitungskonflikte lösen",
+      "paragraphs": [
+        "Master und Eigentümer teilen versionierte Entwürfe. Hat einer denselben Entwurf geändert, meldet das Speichern einer älteren Revision einen Konflikt, statt neueren Inhalt zu überschreiben. Geänderte Aufgaben, Ressourcen und aktive Versionen können ebenfalls Validierung oder Aktivierung verhindern.",
+        "Kopiere bei Bedarf wichtigen ungespeicherten Text und wähle Verlauf aktualisieren. Dies aktualisiert verfügbare Versionen und aktuelle Pod-Metadaten und behält den Editorinhalt bei. Wähle Gewählten Quelltext neu laden für die aktuelle Revision oder Als neuen Entwurf speichern, um deine Alternative separat zu bewahren. Validiere erneut vor der Aktivierung.",
+        "Während Speichern oder Validierung ist der Editor gegen Änderungen gesperrt. Bei einem Zeitlimit der Hintergrundprozessantwort lade vor einem erneuten Versuch den gespeicherten Zustand. Ein Zeitlimit allein beweist nicht, dass die Operation fehlgeschlagen ist."
+      ],
+      "steps": []
+    },
+    {
+      "id": "script-api",
+      "title": "Ein kleines Skript zum Anpassen",
+      "paragraphs": [
+        "Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Warte vor der Rückgabe auf jede asynchrone Operation. Das Ergebnis enthält status, summary, completedInputIds und gapIds. Ein completedWithGaps-Ergebnis benötigt gespeicherte Lückenaussagen.",
+        "context.input enthält eingefrorene Aufgaben- und Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf.",
+        "context.progress.commit schreibt Fortschrittsstand, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext für reguläre Läufe und den bestehenden Pod-Zugriffsgrenzen auf. context.tools.invoke und die mitgelieferte context.mail-API akzeptieren nur definierte Leseverträge und zugewiesene Bereiche; sie sind keine allgemeine Host-Shell.",
+        "Das folgende Beispiel ergänzt eine Markierung im Fortschrittsstand und liefert eine sichtbare Zusammenfassung. Es nutzt weder Mail- noch Modelldienste. Bestätige nur Eingabe-IDs von Arbeit, die das Skript tatsächlich abgeschlossen hat. Der Beispielcode ist in beiden Sprachfassungen identisch."
+      ],
+      "steps": [],
+      "code": "export async function run(context) {\n  await context.progress.commit({\n    expectedRevision: context.input.checkpointRevision,\n    checkpoint: { ...context.input.checkpoint, reviewed: true },\n    sources: [],\n    claims: [],\n  })\n  return {\n    status: 'completed',\n    summary: 'Local review completed',\n    completedInputIds: context.input.eventIds,\n    gapIds: [],\n  }\n}"
+    },
+    {
+      "id": "schedules",
+      "title": "Zeitpläne, Ereignisse und Limits",
+      "paragraphs": [
+        "Wähle unter Zeitplan und Limits entweder In einem Intervall oder Täglich. Gib das Intervall in Minuten oder Ortszeit und eine IANA-Zeitzone wie Europe/Vienna ein. Speichere den Zeitplan mit seiner ausdrücklichen Aktivierungseinstellung. Bei einem pausierten Pod ist zusätzlich Automatische Läufe fortsetzen nötig.",
+        "Das anwendungsweite Parallelitätslimit beträgt standardmäßig zwei aktive Pods und lässt sich von eins bis sechzehn einstellen. Jeder einzelne Pod hat weiterhin höchstens einen aktiven Lauf. Pausieren verhindert neue automatische Starts und lässt einen bestehenden Lauf enden. Verwende Lauf abbrechen unter Läufe, um ihn zu stoppen.",
+        "Die App beobachtet Änderungen zugewiesener Referenzen und unterstützt intern gespeicherte Ereignisse. Diese Version besitzt keinen allgemeinen Webhook- oder Ereignisregel-Editor. Neue Eingaben werden nach dem jeweiligen Quellenvertrag gespeichert und dedupliziert.",
+        "Nach Ruhezustand oder Ausfall verarbeitet ein Nachhollauf verbleibende Eingaben ab dem gespeicherten Fortschritt. Zeitpläne benötigen eine laufende App und einen wachen Mac."
+      ],
+      "steps": []
+    },
+    {
+      "id": "setup",
+      "title": "Verbindungen und Mail-Lesezugriff",
+      "paragraphs": [
+        "Verbindungen & Einrichtung verwaltet drei separate Verbindungen: ChatGPT für die Modellausführung, OpenApe für Pod-Identität und Berechtigungen und Microsoft 365 für Mail-Lesezugriff. Folge dem Anmeldeablauf jedes Anbieters. Verbindungskarten zeigen den Fortschritt und erlauben Abbruch oder Trennung.",
+        "Wähle für Mail den OpenApe-Eigentümer und das Microsoft-Konto, lade die Ordner und wähle den exakten Ordnerbereich. Wähle ein anfängliches UTC-Datum oder Gesamter verfügbarer Verlauf. Der Anhangszugriff ist eine separate Entscheidung. Prüfe Bereich und Datennutzung und bestätige dann den nativen Zuweisungsdialog.",
+        "Das Mail-Leserezept kann empfangene Nachrichten, gesendete Antworten und erlaubte Anhänge berücksichtigen. Es bewahrt Wissen mit Quellen und dokumentiert den Verarbeitungsfortschritt. Analyseinhalte können an den verbundenen Modellanbieter gesendet werden. Nicht unterstützte Anhänge werden als Nachweislücken erfasst.",
+        "Zugewiesene Mail-Lesezugriffe verändern nichts: Sie senden, verschieben, markieren oder kennzeichnen keine Nachrichten als gelesen. Jeder Pod hat eine Agentenidentität und begrenzten Zugriff. Die Erneuerung der Authentifizierung erfolgt innerhalb der vertrauenswürdigen Verbindungs- und Werkzeuggrenze. Geheimnisse gehören nicht in Skripte.",
+        "Der aktuelle Testbuild besitzt synthetische Prüfnachweise. Echte Anbieteranmeldung, Token-Erneuerung im Mandanten und Live-Mail-Verhalten bleiben Teil der Freigabeprüfung. Für die lokale Skriptanleitung ist kein Live-Zugriff nötig."
+      ],
+      "steps": [],
+      "image": "handbook-setup-de.png"
+    },
+    {
+      "id": "master",
+      "title": "Master-Chat",
+      "paragraphs": [
+        "Öffne den Master-Chat über die Seitenleiste oder den Kontext des gewählten Pods. Die Kontextanzeige zeigt, welchen Pod das Gespräch betrifft. Nachrichten und übertragene Antworten bleiben im Gesprächsverlauf der App.",
+        "Bitte den Master, Aufgaben zu erstellen oder zu ändern, ein Skript vorzubereiten, zu validieren oder eine validierte Version innerhalb der aktuellen Aufgabe und Berechtigungen zu aktivieren. Er kann Läufe prüfen, einen manuellen Lauf anfordern und den Pod-Lebenszyklus steuern. Der Master kann eigene Anfragen nach weiteren Ressourcen nicht genehmigen und keine Zeitpläne aktivieren.",
+        "Öffne Skriptentwürfe, um Code und Validierungsnachweise zu prüfen. Zum direkten Bearbeiten öffne Einstellungen → Skript und wähle Verlauf aktualisieren. Ressourcenzugriffsvorschläge bleiben bis zur Eigentümerprüfung ausstehend. Lehne unerwünschte Vorschläge ab oder öffne Ressourcen zur Prüfung.",
+        "Anfrage abbrechen unterbricht eine aktive Master-Anfrage. Lenken sendet eine weitere Anweisung in das aktuelle Gespräch. Reguläre Pod-Ausführungen verwenden frische Codex-Kontexte. Dauerhaftes Wissen mit Quellen bleibt beim Pod und hängt nicht vom Master-Chat-Gedächtnis ab."
+      ],
+      "steps": [],
+      "image": "handbook-master-de.png"
+    },
+    {
+      "id": "data",
+      "title": "Daten, Sicherungen und Updates",
+      "paragraphs": [
+        "Daten & Sicherungen zeigt Anwendungsdatenverbrauch, freien Speicherplatz und ausstehende lokale Löschungen. Das Speicherlimit beträgt standardmäßig 10 GiB und akzeptiert 1–1.024 GiB. Der Verbrauch wird alle fünf Sekunden ermittelt. Die Ausführung stoppt am Limit oder unter 256 MiB freiem Speicher. Zwischen Prüfungen kann der Verbrauch das Limit vorübergehend überschreiten.",
+        "Ungenutzte Dateien bereinigen entfernt nicht referenzierte lokale Dateien und bewahrt Wissen, zitierte Belege, Verlauf und ausstehende Eingaben. Sicherungen und früher wiederhergestellte Profile bleiben separat erhalten.",
+        "Beende die Master-Anfrage und stoppe oder kläre Läufe vor Wartungsarbeiten. Sicherung exportieren … enthält Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellen und Verlauf. Verwaltete Kontozugangsdaten sind ausgeschlossen. Persönliche Inhalte oder Geheimnisse, die du selbst in Quelltext oder Dateien geschrieben hast, bleiben jedoch Teil dieser Daten.",
+        "Sicherung wiederherstellen und neu starten … prüft Prüfsummen und wechselt in ein neues Profil, während das aktuelle erhalten bleibt. Verbinde Konten erneut, prüfe Ressourcen, validiere Skripte und aktiviere Zeitpläne ausdrücklich, bevor du die automatisierte Nutzung fortsetzt.",
+        "Update prüfen und sichern … prüft eine heruntergeladene signierte App und erstellt eine Sicherung. Die Installation erfolgt nach dem Beenden manuell. Behalte die bisherige App und eine kompatible Sicherung für eine Rückkehr. Öffne niemals eine neu migrierte Datenbank mit einer älteren App. Das unsignierte Entwicklungs-DMG ist kein signierter Update-Kandidat."
+      ],
+      "steps": [],
+      "image": "handbook-data-de.png"
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Probleme beheben",
+      "paragraphs": [
+        "Hintergrundprozess nicht verfügbar oder Prüfung erforderlich: Lies die angezeigte Meldung. Öffne die App nach Behebung der Ursache erneut und prüfe unterbrochene Läufe. Ein nicht unterstütztes Betriebssystem oder eine nicht unterstützte CPU lässt sich nicht durch Skriptbearbeitung beheben.",
+        "Diese Version für die aktuelle Aufgabe und Berechtigungen validieren: Öffne den Quelltext erneut, speichere einen Entwurf für die aktuelle Aufgabe, validiere und aktiviere ihn. Widerrufene Ressourcen müssen vor Verwendung ausdrücklich neu zugewiesen werden.",
+        "Syntax- oder Vertragsfehler: Korrigiere das JavaScript und stelle sicher, dass run(context) das erforderliche Ergebnis zurückgibt. Warte auf asynchrone Aufrufe und verknüpfe zurückgegebene Lücken-IDs mit gespeicherten Lücken. Nach einer fehlgeschlagenen Prüfung bleibt das aktive Skript unverändert.",
+        "Kein automatischer Lauf: Prüfe aktives Skript, aktivierten Zeitplan, Pod-Lebenszyklus, nächsten Zeitpunkt, Hintergrundprozess, Ressourcen, ausstehende Wiederherstellung und ob der Mac wach ist.",
+        "Keine Mail-Erkenntnisse: Prüfe Konto- und Ordnerbereich, anfänglichen Zeitraum, Anhangszugriff, Verbindungsbereitschaft und Lauffehler. Leere Erkenntnisse allein belegen nicht, dass alle Quellen gelesen wurden.",
+        "Speicherlimit erreicht: Exportiere bei Bedarf eine Sicherung, entferne unerwünschte archivierte Pods über den Bestätigungsablauf, bereinige ungenutzte Dateien oder erhöhe das Limit. Prüfe anschließend die Wiederherstellung, bevor du unterbrochene Arbeit erneut versuchst."
+      ],
+      "steps": []
+    }
+  ]
+}
