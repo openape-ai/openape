@@ -60,3 +60,7 @@ export type {
   ToolDefinition,
   ApeShellResult,
 } from '@openape/agent-runtime'
+
+export { authorizeAssignedCommand } from './shapes/assigned'
+export type { AssignedCommand } from './shapes/assigned'
+export type { AssignedGrantScope } from './shapes/grants'
