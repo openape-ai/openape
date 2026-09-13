@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, protocol, session, Tray } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
 import type { PodStatus } from '../contracts/ipc'
 import { fixtureDirectory } from './fixture'
@@ -59,6 +60,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
+  })
+  ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.request(parseCommand(command))
   })
   window = createWindow()
   tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods · Fixture mode')

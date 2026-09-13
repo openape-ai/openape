@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { parseWorkspace } from '../contracts/control'
+import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
 import { utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { join } from 'node:path'
@@ -6,6 +9,7 @@ import type { WorkerStatus } from '../contracts/ipc'
 export class FixtureWorker {
   private child: UtilityProcess | null = null
   private stopping = false
+  private pending = new Map<string, { resolve: (state: WorkspaceState) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
@@ -13,14 +17,34 @@ export class FixtureWorker {
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
-      if (message !== 'ready') { reportError('Unexpected worker message'); child.kill(); return }
+      if (message !== 'ready') {
+        const reply = message as { id?: string, state?: unknown, error?: string }
+        const request = reply && typeof reply.id === 'string' ? this.pending.get(reply.id) : undefined
+        if (!request || !reply.id) { reportError('Unexpected worker message'); child.kill(); return }
+        this.pending.delete(reply.id); clearTimeout(request.timer)
+        try { if (reply.error) throw new Error(reply.error); request.resolve(parseWorkspace(reply.state)) }
+        catch (error) { request.reject(error instanceof Error ? error : new Error('Invalid worker response')) }
+        return
+      }
       this.state = { state: 'ready', pid: child.pid ?? null, error: null }; this.publish(this.state)
     })
     child.on('exit', (code) => {
       this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
+      for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
+      this.pending.clear()
       this.child = null; this.publish(this.state)
     })
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
+  }
+
+  request(command: WorkspaceCommand): Promise<WorkspaceState> {
+    const child = this.child
+    if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
+    const id = randomUUID()
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 10000)
+      this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
+    })
   }
 
   async stop(): Promise<void> {

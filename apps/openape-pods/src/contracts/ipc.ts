@@ -1,4 +1,6 @@
-export const channels = { status: 'pods:status', changed: 'pods:status-changed' } as const
+import type { WorkspaceCommand, WorkspaceState } from './control'
+
+export const channels = { status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -9,6 +11,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  workspace: (command: WorkspaceCommand) => Promise<WorkspaceState>
   getStatus: () => Promise<PodStatus>
   onStatus: (listener: (status: PodStatus) => void) => () => void
 }
