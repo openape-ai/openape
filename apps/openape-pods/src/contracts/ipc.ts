@@ -1,3 +1,4 @@
+import type { DataCommand, DataView } from './data'
 import type { OnboardingCommand, OnboardingView } from './onboarding'
 import type { MasterCommand, MasterView } from './master'
 import type { DetailsCommand, PodDetails } from './details'
@@ -6,7 +7,7 @@ import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
+export const channels = { data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -17,6 +18,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  data: (command: DataCommand) => Promise<DataView>
   onboarding: (command: OnboardingCommand) => Promise<OnboardingView>
   master: (command: MasterCommand) => Promise<MasterView>
   details: (command: DetailsCommand) => Promise<PodDetails>

@@ -1,3 +1,8 @@
+import { verifyUpdate } from './update'
+import { selectedProfile, selectProfile } from './profile'
+import { parseDataCommand } from '../contracts/data'
+import { restoreBackup } from '../worker/data/backup'
+import { schemaVersion } from '../worker/storage/database'
 import { parseOnboardingCommand } from '../contracts/onboarding'
 import { parseMasterCommand } from '../contracts/master'
 import { parseDetailsCommand } from '../contracts/details'
@@ -5,8 +10,8 @@ import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, shell, Tray } from 'electron'
-import { readFile, realpath } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { mkdir, readFile, realpath } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
 import type { PodStatus } from '../contracts/ipc'
@@ -17,7 +22,8 @@ import { FixtureWorker } from './worker'
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 app.enableSandbox()
-const root = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
+const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
+const root = selectedProfile(profileBase)
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
 protocol.registerSchemesAsPrivileged([{ scheme: 'pods', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -67,6 +73,43 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
+  })
+  ipcMain.handle(channels.data, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseDataCommand(value)
+    if (!window) throw new Error('Owner window is unavailable')
+    if (command.type === 'deletePod') {
+      const answer = await dialog.showMessageBox(window, { type: 'warning', title: 'Delete local pod', message: `Permanently delete ${command.name}?`, detail: 'This removes this archived pod’s local workspace, scripts, knowledge, source history, run history and pod key. Shared account connections and original reference files remain. OpenApe remote identities/grants are not deleted. Export a backup first if you need this history.', buttons: ['Cancel', 'Delete local pod'], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.data({ type: 'status' })
+    }
+    if (command.type === 'backup' || command.type === 'restore') {
+      const selected = await dialog.showOpenDialog(window, { title: command.type === 'backup' ? 'Choose backup destination' : 'Choose an OpenApe Pods backup folder', properties: ['openDirectory'] })
+      if (selected.canceled || selected.filePaths.length !== 1) return worker.data({ type: 'status' })
+      const path = await realpath(selected.filePaths[0])
+      if (command.type === 'backup') return worker.data({ type: 'backup', parent: path })
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Restore and restart', message: 'Restore this backup into a new profile?', detail: 'The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.', buttons: ['Cancel', 'Restore and restart'], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.data({ type: 'status' })
+      if (status.worker.state === 'starting') throw new Error('Wait for startup to finish before restoring')
+      const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
+      const result = status.worker.state === 'ready' ? await worker.data({ type: 'restore', source: path, parent }) : { usedBytes: 0, freeBytes: 0, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null, result: { kind: 'restore' as const, path: await restoreBackup(path, parent, schemaVersion) } }
+      if (!result.result || result.result.kind !== 'restore') throw new Error('Restored profile is missing')
+      selectProfile(profileBase, result.result.path); app.relaunch(); app.quit(); return result
+    }
+    if (command.type === 'update') {
+      const state = await worker.data({ type: 'status' })
+      if (state.busy) throw new Error('Finish or recover active work before preparing an update')
+      const selection = await dialog.showOpenDialog(window, { title: 'Choose a signed OpenApe Pods update', properties: ['openFile'], filters: [{ name: 'Application', extensions: ['app'] }] })
+      if (selection.canceled || selection.filePaths.length !== 1) return state
+      const candidate = await realpath(selection.filePaths[0]); const installed = dirname(dirname(dirname(process.execPath)))
+      const update = await verifyUpdate(installed, candidate)
+      const destination = await dialog.showOpenDialog(window, { title: 'Choose the pre-update backup destination', properties: ['openDirectory'] })
+      if (destination.canceled || destination.filePaths.length !== 1) return state
+      const result = await worker.data({ type: 'backup', parent: await realpath(destination.filePaths[0]) })
+      await verifyUpdate(installed, candidate)
+      const answer = await dialog.showMessageBox(window, { type: 'info', title: 'Update verified', message: `Version ${update.version} is ready for manual installation`, detail: `Backup: ${result.result?.path}\n\nQuit Pods, then replace the installed app with the verified app. Keep the previous app and this backup for rollback. This verification does not install or launch the update.`, buttons: ['Keep working', 'Quit Pods'], defaultId: 0, cancelId: 0 }); if (answer.response === 1) app.quit()
+      return result
+    }
+    return worker.data(command)
   })
   ipcMain.handle(channels.onboarding, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
