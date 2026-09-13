@@ -56,6 +56,19 @@ describe('foundation', () => {
     const after = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(after.epoch).toBe(before.epoch + 1)
   })
+  it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
+    const { page } = await launch(packaged)
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example', assignment: 'Run synthetic examples only.' }))).pods[0]!
+    await page.getByRole('tab', { name: 'Runs', exact: true }).click()
+    await page.getByRole('button', { name: 'Use local example', exact: true }).click()
+    await page.getByRole('button', { name: 'Start run', exact: true }).click()
+    await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
+    await page.getByText('Persisted events', { exact: true }).click()
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, packaged ? 'runs-packaged.png' : 'runs-manual.png') })
+    const view = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
+    expect(view.runs[0]).toMatchObject({ state: 'completed', checkpointRevision: 1, error: null })
+  })
   it('storage: saves a pod assignment in the worker and reopens it after app restart', async () => {
     const { app, page, root, binary } = await launch()
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
@@ -83,7 +96,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['getStatus', 'onStatus', 'resources', 'runs', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -101,7 +114,7 @@ describe('foundation', () => {
     })
     expect(result).toBe('denied')
     const status = await page.evaluate(() => window.pods.getStatus())
-    expect(status.executionEnabled).toBe(false)
+    expect(status.executionEnabled).toBe(true)
     expect(status.worker.pid).toBeGreaterThan(0)
     const environment = (pid: number) => execFileSync('/bin/ps', ['eww', '-p', String(pid), '-o', 'command='], { encoding: 'utf8' })
     expect(environment(app.process().pid as number)).toContain('PODS_UNASSIGNED_SECRET=synthetic-canary')
@@ -169,6 +182,6 @@ describe('foundation', () => {
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.runtime).toEqual({ electron: '40.9.3', node: '24.14.1' })
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
-    expect(await page.getByRole('button', { name: 'Run once' }).isDisabled()).toBe(true)
+    expect(await page.getByRole('button', { name: 'Run once' }).isDisabled()).toBe(false)
   })
 })

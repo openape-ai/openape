@@ -22,7 +22,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
   const runtime = policy.runtimeDirectories.map(path => `(subpath ${literal(path)})`).join(' ')
   const network = (policy.networkPorts ?? []).map((port) => {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
-    return `(remote ip "127.0.0.1:${port}")`
+    return `(remote tcp "localhost:${port}")`
   }).join(' ')
   return `(version 1)
 (deny default)
@@ -52,11 +52,15 @@ export async function launchSandbox(helper: string, privateDirectory: string, po
   const profile = join(privateDirectory, `policy-${randomUUID()}.sb`)
   const canonical = { ...policy, executable: await realpath(policy.executable), workspace: await realpath(policy.workspace) }
   await writeFile(profile, sandboxPolicy(canonical), { flag: 'wx', mode: 0o600 })
-  const guardian = spawn(helper, ['supervise', '/usr/bin/sandbox-exec', '-f', profile, canonical.executable, ...args], { cwd: canonical.workspace, env: { HOME: canonical.workspace, TMPDIR: canonical.workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+  return superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, environment)
+}
+export function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string> = {}): ProcessDomain {
+  literal(executable); literal(workspace)
+  const guardian = spawn(helper, ['supervise', executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
   const lease = guardian.stdin as Writable
   const channel = guardian.stdio[3] as Duplex
   const control = guardian.stdio[4] as Readable
-  const heartbeat = setInterval(() => { if (!lease.destroyed) lease.write('H') }, 5000)
+  const heartbeat = setInterval(() => { if (!lease.destroyed && !lease.writableEnded) lease.write('H') }, 5000)
   lease.on('error', (error: NodeJS.ErrnoException) => { if (error.code !== 'EPIPE') console.error('Pod lease failed', error.message) })
   let ready = false
   let resolvePid: (pid: number) => void
@@ -77,13 +81,13 @@ export async function launchSandbox(helper: string, privateDirectory: string, po
   })
   const completed = new Promise<number>((resolve, reject) => {
     guardian.once('error', (error) => { clearInterval(heartbeat); rejectPid(error); reject(error) })
-    guardian.once('exit', (code) => {
+    guardian.once('close', (code) => {
       clearInterval(heartbeat)
       if (!ready) rejectPid(new Error('Guardian exited before process registration'))
       resolve(code ?? 128)
     })
   })
-  return { guardian, channel, stdout: guardian.stdout as Readable, stderr: guardian.stderr as Readable, processId, completed, cancel: () => { if (!lease.destroyed) lease.end('X') } }
+  return { guardian, channel, stdout: guardian.stdout as Readable, stderr: guardian.stderr as Readable, processId, completed, cancel: () => { if (!lease.destroyed && !lease.writableEnded) lease.end('X') } }
 }
 export async function verifyExecutable(path: string, expectedHash: string): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new Error('Missing executable digest')
