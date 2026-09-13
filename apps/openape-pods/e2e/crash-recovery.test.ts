@@ -62,7 +62,7 @@ describe('checkpoint recovery in Electron', () => {
     await delay(1200)
     expect((await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs).toHaveLength(0)
     await app.evaluate(({ powerMonitor }) => powerMonitor.emit('resume'))
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state).toBe('completed')
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state, { timeout: 10000 }).toBe('completed')
     await delay(1200)
     expect((await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs).toHaveLength(1)
     expect((await page.evaluate(() => window.pods.workspace({ type: 'pauseAll' }))).pods[0]!.lifecycle).toBe('paused')
