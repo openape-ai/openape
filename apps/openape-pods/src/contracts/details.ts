@@ -1,7 +1,7 @@
 export interface Citation { id: string, version: string, hash: string, locator: string }
 export interface KnowledgeClaim { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, citations: Citation[], supersedes: string | null, revision: number, current: boolean }
 export interface ScriptVersion { hash: string, assignmentRevision: number, validated: boolean, active: boolean }
-export interface PodDetails { claims: KnowledgeClaim[], total: number, counts: { finding: number, question: number, gap: number }, checkpointRevision: number, versions: ScriptVersion[], source: { citation: Citation, content: string } | null }
+export interface PodDetails { claims: KnowledgeClaim[], total: number, counts: { finding: number, question: number, gap: number }, checkpointRevision: number, versions: ScriptVersion[], source: { citation: Citation, content: string, original?: Citation, truncated?: boolean } | null }
 export type DetailsCommand = { type: 'list', podId: string, offset?: number } | { type: 'source', podId: string, id: string, version: string } | { type: 'activate', podId: string, hash: string, expectedActive: string | null, assignmentRevision: number }
 export function parseDetailsCommand(value: unknown): DetailsCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid pod detail request')
