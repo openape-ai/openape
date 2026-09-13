@@ -13,7 +13,7 @@ it('requires exact resource review, resets consent on assignment changes and sur
     if (command.type === 'assign') throw new Error('Permission was denied')
     return state
   })
-  window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding } as unknown as typeof window.pods
+  window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding } as unknown as typeof window.pods
   const wrapper = mount(Onboarding, { props: { pod } }); await flushPromises()
   await wrapper.get('select[aria-label="OpenApe owner"]').setValue(owner.id); await wrapper.get('select[aria-label="Microsoft account"]').setValue(mail.id)
   await wrapper.findAll('button').find(button => button.text() === 'Load folder names')!.trigger('click'); await flushPromises()
@@ -33,7 +33,7 @@ it('requires exact resource review, resets consent on assignment changes and sur
 it('shows device sign-in and cancels only that pending connection', async () => {
   const pending = { ...mail, state: 'connecting' as const, login: { url: 'https://microsoft.com/devicelogin', code: 'SYNTHETIC' } }
   const onboarding = vi.fn(async (): Promise<OnboardingView> => ({ ...state, connections: [pending] }))
-  window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding } as unknown as typeof window.pods
+  window.pods = { scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding } as unknown as typeof window.pods
   const wrapper = mount(Onboarding); await flushPromises()
   expect(wrapper.text()).toContain('SYNTHETIC')
   await wrapper.findAll('button').find(button => button.text() === 'Cancel sign-in')!.trigger('click'); await flushPromises()

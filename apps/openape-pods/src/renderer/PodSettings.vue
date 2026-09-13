@@ -1,11 +1,11 @@
 <script lang="ts">
-import PodVersions from './PodVersions.vue'
+import PodScript from './PodScript.vue'
 import PodSchedule from './PodSchedule.vue'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
-  components: { PodSchedule, PodVersions },
+  components: { PodSchedule, PodScript },
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected'],
   data() { return { pods: [] as StoredPod[], selectedId: '', name: '', assignment: '', revision: 0, error: '', message: '', busy: false } },
@@ -88,8 +88,8 @@ export default defineComponent({
       </button>
     </form>
   </article>
+  <PodScript v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
-  <PodVersions v-if="selectedPod" :key="`${selectedPod.id}:${selectedPod.activeScript}`" :pod="selectedPod" @changed="reload" />
   <article v-if="selectedPod" class="card lifecycle-panel">
     <h2>Pod lifecycle</h2><p class="muted">
       Archiving stops intake and preserves knowledge and run history.
