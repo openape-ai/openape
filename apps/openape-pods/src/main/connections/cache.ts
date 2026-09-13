@@ -40,6 +40,16 @@ export class CredentialCache {
     finally { await directory.close() }
   }
 
+  async create(id: string, cache: string): Promise<void> {
+    this.path(id); await this.acquire(id)
+    try {
+      try { await readFile(this.path(id)); throw new Error('Connection already exists') }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      await this.persist(id, cache)
+    }
+    finally { this.release(id) }
+  }
+
   async connect(id: string, cache: string): Promise<void> {
     this.path(id); await this.acquire(id)
     try { await this.persist(id, cache) }

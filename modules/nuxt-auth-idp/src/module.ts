@@ -427,6 +427,8 @@ export default defineNuxtModule<ModuleOptions>({
     if (routeConfig.agent) {
       addServerHandler({ route: '/api/agent/challenge', method: 'post', handler: resolve('./runtime/server/api/agent/challenge.post') })
       addServerHandler({ route: '/api/agent/authenticate', method: 'post', handler: resolve('./runtime/server/api/agent/authenticate.post') })
+      addServerHandler({ route: '/api/pods/agents/:email', method: 'get', handler: resolve('./runtime/server/api/pods/agents/[email].get') })
+      addServerHandler({ route: '/api/pods/agents', method: 'post', handler: resolve('./runtime/server/api/pods/agents.post') })
       addServerHandler({ route: '/api/agent/enroll', method: 'post', handler: resolve('./runtime/server/api/agent/enroll.post') })
 
       // Unified auth endpoints (agents + humans with SSH keys)
