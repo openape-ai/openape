@@ -9,7 +9,7 @@ describe('pod workspace shell', () => {
   it('shows actual worker updates, contextual navigation and disabled execution', async () => {
     let listener = (_status: PodStatus) => {}
     const unsubscribe = vi.fn()
-    window.pods = { getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
+    window.pods = { workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
     const wrapper = mount(App)
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Ready')
@@ -25,7 +25,7 @@ describe('pod workspace shell', () => {
     wrapper.unmount(); expect(unsubscribe).toHaveBeenCalledOnce()
   })
   it('surfaces IPC connection failure instead of claiming readiness', async () => {
-    window.pods = { getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
+    window.pods = { workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
     const wrapper = mount(App); await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Unavailable')
     expect(wrapper.get('[role="alert"]').text()).toBe('Connection rejected')
