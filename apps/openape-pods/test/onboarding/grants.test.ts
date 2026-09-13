@@ -20,7 +20,7 @@ it.each(['pending', 'approved'])('uses agent identity to request scoped grants a
   vi.spyOn(identities, 'connection').mockReturnValue({ issuer, subject: 'agent@example.invalid', owner: 'owner@example.invalid', keyId: 'key', targetHost: `pods:${podId}`, accessToken: async () => 'SYNTHETIC_AGENT' })
   const setup = { podId, revision: 1, ownerConnection: randomUUID(), mailConnection: randomUUID(), account: 'mail@example.invalid', folders: [{ id: 'inbox', name: 'Inbox' }, { id: 'rules', name: 'Orders' }], attachments: false, since: null }
   const reference = { connectionId: randomUUID(), podId, issuer, owner: 'owner@example.invalid', subject: 'agent@example.invalid', keyId: 'key' }
-  expect(await approveMailGrants(setup, reference, identities, 'SYNTHETIC_OWNER', resolve('dist/vendor'), new AbortController().signal)).toEqual({ messages: id })
+  expect(await approveMailGrants(setup, reference, identities, 'SYNTHETIC_OWNER', resolve('runtime-sources'), new AbortController().signal)).toEqual({ messages: id })
   expect(requests[0].bearer).toBe('Bearer SYNTHETIC_AGENT'); expect(requests[0].body.requester).toBe(reference.subject)
   expect(requests[0].body.authorization_details).toHaveLength(2)
   expect(JSON.stringify(requests[0].body)).not.toContain('SYNTHETIC_OWNER')
