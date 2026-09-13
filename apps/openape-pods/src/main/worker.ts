@@ -1,3 +1,8 @@
+import { assertPilotRuntime } from './support'
+import { parseDataView } from '../contracts/data'
+import type { DataView } from '../contracts/data'
+import type { DataInternal } from '../worker/data/control'
+import type { DeletionJob } from '../worker/data/retention'
 import { ConnectionManager } from './connections/manager'
 import type { SetupInternal } from '../worker/onboarding/control'
 import { startAgentGateway } from '../worker/agent/gateway'
@@ -43,6 +48,8 @@ export class FixtureWorker {
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
+    try { assertPilotRuntime() }
+    catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
     this.root = realpathSync(root)
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
@@ -93,7 +100,20 @@ export class FixtureWorker {
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
     })
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
-    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }) })
+    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.finishDeletions() })
+  }
+
+  private async finishDeletions(): Promise<void> {
+    const jobs = await this.dispatch({ data: { type: 'jobs' } }) as DeletionJob[]
+    for (const job of jobs) { await this.connections!.purgePodKeys(job.podId, job.keyIds); await this.dispatch({ data: { type: 'finishDeletion', podId: job.podId } }) }
+  }
+
+  async data(command: DataInternal): Promise<DataView> {
+    await this.setupReady
+    if (command.type !== 'status' && this.connections?.busy()) throw new Error('Finish or cancel account setup before changing application data')
+    const view = parseDataView(await this.dispatch({ data: command }))
+    if (command.type === 'cleanup' || command.type === 'deletePod') { await this.finishDeletions(); return parseDataView(await this.dispatch({ data: { type: 'status' } })) }
+    return view
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
@@ -115,12 +135,12 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
       this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
     })
   }

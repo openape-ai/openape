@@ -1,5 +1,6 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
+import DataManagement from './DataManagement.vue'
 import Onboarding from './Onboarding.vue'
 import MasterChat from './MasterChat.vue'
 import PodSettings from './PodSettings.vue'
@@ -13,7 +14,7 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { DataManagement, Onboarding, MasterChat, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
     return { selected: 'Overview', tabs: ['Overview', 'Knowledge', 'Resources', 'Runs', 'Settings'], pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
@@ -83,6 +84,9 @@ export default defineComponent({
       <button class="nav-button" :class="{ active: selected === 'Setup' }" @click="selected = 'Setup'">
         Connections &amp; setup
       </button>
+      <button class="nav-button" :class="{ active: selected === 'Data' }" @click="selected = 'Data'">
+        Data &amp; backups
+      </button>
       <div class="sidebar-label">
         YOUR PODS <span>{{ pods.length }}</span>
       </div>
@@ -132,8 +136,9 @@ export default defineComponent({
             {{ tab }}
           </button>
         </nav>
-        <Onboarding v-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @assigned="refresh" @reference="selected = 'Resources'" />
-        <section v-if="selected === 'Overview'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
+        <DataManagement v-if="selected === 'Data'" />
+        <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @assigned="refresh" @reference="selected = 'Resources'" />
+        <section v-else-if="selected === 'Overview'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
             <div class="overview-grid">
               <article class="card assignment">

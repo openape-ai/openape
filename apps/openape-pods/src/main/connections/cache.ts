@@ -70,6 +70,21 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
+  async erasePodKey(id: string, podId: string): Promise<void> {
+    this.path(id); await this.acquire(id)
+    try {
+      let bytes: Buffer
+      try { bytes = await readFile(this.path(id)) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
+      const value = parseCredentialJSON(this.cipher.decrypt(bytes))
+      if (value.podId !== podId || typeof value.privateKey !== 'string') throw new Error('Refusing to erase a shared or foreign connection')
+      await rm(this.path(id)); const directory = await open(this.root, 'r')
+      try { await directory.sync() }
+      finally { await directory.close() }
+    }
+    finally { this.release(id) }
+  }
+
   async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
     this.path(id); await this.acquire(id, signal)
     let temporary: string | undefined

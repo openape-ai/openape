@@ -129,6 +129,22 @@ export class ConnectionManager {
 
   async folders(id: string): Promise<MailFolder[]> { return (await this.metadata(id)).folders as MailFolder[] ?? [] }
 
+  busy(): boolean { return this.jobs.size > 0 || this.assigning }
+  async purgePodKeys(podId: string, assignedIds: string[]): Promise<void> {
+    const ids = new Set(assignedIds)
+    const owners = (await this.state()).connections.filter(item => item.provider === 'openape')
+    for (const owner of owners) {
+      const metadata = await this.metadata(owner.id); const pods = metadata.pods as Record<string, { connectionId?: string }> | undefined
+      const id = pods?.[podId]?.connectionId
+      if (id) ids.add(id)
+    }
+    for (const id of ids) await this.credentials.erasePodKey(id, podId)
+    for (const owner of owners) {
+      const metadata = await this.metadata(owner.id); const pods = metadata.pods as Record<string, unknown> | undefined
+      if (pods && Object.hasOwn(pods, podId)) { delete pods[podId]; await this.save(owner, metadata) }
+    }
+  }
+
   async providerReady(): Promise<boolean> { return this.runtimeState.ready && (await this.state()).connections.some(item => item.provider === 'chatgpt' && item.state === 'ready') }
   async provider(body: unknown, signal: AbortSignal): Promise<Response> {
     signal = AbortSignal.any([signal, this.providerSession.signal])

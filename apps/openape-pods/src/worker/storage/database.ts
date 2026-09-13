@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-const schemaVersion = 9
+export const schemaVersion = 10
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -186,6 +186,15 @@ INSERT INTO onboarding VALUES(1,0);
 PRAGMA user_version=9;`)
       }
 
+      if (version < 10) {
+        this.db.exec(`
+CREATE TABLE data_settings(id INTEGER PRIMARY KEY CHECK(id=1),limit_bytes INTEGER NOT NULL,used_bytes INTEGER NOT NULL,error TEXT);
+INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
+CREATE TABLE deletion_jobs(pod_id TEXT PRIMARY KEY,payload TEXT NOT NULL,error TEXT);
+PRAGMA user_version=10;
+`)
+      }
+
     })
   }
 
@@ -238,18 +247,27 @@ PRAGMA user_version=9;`)
     return this.getPod(id)
   }
 
+  assertStorage(additionalBytes = 0): void {
+    const policy = this.db.prepare('SELECT * FROM data_settings WHERE id=1').get()!
+    if (policy.error) throw new Error(policy.error as string)
+    if ((policy.used_bytes as number) + additionalBytes >= (policy.limit_bytes as number)) throw new Error('Storage limit reached; clean unused data or raise the limit')
+    const disk = statfsSync(this.root)
+    if (disk.bavail * disk.bsize - additionalBytes < 256 * 1024 * 1024) throw new Error('Insufficient free disk space; at least 256 MiB must remain')
+  }
+
   putBlob(content: string | Buffer, observe: (point: CommitPoint) => void = () => {}): string {
     const key = digest(content); const target = join(this.blobs, key)
     if (existsSync(target)) {
       if (digest(readFileSync(target)) !== key) throw new Error('Corrupt stored blob')
       return key
     }
+    this.assertStorage(Buffer.byteLength(content))
     const stage = join(this.blobs, `.stage-${randomUUID()}`)
     const fd = openSync(stage, 'wx', 0o600)
     try { writeFileSync(fd, content); fsyncSync(fd) }
     finally { closeSync(fd) }
     observe('staged')
-    renameSync(stage, target); syncDirectory(this.blobs); observe('renamed')
+    renameSync(stage, target); syncDirectory(this.blobs); this.db.prepare('UPDATE data_settings SET used_bytes=used_bytes+? WHERE id=1').run(Buffer.byteLength(content)); observe('renamed')
     return key
   }
 
