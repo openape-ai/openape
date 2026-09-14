@@ -140,7 +140,7 @@ export default defineComponent({
           </div>
         </section>
         <DataManagement v-else-if="selected === 'Data'" />
-        <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @assigned="refresh" @reference="selected = 'Permissions'" />
+        <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="card master-panel">
           <MasterChat :key="creating || selected === 'Workspace chat' ? 'workspace' : podId" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Permissions' }" /><details v-if="creating">
             <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
@@ -153,11 +153,7 @@ export default defineComponent({
           <PodSettings :key="podId" :selected-pod-id="podId" :show-values="valuesOpen" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Permissions'" id="panel-Permissions" role="tabpanel" aria-labelledby="tab-Permissions">
-          <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" /><button class="secondary" @click="selected = 'Setup'">
-            {{ t('Manage accounts and mail scope') }}
-          </button><p class="muted">
-            {{ t('General app and terminal launch is not available yet.') }}
-          </p>
+          <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
           <PodRuns :key="podId" :selected-pod-id="podId" />

@@ -95,13 +95,17 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 ## Permissions
 
-Permissions lists assigned files and tool/application access with their scope and state. General GUI app and terminal launch is still unavailable because the execution containment gate is unresolved. This screen does not grant unrestricted host execution. Secret values are managed in Settings.
+Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
 
-Choose a reference file through the native file picker. The pod receives a read-only snapshot; the original stays outside its writable workspace. Each run records the reference version it used. A changed original becomes input for a later run.
+Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Enter program arguments, choose Allow command, review the exact permission, then Open terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
 
-Capture a snapshot to inspect its recorded digest. Revoke an assignment to remove its permission. Resource changes invalidate older validation evidence and can stop affected execution; review and validate a script against the new scope.
+Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
 
-Manage accounts and mail scope opens Connections & setup. A capability declared in a script is a request to use existing permissions, not permission to access an account.
+HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Settings. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
+
+Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A terminal owns the pod while open; regular runs wait until it closes. Closing the terminal stops its process and verifies that it has ended before releasing the pod.
+
+The current execution boundary supports foreground native CLIs. Forking, graphical applications and arbitrary interpreter dependency trees remain unavailable. Chosen custom CLIs have no network access by default; the bundled o365-cli has explicitly scoped Microsoft endpoints. External directories are currently assigned as individual reference files; the pod workspace provides writable file storage.
 
 ![Permissions](images/handbook-permissions.png)
 
@@ -125,6 +129,8 @@ At most one run executes per pod. Additional accepted inputs stay queued. Distin
 
 Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.
 
+Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Allow resend. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent.
+
 ![History and recovery](images/handbook-history.png)
 
 ## Results and sources
@@ -141,9 +147,9 @@ Use the contextual discussion action to ask the master about the selected pod. S
 
 ## Use credentials in your pod script
 
-Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Resources, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including mail.read.
+Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Settings → Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.
 
-Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. Existing shared ChatGPT, Microsoft and OpenApe authentication tokens remain managed by their connection broker; this API does not extract them.
+Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
 await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, assignment revision, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
 
@@ -194,7 +200,7 @@ A pod script is a JavaScript ES module exporting async run(context). Await every
 
 context.input contains the frozen assignment/run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
 
-context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh regular-run context and the pod’s existing access boundary. context.tools.invoke and the bundled context.mail API accept only their defined read contracts and assigned scope; they are not a generic host shell.
+context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh context. context.tools.invoke({ applicationId, argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Codex receives ape_shell for assigned reads, but no credential or HTTP tool. Existing context.mail scripts retain their legacy read contract.
 
 The following example adds a checkpoint flag and returns a visible summary. It uses no mail or model service. Keep input completion IDs limited to work the script actually completed.
 
@@ -225,19 +231,83 @@ The app watches assigned reference changes and supports persisted events interna
 
 After sleep or downtime, one catch-up processes remaining input from saved progress. Scheduling requires the app to be running and the Mac awake.
 
-## Connections and read-only mail
+## Connections and the mail notification recipe
 
-Connections & setup manages three separate connections: ChatGPT for model execution, OpenApe for pod identity and permissions, and Microsoft 365 for read-only mail. Follow each provider’s login flow. Connection cards show progress and allow cancellation or disconnection.
+Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using their own terminal or an imported application state file.
 
-For mail, select the OpenApe owner and Microsoft account, load folders, and choose the exact folder scope. Select an initial UTC date or All available history. Attachment access is a separate choice. Review the scope and provider data use, then confirm the native assignment dialog.
+For the mail notification recipe, add o365-cli in Permissions. Allow and run pods login --account you@example.com in its terminal, or import your existing token.json as application state. Then allow pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
 
-The read-only mail recipe can consider received messages, sent replies and permitted attachments. It keeps knowledge with sources and records processing progress. Content used for analysis may be sent to the connected model provider. Unsupported attachments become verification gaps.
+Under Settings → Variables and secrets, save mail_account, o365_application_id and telegram_chat_id as variables, and telegram_bot_token as a secret. The application ID is the assigned resource ID available to the pod chat. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
 
-Assigned mail reads are non-mutating: they do not send, move, label or mark messages read. Each pod has an agent identity and scoped access. Authentication refresh is handled by the trusted connection/tool boundary; secrets do not belong in scripts.
+Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
-The current test build has synthetic acceptance evidence. Actual provider sign-in, tenant token refresh and live mail behavior remain release acceptance work. No live access is required to follow the local script tutorial.
+Validate and run manually before enabling a 15-minute interval in Settings. Review secret access for the exact script. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
 
-![Connections and read-only mail](images/handbook-setup.png)
+```javascript
+import { createHash } from 'node:crypto'
+
+const fingerprint = value => createHash('sha256').update(value).digest('hex')
+const maximumMessages = 1000
+
+export async function run(context) {
+  const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
+  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Settings')
+  let revision = context.input.checkpointRevision
+  let state = context.input.checkpoint
+  const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
+  async function commit(next) {
+    const reply = await context.progress.commit({ expectedRevision: revision, checkpoint: next, sources: [], claims: [] })
+    revision = reply.revision
+    state = next
+  }
+  async function deliverPending() {
+    const token = await context.credentials.get('telegram_bot_token')
+    if (!/^\d+:[\w-]+$/.test(token)) throw new Error('Set a valid telegram_bot_token secret')
+    const reply = await context.http.request({ url: `https://api.telegram.org/bot${token}/sendMessage`, method: 'POST', key: state.pending.key, headers: { 'content-type': 'application/json' }, body: state.pending.body })
+    if (reply.status !== 200 || (reply.headers['x-pods-reconciled'] !== 'owner' && JSON.parse(reply.body).ok !== true)) throw new Error('Telegram did not confirm delivery; review History before retrying')
+    await commit({ version: 1, initialized: true, ...state.pending.next })
+  }
+  if (state.pending) {
+    await deliverPending()
+    return finish('Pending mail notification completed')
+  }
+  const checkedAt = new Date().toISOString()
+  const since = new Date(state.checkedAt ? Date.parse(state.checkedAt) - 5 * 60000 : Date.parse(checkedAt) - 24 * 3600000).toISOString()
+  const messages = new Map()
+  let cursor
+  for (let page = 0; page < 20; page++) {
+    const argv = ['pods', 'read', '--account', account, '--folder', 'inbox', '--operation', 'messages', '--since', since, ...(cursor ? ['--cursor', cursor] : [])]
+    const reply = await context.tools.invoke({ applicationId, argv })
+    if (reply.exitCode !== 0) throw new Error('Mail read failed; inspect the assigned application in Permissions')
+    const result = JSON.parse(reply.stdout)
+    if (result.account !== account || result.operation !== 'messages' || !Array.isArray(result.items)) throw new Error('Mail reply does not match the configured account and operation')
+    for (const item of result.items) {
+      if (typeof item.id !== 'string' || !item.id) throw new Error('Mail reply is missing a stable message identity')
+      messages.set(fingerprint(item.id), true)
+      if (messages.size > maximumMessages) throw new Error('Mail window exceeds 1000 messages; narrow the script window before retrying')
+    }
+    if (result.complete === true) break
+    if (page === 19 || typeof result.nextCursor !== 'string' || !result.nextCursor || result.nextCursor === cursor) throw new Error('Mail pagination did not complete')
+    cursor = result.nextCursor
+  }
+  const previous = new Set(state.seen ?? [])
+  const newIds = [...messages.keys()].filter(id => !previous.has(id)).sort()
+  const next = { checkedAt, seen: [...new Set([...(state.seen ?? []), ...messages.keys()])].slice(-1500) }
+  if (!state.initialized || !newIds.length) {
+    const initialized = state.initialized
+    await commit({ version: 1, initialized: true, ...next })
+    return finish(initialized ? 'No new mail' : 'Mail baseline saved; future new mail will be reported')
+  }
+  const text = language === 'en' ? `${newIds.length} new email(s) in ${account}.` : `${newIds.length} neue E-Mail(s) in ${account}.`
+  const key = `mail:${fingerprint(JSON.stringify([account, newIds]))}`
+  await commit({ ...state, pending: { key, body: JSON.stringify({ chat_id: chatId, text }), next } })
+  await deliverPending()
+  return finish(`Reported ${newIds.length} new email(s)`)
+}
+
+```
+
+![Connections and the mail notification recipe](images/handbook-setup.png)
 
 ## Data, backups and updates
 
@@ -263,6 +333,6 @@ Syntax or contract errors: correct the JavaScript and ensure run(context) return
 
 No automatic run: check the active script, enabled schedule, pod lifecycle, next-run time, worker status, resource state, queued recovery and whether the Mac is awake.
 
-No mail findings: check account and folder scope, initial history, attachment access, connection readiness and run errors. Empty findings alone do not establish that all evidence was read.
+Application read fails: inspect the exact command grant and program output in Permissions. Set up or import that application’s own state there. An empty result is not proof that all sources were read.
 
 Storage limit reached: export a backup if needed, remove unwanted archived pods through the confirmation flow, clean unused files or increase the configured limit. Then inspect recovery before retrying interrupted work.

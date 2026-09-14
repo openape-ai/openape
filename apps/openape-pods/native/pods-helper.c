@@ -186,7 +186,9 @@ static int lease_open(void) {
   for (ssize_t i = 0; i < count; i++) if (bytes[i] != 'H') return 0;
   return 1;
 }
-static int supervise(char **command, const char *record_path) {
+#include "terminal-io.h"
+
+static int supervise(char **command, const char *record_path, int interactive) {
   signal(SIGPIPE, SIG_IGN);
   struct domain_record record; memset(&record, 0, sizeof(record));
   struct proc_bsdinfo guardian_info;
@@ -197,6 +199,12 @@ static int supervise(char **command, const char *record_path) {
   int permission[2]; if (pipe(permission) < 0) fail("Create execution gate");
   int readiness[2];
   if (pipe(readiness) < 0) fail("Create process registration pipe");
+  struct terminal_io terminal; memset(&terminal, 0, sizeof(terminal)); terminal.master = -1;
+  int slave = -1;
+  if (interactive) {
+    struct winsize dimensions = { .ws_row = 24, .ws_col = 80 };
+    if (openpty(&terminal.master, &slave, NULL, NULL, &dimensions) < 0) fail("Create foreground terminal");
+  }
   pid_t child = fork();
   if (child < 0) fail("Start isolated process");
   if (!child) {
@@ -207,11 +215,19 @@ static int supervise(char **command, const char *record_path) {
     char approved;
     if (read(permission[0], &approved, 1) != 1 || approved != 'G') _exit(125);
     close(permission[0]);
-    int input = open("/dev/null", O_RDONLY);
-    if (input < 0 || dup2(input, STDIN_FILENO) < 0) fail("Close inherited input");
-    close_descriptors(4);
+    if (interactive) {
+      close(terminal.master);
+      if (ioctl(slave, TIOCSCTTY, 0) < 0 || dup2(slave, STDIN_FILENO) < 0 || dup2(slave, STDOUT_FILENO) < 0 || dup2(slave, STDERR_FILENO) < 0) fail("Attach foreground terminal");
+      close_descriptors(3);
+    }
+    else {
+      int input = open("/dev/null", O_RDONLY);
+      if (input < 0 || dup2(input, STDIN_FILENO) < 0) fail("Close inherited input");
+      close_descriptors(4);
+    }
     execv(command[0], command); fail("Execute isolated process");
   }
+  if (interactive) close(slave);
   close(readiness[1]); close(permission[0]);
   char registered;
   if (read(readiness[0], &registered, 1) != 1 || registered != 'R') {
@@ -225,17 +241,23 @@ static int supervise(char **command, const char *record_path) {
   if (!lease_open()) { close(permission[1]); int status; terminate_group(child, &status); record.closed = 1; write_domain(record_path, &record); return 125; }
   if (write(permission[1], "G", 1) != 1) fail("Open execution gate");
   close(permission[1]);
-  close(3);
+  if (interactive) {
+    if (nonblocking(terminal.master) < 0 || nonblocking(3) < 0 || nonblocking(5) < 0 || nonblocking(STDOUT_FILENO) < 0) {
+      int status; terminate_group(child, &status); fail("Configure terminal backpressure");
+    }
+  }
+  else close(3);
   dprintf(4, "{\"pid\":%d}\n", child);
   int status = 0; int64_t deadline = monotonic_ms() + 30000;
   for (;;) {
     siginfo_t exited; memset(&exited, 0, sizeof(exited));
     if (waitid(P_PID, (id_t)child, &exited, WEXITED | WNOHANG | WNOWAIT) < 0) { if (errno == EINTR) continue; fail("Inspect isolated process"); }
-    if (exited.si_pid == child) { terminate_group(child, &status); break; }
+    if (exited.si_pid == child) { terminate_group(child, &status); if (interactive && terminal_drain(&terminal) < 0) status = 125 << 8; break; }
     struct pollfd lease = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
-    int readable = poll(&lease, 1, 100);
+    int readable = poll(&lease, 1, interactive ? 10 : 100);
     if (readable < 0 && errno != EINTR) fail("Watch supervisor lease");
     int stop = monotonic_ms() > deadline;
+    if (interactive && terminal_pump(&terminal) < 0) stop = 1;
     if (readable > 0) {
       char heartbeat[128]; ssize_t count = read(STDIN_FILENO, heartbeat, sizeof(heartbeat));
       if (count <= 0) stop = 1;
@@ -256,8 +278,9 @@ static int supervise(char **command, const char *record_path) {
 }
 int main(int argc, char **argv) {
   if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4]); return 0; }
-  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL);
-  if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2]);
+  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL, 0);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1);
   if (argc == 3 && !strcmp(argv[1], "inspect-domain") && argv[2][0] == '/') { close_descriptors(3); return inspect_domain(argv[2]); }
   fprintf(stderr, "Expected capture SOURCE STAGING LIMIT or supervise ABSOLUTE_EXECUTABLE ARGS\n"); return 2;
 }

@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { connect } from 'node:net'
 import type { Socket } from 'node:net'
 
-export async function startMailProxy(signal: AbortSignal, dial: (host: string) => Socket = host => connect({ host, port: 443 })) {
+export async function startMailProxy(signal: AbortSignal, dial: (host: string) => Socket = host => connect({ host, port: 443 }), hosts: string[] = ['graph.microsoft.com', 'login.microsoftonline.com']) {
   signal.throwIfAborted()
   const secret = randomBytes(32).toString('hex')
   const expected = Buffer.from(`Basic ${Buffer.from(`pods:${secret}`).toString('base64')}`)
@@ -13,7 +13,7 @@ export async function startMailProxy(signal: AbortSignal, dial: (host: string) =
   const stop = () => { for (const socket of sockets) socket.destroy() }
   server.on('connect', (request, socket, head) => {
     const authorization = Buffer.from(request.headers['proxy-authorization'] ?? '')
-    if (signal.aborted || authorization.length !== expected.length || !timingSafeEqual(authorization, expected) || request.headers.origin || !['graph.microsoft.com:443', 'login.microsoftonline.com:443'].includes(request.url ?? '') || sockets.size >= 8 || head.length) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return }
+    if (signal.aborted || authorization.length !== expected.length || !timingSafeEqual(authorization, expected) || request.headers.origin || !hosts.map(host => `${host}:443`).includes(request.url ?? '') || sockets.size >= 8 || head.length) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return }
     const upstream = dial(request.url!.split(':')[0])
     sockets.add(socket as Socket); sockets.add(upstream)
     const close = () => { socket.destroy(); upstream.destroy(); sockets.delete(socket as Socket); sockets.delete(upstream) }

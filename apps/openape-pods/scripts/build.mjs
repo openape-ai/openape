@@ -18,6 +18,7 @@ const parserHash = path => createHash('sha256').update(readFileSync(path)).diges
 writeFileSync('dist/runtime/parser-manifest.json', JSON.stringify({ entry: parserHash('dist/runtime/mail-parser.mjs'), worker: parserHash('dist/runtime/pdf.worker.mjs') }))
 bundleCodex()
 bundleO365()
+copyFileSync('runtime-sources/pod-http-shapes.toml', 'dist/vendor/pod-http-shapes.toml')
 await buildRenderer()
 
 writeFileSync('dist/build-inputs.json', JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), clean: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim() === '', dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex') }, null, 2))

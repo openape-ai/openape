@@ -14,6 +14,7 @@ export function parseOnboardingCommand(value: unknown): OnboardingCommand {
   const item = value as Record<string, unknown>
   const fields: Record<string, string[]> = { list: [], connect: ['provider', 'account', 'issuer'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [] }
   if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string].includes(key))) throw new Error('Unsupported setup request')
+  if (item.type === 'assign' || item.type === 'folders' || (item.type === 'connect' && item.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
   if (fields[item.type].includes('id') && !uuid(item.id)) throw new Error('Invalid connection identity')
   if (item.type === 'connect') {
     if (!['chatgpt', 'openape', 'microsoft'].includes(String(item.provider)) || typeof item.account !== 'string' || (item.provider !== 'chatgpt' && !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(item.account)) || item.account.length > 254) throw new Error('Enter the expected account email')
