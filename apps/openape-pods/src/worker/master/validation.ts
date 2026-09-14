@@ -1,3 +1,4 @@
+import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
@@ -28,7 +29,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const fixture = new PodDatabase(join(root, 'control'))
   const fixturePod = fixture.createPod({ name: 'Validation fixture', assignment: pod.assignment })
   try {
-    const input = { version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.revision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
+    const input = { variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.revision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
     const result = await executeScript(runtime, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)

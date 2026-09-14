@@ -56,7 +56,8 @@ export class ScriptWorkspace {
     const pod = this.store.getPod(podId)
     const versions = new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId }).versions
     const drafts = this.store.db.prepare('SELECT id,revision,assignment_revision,script_hash FROM script_drafts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(podId).map(row => ({ id: row.id as string, revision: row.revision as number, assignmentRevision: row.assignment_revision as number, validated: this.evidence(podId, row.script_hash as string | null) !== null }))
-    const selected = selection ?? (pod.activeScript ? { kind: 'version' as const, id: pod.activeScript } : drafts[0] ? { kind: 'draft' as const, id: drafts[0].id } : undefined)
+    const latest = drafts[0] ? this.source(podId, { kind: 'draft', id: drafts[0].id }) : null
+    const selected = selection ?? (latest && latest.hash !== pod.activeScript ? { kind: 'draft' as const, id: latest.id } : pod.activeScript ? { kind: 'version' as const, id: pod.activeScript } : drafts[0] ? { kind: 'draft' as const, id: drafts[0].id } : undefined)
     return { resourceEpoch: this.resources.epoch(podId), credentialAliases: this.resources.list(podId).filter(resource => resource.kind === 'credential' && resource.state === 'ready').map(resource => resource.configuration.alias as string).sort(), pod, versions, drafts, source: selected ? this.source(podId, selected) : null }
   }
 }

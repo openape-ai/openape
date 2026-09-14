@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import type { RunServices } from '../src/worker/runs/dispatcher'
 import { authorizeMailService } from '../src/worker/mail/authorization'
+import { PodVariables } from '../src/worker/resources/variables'
 import { PodDatabase, digest } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
@@ -89,7 +90,9 @@ it.each([false, true])('combines credential reads, files, variables and Codex; s
   f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
   await f.dispatcher.install(f.pod.id, 'deterministic')
   const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
+  new PodVariables(f.store).save(f.pod.id, 'topic', 'ORDINARY_VARIABLE_CANARY', 0)
   const code = `import {readFile,writeFile} from 'node:fs/promises'; export async function run(c) {
+    if (c.variables.topic !== 'ORDINARY_VARIABLE_CANARY' || !Object.isFrozen(c.variables)) throw new Error('Variable contract failed');
     const value = await c.credentials.get('crm'); if(!value) throw new Error('Missing fixture credential');
     await writeFile(c.workspace+'/input.txt','Summarize these synthetic notes');
     const prompt=await readFile(c.workspace+'/input.txt','utf8'); const answer=await c.agent.run({prompt: ${forward ? 'prompt + value' : 'prompt'}});
@@ -103,6 +106,7 @@ it.each([false, true])('combines credential reads, files, variables and Codex; s
   f.store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, f.pod.id)
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id), { timeout: 20000 }).toMatchObject({ state: 'completed', error: null })
+  expect(JSON.stringify(requests)).not.toContain('ORDINARY_VARIABLE_CANARY')
   expect(requests).toHaveLength(2); expect(JSON.stringify(requests).includes(secret)).toBe(forward)
   expect(JSON.stringify(requests[1])).toContain('No tool capability is assigned')
   if (!forward) expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain(secret)
