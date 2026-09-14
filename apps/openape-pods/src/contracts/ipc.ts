@@ -1,3 +1,4 @@
+import type { ProgramCommand, TerminalView } from './programs'
 import type { LanguageCommand, Language } from './language'
 import type { ScriptCommand, ScriptView } from './scripts'
 import type { DataCommand, DataView } from './data'
@@ -9,7 +10,7 @@ import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
+export const channels = { programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -20,6 +21,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView>
   language: (command: LanguageCommand) => Promise<Language>
   scripts: (command: ScriptCommand) => Promise<ScriptView>
   data: (command: DataCommand) => Promise<DataView>

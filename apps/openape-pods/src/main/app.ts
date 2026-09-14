@@ -1,3 +1,5 @@
+import { parseProgramCommand } from '../contracts/programs'
+import { programDefinition } from './programs/definition'
 import { LanguagePreference } from './language'
 import { parseLanguageCommand } from '../contracts/language'
 import { translate, translateDiagnostic } from '../i18n'
@@ -21,7 +23,7 @@ import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
 import type { PodStatus } from '../contracts/ipc'
 import { fixtureDirectory, localDirectory } from './fixture'
-import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL } from './security'
+import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, rendererStyleNonce } from './security'
 import { FixtureWorker } from './worker'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
@@ -85,7 +87,8 @@ async function start(): Promise<void> {
       const contentType = mime[extname(file)]
       if (!contentType) return new Response('Not found', { status: 404 })
       const bytes = await readFile(file)
-      return new Response(bytes, { headers: { 'Content-Type': contentType, 'Content-Security-Policy': contentSecurityPolicy, 'X-Content-Type-Options': 'nosniff' } })
+      const body = contentType === 'text/html' ? bytes.toString('utf8').replace('<head>', `<head><meta name="pods-style-nonce" content="${rendererStyleNonce}">`) : bytes
+      return new Response(body, { headers: { 'Content-Type': contentType, 'Content-Security-Policy': contentSecurityPolicy, 'X-Content-Type-Options': 'nosniff' } })
     }
     catch (error) { console.error('Rejected Pods asset request', error instanceof Error ? error.message : 'unknown error'); return new Response('Not found', { status: 404 }) }
   })
@@ -131,6 +134,34 @@ async function start(): Promise<void> {
     }
     return worker.data(command)
   })
+  ipcMain.handle(channels.programs, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (!window) throw new Error('Owner window is unavailable')
+    const command = parseProgramCommand(value)
+    const unchanged = () => worker.resources({ type: 'list', podId: command.podId })
+    if (command.type === 'add') {
+      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+      if (command.source === 'o365-cli') return worker.program(command, await programDefinition(join(vendor, 'o365-cli'), join(vendor, 'o365-shapes.toml'), vendor))
+      const executable = await dialog.showOpenDialog(window, { title: t('Choose an executable CLI'), properties: ['openFile'] })
+      if (executable.canceled || executable.filePaths.length !== 1) return unchanged()
+      const adapter = await dialog.showOpenDialog(window, { title: t('Choose its apes command descriptor'), properties: ['openFile'], filters: [{ name: 'apes', extensions: ['toml'] }] })
+      if (adapter.canceled || adapter.filePaths.length !== 1) return unchanged()
+      return worker.program(command, await programDefinition(executable.filePaths[0], adapter.filePaths[0]))
+    }
+    if (command.type === 'grant') {
+      const resolved = await worker.programPreview(command)
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow application command'), message: resolved.detail.display, detail: t('Permission: {permission}\n\nThis permission is assigned to this pod’s OpenApe agent. The pod stays paused.', { permission: resolved.permission }), buttons: [t('Cancel'), t('Allow command')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return unchanged()
+    }
+    if (command.type === 'importState') {
+      const selected = await dialog.showOpenDialog(window, { title: t('Import an existing application state file'), properties: ['openFile', 'showHiddenFiles'] })
+      if (selected.canceled || selected.filePaths.length !== 1) return unchanged()
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Copy application state'), message: t('Copy this file into the application’s protected state?'), detail: t('Only this assigned program receives the copy. The original file stays unchanged. This does not verify sign-in or enable scheduled runs.'), buttons: [t('Cancel'), t('Copy application state')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return unchanged()
+      return worker.program(command, undefined, selected.filePaths[0])
+    }
+    return worker.program(command)
+  })
   ipcMain.handle(channels.onboarding, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseOnboardingCommand(value)
@@ -138,12 +169,6 @@ async function start(): Promise<void> {
       const state = await worker.onboarding({ type: 'list' }); const login = state.connections.find(item => item.id === command.id && item.state === 'connecting')?.login
       if (!login) throw new Error('Sign-in expired; start again')
       await shell.openExternal(login.url); return state
-    }
-    if (command.type === 'assign') {
-      if (!window) throw new Error('Owner window is unavailable')
-      const setup = command.setup
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Assign read-only mail'), message: t('Allow this pod to read {p0}?', { p0: setup.account }), detail: t('Folders: {p0}\nHistory: {p1}\nAttachments: {p2}\n\nRead content may be sent to your connected ChatGPT account for analysis. A separate OpenApe agent receives these read permissions. The pod stays paused.', { p0: setup.folders.map(folder => folder.name).join(', '), p1: setup.since ?? t('All available history'), p2: setup.attachments ? t('Allowed for in-scope messages') : t('Not allowed') }), buttons: [t('Cancel'), t('Assign read-only mail')], defaultId: 0, cancelId: 0 })
-      if (answer.response !== 1) return worker.onboarding({ type: 'list' })
     }
     return worker.onboarding(command)
   })
@@ -175,13 +200,24 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.scheduling(parseScheduleCommand(command))
   })
-  ipcMain.handle(channels.runs, (event, command: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.runs, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.runs(parseRunCommand(command))
+    const command = parseRunCommand(value)
+    if (command.type === 'resolveHttp') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('Resolve uncertain delivery'), message: command.applied ? t('Record this request as already delivered?') : t('Allow this request to be sent again?'), detail: command.evidence, buttons: [t('Cancel'), t('Confirm observation')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.runs({ type: 'list', podId: command.podId, runId: command.runId })
+    }
+    return worker.runs(command)
   })
   ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseResourceCommand(value)
+    if (command.type === 'assignHttp') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Settings → Secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
+    }
     if (command.type !== 'pickReference') return worker.resources(command)
     if (!window) throw new Error('Owner window is unavailable')
     const pods = await worker.request({ type: 'list' })

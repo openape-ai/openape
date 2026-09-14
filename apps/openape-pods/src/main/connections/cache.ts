@@ -78,7 +78,7 @@ export class CredentialCache {
       try { bytes = await readFile(this.path(id)) }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
       const value = parseCredentialJSON(this.cipher.decrypt(bytes))
-      if (value.podId !== podId || (typeof value.privateKey !== 'string' && value.kind !== 'script-credential')) throw new Error('Refusing to erase a shared or foreign connection')
+      if (value.podId !== podId || (typeof value.privateKey !== 'string' && !['script-credential', 'program-state'].includes(String(value.kind)))) throw new Error('Refusing to erase a shared or foreign connection')
       await rm(this.path(id)); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
       try { await directory.sync() }
       finally { await directory.close() }
@@ -87,6 +87,10 @@ export class CredentialCache {
   }
 
   async createScriptSecret(podId: string, alias: string, value: string): Promise<string> {
+    return this.createPodRecord(podId, { kind: 'script-credential', alias: parseCredentialAlias(alias), value: parseCredentialValue(value) })
+  }
+
+  async createPodRecord(podId: string, record: Record<string, unknown>): Promise<string> {
     if (!/^[a-f0-9-]{36}$/.test(podId)) throw new Error('Invalid credential pod identity')
     const id = randomUUID()
     this.path(id); await mkdir(this.root, { recursive: true, mode: 0o700 })
@@ -96,7 +100,7 @@ export class CredentialCache {
     const directory = await open(this.root, 'r')
     try { await directory.sync() }
     finally { await directory.close() }
-    await this.create(id, JSON.stringify({ kind: 'script-credential', podId, alias: parseCredentialAlias(alias), value: parseCredentialValue(value) }))
+    await this.create(id, JSON.stringify({ ...record, podId }))
     return id
   }
 

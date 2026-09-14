@@ -23,7 +23,7 @@ export class DataRetention {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
     const disk = await statfs(this.store.root); const limitBytes = this.store.db.prepare('SELECT limit_bytes FROM data_settings WHERE id=1').get()!.limit_bytes as number
-    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length, busy: !!this.store.db.prepare('SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
+    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length, busy: !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
     this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1').run(usedBytes, usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null)
     return view
   }
@@ -50,8 +50,8 @@ export class DataRetention {
       if (config.identity.podId !== podId || !config.identity.connectionId || !validId(config.identity.connectionId)) throw new Error('Invalid pod key binding')
       return [config.identity.connectionId]
     })
-    for (const row of this.store.db.prepare('SELECT configuration FROM resources WHERE pod_id=? AND kind=\'credential\'').all(podId)) {
-      const id = (JSON.parse(row.configuration as string) as { credentialId?: string }).credentialId
+    for (const row of this.store.db.prepare('SELECT configuration FROM resources WHERE pod_id=? AND (kind=\'credential\' OR json_extract(configuration,\'$.type\')=\'program\')').all(podId)) {
+      const config = JSON.parse(row.configuration as string) as { credentialId?: string, stateId?: string }; const id = config.credentialId ?? config.stateId
       if (!id || !validId(id)) throw new Error('Invalid credential deletion binding')
       keyIds.push(id)
     }
@@ -60,7 +60,7 @@ export class DataRetention {
       if (current.revision !== revision || current.lifecycle !== 'archived' || current.name !== name) throw new Error('Pod changed during deletion review')
       this.store.db.prepare('INSERT INTO deletion_jobs VALUES(?,?,NULL)').run(podId, JSON.stringify({ podId, runIds, keyIds: [...new Set(keyIds)] }))
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
-      for (const table of ['run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
+      for (const table of ['program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
       this.store.db.prepare('DELETE FROM master_messages WHERE id IN (SELECT message_id FROM master_message_scopes WHERE scope=?)').run(podId)
       this.store.db.prepare('DELETE FROM master_contexts WHERE scope=?').run(podId)
       this.store.db.prepare('DELETE FROM pods WHERE id=?').run(podId)

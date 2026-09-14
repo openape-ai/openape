@@ -1,3 +1,4 @@
+import { EffectLedger } from './effects'
 import { confirmDomainsStopped } from './domains'
 import type { PodDatabase } from '../storage/database'
 import { parseManifest } from '../storage/database'
@@ -11,8 +12,23 @@ export class Recovery {
     const pod = this.store.getPod(podId)
     if (pod.lifecycle === 'archived' || !pod.activeScript) throw new Error('Choose a validated script before retrying')
     const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript)
-    if (!row || parseManifest(JSON.parse(row.manifest as string)).effects !== 'readOnly') throw new Error('Effectful scripts require a registered reconciliation adapter')
+    if (!row) throw new Error('Validated script is missing')
+    parseManifest(JSON.parse(row.manifest as string))
+    if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, pod.activeScript, pod.revision, this.resources.epoch(podId))) throw new Error('Validate the script for current permissions before retrying')
+  }
+
+  async resolveHttp(podId: string, runId: string, key: string, applied: boolean, evidence: string): Promise<void> {
+    const run = this.store.db.prepare('SELECT state FROM runs WHERE id=? AND pod_id=?').get(runId, podId)
+    const effect = this.store.db.prepare('SELECT operation,state FROM effect_ledger WHERE pod_id=? AND run_id=? AND effect_key=?').get(podId, runId, key)
+    if (!run || run.state === 'running' || effect?.operation !== 'http.request' || effect.state !== 'unknown') throw new Error('HTTP delivery is not awaiting owner review')
+    await confirmDomainsStopped(this.store, runId, this.helper)
+    this.store.transaction(() => {
+      const ledger = new EffectLedger(this.store)
+      ledger.reconcile(podId, key, applied ? { applied: true, result: { status: 200, headers: { 'x-pods-reconciled': 'owner' }, body: '' } } : { applied: false })
+      const sequence = this.store.db.prepare('SELECT coalesce(max(sequence),0)+1 AS next FROM run_events WHERE run_id=?').get(runId)!.next as number
+      this.store.db.prepare('INSERT INTO run_events VALUES(?,?,?,?,?)').run(runId, sequence, 'http-reconciled', JSON.stringify({ key, applied, evidence }), Date.now())
+    })
   }
 
   async inspect(podId: string, runId: string): Promise<void> {

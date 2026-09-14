@@ -9,7 +9,7 @@ function fixture() {
   const hash = 'a'.repeat(64)
   const view: ScriptView = { resourceEpoch: 0, credentialAliases: [], pod: { id: randomUUID(), name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}', credentialAccessApproved: false } }
   const scripts = vi.fn().mockResolvedValue(structuredClone(view))
-  window.pods = { language: async () => 'en' as const, resources: async () => ({ resources: [], variables: [], epoch: 0 }), scripts } as unknown as typeof window.pods
+  window.pods = { programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, resources: async () => ({ resources: [], variables: [], epoch: 0 }), scripts } as unknown as typeof window.pods
   return { view, scripts }
 }
 it('shows highlighted literal source and preserves unsaved edits across navigation with discard protection', async () => {
@@ -57,4 +57,18 @@ it('lets keyboard users leave the editor with Escape then Tab', async () => {
   const wrapper = mount(ScriptCode, { props: { modelValue: 'hello' } }); const input = wrapper.get('textarea')
   await input.trigger('keydown', { key: 'Escape' }); await input.trigger('keydown', { key: 'Tab' })
   expect(wrapper.emitted('update:modelValue')).toBeUndefined(); wrapper.unmount()
+})
+
+it('declares access through assigned tools without offering a built-in mail permission', async () => {
+  const { view, scripts } = fixture()
+  view.source!.capabilities = ['tool.orders.read']
+  scripts.mockResolvedValue(view)
+  window.pods.resources = vi.fn().mockResolvedValue({ resources: [{ id: randomUUID(), podId: view.pod.id, kind: 'tool', state: 'ready', revision: 1, name: 'Orders CLI', configuration: { capability: 'tool.orders.read' } }], variables: [], epoch: 0 })
+  const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
+  expect(wrapper.text()).not.toContain('Read assigned mail')
+  expect(wrapper.text()).toContain('Orders CLI')
+  await wrapper.get('textarea').setValue('export async function run() { return {} }')
+  await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
+  expect(scripts).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', capabilities: ['tool.orders.read'] }))
+  wrapper.unmount()
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assetPath, assertStatusRequest } from '../src/main/security'
+import { assetPath, assertStatusRequest, contentSecurityPolicy, rendererStyleNonce } from '../src/main/security'
 import { isPodStatus } from '../src/contracts/ipc'
 
 describe('renderer boundary', () => {
@@ -17,4 +17,12 @@ describe('renderer boundary', () => {
     expect(isPodStatus(status)).toBe(true)
     for (const bad of [null, {}, { ...status, executionEnabled: false }, { ...status, mode: 'production' }, { ...status, worker: { state: 'ready', pid: -1, error: null } }]) expect(isPodStatus(bad)).toBe(false)
   })
+})
+
+it('authorizes scoped terminal styles while retaining the script and network CSP boundaries', () => {
+  expect(contentSecurityPolicy).toContain(`style-src 'self' 'nonce-${rendererStyleNonce}'`)
+  expect(contentSecurityPolicy).toContain('script-src \'self\';')
+  expect(contentSecurityPolicy).toContain('connect-src \'none\';')
+  expect(contentSecurityPolicy).not.toContain('unsafe-inline')
+  expect(contentSecurityPolicy).not.toContain('unsafe-eval')
 })
