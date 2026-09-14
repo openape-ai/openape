@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 11
+export const schemaVersion = 12
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -55,7 +55,7 @@ export function parseManifest(value: unknown): ScriptManifest {
   if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
   for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
   text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
-  if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][a-zA-Z0-9.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
+  if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][\w.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
   if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
   return structuredClone(value) as unknown as ScriptManifest
 }
@@ -204,6 +204,15 @@ CREATE TABLE pod_memberships(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELE
 CREATE INDEX group_members ON pod_memberships(group_id);
 PRAGMA user_version=11;
 `)
+      }
+
+      if (version < 12) {
+        this.db.exec(`
+CREATE TABLE resources_v12(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
+INSERT INTO resources_v12 SELECT * FROM resources;
+DROP TABLE resources;
+ALTER TABLE resources_v12 RENAME TO resources;
+CREATE TABLE script_credential_approvals(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,assignment_revision INTEGER NOT NULL,resource_epoch INTEGER NOT NULL,PRIMARY KEY(pod_id,script_hash)); PRAGMA user_version=12;`)
       }
 
     })

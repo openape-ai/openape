@@ -1,5 +1,6 @@
+import { parseCredentialAlias, parseCredentialValue } from '../../contracts/credentials'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export function parseCredentialJSON(cache: string): Record<string, unknown> {
@@ -77,10 +78,48 @@ export class CredentialCache {
       try { bytes = await readFile(this.path(id)) }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
       const value = parseCredentialJSON(this.cipher.decrypt(bytes))
-      if (value.podId !== podId || typeof value.privateKey !== 'string') throw new Error('Refusing to erase a shared or foreign connection')
-      await rm(this.path(id)); const directory = await open(this.root, 'r')
+      if (value.podId !== podId || (typeof value.privateKey !== 'string' && value.kind !== 'script-credential')) throw new Error('Refusing to erase a shared or foreign connection')
+      await rm(this.path(id)); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
       try { await directory.sync() }
       finally { await directory.close() }
+    }
+    finally { this.release(id) }
+  }
+
+  async createScriptSecret(podId: string, alias: string, value: string): Promise<string> {
+    if (!/^[a-f0-9-]{36}$/.test(podId)) throw new Error('Invalid credential pod identity')
+    const id = randomUUID()
+    this.path(id); await mkdir(this.root, { recursive: true, mode: 0o700 })
+    const marker = await open(join(this.root, `.script-${id}.json`), 'wx', 0o600)
+    try { await marker.writeFile(JSON.stringify({ id, podId })); await marker.sync() }
+    finally { await marker.close() }
+    const directory = await open(this.root, 'r')
+    try { await directory.sync() }
+    finally { await directory.close() }
+    await this.create(id, JSON.stringify({ kind: 'script-credential', podId, alias: parseCredentialAlias(alias), value: parseCredentialValue(value) }))
+    return id
+  }
+
+  async reconcileScriptSecrets(assignments: { id: string, podId: string }[]): Promise<void> {
+    let names: string[]
+    try { names = await readdir(this.root) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
+    for (const name of names.filter(name => /^\.script-[a-f0-9-]{36}\.json$/.test(name))) {
+      const marker = JSON.parse(await readFile(join(this.root, name), 'utf8')) as { id: string, podId: string }
+      if (!marker || name !== `.script-${marker.id}.json` || typeof marker.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(marker.podId)) throw new Error('Invalid script credential recovery record')
+      if (assignments.some(item => item.id === marker.id && item.podId === marker.podId)) continue
+      await this.erasePodKey(marker.id, marker.podId)
+      await rm(join(this.root, name), { force: true })
+    }
+  }
+
+  async readScriptSecret(id: string, podId: string, alias: string): Promise<string> {
+    this.path(id); parseCredentialAlias(alias); await this.acquire(id)
+    try {
+      const value = parseCredentialJSON(this.cipher.decrypt(await readFile(this.path(id))))
+      if (value.kind !== 'script-credential' || value.podId !== podId) throw new Error('Credential belongs to another pod or is not a script credential')
+      if (value.alias !== alias) throw new Error('Credential alias does not match its assignment')
+      return parseCredentialValue(value.value)
     }
     finally { this.release(id) }
   }
