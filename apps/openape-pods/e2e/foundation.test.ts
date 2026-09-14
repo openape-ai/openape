@@ -29,6 +29,12 @@ afterEach(async () => {
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('foundation', () => {
+  it('packaged: embeds the approved macOS icon referenced by the bundle', async () => {
+    const contents = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
+    const icon = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', join(contents, 'Info.plist')], { encoding: 'utf8' }).trim()
+    expect(icon).toBe('icon.icns')
+    expect(await readFile(join(contents, 'Resources', icon))).toEqual(await readFile(resolve('build/openape-pods.icns')))
+  })
   it.each([false, true])('resources: reviews, snapshots and revokes a reference through the owner window (packaged=%s)', async (packaged) => {
     const { app, page, root } = await launch(packaged)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod', assignment: 'Read the assigned synthetic reference only.' }))).pods[0]!
