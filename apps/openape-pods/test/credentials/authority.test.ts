@@ -44,7 +44,7 @@ it('keeps identical aliases separate across pods and rejects stale, missing or r
   expect(() => f.authority.assigned(f.pod.id, 'crm')).toThrow(); expect(f.authority.assigned(other.id, 'crm').state).toBe('ready')
 })
 it('validates aliases and an exact bounded capability set', () => {
-  expect(parseCredentialAlias('crm_api')).toBe('crm_api'); expect(parseScriptCapabilities(['mail.read', 'credential.crm_api'])).toEqual(['mail.read', 'credential.crm_api'])
+  expect(parseScriptCapabilities(['tool.orders.read'])).toEqual(['tool.orders.read']); expect(parseCredentialAlias('crm_api')).toBe('crm_api'); expect(parseScriptCapabilities(['mail.read', 'credential.crm_api'])).toEqual(['mail.read', 'credential.crm_api'])
   for (const alias of ['../crm', 'CRM', '', 'a'.repeat(65)]) expect(() => parseCredentialAlias(alias)).toThrow()
   for (const capabilities of [['shell.exec'], ['credential.crm', 'credential.crm'], Array.from({ length: 17 }, (_, i) => `credential.a${i}`)]) expect(() => parseScriptCapabilities(capabilities)).toThrow()
 })
@@ -71,7 +71,7 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   const f = fixture(); const reference = f.registry.assignReference(f.pod.id, 'Notes', join(f.store.root, 'notes.txt'))
   const root = f.store.root; f.store.close(); stores.pop()
   const previous = new DatabaseSync(join(root, 'control.sqlite'))
-  previous.exec(`DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
+  previous.exec(`DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
     ALTER TABLE resources RENAME TO newer_resources;
     CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
     INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; PRAGMA user_version=11;`)

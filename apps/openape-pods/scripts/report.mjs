@@ -6,6 +6,11 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['program-terminal-en.png', 'Configure an assigned application', 'The packaged pod terminal accepts real keyboard input. This synthetic CLI saves its own protected state and exits.'],
+  ['program-read-en.png', 'Reuse application state', 'A later granted read sees the state established in that application’s terminal. No login status is inferred.'],
+  ['program-permissions-en.png', 'Program permissions and HTTPS destinations', 'Applications receive command grants. Script HTTP access has an explicit origin and method; tokens remain in pod Settings.'],
+  ['program-http-en.png', 'HTTP destination permissions', 'Node.js requests need an explicitly allowed origin and method. Secrets are managed separately in Settings.'],
+  ['program-permissions-de-dark.png', 'Berechtigungen in Deutsch', 'The same application controls remain usable in the narrow dark German view.'],
   ['workspace-1060-light-overview.png', 'A pod with durable knowledge', 'Overview shows the description, last result and Run now. Results and sources opens retained knowledge.'],
   ['handbook-chat-en.png', 'Pod configuration in Chat', 'The conversation belongs to the selected pod. Proposed changes retain explicit review and permission controls.'],
   ['handbook-script-en.png', 'An editable script', 'Script highlights the working source and provides Save and Run. Expandable access references link to variable and secret management.'],

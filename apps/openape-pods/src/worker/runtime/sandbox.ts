@@ -55,11 +55,11 @@ export async function launchSandbox(helper: string, privateDirectory: string, po
   await writeFile(profile, sandboxPolicy(canonical), { flag: 'wx', mode: 0o600 })
   return superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, environment, privateDirectory, register)
 }
-export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>): Promise<ProcessDomain> {
+export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false): Promise<ProcessDomain> {
   literal(executable); literal(workspace)
   const recordPath = join(privateDirectory, `domain-${randomUUID()}.record`)
   await register?.(recordPath, process.pid)
-  const guardian = spawn(helper, ['supervise-record', recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+  const guardian = spawn(helper, [terminal ? 'supervise-terminal-record' : 'supervise-record', recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: terminal ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
   const lease = guardian.stdin as Writable
   const channel = guardian.stdio[3] as Duplex
   const control = guardian.stdio[4] as Readable

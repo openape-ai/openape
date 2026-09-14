@@ -9,7 +9,7 @@ import type { PodDatabase } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import type { RunStore } from '../runs/store'
 
-function authorizeRunService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
+export function authorizeRunService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
   const scope = parseServiceScope(check.scope)
   runs.assertLease(scope.runId)
   const run = runs.get(scope.runId)

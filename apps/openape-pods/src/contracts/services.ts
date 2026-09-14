@@ -1,7 +1,7 @@
 import { parseScriptCapabilities } from './credentials'
 
 export interface ServiceScope { podId: string, runId: string, epoch: number, assignmentRevision: number, capabilities: string[] }
-export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'credential' }
+export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'credential' | 'http' }
 export interface ServiceCheck { scope: ServiceScope, domain?: { path: string, ownerPid: number } }
 export function parseServiceScope(value: unknown): ServiceScope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid service scope')

@@ -8,7 +8,7 @@ export default defineComponent({
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected'],
   data() {
-    return { pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
+    return { pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
   },
   async mounted() {
     try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
@@ -75,6 +75,20 @@ export default defineComponent({
       <p v-if="!view.runs.length" class="muted">
         {{ t("No runs yet. Choose a version, then start it manually.") }}
       </p>
+      <section v-if="view.effects?.length" class="http-review">
+        <h3>{{ t('Uncertain HTTP deliveries') }}</h3>
+        <p>{{ t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>
+        <article v-for="effect in view.effects" :key="effect.key">
+          <strong>{{ effect.key }}</strong>
+          <label>{{ t('Your observation') }}<textarea v-model="observations[effect.key]" maxlength="4000" /></label>
+          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] })">
+            {{ t('Already delivered') }}
+          </button>
+          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: false, evidence: observations[effect.key] })">
+            {{ t('Not delivered · allow retry') }}
+          </button>
+        </article>
+      </section>
       <article v-for="run in view.runs" :key="run.id" class="run-row">
         <button class="text-button" :aria-pressed="runId === run.id" @click="runId = run.id; load()">
           {{ run.summary || (run.state === 'running' ? t("Run in progress") : t("Interrupted run")) }}

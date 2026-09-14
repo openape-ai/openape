@@ -73,7 +73,16 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
     <section v-if="view?.proposals.length" :aria-label="t('Access proposals')">
       <h3>{{ t("Resource access for your review") }}</h3><article v-for="proposal in view.proposals" :key="proposal.id" class="master-message">
         <p>{{ proposal.body.description }}</p><dl class="proposal-scope">
-          <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'microsoft' ? t("Microsoft 365 · read only") : t("Reference file · read-only snapshots") }}</dd>
+          <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'reference' ? t("Reference file · read-only snapshots") : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
+          <template v-if="proposal.body.application">
+            <dt>{{ t('Application') }}</dt><dd>{{ proposal.body.application }}</dd>
+          </template>
+          <template v-if="proposal.body.command">
+            <dt>{{ t('Program arguments') }}</dt><dd>{{ proposal.body.command }}</dd>
+          </template>
+          <template v-if="proposal.body.origin">
+            <dt>{{ t('HTTPS origin') }}</dt><dd>{{ proposal.body.origin }}</dd>
+          </template>
           <template v-if="proposal.body.account">
             <dt>{{ t("Account") }}</dt><dd>{{ proposal.body.account }}</dd>
           </template>
