@@ -126,8 +126,9 @@ port.on('message', async (event) => {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
       const provider = endpoint ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }) : fixtureProvider
+      const removed = !!runServices.provider && !provider
       runServices.provider = provider; master.setProvider(provider); startupReady = true
-      if (!provider) {
+      if (removed) {
         for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, 'Model connection was removed')
       }
       port.postMessage({ id: request.id, state: true }); return
