@@ -18,17 +18,17 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
     let page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Recovery fixture', assignment: 'Retain synthetic evidence only.' }))).pods[0]
     const workspace = join(root, 'pods', pod.id, 'workspace'); await mkdir(workspace, { recursive: true }); await writeFile(join(workspace, 'notes.txt'), 'SYNTHETIC_DURABLE_WORKSPACE')
-    await page.getByRole('tab', { name: 'Runs', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
+    await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
     await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
     await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, exports)
-    await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Export backup…', exact: true }).click()
     await page.locator('.result').waitFor(); const view = await page.evaluate(() => window.pods.data({ type: 'status' })); const backup = view.result!.path
     expect(JSON.parse(await readFile(join(backup, 'backup.json'), 'utf8')).format).toBe('openape-pods-backup')
     await mkdir(resolve('.artifacts'), { recursive: true }); await page.screenshot({ path: resolve(`.artifacts/data-${packaged ? 'packaged' : 'desktop'}.png`) })
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(560, 840)); await page.emulateMedia({ colorScheme: 'dark' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: resolve('.artifacts/data-narrow-dark.png') })
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByRole('button', { name: 'Archive pod', exact: true }).click()
+    await page.locator('.pod-button').filter({ hasText: 'Recovery fixture' }).click(); await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByText('More options', { exact: true }).click(); await page.getByRole('button', { name: 'Archive pod', exact: true }).click()
     await page.getByRole('button', { name: 'Delete local pod…', exact: true }).waitFor()
     await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false }) })
     await page.getByRole('button', { name: 'Delete local pod…', exact: true }).click()
@@ -65,7 +65,7 @@ it('data: restores a compatible backup when a newer database blocks normal start
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
       const state = globalThis as unknown as { restoreQuit: typeof app.quit }; state.restoreQuit = app.quit.bind(app); app.quit = () => {}; app.relaunch = () => {}
     }, backup)
-    await page.getByRole('button', { name: 'Data & backups', exact: true }).click()
+    await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click()
     await page.getByRole('button', { name: 'Restore backup and restart…', exact: true }).click()
     await expect.poll(async () => {
       try { return JSON.parse(await readFile(join(root, 'selected-profile.json'), 'utf8')).profile as string }
