@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { GroupAction, Organization, PodGroup } from '../contracts/groups'
 
-const props = defineProps<{ pods: StoredPod[], podId: string, organization: Organization, available: boolean, highlight: boolean }>()
+const props = defineProps<{ pods: StoredPod[], podId: string, organization: Organization, available: boolean, highlight: boolean, hideGroupPicker?: boolean }>()
 const emit = defineEmits<{ select: [id: string], updated: [state: WorkspaceState] }>()
 const editRevision = ref(1)
 const busy = ref(false); const error = ref(''); const editing = ref<string | null>(null); const name = ref(''); const removing = ref(false); const dragging = ref<string | null>(null)
@@ -92,7 +92,7 @@ async function drop(groupId: string) {
           </button>
         </div>
         <div v-show="!group.collapsed" :id="`group-${group.id}`">
-          <button v-for="pod in group.pods" :key="pod.id" class="pod-button" :class="{ active: pod.id === podId && highlight }" :aria-pressed="pod.id === podId" :draggable="available && !busy" @dragstart="startDrag($event, pod.id)" @dragend="dragging = null" @click="emit('select', pod.id)">
+          <button v-for="pod in group.pods" :key="pod.id" class="pod-button" :class="{ active: pod.id === podId && highlight }" :aria-pressed="pod.id === podId && highlight" :draggable="available && !busy" @dragstart="startDrag($event, pod.id)" @dragend="dragging = null" @click="emit('select', pod.id)">
             <span class="pod-icon" aria-hidden="true">↗</span><span class="pod-name">{{ pod.name }}<small>{{ label(pod.lifecycle) }}</small></span>
           </button>
           <p v-if="!group.pods.length" class="group-empty muted">
@@ -101,7 +101,7 @@ async function drop(groupId: string) {
         </div>
       </section>
     </div>
-    <label v-if="selected" class="group-picker">{{ t("Group for {p0}", { p0: selected.name }) }}
+    <label v-if="selected && !hideGroupPicker" class="group-picker">{{ t("Group for {p0}", { p0: selected.name }) }}
       <select :aria-label="t('Group for {p0}', { p0: selected.name })" :value="selectedGroup" :disabled="busy || !available" @change="move">
         <option value="">{{ t("Ungrouped") }}</option>
         <option v-for="group in organization.groups" :key="group.id" :value="group.id">{{ group.name }}</option>

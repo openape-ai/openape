@@ -97,3 +97,22 @@ describe('master actions and actual app-server', () => {
     expect(master.view().messages).toHaveLength(2); expect(master.view().state).toBe('interrupted'); expect(master.view().connected).toBe(false)
   })
 })
+it('keeps model conversation history and continuation threads separate for each pod', async () => {
+  const requests: unknown[] = []
+  await setup(async (body) => { requests.push(body); return recordedResponse() }, true)
+  const one = store.createPod({ name: 'One', assignment: 'First task' }); const two = store.createPod({ name: 'Two', assignment: 'Second task' })
+  for (const [podId, text] of [[one.id, 'ONLY_FIRST_POD_CONTEXT'], [two.id, 'ONLY_SECOND_POD_CONTEXT'], [one.id, 'Continue first']]) {
+    await master.execute({ type: 'send', podId, text, id: randomUUID() })
+    await expect.poll(() => master.view(podId).state, { timeout: 20000 }).toBe('idle')
+  }
+  expect(JSON.stringify(requests[1])).not.toContain('ONLY_FIRST_POD_CONTEXT')
+  expect(JSON.stringify(requests[2])).toContain('ONLY_FIRST_POD_CONTEXT')
+  expect(JSON.stringify(requests[2])).not.toContain('ONLY_SECOND_POD_CONTEXT')
+  expect(master.view(one.id).messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_FIRST_POD_CONTEXT', 'Continue first'])
+  expect(master.view(two.id).messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
+  const threads = store.db.prepare('SELECT thread_id FROM master_contexts WHERE scope IN (?,?)').all(one.id, two.id).map(row => row.thread_id)
+  expect(new Set(threads).size).toBe(2)
+  const proposal = randomUUID(); store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,?)').run(proposal, two.id, '{}', 'pending')
+  const response = await master.execute({ type: 'decline', id: proposal, podId: two.id })
+  expect(response.messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
+})

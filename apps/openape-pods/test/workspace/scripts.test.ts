@@ -40,6 +40,7 @@ it('persists literal draft edits, rejects stale revisions and clears validation 
   const f = fixture(); const original = f.store.getPod(f.pod.id).activeScript
   const saved = await f.execute({ type: 'save', podId: f.pod.id, revision: 1, draftId: null, draftRevision: 0, code: '// <script>untrusted()</script>\nexport async function run() {}', capabilities: [] })
   const source = saved.source!
+  expect((await f.execute({ type: 'list', podId: f.pod.id })).source?.code).toBe(source.code)
   expect((await f.execute({ type: 'list', podId: f.pod.id, selection: { kind: 'draft', id: source.id } })).source?.code).toBe(source.code)
   const command = { type: 'save' as const, podId: f.pod.id, revision: 1, draftId: source.id, draftRevision: 1, code: 'export async function run() { return {} }', capabilities: [] }
   const changed = await f.execute(command); expect(changed.source?.revision).toBe(2); expect(changed.source?.validated).toBe(false)

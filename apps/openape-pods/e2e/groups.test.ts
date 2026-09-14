@@ -17,11 +17,11 @@ it('groups: organizes pods through the packaged sidebar and retains grouping acr
   const launch = () => electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   let app = await launch()
   try {
-    let page = await app.firstWindow(); await page.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
+    let page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('button', { name: 'New group', exact: true }).click(); await page.getByLabel('Group name', { exact: true }).fill('Clients'); await page.getByRole('button', { name: 'Create group', exact: true }).click()
     await page.getByRole('region', { name: 'Clients group', exact: true }).waitFor()
     const groups = await page.evaluate(() => window.pods.workspace({ type: 'list' })); const groupId = groups.organization.groups[0]!.id
-    await page.getByLabel('Group for Order review', { exact: true }).selectOption(groupId)
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByLabel('Group', { exact: true }).selectOption(groupId)
     await page.getByRole('region', { name: 'Clients group' }).getByRole('button', { name: 'Order review paused', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Reading notes paused', exact: true }).dragTo(page.getByRole('region', { name: 'Clients group' }).locator('.group-heading'))
     await expect.poll(async () => (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).organization.groups[0]!.podIds.length).toBe(2)
@@ -30,7 +30,7 @@ it('groups: organizes pods through the packaged sidebar and retains grouping acr
     await mkdir(resolve('.artifacts'), { recursive: true }); await page.screenshot({ path: resolve('.artifacts/handbook-groups.png') })
     await page.getByRole('region', { name: 'Work group' }).locator('.group-toggle').click()
     await expect.poll(() => page.getByRole('region', { name: 'Work group' }).getByRole('button', { name: 'Order review paused', exact: true }).isVisible()).toBe(false)
-    await app.close(); app = await launch(); page = await app.firstWindow(); await page.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
+    await app.close(); app = await launch(); page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     const state = await page.evaluate(() => window.pods.workspace({ type: 'list' })); expect(state.organization.groups[0]).toMatchObject({ id: groupId, name: 'Work', collapsed: true }); expect(state.organization.groups[0]!.podIds.sort()).toEqual([pod.id, other.id].sort()); expect(state.pods[0]).toEqual(original)
     await page.getByRole('region', { name: 'Work group' }).locator('.group-toggle').click()
     await page.getByRole('button', { name: 'Edit Work group', exact: true }).click(); const longName = 'LongGroupName'.repeat(7)
