@@ -1,3 +1,7 @@
+import { resolveProgram } from '../../main/programs/session'
+import { programRequest } from '../../main/programs/invoke'
+import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
+import { assignedHttp } from '../../main/programs/http-service'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
@@ -20,6 +24,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   if (draft.assignment_revision !== pod.revision) throw new Error('Assignment changed; save a new draft revision')
   const capabilities = JSON.parse(draft.capabilities as string) as string[]
   new ScriptCredentials(store, resources).required(pod.id, capabilities)
+  const assignedTools = resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
+  if (capabilities.some(capability => capability.startsWith('tool.') && !assignedTools.includes(capability))) throw new Error('No tool assignments are available for this script')
   if (capabilities.includes('mail.read')) assignedMail(resources.list(pod.id))
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { dependencyLockHash: string }
   const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.revision}; dependencies ${manifest.dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
@@ -36,11 +42,22 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         if (!capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')
         return `synthetic-credential-${alias}`
       }
+      if (operation === 'http.request') {
+        assignedHttp(resources.list(pod.id), { podId: pod.id, capabilities }, parseHttpRequest(payload))
+        return { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' }
+      }
       if (operation === 'progress.commit') return { revision: fixture.commitProgress({ ...parseProgress(payload), podId: fixturePod.id }) }
       if (operation === 'mail.next' && capabilities.includes('mail.read')) return { type: 'done' }
       if (operation === 'agent.run') {
         if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
+      }
+      if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'applicationId' in payload) {
+        const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
+        await resolveProgram(assignment, pod.id, argv, true)
+        const argument = (name: string) => argv[argv.indexOf(name) + 1]
+        const output = assignment.cliId === 'o365-cli' ? { account: argument('--account'), operation: argument('--operation'), items: [], complete: true, nextCursor: null } : {}
+        return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' }
       }
       if (operation === 'tools.invoke' && capabilities.includes('mail.read')) {
         const scope = assignedMail(resources.list(pod.id)).mail
@@ -55,7 +72,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     const evidence = JSON.stringify({ kind: 'native-synthetic-contract', draftRevision: revision, assignmentRevision: pod.revision, resourceEpoch: epoch, dependencyLockHash: manifest.dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
     store.transaction(() => {
       if (store.getPod(pod.id).revision !== pod.revision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, assignment or permissions changed during validation')
-      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash: manifest.dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.revision, effects: 'readOnly' }, code)
+      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash: manifest.dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.revision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
       store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.revision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)
     })

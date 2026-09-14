@@ -12,3 +12,12 @@ display = "Read {operation} in {folder} for {account}"
 action = "read"
 risk = "low"
 resource_chain = ["mail-account:email={account}", "mail-folder:id={folder}", "mail-operation:name={operation}"]
+
+[[operation]]
+id = "pods.login"
+command = ["pods", "login"]
+required_options = ["account"]
+display = "Set up o365-cli for {account}"
+action = "login"
+risk = "medium"
+resource_chain = ["mail-account:email={account}"]

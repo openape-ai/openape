@@ -30,6 +30,11 @@ export class EffectLedger {
     if (updated.changes !== 1) throw new Error('Effect is not awaiting completion')
   }
 
+  markUnknown(podId: string, key: string): void {
+    const updated = this.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE pod_id=? AND effect_key=? AND state=\'intent\'').run(podId, key)
+    if (updated.changes !== 1) throw new Error('Effect is not awaiting completion')
+  }
+
   reconcile(podId: string, key: string, outcome: { applied: true, result: unknown } | { applied: false }): void {
     const record = this.store.db.prepare('SELECT state FROM effect_ledger WHERE pod_id=? AND effect_key=?').get(podId, key)
     if (!record || record.state !== 'unknown') throw new Error('Effect is not awaiting reconciliation')

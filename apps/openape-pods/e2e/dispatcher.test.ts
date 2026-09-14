@@ -136,3 +136,31 @@ it('cancels a credential read in progress after rotation and never returns its s
   await expect(readFile(join(f.store.root, 'pods', f.pod.id, 'workspace', 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain('SYNTHETIC_STALE_SECRET')
 })
+
+it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and requires owner reconciliation for uncertainty', async () => {
+  const { Recovery } = await import('../src/worker/recovery/reconcile')
+  const { Scheduler } = await import('../src/worker/scheduling/scheduler')
+  let sends = 0; let uncertain = false
+  const f = await setup({ http: async (request) => { sends++; expect(request.method).toBe('POST'); if (uncertain) throw new Error('Synthetic uncertain delivery'); return { status: 200, headers: {}, body: '{"ok":true}' } } })
+  const authority = { identity: { podId: f.pod.id, connectionId: randomUUID(), issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }, ownerConnection: randomUUID(), grantId: 'synthetic-http' }
+  f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, authority, 0)
+  await f.dispatcher.install(f.pod.id, 'deterministic')
+  const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
+  const capability = f.resources.list(f.pod.id)[0]!.configuration.capability as string
+  const code = `export async function run(c) { const reply=await c.http.request({url:'https://api.example.com/send',method:'POST',headers:{},key:c.variables.effect_key}); await c.progress.commit({expectedRevision:c.input.checkpointRevision,checkpoint:{status:reply.status},sources:[],claims:[]}); return {status:'completed',summary:'HTTP fixture completed',completedInputIds:[],gapIds:[]}; }`
+  const manifest = f.store.storeScript(f.pod.id, { ...original, effects: 'reconciledEffects', capabilities: [capability], contentHash: digest(code) }, code)
+  f.store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(f.pod.id, manifest.contentHash, f.pod.revision, f.resources.epoch(f.pod.id), '{}')
+  f.store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(manifest.contentHash, f.pod.id)
+  const variables = new PodVariables(f.store); variables.save(f.pod.id, 'effect_key', 'first', 0)
+  for (let repeat = 0; repeat < 2; repeat++) { const id = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed') }
+  expect(sends).toBe(1)
+  variables.save(f.pod.id, 'effect_key', 'uncertain', 1); uncertain = true
+  const id = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('failed')
+  expect(f.dispatcher.view(f.pod.id).effects).toEqual([{ key: 'uncertain', runId: id }])
+  expect(() => f.dispatcher.start(f.pod.id)).toThrow('review')
+  const recovery = new Recovery(f.store, f.resources, new Scheduler(f.store, f.dispatcher), resolve('dist/native/pods-helper'))
+  await expect(recovery.resolveHttp(randomUUID(), id, 'uncertain', true, 'Synthetic observation')).rejects.toThrow('not awaiting')
+  await recovery.resolveHttp(f.pod.id, id, 'uncertain', true, 'Synthetic receiver confirmed delivery')
+  const resumed = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(resumed).state).toBe('completed')
+  expect(sends).toBe(2)
+})

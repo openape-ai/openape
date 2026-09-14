@@ -1,0 +1,14 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "pod-http"
+executable = "pod-http"
+audience = "shapes"
+version = "1"
+[[operation]]
+id = "request"
+command = ["request"]
+required_options = ["origin", "method"]
+display = "HTTP {method} to {origin}"
+action = "request"
+risk = "high"
+resource_chain = ["https-origin:url={origin}", "http-method:name={method}"]

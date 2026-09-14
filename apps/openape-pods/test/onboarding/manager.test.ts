@@ -6,7 +6,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ConnectionManager } from '../../src/main/connections/manager'
 import { CredentialCache } from '../../src/main/connections/cache'
 import { CodexConnection } from '../../src/main/connections/codex'
-import { MicrosoftConnection } from '../../src/main/connections/microsoft'
 import { PodDatabase, digest } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
@@ -41,12 +40,10 @@ it('records explicit sign-in cancellation and supports a separate retry without 
   expect((await manager.view()).complete).toBe(false)
   await manager.execute({ type: 'disconnect', id: (await manager.view()).connections[1].id }); expect(await manager.providerReady()).toBe(false)
 })
-it.each(['offline', 'wrong account', 'login expired'])('surfaces %s without connecting Microsoft', async (message) => {
-  vi.spyOn(MicrosoftConnection.prototype, 'login').mockRejectedValue(new Error(message))
+it('rejects global Microsoft setup without touching its cache or starting login', async () => {
   const { manager } = await fixture()
-  await manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })
-  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('failed')
-  expect((await manager.view()).connections[0].error).toBe(message)
+  await expect(manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })).rejects.toThrow('Permissions')
+  expect((await manager.view()).connections).toHaveLength(0)
 })
 it('fails visibly for a locked credential store and mismatched runtime architecture', async () => {
   const locked = await fixture(true)

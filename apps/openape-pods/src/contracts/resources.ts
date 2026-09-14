@@ -1,3 +1,6 @@
+import { parseHttpPermission } from './http'
+import type { HttpPermission } from './http'
+import type { ProgramAuthority } from '../main/programs/grants'
 import { parseCredentialAlias, parseCredentialValue } from './credentials'
 
 export interface PodResource {
@@ -15,13 +18,17 @@ export function parseVariable(value: PodVariable): void {
   if (typeof value.value !== 'string' || value.value.length > 2048 || !Number.isSafeInteger(value.revision) || value.revision < 0) throw new Error('Invalid pod variable')
 }
 export interface ResourceState { variables?: PodVariable[], resources: PodResource[], epoch: number, snapshot?: { id: string, files: { id: string, hash: string, size: number }[] } }
-export type ResourceCommand = { type: 'saveVariable', podId: string, name: string, value: string, revision: number } | { type: 'removeVariable', podId: string, name: string, revision: number } | { type: 'saveCredential', podId: string, alias: string, value: string, epoch: number } | { type: 'list' | 'pickReference' | 'snapshot', podId: string } | { type: 'revoke', podId: string, id: string, revision: number }
-export type InternalResourceCommand = ResourceCommand | { type: 'assignCredential', podId: string, alias: string, credentialId: string, epoch: number } | { type: 'assignReference', podId: string, name: string, path: string }
+export type ResourceCommand = { type: 'assignHttp', podId: string, epoch: number, permission: HttpPermission } | { type: 'saveVariable', podId: string, name: string, value: string, revision: number } | { type: 'removeVariable', podId: string, name: string, revision: number } | { type: 'saveCredential', podId: string, alias: string, value: string, epoch: number } | { type: 'list' | 'pickReference' | 'snapshot', podId: string } | { type: 'revoke', podId: string, id: string, revision: number }
+export type InternalResourceCommand = ResourceCommand | { type: 'approveHttp', podId: string, epoch: number, permission: HttpPermission, authority: ProgramAuthority } | { type: 'assignCredential', podId: string, alias: string, credentialId: string, epoch: number } | { type: 'assignReference', podId: string, name: string, path: string }
 export function parseResourceCommand(value: unknown, internal = false): InternalResourceCommand {
   if (!value || typeof value !== 'object') throw new Error('Invalid resource command')
   const command = value as Record<string, unknown>
-  const keys = command.type === 'saveVariable' ? ['type', 'podId', 'name', 'value', 'revision'] : command.type === 'removeVariable' ? ['type', 'podId', 'name', 'revision'] : command.type === 'saveCredential' ? ['type', 'podId', 'alias', 'value', 'epoch'] : internal && command.type === 'assignCredential' ? ['type', 'podId', 'alias', 'credentialId', 'epoch'] : command.type === 'revoke' ? ['type', 'podId', 'id', 'revision'] : internal && command.type === 'assignReference' ? ['type', 'podId', 'name', 'path'] : ['list', 'pickReference', 'snapshot'].includes(command.type as string) ? ['type', 'podId'] : []
+  const keys = command.type === 'assignHttp' ? ['type', 'podId', 'epoch', 'permission'] : internal && command.type === 'approveHttp' ? ['type', 'podId', 'epoch', 'permission', 'authority'] : command.type === 'saveVariable' ? ['type', 'podId', 'name', 'value', 'revision'] : command.type === 'removeVariable' ? ['type', 'podId', 'name', 'revision'] : command.type === 'saveCredential' ? ['type', 'podId', 'alias', 'value', 'epoch'] : internal && command.type === 'assignCredential' ? ['type', 'podId', 'alias', 'credentialId', 'epoch'] : command.type === 'revoke' ? ['type', 'podId', 'id', 'revision'] : internal && command.type === 'assignReference' ? ['type', 'podId', 'name', 'path'] : ['list', 'pickReference', 'snapshot'].includes(command.type as string) ? ['type', 'podId'] : []
   if (!keys.length || Object.keys(command).some(key => !keys.includes(key)) || typeof command.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(command.podId)) throw new Error('Unsupported resource command')
+  if (command.type === 'assignHttp' || command.type === 'approveHttp') {
+    command.permission = parseHttpPermission(command.permission)
+    if (!Number.isSafeInteger(command.epoch) || Number(command.epoch) < 0) throw new Error('Invalid HTTP permission revision')
+  }
   if (command.type === 'revoke' && (typeof command.id !== 'string' || !/^[a-f0-9-]{36}$/.test(command.id) || !Number.isSafeInteger(command.revision) || (command.revision as number) < 1)) throw new Error('Invalid resource revocation')
   if (command.type === 'assignReference' && (typeof command.name !== 'string' || !command.name.trim() || command.name.length > 255 || typeof command.path !== 'string' || !command.path.startsWith('/') || /[\0\r\n]/.test(command.path))) throw new Error('Invalid file assignment')
   if (command.type === 'saveCredential' || command.type === 'assignCredential') {

@@ -1,3 +1,6 @@
+import type { ProgramAssignment } from '../../contracts/programs'
+import { parseHttpPermission } from '../../contracts/http'
+import type { ProgramAuthority } from '../../main/programs/grants'
 import { parseCredentialAlias } from '../../contracts/credentials'
 import type { PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
@@ -51,6 +54,38 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
+  assignProgram(podId: string, id: string, configuration: ProgramAssignment, expectedEpoch: number): void {
+    this.store.transaction(() => {
+      if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or application permissions changed; reload before assigning access')
+      const owner = this.store.db.prepare('SELECT pod_id FROM resources WHERE id=?').get(id)
+      if (owner && owner.pod_id !== podId) throw new Error('Application belongs to another pod')
+      const current = this.list(podId).find(item => item.id === id)
+      if (current && current.configuration.type !== 'program') throw new Error('Resource is not an application')
+      if (!current && this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready').length >= 16) throw new Error('This pod already has 16 tools')
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?) ON CONFLICT(id) DO UPDATE SET revision=revision+1,state=\'ready\',name=excluded.name,configuration=excluded.configuration').run(id, podId, configuration.name, JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
+  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number): void {
+    const scope = parseHttpPermission(permission)
+    this.store.transaction(() => {
+      const pod = this.store.getPod(podId)
+      if (pod.lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
+      const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
+      if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === scope.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
+      for (const item of this.list(podId).filter(item => item.kind === 'tool' && item.configuration.type === 'http' && item.configuration.origin === scope.origin && item.state !== 'revoked')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(item.id)
+      const id = randomUUID()
+      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request` }
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', scope.origin, JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
   revoke(podId: string, id: string, revision: number): void {
     this.store.transaction(() => {
       const result = this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE pod_id=? AND id=? AND revision=? AND state!=\'revoked\'').run(podId, id, revision)
@@ -63,7 +98,7 @@ export class ResourceRegistry {
   replaceMail(podId: string, resources: { kind: 'tool' | 'connection', name: string, configuration: Record<string, unknown> }[]): void {
     this.store.getPod(podId)
     this.store.transaction(() => {
-      this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE pod_id=? AND kind IN (\'tool\',\'connection\') AND state!=\'revoked\'').run(podId)
+      this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE pod_id=? AND (json_extract(configuration,\'$.capability\')=\'mail.read\' OR kind=\'connection\') AND state!=\'revoked\'').run(podId)
       for (const resource of resources) this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, resource.kind, 'ready', resource.name, JSON.stringify(resource.configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)

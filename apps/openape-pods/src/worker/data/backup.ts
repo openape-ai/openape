@@ -10,7 +10,7 @@ import type { FileRecord } from './files'
 interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 export function assertDataIdle(store: PodDatabase): void {
-  if (store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
+  if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
 }
 function allowed(path: string): boolean {
   relativePath(path)

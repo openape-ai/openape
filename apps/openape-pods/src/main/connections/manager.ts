@@ -7,13 +7,12 @@ import type { SetupInternal } from '../../worker/onboarding/control'
 import type { CredentialCache } from './cache'
 import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
-import { MicrosoftConnection } from './microsoft'
-import type { MailFolder } from './microsoft'
 import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
-import { approveMailGrants } from './grants'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
+import { approveCommands } from '../programs/grants'
+import type { ProgramAuthority } from '../programs/grants'
 
 interface SetupState { connections: ConnectionView[], complete: boolean }
 export class ConnectionManager {
@@ -23,11 +22,9 @@ export class ConnectionManager {
   private providerSession = new AbortController()
   private codex: CodexConnection
   private owner: OwnerConnection
-  private microsoft: MicrosoftConnection
   constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>) {
     this.codex = new CodexConnection(credentials, runtime, join(root, 'authentication'))
     this.owner = new OwnerConnection(credentials)
-    this.microsoft = new MicrosoftConnection(credentials, runtime.helper, dirname(runtime.binary), join(root, 'authentication'))
   }
 
   async initialize(inspectCredentials: () => Promise<void>): Promise<void> {
@@ -66,6 +63,7 @@ export class ConnectionManager {
 
   async execute(command: OnboardingCommand): Promise<OnboardingView> {
     if (command.type === 'list') return this.view()
+    if (command.type === 'assign' || command.type === 'folders' || (command.type === 'connect' && command.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
     if (command.type === 'cancel' || command.type === 'disconnect') {
       const job = this.jobs.get(command.id); job?.controller.abort(new Error('Sign-in cancelled by the owner')); await job?.work
       if (command.type === 'disconnect') {
@@ -89,7 +87,6 @@ export class ConnectionManager {
           const present = (login: NonNullable<ConnectionView['login']>) => { job.login = login }
           if (command.provider === 'chatgpt') { const account = await this.codex.login(id, controller.signal, present); connection.account = account.account; metadata.accountId = account.accountId }
           if (command.provider === 'openape') Object.assign(metadata, await this.owner.login(id, command.issuer!.replace(/\/$/, ''), command.account, controller.signal, present))
-          if (command.provider === 'microsoft') await this.microsoft.login(id, command.account, controller.signal, present)
           controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata); await this.availability()
         }
         catch (error) { await this.save({ ...connection, state: 'failed', error: error instanceof Error ? error.message : 'Sign-in failed' }, metadata) }
@@ -97,37 +94,31 @@ export class ConnectionManager {
       })().catch((error: unknown) => { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Could not persist sign-in outcome' } })
       return this.view()
     }
-    if (command.type === 'folders') {
-      const item = await this.connection(command.id, 'microsoft'); if (item.state !== 'ready') throw new Error('Reconnect Microsoft before choosing folders')
-      const folders = await this.microsoft.folders(item.id, item.account, AbortSignal.timeout(120000))
-      await this.save(item, { ...await this.metadata(item.id), folders, foldersAt: Date.now() }); return this.view()
-    }
-    if (command.type === 'assign') {
-      if (this.assigning) throw new Error('Another permission review is in progress')
-      this.assigning = true
-      try {
-        const setup = command.setup; const owner = await this.connection(setup.ownerConnection, 'openape'); const mail = await this.connection(setup.mailConnection, 'microsoft')
-        const metadata = await this.metadata(owner.id); const mailMetadata = await this.metadata(mail.id)
-        const folders = mailMetadata.folders as MailFolder[] | undefined
-        if (owner.state !== 'ready' || mail.state !== 'ready' || mail.account !== setup.account || typeof metadata.issuer !== 'string' || !Array.isArray(folders) || setup.folders.some(folder => !folders.some(known => known.id === folder.id && known.name === folder.name))) throw new Error('Review the current connected account and folder inventory')
-        const identities = new PodIdentityManager(this.credentials)
-        const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, identity?: PodIdentityReference }>
-        let entry = pods[setup.podId]
-        if (!entry) { entry = { connectionId: randomUUID(), prepared: false }; pods[setup.podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
-        if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, setup.podId, metadata.issuer, owner.account); entry.prepared = true; await this.save(owner, metadata) }
-        const signal = AbortSignal.timeout(120000)
-        const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, signal)
-        entry.identity = await identities.provision(entry.connectionId, `Pod ${setup.podId}`, bearer); await this.save(owner, metadata)
-        const grants = await approveMailGrants(setup, entry.identity, identities, bearer, dirname(this.runtime.binary), signal)
-        await this.dispatch({ type: 'assign', setup, identity: entry.identity, grants })
-      }
-      finally { this.assigning = false }
-    }
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
   }
 
-  async folders(id: string): Promise<MailFolder[]> { return (await this.metadata(id)).folders as MailFolder[] ?? [] }
+  async approve(podId: string, adapterPath: string, commands: string[][]): Promise<ProgramAuthority> {
+    if (this.assigning) throw new Error('Another permission review is in progress')
+    this.assigning = true
+    try {
+      const owner = (await this.state()).connections.find(item => item.provider === 'openape' && item.state === 'ready')
+      if (!owner) throw new Error('Connect OpenApe before assigning application or network permissions')
+      const metadata = await this.metadata(owner.id)
+      if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
+      const identities = new PodIdentityManager(this.credentials)
+      const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, identity?: PodIdentityReference }>
+      let entry = pods[podId]
+      if (!entry) { entry = { connectionId: randomUUID(), prepared: false }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
+      if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, metadata.issuer, owner.account); entry.prepared = true; await this.save(owner, metadata) }
+      const signal = AbortSignal.timeout(120000)
+      const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, signal)
+      entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer); await this.save(owner, metadata)
+      const grantId = await approveCommands(entry.identity, identities, bearer, adapterPath, commands, signal)
+      return { identity: entry.identity, ownerConnection: owner.id, grantId }
+    }
+    finally { this.assigning = false }
+  }
 
   busy(): boolean { return this.jobs.size > 0 || this.assigning }
   async purgePodKeys(podId: string, assignedIds: string[]): Promise<void> {
