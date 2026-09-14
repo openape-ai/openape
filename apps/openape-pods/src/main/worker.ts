@@ -1,3 +1,9 @@
+import { invokeProgram } from './programs/invoke'
+import { ProgramManager } from './programs/manager'
+import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
+import type { ProgramInternal } from '../worker/resources/programs'
+import { parseHttpPermission, parseHttpRequest } from '../contracts/http'
+import { executeHttp } from './programs/http-service'
 import { parseCredentialRead } from '../contracts/credentials'
 import { parseScriptView } from '../contracts/scripts'
 import type { ScriptCommand, ScriptView } from '../contracts/scripts'
@@ -38,6 +44,7 @@ import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 export class FixtureWorker {
+  private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
   private providerAbort = new AbortController()
@@ -61,6 +68,7 @@ export class FixtureWorker {
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
+      if (message && typeof message === 'object' && 'programCancel' in message) { this.programs?.cancelPod(String(message.programCancel)); return }
       if (message && typeof message === 'object' && 'serviceCancel' in message) { this.services.get(String(message.serviceCancel))?.abort(new Error('Pod tool call cancelled')); return }
       if (message && typeof message === 'object' && 'service' in message) {
         const request = message.service as ServiceRequest
@@ -86,6 +94,7 @@ export class FixtureWorker {
       this.setupReady = (async () => { await this.initializeConnections(); this.publish(this.state) })().catch((error: unknown) => { reportError(error instanceof Error ? error.message : 'Connection setup failed') })
     })
     child.on('exit', (code) => {
+      this.programs?.cancelAll()
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
       this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
@@ -103,8 +112,8 @@ export class FixtureWorker {
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
     })
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
-    await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[])
-    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.finishDeletions() })
+    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }))
+    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() })
   }
 
   private async finishDeletions(): Promise<void> {
@@ -114,17 +123,42 @@ export class FixtureWorker {
 
   async data(command: DataInternal): Promise<DataView> {
     await this.setupReady
-    if (command.type !== 'status' && this.connections?.busy()) throw new Error('Finish or cancel account setup before changing application data')
+    if (command.type !== 'status' && (this.connections?.busy() || this.programs?.busy())) throw new Error('Finish or cancel account setup before changing application data')
     const view = parseDataView(await this.dispatch({ data: command }))
     if (command.type === 'cleanup' || command.type === 'deletePod') { await this.finishDeletions(); return parseDataView(await this.dispatch({ data: { type: 'status' } })) }
     return view
   }
 
+  async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string) {
+    await this.setupReady
+    if (!this.programs) throw new Error('Program service is not ready')
+    if (command.type === 'add') {
+      if (!definition) throw new Error('Choose an application in the owner window')
+      await this.programs.add(command.podId, command.epoch, definition)
+    }
+    else if (command.type === 'grant') {
+      await this.programs.grant(command)
+    }
+    else if (command.type === 'importState') {
+      if (!file) throw new Error('Choose an application state file in the owner window')
+      await this.programs.importFile(command.podId, command.applicationId, command.epoch, file)
+    }
+    else {
+      return this.programs.terminal(command)
+    }
+    return this.resources({ type: 'list', podId: command.podId })
+  }
+
+  async programPreview(command: Extract<ProgramCommand, { type: 'grant' | 'start' }>) {
+    await this.setupReady
+    if (!this.programs) throw new Error('Program service is not ready')
+    return this.programs.preview(command.podId, command.applicationId, command.epoch, command.argv)
+  }
+
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection setup is not ready')
-    const view = await this.connections.execute(command)
-    return command.type === 'folders' ? { ...view, folders: { connectionId: command.id, items: await this.connections.folders(command.id) } } : view
+    return this.connections.execute(command)
   }
 
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
@@ -137,6 +171,17 @@ export class FixtureWorker {
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
     await this.setupReady
+    if (command.type === 'assignHttp') {
+      if (!this.connections) throw new Error('Connection setup is not ready')
+      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+      if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
+      const permission = parseHttpPermission(command.permission)
+      const current = before.resources.filter(item => item.kind === 'tool' && item.state === 'ready')
+      if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === permission.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
+      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), permission.methods.map(method => ['pod-http', 'request', '--origin', permission.origin, '--method', method]))
+      return parseResourceState(await this.dispatch({ resource: { type: 'approveHttp', podId: command.podId, epoch: command.epoch, permission, authority } }))
+    }
     if (command.type === 'saveCredential') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
       const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
@@ -154,9 +199,9 @@ export class FixtureWorker {
     }
     const before = command.type === 'revoke' ? parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } })).resources.find(item => item.id === command.id) : undefined
     const view = parseResourceState(await this.dispatch({ resource: command }))
-    if (before?.kind === 'credential') {
+    if (before?.kind === 'credential' || before?.configuration.type === 'program') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
-      await this.credentials.erasePodKey(before.configuration.credentialId as string, command.podId)
+      await this.credentials.erasePodKey((before.configuration.credentialId ?? before.configuration.stateId) as string, command.podId)
     }
     return view
   }
@@ -165,7 +210,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
@@ -177,7 +222,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'credential') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'http') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -195,6 +240,18 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'http') {
+        if (!this.credentials) throw new Error('Credential store is unavailable')
+        const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, this.credentials, controller.signal)
+        await check(); controller.signal.throwIfAborted(); return result
+      }
+      if (request.body && typeof request.body === 'object' && 'applicationId' in request.body) {
+        if (!this.credentials) throw new Error('Credential store is unavailable')
+        const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+        const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       const assignment = assignedMail(state.resources)
       if (assignment.identity.podId !== scope.podId) throw new Error('Agent identity belongs to another pod')
       const credentials = this.credentials
@@ -214,6 +271,7 @@ export class FixtureWorker {
 
   async stop(): Promise<void> {
     await this.setupReady
+    await this.programs?.stop()
     await this.connections?.stop()
     this.providerAbort.abort()
     await this.providerGateway?.close()

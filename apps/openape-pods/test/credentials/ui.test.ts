@@ -31,7 +31,7 @@ it('requires owner credential review before Run and preserves declarations when 
   await button('Review credential access').trigger('click'); await flushPromises()
   expect(scripts).toHaveBeenCalledWith({ type: 'approveCredentials', podId: view.pod.id, revision: 1, hash, epoch: 1 })
   expect(runs).toHaveBeenCalledWith({ type: 'start', podId: view.pod.id, expectedScript: hash })
-  await wrapper.findAll('input[type="checkbox"]')[1]!.setValue(false)
+  await wrapper.get('input[type="checkbox"]').setValue(false)
   expect(wrapper.text()).toContain('Unsaved changes')
   await button('Save script').trigger('click'); await flushPromises()
   expect(scripts.mock.calls.at(-1)![0].capabilities).toEqual([]); wrapper.unmount()
@@ -41,7 +41,7 @@ it('keeps a revoked but selected alias visible so its declaration can be removed
   window.pods = { scripts: vi.fn().mockResolvedValue(view), resources: async () => ({ resources: [], epoch: 2 }) } as unknown as typeof window.pods
   const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
   expect(wrapper.text()).toContain('Not assigned')
-  await wrapper.findAll('input[type="checkbox"]')[1]!.setValue(false)
+  await wrapper.get('input[type="checkbox"]').setValue(false)
   await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
   expect(window.pods.scripts).toHaveBeenCalledWith(expect.objectContaining({ type: 'save', capabilities: [] })); wrapper.unmount()
 })

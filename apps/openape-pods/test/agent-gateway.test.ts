@@ -39,3 +39,21 @@ it('rejects oversized provider streams and releases their producer', async () =>
   }
   finally { await gateway.close() }
 })
+
+it('advertises assigned application invocations to the agent without credential or HTTP tools', async () => {
+  const tool = vi.fn(async () => ({ exitCode: 0, stdout: 'Synthetic read', stderr: '' }))
+  const gateway = await startAgentGateway({ tool, provider: async () => new Response() }, new AbortController().signal)
+  const rpc = async (method: string, params?: unknown) => (await fetch(`http://127.0.0.1:${gateway.port}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })).json()
+  try {
+    const list = await rpc('tools/list')
+    expect(list.result.tools).toHaveLength(1)
+    expect(list.result.tools[0].inputSchema.properties.applicationId).toEqual({ type: 'string' })
+    expect(list.result.tools[0].inputSchema.oneOf).toEqual([{ required: ['applicationId'] }, { required: ['toolId'] }])
+    const invocation = { applicationId: 'assigned-application', argv: ['pods', 'read'] }
+    expect((await rpc('tools/call', { name: 'ape_shell', arguments: invocation })).result.isError).toBeUndefined()
+    expect(tool).toHaveBeenCalledWith(invocation, expect.any(AbortSignal))
+    for (const name of ['credentials.get', 'http.request']) expect((await rpc('tools/call', { name, arguments: {} })).error.code).toBe(-32601)
+    expect(tool).toHaveBeenCalledTimes(1)
+  }
+  finally { await gateway.close() }
+})

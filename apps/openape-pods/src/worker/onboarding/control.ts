@@ -6,6 +6,12 @@ import type { MailAssignment } from '../../main/mail/service'
 import { OnboardingStore } from './store'
 
 export type SetupInternal = { type: 'list' } | { type: 'save', connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown> } | { type: 'metadata', id: string } | { type: 'finish' } | { type: 'revoke', id: string } | { type: 'assign', setup: MailSetup, identity: PodIdentityReference, grants: MailAssignment['grants'] }
+function usesConnection(configuration: Record<string, unknown>, id: string): boolean {
+  const authority = configuration.authority as { ownerConnection?: string } | undefined
+  const grants = Array.isArray(configuration.grants) ? configuration.grants as { authority?: { ownerConnection?: string } }[] : []
+  return [configuration.connectionId, configuration.ownerConnection, authority?.ownerConnection].includes(id) || grants.some(grant => grant.authority?.ownerConnection === id)
+}
+
 export class SetupControl {
   readonly connections: OnboardingStore
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) { this.connections = new OnboardingStore(store) }
@@ -16,7 +22,7 @@ export class SetupControl {
     if (command.type === 'revoke') {
       for (const pod of this.store.listPods()) {
         for (const resource of this.resources.list(pod.id)) {
-          if (resource.state !== 'revoked' && [resource.configuration.connectionId, resource.configuration.ownerConnection].includes(command.id)) this.resources.revoke(pod.id, resource.id, resource.revision)
+          if (resource.state !== 'revoked' && usesConnection(resource.configuration, command.id)) this.resources.revoke(pod.id, resource.id, resource.revision)
         }
       }
     }

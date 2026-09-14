@@ -95,13 +95,17 @@ Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeic
 
 ## Berechtigungen
 
-Berechtigungen zeigt zugewiesene Dateien und Werkzeug-/Anwendungszugriffe mit Umfang und Zustand. Allgemeiner GUI- und Terminalstart ist wegen des offenen Nachweises zur Prozessbegrenzung noch nicht verfügbar. Die Ansicht erlaubt keine unbeschränkte Ausführung auf dem Mac. Geheimniswerte verwalten Sie in Einstellungen.
+Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
 
-Wähle eine Referenzdatei über den nativen Dateidialog. Der Pod erhält eine schreibgeschützte Kopie; das Original bleibt außerhalb seines beschreibbaren Arbeitsbereichs. Jeder Lauf protokolliert die verwendete Referenzversion. Ein geändertes Original wird zur Eingabe eines späteren Laufs.
+Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Gib Programmargumente ein, wähle Befehl erlauben, prüfe die genaue Berechtigung und öffne das Terminal. Darin läuft dieses CLI im Kontext der zugewiesenen Pod-Anwendung. Es ist keine uneingeschränkte Shell. Das Programm verwaltet seine Anmeldung selbst; Pods leitet keinen Anmeldestatus ab.
 
-Erstelle eine Quellenkopie, um ihre gespeicherte Prüfsumme zu prüfen. Widerrufe eine Zuweisung, um ihre Berechtigung zu entfernen. Ressourcenänderungen machen ältere Validierungsnachweise ungültig und können betroffene Ausführungen stoppen. Prüfe und validiere das Skript für den neuen Zugriffsbereich.
+Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
 
-Konten und Mail-Zugriff verwalten öffnet Verbindungen & Einrichtung. Eine im Skript deklarierte Fähigkeit fordert die Nutzung vorhandener Berechtigungen an; sie erteilt keinen Kontozugriff.
+HTTP-Ziele erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Einstellungen. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
+
+Ein Widerruf ändert den Ressourcenstand und beendet betroffene Arbeit. Prüfe das Skript nach Berechtigungsänderungen erneut. Ein offenes Terminal belegt den Pod; reguläre Läufe warten auf sein Ende. Beim Schließen wird der Prozess gestoppt und sein Ende geprüft, bevor der Pod freigegeben wird.
+
+Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking, grafische Anwendungen und beliebige Interpreter-Abhängigkeiten sind noch nicht verfügbar. Selbst gewählte CLIs haben standardmäßig keinen Netzwerkzugriff; das mitgelieferte o365-cli hat ausdrücklich begrenzte Microsoft-Ziele. Externe Verzeichnisse werden derzeit über einzelne Referenzdateien zugewiesen; beschreibbare Dateien liegen im Pod-Arbeitsbereich.
 
 ![Berechtigungen](images/handbook-permissions-de.png)
 
@@ -125,6 +129,8 @@ Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben
 
 Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
 
+Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Erneut senden erlauben. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
+
 ![Historie und Wiederherstellung](images/handbook-history-de.png)
 
 ## Ergebnisse und Quellen
@@ -141,9 +147,9 @@ Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod 
 
 ## Zugangsdaten im Pod-Skript verwenden
 
-Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Ressourcen einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich mail.read deklarieren.
+Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Ressourcen einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 
-Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. Bestehende gemeinsame ChatGPT-, Microsoft- und OpenApe-Anmeldetokens verwaltet weiterhin der Verbindungsdienst; diese API gibt sie nicht heraus.
+Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
 await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Deklariere credential.crm durch Auswahl von crm im Editor. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, den Auftrags- und Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
 
@@ -194,7 +200,7 @@ Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Wa
 
 context.input enthält eingefrorene Aufgaben- und Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
-context.progress.commit schreibt Fortschrittsstand, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext für reguläre Läufe und den bestehenden Pod-Zugriffsgrenzen auf. context.tools.invoke und die mitgelieferte context.mail-API akzeptieren nur definierte Leseverträge und zugewiesene Bereiche; sie sind keine allgemeine Host-Shell.
+context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ applicationId, argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte behalten ihren bisherigen Lesevertrag.
 
 Das folgende Beispiel ergänzt eine Markierung im Fortschrittsstand und liefert eine sichtbare Zusammenfassung. Es nutzt weder Mail- noch Modelldienste. Bestätige nur Eingabe-IDs von Arbeit, die das Skript tatsächlich abgeschlossen hat. Der Beispielcode ist in beiden Sprachfassungen identisch.
 
@@ -225,19 +231,83 @@ Die App beobachtet Änderungen zugewiesener Referenzen und unterstützt intern g
 
 Nach Ruhezustand oder Ausfall verarbeitet ein Nachhollauf verbleibende Eingaben ab dem gespeicherten Fortschritt. Zeitpläne benötigen eine laufende App und einen wachen Mac.
 
-## Verbindungen und Mail-Lesezugriff
+## Verbindungen und Mail-Benachrichtigungen
 
-Verbindungen & Einrichtung verwaltet drei separate Verbindungen: ChatGPT für die Modellausführung, OpenApe für Pod-Identität und Berechtigungen und Microsoft 365 für Mail-Lesezugriff. Folge dem Anmeldeablauf jedes Anbieters. Verbindungskarten zeigen den Fortschritt und erlauben Abbruch oder Trennung.
+Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex für KI-Ausführung und OpenApe für Pod-Identitäten und Grants. Weitere Programme werden in Berechtigungen über ihr eigenes Terminal oder eine importierte Zustandsdatei angemeldet.
 
-Wähle für Mail den OpenApe-Eigentümer und das Microsoft-Konto, lade die Ordner und wähle den exakten Ordnerbereich. Wähle ein anfängliches UTC-Datum oder Gesamter verfügbarer Verlauf. Der Anhangszugriff ist eine separate Entscheidung. Prüfe Bereich und Datennutzung und bestätige dann den nativen Zuweisungsdialog.
+Füge für Mail-Benachrichtigungen o365-cli in Berechtigungen hinzu. Erlaube pods login --account you@example.com und führe den Befehl im Terminal aus, oder importiere eine vorhandene token.json als Anwendungszustand. Erlaube anschließend pods read --account you@example.com --folder inbox --operation messages. Der apes-Grant begrenzt die Ausführung auf den bestätigten Lesebereich; ein weiter reichender Anbieter-Token erlaubt dem Skript keine zusätzlichen Befehle.
 
-Das Mail-Leserezept kann empfangene Nachrichten, gesendete Antworten und erlaubte Anhänge berücksichtigen. Es bewahrt Wissen mit Quellen und dokumentiert den Verarbeitungsfortschritt. Analyseinhalte können an den verbundenen Modellanbieter gesendet werden. Nicht unterstützte Anhänge werden als Nachweislücken erfasst.
+Speichere unter Einstellungen → Variablen und Geheimnisse mail_account, o365_application_id und telegram_chat_id als Variablen sowie telegram_bot_token als Geheimnis. Die Anwendungskennung ist die Ressourcen-ID der zugewiesenen Anwendung, die dem Pod-Chat zur Verfügung steht. Erlaube in Berechtigungen POST für https://api.telegram.org. Telegram benötigt keine eigene Kontokarte und kein CLI.
 
-Zugewiesene Mail-Lesezugriffe verändern nichts: Sie senden, verschieben, markieren oder kennzeichnen keine Nachrichten als gelesen. Jeder Pod hat eine Agentenidentität und begrenzten Zugriff. Die Erneuerung der Authentifizierung erfolgt innerhalb der vertrauenswürdigen Verbindungs- und Werkzeuggrenze. Geheimnisse gehören nicht in Skripte.
+Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
-Der aktuelle Testbuild besitzt synthetische Prüfnachweise. Echte Anbieteranmeldung, Token-Erneuerung im Mandanten und Live-Mail-Verhalten bleiben Teil der Freigabeprüfung. Für die lokale Skriptanleitung ist kein Live-Zugriff nötig.
+Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
 
-![Verbindungen und Mail-Lesezugriff](images/handbook-setup-de.png)
+```javascript
+import { createHash } from 'node:crypto'
+
+const fingerprint = value => createHash('sha256').update(value).digest('hex')
+const maximumMessages = 1000
+
+export async function run(context) {
+  const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
+  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Settings')
+  let revision = context.input.checkpointRevision
+  let state = context.input.checkpoint
+  const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
+  async function commit(next) {
+    const reply = await context.progress.commit({ expectedRevision: revision, checkpoint: next, sources: [], claims: [] })
+    revision = reply.revision
+    state = next
+  }
+  async function deliverPending() {
+    const token = await context.credentials.get('telegram_bot_token')
+    if (!/^\d+:[\w-]+$/.test(token)) throw new Error('Set a valid telegram_bot_token secret')
+    const reply = await context.http.request({ url: `https://api.telegram.org/bot${token}/sendMessage`, method: 'POST', key: state.pending.key, headers: { 'content-type': 'application/json' }, body: state.pending.body })
+    if (reply.status !== 200 || (reply.headers['x-pods-reconciled'] !== 'owner' && JSON.parse(reply.body).ok !== true)) throw new Error('Telegram did not confirm delivery; review History before retrying')
+    await commit({ version: 1, initialized: true, ...state.pending.next })
+  }
+  if (state.pending) {
+    await deliverPending()
+    return finish('Pending mail notification completed')
+  }
+  const checkedAt = new Date().toISOString()
+  const since = new Date(state.checkedAt ? Date.parse(state.checkedAt) - 5 * 60000 : Date.parse(checkedAt) - 24 * 3600000).toISOString()
+  const messages = new Map()
+  let cursor
+  for (let page = 0; page < 20; page++) {
+    const argv = ['pods', 'read', '--account', account, '--folder', 'inbox', '--operation', 'messages', '--since', since, ...(cursor ? ['--cursor', cursor] : [])]
+    const reply = await context.tools.invoke({ applicationId, argv })
+    if (reply.exitCode !== 0) throw new Error('Mail read failed; inspect the assigned application in Permissions')
+    const result = JSON.parse(reply.stdout)
+    if (result.account !== account || result.operation !== 'messages' || !Array.isArray(result.items)) throw new Error('Mail reply does not match the configured account and operation')
+    for (const item of result.items) {
+      if (typeof item.id !== 'string' || !item.id) throw new Error('Mail reply is missing a stable message identity')
+      messages.set(fingerprint(item.id), true)
+      if (messages.size > maximumMessages) throw new Error('Mail window exceeds 1000 messages; narrow the script window before retrying')
+    }
+    if (result.complete === true) break
+    if (page === 19 || typeof result.nextCursor !== 'string' || !result.nextCursor || result.nextCursor === cursor) throw new Error('Mail pagination did not complete')
+    cursor = result.nextCursor
+  }
+  const previous = new Set(state.seen ?? [])
+  const newIds = [...messages.keys()].filter(id => !previous.has(id)).sort()
+  const next = { checkedAt, seen: [...new Set([...(state.seen ?? []), ...messages.keys()])].slice(-1500) }
+  if (!state.initialized || !newIds.length) {
+    const initialized = state.initialized
+    await commit({ version: 1, initialized: true, ...next })
+    return finish(initialized ? 'No new mail' : 'Mail baseline saved; future new mail will be reported')
+  }
+  const text = language === 'en' ? `${newIds.length} new email(s) in ${account}.` : `${newIds.length} neue E-Mail(s) in ${account}.`
+  const key = `mail:${fingerprint(JSON.stringify([account, newIds]))}`
+  await commit({ ...state, pending: { key, body: JSON.stringify({ chat_id: chatId, text }), next } })
+  await deliverPending()
+  return finish(`Reported ${newIds.length} new email(s)`)
+}
+
+```
+
+![Verbindungen und Mail-Benachrichtigungen](images/handbook-setup-de.png)
 
 ## Daten, Sicherungen und Updates
 
@@ -263,6 +333,6 @@ Syntax- oder Vertragsfehler: Korrigiere das JavaScript und stelle sicher, dass r
 
 Kein automatischer Lauf: Prüfe aktives Skript, aktivierten Zeitplan, Pod-Lebenszyklus, nächsten Zeitpunkt, Hintergrundprozess, Ressourcen, ausstehende Wiederherstellung und ob der Mac wach ist.
 
-Keine Mail-Erkenntnisse: Prüfe Konto- und Ordnerbereich, anfänglichen Zeitraum, Anhangszugriff, Verbindungsbereitschaft und Lauffehler. Leere Erkenntnisse allein belegen nicht, dass alle Quellen gelesen wurden.
+Anwendungsaufruf schlägt fehl: Prüfe den exakten Grant und die Programmausgabe in Berechtigungen. Richte dort den eigenen Programmzustand ein oder importiere ihn. Ein leeres Ergebnis belegt nicht, dass alle Quellen gelesen wurden.
 
 Speicherlimit erreicht: Exportiere bei Bedarf eine Sicherung, entferne unerwünschte archivierte Pods über den Bestätigungsablauf, bereinige ungenutzte Dateien oder erhöhe das Limit. Prüfe anschließend die Wiederherstellung, bevor du unterbrochene Arbeit erneut versuchst.

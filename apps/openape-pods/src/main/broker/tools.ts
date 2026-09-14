@@ -1,3 +1,4 @@
+import { ProgramState } from '../programs/state'
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -9,6 +10,7 @@ import type { AgentAuthority, AssignedAuthorization } from './authorization'
 
 export interface ToolAssignment extends AssignedAuthorization {
   id: string
+  programState?: { id: string, podId: string, applicationId: string }
   capability: string
   executable: string
   executableHash: string
@@ -48,6 +50,10 @@ export class PodToolBroker {
     await this.authority.authorize(assignment, lease.signal)
     lease.assertCurrent(); lease.signal.throwIfAborted()
     await mkdir(this.root, { recursive: true, mode: 0o700 })
+    if (assignment.programState) {
+      const state = assignment.programState
+      return new ProgramState(this.credentials).use(state.id, state, async directory => this.run(assignment, lease, directory, assignment.cacheArgument ? join(directory, 'token.json') : undefined), lease.signal)
+    }
     if (assignment.connectionId) {
       return this.credentials.withCache(assignment.connectionId, async (cache) => {
         lease.assertCurrent(); lease.signal.throwIfAborted()

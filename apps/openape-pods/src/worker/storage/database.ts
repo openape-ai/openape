@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 13
+export const schemaVersion = 14
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -223,6 +223,9 @@ INSERT INTO master_contexts SELECT '',thread_id,state,error FROM master_session 
 CREATE TABLE master_message_scopes(message_id TEXT PRIMARY KEY REFERENCES master_messages(id) ON DELETE CASCADE,scope TEXT NOT NULL);
 INSERT INTO master_message_scopes SELECT id,'' FROM master_messages;
 PRAGMA user_version=13;`)
+      }
+      if (version < 14) {
+        this.db.exec(`CREATE TABLE program_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,session_id TEXT NOT NULL UNIQUE,application_id TEXT NOT NULL,epoch INTEGER NOT NULL,assignment_revision INTEGER NOT NULL); PRAGMA user_version=14;`)
       }
 
     })
