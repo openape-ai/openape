@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, readdir, mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { fixtureDirectory } from '../src/main/fixture'
@@ -13,7 +13,9 @@ it('credentials: packaged owner flow protects exact source, persists encrypted v
   const syntheticCipher = process.env.OPENAPE_PODS_TEST_SYNTHETIC_CIPHER === '1'
   const key = randomBytes(32).toString('hex')
   const launch = async () => {
-    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: syntheticCipher ? root : homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+    expect(await running.evaluate(({ app }) => app.getPath('userData'))).toBe(root)
+    expect(await running.evaluate(({ app }) => app.getPath('sessionData'))).toBe(join(root, 'chromium'))
     if (syntheticCipher) {
       await running.evaluate(({ safeStorage }, key) => {
         const { createCipheriv, createDecipheriv, randomBytes } = process.getBuiltinModule('node:crypto') as typeof import('node:crypto')
