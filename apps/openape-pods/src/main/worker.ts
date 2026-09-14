@@ -206,7 +206,7 @@ export class FixtureWorker {
     return view
   }
 
-  async runs(command: RunCommand): Promise<RunView> { return parseRunView(await this.dispatch({ run: command })) }
+  async runs(command: RunCommand): Promise<RunView> { await this.setupReady; return parseRunView(await this.dispatch({ run: command })) }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
