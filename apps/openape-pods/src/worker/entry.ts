@@ -1,3 +1,7 @@
+import { programRequest } from '../main/programs/invoke'
+import { ProgramControl } from './resources/programs'
+import type { ProgramInternal } from './resources/programs'
+import { parseHttpReply } from '../contracts/http'
 import { PodVariables } from './resources/variables'
 import { PodGroups } from './workspace/groups'
 import { ScriptWorkspace } from './workspace/scripts'
@@ -12,7 +16,7 @@ import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
 import type { AgentRuntime } from './agent/executor'
 import type { ServiceCheck } from '../contracts/services'
-import { authorizeMailService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
+import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
 import { parseMailRequest } from '../main/mail/contract'
@@ -38,7 +42,7 @@ if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = new PodDatabase(process.cwd())
 const mailBridge = new MailBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
-const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId, 'Resource permissions changed'))
+const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed'); port.postMessage({ programCancel: podId }) })
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
 if (!executable) throw new Error('Trusted runtime executable is missing')
@@ -47,11 +51,15 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { credential: async (alias, signal, scope) => {
+const runServices: RunServices = { http: async (body, signal, scope) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http')), credential: async (alias, signal, scope) => {
   const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
 }, tool: async (body, signal, scope) => {
+  if (body && typeof body === 'object' && 'applicationId' in body) {
+    programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
+    return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
+  }
   const assignment = assignedMail(registry.list(scope.podId))
   const { read } = parseMailRequest(body, assignment.mail)
   assertMailHistory(store, scope.podId, assignment.mail, read)
@@ -118,21 +126,24 @@ port.on('message', async (event) => {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
       const provider = endpoint ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }) : fixtureProvider
+      const removed = !!runServices.provider && !provider
       runServices.provider = provider; master.setProvider(provider); startupReady = true
-      if (!provider) {
+      if (removed) {
         for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, 'Model connection was removed')
       }
       port.postMessage({ id: request.id, state: true }); return
     }
+    if (request.command && typeof request.command === 'object' && 'program' in request.command) { port.postMessage({ id: request.id, state: new ProgramControl(store, registry).execute(request.command.program as ProgramInternal) }); return }
     if (request.command && typeof request.command === 'object' && 'setup' in request.command) {
       port.postMessage({ id: request.id, state: setup.execute(request.command.setup as SetupInternal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'credentialInventory' in request.command) {
-      const assignments = store.listPods().flatMap(pod => registry.list(pod.id).filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ podId: pod.id, id: item.configuration.credentialId as string })))
+      const assignments = store.listPods().flatMap(pod => registry.list(pod.id).filter(item => (item.kind === 'credential' || item.configuration.type === 'program') && item.state === 'ready').map(item => ({ podId: pod.id, id: (item.configuration.credentialId ?? item.configuration.stateId) as string })))
       port.postMessage({ id: request.id, state: assignments }); return
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
+      new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
     }
@@ -144,7 +155,7 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: authorizeCredentialService(store, registry, dispatcher.runs, check, check.alias) }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
-      port.postMessage({ id: request.id, state: authorizeMailService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
+      port.postMessage({ id: request.id, state: authorizeRunService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
       port.postMessage({ id: request.id, state: await scripts.execute(parseScriptCommand(request.command.scripts), scriptController.signal) }); return
@@ -164,6 +175,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
+      if (command.type === 'resolveHttp') await recovery.resolveHttp(command.podId, command.runId, command.key, command.applied, command.evidence)
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
@@ -174,6 +186,8 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
+      if (resource.type === 'approveHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch)
+      if (resource.type === 'assignHttp') throw new Error('HTTP permissions require owner approval')
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
       const variables = new PodVariables(store)
       if (resource.type === 'saveVariable') variables.save(resource.podId, resource.name, resource.value, resource.revision)

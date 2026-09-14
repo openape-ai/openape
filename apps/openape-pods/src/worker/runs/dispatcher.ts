@@ -1,3 +1,8 @@
+import { parseHttpRequest } from '../../contracts/http'
+import type { HttpRequest, HttpReply } from '../../contracts/http'
+import { assignedHttp } from '../../main/programs/http-service'
+import { EffectLedger } from '../recovery/effects'
+import { executeHttpEffect } from './http'
 import { PodVariables } from '../resources/variables'
 import { credentialAliases, parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
@@ -32,6 +37,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
@@ -49,7 +55,7 @@ export class RunDispatcher {
     })
   }
 
-  view(podId: string, id?: string, after = 0): RunView { return { runs: this.runs.list(podId), events: id ? this.runs.events(podId, id, after) : [] } }
+  view(podId: string, id?: string, after = 0): RunView { return { effects: this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[], runs: this.runs.list(podId), events: id ? this.runs.events(podId, id, after) : [] } }
 
   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
     const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }
@@ -58,6 +64,7 @@ export class RunDispatcher {
 
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): string {
     this.store.assertStorage()
+    if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
     const epoch = this.resources.epoch(podId)
@@ -95,7 +102,6 @@ export class RunDispatcher {
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
-      if (manifest.effects !== 'readOnly') throw new Error('Effectful scripts are not enabled')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
       new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
@@ -110,7 +116,7 @@ export class RunDispatcher {
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.revision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
-        if (!manifest.capabilities.includes('mail.read') || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const operation = this.services.tool(body, toolSignal, scope)
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
@@ -141,6 +147,18 @@ export class RunDispatcher {
             this.runs.append(id, 'mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
             return result
           }
+          if (operation === 'http.request') {
+            if (!this.services?.http) throw new Error('HTTP service is unavailable')
+            const request = parseHttpRequest(payload)
+            assignedHttp(this.resources.list(pod.id), scope, request)
+            const pending = executeHttpEffect(new EffectLedger(this.store), pod.id, id, request, async () => {
+              const result = await this.services!.http!(request, operationSignal, scope)
+              assertCurrent(); operationSignal.throwIfAborted(); return result
+            })
+            pendingAgents.add(pending)
+            try { return await pending }
+            finally { pendingAgents.delete(pending) }
+          }
           if (operation === 'progress.commit') {
             const progress = parseProgress(payload)
             const revision = this.store.commitProgress({ ...progress, podId: pod.id })
@@ -167,6 +185,7 @@ export class RunDispatcher {
         },
       })
       assertCurrent()
+      if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\')').get(id)) throw new Error('An HTTP delivery needs review before this pod can run again')
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
