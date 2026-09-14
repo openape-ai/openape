@@ -1,3 +1,4 @@
+import { ScriptCredentials } from '../resources/script-credentials'
 import { randomUUID } from 'node:crypto'
 import type { ScriptCommand, ScriptSelection, ScriptSource, ScriptView } from '../../contracts/scripts'
 import { parseScriptCommand } from '../../contracts/scripts'
@@ -15,6 +16,10 @@ export class ScriptWorkspace {
     const command = parseScriptCommand(value)
     this.store.getPod(command.podId)
     if (command.type === 'list') return this.view(command.podId, command.selection)
+    if (command.type === 'approveCredentials') {
+      new ScriptCredentials(this.store, this.resources).approve(command.podId, command.hash, command.revision, command.epoch)
+      return this.view(command.podId, { kind: 'version', id: command.hash })
+    }
     const { type, ...fields } = command
     if (command.type === 'validate' && this.validating) throw new Error('Another script validation is running; try again when it finishes')
     if (command.type === 'validate') this.validating = true
@@ -39,12 +44,12 @@ export class ScriptWorkspace {
       if (!row) throw new Error('Script version is not assigned to this pod')
       const manifest = parseManifest(JSON.parse(row.manifest as string))
       const evidence = this.evidence(podId, selection.id)
-      return { ...selection, code: this.store.readBlob(selection.id).toString('utf8'), capabilities: manifest.capabilities, revision: 0, assignmentRevision: manifest.assignmentRevision, hash: selection.id, validated: evidence !== null, evidence }
+      return { ...selection, code: this.store.readBlob(selection.id).toString('utf8'), capabilities: manifest.capabilities, revision: 0, assignmentRevision: manifest.assignmentRevision, hash: selection.id, validated: evidence !== null, evidence, credentialAccessApproved: new ScriptCredentials(this.store, this.resources).approved(podId, selection.id) }
     }
     const row = this.store.db.prepare('SELECT * FROM script_drafts WHERE pod_id=? AND id=?').get(podId, selection.id)
     if (!row) throw new Error('Draft is not assigned to this pod')
     const evidence = this.evidence(podId, row.script_hash as string | null)
-    return { ...selection, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], revision: row.revision as number, assignmentRevision: row.assignment_revision as number, hash: row.script_hash as string | null, validated: evidence !== null, evidence }
+    return { ...selection, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], revision: row.revision as number, assignmentRevision: row.assignment_revision as number, hash: row.script_hash as string | null, validated: evidence !== null, evidence, credentialAccessApproved: !!row.script_hash && new ScriptCredentials(this.store, this.resources).approved(podId, row.script_hash as string) }
   }
 
   private view(podId: string, selection?: ScriptSelection): ScriptView {
@@ -52,6 +57,6 @@ export class ScriptWorkspace {
     const versions = new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId }).versions
     const drafts = this.store.db.prepare('SELECT id,revision,assignment_revision,script_hash FROM script_drafts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(podId).map(row => ({ id: row.id as string, revision: row.revision as number, assignmentRevision: row.assignment_revision as number, validated: this.evidence(podId, row.script_hash as string | null) !== null }))
     const selected = selection ?? (pod.activeScript ? { kind: 'version' as const, id: pod.activeScript } : drafts[0] ? { kind: 'draft' as const, id: drafts[0].id } : undefined)
-    return { pod, versions, drafts, source: selected ? this.source(podId, selected) : null }
+    return { resourceEpoch: this.resources.epoch(podId), credentialAliases: this.resources.list(podId).filter(resource => resource.kind === 'credential' && resource.state === 'ready').map(resource => resource.configuration.alias as string).sort(), pod, versions, drafts, source: selected ? this.source(podId, selected) : null }
   }
 }

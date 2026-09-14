@@ -117,6 +117,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         const directory = join(stage, 'snapshots', row.pod_id as string, row.id as string); await mkdir(directory, { recursive: true, mode: 0o700 })
         await rm(join(directory, 'manifest.json'), { force: true }); await durableJSON(join(directory, 'manifest.json'), snapshot, 0o400)
       }
+      if (manifest.schema >= 12) database.exec('DELETE FROM script_credential_approvals;')
       if (manifest.schema >= 10) database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
       database.exec('COMMIT;')
     }
