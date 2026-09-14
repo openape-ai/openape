@@ -24,7 +24,7 @@ const artifacts = await build({ targets: Platform.MAC.createTarget(distribution 
   publish: [], forceCodeSigning: signed, appId: distribution ? 'ai.openape.pods' : 'ai.openape.pods.fixture', productName, electronVersion: '40.9.3', directories: { output },
   files: ['dist/**/*', 'package.json'], asar: true, asarUnpack: ['dist/worker/**', 'dist/native/**', 'dist/runtime/**', 'dist/vendor/**'], npmRebuild: false,
   ...(distribution ? { extraResources: [{ from: 'dist/distribution', to: '.' }], artifactName: `OpenApe-Pods-\${version}-\${arch}-${candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
-  mac: { category: 'public.app-category.productivity', identity: signed ? identity : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
+  mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
   ...(signed
     ? { afterSign: async (context) => {
         const bundle = join(context.appOutDir, `${productName}.app`); const archive = join(context.appOutDir, 'notarization.zip')
