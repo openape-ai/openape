@@ -132,6 +132,55 @@ Kopiere bei Bedarf wichtigen ungespeicherten Text und wähle Verlauf aktualisier
 
 Während Speichern oder Validierung ist der Editor gegen Änderungen gesperrt. Bei einem Zeitlimit der Hintergrundprozessantwort lade vor einem erneuten Versuch den gespeicherten Zustand. Ein Zeitlimit allein beweist nicht, dass die Operation fehlgeschlagen ist.
 
+## Zugangsdaten im Pod-Skript verwenden
+
+Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Ressourcen einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich mail.read deklarieren.
+
+Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. Bestehende gemeinsame ChatGPT-, Microsoft- und OpenApe-Anmeldetokens verwaltet weiterhin der Verbindungsdienst; diese API gibt sie nicht heraus.
+
+await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Deklariere credential.crm durch Auswahl von crm im Editor. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, den Auftrags- und Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
+
+Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
+
+Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zugangsdaten-Freigaben ungültig. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe und bestätige die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
+
+Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
+
+1. Öffne Ressourcen für den gewünschten Pod. Gib einen Alias wie crm und seinen Wert ein. Nach dem Speichern wird das Wertefeld auch bei Fehlern geleert. Lade die Ansicht vor einem erneuten Versuch neu, falls sich der Ressourcenstand geändert hat.
+2. Öffne Einstellungen → Skript. Bearbeite oder erstelle einen Entwurf und wähle die benötigten Zugangsdaten-Aliase. Verwende await context.credentials.get(alias) im Code, speichere den Entwurf und validiere ihn.
+3. Öffne den exakten validierten Quelltext und prüfe die vollständige Version. Zugang zu Zugangsdaten prüfen öffnet eine native Bestätigung mit Pod-Name, vollständigem SHA-256 und Aliasen. Abbrechen lässt den Zugriff gesperrt. Gib nur den geprüften Quelltext frei.
+4. Aktiviere die Version für den nächsten Lauf und wähle Einmal ausführen. Prüfe Läufe und die Ausgabedatei im Arbeitsbereich. Änderungen an Quelltext, Auftrag oder Ressourcen erfordern eine neue Prüfung. Kopiere nach dem Austausch eines Werts die bestehende Version in einen Entwurf, validiere erneut und bestätige den aktuellen Ressourcenstand vor dem nächsten Lauf.
+
+```javascript
+import { readFile, writeFile } from 'node:fs/promises'
+
+export async function run(context) {
+  const credential = await context.credentials.get('crm')
+  if (!credential) throw new Error('Assigned credential is empty')
+
+  const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'
+  await writeFile(context.workspace + '/notes.txt', notes)
+  const text = await readFile(context.workspace + '/notes.txt', 'utf8')
+  const answer = await context.agent.run({ prompt: text })
+  await writeFile(context.workspace + '/review.txt', answer.response)
+
+  await context.progress.commit({
+    expectedRevision: context.input.checkpointRevision,
+    checkpoint: { ...context.input.checkpoint, reviews: (context.input.checkpoint.reviews ?? 0) + 1 },
+    sources: [],
+    claims: [],
+  })
+  return {
+    status: 'completed',
+    summary: 'Local review completed',
+    completedInputIds: context.input.eventIds,
+    gapIds: [],
+  }
+}
+```
+
+![Zugangsdaten im Pod-Skript verwenden](images/handbook-credentials-de.png)
+
 ## Ein kleines Skript zum Anpassen
 
 Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Warte vor der Rückgabe auf jede asynchrone Operation. Das Ergebnis enthält status, summary, completedInputIds und gapIds. Ein completedWithGaps-Ergebnis benötigt gespeicherte Lückenaussagen.

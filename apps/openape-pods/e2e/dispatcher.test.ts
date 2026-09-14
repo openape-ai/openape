@@ -76,3 +76,59 @@ it('routes a script tool call with a frozen lease and rejects scope substitution
   await expect.poll(() => dispatcher.runs.get(id).state).toBe('completed')
   expect(calls).toHaveLength(1); expect(store.checkpoint(pod.id).body).toEqual({ count: 1 })
 })
+
+it.each([false, true])('combines credential reads, files, variables and Codex; secret forwarding requires explicit source (forward=%s)', async (forward) => {
+  const { ScriptCredentials } = await import('../src/worker/resources/script-credentials')
+  const { authorizeCredentialService } = await import('../src/worker/mail/authorization')
+  const { recordedResponse } = await import('./fixtures/responses')
+  const requests: unknown[] = []; const secret = 'SYNTHETIC_DIRECT_CREDENTIAL'
+  const f = await setup({
+    credential: async (alias, _signal, scope) => { authorizeCredentialService(f.store, f.resources, f.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } }, alias); return secret },
+    provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
+  })
+  f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
+  await f.dispatcher.install(f.pod.id, 'deterministic')
+  const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
+  const code = `import {readFile,writeFile} from 'node:fs/promises'; export async function run(c) {
+    const value = await c.credentials.get('crm'); if(!value) throw new Error('Missing fixture credential');
+    await writeFile(c.workspace+'/input.txt','Summarize these synthetic notes');
+    const prompt=await readFile(c.workspace+'/input.txt','utf8'); const answer=await c.agent.run({prompt: ${forward ? 'prompt + value' : 'prompt'}});
+    await writeFile(c.workspace+'/output.txt',answer.response);
+    await c.progress.commit({expectedRevision:c.input.checkpointRevision,checkpoint:{count:(c.input.checkpoint.count??0)+1},sources:[],claims:[]});
+    return {status:'completed',summary:'Combined script complete',completedInputIds:[],gapIds:[]}; }`
+  const hash = digest(code)
+  f.store.storeScript(f.pod.id, { ...original, capabilities: ['credential.crm'], contentHash: hash }, code)
+  f.store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(f.pod.id, hash, 1, 1, '{}')
+  new ScriptCredentials(f.store, f.resources).approve(f.pod.id, hash, 1, 1)
+  f.store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, f.pod.id)
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id), { timeout: 20000 }).toMatchObject({ state: 'completed', error: null })
+  expect(requests).toHaveLength(2); expect(JSON.stringify(requests).includes(secret)).toBe(forward)
+  expect(JSON.stringify(requests[1])).toContain('No tool capability is assigned')
+  if (!forward) expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain(secret)
+  expect(await readFile(join(f.store.root, 'runs', id, 'input.json'), 'utf8')).not.toContain(secret)
+  expect(await readFile(join(f.store.root, 'pods', f.pod.id, 'workspace', 'output.txt'), 'utf8')).toBe('SYNTHETIC_RESPONSE_COMPLETE')
+  expect(f.store.checkpoint(f.pod.id).body).toEqual({ count: 1 })
+})
+
+it('cancels a credential read in progress after rotation and never returns its stale value to the script', async () => {
+  const { ScriptCredentials } = await import('../src/worker/resources/script-credentials')
+  let release: () => void = () => {}; let requested = false
+  const pending = new Promise<void>((resolveRequest) => { release = resolveRequest })
+  const f = await setup({ credential: async () => { requested = true; await pending; return 'SYNTHETIC_STALE_SECRET' } })
+  f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0); await f.dispatcher.install(f.pod.id, 'deterministic')
+  const previous = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
+  const code = `import {writeFile} from 'node:fs/promises'; export async function run(c) { const secret=await c.credentials.get('crm'); await writeFile(c.workspace+'/stale.txt',secret); return {status:'completed',summary:'Incorrect stale read',completedInputIds:[],gapIds:[]}; }`
+  const hash = digest(code); f.store.storeScript(f.pod.id, { ...previous, contentHash: hash, capabilities: ['credential.crm'] }, code)
+  f.store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(f.pod.id, hash, 1, 1, '{}'); new ScriptCredentials(f.store, f.resources).approve(f.pod.id, hash, 1, 1)
+  f.store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, f.pod.id)
+  const id = f.dispatcher.start(f.pod.id)
+  try {
+    await expect.poll(() => requested).toBe(true)
+    f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 1)
+  }
+  finally { release() }
+  await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('cancelled')
+  await expect(readFile(join(f.store.root, 'pods', f.pod.id, 'workspace', 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain('SYNTHETIC_STALE_SECRET')
+})
