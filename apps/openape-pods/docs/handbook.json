@@ -141,6 +141,26 @@
       "steps": []
     },
     {
+      "id": "credentials",
+      "title": "Use credentials in your pod script",
+      "paragraphs": [
+        "Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Resources, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including mail.read.",
+        "Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. Existing shared ChatGPT, Microsoft and OpenApe authentication tokens remain managed by their connection broker; this API does not extract them.",
+        "await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, assignment revision, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.",
+        "A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.",
+        "Saving or replacing a credential pauses the pod and invalidates prior validation and credential approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate and approve scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart. New versions prepared by the master cannot grant themselves credential access.",
+        "The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, exact-version approval and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either."
+      ],
+      "steps": [
+        "Open Resources for the intended pod. Enter an alias such as crm and its value. Save; the value field clears after submission, including failures. If the resource revision changed, reload the view before retrying.",
+        "Open Settings → Script. Edit or create a draft and select its required credential aliases. Use await context.credentials.get(alias) in the code, then Save draft and Validate draft.",
+        "Choose View exact validated source and inspect the complete version. Review credential access opens a native confirmation with the pod name, full SHA-256 and aliases. Cancel leaves access blocked. Approve only the reviewed source.",
+        "Activate for next run, then Run once. Inspect Runs and the workspace output. Changing source, assignment or any resource requires a new review. For a rotated credential, copy the existing version into a draft, validate it again and approve its current resource binding before running."
+      ],
+      "code": "import { readFile, writeFile } from 'node:fs/promises'\n\nexport async function run(context) {\n  const credential = await context.credentials.get('crm')\n  if (!credential) throw new Error('Assigned credential is empty')\n\n  const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'\n  await writeFile(context.workspace + '/notes.txt', notes)\n  const text = await readFile(context.workspace + '/notes.txt', 'utf8')\n  const answer = await context.agent.run({ prompt: text })\n  await writeFile(context.workspace + '/review.txt', answer.response)\n\n  await context.progress.commit({\n    expectedRevision: context.input.checkpointRevision,\n    checkpoint: { ...context.input.checkpoint, reviews: (context.input.checkpoint.reviews ?? 0) + 1 },\n    sources: [],\n    claims: [],\n  })\n  return {\n    status: 'completed',\n    summary: 'Local review completed',\n    completedInputIds: context.input.eventIds,\n    gapIds: [],\n  }\n}",
+      "image": "handbook-credentials.png"
+    },
+    {
       "id": "script-api",
       "title": "A small script you can adapt",
       "paragraphs": [

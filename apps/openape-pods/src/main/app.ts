@@ -151,9 +151,17 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.master(parseMasterCommand(command))
   })
-  ipcMain.handle(channels.scripts, (event, command: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.scripts, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.scripts(parseScriptCommand(command))
+    const command = parseScriptCommand(value)
+    if (command.type === 'approveCredentials') {
+      const view = await worker.scripts({ type: 'list', podId: command.podId, selection: { kind: 'version', id: command.hash } })
+      if (!window || view.pod.revision !== command.revision || view.resourceEpoch !== command.epoch || !view.source?.validated) throw new Error('Pod or resources changed during credential review')
+      const aliases = view.source.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11))
+      const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('Approve script credentials'), message: t('Allow this exact script to read the selected credentials?'), detail: t('Pod: {pod}\nSHA-256: {hash}\nCredentials: {aliases}\n\nThe script can explicitly write these values into files, logs or AI prompts. Review the full source before approving. Changes to the script, assignment or resources require a new approval.', { pod: view.pod.name, hash: command.hash, aliases: aliases.join(', ') }), buttons: [t('Cancel'), t('Approve script credentials')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return view
+    }
+    return worker.scripts(command)
   })
   ipcMain.handle(channels.details, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
