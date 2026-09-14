@@ -54,7 +54,16 @@ export class Scheduler {
     return id
   }
 
-  requestManual(podId: string): void {
+  requestManual(podId: string, expectedScript?: string): void {
+    if (expectedScript) {
+      if (this.store.getPod(podId).activeScript !== expectedScript) throw new Error('Script changed; review before running')
+      if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('No execution slot available; try again after the active run')
+      if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'blocked\',\'claimed\',\'pending\')').get(podId)) throw new Error('Review pending inputs before running this script')
+      this.drain()
+      const active = this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number
+      const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
+      if (active >= maximum) throw new Error('No execution slot available; try again after the active run')
+    }
     if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) return
     if (!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND source=\'manual\' AND state=\'pending\'').get(podId)) this.acceptEvent(podId, 'manual', randomUUID(), {})
     this.drain()

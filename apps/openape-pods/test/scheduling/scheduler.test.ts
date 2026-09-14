@@ -114,3 +114,25 @@ describe('wall clock schedules', () => {
     expect(nextDue({ kind: 'interval', seconds: 60 }, 61000, 1000)).toBe(61000)
   })
 })
+it('starts exactly the reviewed script or rejects without adding a delayed manual request', () => {
+  const f = fixture(); const pod = f.pod(false); const hash = f.store.getPod(pod).activeScript!
+  expect(() => f.scheduler.requestManual(pod, '0'.repeat(64))).toThrow('Script changed')
+  expect(f.scheduler.view(pod).pending).toBe(0)
+  f.scheduler.requestManual(pod, hash); expect(f.started).toHaveLength(1)
+  expect(() => f.scheduler.requestManual(pod, hash)).toThrow('execution slot')
+  f.runs.finish(f.started[0]!.id, 'completed', 'Done', null, f.started[0]!.trigger.eventIds)
+  f.scheduler.acceptEvent(pod, 'fixture', 'pending', {})
+  expect(() => f.scheduler.requestManual(pod, hash)).toThrow('pending inputs')
+  expect(f.scheduler.view(pod).pending).toBe(1)
+})
+
+it('lets earlier ready pods take their slots without queuing a reviewed script for later', () => {
+  const f = fixture(); const earlier = [f.pod(), f.pod()]; const selected = f.pod(false)
+  for (const podId of earlier) f.scheduler.acceptEvent(podId, 'fixture', 'earlier', {})
+  expect(() => f.scheduler.requestManual(selected, f.store.getPod(selected).activeScript!)).toThrow('execution slot')
+  expect(f.started.map(run => run.podId)).toEqual(earlier)
+  expect(f.scheduler.view(selected).pending).toBe(0)
+  for (const run of f.started) f.runs.finish(run.id, 'completed', 'Done', null, run.trigger.eventIds)
+  f.scheduler.tick()
+  expect(f.started.map(run => run.podId)).toEqual(earlier)
+})

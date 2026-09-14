@@ -1,3 +1,4 @@
+import { MasterConversations } from './conversations'
 import { digest } from '../storage/database'
 import { join } from 'node:path'
 import type { MasterCommand, MasterView } from '../../contracts/master'
@@ -14,10 +15,12 @@ export class MasterService {
   private controller: AbortController | null = null
   private active: Promise<void> | null = null
   private finish: ((error?: Error) => void) | null = null
+  private context = ''
   private actions = 0
   private tools = new Set<Promise<void>>()
   constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private provider?: AgentGatewayServices['provider']) {
     store.transaction(() => {
+      store.db.prepare('UPDATE master_contexts SET state=\'interrupted\',error=\'Previous chat was interrupted.\' WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_session SET state=\'interrupted\',error=\'Previous chat was interrupted. Inspect its actions before continuing.\',active_turn=NULL WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
       store.db.prepare('UPDATE master_actions SET state=\'interrupted\',error=\'Action interrupted; inspect the current pod and draft before retrying\' WHERE state=\'running\'').run()
@@ -26,25 +29,28 @@ export class MasterService {
 
   setProvider(provider?: AgentGatewayServices['provider']): void { this.provider = provider; if (!provider) this.controller?.abort(new Error('Model connection was removed')) }
 
-  view(): MasterView {
-    const session = this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()!
+  view(podId: string | null = this.context): MasterView {
+    const scope = podId ?? ''
+    const conversations = new MasterConversations(this.store)
+    const session = scope === this.context && this.active ? this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()! : conversations.session(scope)
     return { connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
-      messages: this.store.db.prepare('SELECT * FROM master_messages ORDER BY created_at DESC,rowid DESC LIMIT 100').all().reverse().map(row => ({ id: row.id as string, role: row.role as 'user' | 'assistant' | 'tool', text: row.body as string, state: row.state as string, at: row.created_at as number })),
-      drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id ORDER BY d.rowid DESC LIMIT 20').all().map(row => ({ id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })),
-      proposals: this.store.db.prepare('SELECT * FROM access_proposals ORDER BY rowid DESC LIMIT 100').all().map(row => ({ id: row.id as string, podId: row.pod_id as string, body: JSON.parse(row.body as string) as Record<string, unknown>, state: row.state as 'pending' | 'declined' | 'approved' })),
+      messages: conversations.messages(scope),
+      drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE (?=\'\' OR d.pod_id=?) ORDER BY d.rowid DESC LIMIT 20').all(scope, scope).map(row => ({ id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })).filter(draft => !scope || draft.podId === scope),
+      proposals: this.store.db.prepare('SELECT * FROM access_proposals WHERE (?=\'\' OR pod_id=?) ORDER BY rowid DESC LIMIT 100').all(scope, scope).map(row => ({ id: row.id as string, podId: row.pod_id as string, body: JSON.parse(row.body as string) as Record<string, unknown>, state: row.state as 'pending' | 'declined' | 'approved' })).filter(proposal => !scope || proposal.podId === scope),
     }
   }
 
   async execute(command: MasterCommand): Promise<MasterView> {
-    if (command.type === 'list') return this.view()
-    if (command.type === 'decline') { this.store.db.prepare('UPDATE access_proposals SET state=\'declined\' WHERE id=? AND state=\'pending\'').run(command.id); return this.view() }
-    if (command.type === 'cancel') { await this.stop(); return this.view() }
+    if (command.type === 'list') return this.view(command.podId === undefined ? this.context : command.podId)
+    if (command.type === 'decline') { if (command.podId && this.store.db.prepare('SELECT pod_id FROM access_proposals WHERE id=?').get(command.id)?.pod_id !== command.podId) throw new Error('Access proposal belongs to another pod'); this.store.db.prepare('UPDATE access_proposals SET state=\'declined\' WHERE id=? AND state=\'pending\'').run(command.id); return this.view(command.podId === undefined ? this.context : command.podId) }
+    if (command.type === 'cancel') { if (command.podId !== undefined && (command.podId ?? '') !== this.context) throw new Error('Another pod owns the active chat'); await this.stop(); return this.view() }
     const context = command.podId ? this.store.getPod(command.podId) : null
     const text = `${command.text}\n\nSelected context: ${context ? JSON.stringify({ podId: context.id, revision: context.revision, name: context.name }) : 'workspace / new pod'}`
     const requestHash = digest(JSON.stringify(command))
     const prior = this.store.db.prepare('SELECT request_hash FROM master_inputs WHERE id=?').get(command.id)
-    if (prior) { if (prior.request_hash !== requestHash) throw new Error('Message identity reused with different input'); return this.view() }
+    if (prior) { if (prior.request_hash !== requestHash) throw new Error('Message identity reused with different input'); return this.view(command.podId) }
     if (command.type === 'steer') {
+      if ((command.podId ?? '') !== this.context) throw new Error('Another pod owns the active chat')
       const session = this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()!
       if (!this.transport || !session.active_turn || !this.active) throw new Error('No active master turn to steer')
       this.input(command.id, command.text, requestHash, 'sending')
@@ -53,11 +59,14 @@ export class MasterService {
       return this.view()
     }
     if (this.active) throw new Error('The master is already running; steer or cancel this turn')
+    this.context = command.podId ?? ''
+    new MasterConversations(this.store).select(this.context)
     this.input(command.id, command.text, requestHash, 'sent')
-    if (!this.provider) { this.store.db.prepare('UPDATE master_session SET state=\'failed\',error=\'Codex is not connected. Connect your account before sending another message.\' WHERE id=1').run(); return this.view() }
+    if (!this.provider) { this.store.db.prepare('UPDATE master_session SET state=\'failed\',error=\'Codex is not connected. Connect your account before sending another message.\' WHERE id=1').run(); new MasterConversations(this.store).capture(this.context); return this.view() }
     this.store.db.prepare('UPDATE master_session SET state=\'running\',error=NULL,active_turn=NULL WHERE id=1').run()
     this.controller = new AbortController(); this.actions = 0
     this.active = this.run(text).finally(() => { this.active = null; this.controller = null })
+    new MasterConversations(this.store).capture(this.context)
     return this.view()
   }
 
@@ -91,6 +100,7 @@ export class MasterService {
       catch (error) { outcome = 'failed'; failure = error instanceof Error ? error.message : 'Master cleanup failed' }
       this.transport = null; this.finish = null
       this.store.db.prepare('UPDATE master_session SET active_turn=NULL,state=?,error=? WHERE id=1').run(outcome, failure)
+      new MasterConversations(this.store).capture(this.context)
       this.store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
     }
   }
@@ -147,6 +157,7 @@ export class MasterService {
   private message(id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string): void {
     if (Buffer.byteLength(text) > 512 * 1024) throw new Error('Master message exceeds its limit')
     this.store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,state=excluded.state').run(id, role, text, state, Date.now())
+    new MasterConversations(this.store).assign(id, this.context)
   }
 
   async stop(): Promise<void> { this.controller?.abort(new Error('Master cancelled')); await this.active }

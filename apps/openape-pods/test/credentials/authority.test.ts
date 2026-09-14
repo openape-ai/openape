@@ -71,7 +71,7 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   const f = fixture(); const reference = f.registry.assignReference(f.pod.id, 'Notes', join(f.store.root, 'notes.txt'))
   const root = f.store.root; f.store.close(); stores.pop()
   const previous = new DatabaseSync(join(root, 'control.sqlite'))
-  previous.exec(`DROP TABLE script_credential_approvals;
+  previous.exec(`DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
     ALTER TABLE resources RENAME TO newer_resources;
     CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
     INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; PRAGMA user_version=11;`)

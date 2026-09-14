@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { t, diagnostic, label } from './i18n'
+import { chatDraft } from './chat-buffer'
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import type { MasterCommand, MasterView } from '../contracts/master'
 
 const props = defineProps<{ podId: string | null }>()
 const emit = defineEmits<{ resources: [podId: string] }>()
-const view = ref<MasterView | null>(null); const text = ref(''); const error = ref(''); const busy = ref(false)
+const view = ref<MasterView | null>(null); const text = chatDraft(props.podId); const error = ref(''); const busy = ref(false)
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
 async function refresh(): Promise<void> {
-  try { view.value = await window.pods.master({ type: 'list' }) }
+  try { view.value = await window.pods.master({ type: 'list', podId: props.podId }) }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
   if (!closed) timer = setTimeout(() => { void refresh() }, 500)
 }
 async function command(value: MasterCommand): Promise<void> {
   busy.value = true; error.value = ''
-  try { view.value = await window.pods.master(value); if (value.type === 'send' || value.type === 'steer') text.value = '' }
+  try { view.value = await window.pods.master(value); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Master request failed' }
   finally { busy.value = false }
 }
@@ -25,15 +26,15 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
 <template>
   <div class="master-chat">
     <p class="muted">
-      {{ view?.connected ? t("Your master can configure pods within their assigned permissions.") : t("Connect Codex to start a conversation. Your local history remains available.") }}
+      {{ view?.connected ? t("Describe the task. Your assistant helps prepare the script and required access.") : t("Connect Codex to start a conversation. Your local history remains available.") }}
     </p>
     <p v-if="error || view?.error" role="alert" class="error-message">
       {{ diagnostic(error || view?.error) }}
     </p>
-    <div class="master-history" role="log" :aria-label="t('Master conversation')" aria-live="polite">
+    <div class="master-history" role="log" :aria-label="t('Pod conversation')" aria-live="polite">
       <article v-for="message in view?.messages" :key="message.id" class="master-message" :class="message.role">
         <div class="card-heading">
-          <strong>{{ message.role === 'user' ? t("You") : message.role === 'tool' ? t("Pod action") : t("Master") }}</strong><span class="badge">{{ label(message.state) }}</span>
+          <strong>{{ message.role === 'user' ? t("You") : message.role === 'tool' ? t("Pod action") : t("Pod assistant") }}</strong><span class="badge">{{ label(message.state) }}</span>
         </div>
         <details v-if="message.role === 'tool'">
           <summary>{{ t("Inspect request and result") }}</summary><pre>{{ message.text }}</pre>
@@ -46,11 +47,11 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
       </p>
     </div>
     <form class="master-compose" @submit.prevent="send">
-      <label for="master-input">{{ view?.state === 'running' ? t("Steer the current turn") : t("Message the master") }}</label>
+      <label for="master-input">{{ view?.state === 'running' ? t("Steer the current turn") : t("Message this pod") }}</label>
       <textarea id="master-input" v-model="text" rows="3" maxlength="20000" :placeholder="t('Create a pod that keeps sourced knowledge about…')" />
       <div class="overview-actions">
         <span role="status" class="muted">{{ label(view?.state ?? t("Loading")) }}</span>
-        <button v-if="view?.state === 'running'" type="button" class="secondary" :disabled="busy" @click="command({ type: 'cancel' })">
+        <button v-if="view?.state === 'running'" type="button" class="secondary" :disabled="busy" @click="command({ type: 'cancel', podId: props.podId })">
           {{ t("Cancel turn") }}
         </button><button class="primary" :disabled="busy || !text.trim() || !view?.connected">
           {{ view?.state === 'running' ? t("Steer") : t("Send") }}
@@ -86,7 +87,7 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
         <div v-if="proposal.state === 'pending'" class="overview-actions">
           <button class="secondary" @click="emit('resources', proposal.podId)">
             {{ t("Review resources") }}
-          </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id })">
+          </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: props.podId })">
             {{ t("Decline") }}
           </button>
         </div>

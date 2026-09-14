@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 12
+export const schemaVersion = 13
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -213,6 +213,16 @@ INSERT INTO resources_v12 SELECT * FROM resources;
 DROP TABLE resources;
 ALTER TABLE resources_v12 RENAME TO resources;
 CREATE TABLE script_credential_approvals(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,assignment_revision INTEGER NOT NULL,resource_epoch INTEGER NOT NULL,PRIMARY KEY(pod_id,script_hash)); PRAGMA user_version=12;`)
+      }
+
+      if (version < 13) {
+        this.db.exec(`
+CREATE TABLE pod_variables(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,name TEXT NOT NULL,value TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(pod_id,name));
+CREATE TABLE master_contexts(scope TEXT PRIMARY KEY,thread_id TEXT,state TEXT NOT NULL,error TEXT);
+INSERT INTO master_contexts SELECT '',thread_id,state,error FROM master_session WHERE id=1;
+CREATE TABLE master_message_scopes(message_id TEXT PRIMARY KEY REFERENCES master_messages(id) ON DELETE CASCADE,scope TEXT NOT NULL);
+INSERT INTO master_message_scopes SELECT id,'' FROM master_messages;
+PRAGMA user_version=13;`)
       }
 
     })
