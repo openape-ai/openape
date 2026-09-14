@@ -17,6 +17,9 @@ try {
   execFileSync('/usr/bin/hdiutil', ['verify', image], { stdio: 'pipe' })
   execFileSync('/usr/bin/hdiutil', ['attach', image, '-readonly', '-nobrowse', '-mountpoint', mount], { stdio: 'pipe' }); attached = true
   const bundle = join(mount, 'OpenApe Pods.app')
+  const icon = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', join(bundle, 'Contents/Info.plist')], { encoding: 'utf8' }).trim()
+  assert.equal(icon, 'icon.icns')
+  assert.equal(sha256(join(bundle, 'Contents/Resources', icon)), sha256('build/openape-pods.icns'))
   const manifest = JSON.parse(await readFile(join(bundle, 'Contents/Resources/pods-distribution.json'), 'utf8'))
   assert.equal(manifest.releaseReady, false); assert.equal(manifest.version, version)
   const bom = JSON.parse(await readFile(join(bundle, 'Contents/Resources/bom.json'), 'utf8')); assert.ok(bom.packages.length > 5); assert.ok(bom.blockers.length)
