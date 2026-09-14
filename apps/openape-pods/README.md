@@ -236,20 +236,20 @@ gates and are not implied by these tests.
 
 ## M7: concept B with persisted state
 
-The shared pod selection drives Overview, Knowledge, Resources, Runs and Settings.
-The sidebar and header show stored pods and their lifecycle; an empty profile has
-no invented pod or counts. Overview shows the assignment, next dispatch, queued
-inputs, actual result and current findings/questions/gaps. Header Run once starts
-the selected pod. Contextual actions and New pod open the same master area with
-explicit pod/creation context; live master streaming is implemented in M10.
+The current workspace uses Overview, Chat, Script, Permissions, Settings and
+History. Overview shows the description, last execution and Run now. Results
+and sources opens retained knowledge within Overview. The sidebar supports
+pointer/keyboard resizing (176–360 px), persisted width and collapse.
 
-Knowledge distinguishes current findings, open questions, verification gaps and
-superseded history. Sources open their pinned provider version and verified blob,
-rendered as plain text. The worker binds every source lookup to the selected pod;
-a caller cannot choose a filesystem path. The view loads knowledge in bounded
-pages and filters the loaded entries. Script Settings lists retained versions;
-activation/rollback checks validation, resource epoch, assignment revision and
-expected active hash atomically. Existing runs retain their original script.
+Each pod has separate chat history and Codex continuation state. The workspace
+chat retains legacy messages. Only one master turn runs across the app at a
+time; regular pod runs still start fresh contexts. The existing master control
+authority is retained; conversation separation does not add arbitrary host tools.
+
+Permissions lists assigned file/tool resources; Settings owns ordinary variables
+and managed secrets. General app/terminal launch remains blocked by the separate
+G0 containment gate. No security boundary was relaxed for this UI change.
+
 
 Component/SQLite tests cover hostile source text, exact historical citations,
 foreign-source denial, immutable-version activation races and validation invalidation.
@@ -547,26 +547,32 @@ an offline, standalone `.artifacts/handbook.html` from `docs/handbook.json` and
 reviewed screenshots. After the packaged `script-editor` scenario, pass
 `--refresh-images` to deliberately refresh the committed illustrations.
 
-Settings → Script shows exact content-addressed source and retained drafts.
-Owners edit plain JavaScript, save a draft, run the bounded synthetic sandbox
-validation and explicitly activate the validated version. Drafts are shared with
-master chat and use revision checks to reject conflicting saves. Validation and
-activation retain assignment/resource checks; running scripts keep their pinned
-version. Failed validation leaves active code intact. The viewer includes the
-runtime binding comment appended during validation. Source text never executes
-in the renderer.
+The Script tab is a highlighted JavaScript source editor with direct saving and
+Save and run. Saved unactivated work is reopened by default; visible version,
+comparison and rollback controls are removed for V1. Internal source hashes,
+assignment/resource validation, credential approvals and pinned runs remain.
+Run saves and validates changed source, requires owner approval for secret access,
+activates the exact hash and requests that same hash for immediate execution.
+An occupied slot or pending inputs returns an error instead of queuing a later,
+potentially different script. Failed validation preserves the active script.
 
-Unsaved edits remain in memory across tab/pod navigation within an app session;
-save before quitting. Source changes require explicit discard when edits are
-unsaved. Saved drafts survive restart. Refresh history preserves editor text;
-reopen a draft to load its latest revision, or save as a new draft after a
-conflict. No new editor dependency or database migration is introduced.
+Script, chat and ordinary form edits survive tab navigation within the session.
+Stale script conflicts offer reload with discard confirmation or explicit saving
+of local edits as the current artifact. No editor dependency is introduced.
+
+Schema 13 adds per-pod ordinary variables and scoped chat metadata while retaining
+legacy workspace chat. Variables are bounded plain strings, captured and frozen
+as `context.variables` per run. They are included in backups; managed secrets
+remain encrypted and excluded. Neither variables nor secret values are added to
+model prompts automatically. A script can explicitly include values in a prompt.
+Restore clears chat continuation IDs and requires explicit recovery. Older apps
+must not open the migrated profile; use the matching pre-migration backup.
 
 ## Pod groups
 
 The sidebar supports up to fifty named flat groups. Owners can create, rename,
 collapse and remove groups, or move pods by dragging onto a group heading or
-using the selected pod's group picker. Removing a group keeps its pods under
+using Settings → Group. Removing a group keeps its pods under
 Ungrouped. New pods are ungrouped; groups and pods retain creation order.
 
 Schema 11 stores organization separately from pod assignment revisions. Group
@@ -579,7 +585,7 @@ backup. See the handbook's grouping chapter for the owner workflow.
 
 ## Languages and handbooks
 
-Use the sidebar Language / Sprache selector for immediate English/German switching. The profile stores the explicit choice in `language.json`; new profiles use German when the preferred system language is German, otherwise English. The renderer loads the choice before mounting, and the same choice updates native menus and app-owned dialogs. Display dates/numbers use `de-AT` or `en-GB`. Switching retains selected views and unsaved text. User content, script source, model prompts and raw audit payloads are unchanged. Known app diagnostics are translated; unknown external diagnostics retain their original text with a localized label. Restored profiles start with the system default because language is excluded from data backups.
+Open App settings in the sidebar and use Language / Sprache for immediate English/German switching. The profile stores the explicit choice in `language.json`; new profiles use German when the preferred system language is German, otherwise English. The renderer loads the choice before mounting, and the same choice updates native menus and app-owned dialogs. Display dates/numbers use `de-AT` or `en-GB`. Switching retains selected views and unsaved text. User content, script source, model prompts and raw audit payloads are unchanged. Known app diagnostics are translated; unknown external diagnostics retain their original text with a localized label. Restored profiles start with the system default because language is excluded from data backups.
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 

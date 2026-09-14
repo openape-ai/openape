@@ -20,9 +20,10 @@ const starter = `export async function run(context) {
 export default defineComponent({
   components: { ScriptCode },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
-  emits: ['changed'],
-  data() { return { buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | null } },
+  emits: ['changed', 'values', 'ran'],
+  data() { return { awaitingRun: false, available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
+    declaredAliases(): string[] { return [...new Set([...(this.buffer.view?.credentialAliases ?? []), ...this.buffer.credentialAliases])].sort() },
     dirty(): boolean { return isDirty(this.buffer) },
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
@@ -33,11 +34,33 @@ export default defineComponent({
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
   watch: { 'buffer.source': { handler() { this.syncChoice() } } },
-  async mounted() { if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice() },
+  async mounted() { if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice(); await this.loadAvailable(); if (!this.buffer.source && !this.buffer.editing && this.buffer.view) await this.open('new') },
   methods: {
     t, diagnostic, number,
+    async loadAvailable() {
+      try { const resources = await window.pods.resources({ type: 'list', podId: this.pod.id }); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
+      catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load variables' }
+    },
+    async prepareRun() {
+      this.awaitingRun = false
+      if (this.dirty || !this.buffer.source?.validated) {
+        await this.save(); if (this.buffer.error) return
+        await this.validate(); if (this.buffer.error) return
+      }
+      if (this.needsCredentialApproval) { this.awaitingRun = true; return }
+      await this.finishRun()
+    },
+    async approveAndRun() {
+      await this.approveCredentials(); if (this.buffer.error || this.needsCredentialApproval) return
+      this.awaitingRun = false; await this.finishRun()
+    },
+    async finishRun() {
+      await this.activate(); if (this.buffer.error) return
+      try { if (!this.buffer.source?.hash) throw new Error('Validate the script before running'); await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.buffer.source.hash }); this.$emit('ran') }
+      catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not start run' }
+    },
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
-    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.mail = view.source?.capabilities.includes('mail.read') ?? false; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = view.source?.kind === 'draft'; this.buffer.compare = null; this.syncChoice() },
+    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.mail = view.source?.capabilities.includes('mail.read') ?? false; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
       this.buffer.busy = true; this.buffer.error = ''
       try { this.apply(await window.pods.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
@@ -49,15 +72,15 @@ export default defineComponent({
       if (kind !== 'version' && kind !== 'draft') return
       this.requestSelection({ kind, id }); this.syncChoice()
     },
-    requestSelection(selection: ScriptSelection | 'new') {
+    requestSelection(selection: ScriptSelection | 'new' | 'current') {
       if (this.buffer.busy) return
       if (this.dirty) { this.pending = selection; return }
       void this.open(selection)
     },
-    async open(selection: ScriptSelection | 'new') {
+    async open(selection: ScriptSelection | 'new' | 'current') {
       if (this.buffer.busy) return
       this.pending = null; this.buffer.message = ''
-      if (selection !== 'new') { await this.load(selection); return }
+      if (selection !== 'new') { await this.load(selection === 'current' ? undefined : selection); if (!this.buffer.source && this.buffer.view) await this.open('new'); return }
       this.buffer.source = null; this.buffer.code = starter; this.buffer.mail = false; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
     },
     async save(asNew = false) {
@@ -87,10 +110,11 @@ export default defineComponent({
     },
     async refresh(announce = true) {
       this.buffer.busy = true; this.buffer.error = ''
-      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id }); if (this.buffer.source && (view.resourceEpoch !== this.buffer.view?.resourceEpoch || view.pod.revision !== this.buffer.view?.pod.revision)) { this.buffer.source.credentialAccessApproved = false; this.buffer.source.validated = false; this.buffer.source.evidence = null } this.buffer.view = view; if (announce) this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
+      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id }); if (!this.dirty) { this.apply(view); return } if (this.buffer.source && (view.resourceEpoch !== this.buffer.view?.resourceEpoch || view.pod.revision !== this.buffer.view?.pod.revision)) { this.buffer.source.credentialAccessApproved = false; this.buffer.source.validated = false; this.buffer.source.evidence = null } this.buffer.view = view; if (announce) this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not refresh scripts' }
       finally { this.buffer.busy = false }
     },
+    async keepChanges() { await this.refresh(false); if (!this.buffer.error) await this.save(true) },
     async compare() {
       const active = this.buffer.view?.pod.activeScript; if (!active) return
       this.buffer.busy = true; this.buffer.error = ''
@@ -106,101 +130,64 @@ export default defineComponent({
   <article class="card script-panel" :aria-label="t('Script editor')">
     <div class="card-heading">
       <div>
-        <h2>{{ t("Script") }}</h2><p class="muted">
-          {{ t("JavaScript · Node.js · run.mjs") }}
+        <h2>{{ 'run.mjs' }}</h2><p class="muted">
+          {{ dirty ? t('Unsaved changes') : t('Saved locally') }}
         </p>
-      </div><span class="badge">{{ dirty ? t("Unsaved changes") : buffer.editing && buffer.source?.kind === 'version' ? t("Editing copy") : buffer.source?.hash === buffer.view?.pod.activeScript && buffer.source?.hash ? t("Active version") : buffer.source?.validated ? t("Validated") : t("Draft") }}</span>
-    </div>
-    <p class="muted">
-      {{ t("Inspect the exact version used by this pod, or edit a draft for its next run.") }}
-    </p>
-    <div class="script-tools">
-      <label>{{ t("Versions and drafts") }}<select v-model="choice" :disabled="buffer.busy" @change="choose"><option value="" disabled>{{ t("Select a script") }}</option><optgroup :label="t('Versions')"><option v-for="version in buffer.view?.versions" :key="version.hash" :value="`version:${version.hash}`">{{ version.active ? t("Active · ") : '' }}{{ version.hash.slice(0, 12) }} · {{ version.validated ? t("validated") : t("needs validation") }}</option></optgroup><optgroup :label="t('Drafts')"><option v-for="draft in buffer.view?.drafts" :key="draft.id" :value="`draft:${draft.id}`">{{ t("{p0} · revision {p1}", { p0: draft.id.slice(0, 8), p1: draft.revision }) }}</option></optgroup></select></label>
-      <button class="secondary" :disabled="buffer.busy || pod.lifecycle === 'archived'" @click="requestSelection('new')">
-        {{ t("New script") }}
-      </button><button class="text-button" :disabled="buffer.busy" @click="refresh()">
-        {{ t("Refresh history") }}
+      </div><button class="primary" :disabled="buffer.busy || readOnly || !buffer.code.trim()" @click="prepareRun">
+        {{ buffer.busy ? t('Working…') : dirty ? t('Save and run') : t('Run') }}
       </button>
     </div>
-    <div v-if="pending" class="discard-prompt" role="alert">
-      <p>{{ t("Discard unsaved edits and open the selected script?") }}</p><button class="secondary" @click="open(pending)">
-        {{ t("Discard edits") }}
-      </button><button class="primary" @click="pending = null">
-        {{ t("Keep editing") }}
-      </button>
-    </div>
-    <button v-if="buffer.source" class="text-button" :disabled="buffer.busy" @click="requestSelection({ kind: buffer.source.kind, id: buffer.source.id })">
-      {{ t("Reload selected source") }}
-    </button>
     <p v-if="buffer.error" class="error-message" role="alert">
       {{ diagnostic(buffer.error) }}
     </p><p v-if="buffer.message" role="status">
       {{ diagnostic(buffer.message) }}
     </p>
-    <template v-if="buffer.source || buffer.editing">
-      <div class="script-heading">
-        <strong>{{ sourceLabel }}</strong><button v-if="readOnly && pod.lifecycle !== 'archived'" class="secondary" :disabled="buffer.busy" @click="buffer.editing = true">
-          {{ t("Edit as draft") }}
-        </button>
+    <div v-if="pending" class="discard-prompt" role="alert">
+      <p>{{ t('Discard unsaved edits and load the current script?') }}</p><button @click="open(pending)">
+        {{ t('Discard and reload') }}
+      </button><button @click="pending = null">
+        {{ t('Keep editing') }}
+      </button>
+    </div>
+    <div v-if="buffer.error && dirty" class="script-actions">
+      <button :disabled="buffer.busy" @click="keepChanges">
+        {{ t('Save my changes as current script') }}
+      </button>
+    </div>
+    <ScriptCode v-model="buffer.code" :readonly="readOnly" :disabled="buffer.busy" @save="save()" />
+    <div class="script-actions">
+      <span class="muted">{{ 'JavaScript · Node.js' }}</span><button class="text-button" :disabled="readOnly || buffer.busy || !buffer.code.trim()" @click="save()">
+        {{ t('Save script') }}
+      </button><button class="text-button" :disabled="buffer.busy" @click="requestSelection('current')">
+        {{ t('Reload script') }}
+      </button>
+    </div>
+    <div v-if="awaitingRun" class="discard-prompt" role="alert">
+      <p>{{ t('Review secret access before this script runs.') }}</p><button class="primary" :disabled="!canApprove" @click="approveAndRun">
+        {{ t('Review credential access') }}
+      </button><button class="text-button" @click="awaitingRun = false">
+        {{ t('Cancel') }}
+      </button>
+    </div>
+    <details class="script-references">
+      <summary>{{ t('Available variables and secrets') }}</summary>
+      <p><code>{{ 'context.workspace' }}</code> · {{ t('Writable workspace') }}</p><p><code>{{ 'context.references' }}</code> · {{ t('Read-only references') }}</p><p><code>{{ 'context.input' }}</code> · {{ t('Run inputs and progress') }}</p>
+      <div v-for="item in available" :key="item.name" class="reference-expression">
+        <strong>{{ item.name }}</strong><input readonly :aria-label="item.name" :value="item.expression" @focus="($event.target as HTMLInputElement).select()">
       </div>
-      <div class="script-actions">
-        <button class="primary" :disabled="readOnly || buffer.busy || !buffer.code.trim()" @click="save()">
-          {{ t("Save draft") }}
-        </button><button v-if="buffer.source?.kind === 'draft' && buffer.editing" class="text-button" :disabled="buffer.busy || pod.lifecycle === 'archived'" @click="save(true)">
-          {{ t("Save as new draft") }}
-        </button><button class="secondary" :disabled="!canValidate" @click="validate">
-          {{ buffer.busy ? t("Working…") : t("Validate draft") }}
-        </button><button v-if="needsCredentialApproval" class="secondary" :disabled="!canApprove" @click="approveCredentials">
-          {{ t('Review credential access') }}
-        </button><button class="primary" :disabled="!canActivate" @click="activate">
-          {{ t("Activate for next run") }}
-        </button>
-      </div>
-      <ScriptCode v-model="buffer.code" :readonly="readOnly" :disabled="buffer.busy" @save="save()" />
       <p class="muted">
-        {{ t("{p0} lines · {p1} / 150,000 characters{p2}", { p0: buffer.code.split('\n').length, p1: number(buffer.code.length), p2: dirty ? t(" · Save before quitting. Edits are kept while navigating this app session.") : '' }) }}
-      </p>
-      <label class="capability"><input v-model="buffer.mail" type="checkbox" :disabled="readOnly || buffer.busy">{{ t("Declare read-only mail calls (requires assigned mail permissions)") }}</label>
-
-      <fieldset v-if="buffer.view?.credentialAliases.length || buffer.credentialAliases.length">
-        <legend>{{ t('Script credentials') }}</legend>
-        <p class="muted">
-          {{ t('Select assigned aliases used by context.credentials.get(alias). Validation uses synthetic values; real access needs approval of the exact script version.') }}
-        </p>
-        <label v-for="alias in [...new Set([...(buffer.view?.credentialAliases ?? []), ...buffer.credentialAliases])]" :key="alias" class="capability"><input v-model="buffer.credentialAliases" type="checkbox" :value="alias" :disabled="readOnly || buffer.busy">{{ alias }} {{ buffer.view?.credentialAliases.includes(alias) ? '' : t('(requires reassignment)') }}</label>
-        <p v-if="buffer.source?.credentialAccessApproved" role="status">
-          {{ t('Credential access approved for this version and current resources.') }}
-        </p>
-      </fieldset>
-      <p class="muted">
-        {{ t("Validation runs for up to five seconds in the sandbox with synthetic services. It does not prove real mail or model results. Activation keeps existing permissions and leaves running versions unchanged.") }}
-      </p>
-      <details v-if="evidence">
-        <summary>{{ t("Validation details") }}</summary><pre class="source-preview">{{ evidence }}</pre><button v-if="buffer.source?.kind === 'draft' && buffer.source.hash" class="text-button" :disabled="buffer.busy || dirty" @click="requestSelection({ kind: 'version', id: buffer.source.hash })">
-          {{ t("View exact validated source") }}
-        </button>
-      </details>
-      <div class="script-actions">
-        <button class="text-button" :disabled="buffer.busy || !buffer.view?.pod.activeScript" @click="compare">
-          {{ t("Compare with active version") }}
-        </button>
-      </div>
-      <details v-if="buffer.compare !== null" open>
-        <summary>{{ t("Active version for comparison") }}</summary><p class="muted">
-          {{ t("The editor above contains your selected source; this is the currently active source.") }}
-        </p><pre class="source-preview">{{ buffer.compare }}</pre>
-      </details>
-      <p v-if="buffer.source?.hash" class="script-hash">
-        {{ buffer.editing ? t("Base source SHA-256") : t("SHA-256") }} · {{ buffer.source.hash }}
-      </p>
-    </template>
-    <p v-else class="muted">
-      {{ t("No script yet. Choose New script to start locally, or ask the master to prepare a draft.") }}
-    </p>
+        {{ t('Values are not automatically sent to AI. Secrets remain hidden here.') }}
+      </p><button class="text-button" @click="$emit('values')">
+        {{ t('Manage variables and secrets') }}
+      </button>
+    </details>
+    <details><summary>{{ t('Required access') }}</summary><label class="script-capability"><input v-model="buffer.mail" type="checkbox" :disabled="readOnly || buffer.busy">{{ t('Read assigned mail') }}</label><label v-for="item in declaredAliases" :key="item" class="script-capability"><input v-model="buffer.credentialAliases" type="checkbox" :value="item" :disabled="readOnly || buffer.busy"><span>{{ item }}<span v-if="!buffer.view?.credentialAliases.includes(item)" class="muted"> · {{ t('Not assigned') }}</span></span></label></details>
   </article>
 </template>
 
 <style scoped>
+.script-capability { display:flex;gap:8px;align-items:flex-start;overflow-wrap:anywhere;min-width:0;margin:12px 0; }
+.script-capability input { flex-shrink:0; }
 .script-panel { margin-top:20px; min-width:0; }
 .script-panel p { margin:10px 0; }
 .script-tools, .script-actions, .script-heading { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:16px 0; }

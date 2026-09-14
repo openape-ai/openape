@@ -5,9 +5,10 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  props: { selectedPodId: { type: String, default: '' } },
+  props: { mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: '', credentialValue: '' } },
+  computed: { visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : resource.kind !== 'credential') } },
   async mounted() {
     try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
@@ -32,9 +33,9 @@ export default defineComponent({
 <template>
   <article class="card resource-panel">
     <div class="card-heading">
-      <h2>{{ t("Resources") }}</h2><span class="badge">{{ t("Explicit pod access") }}</span>
+      <h2>{{ t(mode === 'values' ? 'Secrets' : 'Permissions') }}</h2><span class="badge">{{ t("Explicit pod access") }}</span>
     </div>
-    <p class="muted">
+    <p v-if="mode !== 'values'" class="muted">
       {{ t("{p0} Reference access is assigned separately to each pod.", { p0: state.resources.some(resource => resource.kind !== 'reference') ? t("Connections and tools use the scope assigned to this pod.") : t("No accounts or tools are connected.") }) }}
     </p>
     <p v-if="!pods.length" class="muted">
@@ -42,7 +43,7 @@ export default defineComponent({
     </p>
     <template v-else>
       <label v-if="!selectedPodId">{{ t("Pod") }}<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
-      <div class="resource-actions">
+      <div v-if="mode !== 'values'" class="resource-actions">
         <button class="secondary" :disabled="busy" @click="act({ type: 'pickReference', podId })">
           {{ t("Assign reference file") }}
         </button>
@@ -50,7 +51,7 @@ export default defineComponent({
           {{ t("Preview next snapshot") }}
         </button>
       </div>
-      <form class="credential-form" @submit.prevent="saveCredential">
+      <form v-if="mode === 'values'" class="credential-form" @submit.prevent="saveCredential">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
           {{ t('Store an encrypted value for this pod. The alias is visible; the value is never shown again. Saving or replacing pauses the pod and requires script validation and credential approval again.') }}
@@ -61,10 +62,10 @@ export default defineComponent({
           {{ t('Save or replace credential') }}
         </button>
       </form>
-      <p v-if="!state.resources.length" class="muted">
-        {{ t("Nothing assigned. This pod cannot read reference files.") }}
+      <p v-if="!visibleResources.length" class="muted">
+        {{ t(mode === 'values' ? 'No secrets assigned.' : 'Nothing assigned. This pod cannot read reference files.') }}
       </p>
-      <article v-for="resource in state.resources" :key="resource.id" class="resource-row">
+      <article v-for="resource in visibleResources" :key="resource.id" class="resource-row">
         <div>
           <strong>{{ resource.name }}</strong><p class="resource-path">
             {{ resource.configuration.path ?? resource.configuration.account ?? resource.configuration.scope }}

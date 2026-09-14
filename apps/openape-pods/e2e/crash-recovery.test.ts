@@ -110,7 +110,7 @@ describe('checkpoint recovery in Electron', () => {
     const { page: reopened } = await launch(root, packaged)
     const stopped = (await reopened.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
     expect(stopped.state).toBe(target === 'quit' ? 'cancelled' : target === 'script' ? 'failed' : 'interrupted')
-    await reopened.getByRole('tab', { name: 'Runs', exact: true }).click()
+    await reopened.getByRole('tab', { name: 'History', exact: true }).click()
     await reopened.getByRole('button', { name: 'Check stopped execution' }).click()
     await reopened.getByText('Recovery: ready', { exact: true }).waitFor()
     await reopened.getByRole('button', { name: 'Retry remaining inputs' }).click()
