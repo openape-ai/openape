@@ -11,7 +11,7 @@ import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
 import type { AgentRuntime } from './agent/executor'
 import type { ServiceCheck } from '../contracts/services'
-import { authorizeMailService, assertMailHistory } from './mail/authorization'
+import { authorizeMailService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
 import { parseMailRequest } from '../main/mail/contract'
@@ -46,7 +46,11 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { tool: async (body, signal, scope) => {
+const runServices: RunServices = { credential: async (alias, signal, scope) => {
+  const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
+  if (typeof value !== 'string') throw new Error('Invalid credential broker response')
+  return value
+}, tool: async (body, signal, scope) => {
   const assignment = assignedMail(registry.list(scope.podId))
   const { read } = parseMailRequest(body, assignment.mail)
   assertMailHistory(store, scope.podId, assignment.mail, read)
@@ -122,6 +126,10 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'setup' in request.command) {
       port.postMessage({ id: request.id, state: setup.execute(request.command.setup as SetupInternal) }); return
     }
+    if (request.command && typeof request.command === 'object' && 'credentialInventory' in request.command) {
+      const assignments = store.listPods().flatMap(pod => registry.list(pod.id).filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ podId: pod.id, id: item.configuration.credentialId as string })))
+      port.postMessage({ id: request.id, state: assignments }); return
+    }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
       await data.retention.cleanDeletedFiles(); await data.retention.view()
@@ -129,6 +137,10 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'credentialCheck' in request.command) {
+      const check = request.command.credentialCheck as ServiceCheck & { alias: string }
+      port.postMessage({ id: request.id, state: authorizeCredentialService(store, registry, dispatcher.runs, check, check.alias) }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       port.postMessage({ id: request.id, state: authorizeMailService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
@@ -161,6 +173,8 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
+      if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
+      if (resource.type === 'assignCredential') registry.assignCredential(resource.podId, resource.alias, resource.credentialId, resource.epoch)
       if (resource.type === 'assignReference') registry.assignReference(resource.podId, resource.name, resource.path)
       if (resource.type === 'revoke') registry.revoke(resource.podId, resource.id, resource.revision)
       if (resource.type === 'pickReference') throw new Error('File selection requires the owner window')

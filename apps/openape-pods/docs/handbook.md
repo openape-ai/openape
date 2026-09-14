@@ -132,6 +132,55 @@ Copy important unsaved text if needed, then choose Refresh history. It refreshes
 
 While a save or validation is running, editor mutations are disabled. If a worker response times out, reload the stored state before retrying; a timeout alone does not prove that the operation failed.
 
+## Use credentials in your pod script
+
+Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Resources, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including mail.read.
+
+Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. Existing shared ChatGPT, Microsoft and OpenApe authentication tokens remain managed by their connection broker; this API does not extract them.
+
+await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, assignment revision, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
+
+A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.
+
+Saving or replacing a credential pauses the pod and invalidates prior validation and credential approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate and approve scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart. New versions prepared by the master cannot grant themselves credential access.
+
+The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, exact-version approval and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
+
+1. Open Resources for the intended pod. Enter an alias such as crm and its value. Save; the value field clears after submission, including failures. If the resource revision changed, reload the view before retrying.
+2. Open Settings → Script. Edit or create a draft and select its required credential aliases. Use await context.credentials.get(alias) in the code, then Save draft and Validate draft.
+3. Choose View exact validated source and inspect the complete version. Review credential access opens a native confirmation with the pod name, full SHA-256 and aliases. Cancel leaves access blocked. Approve only the reviewed source.
+4. Activate for next run, then Run once. Inspect Runs and the workspace output. Changing source, assignment or any resource requires a new review. For a rotated credential, copy the existing version into a draft, validate it again and approve its current resource binding before running.
+
+```javascript
+import { readFile, writeFile } from 'node:fs/promises'
+
+export async function run(context) {
+  const credential = await context.credentials.get('crm')
+  if (!credential) throw new Error('Assigned credential is empty')
+
+  const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'
+  await writeFile(context.workspace + '/notes.txt', notes)
+  const text = await readFile(context.workspace + '/notes.txt', 'utf8')
+  const answer = await context.agent.run({ prompt: text })
+  await writeFile(context.workspace + '/review.txt', answer.response)
+
+  await context.progress.commit({
+    expectedRevision: context.input.checkpointRevision,
+    checkpoint: { ...context.input.checkpoint, reviews: (context.input.checkpoint.reviews ?? 0) + 1 },
+    sources: [],
+    claims: [],
+  })
+  return {
+    status: 'completed',
+    summary: 'Local review completed',
+    completedInputIds: context.input.eventIds,
+    gapIds: [],
+  }
+}
+```
+
+![Use credentials in your pod script](images/handbook-credentials.png)
+
 ## A small script you can adapt
 
 A pod script is a JavaScript ES module exporting async run(context). Await every asynchronous operation before returning. The result includes status, summary, completedInputIds and gapIds. A completedWithGaps result needs committed gap claims.

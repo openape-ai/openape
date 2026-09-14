@@ -583,4 +583,32 @@ Use the sidebar Language / Sprache selector for immediate English/German switchi
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 
-Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have seventeen chapters and ten locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/language.test.ts` scenario with `pnpm --filter @openape/pods handbook --refresh-images`.
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have eighteen chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/language.test.ts` scenario with `pnpm --filter @openape/pods handbook --refresh-images`.
+
+
+## Named script credentials
+
+Resources stores named string secrets separately for each pod using the existing
+macOS safeStorage encryption. `await context.credentials.get('crm')` reads the
+pod's assigned value only when the script declares `credential.crm` and the owner
+has approved its exact validated hash, current assignment and resource epoch.
+The native review names the pod, aliases and full SHA-256. Master actions cannot
+approve this access. The script editor preserves and edits these declarations.
+
+Schema 12 extends resource kinds and records version approvals. Migration retains
+existing resources and creates a pre-migration database copy. Rotation pauses the
+pod and invalidates validation/approval; revocation cancels affected work and
+removes the encrypted value. Startup reconciles interrupted saves using durable
+metadata-only credential records. Pod deletion uses the existing deletion journal.
+Backups exclude the credential store; restore clears approvals and requires values
+to be assigned again. Roll back using a compatible pre-migration backup.
+
+The credential broker uses a separate private script operation, verifies the pinned
+run lease and declared alias before and after decryption, and never automatically
+places values in inputs, environment, prompts, metadata or audit messages. Codex
+still has only the assigned ape-shell gateway and cannot call credentials.get.
+Existing shared provider OAuth tokens cannot be extracted through this API.
+An approved script can explicitly include its readable secret in a prompt, log,
+checkpoint or file. Synthetic validation uses fake values and is not a proof of
+non-disclosure. Direct networking and process creation remain sandbox-restricted.
+See the credential chapter in both handbooks for the workflow and complete example.

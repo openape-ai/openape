@@ -1,3 +1,5 @@
+import { credentialAliases, parseCredentialRead } from '../../contracts/credentials'
+import { ScriptCredentials } from '../resources/script-credentials'
 import { MailRecipeSession, mailToolRequest } from '../mail/recipe'
 import { extractSource } from '../mail/extraction'
 import { assignedMail } from '../../main/mail/assigned'
@@ -29,6 +31,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
@@ -93,7 +96,9 @@ export class RunDispatcher {
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       if (manifest.effects !== 'readOnly') throw new Error('Effectful scripts are not enabled')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
-      if (manifest.capabilities.some(capability => !assigned.includes(capability)) || (manifest.capabilities.length && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
+      if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
+      new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
+      if (credentialAliases(manifest.capabilities).length && !this.services?.credential) throw new Error('Script credential service is unavailable')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
@@ -104,7 +109,7 @@ export class RunDispatcher {
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.revision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
-        if (!manifest.capabilities.length || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        if (!manifest.capabilities.includes('mail.read') || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const operation = this.services.tool(body, toolSignal, scope)
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
@@ -139,6 +144,14 @@ export class RunDispatcher {
             const progress = parseProgress(payload)
             const revision = this.store.commitProgress({ ...progress, podId: pod.id })
             this.runs.append(id, 'checkpoint', { revision }); return { revision }
+          }
+          if (operation === 'credentials.get') {
+            const alias = parseCredentialRead(payload)
+            if (!manifest.capabilities.includes(`credential.${alias}`) || !this.services?.credential) throw new Error('Credential capability is not declared by this script')
+            new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
+            const request = this.services.credential(alias, operationSignal, scope); pendingAgents.add(request)
+            try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
+            finally { pendingAgents.delete(request) }
           }
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
