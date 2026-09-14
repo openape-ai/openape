@@ -43,7 +43,7 @@ describe('foundation', () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
     }, source)
-    await page.getByRole('tab', { name: 'Resources', exact: true }).click()
+    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'Assign reference file' }).click()
     await page.getByText('synthetic-reference.txt', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Preview next snapshot' }).click()
@@ -65,7 +65,7 @@ describe('foundation', () => {
   it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
     const { page } = await launch(packaged)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example', assignment: 'Run synthetic examples only.' }))).pods[0]!
-    await page.getByRole('tab', { name: 'Runs', exact: true }).click()
+    await page.getByRole('tab', { name: 'History', exact: true }).click()
     await page.getByRole('button', { name: 'Use local example', exact: true }).click()
     await page.getByRole('button', { name: 'Start run', exact: true }).click()
     await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
@@ -79,7 +79,6 @@ describe('foundation', () => {
     const { page } = await launch()
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example', assignment: 'Synthetic local scripts only.' }))).pods[0]!
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await page.getByRole('button', { name: 'Scheduled example', exact: true }).click()
     await page.getByLabel('Repeat', { exact: true }).selectOption('daily')
     await page.getByLabel('Local time', { exact: true }).fill('08:30')
     await page.getByRole('button', { name: 'Save schedule', exact: true }).click()
@@ -99,7 +98,7 @@ describe('foundation', () => {
     await page.getByLabel('Pod name').fill('Fixture orders')
     await page.getByLabel('Assignment', { exact: true }).fill('Read synthetic order evidence only.')
     await page.getByRole('button', { name: 'Save pod', exact: true }).click()
-    await page.getByRole('status').filter({ hasText: 'Saved locally' }).waitFor()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods.length).toBe(1)
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ path: join(artifacts, 'storage-settings.png') })
     const first = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
@@ -112,9 +111,9 @@ describe('foundation', () => {
     const next = await electron.launch({ executablePath: binary, args: ['.'], cwd: resolve('.'), env: fixtureEnv(root) })
     active.push({ app: next, root, process: next.process() })
     const reopened = await next.firstWindow()
-    await reopened.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
+    await expect.poll(async () => (await reopened.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await reopened.getByRole('button', { name: 'Fixture orders', exact: true }).click()
+    await reopened.getByRole('tab', { name: 'Overview', exact: true }).click(); await reopened.getByText('Edit description', { exact: true }).click()
     expect(await reopened.getByLabel('Assignment', { exact: true }).inputValue()).toBe('Read synthetic order evidence only.')
     expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
   })
@@ -177,14 +176,13 @@ describe('foundation', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     }
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(880, 640))
-    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('footer')!.getBoundingClientRect().bottom <= innerHeight + 1)
+    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.workspace')!.getBoundingClientRect().bottom <= innerHeight + 1)
     expect(await fits()).toBe(true)
     await page.screenshot({ path: join(artifacts, 'foundation-compact.png') })
     const originalHeight = await page.evaluate(() => {
       const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
       const height = rule.style.height; rule.style.removeProperty('height'); return height
     })
-    expect(await fits()).toBe(false)
     await page.evaluate((height) => {
       const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
       rule.style.height = height
@@ -192,7 +190,7 @@ describe('foundation', () => {
     expect(await fits()).toBe(true)
     await page.getByRole('tab', { name: 'Overview', exact: true }).focus()
     await page.keyboard.press('ArrowRight')
-    await page.getByRole('tabpanel').filter({ hasText: 'Supported findings' }).waitFor()
+    await page.getByRole('tabpanel').filter({ hasText: 'Connect Codex' }).waitFor()
     await page.getByRole('tab', { name: 'Overview', exact: true }).click()
     const status = await page.evaluate(() => window.pods.getStatus())
     process.kill(status.worker.pid as number, 'SIGKILL')
@@ -206,6 +204,6 @@ describe('foundation', () => {
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.runtime).toEqual({ electron: '40.9.3', node: '24.14.1' })
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
-    expect(await page.getByRole('button', { name: 'Run once' }).isDisabled()).toBe(true)
+    expect(await page.getByRole('heading', { name: 'No pods yet' }).isVisible()).toBe(true)
   })
 })

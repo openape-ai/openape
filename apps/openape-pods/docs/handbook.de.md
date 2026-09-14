@@ -8,7 +8,7 @@ Erstellt aus handbook.de.json. Abbildungen zeigen die gepackte App mit synthetis
 
 ## Hier beginnen
 
-OpenApe Pods gibt jeder wiederkehrenden Aufgabe einen Auftrag, ein Skript, einen Arbeitsbereich, dauerhaftes Wissen und ausdrücklich zugewiesene Ressourcen. Wähle einen Pod in der Seitenleiste und verwende Übersicht, Wissen, Ressourcen, Läufe und Einstellungen, um ihn zu prüfen und zu steuern. Der Master-Chat hilft bei der Vorbereitung von Pods und Skripten.
+Wählen Sie einen Pod in der Seitenleiste und nutzen Sie Übersicht, Chat, Skript, Berechtigungen, Einstellungen und Historie. Ziehen Sie den Trenner oder verwenden Sie nach dessen Fokussierung Links/Rechts zum Verbreitern. Der Pfeil klappt die Seitenleiste ein; ihre Breite wird auf diesem Mac gespeichert.
 
 Dieses Handbuch beschreibt die unsignierte Entwicklungsversion 0.1.0. Die Abbildungen zeigen synthetische Aufträge und lokale Referenzdateien. Echte Anmeldungen bei ChatGPT, OpenApe und Microsoft, Live-Mail-Zugriffe und die signierte Distribution benötigen noch eine Freigabeprüfung. Die Ausführung erfordert derzeit Apple Silicon und Darwin 25.6.0, geprüft unter macOS 26.6.2. Ein nicht unterstützter Rechner zeigt einen Fehler und blockiert die Ausführung.
 
@@ -18,7 +18,7 @@ Das Schließen des Fensters lässt die App über die Menüleiste verfügbar. Bee
 
 ## Sprache wählen
 
-Verwende Sprache in der Seitenleiste, um sofort zwischen Deutsch und English zu wechseln. Der gewählte Tab und ungespeicherter Editorinhalt bleiben geöffnet. Die Auswahl wird pro lokalem Profil gespeichert und gilt auch nach einem Neustart für Oberfläche, native Menüs und app-eigene Dialoge. Ein neues Profil startet auf Deutsch, wenn deine bevorzugte Systemsprache Deutsch ist, sonst auf Englisch.
+Öffnen Sie App-Einstellungen in der Seitenleiste und wechseln Sie mit Sprache zwischen Deutsch und English. Die Wahl wird je lokalem Profil gespeichert und gilt für Oberfläche, native Menüs und App-Dialoge. Ungespeicherter Editorinhalt bleibt beim Navigieren erhalten.
 
 Pod- und Gruppennamen, Aufgaben, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.
 
@@ -28,11 +28,11 @@ Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit 
 
 Probiere dies mit einem neuen Pod. Das lokale Beispiel benötigt keine Kontoverbindung und erhöht einen dauerhaft gespeicherten Zähler. Beim Installieren wird das Beispiel zugleich zum aktiven Skript. Verwende deshalb einen neuen Pod, um kein eingerichtetes Arbeitsskript zu ersetzen.
 
-1. Wähle + Neuer Pod. Gib im lokalen Pod-Formular unter dem Master-Chat einen Pod-Namen und eine Aufgabe ein und wähle Pod speichern. Der neue Pod ist pausiert.
-2. Wähle den Tab Läufe und dann Lokales Beispiel verwenden. Wähle Lauf starten oder oben im Arbeitsbereich Einmal ausführen.
-3. Warte auf Local example completed (1). Diese Zusammenfassung stammt aus dem Beispielskript und bleibt im Original. Wähle das Ergebnis und öffne Gespeicherte Ereignisse, um das Protokoll zu prüfen.
-4. Führe das Skript erneut aus, um den Zähler zu erhöhen. Ein Skriptlauf kann Fortschritt speichern, ohne fachliche Erkenntnisse zu erzeugen.
-5. Öffne Einstellungen und scrolle zu Skript, um das aktive JavaScript zu prüfen. Automatische Läufe bleiben deaktiviert, bis du sie ausdrücklich konfigurierst und aktivierst.
+1. Wählen Sie Neuer Pod, öffnen Sie Ohne Chat erstellen, tragen Sie Pod-Name und Aufgabe ein und speichern Sie.
+2. Öffnen Sie Skript. Das Startskript liefert bereits ein gültiges lokales Ergebnis; ändern Sie bei Bedarf dessen Zusammenfassung.
+3. Wählen Sie Speichern und ausführen. Nach der Prüfung mit synthetischen Diensten startet der lokale Lauf ohne Kontoverbindung.
+4. Prüfen Sie die Historie und das abgeschlossene Ergebnis. Ein ausgewählter Lauf zeigt seine gespeicherten Ereignisse.
+5. Die Übersicht zeigt das letzte Ergebnis. Die Automatik bleibt deaktiviert.
 
 ## Pods in Gruppen organisieren
 
@@ -41,7 +41,7 @@ Verwende Gruppen in der Seitenleiste, um zusammengehörige Pods zu ordnen. Jeder
 Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung.
 
 1. Wähle + Gruppe neben DEINE PODS, gib einen Gruppennamen ein und wähle Gruppe erstellen. Namen enthalten 1–100 Zeichen; bis zu fünfzig Gruppen werden unterstützt.
-2. Wähle einen Pod und unter Gruppe für [Pod-Name] sein Ziel. Du kannst einen Pod auch auf eine Gruppenüberschrift ziehen, einschließlich eingeklappter Gruppen. Wähle Nicht gruppiert, um seine Zuordnung zu entfernen.
+2. Wählen Sie einen Pod, öffnen Sie Einstellungen und wählen Sie die Gruppe. Sie können den Pod auch auf eine Gruppe in der Seitenleiste ziehen.
 3. Wähle eine Gruppenüberschrift zum Ein- oder Ausklappen. Der gewählte Pod bleibt im Arbeitsbereich geöffnet, während seine Gruppe eingeklappt ist.
 4. Wähle die Schaltfläche mit drei Punkten neben einer Gruppe, um sie umzubenennen. Zum Entfernen wähle Gruppe entfernen und bestätige, dass ihre Pods nach Nicht gruppiert verschoben werden.
 5. Falls eine andere Bearbeitung die Gruppen geändert hat, bleibt dein eingegebener Text erhalten. Warte auf die Aktualisierung der Seitenleiste und versuche es erneut.
@@ -50,17 +50,84 @@ Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, ma
 
 ## Übersicht
 
-Die Übersicht zeigt, was dieser Pod tut, was zuletzt passiert ist und was als Nächstes ansteht. Die Aufgabenkarte zeigt den gespeicherten Auftrag und seine Revision. Aufgabe bearbeiten öffnet die Einstellungen.
+Die Übersicht zeigt die Beschreibung, die letzte Ausführung und ihr Ergebnis. Über Beschreibung bearbeiten ändern Sie die Aufgabe. Speichern pausiert die Automatik und erhöht die Aufgabenrevision.
 
-Letztes Ergebnis zeigt Zustand, Zusammenfassung, Fortschrittsstand und Fehler des letzten Laufs. Laufprotokoll ansehen öffnet Läufe. Einmal ausführen startet das aktive Skript auch bei pausierter automatischer Ausführung. Die Aktion ist ohne aktives Skript, bei bereits laufendem Pod, archiviertem Pod oder nicht verfügbarem Hintergrundprozess gesperrt.
+Jetzt ausführen startet das aktive, geprüfte Skript. Neue oder geänderte Skripte bereiten Sie zuerst unter Skript vor. Ein laufender Durchlauf, ein belegter Ausführungsplatz, ein geändertes Skript oder ausstehende Wiederherstellung verhindern den unmittelbaren Start.
 
-NÄCHSTER LAUF zeigt den nächsten geplanten Zeitpunkt oder Nur manuell sowie vorgemerkte Eingaben und Eingaben, die auf Wiederherstellung warten. Automatische Läufe fortsetzen und Automatische Läufe pausieren steuern den Pod-Lebenszyklus. Einen Zeitplan aktivierst du separat unter Einstellungen.
-
-Die Wissensübersicht unterscheidet Erkenntnisse, offene Fragen und Nachweislücken. Master-Chat öffnen übernimmt den gewählten Pod als Kontext.
+Laufprotokoll ansehen öffnet die Historie. Ergebnisse und Quellen öffnet die gespeicherten Erkenntnisse innerhalb der Übersicht, einschließlich Fragen, Lücken und genauer Belege.
 
 ![Übersicht](images/handbook-overview-de.png)
 
-## Wissen
+## Chat und Pod-Erstellung
+
+Jeder Pod besitzt einen Chat-Tab mit eigenem gespeichertem Verlauf und eigener fortsetzbarer Codex-Unterhaltung. Der Assistent hilft bei Aufgabe, Skript und benötigtem Zugriff. Neuer Pod startet den Erstellungs-Chat; Ohne Chat erstellen öffnet das lokale Formular.
+
+Der Assistent kann Skripte innerhalb bestehender Aufgaben und Berechtigungen vorbereiten, prüfen und aktivieren. Erweiterter Zugriff und Freigaben für Geheimnisse bleiben Ihre Entscheidung. Zeitpläne kann er nicht aktivieren. In der gesamten App läuft jeweils eine Assistentenrunde; beenden oder stoppen Sie diese vor einer Unterhaltung mit einem anderen Pod.
+
+Runde abbrechen unterbricht die aktive Unterhaltung; Lenken ergänzt eine Anweisung. Während des Sendens nachgetippter Text bleibt erhalten. Der reguläre Skript-Agent startet mit frischem Kontext und erhält weder diesen Chat noch Variablenwerte oder Geheimnisse automatisch.
+
+App-Einstellungen → Arbeitsbereich-Chat bewahrt die bisherige globale Unterhaltung und unterstützt das Erstellen von Pods. Pod-Chats besitzen getrennte Verläufe und Modell-Unterhaltungen; sie verwenden weiterhin die bestehenden, vom Eigentümer autorisierten Steuerungsfunktionen.
+
+![Chat und Pod-Erstellung](images/handbook-chat-de.png)
+
+## Dein Skript ansehen und bearbeiten
+
+Der Tab Skript öffnet den aktuell gespeicherten Arbeitsstand, auch einen neueren gespeicherten Entwurf. V1 bietet keine Versionsauswahl, Vergleiche oder Rücksetzfunktionen. Unveränderliche Skript-Hashes, Validierung, Freigabe von Geheimnissen und die Zuordnung jedes Laufs zu einer Fassung bleiben intern bestehen.
+
+Der JavaScript-Editor bietet Syntaxhervorhebung, Zeilennummern, horizontales Scrollen, Einrückung mit Tab, Escape gefolgt von Tab zum Verlassen und Cmd+S (Ctrl+S) zum Speichern. Quelltext wird wörtlich angezeigt und nicht in der Oberfläche ausgeführt.
+
+Ungespeicherte Skripte, normale Variablen, Einstellungen und Chat-Texte bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.
+
+Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den passenden Abschnitt der Einstellungen. Erforderlicher Zugriff deklariert ausschließlich bereits zugewiesene Fähigkeiten.
+
+1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
+2. Wählen Sie Ausführen oder Speichern und ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
+3. Bei benötigten Geheimnissen prüfen Sie den vollständigen Quelltext und wählen Zugriff auf Zugangsdaten prüfen. Die native Bestätigung nennt Pod, genauen SHA-256 und Aliase. Abbrechen blockiert weiterhin die Ausführung.
+4. Nach erfolgreicher Prüfung und erforderlicher Freigabe aktiviert die App genau diese Fassung und startet sie. Das Ergebnis steht in der Historie. Die Automatik wird dadurch nicht aktiviert.
+
+![Dein Skript ansehen und bearbeiten](images/handbook-script-de.png)
+
+## Gleichzeitige Änderungen und Wiederherstellung
+
+Ändert ein Chat oder eine andere Bearbeitung das gespeicherte Skript, während Sie ungespeicherten Text haben, bleibt Ihr Text erhalten und ein veralteter Speicherversuch wird abgewiesen. Skript neu laden erlaubt nach Bestätigung das Verwerfen lokaler Änderungen. Meine Änderungen als aktuelles Skript speichern übernimmt Ihren Text ausdrücklich als neuen Arbeitsstand; vor der Ausführung sind weiterhin Prüfung und nötige Freigaben erforderlich.
+
+Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeicherten Quelltext. Speichern startet keinen Lauf. Ein Start wird bei verändertem aktivem Skript, belegtem Ausführungsplatz oder ausstehenden Eingaben abgewiesen, damit später kein anderer Code ausgeführt wird.
+
+## Berechtigungen
+
+Berechtigungen zeigt zugewiesene Dateien und Werkzeug-/Anwendungszugriffe mit Umfang und Zustand. Allgemeiner GUI- und Terminalstart ist wegen des offenen Nachweises zur Prozessbegrenzung noch nicht verfügbar. Die Ansicht erlaubt keine unbeschränkte Ausführung auf dem Mac. Geheimniswerte verwalten Sie in Einstellungen.
+
+Wähle eine Referenzdatei über den nativen Dateidialog. Der Pod erhält eine schreibgeschützte Kopie; das Original bleibt außerhalb seines beschreibbaren Arbeitsbereichs. Jeder Lauf protokolliert die verwendete Referenzversion. Ein geändertes Original wird zur Eingabe eines späteren Laufs.
+
+Erstelle eine Quellenkopie, um ihre gespeicherte Prüfsumme zu prüfen. Widerrufe eine Zuweisung, um ihre Berechtigung zu entfernen. Ressourcenänderungen machen ältere Validierungsnachweise ungültig und können betroffene Ausführungen stoppen. Prüfe und validiere das Skript für den neuen Zugriffsbereich.
+
+Konten und Mail-Zugriff verwalten öffnet Verbindungen & Einrichtung. Eine im Skript deklarierte Fähigkeit fordert die Nutzung vorhandener Berechtigungen an; sie erteilt keinen Kontozugriff.
+
+![Berechtigungen](images/handbook-permissions-de.png)
+
+## Einstellungen und Aufgaben
+
+Die Einstellungen enthalten Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie zusätzliche Optionen zum Lebenszyklus. Die Beschreibung bearbeiten Sie in der Übersicht. Änderungen am Namen oder an der Beschreibung pausieren die Automatik; prüfen Sie danach das Skript erneut.
+
+Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
+
+Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten Pod nach gesonderter nativer Bestätigung löschen. Dabei werden auch seine Variablen und sein Pod-Chat entfernt. Arbeitsbereich-Chat, gemeinsame Konten und ursprüngliche Referenzdateien bleiben erhalten.
+
+![Einstellungen und Aufgaben](images/handbook-settings-de.png)
+
+## Historie und Wiederherstellung
+
+Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
+
+Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
+
+Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
+
+Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
+
+![Historie und Wiederherstellung](images/handbook-history-de.png)
+
+## Ergebnisse und Quellen
 
 Wissen enthält dauerhafte Aussagen mit zugehörigen Belegen. Erkenntnisse beschreiben belegte fachliche Tatsachen. Offene Fragen benötigen eine fachliche Antwort. Nachweislücken kennzeichnen fehlende oder unlesbare Belege; eine Lücke ist nicht automatisch eine unbeantwortete fachliche Frage.
 
@@ -70,67 +137,7 @@ Filtere nach Art und aktiviere Ersetzte Versionen einbeziehen, um frühere Aussa
 
 Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod zu befragen. Aussagen und Quellenverlauf bleiben unabhängig vom Chat im Pod.
 
-![Wissen](images/handbook-knowledge-de.png)
-
-## Ressourcen
-
-Ressourcen zeigt Dateien, Werkzeugzugriffe und Verbindungen dieses Pods mit aktuellem Zustand und Zugriffsbereich. Bereit, abgelaufen, fehlt und widerrufen zeigen an, welche Zugriffe nutzbar sind.
-
-Wähle eine Referenzdatei über den nativen Dateidialog. Der Pod erhält eine schreibgeschützte Kopie; das Original bleibt außerhalb seines beschreibbaren Arbeitsbereichs. Jeder Lauf protokolliert die verwendete Referenzversion. Ein geändertes Original wird zur Eingabe eines späteren Laufs.
-
-Erstelle eine Quellenkopie, um ihre gespeicherte Prüfsumme zu prüfen. Widerrufe eine Zuweisung, um ihre Berechtigung zu entfernen. Ressourcenänderungen machen ältere Validierungsnachweise ungültig und können betroffene Ausführungen stoppen. Prüfe und validiere das Skript für den neuen Zugriffsbereich.
-
-Konten und Mail-Zugriff verwalten öffnet Verbindungen & Einrichtung. Eine im Skript deklarierte Fähigkeit fordert die Nutzung vorhandener Berechtigungen an; sie erteilt keinen Kontozugriff.
-
-![Ressourcen](images/handbook-resources-de.png)
-
-## Läufe und Wiederherstellung
-
-Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
-
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
-
-Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
-
-Ein Skriptwechsel oder eine Rückkehr zu einer älteren Version betrifft nur spätere Läufe. Ergebnisse und Wirkungen früherer Läufe werden nicht rückgängig gemacht.
-
-![Läufe und Wiederherstellung](images/handbook-runs-de.png)
-
-## Einstellungen und Aufgaben
-
-Einstellungen enthält die gespeicherte Pod-Aufgabe, Skript, Zeitplan und Limits sowie Pod-Lebenszyklus. Wähle einen lokalen Pod oder Neuer lokaler Pod, um eine weitere Aufgabe anzulegen.
-
-Bearbeite Pod-Name und Aufgabe und wähle Pod speichern. Das Speichern erhöht die Aufgabenrevision und pausiert automatische Ausführungen. Die Skriptvalidierung ist an diese Revision gebunden: Speichere und validiere vor der Aktivierung einen Entwurf für die neue Aufgabe.
-
-Pod archivieren stoppt neue Eingaben und bewahrt Wissen und Verlauf. Ein archivierter Pod bleibt einsehbar. Lokalen Pod löschen … erfordert eine separate native Bestätigung und entfernt lokale Daten und Schlüssel dauerhaft. Sichere sie vorher. Geteilte Konten, Originalreferenzen, globaler Chat und entfernte Identitäts- und Berechtigungsdatensätze bleiben erhalten.
-
-![Einstellungen und Aufgaben](images/handbook-settings-de.png)
-
-## Dein Skript ansehen und bearbeiten
-
-Unter Einstellungen → Skript zeigt der Editor zunächst den exakten aktiven run.mjs-Quelltext. Versionen und Entwürfe wählt gespeicherte Versionen oder Entwürfe. Die SHA-256-Prüfsumme identifiziert den unveränderlichen Ausführungsquelltext. Vom Master vorbereitete Entwürfe erscheinen nach Verlauf aktualisieren ebenfalls hier.
-
-Als Entwurf bearbeiten macht eine Kopie bearbeitbar; Neues Skript beginnt mit einem minimalen lokalen Skript. Dies ist ein direkter JavaScript-Quelltexteditor mit Zeilennummern, horizontalem Scrollen, Einfügen von zwei Leerzeichen per Tab, Umschalt+Tab zum Verlassen und Cmd+S (Strg+S) zum Speichern. Code ist Klartext und wird nicht in der Oberfläche ausgeführt.
-
-Ungespeicherte Änderungen bleiben beim Wechsel zwischen Tabs und Pods innerhalb dieser App-Sitzung erhalten. Speichere vor dem Beenden. Wenn du bei ungespeicherten Änderungen eine andere Quelle wählst, fragt die App nach dem Verwerfen. Weiter bearbeiten behält den aktuellen Text. Gespeicherte Entwürfe überstehen einen Neustart.
-
-Deklariere Mail-Leseaufrufe nur, wenn das Skript Mail-Zugriff benötigt. Der Pod muss bereits die passende Konto- und Ordnerberechtigung besitzen. Weder eine Quelltextänderung noch das Aktivieren dieses Felds erweitert Zugriffe.
-
-1. Wähle eine Version, klicke auf Als Entwurf bearbeiten und ändere das JavaScript. Wähle Entwurf speichern. Dies speichert einen Entwurf, ohne das aktive Skript zu ändern.
-2. Wähle Entwurf validieren. Der Code läuft bis zu fünf Sekunden in der bestehenden Sandbox mit synthetischen Diensten und getrennten Validierungsdaten. Bei einem Fehler bleiben dein Text und die aktive Version erhalten. Korrigiere den Code und speichere erneut.
-3. Öffne nach Erfolg die Validierungsdetails. Exakten validierten Quelltext ansehen zeigt das unveränderliche Ausführungsartefakt einschließlich des bei der Validierung angehängten Laufzeitbindungskommentars. Synthetische Prüfungen belegen keine Korrektheit für alle echten Mail- oder Modellantworten.
-4. Wähle Mit aktiver Version vergleichen, um den aktiven Quelltext unter dem gewählten Text anzuzeigen. Wähle dann Für nächsten Lauf aktivieren. Bestehende Läufe behalten ihre ursprüngliche Version.
-5. Wähle Einmal ausführen und prüfe das Ergebnis unter Läufe. Für eine Rückkehr wähle eine gespeicherte validierte Version und Für nächsten Lauf aktivieren. Versionen mit ausstehender Validierung kannst du als Entwurf kopieren und für die aktuelle Aufgabe und Berechtigungen validieren.
-
-![Dein Skript ansehen und bearbeiten](images/handbook-script-de.png)
-
-## Bearbeitungskonflikte lösen
-
-Master und Eigentümer teilen versionierte Entwürfe. Hat einer denselben Entwurf geändert, meldet das Speichern einer älteren Revision einen Konflikt, statt neueren Inhalt zu überschreiben. Geänderte Aufgaben, Ressourcen und aktive Versionen können ebenfalls Validierung oder Aktivierung verhindern.
-
-Kopiere bei Bedarf wichtigen ungespeicherten Text und wähle Verlauf aktualisieren. Dies aktualisiert verfügbare Versionen und aktuelle Pod-Metadaten und behält den Editorinhalt bei. Wähle Gewählten Quelltext neu laden für die aktuelle Revision oder Als neuen Entwurf speichern, um deine Alternative separat zu bewahren. Validiere erneut vor der Aktivierung.
-
-Während Speichern oder Validierung ist der Editor gegen Änderungen gesperrt. Bei einem Zeitlimit der Hintergrundprozessantwort lade vor einem erneuten Versuch den gespeicherten Zustand. Ein Zeitlimit allein beweist nicht, dass die Operation fehlgeschlagen ist.
+![Ergebnisse und Quellen](images/handbook-knowledge-de.png)
 
 ## Zugangsdaten im Pod-Skript verwenden
 
@@ -146,10 +153,10 @@ Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zuga
 
 Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
-1. Öffne Ressourcen für den gewünschten Pod. Gib einen Alias wie crm und seinen Wert ein. Nach dem Speichern wird das Wertefeld auch bei Fehlern geleert. Lade die Ansicht vor einem erneuten Versuch neu, falls sich der Ressourcenstand geändert hat.
-2. Öffne Einstellungen → Skript. Bearbeite oder erstelle einen Entwurf und wähle die benötigten Zugangsdaten-Aliase. Verwende await context.credentials.get(alias) im Code, speichere den Entwurf und validiere ihn.
-3. Öffne den exakten validierten Quelltext und prüfe die vollständige Version. Zugang zu Zugangsdaten prüfen öffnet eine native Bestätigung mit Pod-Name, vollständigem SHA-256 und Aliasen. Abbrechen lässt den Zugriff gesperrt. Gib nur den geprüften Quelltext frei.
-4. Aktiviere die Version für den nächsten Lauf und wähle Einmal ausführen. Prüfe Läufe und die Ausgabedatei im Arbeitsbereich. Änderungen an Quelltext, Auftrag oder Ressourcen erfordern eine neue Prüfung. Kopiere nach dem Austausch eines Werts die bestehende Version in einen Entwurf, validiere erneut und bestätige den aktuellen Ressourcenstand vor dem nächsten Lauf.
+1. Öffnen Sie Einstellungen → Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
+2. Öffnen Sie Skript, klappen Sie Erforderlicher Zugriff auf und wählen Sie die Aliase. Verwenden Sie await context.credentials.get("alias") im Quelltext.
+3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
+4. Die Historie zeigt den Lauf. Änderungen an Quelltext, Aufgabe oder Ressourcen erfordern erneute Prüfung und Freigabe.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -185,7 +192,7 @@ export async function run(context) {
 
 Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Warte vor der Rückgabe auf jede asynchrone Operation. Das Ergebnis enthält status, summary, completedInputIds und gapIds. Ein completedWithGaps-Ergebnis benötigt gespeicherte Lückenaussagen.
 
-context.input enthält eingefrorene Aufgaben- und Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf.
+context.input enthält eingefrorene Aufgaben- und Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
 context.progress.commit schreibt Fortschrittsstand, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext für reguläre Läufe und den bestehenden Pod-Zugriffsgrenzen auf. context.tools.invoke und die mitgelieferte context.mail-API akzeptieren nur definierte Leseverträge und zugewiesene Bereiche; sie sind keine allgemeine Host-Shell.
 
@@ -231,18 +238,6 @@ Zugewiesene Mail-Lesezugriffe verändern nichts: Sie senden, verschieben, markie
 Der aktuelle Testbuild besitzt synthetische Prüfnachweise. Echte Anbieteranmeldung, Token-Erneuerung im Mandanten und Live-Mail-Verhalten bleiben Teil der Freigabeprüfung. Für die lokale Skriptanleitung ist kein Live-Zugriff nötig.
 
 ![Verbindungen und Mail-Lesezugriff](images/handbook-setup-de.png)
-
-## Master-Chat
-
-Öffne den Master-Chat über die Seitenleiste oder den Kontext des gewählten Pods. Die Kontextanzeige zeigt, welchen Pod das Gespräch betrifft. Nachrichten und übertragene Antworten bleiben im Gesprächsverlauf der App.
-
-Bitte den Master, Aufgaben zu erstellen oder zu ändern, ein Skript vorzubereiten, zu validieren oder eine validierte Version innerhalb der aktuellen Aufgabe und Berechtigungen zu aktivieren. Er kann Läufe prüfen, einen manuellen Lauf anfordern und den Pod-Lebenszyklus steuern. Der Master kann eigene Anfragen nach weiteren Ressourcen nicht genehmigen und keine Zeitpläne aktivieren.
-
-Öffne Skriptentwürfe, um Code und Validierungsnachweise zu prüfen. Zum direkten Bearbeiten öffne Einstellungen → Skript und wähle Verlauf aktualisieren. Ressourcenzugriffsvorschläge bleiben bis zur Eigentümerprüfung ausstehend. Lehne unerwünschte Vorschläge ab oder öffne Ressourcen zur Prüfung.
-
-Anfrage abbrechen unterbricht eine aktive Master-Anfrage. Lenken sendet eine weitere Anweisung in das aktuelle Gespräch. Reguläre Pod-Ausführungen verwenden frische Codex-Kontexte. Dauerhaftes Wissen mit Quellen bleibt beim Pod und hängt nicht vom Master-Chat-Gedächtnis ab.
-
-![Master-Chat](images/handbook-master-de.png)
 
 ## Daten, Sicherungen und Updates
 

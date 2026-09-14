@@ -16,7 +16,7 @@ describe('reviewable master chat', () => {
     await wrapper.get('textarea').setValue('Stop after inspecting'); await wrapper.get('form').trigger('submit'); await flushPromises()
     expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'steer', podId }))
     const button = (name: string) => wrapper.findAll('button').find(button => button.text() === name)!
-    await button('Cancel turn').trigger('click'); await flushPromises(); expect(master).toHaveBeenCalledWith({ type: 'cancel' })
+    await button('Cancel turn').trigger('click'); await flushPromises(); expect(master).toHaveBeenCalledWith({ type: 'cancel', podId })
     expect(wrapper.text()).toContain('Unvalidated draft'); expect(wrapper.text()).toContain('export async function run()')
     expect(wrapper.text()).not.toContain('Approve access')
     await button('Review resources').trigger('click'); expect(wrapper.emitted('resources')).toEqual([[podId]])
@@ -29,4 +29,13 @@ describe('reviewable master chat', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('needs inspection'); expect(wrapper.text()).toContain('created')
     await wrapper.get('textarea').setValue('Continue'); expect(wrapper.get('button.primary').attributes('disabled')).toBeDefined(); wrapper.unmount()
   })
+})
+
+it('preserves text composed while an earlier message is sending', async () => {
+  let finish!: (view: MasterView) => void
+  window.pods = { master: vi.fn().mockImplementation(command => command.type === 'list' ? Promise.resolve(empty) : new Promise<MasterView>((resolve) => { finish = resolve })) } as unknown as typeof window.pods
+  const wrapper = mount(MasterChat, { props: { podId: crypto.randomUUID() } }); await flushPromises()
+  await wrapper.get('textarea').setValue('First message'); await wrapper.get('form').trigger('submit')
+  await wrapper.get('textarea').setValue('Next thought'); finish(empty); await flushPromises()
+  expect(wrapper.get('textarea').element.value).toBe('Next thought'); wrapper.unmount()
 })

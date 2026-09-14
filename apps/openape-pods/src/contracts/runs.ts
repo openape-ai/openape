@@ -2,16 +2,17 @@ export type RunState = 'running' | 'completed' | 'completedWithGaps' | 'failed' 
 export interface RunRecord { id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number, recovery: { state: 'ready' | 'needsReview' | 'retryQueued', error: string | null } | null }
 export interface RunEvent { sequence: number, type: string, data: unknown, at: number }
 export interface RunView { runs: RunRecord[], events: RunEvent[] }
-export type RunCommand = { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string } | { type: 'cancel', podId: string, runId: string } | { type: 'recover', podId: string, runId: string, action: 'inspect' | 'retry' } | { type: 'retryQueue', podId: string }
+export type RunCommand = { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string, expectedScript?: string } | { type: 'cancel', podId: string, runId: string } | { type: 'recover', podId: string, runId: string, action: 'inspect' | 'retry' } | { type: 'retryQueue', podId: string }
 export function parseRunCommand(value: unknown): RunCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid run command')
   const item = value as Record<string, unknown>
-  const keys = item.type === 'list' ? ['type', 'podId', 'runId', 'after'] : item.type === 'installExample' ? ['type', 'podId', 'variant'] : ['start', 'retryQueue'].includes(item.type as string) ? ['type', 'podId'] : item.type === 'recover' ? ['type', 'podId', 'runId', 'action'] : item.type === 'cancel' ? ['type', 'podId', 'runId'] : []
+  const keys = item.type === 'list' ? ['type', 'podId', 'runId', 'after'] : item.type === 'installExample' ? ['type', 'podId', 'variant'] : item.type === 'start' ? ['type', 'podId', 'expectedScript'] : item.type === 'retryQueue' ? ['type', 'podId'] : item.type === 'recover' ? ['type', 'podId', 'runId', 'action'] : item.type === 'cancel' ? ['type', 'podId', 'runId'] : []
   if (!keys.length || Object.keys(item).some(key => !keys.includes(key)) || typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId)) throw new Error('Unsupported run command')
   if ((['cancel', 'recover'].includes(item.type as string) || item.runId !== undefined) && (typeof item.runId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.runId))) throw new Error('Invalid run identity')
   if (item.after !== undefined && (!Number.isSafeInteger(item.after) || (item.after as number) < 0)) throw new Error('Invalid event cursor')
   if (item.type === 'recover' && !['inspect', 'retry'].includes(item.action as string)) throw new Error('Invalid recovery action')
   if (item.type === 'installExample' && !['deterministic', 'agent'].includes(item.variant as string)) throw new Error('Invalid example version')
+  if (item.expectedScript !== undefined && (typeof item.expectedScript !== 'string' || !/^[a-f0-9]{64}$/.test(item.expectedScript))) throw new Error('Invalid expected script')
   return structuredClone(item) as RunCommand
 }
 export function parseRunView(value: unknown): RunView {
@@ -34,6 +35,7 @@ export function parseRunView(value: unknown): RunView {
   return view
 }
 export interface RunInput {
+  variables?: Record<string, string>
   version: 1
   runId: string
   podId: string

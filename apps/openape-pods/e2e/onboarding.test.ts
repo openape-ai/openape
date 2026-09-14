@@ -28,8 +28,8 @@ it.each([false, true])('onboarding: empty setup, explicit continuation and no im
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-onboarding-')))
   const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : executable, args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {
-    const page = await app.firstWindow(); await page.getByRole('status').filter({ hasText: 'Ready' }).waitFor()
-    await page.getByRole('button', { name: 'Connections & setup', exact: true }).click()
+    const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Connections & setup', exact: true }).click()
     await page.getByRole('heading', { name: 'Connections & setup', exact: true }).waitFor()
     expect(await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).toMatchObject({ connections: [], complete: false, runtime: { ready: true, error: null } })
     expect(await page.getByRole('button', { name: 'Review and assign read-only mail' }).isDisabled()).toBe(true)

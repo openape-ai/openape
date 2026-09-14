@@ -1,3 +1,4 @@
+import { PodVariables } from './resources/variables'
 import { PodGroups } from './workspace/groups'
 import { ScriptWorkspace } from './workspace/scripts'
 import { parseScriptCommand } from '../contracts/scripts'
@@ -165,7 +166,7 @@ port.on('message', async (event) => {
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
-      if (command.type === 'start') scheduler.requestManual(command.podId)
+      if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })
@@ -174,12 +175,15 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
+      const variables = new PodVariables(store)
+      if (resource.type === 'saveVariable') variables.save(resource.podId, resource.name, resource.value, resource.revision)
+      if (resource.type === 'removeVariable') variables.remove(resource.podId, resource.name, resource.revision)
       if (resource.type === 'assignCredential') registry.assignCredential(resource.podId, resource.alias, resource.credentialId, resource.epoch)
       if (resource.type === 'assignReference') registry.assignReference(resource.podId, resource.name, resource.path)
       if (resource.type === 'revoke') registry.revoke(resource.podId, resource.id, resource.revision)
       if (resource.type === 'pickReference') throw new Error('File selection requires the owner window')
       const snapshot = resource.type === 'snapshot' ? await registry.capture(resource.podId, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/')) : undefined
-      port.postMessage({ id: request.id, state: { resources: registry.list(resource.podId), epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
+      port.postMessage({ id: request.id, state: { variables: variables.list(resource.podId), resources: registry.list(resource.podId), epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
       return
     }
     const command = parseCommand(request.command)

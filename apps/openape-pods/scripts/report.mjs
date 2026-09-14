@@ -6,14 +6,18 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
-  ['workspace-1060-light-overview.png', 'A pod with durable knowledge', 'Overview shows the stored assignment, current findings, open questions, verification gaps and the next run.'],
-  ['workspace-760-dark-knowledge.png', 'Knowledge and exact evidence', 'Current claims remain distinct from history, questions and verification gaps.'],
+  ['workspace-1060-light-overview.png', 'A pod with durable knowledge', 'Overview shows the description, last result and Run now. Results and sources opens retained knowledge.'],
+  ['handbook-chat-en.png', 'Pod configuration in Chat', 'The conversation belongs to the selected pod. Proposed changes retain explicit review and permission controls.'],
+  ['handbook-script-en.png', 'An editable script', 'Script highlights the working source and provides Save and Run. Expandable access references link to variable and secret management.'],
+  ['handbook-settings-en.png', 'Pod settings', 'Settings contains the name, group, variables, secrets and automation controls.'],
+  ['handbook-history-en.png', 'Execution history', 'History lists persisted runs, their outcome and available recovery actions.'],
+  ['handbook-knowledge-en.png', 'Knowledge and exact evidence', 'Current claims remain distinct from history, questions and verification gaps.'],
   ['workspace-source.png', 'A pinned source version', 'The source viewer shows the exact stored content and digest supporting a finding.'],
-  ['workspace-560-light-resources.png', 'Explicit resource scope', 'Resources remains usable in a narrow window, with per-pod access and revocation.'],
-  ['workspace-master.png', 'One contextual master area', 'Contextual actions retain the selected pod. Streaming and control actions are connected in the master milestone.'],
+  ['workspace-560-light-permissions.png', 'Explicit resource scope', 'Permissions remains usable in a narrow window, with per-pod access and revocation.'],
+  ['workspace-master.png', 'A separate chat for each pod', 'Contextual actions retain the selected pod. Each pod has its own history and continuation thread.'],
   ['recovery-packaged.png', 'Explicit recovery after an app crash', 'The packaged app preserves a committed fact and checkpoint. Inspection confirms previous execution has stopped before an explicit retry completes the remaining inputs.'],
   ['schedule-settings.png', 'Explicit schedules and concurrency', 'A disabled daily schedule records its local time and timezone. Activation, pause/resume and the global concurrency limit are separate owner controls.'],
-  ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. Runs shows its persisted result, checkpoint revision and ordered events.'],
+  ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. History shows its persisted result, checkpoint revision and ordered events.'],
   ['resources-packaged.png', 'Assigned reference snapshots', 'The packaged app lists the chosen file, its permission revision and the hash of a separate snapshot. Access can be revoked from the same view.'],
   ['storage-settings.png', 'Saved local assignments', 'A pod assignment is committed by the SQLite worker and reopens after restarting the application. New pods remain paused.'],
   ['foundation-light.png', 'Your pod workspace', 'An empty profile shows no invented pod or knowledge. The local worker status is reported directly.'],

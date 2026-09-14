@@ -4,12 +4,13 @@ export interface MasterMessage { id: string, role: 'user' | 'assistant' | 'tool'
 export interface MasterDraft { id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
 export interface AccessProposal { id: string, podId: string, body: Record<string, unknown>, state: 'pending' | 'declined' | 'approved' }
 export interface MasterView { connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
-export type MasterCommand = { type: 'list' } | { type: 'send' | 'steer', id: string, text: string, podId: string | null } | { type: 'cancel' } | { type: 'decline', id: string }
+export type MasterCommand = { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }
 export function parseMasterCommand(value: unknown): MasterCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master request')
   const item = value as Record<string, unknown>
-  const fields = item.type === 'list' || item.type === 'cancel' ? ['type'] : item.type === 'decline' ? ['type', 'id'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId'] : []
+  const fields = item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId'] : []
   if (!fields.length || Object.keys(item).some(key => !fields.includes(key))) throw new Error('Unsupported master request')
+  if (item.podId !== undefined && item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid chat pod context')
   if (fields.includes('id') && (typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id))) throw new Error('Invalid master request identity')
   if (fields.includes('text') && (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 20000 || (item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))))) throw new Error('Invalid master input')
   return structuredClone(item) as MasterCommand
