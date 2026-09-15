@@ -1,4 +1,4 @@
-import { parseProgramCommand, parseTerminalView } from '../contracts/programs'
+import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
 import { parseLanguage, parseLanguageCommand } from '../contracts/language'
 import { parseScriptCommand, parseScriptView } from '../contracts/scripts'
 import { parseDataCommand, parseDataView } from '../contracts/data'
@@ -18,6 +18,7 @@ const bridge: PodsBridge = {
   async programs(command) {
     const request = parseProgramCommand(command)
     const response: unknown = await ipcRenderer.invoke(channels.programs, request)
+    if (request.type === 'prepare') return parseConsoleView(response)
     return ['add', 'grant', 'importState'].includes(request.type) ? parseResourceState(response) : parseTerminalView(response)
   },
   async language(command) { return parseLanguage(await ipcRenderer.invoke(channels.language, parseLanguageCommand(command))) },
