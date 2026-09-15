@@ -17,6 +17,7 @@ export class PromptModel {
   readonly requests: unknown[] = []
 
   reply(body: unknown): Response {
+    if (JSON.stringify(body).includes('previousDescription')) return recordedResponse({ type: 'message', id: 'description', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Writes a greeting file and preserves a run counter. The 15-minute schedule is prepared and remains disabled.' }), annotations: [] }] })
     this.requests.push(body)
     const index = this.calls++
     if (index) this.results.set(index - 1, result(body, `setup-${index - 1}`))

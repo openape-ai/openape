@@ -618,3 +618,13 @@ An approved script can explicitly include its readable secret in a prompt, log,
 checkpoint or file. Synthetic validation uses fake values and is not a proof of
 non-disclosure. Direct networking and process creation remain sandbox-restricted.
 See the credential chapter in both handbooks for the workflow and complete example.
+
+## Pod creation history and generated descriptions
+
+A creation conversation has its own persisted identity. Its first successful create action binds it atomically to one Pod, including the initial request, streamed responses and subsequent actions. The UI follows that Pod, and later model actions are confined to it. A new creation session starts a separate conversation. Chat presents the immutable initial request separately from the recent timeline.
+
+Overview's description is derived from completed owner/assistant exchanges by a separate, tool-free Codex app-server request. SQLite stores source boundaries, partial progress and the last successful description. Long histories and oversized messages are processed in ordered, bounded segments; interrupted updates can retry. Stale results cannot replace a newer requested description. Generation failures remain visible and preserve the last successful text. The description does not revise the execution assignment, invalidate scripts, grant access or enable schedules. Explicit assignment editing remains under Settings → More options → Execution assignment.
+
+Schema 15 preserves existing data and adds creation bindings, original-request provenance, description progress and summary process ownership. Older unlinked creation history has an explicit, fingerprint-checked recovery preview. Recovery verifies the stored create result and rejects mixed-Pod, changed or active history. A recovered original request retains its identity and timestamp. Do not hand-edit the profile database to migrate a conversation.
+
+Verification covers scoped creation/replay, preservation of the original request, stale summaries, long-message continuation, failure/retry, legacy adoption and actual packaged UI/App Server execution with recorded model responses. Real model quality and provider execution remain separately observable acceptance steps.
