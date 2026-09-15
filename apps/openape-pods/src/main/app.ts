@@ -215,7 +215,7 @@ async function start(): Promise<void> {
     const command = parseResourceCommand(value)
     if (command.type === 'assignHttp') {
       if (!window) throw new Error('Owner window is unavailable')
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Settings → Secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
     }
     if (command.type !== 'pickReference') return worker.resources(command)
