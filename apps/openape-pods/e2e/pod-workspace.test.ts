@@ -82,13 +82,13 @@ describe('pod-workspace concept B', () => {
     expect(await page.getByRole('button', { name: 'Run now', exact: true }).isDisabled()).toBe(true)
     await page.getByRole('button', { name: 'New pod', exact: false }).click(); await page.getByRole('heading', { name: 'New pod', exact: true }).waitFor()
   })
-  it('fits all six views at desktop, compact and narrow widths in light and dark appearance', async () => {
+  it('fits all seven views at desktop, compact and narrow widths in light and dark appearance', async () => {
     const { app, page } = await launch(); await mkdir(resolve('.artifacts'), { recursive: true })
     for (const [width, height] of [[1280, 800], [1060, 850], [760, 700], [560, 700], [560, 560]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size[0]!, size[1]!), [width!, height!])
       for (const theme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme: theme })
-        for (const tab of ['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History']) {
+        for (const tab of ['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History']) {
           await page.getByRole('tab', { name: tab, exact: true }).click()
           if (tab === 'Settings') await expect.poll(() => page.getByLabel('Pod name', { exact: true }).inputValue(), { timeout: 5000 }).toBe('Mail knowledge')
           if (tab === 'Knowledge') await page.getByText('Delivery is confirmed for Tuesday.', { exact: true }).waitFor()

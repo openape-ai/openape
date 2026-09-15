@@ -5,7 +5,7 @@ import PodSettings from '../../src/renderer/PodSettings.vue'
 
 it('keeps ordinary variable edits per pod and renders valid bracket references', async () => {
   const podId = crypto.randomUUID(); const resources = vi.fn().mockResolvedValue({ resources: [], variables: [{ name: 'mail-folder', value: 'Inbox', revision: 1 }], epoch: 0 })
-  window.pods = { resources } as unknown as typeof window.pods
+  window.pods = { resources, master: async () => ({ proposals: [] }), scripts: async () => ({ source: null }) } as unknown as typeof window.pods
   const options = { props: { podId }, global: { stubs: { PodResources: true } } }
   let wrapper = mount(PodValues, options); await flushPromises()
   expect(wrapper.get('code').text()).toBe('context.variables["mail-folder"]')
@@ -46,4 +46,28 @@ it('recovers a stale settings form only after explicit discard confirmation', as
   await button('Keep editing').trigger('click'); expect(wrapper.get('input').element.value).toBe('My edits')
   await button('Load saved settings').trigger('click'); await button('Discard and reload').trigger('click'); await flushPromises()
   expect(wrapper.get('input').element.value).toBe('Updated elsewhere'); expect(wrapper.find('[role="alert"]').exists()).toBe(false); wrapper.unmount()
+})
+
+it('marks empty variables and exposes required secrets without inventing their values', async () => {
+  const podId = crypto.randomUUID()
+  const resources = vi.fn().mockResolvedValue({ resources: [], variables: [{ name: 'destination', value: '', revision: 1 }], epoch: 0 })
+  window.pods = { resources, master: async () => ({ proposals: [] }), scripts: vi.fn().mockResolvedValue({ source: { capabilities: ['credential.notification_token'] } }) } as unknown as typeof window.pods
+  const wrapper = mount(PodValues, { props: { podId }, global: { stubs: { PodResources: true } } }); await flushPromises()
+  expect(wrapper.get('.value-row').text()).toContain('Not set')
+  expect(wrapper.getComponent({ name: 'PodResources' }).props('requiredAliases')).toEqual(['notification_token'])
+  expect(resources).toHaveBeenCalledTimes(1)
+  wrapper.unmount()
+})
+
+it('includes pending chat secrets and excludes declined proposals', async () => {
+  const podId = crypto.randomUUID()
+  const master = vi.fn().mockResolvedValue({ proposals: [
+    { podId, state: 'pending', body: { provider: 'credential', alias: 'chat_token' } },
+    { podId, state: 'declined', body: { provider: 'credential', alias: 'declined_token' } },
+  ] })
+  window.pods = { master, resources: async () => ({ variables: [] }), scripts: async () => ({ source: null }) } as unknown as typeof window.pods
+  const wrapper = mount(PodValues, { props: { podId }, global: { stubs: { PodResources: true } } }); await flushPromises()
+  expect(wrapper.getComponent({ name: 'PodResources' }).props('requiredAliases')).toEqual(['chat_token'])
+  expect(master).toHaveBeenCalledWith({ type: 'list', podId })
+  wrapper.unmount()
 })

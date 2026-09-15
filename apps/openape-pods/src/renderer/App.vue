@@ -11,6 +11,7 @@ import PodDescription from './PodDescription.vue'
 import { chatDraft } from './chat-buffer'
 import PodScript from './PodScript.vue'
 import PodSettings from './PodSettings.vue'
+import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
 import PodKnowledge from './PodKnowledge.vue'
@@ -21,9 +22,9 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, valuesOpen: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -46,7 +47,7 @@ export default defineComponent({
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
     t, diagnostic, label, dateTime, chatDraft,
-    async openValues() { this.valuesOpen = true; this.selected = 'Settings'; await this.$nextTick(); document.getElementById('pod-values')?.scrollIntoView({ block: 'start' }) },
+    openValues() { this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
     persistWidth() {
@@ -130,7 +131,7 @@ export default defineComponent({
         </p>
         <nav v-if="!globalPage" class="tabs" role="tablist" :aria-label="t('Pod sections')">
           <button v-for="(tab, index) in tabs" :id="`tab-${tab}`" ref="tabButtons" :key="tab" role="tab" :aria-selected="activeTab === tab" :aria-controls="`panel-${tab}`" :tabindex="activeTab === tab ? 0 : -1" @click="selectTab(tab)" @keydown="moveTab($event, index)">
-            {{ label(tab) }}
+            {{ tab === 'Values' ? t('Variables and secrets') : label(tab) }}
           </button>
         </nav>
         <section v-if="selected === 'App settings'" class="card">
@@ -147,15 +148,18 @@ export default defineComponent({
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="card master-panel">
-          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); await openValues() }" /><details v-if="creating">
+          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); openValues() }" /><details v-if="creating">
             <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
           </details>
         </section>
         <section v-else-if="selected === 'Script'" id="panel-Script" role="tabpanel" aria-labelledby="tab-Script">
           <PodScript v-if="pod" :key="podId" :pod="pod" @changed="refresh" @values="openValues" @ran="selected = 'History'; refresh()" />
         </section>
+        <section v-else-if="selected === 'Values'" id="panel-Values" role="tabpanel" aria-labelledby="tab-Values">
+          <PodValues v-if="pod" :key="podId" :pod-id="podId" />
+        </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
-          <PodSettings :key="podId" :selected-pod-id="podId" :show-values="valuesOpen" @selected="changed" />
+          <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" />
         </section>
         <section v-else-if="selected === 'Permissions'" id="panel-Permissions" role="tabpanel" aria-labelledby="tab-Permissions">
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />

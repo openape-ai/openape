@@ -1,17 +1,16 @@
 <script lang="ts">
 import { t, diagnostic, label } from './i18n'
 import { settingsDrafts } from './form-buffer'
-import PodValues from './PodValues.vue'
 import PodSchedule from './PodSchedule.vue'
 import { defineComponent } from 'vue'
 import type { Organization } from '../contracts/groups'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
-  components: { PodSchedule, PodValues },
-  props: { showValues: Boolean, selectedPodId: { type: String, default: '' } },
+  components: { PodSchedule },
+  props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected'],
-  data() { return { confirmReload: false, initialized: false, valuesExpanded: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
+  data() { return { confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
   watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
@@ -23,7 +22,6 @@ export default defineComponent({
   beforeUnmount() { this.remember() },
   methods: {
     t, diagnostic, label,
-    scrollValues() { if (this.showValues) document.getElementById('pod-values')?.scrollIntoView?.({ block: 'start' }) },
     async reloadSaved() {
       const id = this.selectedId
       this.error = ''; await this.reload(); if (this.error) return
@@ -133,9 +131,6 @@ export default defineComponent({
       </option>
     </select>
   </article>
-  <details v-if="selectedPod" :open="showValues" class="values-settings" @toggle="valuesExpanded = ($event.target as HTMLDetailsElement).open">
-    <summary>{{ t('Variables and secrets') }}</summary><PodValues v-if="showValues || valuesExpanded" :key="selectedPod.id" :pod-id="selectedPod.id" @vue:mounted="scrollValues" />
-  </details>
   <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <details v-if="selectedPod" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>

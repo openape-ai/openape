@@ -30,7 +30,7 @@ it('credentials: packaged owner flow protects exact source, persists encrypted v
   let app = await launch()
   try {
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByText('Variables and secrets', { exact: true }).click()
+    await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     await mkdir(resolve('.artifacts'), { recursive: true })
     await page.locator('.credential-form').screenshot({ path: resolve('.artifacts/handbook-credentials-en.png') })
     console.info('Credential flow: rendered resources, saving synthetic encrypted value')
@@ -87,12 +87,12 @@ export async function run(context) {
     const result = await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)
     await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs[0]?.state).toBe('completed')
     expect(result.runs.length).toBeGreaterThan(0)
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByText('Variables and secrets', { exact: true }).click()
+    await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     const rotated = await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'ROTATED_SYNTHETIC_VALUE', epoch }), { podId: pod.id, epoch: resources.epoch })
     const current = rotated.resources.find(item => item.state === 'ready')!
     expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.credentialAccessApproved).toBe(false)
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
-    await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('tab', { name: 'Settings', exact: true }).click(); await page.getByText('Variables and secrets', { exact: true }).click()
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     await page.locator('.resource-row').last().getByRole('button', { name: 'Revoke access' }).click()
     await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)).resources.find(item => item.id === current.id)?.state).toBe('revoked')
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)

@@ -1221,7 +1221,7 @@
   "Invalid terminal cursor": "Ungültige Terminal-Leseposition",
   "Invalid terminal session": "Ungültige Terminal-Sitzung",
   "No commands allowed yet.": "Noch keine Befehle freigegeben.",
-  "Node.js scripts can request these HTTPS destinations. Store API tokens under Settings → Secrets.": "Node.js-Skripte dürfen diese HTTPS-Ziele aufrufen. API-Token hinterlegst du unter Einstellungen → Geheimnisse.",
+  "Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.": "Node.js-Skripte dürfen diese HTTPS-Ziele aufrufen. API-Token hinterlegst du unter Variablen und Geheimnisse.",
   "Only granted read operations are available to scripts; use the owner terminal for setup": "Skripten stehen nur freigegebene Leseoperationen zur Verfügung; nutze zur Einrichtung das Eigentümer-Terminal",
   "Only this assigned program receives the copy. The original file stays unchanged. This does not verify sign-in or enable scheduled runs.": "Nur dieses zugewiesene Programm erhält die Kopie. Die Originaldatei bleibt unverändert. Damit wird weder die Anmeldung geprüft noch die Automatik aktiviert.",
   "Open pod permissions": "Pod-Berechtigungen öffnen",
@@ -1256,7 +1256,7 @@
   "Permission: {permission}\n\nThis permission is assigned to this pod’s OpenApe agent. The pod stays paused.": "Berechtigung: {permission}\n\nDiese Berechtigung wird dem OpenApe-Agenten dieses Pods zugewiesen. Der Pod bleibt pausiert.",
   "o365-cli": "o365-cli",
   "https://api.example.com": "https://api.example.com",
-  "Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Settings → Secrets. The pod stays paused.": "Erlaubte Methoden: {methods}\n\nSkripte mit dieser Berechtigung können Daten an dieses Ziel senden. Tokenwerte bleiben unter Einstellungen → Geheimnisse. Der Pod bleibt pausiert.",
+  "Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.": "Erlaubte Methoden: {methods}\n\nSkripte mit dieser Berechtigung können Daten an dieses Ziel senden. Tokenwerte bleiben unter Variablen und Geheimnisse. Der Pod bleibt pausiert.",
   "Record your HTTP delivery observation before resolving it": "Halte vor dem Auflösen fest, was du zur HTTP-Zustellung festgestellt hast",
   "Invalid HTTP delivery review": "Ungültige Prüfung der HTTP-Zustellung",
   "HTTP delivery is not awaiting owner review": "HTTP-Zustellung wartet nicht auf die Prüfung durch den Eigentümer",
@@ -1351,5 +1351,9 @@
   "Script binding changed during example installation": "Skriptbindung während der Beispielinstallation geändert",
   "Script needs validation for the current script and resources": "Skript muss für die aktuellen Ressourcen geprüft werden",
   "Stale script binding": "Veraltete Skriptbindung",
-  "Validate this version for the current script and permissions": "Prüfe diese Skriptversion für die aktuellen Berechtigungen"
+  "Validate this version for the current script and permissions": "Prüfe diese Skriptversion für die aktuellen Berechtigungen",
+  "Not set": "Nicht hinterlegt",
+  "Requested secret · Not set": "Angefragtes Geheimnis · Nicht hinterlegt",
+  "Set secret": "Geheimnis hinterlegen",
+  "Replace secret": "Geheimnis ersetzen"
 }
