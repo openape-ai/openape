@@ -14,3 +14,11 @@ it('retains the last successful description with a visible retry after a model f
   await wrapper.get('button.text-button').trigger('click'); expect(wrapper.emitted('change')).toHaveLength(1)
   wrapper.unmount()
 })
+
+it('allows a ready description to be refreshed without sending a chat message', async () => {
+  const podId = crypto.randomUUID(); const master = vi.fn().mockResolvedValue({ description: { text: 'Existing summary', state: 'ready', error: null, revision: 1, updatedAt: 1 } })
+  window.pods = { master } as unknown as typeof window.pods
+  const wrapper = mount(PodDescription, { props: { podId, assignment: 'Keep' } }); await flushPromises()
+  try { await wrapper.findAll('button').find(button => button.text() === 'Refresh description')!.trigger('click'); expect(master).toHaveBeenLastCalledWith({ type: 'summarize', podId }) }
+  finally { wrapper.unmount() }
+})

@@ -17,12 +17,13 @@ export class PodDescriptions {
     return row ? { text: row.body as string, state: row.state as PodDescription['state'], error: row.error as string | null, revision: row.revision as number, updatedAt: row.updated_at as number | null } : null
   }
 
-  request(podId: string): void {
+  request(podId: string, refresh = false): void {
     this.store.getPod(podId)
     const row = this.store.db.prepare('SELECT MAX(m.rowid) AS latest FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\')').get(podId)
     if (!row?.latest) return
-    const current = this.store.db.prepare('SELECT covered_row FROM pod_descriptions WHERE pod_id=?').get(podId)
-    if (current && Number(current.covered_row) >= Number(row.latest)) return
+    const current = this.store.db.prepare('SELECT covered_row,state FROM pod_descriptions WHERE pod_id=?').get(podId)
+    if (refresh && current?.state === 'ready') this.store.db.prepare('UPDATE pod_descriptions SET covered_row=0,work_row=0,work_offset=0,work_body=\'\' WHERE pod_id=?').run(podId)
+    else if (current && Number(current.covered_row) >= Number(row.latest)) return
     this.store.db.prepare('INSERT INTO pod_descriptions(pod_id,requested_row) VALUES(?,?) ON CONFLICT(pod_id) DO UPDATE SET requested_row=excluded.requested_row,state=CASE WHEN state=\'running\' THEN state ELSE \'pending\' END,error=NULL').run(podId, row.latest)
   }
 
