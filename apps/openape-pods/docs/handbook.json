@@ -57,11 +57,14 @@
       "id": "overview",
       "title": "Overview",
       "paragraphs": [
-        "Overview shows the description, the latest execution and its result. Expand Edit description to change the task. Saving pauses automatic execution and advances the assignment revision.",
-        "Run now starts the active, reviewed script. Prepare a new or changed script in Script first. An active run, unavailable execution slot, changed script or pending recovery prevents an immediate reviewed run.",
-        "View run trace opens History. Results and sources opens the retained knowledge view within Overview, including findings, questions, gaps and exact citations."
+        "Description summarizes the current agreed requirements from the pod conversation. It refreshes after completed exchanges. Later corrections supersede older wishes; the Start request remains unchanged in Chat. Use Change in chat to describe a change.",
+        "The description is informational. Its wording does not approve access, activate a script, change an execution assignment or enable automation. Updating and Not updated indicate pending or failed generation; Retry description keeps the last successful text until a new result is available. Pods without chat history retain their existing assignment description."
       ],
-      "steps": [],
+      "steps": [
+        "Open a pod and read Description.",
+        "Use Change in chat for a correction. The Start request remains available in Chat.",
+        "Inspect the last run and use Run now when the script is ready."
+      ],
       "image": "handbook-overview.png"
     },
     {
@@ -77,7 +80,8 @@
         "Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. The assistant cannot retrieve its stored value or approve script access to credentials. Review the exact script before granting that access in Settings.",
         "Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Settings.",
         "Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.",
-        "The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant."
+        "The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant.",
+        "The original creation message stays with the new pod as a Start request card. Replies and later corrections appear below it. The app follows the created pod automatically, and its conversation remains available after restarting. An older unlinked creation chat can be recovered after reviewing the proposed original requests."
       ],
       "steps": [],
       "image": "handbook-chat.png"
@@ -126,7 +130,7 @@
       "id": "settings",
       "title": "Settings and assignments",
       "paragraphs": [
-        "Settings contains the pod name, group, automation and interval, Variables and secrets, and additional lifecycle options. Edit the description from Overview. Saving the name or description pauses automatic execution; revalidate the script for the changed assignment.",
+        "Settings contains the pod name, group, automation and interval, Variables and secrets, and More options. The generated description is updated through Chat. More options → Execution assignment changes the execution contract explicitly; revalidate the script after changing that assignment.",
         "Ordinary variables are named strings stored in SQLite for this pod. Use context.variables[\"name\"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.",
         "Expand More options to archive the pod or delete an archived pod through a separate native confirmation. Deletion removes its variables and pod chat as well as local data. Workspace chat, shared accounts and original reference files remain."
       ],

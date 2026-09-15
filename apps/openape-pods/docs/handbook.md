@@ -50,11 +50,13 @@ Grouping does not share resources or permissions, change an assignment, invalida
 
 ## Overview
 
-Overview shows the description, the latest execution and its result. Expand Edit description to change the task. Saving pauses automatic execution and advances the assignment revision.
+Description summarizes the current agreed requirements from the pod conversation. It refreshes after completed exchanges. Later corrections supersede older wishes; the Start request remains unchanged in Chat. Use Change in chat to describe a change.
 
-Run now starts the active, reviewed script. Prepare a new or changed script in Script first. An active run, unavailable execution slot, changed script or pending recovery prevents an immediate reviewed run.
+The description is informational. Its wording does not approve access, activate a script, change an execution assignment or enable automation. Updating and Not updated indicate pending or failed generation; Retry description keeps the last successful text until a new result is available. Pods without chat history retain their existing assignment description.
 
-View run trace opens History. Results and sources opens the retained knowledge view within Overview, including findings, questions, gaps and exact citations.
+1. Open a pod and read Description.
+2. Use Change in chat for a correction. The Start request remains available in Chat.
+3. Inspect the last run and use Run now when the script is ready.
 
 ![Overview](images/handbook-overview.png)
 
@@ -79,6 +81,8 @@ Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Ch
 Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.
 
 The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant.
+
+The original creation message stays with the new pod as a Start request card. Replies and later corrections appear below it. The app follows the created pod automatically, and its conversation remains available after restarting. An older unlinked creation chat can be recovered after reviewing the proposed original requests.
 
 ![Chat and pod creation](images/handbook-chat.png)
 
@@ -123,7 +127,7 @@ The current execution boundary supports foreground native CLIs. Forking, graphic
 
 ## Settings and assignments
 
-Settings contains the pod name, group, automation and interval, Variables and secrets, and additional lifecycle options. Edit the description from Overview. Saving the name or description pauses automatic execution; revalidate the script for the changed assignment.
+Settings contains the pod name, group, automation and interval, Variables and secrets, and More options. The generated description is updated through Chat. More options → Execution assignment changes the execution contract explicitly; revalidate the script after changing that assignment.
 
 Ordinary variables are named strings stored in SQLite for this pod. Use context.variables["name"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.
 

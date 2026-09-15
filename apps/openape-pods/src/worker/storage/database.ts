@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 14
+export const schemaVersion = 15
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -226,6 +226,15 @@ PRAGMA user_version=13;`)
       }
       if (version < 14) {
         this.db.exec(`CREATE TABLE program_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,session_id TEXT NOT NULL UNIQUE,application_id TEXT NOT NULL,epoch INTEGER NOT NULL,assignment_revision INTEGER NOT NULL); PRAGMA user_version=14;`)
+      }
+
+      if (version < 15) {
+        this.db.exec(`
+CREATE TABLE master_creations(id TEXT PRIMARY KEY,pod_id TEXT UNIQUE REFERENCES pods(id) ON DELETE CASCADE);
+CREATE TABLE pod_chat_origins(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,message_id TEXT NOT NULL REFERENCES master_messages(id) ON DELETE CASCADE);
+CREATE TABLE pod_descriptions(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,body TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 0,covered_row INTEGER NOT NULL DEFAULT 0,requested_row INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'pending',error TEXT,updated_at INTEGER,work_body TEXT NOT NULL DEFAULT '',work_row INTEGER NOT NULL DEFAULT 0,work_offset INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE summary_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
+PRAGMA user_version=15;`)
       }
 
     })

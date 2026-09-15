@@ -10,6 +10,7 @@ import type { FileRecord } from './files'
 interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 export function assertDataIdle(store: PodDatabase): void {
+  if (store.db.prepare('SELECT 1 FROM pod_descriptions WHERE state=\'running\'').get()) throw new Error('Wait for the description update before changing stored data')
   if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
 }
 function allowed(path: string): boolean {
@@ -117,6 +118,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         const directory = join(stage, 'snapshots', row.pod_id as string, row.id as string); await mkdir(directory, { recursive: true, mode: 0o700 })
         await rm(join(directory, 'manifest.json'), { force: true }); await durableJSON(join(directory, 'manifest.json'), snapshot, 0o400)
       }
+      if (manifest.schema >= 15) database.exec('DELETE FROM summary_domains; UPDATE pod_descriptions SET state=\'failed\',error=\'Restored description update; reconnect and retry.\' WHERE state IN (\'pending\',\'running\');')
       if (manifest.schema >= 13) database.exec('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\';')
       if (manifest.schema >= 12) database.exec('DELETE FROM script_credential_approvals;')
       if (manifest.schema >= 10) database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
