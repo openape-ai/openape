@@ -113,7 +113,7 @@ describe('foundation', () => {
     const reopened = await next.firstWindow()
     await expect.poll(async () => (await reopened.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await reopened.getByRole('tab', { name: 'Overview', exact: true }).click(); await reopened.getByText('Edit description', { exact: true }).click()
+    await reopened.getByRole('tab', { name: 'Settings', exact: true }).click(); await reopened.getByText('More options', { exact: true }).click(); await reopened.getByText('Execution assignment', { exact: true }).click()
     expect(await reopened.getByLabel('Assignment', { exact: true }).inputValue()).toBe('Read synthetic order evidence only.')
     expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
   })

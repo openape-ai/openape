@@ -11,8 +11,12 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-master-ui-')))
   let calls = 0
   const server = createServer((request, response) => {
-    request.resume()
     const respond = async () => {
+      let body = ''; for await (const chunk of request) body += String(chunk)
+      if (body.includes('previousDescription')) {
+        const reply = recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Maintains sourced mail knowledge; access remains pending.' }), annotations: [] }] })
+        response.setHeader('Content-Type', 'text/event-stream'); response.end(await reply.text()); return
+      }
       const index = ++calls; const store = new PodDatabase(root)
       const pod = store.listPods()[0]; const draft = store.db.prepare('SELECT id,revision FROM script_drafts LIMIT 1').get(); store.close()
       const scope = { podId: pod?.id, revision: pod?.revision }

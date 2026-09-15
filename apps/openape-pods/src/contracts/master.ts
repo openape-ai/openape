@@ -1,3 +1,4 @@
+import type { AdoptionPreview, PodDescription  } from './description'
 import { parseCredentialAlias, parseScriptCapabilities } from './credentials'
 import { parseVariable } from './resources'
 import { groupName } from './groups'
@@ -7,13 +8,16 @@ import type { ScheduleSpec } from './scheduling'
 export interface MasterMessage { id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string, at: number }
 export interface MasterDraft { id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
 export interface AccessProposal { id: string, podId: string, body: Record<string, unknown>, state: 'pending' | 'declined' | 'approved' }
-export interface MasterView { connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
-export type MasterCommand = { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }
+export interface MasterView { adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
+export type MasterCommand = ({ type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string }
 export function parseMasterCommand(value: unknown): MasterCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master request')
   const item = value as Record<string, unknown>
-  const fields = item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId'] : []
-  if (!fields.length || Object.keys(item).some(key => !fields.includes(key))) throw new Error('Unsupported master request')
+  const fields = item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId'] : []
+  if (!fields.length || Object.keys(item).some(key => !fields.includes(key) && key !== 'creationId')) throw new Error('Unsupported master request')
+  if (['summarize', 'adopt'].includes(item.type as string) && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid description pod')
+  if (item.type === 'adopt' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))) throw new Error('Invalid history review hash')
+  if (item.creationId !== undefined && (typeof item.creationId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.creationId) || item.podId)) throw new Error('Invalid creation conversation')
   if (item.podId !== undefined && item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid chat pod context')
   if (fields.includes('id') && (typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id))) throw new Error('Invalid master request identity')
   if (fields.includes('text') && (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 20000 || (item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))))) throw new Error('Invalid master input')
@@ -23,6 +27,11 @@ export function parseMasterView(value: unknown): MasterView {
   if (!value || typeof value !== 'object') throw new Error('Invalid master state')
   const view = value as MasterView
   if (typeof view.connected !== 'boolean' || !['idle', 'running', 'interrupted', 'failed'].includes(view.state) || (view.error !== null && typeof view.error !== 'string') || !Array.isArray(view.messages) || view.messages.length > 100 || !Array.isArray(view.drafts) || view.drafts.length > 20 || !Array.isArray(view.proposals) || view.proposals.length > 100) throw new Error('Invalid master state fields')
+  if (view.creationId !== undefined && !/^[a-f0-9-]{36}$/.test(view.creationId)) throw new Error('Invalid creation view')
+  if (view.boundPodId !== undefined && view.boundPodId !== null && !/^[a-f0-9-]{36}$/.test(view.boundPodId)) throw new Error('Invalid bound pod')
+  if (view.initialRequest && (view.initialRequest.role !== 'user' || typeof view.initialRequest.text !== 'string' || !Number.isSafeInteger(view.initialRequest.at))) throw new Error('Invalid initial request')
+  if (view.description && (typeof view.description.text !== 'string' || view.description.text.length > 4000 || !['pending', 'running', 'ready', 'failed'].includes(view.description.state) || !Number.isSafeInteger(view.description.revision))) throw new Error('Invalid description view')
+  if (view.adoption && (!/^[a-f0-9]{64}$/.test(view.adoption.hash) || !Array.isArray(view.adoption.requests) || view.adoption.requests.some(request => typeof request.id !== 'string' || typeof request.text !== 'string'))) throw new Error('Invalid history recovery view')
   for (const message of view.messages) {
     if (!message || typeof message.id !== 'string' || typeof message.text !== 'string' || !['user', 'assistant', 'tool'].includes(message.role) || typeof message.state !== 'string' || !Number.isSafeInteger(message.at)) throw new Error('Invalid master message')
   }

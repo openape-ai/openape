@@ -52,3 +52,14 @@ it('routes named-secret proposals to Settings without displaying an input for se
   expect(wrapper.text()).toContain('Name des Geheimnisses'); expect(wrapper.text()).toContain('Einstellungen öffnen')
   applyLanguage('en'); wrapper.unmount()
 })
+
+it('shows the immutable start request separately even outside the recent message window', async () => {
+  const initialRequest = { id: 'initial', role: 'user' as const, text: 'Check every 15 minutes', state: 'sent', at: 1 }
+  window.pods = { master: vi.fn().mockResolvedValue({ ...empty, initialRequest, messages: [{ ...initialRequest, id: 'later', text: 'Use 30 minutes instead' }] }) } as unknown as typeof window.pods
+  const wrapper = mount(MasterChat, { props: { podId: crypto.randomUUID() } }); await flushPromises()
+  expect(wrapper.get('.start-request').text()).toContain('Check every 15 minutes')
+  expect(wrapper.get('.master-history').text()).toContain('Use 30 minutes instead')
+  expect(wrapper.get('.master-history').text()).not.toContain('Check every 15 minutes')
+  applyLanguage('de'); await flushPromises(); expect(wrapper.get('.start-request').text()).toContain('Startauftrag')
+  applyLanguage('en'); wrapper.unmount()
+})

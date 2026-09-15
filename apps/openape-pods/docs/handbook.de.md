@@ -50,11 +50,13 @@ Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, ma
 
 ## Übersicht
 
-Die Übersicht zeigt die Beschreibung, die letzte Ausführung und ihr Ergebnis. Über Beschreibung bearbeiten ändern Sie die Aufgabe. Speichern pausiert die Automatik und erhöht die Aufgabenrevision.
+Die Beschreibung fasst die aktuell vereinbarten Anforderungen aus dem Pod-Chat zusammen. Sie wird nach abgeschlossenen Anfragen aktualisiert. Spätere Korrekturen ersetzen frühere Wünsche; der Startauftrag im Chat bleibt unverändert. Mit Im Chat ändern beschreibst du eine Änderung.
 
-Jetzt ausführen startet das aktive, geprüfte Skript. Neue oder geänderte Skripte bereiten Sie zuerst unter Skript vor. Ein laufender Durchlauf, ein belegter Ausführungsplatz, ein geändertes Skript oder ausstehende Wiederherstellung verhindern den unmittelbaren Start.
+Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, aktiviert kein Skript und ändert weder Ausführungsauftrag noch Automatik. Wird aktualisiert und Nicht aktualisiert zeigen ausstehende oder fehlgeschlagene Generierung an. Beschreibung erneut erstellen behält den letzten erfolgreichen Text, bis ein neues Ergebnis vorliegt. Pods ohne Chatverlauf behalten ihre bisherige Auftragsbeschreibung.
 
-Laufprotokoll ansehen öffnet die Historie. Ergebnisse und Quellen öffnet die gespeicherten Erkenntnisse innerhalb der Übersicht, einschließlich Fragen, Lücken und genauer Belege.
+1. Öffne einen Pod und lies die Beschreibung.
+2. Verwende Im Chat ändern für eine Korrektur. Der Startauftrag bleibt im Chat verfügbar.
+3. Prüfe die letzte Ausführung und verwende Jetzt ausführen, wenn das Skript bereit ist.
 
 ![Übersicht](images/handbook-overview-de.png)
 
@@ -79,6 +81,8 @@ Beispiel-Prompt: „Erstelle einen Mail-Benachrichtigungs-Pod für phofmann@delt
 Die synthetische Validierung prüft einen Anfangspfad mit leerem Checkpoint, ohne Referenzsnapshots und mit simulierten Diensten. Sie beweist keine echte Anmeldung, keine Antwortformate eines Anbieters, keine späteren Verzweigungen und keine tatsächliche Zustellung. Der automatisierte Ein-Prompt-Test nutzt den echten verpackten Chat und Codex-Prozess mit einem aufgezeichneten Modell. Die Qualität echter Modellgenerierung und Live-Integrationen benötigen eine getrennte Abnahme.
 
 Der Assistent kann das aktuell gespeicherte Skript lesen, einschließlich eines neueren gespeicherten Entwurfs aus dem Editor. Speichere manuelle Änderungen, bevor du den Chat um eine Überarbeitung bittest; ungespeicherter Editor-Text ist für den Assistenten nicht verfügbar.
+
+Die ursprüngliche Erstellungsnachricht bleibt als Startauftrag beim neuen Pod. Antworten und spätere Korrekturen stehen darunter. Die App öffnet den erstellten Pod automatisch; der Verlauf bleibt nach einem Neustart erhalten. Ein älterer, noch nicht zugeordneter Erstellungs-Chat lässt sich nach Prüfung der vorgeschlagenen ursprünglichen Aufträge wiederherstellen.
 
 ![Chat und Pod-Erstellung](images/handbook-chat-de.png)
 
@@ -123,7 +127,7 @@ Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking
 
 ## Einstellungen und Aufgaben
 
-Die Einstellungen enthalten Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie zusätzliche Optionen zum Lebenszyklus. Die Beschreibung bearbeiten Sie in der Übersicht. Änderungen am Namen oder an der Beschreibung pausieren die Automatik; prüfen Sie danach das Skript erneut.
+Einstellungen enthält Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie Weitere Optionen. Die erstellte Beschreibung wird über den Chat aktualisiert. Weitere Optionen → Ausführungsauftrag ändert den Auftrag für die Ausführung ausdrücklich; prüfe das Skript danach erneut.
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
