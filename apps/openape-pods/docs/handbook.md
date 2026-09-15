@@ -78,6 +78,8 @@ Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Ch
 
 Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.
 
+The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant.
+
 ![Chat and pod creation](images/handbook-chat.png)
 
 ## Inspect and edit your script

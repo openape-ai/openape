@@ -78,6 +78,8 @@ Beispiel-Prompt: „Erstelle einen Mail-Benachrichtigungs-Pod für phofmann@delt
 
 Die synthetische Validierung prüft einen Anfangspfad mit leerem Checkpoint, ohne Referenzsnapshots und mit simulierten Diensten. Sie beweist keine echte Anmeldung, keine Antwortformate eines Anbieters, keine späteren Verzweigungen und keine tatsächliche Zustellung. Der automatisierte Ein-Prompt-Test nutzt den echten verpackten Chat und Codex-Prozess mit einem aufgezeichneten Modell. Die Qualität echter Modellgenerierung und Live-Integrationen benötigen eine getrennte Abnahme.
 
+Der Assistent kann das aktuell gespeicherte Skript lesen, einschließlich eines neueren gespeicherten Entwurfs aus dem Editor. Speichere manuelle Änderungen, bevor du den Chat um eine Überarbeitung bittest; ungespeicherter Editor-Text ist für den Assistenten nicht verfügbar.
+
 ![Chat und Pod-Erstellung](images/handbook-chat-de.png)
 
 ## Dein Skript ansehen und bearbeiten

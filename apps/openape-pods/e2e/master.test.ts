@@ -7,6 +7,7 @@ import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
 import { Scheduler } from '../src/worker/scheduling/scheduler'
+import { ScriptWorkspace } from '../src/worker/workspace/scripts'
 import { MasterControl } from '../src/worker/master/control'
 import { MasterService } from '../src/worker/master/service'
 import type { AgentRuntime } from '../src/worker/agent/executor'
@@ -176,12 +177,14 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
 })
 
 it('executes the model-facing runtime example and preserves files and progress across runs', async () => {
-  const { control } = await setup(); const signal = new AbortController().signal
+  const { control, registry } = await setup(); const signal = new AbortController().signal
   const reference = await control.execute('reference', { action: 'runtime' }, signal) as { example: string }
   const pod = store.createPod({ name: 'Runtime reference', assignment: 'Write a greeting and count runs' }); const scope = { podId: pod.id, revision: 1 }
   await control.execute('variable', { action: 'setVariable', ...scope, name: 'greeting', value: 'Documented runtime works', variableRevision: 0 }, signal)
   const draft = await control.execute('draft', { action: 'draft', ...scope, draftId: null, draftRevision: 0, code: reference.example, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
   const draftScope = { ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision }
+  const inspected = await control.execute('inspect-draft', { action: 'inspect', ...scope }, signal) as { script?: { code: string, kind: string } }
+  expect(inspected.script).toMatchObject({ kind: 'draft', code: reference.example })
   await control.execute('validate', { action: 'validate', ...draftScope }, signal)
   await control.execute('activate', { action: 'activate', ...draftScope }, signal)
   for (let count = 1; count <= 2; count++) {
@@ -190,4 +193,12 @@ it('executes the model-facing runtime example and preserves files and progress a
     await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
     expect(dispatcher.view(pod.id).runs[0]?.summary).toBe(`Documented runtime works (${count})`)
   }
+  const activeHash = store.getPod(pod.id).activeScript
+  const active = await control.execute('inspect-active', { action: 'inspect', ...scope }, signal) as { script: { kind: string, code: string } }
+  expect(active.script.kind).toBe('version'); expect(active.script.code).toContain(reference.example)
+  const editedCode = reference.example.replace('Hello', 'Saved owner edit')
+  await new ScriptWorkspace(store, registry, control).execute({ type: 'save', ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision, code: editedCode, capabilities: [] }, signal)
+  const edited = await control.execute('inspect-owner-edit', { action: 'inspect', ...scope }, signal, pod.id) as { script: unknown }
+  expect(edited.script).toMatchObject({ kind: 'draft', id: draft.draftId, revision: 2, code: editedCode })
+  expect(store.getPod(pod.id).activeScript).toBe(activeHash)
 })
