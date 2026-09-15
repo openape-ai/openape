@@ -94,7 +94,7 @@ The highlighted JavaScript editor supports line numbers, horizontal scrolling, t
 
 Unsaved script, ordinary variable, settings and chat text survive navigation within this app session. Save before quitting. Reload script asks before discarding changed text. If a concurrent change causes a conflict, reload the current source or explicitly save your edits as the current script.
 
-Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their dedicated tab. Required access declares the capabilities the script needs; a declaration does not assign or approve access.
+Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their dedicated tab. Manage script secrets in Variables and secrets, and script applications in Permissions. Selecting a capability does not grant resource access.
 
 1. Edit the source and choose Save script to persist it without running.
 2. Choose Run or Save and run. The app saves and validates changed source in the existing sandbox with synthetic services. A failed check preserves the source and leaves the previously active script intact.
@@ -113,7 +113,7 @@ Each pod owns its script versions, workspace, persistent checkpoint and credenti
 
 Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
-await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, execution binding, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
+await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm under Secrets used by the script in Variables and secrets, then save script access. The runtime verifies the current run lease, exact script version, execution binding, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
 
 A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.
 
@@ -122,7 +122,7 @@ Saving or replacing a credential pauses the pod and invalidates prior validation
 The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, exact-version approval and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
 
 1. Open Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
-2. Open Script, expand Required access and select the required aliases. Use await context.credentials.get("alias") in the source.
+2. In Variables and secrets, select the aliases under Secrets used by the script and save script access. Save unfinished code edits in Script first. Use await context.credentials.get("alias") in the source.
 3. Choose Save and run. After synthetic validation, review the source and confirm Review credential access in the native dialog.
 4. History shows the run. Source or resource changes require renewed validation and secret approval.
 
@@ -166,7 +166,7 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
 
-Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Enter program arguments, choose Allow command, review the exact permission, then Open terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
+Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Choose Open terminal beside the application name. Enter program arguments, choose Allow command, review the exact permission, then Start in terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
 
 Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
 
@@ -218,7 +218,7 @@ A pod script is a JavaScript ES module exporting async run(context). Await every
 
 context.input contains the frozen run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
 
-context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh context. context.tools.invoke({ applicationId, argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Codex receives ape_shell for assigned reads, but no credential or HTTP tool. Existing context.mail scripts retain their legacy read contract.
+context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh context. context.tools.invoke({ application: "o365-cli", argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Codex receives ape_shell for assigned reads, but no credential or HTTP tool. Existing context.mail scripts retain their legacy read contract.
 
 The following example adds a checkpoint flag and returns a visible summary. It uses no mail or model service. Keep input completion IDs limited to work the script actually completed.
 
@@ -255,7 +255,7 @@ Connections & setup has two global connections: ChatGPT/Codex for AI execution a
 
 For the mail notification recipe, add o365-cli in Permissions. Allow and run pods login --account you@example.com in its terminal, or import your existing token.json as application state. Then allow pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
 
-Under Variables and secrets, save mail_account, o365_application_id and telegram_chat_id as variables, and telegram_bot_token as a secret. The application ID is the assigned resource ID available to the pod chat. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
+Under Variables and secrets, save mail_account and telegram_chat_id as variables, and telegram_bot_token as a secret. The script resolves the assigned application by name; no internal ID variable is required. The account remains explicit because the bundled CLI and grant require its scope. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
 
 Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
@@ -268,8 +268,8 @@ const fingerprint = value => createHash('sha256').update(value).digest('hex')
 const maximumMessages = 1000
 
 export async function run(context) {
-  const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Variables and secrets')
+  const { mail_account: account, telegram_chat_id: chatId, language = 'de' } = context.variables
+  if (!account || !chatId) throw new Error('Set mail_account and telegram_chat_id in Variables and secrets')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
@@ -295,7 +295,7 @@ export async function run(context) {
   let cursor
   for (let page = 0; page < 20; page++) {
     const argv = ['pods', 'read', '--account', account, '--folder', 'inbox', '--operation', 'messages', '--since', since, ...(cursor ? ['--cursor', cursor] : [])]
-    const reply = await context.tools.invoke({ applicationId, argv })
+    const reply = await context.tools.invoke({ application: 'o365-cli', argv })
     if (reply.exitCode !== 0) throw new Error('Mail read failed; inspect the assigned application in Permissions')
     const result = JSON.parse(reply.stdout)
     if (result.account !== account || result.operation !== 'messages' || !Array.isArray(result.items)) throw new Error('Mail reply does not match the configured account and operation')

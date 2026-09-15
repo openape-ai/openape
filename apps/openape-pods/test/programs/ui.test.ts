@@ -9,10 +9,11 @@ const state: ResourceState = { epoch: 2, resources: [{ id, podId, kind: 'tool', 
 it('keeps program setup inside permissions, parses arguments and exposes a usable script reference', async () => {
   const programs = vi.fn().mockResolvedValue(state)
   window.pods = { ...window.pods, programs }
-  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodTerminal: true } } })
+  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodTerminal: true, ScriptAccess: true } } })
   expect(wrapper.text()).toContain('Authentication is managed by the program itself.')
   expect(wrapper.text()).not.toContain('Signed in')
-  expect(wrapper.get('code').text()).toContain(`applicationId: '${id}'`)
+  expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
+  await wrapper.findAll('button').find(button => button.text() === 'Open terminal')!.trigger('click')
   await wrapper.get(`input[aria-label="Arguments for Synthetic CLI"]`).setValue('read --folder "Sent Items"')
   const buttons = () => wrapper.findAll('button')
   await buttons().find(button => button.text() === 'Allow command')!.trigger('click'); await flushPromises()
@@ -20,7 +21,7 @@ it('keeps program setup inside permissions, parses arguments and exposes a usabl
   await buttons().find(button => button.text() === 'Import existing setup')!.trigger('click'); await flushPromises()
   expect(programs).toHaveBeenLastCalledWith({ type: 'importState', podId, applicationId: id, epoch: 2 })
   await wrapper.get(`input[aria-label="Arguments for Synthetic CLI"]`).setValue('read; send')
-  await buttons().find(button => button.text() === 'Open terminal')!.trigger('click'); await flushPromises()
+  await buttons().find(button => button.text() === 'Start in terminal')!.trigger('click'); await flushPromises()
   expect(wrapper.get('[role="alert"]').text()).toContain('without shell operators')
   expect(programs).toHaveBeenCalledTimes(2)
   wrapper.unmount()

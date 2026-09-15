@@ -61,7 +61,7 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
       result = {}
     }
     else if (rpc.method === 'tools/list') {
-      result = { tools: [{ name: 'ape_shell', description: 'Invoke a granted read command of an assigned application using applicationId and argv. Legacy tools use toolId instead. Authentication state stays inside the application sandbox.', inputSchema: { type: 'object', properties: { applicationId: { type: 'string' }, toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['argv'], oneOf: [{ required: ['applicationId'] }, { required: ['toolId'] }], additionalProperties: false } }] }
+      result = { tools: [{ name: 'ape_shell', description: 'Invoke a granted read command of an assigned application using application and argv (or an explicit applicationId). Legacy tools use toolId instead. Authentication state stays inside the application sandbox.', inputSchema: { type: 'object', properties: { application: { type: 'string' }, applicationId: { type: 'string' }, toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['argv'], oneOf: [{ required: ['application'] }, { required: ['applicationId'] }, { required: ['toolId'] }], additionalProperties: false } }] }
     }
     else if (rpc.method === 'tools/call' && rpc.params?.name === 'ape_shell') {
       try {
