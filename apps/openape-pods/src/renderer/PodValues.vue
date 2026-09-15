@@ -39,7 +39,7 @@ export default defineComponent({
   <section id="pod-values" :aria-label="t('Variables and secrets')">
     <article class="card">
       <h2>{{ t('Variables') }}</h2><p class="muted">
-        {{ t('Plain values for this pod. Changes apply to future runs. Store sensitive values as secrets below.') }}
+        {{ t('These values are visible to the pod assistant. Changes apply to future runs. Store sensitive values as secrets below.') }}
       </p>
       <div v-for="variable in variables" :key="variable.name" class="value-row">
         <div><strong>{{ variable.name }}</strong><p>{{ variable.value }}</p><code>{{ `context.variables[${JSON.stringify(variable.name)}]` }}</code></div>

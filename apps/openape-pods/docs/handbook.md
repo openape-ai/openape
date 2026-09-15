@@ -68,6 +68,16 @@ Cancel turn interrupts the active conversation; Steer adds an instruction to tha
 
 App settings → Workspace chat retains the previous global conversation and supports workspace-wide creation. Pod chats provide separate histories and model threads, while using the existing owner-authorized master control capabilities.
 
+The chat can set ordinary variables, assign or create a group, and prepare an interval or daily schedule. Schedule preparation leaves automation disabled and pauses automatic execution. Enable it yourself in Settings after reviewing the script and access. A selected pod chat cannot read or change another pod; the workspace creation chat can create pods.
+
+The assistant reads a runtime reference supplied by the app before writing scripts. It can validate a draft, use the reported error to repair it and activate it within existing permissions. Ask explicitly for a manual run if you want one. Application, HTTPS and file proposals open Permissions; named-secret proposals open Settings.
+
+Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. The assistant cannot retrieve its stored value or approve script access to credentials. Review the exact script before granting that access in Settings.
+
+Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Settings.
+
+Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.
+
 ![Chat and pod creation](images/handbook-chat.png)
 
 ## Inspect and edit your script

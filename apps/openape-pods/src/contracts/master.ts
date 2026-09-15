@@ -1,4 +1,8 @@
-import { parseScriptCapabilities } from './credentials'
+import { parseCredentialAlias, parseScriptCapabilities } from './credentials'
+import { parseVariable } from './resources'
+import { groupName } from './groups'
+import { parseSchedule } from './scheduling'
+import type { ScheduleSpec } from './scheduling'
 
 export interface MasterMessage { id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string, at: number }
 export interface MasterDraft { id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
@@ -33,19 +37,23 @@ export function parseMasterView(value: unknown): MasterView {
 }
 export type MasterAction =
   | { action: 'list' }
+  | { action: 'runtime' }
   | { action: 'create', name: string, assignment: string }
   | { action: 'inspect' | 'run' | 'pause' | 'resume' | 'installMailRecipe', podId: string, revision: number }
+  | { action: 'setVariable', podId: string, revision: number, name: string, value: string, variableRevision: number }
+  | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
+  | { action: 'setGroup', podId: string, revision: number, name: string | null, organizationRevision: number }
   | { action: 'revise', podId: string, revision: number, name: string, assignment: string }
   | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[] }
   | { action: 'validate' | 'activate', podId: string, revision: number, draftId: string, draftRevision: number }
   | { action: 'rollback', podId: string, revision: number, hash: string, expectedActive: string | null }
-  | { action: 'requestAccess', podId: string, revision: number, request: { provider: 'application' | 'http' | 'microsoft' | 'reference', application?: string, command?: string, origin?: string, account?: string, folders?: string[], attachments?: boolean, description: string } }
+  | { action: 'requestAccess', podId: string, revision: number, request: { provider: 'application' | 'http' | 'microsoft' | 'reference' | 'credential', alias?: string, application?: string, command?: string, origin?: string, account?: string, folders?: string[], attachments?: boolean, description: string } }
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
-  const item = value as Record<string, unknown>
-  const extra: Record<string, string[]> = { list: [], create: ['name', 'assignment'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name', 'assignment'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
+  const item = { ...value } as Record<string, unknown>
+  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setGroup: ['name', 'organizationRevision'], create: ['name', 'assignment'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name', 'assignment'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
-  const scoped = !['list', 'create'].includes(item.action)
+  const scoped = !['list', 'runtime', 'create'].includes(item.action)
   const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]]
   if (Object.keys(item).some(key => !allowed.includes(key)) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
   if (scoped && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || !Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) throw new Error('Invalid master pod revision')
@@ -54,12 +62,37 @@ export function parseMasterAction(value: unknown): MasterAction {
   if (allowed.includes('draftRevision') && (!Number.isSafeInteger(item.draftRevision) || (item.draftRevision as number) < (item.action === 'draft' && item.draftId === null ? 0 : 1))) throw new Error('Invalid draft revision')
   if (item.action === 'draft' && (typeof item.code !== 'string' || !item.code.trim() || item.code.length > 150000)) throw new Error('Invalid draft contract')
   if (item.action === 'draft') parseScriptCapabilities(item.capabilities)
+  if (item.action === 'setVariable') {
+    if (typeof item.name !== 'string' || typeof item.value !== 'string' || typeof item.variableRevision !== 'number') throw new Error('Invalid pod variable')
+    parseVariable({ name: item.name, value: item.value, revision: item.variableRevision })
+  }
+  if (item.action === 'prepareSchedule') { parseSchedule(item.spec); if (!Number.isSafeInteger(item.scheduleRevision) || (item.scheduleRevision as number) < 0) throw new Error('Invalid schedule revision') }
+  if (item.action === 'setGroup') { if (item.name !== null) item.name = groupName(item.name); if (!Number.isSafeInteger(item.organizationRevision) || (item.organizationRevision as number) < 1) throw new Error('Invalid organization revision') }
   if (item.action === 'rollback' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash) || (item.expectedActive !== null && (typeof item.expectedActive !== 'string' || !/^[a-f0-9]{64}$/.test(item.expectedActive))))) throw new Error('Invalid rollback version')
   if (item.action === 'requestAccess') {
     const request = item.request as Record<string, unknown>
-    if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(key => !['provider', 'application', 'command', 'origin', 'account', 'folders', 'attachments', 'description'].includes(key)) || !['application', 'http', 'microsoft', 'reference'].includes(request.provider as string) || typeof request.description !== 'string' || !request.description.trim() || request.description.length > 4000 || (request.account !== undefined && (typeof request.account !== 'string' || request.account.length > 254)) || (request.folders !== undefined && (!Array.isArray(request.folders) || request.folders.length > 100 || request.folders.some(folder => typeof folder !== 'string' || !folder || folder.length > 2048))) || (request.attachments !== undefined && typeof request.attachments !== 'boolean')) throw new Error('Invalid resource proposal')
+    if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(key => !['provider', 'alias', 'application', 'command', 'origin', 'account', 'folders', 'attachments', 'description'].includes(key)) || !['application', 'http', 'microsoft', 'reference', 'credential'].includes(request.provider as string) || typeof request.description !== 'string' || !request.description.trim() || request.description.length > 4000 || (request.account !== undefined && (typeof request.account !== 'string' || request.account.length > 254)) || (request.folders !== undefined && (!Array.isArray(request.folders) || request.folders.length > 100 || request.folders.some(folder => typeof folder !== 'string' || !folder || folder.length > 2048))) || (request.attachments !== undefined && typeof request.attachments !== 'boolean')) throw new Error('Invalid resource proposal')
+    if (request.provider === 'credential') parseCredentialAlias(request.alias)
+    else if (request.alias !== undefined) throw new Error('Only credential proposals accept an alias')
     if (['application', 'command', 'origin'].some(key => request[key] !== undefined && (typeof request[key] !== 'string' || String(request[key]).length > 4000))) throw new Error('Invalid resource proposal')
   }
   return structuredClone(item) as MasterAction
 }
-export const masterTool = { type: 'function', name: 'pods_control', description: 'Manage local pods within their current assignment and permissions. Allowed actions: list; create(name,assignment); inspect/run/pause/resume/installMailRecipe(podId,revision); revise(podId,revision,name,assignment); draft(podId,revision,draftId|null,draftRevision,code,capabilities); validate/activate(podId,revision,draftId,draftRevision); rollback(podId,revision,hash,expectedActive); requestAccess(podId,revision,request). All mutations require current revisions. New pods are manual-only. Resource proposals require owner review; this tool cannot approve permissions or enable schedules. Drafts export async run(context). Use context.variables for named working values, context.credentials.get(alias) for secrets, context.tools.invoke({applicationId,argv}) for assigned program reads, context.http.request({url,method,headers,body,key}) for explicit HTTPS destinations, context.agent.run({prompt}) for AI, and context.progress.commit for checkpoints. HTTP returns {status,headers,body}; mutating methods require a stable operation key and uncertain delivery blocks retries. Copy exact tool.* capabilities from inspected resources plus credential.<alias> (16 total). Global connections are only ChatGPT and OpenApe. For other programs, requestAccess with provider application, application name, command arguments and description; for network destinations use provider http, origin and description. Program authentication is configured in the owner terminal under Permissions; never infer a generic login status. Existing auth files may be imported into protected application state, never reference snapshots. Tool tokens stay outside script and model contexts; do not ask for them in chat. Use the existing mail helper only for legacy pods. Read assigned named values with await context.credentials.get(alias); values never belong in prompts or logs unless explicitly intended by the owner. The owner must approve the exact validated credential-reading version in Settings before activation; this tool cannot grant that approval. Validation executes with synthetic services only; activation never expands permissions.', inputSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'], additionalProperties: true } }
+export const masterTool = {
+  type: 'function', name: 'pods_control',
+  description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. A selected pod chat can only manage that pod. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. requestAccess creates an owner-reviewed proposal, never a permission or credential approval. Validate, repair failures and activate only within existing assignments and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
+  inputSchema: {
+    type: 'object', required: ['action'], additionalProperties: false,
+    properties: {
+      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
+      podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod assignment revision.' },
+      name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' }, assignment: { type: 'string' },
+      value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },
+      spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' }, scheduleRevision: { type: 'integer', minimum: 0 },
+      organizationRevision: { type: 'integer', minimum: 1 },
+      draftId: { type: ['string', 'null'] }, draftRevision: { type: 'integer', minimum: 0 }, code: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
+      hash: { type: 'string' }, expectedActive: { type: ['string', 'null'] },
+      request: { type: 'object', description: 'Access proposal: provider (application/http/reference/credential), description, and optional application/command/origin. Credential requires alias, never a value.' },
+    },
+  },
+}

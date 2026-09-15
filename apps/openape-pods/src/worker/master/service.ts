@@ -141,7 +141,7 @@ export class MasterService {
     const id = `${String(params.threadId)}:${String(params.turnId)}:${String(params.callId)}`
     try {
       if (frame.method !== 'item/tool/call' || params.tool !== 'pods_control' || params.threadId !== session.thread_id || params.turnId !== session.active_turn || typeof params.callId !== 'string' || params.callId.length > 128 || ++this.actions > 20) throw new Error('Master tool request is outside the active turn or allowed action budget')
-      const result = await this.control.execute(id, params.arguments, this.controller!.signal)
+      const result = await this.control.execute(id, params.arguments, this.controller!.signal, this.context || null)
       text = JSON.stringify(result); if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion in the workspace')
       success = true
     }

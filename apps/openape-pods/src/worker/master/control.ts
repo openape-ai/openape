@@ -12,12 +12,18 @@ import { WorkspaceDetails } from '../workspace/details'
 import { assignedMail } from '../../main/mail/assigned'
 import { installMailRecipe } from '../mail/install'
 import { validateDraft } from './validation'
+import { runtimeReference } from './reference'
+import { PodVariables } from '../resources/variables'
+import { PodGroups } from '../workspace/groups'
+import { modelResources } from './resources'
 
 export class MasterControl {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime) {}
-  async execute(key: string, value: unknown, signal: AbortSignal): Promise<unknown> {
+  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
-    const action = parseMasterAction(value); const request = JSON.stringify(action); const hash = digest(request)
+    const action = parseMasterAction(value)
+    if (selectedPod && (action.action === 'create' || ('podId' in action && action.podId !== selectedPod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
+    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action }))
     const prior = this.store.db.prepare('SELECT * FROM master_actions WHERE id=?').get(key)
     if (prior) {
       if (prior.request_hash !== hash) throw new Error('Master operation identity was reused with different arguments')
@@ -41,10 +47,15 @@ export class MasterControl {
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-      const result = this.apply(action, dependencyLockHash)
+      const result = this.apply(action, dependencyLockHash, selectedPod)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
     })
+  }
+
+  private organization(podId: string) {
+    const state = new PodGroups(this.store).view()
+    return { revision: state.revision, groups: state.groups.map(({ id, name, podIds }) => ({ id, name, selected: podIds.includes(podId) })) }
   }
 
   private assertPod(id: string, revision: number, inspect = false): void {
@@ -59,14 +70,35 @@ export class MasterControl {
     return draft
   }
 
-  private apply(action: MasterAction, lock: string): unknown {
-    if (action.action === 'list') return { pods: this.store.listPods() }
+  private apply(action: MasterAction, lock: string, selectedPod: string | null): unknown {
+    if (action.action === 'runtime') return runtimeReference
+    if (action.action === 'list') return { pods: selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods() }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
       return this.store.createPod({ name: action.name, assignment: action.assignment })
     }
     const pod = this.store.getPod(action.podId)
-    if (action.action === 'inspect') return { pod, resources: this.resources.list(pod.id), versions: new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId: pod.id }).versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
+    if (action.action === 'inspect') return { pod, resources: modelResources(this.resources.list(pod.id)), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId: pod.id }).versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
+    if (action.action === 'setVariable') {
+      new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
+      return { variables: new PodVariables(this.store).list(pod.id) }
+    }
+    if (action.action === 'prepareSchedule') {
+      this.scheduler.save(pod.id, action.scheduleRevision, action.spec, false)
+      this.scheduler.lifecycle(pod.id, pod.revision, 'paused')
+      return { schedule: this.scheduler.view(pod.id), lifecycle: 'paused', activation: 'owner-only-in-settings' }
+    }
+    if (action.action === 'setGroup') {
+      const groups = new PodGroups(this.store); let state = groups.view()
+      if (state.revision !== action.organizationRevision) throw new Error('Groups changed. Refresh and try again.')
+      let group = state.groups.find(item => item.name.toLowerCase() === action.name?.toLowerCase())
+      if (action.name && !group) {
+        groups.execute({ type: 'organize', action: 'create', name: action.name, revision: state.revision })
+        state = groups.view(); group = state.groups.find(item => item.name === action.name)
+      }
+      groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId: group?.id ?? null, revision: state.revision })
+      return this.organization(pod.id)
+    }
     if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, assignment: action.assignment, lifecycle: pod.lifecycle }); this.dispatcher.cancelPod(pod.id, 'Master revised the assignment'); return this.store.getPod(pod.id) }
     if (action.action === 'run') { this.scheduler.requestManual(pod.id); return { accepted: true, runs: this.dispatcher.view(pod.id).runs } }
     if (action.action === 'resume') {

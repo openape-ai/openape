@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import type { MasterView } from '../../src/contracts/master'
+import { applyLanguage } from '../../src/renderer/i18n'
 import MasterChat from '../../src/renderer/MasterChat.vue'
 
 const empty: MasterView = { connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }
@@ -38,4 +39,16 @@ it('preserves text composed while an earlier message is sending', async () => {
   await wrapper.get('textarea').setValue('First message'); await wrapper.get('form').trigger('submit')
   await wrapper.get('textarea').setValue('Next thought'); finish(empty); await flushPromises()
   expect(wrapper.get('textarea').element.value).toBe('Next thought'); wrapper.unmount()
+})
+
+it('routes named-secret proposals to Settings without displaying an input for secret values', async () => {
+  const podId = crypto.randomUUID()
+  window.pods = { master: vi.fn().mockResolvedValue({ ...empty, proposals: [{ id: crypto.randomUUID(), podId, state: 'pending', body: { provider: 'credential', alias: 'bot_token', description: 'Store your notification token in Settings' } }] }) } as unknown as typeof window.pods
+  const wrapper = mount(MasterChat, { props: { podId } }); await flushPromises()
+  expect(wrapper.text()).toContain('bot_token'); expect(wrapper.find('input[type="password"]').exists()).toBe(false)
+  await wrapper.findAll('button').find(button => button.text() === 'Open Settings')!.trigger('click')
+  expect(wrapper.emitted('settings')).toEqual([[podId]]); expect(wrapper.emitted('resources')).toBeUndefined()
+  applyLanguage('de'); await flushPromises()
+  expect(wrapper.text()).toContain('Name des Geheimnisses'); expect(wrapper.text()).toContain('Einstellungen öffnen')
+  applyLanguage('en'); wrapper.unmount()
 })

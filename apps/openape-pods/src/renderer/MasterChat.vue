@@ -5,7 +5,7 @@ import { onMounted, onBeforeUnmount, ref } from 'vue'
 import type { MasterCommand, MasterView } from '../contracts/master'
 
 const props = defineProps<{ podId: string | null }>()
-const emit = defineEmits<{ resources: [podId: string] }>()
+const emit = defineEmits<{ resources: [podId: string], settings: [podId: string] }>()
 const view = ref<MasterView | null>(null); const text = chatDraft(props.podId); const error = ref(''); const busy = ref(false)
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
 async function refresh(): Promise<void> {
@@ -73,7 +73,10 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
     <section v-if="view?.proposals.length" :aria-label="t('Access proposals')">
       <h3>{{ t("Resource access for your review") }}</h3><article v-for="proposal in view.proposals" :key="proposal.id" class="master-message">
         <p>{{ proposal.body.description }}</p><dl class="proposal-scope">
-          <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'reference' ? t("Reference file · read-only snapshots") : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
+          <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'reference' ? t("Reference file · read-only snapshots") : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
+          <template v-if="proposal.body.alias">
+            <dt>{{ t('Secret name') }}</dt><dd>{{ proposal.body.alias }}</dd>
+          </template>
           <template v-if="proposal.body.application">
             <dt>{{ t('Application') }}</dt><dd>{{ proposal.body.application }}</dd>
           </template>
@@ -94,8 +97,8 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
           </template>
         </dl><span class="badge">{{ label(proposal.state) }}</span>
         <div v-if="proposal.state === 'pending'" class="overview-actions">
-          <button class="secondary" @click="emit('resources', proposal.podId)">
-            {{ t("Review resources") }}
+          <button class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId) : emit('resources', proposal.podId)">
+            {{ proposal.body.provider === 'credential' ? t('Open Settings') : t('Review resources') }}
           </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: props.podId })">
             {{ t("Decline") }}
           </button>
