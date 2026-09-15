@@ -36,7 +36,7 @@ it('language: switches every packaged view and native menus, preserves edits and
       await expect.poll(() => page.locator('html').getAttribute('lang')).toBe(locale)
       await page.locator('.pod-button').first().click()
       const suffix = locale === 'de' ? '-de' : '-en'
-      for (const [tab, german] of [['Overview', 'Übersicht'], ['Chat', 'Chat'], ['Script', 'Skript'], ['Permissions', 'Berechtigungen'], ['Settings', 'Einstellungen'], ['History', 'Historie']]) {
+      for (const [tab, german] of [['Overview', 'Übersicht'], ['Chat', 'Chat'], ['Script', 'Skript'], ['Variables and secrets', 'Variablen und Geheimnisse'], ['Permissions', 'Berechtigungen'], ['Settings', 'Einstellungen'], ['History', 'Historie']]) {
         await page.getByRole('tab', { name: locale === 'de' ? german : tab, exact: true }).click()
         await page.getByRole('tabpanel').waitFor()
         if (tab === 'Script') await expect.poll(() => page.getByLabel(locale === 'de' ? 'Skriptquelltext' : 'Script source', { exact: true }).inputValue()).toBe(code)
@@ -48,8 +48,7 @@ it('language: switches every packaged view and native menus, preserves edits and
       await page.getByText('Delivery is confirmed for Tuesday.', { exact: true }).waitFor()
       expect(await page.getByRole('tab', { name: locale === 'de' ? 'Übersicht' : 'Overview', exact: true }).getAttribute('tabindex')).toBe('0')
       await page.screenshot({ path: resolve(`.artifacts/handbook-knowledge${suffix}.png`) })
-      await page.getByRole('tab', { name: locale === 'de' ? 'Einstellungen' : 'Settings', exact: true }).click()
-      await page.getByText(locale === 'de' ? 'Variablen und Geheimnisse' : 'Variables and secrets', { exact: true }).click()
+      await page.getByRole('tab', { name: locale === 'de' ? 'Variablen und Geheimnisse' : 'Variables and secrets', exact: true }).click()
       await page.locator('.credential-form').screenshot({ path: resolve(`.artifacts/handbook-credentials${suffix}.png`) })
       for (const [button, german, name] of [['Connections & setup', 'Verbindungen & Einrichtung', 'setup'], ['Workspace chat', 'Arbeitsbereich-Chat', 'master'], ['Data & backups', 'Daten & Sicherungen', 'data']]) {
         await page.locator('.nav-button').click(); await page.getByRole('button', { name: locale === 'de' ? german : button, exact: true }).click()

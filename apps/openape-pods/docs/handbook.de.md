@@ -8,7 +8,7 @@ Erstellt aus handbook.de.json. Abbildungen zeigen die gepackte App mit synthetis
 
 ## Hier beginnen
 
-Wählen Sie einen Pod in der Seitenleiste und nutzen Sie Übersicht, Chat, Skript, Berechtigungen, Einstellungen und Historie. Ziehen Sie den Trenner oder verwenden Sie nach dessen Fokussierung Links/Rechts zum Verbreitern. Der Pfeil klappt die Seitenleiste ein; ihre Breite wird auf diesem Mac gespeichert.
+Wählen Sie einen Pod in der Seitenleiste und nutzen Sie Übersicht, Chat, Skript, Variablen und Geheimnisse, Berechtigungen, Einstellungen und Historie. Ziehen Sie den Trenner oder verwenden Sie nach dessen Fokussierung Links/Rechts zum Verbreitern. Der Pfeil klappt die Seitenleiste ein; ihre Breite wird auf diesem Mac gespeichert.
 
 Dieses Handbuch beschreibt die unsignierte Entwicklungsversion 0.1.0. Die Abbildungen zeigen synthetische Aufträge und lokale Referenzdateien. Echte Anmeldungen bei ChatGPT, OpenApe und Microsoft, Live-Mail-Zugriffe und die signierte Distribution benötigen noch eine Freigabeprüfung. Die Ausführung erfordert derzeit Apple Silicon und Darwin 25.6.0, geprüft unter macOS 26.6.2. Ein nicht unterstützter Rechner zeigt einen Fehler und blockiert die Ausführung.
 
@@ -72,11 +72,11 @@ App-Einstellungen → Arbeitsbereich-Chat bewahrt die bisherige globale Unterhal
 
 Der Chat kann gewöhnliche Variablen setzen, eine Gruppe zuordnen oder anlegen und ein Intervall oder einen täglichen Zeitplan vorbereiten. Dabei bleibt der Zeitplan ausgeschaltet und automatische Ausführung wird pausiert. Aktiviere sie nach Prüfung von Skript und Zugriffen selbst in Einstellungen. Der Chat eines ausgewählten Pods kann keinen anderen Pod lesen oder ändern; der Erstellungs-Chat des Arbeitsbereichs kann Pods anlegen.
 
-Der Assistent liest vor dem Schreiben eine von der App bereitgestellte Laufzeitreferenz. Er kann einen Entwurf validieren, anhand der Fehlermeldung verbessern und innerhalb vorhandener Berechtigungen aktivieren. Fordere einen manuellen Lauf ausdrücklich an, wenn du einen möchtest. App-, HTTPS- und Dateivorschläge öffnen Berechtigungen; Vorschläge für benannte Geheimnisse öffnen Einstellungen.
+Der Assistent liest vor dem Schreiben eine von der App bereitgestellte Laufzeitreferenz. Er kann einen Entwurf validieren, anhand der Fehlermeldung verbessern und innerhalb vorhandener Berechtigungen aktivieren. Fordere einen manuellen Lauf ausdrücklich an, wenn du einen möchtest. App-, HTTPS- und Dateivorschläge öffnen Berechtigungen; Vorschläge für benannte Geheimnisse öffnen Variablen und Geheimnisse.
 
-Gewöhnliche Variablenwerte sind für den Assistenten sichtbar, wenn er den Pod prüft. Tokens, Passwörter und API-Schlüssel gehören in Geheimnisse. Ein Geheimnis-Vorschlag enthält nur Name und Zweck. Der Assistent kann den gespeicherten Wert nicht abrufen und keinen Skriptzugriff auf Zugangsdaten freigeben. Prüfe das konkrete Skript, bevor du diesen Zugriff in Einstellungen erlaubst.
+Gewöhnliche Variablenwerte sind für den Assistenten sichtbar, wenn er den Pod prüft. Tokens, Passwörter und API-Schlüssel gehören in Geheimnisse. Ein Geheimnis-Vorschlag enthält nur Name und Zweck. Der Assistent kann den gespeicherten Wert nicht abrufen und keinen Skriptzugriff auf Zugangsdaten freigeben. Prüfe das konkrete Skript, bevor du diesen Zugriff über Skript → Ausführen erlaubst.
 
-Beispiel-Prompt: „Erstelle einen Mail-Benachrichtigungs-Pod für phofmann@delta-mind.at. Prüfe über die zugewiesene o365-cli-App alle 15 Minuten auf neue Nachrichten und benachrichtige meinen Telegram-Chat. Verwende den ersten Lauf als stille Ausgangsbasis und vermeide Duplikate. Speichere die Telegram-Chat-ID als gewöhnliche Variable und fordere bot_token als Geheimnis an. Fordere lesende App-Befehle und die Telegram-HTTPS-Berechtigung an. Bereite Skript und Intervall vor, lasse die Automatik ausgeschaltet und führe noch nichts aus.“ Ergänze die fehlende Chat-ID, richte o365-cli über dessen Terminal in Berechtigungen ein und hinterlege den Token in Einstellungen.
+Beispiel-Prompt: „Erstelle einen Mail-Benachrichtigungs-Pod für phofmann@delta-mind.at. Prüfe über die zugewiesene o365-cli-App alle 15 Minuten auf neue Nachrichten und benachrichtige meinen Telegram-Chat. Verwende den ersten Lauf als stille Ausgangsbasis und vermeide Duplikate. Speichere die Telegram-Chat-ID als gewöhnliche Variable und fordere bot_token als Geheimnis an. Fordere lesende App-Befehle und die Telegram-HTTPS-Berechtigung an. Bereite Skript und Intervall vor, lasse die Automatik ausgeschaltet und führe noch nichts aus.“ Ergänze die fehlende Chat-ID, richte o365-cli über dessen Terminal in Berechtigungen ein und hinterlege den Token in Variablen und Geheimnisse.
 
 Die synthetische Validierung prüft einen Anfangspfad mit leerem Checkpoint, ohne Referenzsnapshots und mit simulierten Diensten. Sie beweist keine echte Anmeldung, keine Antwortformate eines Anbieters, keine späteren Verzweigungen und keine tatsächliche Zustellung. Der automatisierte Ein-Prompt-Test nutzt den echten verpackten Chat und Codex-Prozess mit einem aufgezeichneten Modell. Die Qualität echter Modellgenerierung und Live-Integrationen benötigen eine getrennte Abnahme.
 
@@ -94,7 +94,7 @@ Der JavaScript-Editor bietet Syntaxhervorhebung, Zeilennummern, horizontales Scr
 
 Ungespeicherte Skripte, normale Variablen, Einstellungen und Chat-Texte bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.
 
-Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den passenden Abschnitt der Einstellungen. Erforderlicher Zugriff deklariert ausschließlich bereits zugewiesene Fähigkeiten.
+Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Benötigte Zugriffe deklariert die vom Skript benötigten Fähigkeiten; eine Deklaration weist noch keinen Zugriff zu und erteilt keine Freigabe.
 
 1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
 2. Wählen Sie Ausführen oder Speichern und ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
@@ -103,67 +103,13 @@ Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdr
 
 ![Dein Skript ansehen und bearbeiten](images/handbook-script-de.png)
 
-## Gleichzeitige Änderungen und Wiederherstellung
-
-Ändert ein Chat oder eine andere Bearbeitung das gespeicherte Skript, während Sie ungespeicherten Text haben, bleibt Ihr Text erhalten und ein veralteter Speicherversuch wird abgewiesen. Skript neu laden erlaubt nach Bestätigung das Verwerfen lokaler Änderungen. Meine Änderungen als aktuelles Skript speichern übernimmt Ihren Text ausdrücklich als neuen Arbeitsstand; vor der Ausführung sind weiterhin Prüfung und nötige Freigaben erforderlich.
-
-Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeicherten Quelltext. Speichern startet keinen Lauf. Ein Start wird bei verändertem aktivem Skript, belegtem Ausführungsplatz oder ausstehenden Eingaben abgewiesen, damit später kein anderer Code ausgeführt wird.
-
-## Berechtigungen
-
-Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
-
-Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Gib Programmargumente ein, wähle Befehl erlauben, prüfe die genaue Berechtigung und öffne das Terminal. Darin läuft dieses CLI im Kontext der zugewiesenen Pod-Anwendung. Es ist keine uneingeschränkte Shell. Das Programm verwaltet seine Anmeldung selbst; Pods leitet keinen Anmeldestatus ab.
-
-Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
-
-HTTP-Ziele erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Einstellungen. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
-
-Ein Widerruf ändert den Ressourcenstand und beendet betroffene Arbeit. Prüfe das Skript nach Berechtigungsänderungen erneut. Ein offenes Terminal belegt den Pod; reguläre Läufe warten auf sein Ende. Beim Schließen wird der Prozess gestoppt und sein Ende geprüft, bevor der Pod freigegeben wird.
-
-Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking, grafische Anwendungen und beliebige Interpreter-Abhängigkeiten sind noch nicht verfügbar. Selbst gewählte CLIs haben standardmäßig keinen Netzwerkzugriff; das mitgelieferte o365-cli hat ausdrücklich begrenzte Microsoft-Ziele. Externe Verzeichnisse werden derzeit über einzelne Referenzdateien zugewiesen; beschreibbare Dateien liegen im Pod-Arbeitsbereich.
-
-![Berechtigungen](images/handbook-permissions-de.png)
-
-## Einstellungen
-
-Einstellungen enthält Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie Weitere Optionen. Die Beschreibung wird über den Chat aktualisiert. Das Skript steuert jeden Lauf und legt die Prompts für seine KI-Aufrufe fest. Einen separaten Ausführungsauftrag gibt es nicht. Das Umbenennen eines Pods erhält laufende Arbeit, Skriptprüfung, Freigaben für Geheimnisse und den Zustand der Automatik.
+## Variablen und Geheimnisse
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
-Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten Pod nach gesonderter nativer Bestätigung löschen. Dabei werden auch seine Variablen und sein Pod-Chat entfernt. Arbeitsbereich-Chat, gemeinsame Konten und ursprüngliche Referenzdateien bleiben erhalten.
+Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Ein gespeicherter Wert erteilt dem Skript noch keine Lesefreigabe.
 
-![Einstellungen](images/handbook-settings-de.png)
-
-## Historie und Wiederherstellung
-
-Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
-
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
-
-Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
-
-Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
-
-Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Erneut senden erlauben. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
-
-![Historie und Wiederherstellung](images/handbook-history-de.png)
-
-## Ergebnisse und Quellen
-
-Wissen enthält dauerhafte Aussagen mit zugehörigen Belegen. Erkenntnisse beschreiben belegte fachliche Tatsachen. Offene Fragen benötigen eine fachliche Antwort. Nachweislücken kennzeichnen fehlende oder unlesbare Belege; eine Lücke ist nicht automatisch eine unbeantwortete fachliche Frage.
-
-Filtere nach Art und aktiviere Ersetzte Versionen einbeziehen, um frühere Aussagen zu prüfen. Aktuelle Aussagen können frühere ersetzen und dabei ihren Quellenverlauf bewahren. Weitere Einträge werden seitenweise geladen.
-
-Öffne einen Eintrag und wähle seine Quelle, um gespeicherten Inhalt, Version und Prüfsumme anzusehen. Extrahierter Text kann auf sein gespeichertes Original verweisen. Lange Vorschauen sind ausdrücklich als gekürzt gekennzeichnet. Quellentext wird unverändert angezeigt.
-
-Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod zu befragen. Aussagen und Quellenverlauf bleiben unabhängig vom Chat im Pod.
-
-![Ergebnisse und Quellen](images/handbook-knowledge-de.png)
-
-## Zugangsdaten im Pod-Skript verwenden
-
-Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Ressourcen einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
+Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Variablen und Geheimnisse einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 
 Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
@@ -175,7 +121,7 @@ Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zuga
 
 Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
-1. Öffnen Sie Einstellungen → Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
+1. Öffnen Sie Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
 2. Öffnen Sie Skript, klappen Sie Erforderlicher Zugriff auf und wählen Sie die Aliase. Verwenden Sie await context.credentials.get("alias") im Quelltext.
 3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
 4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung und Freigabe.
@@ -208,7 +154,63 @@ export async function run(context) {
 }
 ```
 
-![Zugangsdaten im Pod-Skript verwenden](images/handbook-credentials-de.png)
+![Variablen und Geheimnisse](images/handbook-credentials-de.png)
+
+## Gleichzeitige Änderungen und Wiederherstellung
+
+Ändert ein Chat oder eine andere Bearbeitung das gespeicherte Skript, während Sie ungespeicherten Text haben, bleibt Ihr Text erhalten und ein veralteter Speicherversuch wird abgewiesen. Skript neu laden erlaubt nach Bestätigung das Verwerfen lokaler Änderungen. Meine Änderungen als aktuelles Skript speichern übernimmt Ihren Text ausdrücklich als neuen Arbeitsstand; vor der Ausführung sind weiterhin Prüfung und nötige Freigaben erforderlich.
+
+Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeicherten Quelltext. Speichern startet keinen Lauf. Ein Start wird bei verändertem aktivem Skript, belegtem Ausführungsplatz oder ausstehenden Eingaben abgewiesen, damit später kein anderer Code ausgeführt wird.
+
+## Berechtigungen
+
+Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
+
+Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Gib Programmargumente ein, wähle Befehl erlauben, prüfe die genaue Berechtigung und öffne das Terminal. Darin läuft dieses CLI im Kontext der zugewiesenen Pod-Anwendung. Es ist keine uneingeschränkte Shell. Das Programm verwaltet seine Anmeldung selbst; Pods leitet keinen Anmeldestatus ab.
+
+Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
+
+HTTP-Ziele erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Variablen und Geheimnisse. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
+
+Ein Widerruf ändert den Ressourcenstand und beendet betroffene Arbeit. Prüfe das Skript nach Berechtigungsänderungen erneut. Ein offenes Terminal belegt den Pod; reguläre Läufe warten auf sein Ende. Beim Schließen wird der Prozess gestoppt und sein Ende geprüft, bevor der Pod freigegeben wird.
+
+Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking, grafische Anwendungen und beliebige Interpreter-Abhängigkeiten sind noch nicht verfügbar. Selbst gewählte CLIs haben standardmäßig keinen Netzwerkzugriff; das mitgelieferte o365-cli hat ausdrücklich begrenzte Microsoft-Ziele. Externe Verzeichnisse werden derzeit über einzelne Referenzdateien zugewiesen; beschreibbare Dateien liegen im Pod-Arbeitsbereich.
+
+![Berechtigungen](images/handbook-permissions-de.png)
+
+## Einstellungen
+
+Einstellungen enthält Pod-Name, Gruppe, Automatik und Intervall sowie Weitere Optionen. Die Beschreibung wird über den Chat aktualisiert. Das Skript steuert jeden Lauf und legt die Prompts für seine KI-Aufrufe fest. Einen separaten Ausführungsauftrag gibt es nicht. Das Umbenennen eines Pods erhält laufende Arbeit, Skriptprüfung, Freigaben für Geheimnisse und den Zustand der Automatik.
+
+Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten Pod nach gesonderter nativer Bestätigung löschen. Dabei werden auch seine Variablen und sein Pod-Chat entfernt. Arbeitsbereich-Chat, gemeinsame Konten und ursprüngliche Referenzdateien bleiben erhalten.
+
+![Einstellungen](images/handbook-settings-de.png)
+
+## Historie und Wiederherstellung
+
+Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
+
+Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
+
+Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
+
+Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
+
+Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Erneut senden erlauben. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
+
+![Historie und Wiederherstellung](images/handbook-history-de.png)
+
+## Ergebnisse und Quellen
+
+Wissen enthält dauerhafte Aussagen mit zugehörigen Belegen. Erkenntnisse beschreiben belegte fachliche Tatsachen. Offene Fragen benötigen eine fachliche Antwort. Nachweislücken kennzeichnen fehlende oder unlesbare Belege; eine Lücke ist nicht automatisch eine unbeantwortete fachliche Frage.
+
+Filtere nach Art und aktiviere Ersetzte Versionen einbeziehen, um frühere Aussagen zu prüfen. Aktuelle Aussagen können frühere ersetzen und dabei ihren Quellenverlauf bewahren. Weitere Einträge werden seitenweise geladen.
+
+Öffne einen Eintrag und wähle seine Quelle, um gespeicherten Inhalt, Version und Prüfsumme anzusehen. Extrahierter Text kann auf sein gespeichertes Original verweisen. Lange Vorschauen sind ausdrücklich als gekürzt gekennzeichnet. Quellentext wird unverändert angezeigt.
+
+Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod zu befragen. Aussagen und Quellenverlauf bleiben unabhängig vom Chat im Pod.
+
+![Ergebnisse und Quellen](images/handbook-knowledge-de.png)
 
 ## Ein kleines Skript zum Anpassen
 
@@ -253,7 +255,7 @@ Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex fü
 
 Füge für Mail-Benachrichtigungen o365-cli in Berechtigungen hinzu. Erlaube pods login --account you@example.com und führe den Befehl im Terminal aus, oder importiere eine vorhandene token.json als Anwendungszustand. Erlaube anschließend pods read --account you@example.com --folder inbox --operation messages. Der apes-Grant begrenzt die Ausführung auf den bestätigten Lesebereich; ein weiter reichender Anbieter-Token erlaubt dem Skript keine zusätzlichen Befehle.
 
-Speichere unter Einstellungen → Variablen und Geheimnisse mail_account, o365_application_id und telegram_chat_id als Variablen sowie telegram_bot_token als Geheimnis. Die Anwendungskennung ist die Ressourcen-ID der zugewiesenen Anwendung, die dem Pod-Chat zur Verfügung steht. Erlaube in Berechtigungen POST für https://api.telegram.org. Telegram benötigt keine eigene Kontokarte und kein CLI.
+Speichere unter Variablen und Geheimnisse mail_account, o365_application_id und telegram_chat_id als Variablen sowie telegram_bot_token als Geheimnis. Die Anwendungskennung ist die Ressourcen-ID der zugewiesenen Anwendung, die dem Pod-Chat zur Verfügung steht. Erlaube in Berechtigungen POST für https://api.telegram.org. Telegram benötigt keine eigene Kontokarte und kein CLI.
 
 Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
@@ -267,7 +269,7 @@ const maximumMessages = 1000
 
 export async function run(context) {
   const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Settings')
+  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Variables and secrets')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })

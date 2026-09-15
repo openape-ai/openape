@@ -8,7 +8,7 @@ Generated from handbook.json. Screenshots use the packaged app with synthetic da
 
 ## Start here
 
-Choose a pod in the sidebar, then use Overview, Chat, Script, Permissions, Settings and History. Drag the sidebar divider or focus it and press Left/Right to resize; collapse it with the arrow button. Width is saved on this Mac.
+Choose a pod in the sidebar, then use Overview, Chat, Script, Variables and secrets, Permissions, Settings and History. Drag the sidebar divider or focus it and press Left/Right to resize; collapse it with the arrow button. Width is saved on this Mac.
 
 This handbook covers the unsigned 0.1.0 development app. Screenshots use synthetic orders and local reference files. Actual ChatGPT/OpenApe/Microsoft sign-in, live mail and signed distribution still need release acceptance. Runtime execution currently requires Apple Silicon and Darwin 25.6.0, verified on macOS 26.6.2. An unsupported host displays an error and blocks execution.
 
@@ -72,11 +72,11 @@ App settings → Workspace chat retains the previous global conversation and sup
 
 The chat can set ordinary variables, assign or create a group, and prepare an interval or daily schedule. Schedule preparation leaves automation disabled and pauses automatic execution. Enable it yourself in Settings after reviewing the script and access. A selected pod chat cannot read or change another pod; the workspace creation chat can create pods.
 
-The assistant reads a runtime reference supplied by the app before writing scripts. It can validate a draft, use the reported error to repair it and activate it within existing permissions. Ask explicitly for a manual run if you want one. Application, HTTPS and file proposals open Permissions; named-secret proposals open Settings.
+The assistant reads a runtime reference supplied by the app before writing scripts. It can validate a draft, use the reported error to repair it and activate it within existing permissions. Ask explicitly for a manual run if you want one. Application, HTTPS and file proposals open Permissions; named-secret proposals open Variables and secrets.
 
-Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. The assistant cannot retrieve its stored value or approve script access to credentials. Review the exact script before granting that access in Settings.
+Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. The assistant cannot retrieve its stored value or approve script access to credentials. Review the exact script before granting that access from Script → Run.
 
-Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Settings.
+Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Variables and secrets.
 
 Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.
 
@@ -94,7 +94,7 @@ The highlighted JavaScript editor supports line numbers, horizontal scrolling, t
 
 Unsaved script, ordinary variable, settings and chat text survive navigation within this app session. Save before quitting. Reload script asks before discarding changed text. If a concurrent change causes a conflict, reload the current source or explicitly save your edits as the current script.
 
-Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their Settings section. Required access declares only capabilities already assigned to the pod.
+Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their dedicated tab. Required access declares the capabilities the script needs; a declaration does not assign or approve access.
 
 1. Edit the source and choose Save script to persist it without running.
 2. Choose Run or Save and run. The app saves and validates changed source in the existing sandbox with synthetic services. A failed check preserves the source and leaves the previously active script intact.
@@ -103,67 +103,13 @@ Available variables and secrets expands a reference list with copyable access ex
 
 ![Inspect and edit your script](images/handbook-script.png)
 
-## Concurrent edits and recovery
-
-If a chat or another edit changes the saved script while your editor contains unsaved work, the app retains your text and rejects a stale save. Reload script lets you discard your local edits after confirmation. Save my changes as current script explicitly preserves your text as a new working artifact; it still requires validation and any credential approval before running.
-
-Reloading an unchanged editor picks up the current saved source. Saving does not start a run. A Run request rejects a changed active script, an occupied execution slot or pending inputs rather than silently executing different code later.
-
-## Permissions
-
-Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
-
-Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Enter program arguments, choose Allow command, review the exact permission, then Open terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
-
-Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
-
-HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Settings. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
-
-Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A terminal owns the pod while open; regular runs wait until it closes. Closing the terminal stops its process and verifies that it has ended before releasing the pod.
-
-The current execution boundary supports foreground native CLIs. Forking, graphical applications and arbitrary interpreter dependency trees remain unavailable. Chosen custom CLIs have no network access by default; the bundled o365-cli has explicitly scoped Microsoft endpoints. External directories are currently assigned as individual reference files; the pod workspace provides writable file storage.
-
-![Permissions](images/handbook-permissions.png)
-
-## Settings
-
-Settings contains the pod name, group, automation and interval, Variables and secrets, and More options. The generated description is updated through Chat. The script controls each run and supplies the prompts for its AI calls. There is no separate execution-assignment field. Renaming a pod preserves running work, script validation, credential approval and automation state.
+## Variables and secrets
 
 Ordinary variables are named strings stored in SQLite for this pod. Use context.variables["name"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.
 
-Expand More options to archive the pod or delete an archived pod through a separate native confirmation. Deletion removes its variables and pod chat as well as local data. Workspace chat, shared accounts and original reference files remain.
+The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script or requested in pending chat proposals also appear before a value has been assigned; choose Set secret to prefill the alias. Filling a value does not approve the script to read it.
 
-![Settings](images/handbook-settings.png)
-
-## History and recovery
-
-History lists persisted execution states and summaries. Select a run to inspect its pinned script version, checkpoint, error and ordered Persisted events. The local example is deterministic; the agent example additionally needs a connected Codex provider.
-
-Cancel stops an active run. Interrupted work remains visible after a crash or restart. Choose Check stopped execution to reconcile the previous execution, then Retry remaining inputs when the result permits it. If the outcome needs review, resolve that uncertainty before retrying. Retry unstarted inputs becomes available for a blocked queue.
-
-At most one run executes per pod. Additional accepted inputs stay queued. Distinct events are preserved, while missed schedule occurrences are coalesced into one catch-up. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
-
-Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.
-
-Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Allow resend. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent.
-
-![History and recovery](images/handbook-history.png)
-
-## Results and sources
-
-Knowledge contains durable statements with supporting evidence. Findings describe supported business facts. Open questions need a business answer. Verification gaps identify missing or unreadable evidence; a gap is not automatically an unanswered business question.
-
-Filter by kind, and enable Include superseded history to inspect earlier statements. Current statements can replace earlier ones while retaining their source history. Additional entries are paginated.
-
-Expand an entry and choose its source to view the retained content, version and digest. Extracted text can link to its retained original. Long source previews are explicitly marked as truncated. Source text is displayed literally.
-
-Use the contextual discussion action to ask the master about the selected pod. Statements and source history stay in the pod independently of the chat.
-
-![Results and sources](images/handbook-knowledge.png)
-
-## Use credentials in your pod script
-
-Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Settings → Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.
+Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.
 
 Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
@@ -175,7 +121,7 @@ Saving or replacing a credential pauses the pod and invalidates prior validation
 
 The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, exact-version approval and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
 
-1. Open Settings → Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
+1. Open Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
 2. Open Script, expand Required access and select the required aliases. Use await context.credentials.get("alias") in the source.
 3. Choose Save and run. After synthetic validation, review the source and confirm Review credential access in the native dialog.
 4. History shows the run. Source or resource changes require renewed validation and secret approval.
@@ -208,7 +154,63 @@ export async function run(context) {
 }
 ```
 
-![Use credentials in your pod script](images/handbook-credentials.png)
+![Variables and secrets](images/handbook-credentials.png)
+
+## Concurrent edits and recovery
+
+If a chat or another edit changes the saved script while your editor contains unsaved work, the app retains your text and rejects a stale save. Reload script lets you discard your local edits after confirmation. Save my changes as current script explicitly preserves your text as a new working artifact; it still requires validation and any credential approval before running.
+
+Reloading an unchanged editor picks up the current saved source. Saving does not start a run. A Run request rejects a changed active script, an occupied execution slot or pending inputs rather than silently executing different code later.
+
+## Permissions
+
+Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
+
+Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Enter program arguments, choose Allow command, review the exact permission, then Open terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
+
+Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
+
+HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
+
+Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A terminal owns the pod while open; regular runs wait until it closes. Closing the terminal stops its process and verifies that it has ended before releasing the pod.
+
+The current execution boundary supports foreground native CLIs. Forking, graphical applications and arbitrary interpreter dependency trees remain unavailable. Chosen custom CLIs have no network access by default; the bundled o365-cli has explicitly scoped Microsoft endpoints. External directories are currently assigned as individual reference files; the pod workspace provides writable file storage.
+
+![Permissions](images/handbook-permissions.png)
+
+## Settings
+
+Settings contains the pod name, group, automation and interval, and More options. The generated description is updated through Chat. The script controls each run and supplies the prompts for its AI calls. There is no separate execution-assignment field. Renaming a pod preserves running work, script validation, credential approval and automation state.
+
+Expand More options to archive the pod or delete an archived pod through a separate native confirmation. Deletion removes its variables and pod chat as well as local data. Workspace chat, shared accounts and original reference files remain.
+
+![Settings](images/handbook-settings.png)
+
+## History and recovery
+
+History lists persisted execution states and summaries. Select a run to inspect its pinned script version, checkpoint, error and ordered Persisted events. The local example is deterministic; the agent example additionally needs a connected Codex provider.
+
+Cancel stops an active run. Interrupted work remains visible after a crash or restart. Choose Check stopped execution to reconcile the previous execution, then Retry remaining inputs when the result permits it. If the outcome needs review, resolve that uncertainty before retrying. Retry unstarted inputs becomes available for a blocked queue.
+
+At most one run executes per pod. Additional accepted inputs stay queued. Distinct events are preserved, while missed schedule occurrences are coalesced into one catch-up. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
+
+Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.
+
+Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Allow resend. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent.
+
+![History and recovery](images/handbook-history.png)
+
+## Results and sources
+
+Knowledge contains durable statements with supporting evidence. Findings describe supported business facts. Open questions need a business answer. Verification gaps identify missing or unreadable evidence; a gap is not automatically an unanswered business question.
+
+Filter by kind, and enable Include superseded history to inspect earlier statements. Current statements can replace earlier ones while retaining their source history. Additional entries are paginated.
+
+Expand an entry and choose its source to view the retained content, version and digest. Extracted text can link to its retained original. Long source previews are explicitly marked as truncated. Source text is displayed literally.
+
+Use the contextual discussion action to ask the master about the selected pod. Statements and source history stay in the pod independently of the chat.
+
+![Results and sources](images/handbook-knowledge.png)
 
 ## A small script you can adapt
 
@@ -253,7 +255,7 @@ Connections & setup has two global connections: ChatGPT/Codex for AI execution a
 
 For the mail notification recipe, add o365-cli in Permissions. Allow and run pods login --account you@example.com in its terminal, or import your existing token.json as application state. Then allow pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
 
-Under Settings → Variables and secrets, save mail_account, o365_application_id and telegram_chat_id as variables, and telegram_bot_token as a secret. The application ID is the assigned resource ID available to the pod chat. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
+Under Variables and secrets, save mail_account, o365_application_id and telegram_chat_id as variables, and telegram_bot_token as a secret. The application ID is the assigned resource ID available to the pod chat. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
 
 Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
@@ -267,7 +269,7 @@ const maximumMessages = 1000
 
 export async function run(context) {
   const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Settings')
+  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Variables and secrets')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
