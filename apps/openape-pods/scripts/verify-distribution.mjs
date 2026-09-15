@@ -26,7 +26,7 @@ try {
   app = await electron.launch({ executablePath: join(bundle, 'Contents/MacOS/OpenApe Pods'), env: { HOME: profile, TMPDIR: root, PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile, NODE_ENV: 'test' } })
   const page = await app.firstWindow()
   await page.waitForFunction(async () => (await window.pods.getStatus()).worker.state === 'ready')
-  await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'DMG acceptance', assignment: 'Run the synthetic bundled example only.' }))
+  await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'DMG acceptance' }))
   await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
   await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
   await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
