@@ -62,8 +62,14 @@ export async function run(context) {
   return { status: 'completed', summary: 'Credential script completed', completedInputIds: context.input.eventIds, gapIds: [] }
 }
 `
-    await panel().getByLabel('Script source').fill(code); await panel().getByText('Required access', { exact: true }).click(); await panel().getByRole('checkbox', { name: 'crm', exact: true }).check()
-    await panel().getByRole('button', { name: 'Save and run', exact: true }).click(); await panel().getByRole('button', { name: 'Review credential access' }).waitFor()
+    await panel().getByLabel('Script source').fill(code)
+    await panel().getByRole('button', { name: 'Save script', exact: true }).click()
+    await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
+    await page.getByRole('checkbox', { name: 'crm', exact: true }).check()
+    await page.getByRole('button', { name: 'Save script access', exact: true }).click()
+    await page.getByText('Script access saved', { exact: true }).waitFor()
+    await page.getByRole('tab', { name: 'Script', exact: true }).click()
+    await panel().getByRole('button', { name: 'Run', exact: true }).click(); await panel().getByRole('button', { name: 'Review credential access' }).waitFor()
     expect((await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs).toHaveLength(0)
     const validated = await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)
     const hash = validated.source!.hash!
@@ -104,9 +110,9 @@ export async function run(context) {
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
     const epoch = (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)).epoch
     await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'a'.repeat(64), value: 'SYNTHETIC_LONG_ALIAS', epoch }), { podId: pod.id, epoch })
-    await page.getByRole('tab', { name: 'Script', exact: true }).click(); await panel().getByRole('button', { name: 'Reload script' }).click(); await panel().getByText('Required access', { exact: true }).click()
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(560, 840)); await page.emulateMedia({ colorScheme: 'dark' })
-    const content = page.locator('.content'); const fieldset = panel().locator('details').last()
+    const content = page.locator('.content'); const fieldset = page.locator('.script-access')
     await fieldset.scrollIntoViewIfNeeded()
     expect(await content.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await fieldset.evaluate(element => element.style.minWidth = '1200px')
