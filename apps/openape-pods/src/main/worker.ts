@@ -246,7 +246,7 @@ export class FixtureWorker {
         const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, this.credentials, controller.signal)
         await check(); controller.signal.throwIfAborted(); return result
       }
-      if (request.body && typeof request.body === 'object' && 'applicationId' in request.body) {
+      if (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body)) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
