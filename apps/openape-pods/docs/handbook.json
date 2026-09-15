@@ -57,7 +57,7 @@
       "id": "overview",
       "title": "Overview",
       "paragraphs": [
-        "Description summarizes the current agreed requirements from the pod conversation. It refreshes after completed exchanges. Later corrections supersede older wishes; the Start request remains unchanged in Chat. Use Change in chat to describe a change.",
+        "Description summarizes the current agreed requirements from the pod conversation. It refreshes after completed exchanges. Later corrections supersede older wishes; the Start request remains unchanged in Chat. Use Change in chat to describe a change. Refresh description regenerates the short overview text from the existing conversation without sending a new message.",
         "The description is informational. Its wording does not approve access, activate a script, change an execution assignment or enable automation. Updating and Not updated indicate pending or failed generation; Retry description keeps the last successful text until a new result is available. Pods without chat history retain their existing assignment description."
       ],
       "steps": [
