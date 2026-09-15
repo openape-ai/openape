@@ -57,7 +57,7 @@
       "id": "overview",
       "title": "Übersicht",
       "paragraphs": [
-        "Die Beschreibung fasst die aktuell vereinbarten Anforderungen aus dem Pod-Chat zusammen. Sie wird nach abgeschlossenen Anfragen aktualisiert. Spätere Korrekturen ersetzen frühere Wünsche; der Startauftrag im Chat bleibt unverändert. Mit Im Chat ändern beschreibst du eine Änderung.",
+        "Die Beschreibung fasst die aktuell vereinbarten Anforderungen aus dem Pod-Chat zusammen. Sie wird nach abgeschlossenen Anfragen aktualisiert. Spätere Korrekturen ersetzen frühere Wünsche; der Startauftrag im Chat bleibt unverändert. Mit Im Chat ändern beschreibst du eine Änderung. Beschreibung aktualisieren erstellt den kurzen Übersichtstext aus dem bestehenden Verlauf neu, ohne eine Nachricht zu senden.",
         "Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, aktiviert kein Skript und ändert weder Ausführungsauftrag noch Automatik. Wird aktualisiert und Nicht aktualisiert zeigen ausstehende oder fehlgeschlagene Generierung an. Beschreibung erneut erstellen behält den letzten erfolgreichen Text, bis ein neues Ergebnis vorliegt. Pods ohne Chatverlauf behalten ihre bisherige Auftragsbeschreibung."
       ],
       "steps": [
