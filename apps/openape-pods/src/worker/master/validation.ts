@@ -52,7 +52,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
       }
-      if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'applicationId' in payload) {
+      if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
         const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
         await resolveProgram(assignment, pod.id, argv, true)
         const argument = (name: string) => argv[argv.indexOf(name) + 1]

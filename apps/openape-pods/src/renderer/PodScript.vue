@@ -21,10 +21,8 @@ export default defineComponent({
   components: { ScriptCode },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
-  data() { return { awaitingRun: false, assignedTools: [] as { capability: string, name: string }[], available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
+  data() { return { awaitingRun: false, available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
-    declaredTools(): { capability: string, name: string, assigned: boolean }[] { return [...new Set([...this.assignedTools.map(item => item.capability), ...this.buffer.toolCapabilities])].sort().map(capability => ({ capability, name: this.assignedTools.find(item => item.capability === capability)?.name ?? capability, assigned: this.assignedTools.some(item => item.capability === capability) })) },
-    declaredAliases(): string[] { return [...new Set([...(this.buffer.view?.credentialAliases ?? []), ...this.buffer.credentialAliases])].sort() },
     dirty(): boolean { return isDirty(this.buffer) },
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
@@ -39,7 +37,7 @@ export default defineComponent({
   methods: {
     t, diagnostic, number,
     async loadAvailable() {
-      try { const resources = await window.pods.resources({ type: 'list', podId: this.pod.id }); this.assignedTools = resources.resources.filter(item => item.kind === 'tool' && item.state === 'ready' && typeof item.configuration.capability === 'string').map(item => ({ capability: item.configuration.capability as string, name: item.name })); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
+      try { const resources = await window.pods.resources({ type: 'list', podId: this.pod.id }); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load variables' }
     },
     async prepareRun() {
@@ -182,7 +180,6 @@ export default defineComponent({
         {{ t('Manage variables and secrets') }}
       </button>
     </details>
-    <details><summary>{{ t('Required access') }}</summary><label v-for="tool in declaredTools" :key="tool.capability" class="script-capability"><input v-model="buffer.toolCapabilities" type="checkbox" :value="tool.capability" :disabled="readOnly || buffer.busy"><span>{{ tool.name }}<span v-if="!tool.assigned" class="muted"> · {{ t('Not assigned') }}</span></span></label><label v-for="item in declaredAliases" :key="item" class="script-capability"><input v-model="buffer.credentialAliases" type="checkbox" :value="item" :disabled="readOnly || buffer.busy"><span>{{ item }}<span v-if="!buffer.view?.credentialAliases.includes(item)" class="muted"> · {{ t('Not assigned') }}</span></span></label></details>
   </article>
 </template>
 

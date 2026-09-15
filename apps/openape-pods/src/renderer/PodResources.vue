@@ -1,5 +1,6 @@
 <script lang="ts">
 import ProgramPermissions from './ProgramPermissions.vue'
+import ScriptAccess from './ScriptAccess.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -7,7 +8,7 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  components: { ProgramPermissions },
+  components: { ProgramPermissions, ScriptAccess },
   props: { requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: '', credentialValue: '' } },
@@ -103,6 +104,7 @@ export default defineComponent({
           {{ t("Revoke access") }}
         </button>
       </article>
+      <ScriptAccess v-if="mode === 'values' && podId" :key="state.epoch" :pod-id="podId" kind="secrets" />
       <ProgramPermissions v-if="mode !== 'values'" :pod-id="podId" :state="state" @updated="value => { state = value }" />
       <div v-if="state.snapshot" class="snapshot-result" role="status">
         <h3>{{ t("Snapshot ready") }}</h3><p>{{ t("Each file is copied and hashed. Its source remains unchanged.") }}</p>

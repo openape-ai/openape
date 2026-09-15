@@ -4,8 +4,8 @@ const fingerprint = value => createHash('sha256').update(value).digest('hex')
 const maximumMessages = 1000
 
 export async function run(context) {
-  const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Settings')
+  const { mail_account: account, telegram_chat_id: chatId, language = 'de' } = context.variables
+  if (!account || !chatId) throw new Error('Set mail_account and telegram_chat_id in Variables and secrets')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
@@ -31,7 +31,7 @@ export async function run(context) {
   let cursor
   for (let page = 0; page < 20; page++) {
     const argv = ['pods', 'read', '--account', account, '--folder', 'inbox', '--operation', 'messages', '--since', since, ...(cursor ? ['--cursor', cursor] : [])]
-    const reply = await context.tools.invoke({ applicationId, argv })
+    const reply = await context.tools.invoke({ application: 'o365-cli', argv })
     if (reply.exitCode !== 0) throw new Error('Mail read failed; inspect the assigned application in Permissions')
     const result = JSON.parse(reply.stdout)
     if (result.account !== account || result.operation !== 'messages' || !Array.isArray(result.items)) throw new Error('Mail reply does not match the configured account and operation')
