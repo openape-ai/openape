@@ -1,4 +1,4 @@
-import type { ProgramCommand, TerminalView } from './programs'
+import type { ProgramCommand, TerminalView, ConsoleView } from './programs'
 import type { LanguageCommand, Language } from './language'
 import type { ScriptCommand, ScriptView } from './scripts'
 import type { DataCommand, DataView } from './data'
@@ -21,7 +21,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
-  programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView>
+  programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView>
   language: (command: LanguageCommand) => Promise<Language>
   scripts: (command: ScriptCommand) => Promise<ScriptView>
   data: (command: DataCommand) => Promise<DataView>

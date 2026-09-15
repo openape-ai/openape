@@ -132,6 +132,7 @@ export class FixtureWorker {
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string) {
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
+    if (command.type === 'prepare') return this.programs.prepare(command.podId, command.line)
     if (command.type === 'add') {
       if (!definition) throw new Error('Choose an application in the owner window')
       await this.programs.add(command.podId, command.epoch, definition)

@@ -166,13 +166,13 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
 
-Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Choose Open terminal beside the application name. Enter program arguments, choose Allow command, review the exact permission, then Start in terminal. The terminal runs that foreground CLI in the pod’s assigned application context. It does not start an unrestricted shell. The application manages its own sign-in; Pods does not infer an application login status.
+Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Open terminal presents a prompt in the pod workspace. Enter a complete command such as o365-cli pods login --account you@example.com and press Enter. Review the native permission dialog if the command needs approval. While the program runs, the terminal accepts its input; the command prompt returns after exit. Enter the application name alone for command forms from its descriptor, help for assigned programs, or pwd for the working directory. Shell composition and arbitrary Mac commands are unavailable. The application manages its own sign-in.
 
 Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
 
 HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
 
-Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A terminal owns the pod while open; regular runs wait until it closes. Closing the terminal stops its process and verifies that it has ended before releasing the pod.
+Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A running terminal program owns the pod and pauses automation. Verified process exit releases the lease; automation remains paused. An idle command prompt does not hold a run slot. The working directory is the writable pod workspace. HOME, temporary files and the login cache remain in the application’s private encrypted state.
 
 The current execution boundary supports foreground native CLIs. Forking, graphical applications and arbitrary interpreter dependency trees remain unavailable. Chosen custom CLIs have no network access by default; the bundled o365-cli has explicitly scoped Microsoft endpoints. External directories are currently assigned as individual reference files; the pod workspace provides writable file storage.
 
@@ -253,7 +253,7 @@ After sleep or downtime, one catch-up processes remaining input from saved progr
 
 Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using their own terminal or an imported application state file.
 
-For the mail notification recipe, add o365-cli in Permissions. Allow and run pods login --account you@example.com in its terminal, or import your existing token.json as application state. Then allow pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
+For the mail notification recipe, add o365-cli in Permissions. Enter o365-cli pods login --account you@example.com in its terminal, or import your existing token.json as application state. For a read command, enter o365-cli pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
 
 Under Variables and secrets, save mail_account and telegram_chat_id as variables, and telegram_bot_token as a secret. The script resolves the assigned application by name; no internal ID variable is required. The account remains explicit because the bundled CLI and grant require its scope. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or CLI application.
 
