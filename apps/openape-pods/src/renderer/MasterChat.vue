@@ -6,7 +6,7 @@ import type { MasterCommand, MasterView } from '../contracts/master'
 
 const props = defineProps<{ podId: string | null, creationId?: string }>()
 const emit = defineEmits<{ resources: [podId: string], settings: [podId: string], created: [podId: string] }>()
-const view = ref<MasterView | null>(null); const text = chatDraft(props.podId); const error = ref(''); const busy = ref(false)
+const view = ref<MasterView | null>(null); const text = chatDraft(props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
 async function refresh(): Promise<void> {
   try { view.value = await window.pods.master({ type: 'list', podId: props.podId, ...(props.creationId ? { creationId: props.creationId } : {}) }); if (view.value.boundPodId) emit('created', view.value.boundPodId) }
