@@ -116,3 +116,78 @@ it('keeps model conversation history and continuation threads separate for each 
   const response = await master.execute({ type: 'decline', id: proposal, podId: two.id })
   expect(response.messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
 })
+
+it('denies a model-forced read of another pod from a selected pod chat', async () => {
+  let target = ''; let calls = 0; const requests: unknown[] = []
+  await setup(async (body) => {
+    requests.push(body)
+    return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'cross-pod', call_id: 'cross-pod', name: 'pods_control', arguments: JSON.stringify({ action: 'inspect', podId: target, revision: 1 }) }) : recordedResponse()
+  })
+  const selected = store.createPod({ name: 'Selected', assignment: 'Only this task' })
+  target = store.createPod({ name: 'Private other pod', assignment: 'CROSS_POD_PRIVATE_ASSIGNMENT' }).id
+  await master.execute({ type: 'send', podId: selected.id, text: 'Inspect my configuration', id: randomUUID() })
+  await expect.poll(() => master.view(selected.id).state, { timeout: 20000 }).toBe('idle')
+  expect(JSON.stringify(requests[1])).not.toContain('CROSS_POD_PRIVATE_ASSIGNMENT')
+  expect(master.view(selected.id).messages.some(message => message.text.includes('outside the selected pod'))).toBe(true)
+})
+
+it('persists ordinary setup, keeps automation disabled and enforces revisions and scope before replay', async () => {
+  const { control, registry, scheduler } = await setup(); const signal = new AbortController().signal
+  const pod = store.createPod({ name: 'Setup', assignment: 'Prepare local work' }); const other = store.createPod({ name: 'Other', assignment: 'Untouched' })
+  const scope = { podId: pod.id, revision: pod.revision }; let key = 0
+  const action = (value: Record<string, unknown>) => control.execute(`setup-${++key}`, { ...scope, ...value }, signal, pod.id)
+  const list = { action: 'list' }
+  expect(await control.execute('scoped-list', list, signal, pod.id)).toEqual({ pods: [pod] })
+  await expect(control.execute('scoped-list', list, signal, other.id)).rejects.toThrow('reused')
+  const inspectOther = { action: 'inspect', podId: other.id, revision: 1 }
+  await control.execute('other-inspection', inspectOther, signal)
+  await expect(control.execute('other-inspection', inspectOther, signal, pod.id)).rejects.toThrow('outside the selected pod')
+  await expect(action({ action: 'setVariable', podId: other.id, name: 'target', value: 'changed', variableRevision: 0 })).rejects.toThrow('outside the selected pod')
+  await expect(control.execute('scoped-create', { action: 'create', name: 'Wrong', assignment: 'Wrong chat' }, signal, pod.id)).rejects.toThrow('outside the selected pod')
+  await action({ action: 'setVariable', name: 'greeting', value: 'Hello from chat', variableRevision: 0 })
+  await expect(action({ action: 'setVariable', name: 'greeting', value: 'Stale', variableRevision: 0 })).rejects.toThrow('Variable changed')
+  scheduler.save(pod.id, 0, { kind: 'interval', seconds: 60 }, true); scheduler.lifecycle(pod.id, 1, 'active')
+  await expect(action({ action: 'prepareSchedule', scheduleRevision: 0, spec: { kind: 'interval', seconds: 900 } })).rejects.toThrow('Stale schedule')
+  await action({ action: 'prepareSchedule', scheduleRevision: 1, spec: { kind: 'interval', seconds: 900 } })
+  await expect(action({ action: 'prepareSchedule', scheduleRevision: 2, spec: { kind: 'interval', seconds: 900 }, enabled: true })).rejects.toThrow('fields')
+  await action({ action: 'setGroup', name: 'Examples', organizationRevision: 1 })
+  await expect(action({ action: 'setGroup', name: 'Unwanted', organizationRevision: 1 })).rejects.toThrow('Groups changed')
+  const credentialId = randomUUID(); registry.assignCredential(pod.id, 'notification_token', credentialId, 0)
+  const reference = registry.assignReference(pod.id, 'Read-only reference', '/private/owner-only.txt')
+  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pod.id, 'tool', 'ready', 'Synthetic application', JSON.stringify({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', stateId: 'PRIVATE_STATE_ID', environment: { TOKEN: 'PRIVATE_ENV_VALUE' }, executable: '/private/host/tool', grants: [{ permission: 'fixture.read', display: 'PRIVATE_COMMAND_DETAIL', authority: { grantId: 'PRIVATE_GRANT_ID' } }] }))
+  const inspected = await action({ action: 'inspect' }) as { variables: unknown[], schedule: { enabled: boolean, spec: unknown }, organization: { revision: number, groups: unknown[] }, resources: { id: string, configuration: unknown }[] }
+  expect(inspected.variables).toEqual([{ name: 'greeting', value: 'Hello from chat', revision: 1 }])
+  expect(inspected.schedule).toMatchObject({ enabled: false, spec: { kind: 'interval', seconds: 900 } })
+  expect(inspected.organization.groups).toEqual([expect.objectContaining({ name: 'Examples', selected: true })])
+  expect(inspected.resources.find(resource => resource.id === reference.id)?.configuration).toEqual({})
+  expect(JSON.stringify(inspected)).not.toContain(credentialId); expect(JSON.stringify(inspected)).not.toContain('/private/owner-only.txt'); expect(JSON.stringify(inspected)).not.toContain('PRIVATE_'); expect(JSON.stringify(inspected)).not.toContain('/private/host/tool')
+  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', permissions: ['fixture.read'] })
+  await action({ action: 'setGroup', name: 'examples', organizationRevision: inspected.organization.revision })
+  expect(store.db.prepare('SELECT count(*) AS n FROM pod_groups').get()?.n).toBe(1)
+  const epoch = registry.epoch(pod.id)
+  await action({ action: 'requestAccess', request: { provider: 'credential', alias: 'bot_token', description: 'Provide the notification token in Settings' } })
+  await expect(action({ action: 'requestAccess', request: { provider: 'credential', alias: 'bot_token', value: 'DO_NOT_ACCEPT', description: 'Secret' } })).rejects.toThrow('proposal')
+  expect(registry.epoch(pod.id)).toBe(epoch)
+  expect(master.view(pod.id).proposals[0]?.body).toEqual({ provider: 'credential', alias: 'bot_token', description: 'Provide the notification token in Settings' })
+  scheduler.tick(); expect(dispatcher.view(pod.id).runs).toEqual([])
+  const reopened = new PodDatabase(root)
+  try { expect(reopened.getPod(pod.id).lifecycle).toBe('paused'); expect(reopened.getPod(other.id)).toEqual(other); expect(reopened.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(pod.id)?.value).toBe('Hello from chat') }
+  finally { reopened.close() }
+})
+
+it('executes the model-facing runtime example and preserves files and progress across runs', async () => {
+  const { control } = await setup(); const signal = new AbortController().signal
+  const reference = await control.execute('reference', { action: 'runtime' }, signal) as { example: string }
+  const pod = store.createPod({ name: 'Runtime reference', assignment: 'Write a greeting and count runs' }); const scope = { podId: pod.id, revision: 1 }
+  await control.execute('variable', { action: 'setVariable', ...scope, name: 'greeting', value: 'Documented runtime works', variableRevision: 0 }, signal)
+  const draft = await control.execute('draft', { action: 'draft', ...scope, draftId: null, draftRevision: 0, code: reference.example, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
+  const draftScope = { ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision }
+  await control.execute('validate', { action: 'validate', ...draftScope }, signal)
+  await control.execute('activate', { action: 'activate', ...draftScope }, signal)
+  for (let count = 1; count <= 2; count++) {
+    await control.execute(`run-${count}`, { action: 'run', ...scope }, signal)
+    await expect.poll(() => store.checkpoint(pod.id).body.count).toBe(count)
+    await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
+    expect(dispatcher.view(pod.id).runs[0]?.summary).toBe(`Documented runtime works (${count})`)
+  }
+})
