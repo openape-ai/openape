@@ -100,7 +100,7 @@ describe('master actions and actual app-server', () => {
 })
 it('keeps model conversation history and continuation threads separate for each pod', async () => {
   const requests: unknown[] = []
-  await setup(async (body) => { requests.push(body); return recordedResponse() }, true)
+  await setup(async (body) => { if (!JSON.stringify(body).includes('previousDescription')) requests.push(body); return recordedResponse() }, true)
   const one = store.createPod({ name: 'One', assignment: 'First task' }); const two = store.createPod({ name: 'Two', assignment: 'Second task' })
   for (const [podId, text] of [[one.id, 'ONLY_FIRST_POD_CONTEXT'], [two.id, 'ONLY_SECOND_POD_CONTEXT'], [one.id, 'Continue first']]) {
     await master.execute({ type: 'send', podId, text, id: randomUUID() })
@@ -201,4 +201,29 @@ it('executes the model-facing runtime example and preserves files and progress a
   const edited = await control.execute('inspect-owner-edit', { action: 'inspect', ...scope }, signal, pod.id) as { script: unknown }
   expect(edited.script).toMatchObject({ kind: 'draft', id: draft.draftId, revision: 2, code: editedCode })
   expect(store.getPod(pod.id).activeScript).toBe(activeHash)
+})
+
+it('adopts a creation turn atomically and scopes later tool calls and replay to its new pod', async () => {
+  const { control } = await setup(); const creationId = randomUUID(); const conversations = new (await import('../src/worker/master/conversations')).MasterConversations(store)
+  const scope = conversations.begin(creationId)
+  store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('initial', 'user', 'Create a pod', 'sent', 1); conversations.assign('initial', scope)
+  const signal = new AbortController().signal; const action = { action: 'create', name: 'Owned', assignment: 'Prepare' }
+  const pod = await control.execute('creation', action, signal, null, creationId) as { id: string }
+  expect(await control.execute('creation', action, signal, null, creationId)).toEqual(pod)
+  await expect(control.execute('second', action, signal, null, creationId)).rejects.toThrow('already')
+  const other = store.createPod({ name: 'Other', assignment: 'Preserve' })
+  await expect(control.execute('cross', { action: 'inspect', podId: other.id, revision: 1 }, signal, null, creationId)).rejects.toThrow('outside')
+  expect(master.view(pod.id).initialRequest?.text).toBe('Create a pod')
+})
+
+it('generates a bounded structured description through actual app-server without control tools', async () => {
+  const { runtime } = await setup(); const requests: Record<string, unknown>[] = []
+  const { summarizeConversation } = await import('../src/worker/master/summarize')
+  const result = await summarizeConversation(store, runtime, async (body) => {
+    requests.push(body as Record<string, unknown>)
+    return recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Checks every 30 minutes.' }), annotations: [] }] })
+  }, JSON.stringify({ previousDescription: '', conversation: [{ role: 'user', text: 'Check every 30 minutes' }] }), new AbortController().signal)
+  expect(result).toBe('Checks every 30 minutes.')
+  expect(JSON.stringify(requests[0].tools ?? [])).not.toContain('pods_control')
+  expect(store.listPods()).toHaveLength(0)
 })
