@@ -24,7 +24,7 @@ const shots = [
   ['schedule-settings.png', 'Explicit schedules and concurrency', 'A disabled daily schedule records its local time and timezone. Activation, pause/resume and the global concurrency limit are separate owner controls.'],
   ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. History shows its persisted result, checkpoint revision and ordered events.'],
   ['resources-packaged.png', 'Assigned reference snapshots', 'The packaged app lists the chosen file, its permission revision and the hash of a separate snapshot. Access can be revoked from the same view.'],
-  ['storage-settings.png', 'Saved local assignments', 'A pod assignment is committed by the SQLite worker and reopens after restarting the application. New pods remain paused.'],
+  ['storage-settings.png', 'Saved local pods', 'A pod is committed by the SQLite worker and reopens after restarting the application. New pods remain paused.'],
   ['foundation-light.png', 'Your pod workspace', 'An empty profile shows no invented pod or knowledge. The local worker status is reported directly.'],
   ['foundation-dark.png', 'Dark appearance', 'The workspace follows the dark color scheme while keeping the same navigation and state visible.'],
   ['foundation-compact.png', 'Compact desktop window', 'At the minimum supported window size, navigation and worker status stay visible while the content scrolls.'],

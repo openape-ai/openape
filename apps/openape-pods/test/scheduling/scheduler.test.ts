@@ -20,7 +20,7 @@ function fixture() {
   const runs = new RunStore(store); const started: { podId: string, id: string, trigger: RunTrigger }[] = []
   let now = 1000
   const scheduler = new Scheduler(store, { start: (podId, trigger) => { const run = runs.reserve(podId, store.getPod(podId).activeScript!, resources.epoch(podId), trigger).run; started.push({ podId, id: run.id, trigger }); return run.id } }, () => now)
-  const pod = (active = true) => { const created = store.createPod({ name: 'Synthetic', assignment: 'Process synthetic events only' }); if (active) scheduler.lifecycle(created.id, created.revision, 'active'); installExample(store, resources, created.id, 'deterministic', 'a'.repeat(64)); return created.id }
+  const pod = (active = true) => { const created = store.createPod({ name: 'Synthetic' }); if (active) scheduler.lifecycle(created.id, created.revision, 'active'); installExample(store, resources, created.id, 'deterministic', 'a'.repeat(64)); return created.id }
   return { store, resources, runs, scheduler, started, pod, time: (instant: number) => { now = instant } }
 }
 describe('persistent scheduling and intake', () => {
@@ -90,7 +90,7 @@ describe('persistent scheduling and intake', () => {
     f.runs.finish(f.started[0]!.id, 'failed', 'Failed', 'Synthetic failure')
     f.scheduler.acceptEvent(pod, 'fixture', 'B', {}); f.scheduler.tick()
     expect(f.started).toHaveLength(1); expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 1 })
-    const other = f.store.createPod({ name: 'Unconfigured', assignment: 'No script' })
+    const other = f.store.createPod({ name: 'Unconfigured' })
     f.scheduler.requestManual(other.id)
     expect(f.scheduler.view(other.id).blocked).toBe(1)
   })

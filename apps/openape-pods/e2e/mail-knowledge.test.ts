@@ -69,7 +69,7 @@ it('mail-knowledge: runs the versioned recipe through the actual script, SDK and
   const config = await runtime(false)
   Object.assign(config, { binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') })
   const store = new PodDatabase(root); const resources = new ResourceRegistry(store, () => {})
-  const pod = store.createPod({ name: 'Golden mail pod', assignment: 'Read assigned synthetic delivery commitments only.' })
+  const pod = store.createPod({ name: 'Golden mail pod' })
   const connectionId = randomUUID()
   const scope = { account: 'synthetic@example.invalid', folders: ['rules'], attachments: false }
   for (const [kind, configuration] of [

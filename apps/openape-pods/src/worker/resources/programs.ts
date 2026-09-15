@@ -19,7 +19,7 @@ export class ProgramControl {
     if (pod.lifecycle === 'archived') throw new Error('Archived pods cannot run or configure applications')
     if (command.type === 'check') {
       const lease = this.store.db.prepare('SELECT * FROM program_leases WHERE pod_id=? AND session_id=?').get(pod.id, command.sessionId)
-      if (!lease || lease.epoch !== this.resources.epoch(pod.id) || lease.assignment_revision !== pod.revision) throw new Error('Terminal permission or pod assignment changed')
+      if (!lease || lease.epoch !== this.resources.epoch(pod.id) || lease.assignment_revision !== pod.bindingRevision) throw new Error('Terminal permission or script binding changed')
       return true
     }
     this.resources.assertCurrent(pod.id, command.epoch)
@@ -31,7 +31,7 @@ export class ProgramControl {
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(pod.id) || this.store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(pod.id)) throw new Error('Finish or recover the current pod run or terminal first')
       const resource = this.resources.list(pod.id).find(item => item.id === command.applicationId && item.state === 'ready' && item.configuration.type === 'program')
       if (!resource) throw new Error('Application is not assigned to this pod')
-      this.store.db.prepare('INSERT INTO program_leases VALUES(?,?,?,?,?)').run(pod.id, command.sessionId, command.applicationId, command.epoch, pod.revision)
+      this.store.db.prepare('INSERT INTO program_leases VALUES(?,?,?,?,?)').run(pod.id, command.sessionId, command.applicationId, command.epoch, pod.bindingRevision)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(pod.id)
       return resource
     })

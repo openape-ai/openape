@@ -14,7 +14,7 @@ export function authorizeRunService(store: PodDatabase, registry: ResourceRegist
   runs.assertLease(scope.runId)
   const run = runs.get(scope.runId)
   const revision = store.db.prepare('SELECT assignment_revision FROM runs WHERE id=?').get(scope.runId)?.assignment_revision
-  if (run.podId !== scope.podId || store.getPod(scope.podId).revision !== scope.assignmentRevision || revision !== scope.assignmentRevision) throw new Error('Service assignment changed')
+  if (run.podId !== scope.podId || store.getPod(scope.podId).bindingRevision !== scope.assignmentRevision || revision !== scope.assignmentRevision) throw new Error('Service binding changed')
   registry.assertCurrent(scope.podId, scope.epoch)
   const row = store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(scope.podId, run.scriptHash)
   if (!row) throw new Error('Pinned service script is missing')

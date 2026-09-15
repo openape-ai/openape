@@ -19,7 +19,7 @@ afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(
 function fixture() {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-program-control-'))); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
-  const pod = store.createPod({ name: 'Application fixture', assignment: 'Synthetic CLI only' })
+  const pod = store.createPod({ name: 'Application fixture' })
   const id = randomUUID()
   const configuration: ProgramAssignment = { type: 'program', name: 'fixture', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), entryFiles: [], environment: {}, networkHosts: [], stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, grants: [] }
   const control = new ProgramControl(store, resources)
@@ -39,7 +39,7 @@ it('excludes a pod run and data maintenance while its terminal owns the lease', 
   f.runs.finish(run.run.id, 'completed', 'Fixture', null)
 })
 it('fences changed resources and prevents borrowing another pod application', () => {
-  const f = fixture(); const other = f.store.createPod({ name: 'Other', assignment: 'Separate' }); const sessionId = randomUUID()
+  const f = fixture(); const other = f.store.createPod({ name: 'Other' }); const sessionId = randomUUID()
   expect(() => f.control.execute({ type: 'reserve', podId: other.id, applicationId: f.id, epoch: 0, sessionId })).toThrow('not assigned')
   f.control.execute({ type: 'reserve', podId: f.pod.id, applicationId: f.id, epoch: f.resources.epoch(f.pod.id), sessionId })
   f.resources.revoke(f.pod.id, f.id, 1)
@@ -66,7 +66,7 @@ it('keeps HTTP origin, method and pod identity checks independent of declared ca
 })
 
 it('cannot overwrite an application owned by another pod', () => {
-  const f = fixture(); const other = f.store.createPod({ name: 'Other', assignment: 'Separate' })
+  const f = fixture(); const other = f.store.createPod({ name: 'Other' })
   expect(() => f.control.execute({ type: 'save', podId: other.id, id: f.id, epoch: 0, configuration: { ...f.configuration, name: 'Replaced' } })).toThrow('another pod')
   expect(f.resources.list(f.pod.id)[0]?.name).toBe('fixture')
   expect(f.resources.epoch(other.id)).toBe(0)

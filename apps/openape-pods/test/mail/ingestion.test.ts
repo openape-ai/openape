@@ -11,7 +11,7 @@ let root = ''; let store: PodDatabase | undefined
 afterEach(async () => { store?.close(); if (root) await rm(root, { recursive: true, force: true }) })
 it('retains exact source versions across pagination retries and moved old messages', async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-mail-ingest-'))); store = new PodDatabase(root)
-  const pod = store.createPod({ name: 'Mail fixture', assignment: 'Read only synthetic mail' })
+  const pod = store.createPod({ name: 'Mail fixture' })
   const scope = { account: 'pod@example.invalid', folders: ['rules'], attachments: true }
   async function ingest(version: string, folder = 'rules') {
     const body = JSON.stringify({ version: 1, operation: 'messages', account: scope.account, folder: 'rules', items: [{ id: 'immutable', changeKey: version, parentFolderId: folder, receivedDateTime: '2020-01-01T00:00:00Z', subject: 'Synthetic', body: { contentType: 'text', content: 'Retained evidence' } }], complete: true })
@@ -29,7 +29,7 @@ it('retains exact source versions across pagination retries and moved old messag
 
 it('retains moved messages without colliding with the original source version', async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-mail-move-'))); store = new PodDatabase(root)
-  const pod = store.createPod({ name: 'Moved mail', assignment: 'Read two folders' })
+  const pod = store.createPod({ name: 'Moved mail' })
   const scope = { account: 'pod@example.invalid', folders: ['inbox', 'rules'], attachments: false }
   const ids: string[] = []
   for (const folder of scope.folders) {

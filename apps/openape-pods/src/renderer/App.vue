@@ -170,7 +170,7 @@ export default defineComponent({
         </section>
         <section v-else id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
-            <PodDescription :key="pod.id" :pod-id="pod.id" :assignment="pod.assignment" @change="chatDraft(podId).value ||= t('Please update this pod: '); master()" />
+            <PodDescription :key="pod.id" :pod-id="pod.id" @change="chatDraft(podId).value ||= t('Please update this pod: '); master()" />
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>

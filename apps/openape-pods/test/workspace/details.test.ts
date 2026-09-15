@@ -15,7 +15,7 @@ afterEach(() => { for (const store of stores.splice(0)) store.close(); for (cons
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-details-')); roots.push(root)
   const store = new PodDatabase(root); stores.push(store)
-  const pod = store.createPod({ name: 'Orders', assignment: 'Read assigned synthetic orders' }); const resources = new ResourceRegistry(store, () => {})
+  const pod = store.createPod({ name: 'Orders' }); const resources = new ResourceRegistry(store, () => {})
   return { store, pod, resources, details: new WorkspaceDetails(store, resources) }
 }
 describe('pod details and version controls', () => {
@@ -26,7 +26,7 @@ describe('pod details and version controls', () => {
     expect(view.counts).toEqual({ finding: 1, question: 0, gap: 0 }); expect(view.total).toBe(2)
     expect(view.claims.map(claim => claim.current)).toEqual([true, false])
     expect(f.details.execute({ type: 'source', podId: f.pod.id, id: 'source', version: '0' }).source?.content).toBe('Due Monday')
-    const foreign = f.store.createPod({ name: 'Other', assignment: 'No source permission' })
+    const foreign = f.store.createPod({ name: 'Other' })
     expect(() => f.details.execute({ type: 'source', podId: foreign.id, id: 'source', version: '0' })).toThrow('not assigned')
     expect(() => parseDetailsCommand({ type: 'source', podId: f.pod.id, path: '/private', id: 'source', version: '0' })).toThrow('scope')
   })
@@ -42,9 +42,9 @@ describe('pod details and version controls', () => {
     f.resources.assignReference(f.pod.id, 'Reference', join(f.store.root, 'assigned.txt'))
     expect(() => f.details.execute({ ...command, expectedActive: first })).toThrow('Validate')
   })
-  it('denies activation after assignment or archival changes', () => {
+  it('denies activation after archival', () => {
     const f = fixture(); installExample(f.store, f.resources, f.pod.id, 'deterministic', 'a'.repeat(64)); const hash = f.store.getPod(f.pod.id).activeScript!
-    f.store.updatePod(f.pod.id, 1, { name: 'Changed', assignment: 'Changed scope', lifecycle: 'archived' })
+    f.store.updatePod(f.pod.id, 1, { name: 'Changed', lifecycle: 'archived' })
     expect(() => f.details.execute({ type: 'activate', podId: f.pod.id, hash, expectedActive: hash, assignmentRevision: 1 })).toThrow('changed')
   })
 })

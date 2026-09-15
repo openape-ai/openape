@@ -16,7 +16,7 @@ async function fixture() {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'Pods Müller backup '))); roots.push(base)
   const root = join(base, 'profile'); const exports = join(base, 'exports'); await mkdir(exports)
   const store = new PodDatabase(root); stores.push(store)
-  const pod = store.createPod({ name: 'Orders', assignment: 'Read only synthetic evidence' })
+  const pod = store.createPod({ name: 'Orders' })
   store.commitProgress({ podId: pod.id, expectedRevision: 0, checkpoint: { cursor: 'committed' }, sources: [{ id: 'source', version: 'v1', locator: 'fixture:source', content: 'Delivery Friday' }], claims: [{ id: 'claim', matter: 'order', kind: 'finding', text: 'Delivery Friday', sourceIds: ['source'] }] })
   const code = 'export async function run() {}'
   store.storeScript(pod.id, { schemaVersion: 1, contentHash: digest(code), entrypoint: 'run.mjs', dependencyLockHash: digest('lock'), runtimeVersion: 'node24', capabilities: [], triggers: ['manual'], inputSchemaHash: digest('input'), outputSchemaHash: digest('output'), checkpointSchemaVersion: 1, assignmentRevision: 1, effects: 'readOnly' }, code)
@@ -88,7 +88,7 @@ it('deletes an archived pod locally without deleting shared connections or origi
   const credentialId = randomUUID(); new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'crm', credentialId, 0)
   const retention = new DataRetention(store, 'unused-helper')
   await expect(retention.deletePod(pod.id, pod.revision, pod.name)).rejects.toThrow('Archive')
-  store.updatePod(pod.id, 1, { name: pod.name, assignment: pod.assignment, lifecycle: 'archived' })
+  store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
   await retention.deletePod(pod.id, 2, pod.name)
   expect(store.listPods()).toEqual([]); expect(store.db.prepare('SELECT * FROM connections').all()).toHaveLength(1)
   expect(await readFile(original, 'utf8')).toBe('OWNER_FILE'); expect(await readdir(exports)).toEqual([])
