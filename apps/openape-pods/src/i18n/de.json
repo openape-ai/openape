@@ -1385,5 +1385,6 @@
   "Pod workspace cannot contain symbolic directory links": "Das Pod-Arbeitsverzeichnis darf keine symbolischen Verzeichnisverknüpfungen enthalten",
   "Application command is ambiguous; remove the duplicate assignment in Permissions": "Der Anwendungsbefehl ist nicht eindeutig. Entferne die doppelte Zuweisung unter Berechtigungen.",
   "Command is not assigned to this pod. Enter help to list available applications.": "Dieser Befehl ist dem Pod nicht zugewiesen. Gib help ein, um die verfügbaren Anwendungen anzuzeigen.",
-  "Application permission response is missing": "Die Antwort auf die Anwendungsfreigabe fehlt"
+  "Application permission response is missing": "Die Antwort auf die Anwendungsfreigabe fehlt",
+  "Terminal workspace changed before launch": "Das Terminal-Arbeitsverzeichnis wurde vor dem Start verändert"
 }
