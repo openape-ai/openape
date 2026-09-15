@@ -48,8 +48,8 @@ it('advertises assigned application invocations to the agent without credential 
     const list = await rpc('tools/list')
     expect(list.result.tools).toHaveLength(1)
     expect(list.result.tools[0].inputSchema.properties.applicationId).toEqual({ type: 'string' })
-    expect(list.result.tools[0].inputSchema.oneOf).toEqual([{ required: ['applicationId'] }, { required: ['toolId'] }])
-    const invocation = { applicationId: 'assigned-application', argv: ['pods', 'read'] }
+    expect(list.result.tools[0].inputSchema.oneOf).toEqual([{ required: ['application'] }, { required: ['applicationId'] }, { required: ['toolId'] }])
+    const invocation = { application: 'assigned-application', argv: ['pods', 'read'] }
     expect((await rpc('tools/call', { name: 'ape_shell', arguments: invocation })).result.isError).toBeUndefined()
     expect(tool).toHaveBeenCalledWith(invocation, expect.any(AbortSignal))
     for (const name of ['credentials.get', 'http.request']) expect((await rpc('tools/call', { name, arguments: {} })).error.code).toBe(-32601)

@@ -1355,5 +1355,16 @@
   "Not set": "Nicht hinterlegt",
   "Requested secret · Not set": "Angefragtes Geheimnis · Nicht hinterlegt",
   "Set secret": "Geheimnis hinterlegen",
-  "Replace secret": "Geheimnis ersetzen"
+  "Replace secret": "Geheimnis ersetzen",
+  "Secrets used by the script": "Vom Skript verwendete Geheimnisse",
+  "Applications used by the script": "Vom Skript verwendete Anwendungen",
+  "Select what the saved script may use. Changes require a new script check; existing access approvals remain mandatory.": "Wähle, was das gespeicherte Skript verwenden darf. Änderungen erfordern eine erneute Skriptprüfung; Zugriffsfreigaben bleiben erforderlich.",
+  "Save script access": "Skriptzugriffe speichern",
+  "Script access saved": "Skriptzugriffe gespeichert",
+  "Save your script editor changes first": "Speichere zuerst deine Änderungen im Skript-Editor",
+  "Could not load script access": "Skriptzugriffe konnten nicht geladen werden",
+  "Could not save script access": "Skriptzugriffe konnten nicht gespeichert werden",
+  "Set up {name}": "{name} einrichten",
+  "Start in terminal": "Im Terminal starten",
+  "Application name is ambiguous; use its explicit resource ID": "Der Anwendungsname ist mehrdeutig; verwende die eindeutige Ressourcen-ID"
 }
