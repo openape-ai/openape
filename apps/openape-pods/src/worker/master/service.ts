@@ -55,7 +55,7 @@ export class MasterService {
   async execute(command: MasterCommand): Promise<MasterView> {
     const conversations = new MasterConversations(this.store)
     if (command.type === 'adopt') { new LegacyChatAdoption(this.store).adopt(command.podId, command.hash); this.descriptions.request(command.podId); this.descriptions.start(); return this.view(command.podId) }
-    if (command.type === 'summarize') { this.descriptions.request(command.podId); this.descriptions.start(); return this.view(command.podId) }
+    if (command.type === 'summarize') { this.descriptions.request(command.podId, true); this.descriptions.start(); return this.view(command.podId) }
     if (command.type === 'begin') { conversations.begin(command.id); return this.view(null, command.id) }
     if (command.type === 'list') return this.view(command.podId === undefined ? this.context : command.podId, command.creationId)
     const requestedScope = command.creationId ? `creation:${command.creationId}` : command.podId ?? ''

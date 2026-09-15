@@ -68,3 +68,16 @@ it('segments an oversized message without dropping text and resumes after an int
   fail = false; descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
   expect(seen).toBe(original); expect(descriptions.view(pod.id)).toMatchObject({ state: 'ready', revision: 1 })
 })
+
+it('explicitly regenerates a ready description from its original conversation while retaining the published text', async () => {
+  const pod = store.createPod({ name: 'Refresh', assignment: 'Keep' }); let calls = 0
+  const descriptions = new PodDescriptions(store, async (input) => {
+    calls++; expect(input).toContain('Original request')
+    if (calls === 2) expect(descriptions.view(pod.id)?.text).toBe('Previous summary')
+    return calls === 1 ? 'Previous summary' : 'A concise replacement'
+  })
+  message(pod.id, 'Original request'); descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
+  descriptions.request(pod.id, true); descriptions.start(); await descriptions.idle()
+  expect(descriptions.view(pod.id)).toMatchObject({ state: 'ready', text: 'A concise replacement', revision: 2 })
+  expect(calls).toBe(2); expect(store.getPod(pod.id)).toEqual(pod)
+})
