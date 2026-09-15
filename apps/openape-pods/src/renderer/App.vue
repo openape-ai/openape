@@ -7,6 +7,8 @@ import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
 import Onboarding from './Onboarding.vue'
 import MasterChat from './MasterChat.vue'
+import PodDescription from './PodDescription.vue'
+import { chatDraft } from './chat-buffer'
 import PodScript from './PodScript.vue'
 import PodSettings from './PodSettings.vue'
 import PodResources from './PodResources.vue'
@@ -19,9 +21,9 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodResources, PodRuns, PodKnowledge },
+  components: { PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, valuesOpen: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, valuesOpen: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -33,6 +35,8 @@ export default defineComponent({
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
   async mounted() {
+    try { const creation = localStorage.getItem('pods-creation-id'); if (creation && /^[a-f0-9-]{36}$/.test(creation)) { this.creationId = creation; this.creating = true; this.selected = 'Chat' } }
+    catch (error) { this.dataError = String(error) }
     try { const width = Number(localStorage.getItem('pods-sidebar-width')); if (width >= 176 && width <= 360) this.sidebarWidth = width }
     catch (error) { this.dataError = String(error) }
     try { this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
@@ -41,7 +45,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label, dateTime,
+    t, diagnostic, label, dateTime, chatDraft,
     async openValues() { this.valuesOpen = true; this.selected = 'Settings'; await this.$nextTick(); document.getElementById('pod-values')?.scrollIntoView({ block: 'start' }) },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
@@ -70,7 +74,8 @@ export default defineComponent({
     async selectPod(id: string) { this.podId = id; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
-    master(create = false) { this.creating = create; if (create) this.podId = ''; this.selected = 'Chat' },
+    master(create = false) { this.creating = create; if (create) { this.podId = ''; this.creationId = crypto.randomUUID(); localStorage.setItem('pods-creation-id', this.creationId) }; this.selected = 'Chat' },
+    async created(id: string) { this.podId = id; this.creating = false; this.creationId = ''; localStorage.removeItem('pods-creation-id'); this.selected = 'Chat'; await this.refresh() },
     async runOnce() {
       if (!this.pod) return; try { await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
@@ -142,7 +147,7 @@ export default defineComponent({
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="card master-panel">
-          <MasterChat :key="creating || selected === 'Workspace chat' ? 'workspace' : podId" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); await openValues() }" /><details v-if="creating">
+          <MasterChat :key="creating || selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); await openValues() }" /><details v-if="creating">
             <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
           </details>
         </section>
@@ -165,13 +170,7 @@ export default defineComponent({
         </section>
         <section v-else id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
-            <article class="card">
-              <h2>{{ t('Description') }}</h2><p class="assignment-text">
-                {{ pod.assignment }}
-              </p><details @toggle="descriptionExpanded = ($event.target as HTMLDetailsElement).open">
-                <summary>{{ t('Edit description') }}</summary><PodSettings v-if="descriptionExpanded" :selected-pod-id="podId" description-only @selected="changed" />
-              </details>
-            </article>
+            <PodDescription :key="pod.id" :pod-id="pod.id" :assignment="pod.assignment" @change="chatDraft(podId).value ||= t('Please update this pod: '); master()" />
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>

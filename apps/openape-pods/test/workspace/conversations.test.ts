@@ -27,3 +27,23 @@ it('keeps legacy and per-pod history and continuation IDs separate after reopeni
   }
   finally { store.close(); rmSync(root, { recursive: true, force: true }) }
 })
+
+it('adopts a creation conversation without losing its first prompt or later streamed messages', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pods-creation-')); const store = new PodDatabase(root)
+  try {
+    const conversations = new MasterConversations(store); const id = '11111111-1111-4111-8111-111111111111'
+    const scope = conversations.begin(id)
+    store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('initial', 'user', 'Check every 15 minutes', 'sent', 1)
+    conversations.assign('initial', scope)
+    const pod = store.createPod({ name: 'Created', assignment: 'Check' })
+    conversations.bind(id, pod.id)
+    store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('response', 'assistant', 'Prepared', 'completed', 2)
+    conversations.assign('response', scope)
+    expect(conversations.messages(pod.id).map(message => message.text)).toEqual(['Check every 15 minutes', 'Prepared'])
+    expect(conversations.initial(pod.id)?.text).toBe('Check every 15 minutes')
+    expect(conversations.messages('')).toEqual([])
+    const other = store.createPod({ name: 'Other', assignment: 'Other' })
+    expect(() => conversations.bind(id, other.id)).toThrow('already')
+  }
+  finally { store.close(); rmSync(root, { recursive: true, force: true }) }
+})

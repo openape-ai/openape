@@ -1,26 +1,31 @@
 <script setup lang="ts">
-import { t, diagnostic, label } from './i18n'
+import { t, diagnostic, label, dateTime } from './i18n'
 import { chatDraft } from './chat-buffer'
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import type { MasterCommand, MasterView } from '../contracts/master'
 
-const props = defineProps<{ podId: string | null }>()
-const emit = defineEmits<{ resources: [podId: string], settings: [podId: string] }>()
+const props = defineProps<{ podId: string | null, creationId?: string }>()
+const emit = defineEmits<{ resources: [podId: string], settings: [podId: string], created: [podId: string] }>()
 const view = ref<MasterView | null>(null); const text = chatDraft(props.podId); const error = ref(''); const busy = ref(false)
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
 async function refresh(): Promise<void> {
-  try { view.value = await window.pods.master({ type: 'list', podId: props.podId }) }
+  try { view.value = await window.pods.master({ type: 'list', podId: props.podId, ...(props.creationId ? { creationId: props.creationId } : {}) }); if (view.value.boundPodId) emit('created', view.value.boundPodId) }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
   if (!closed) timer = setTimeout(() => { void refresh() }, 500)
 }
 async function command(value: MasterCommand): Promise<void> {
   busy.value = true; error.value = ''
-  try { view.value = await window.pods.master(value); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
+  try { view.value = await window.pods.master({ ...value, ...(props.creationId ? { creationId: props.creationId } : {}) }); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Master request failed' }
   finally { busy.value = false }
 }
 async function send(): Promise<void> { await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId }) }
-onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
+onMounted(async () => {
+  if (props.creationId) {
+    try { await window.pods.master({ type: 'begin', id: props.creationId }) }
+    catch (failure) { error.value = String(failure); return }
+  }; await refresh()
+}); onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
 </script>
 
 <template>
@@ -31,8 +36,35 @@ onMounted(() => { void refresh() }); onBeforeUnmount(() => { closed = true; clea
     <p v-if="error || view?.error" role="alert" class="error-message">
       {{ diagnostic(error || view?.error) }}
     </p>
+    <section v-if="view?.adoption && podId" class="card">
+      <h3>{{ t('Recover creation chat') }}</h3><p>{{ t('These original requests can be linked to this pod. Review them before continuing.') }}</p>
+      <details>
+        <summary>{{ t('Review original requests') }}</summary><p v-for="request in view.adoption.requests" :key="request.id" class="master-text">
+          {{ request.text }}
+        </p>
+      </details>
+      <button :disabled="busy" @click="command({ type: 'adopt', podId, hash: view.adoption.hash })">
+        {{ t('Link this history to the pod') }}
+      </button>
+    </section>
+    <article v-if="view?.initialRequest" class="start-request" :aria-label="t('Start request')">
+      <div class="card-heading">
+        <strong>{{ t('Start request') }}</strong><time>{{ dateTime(view.initialRequest.at) }}</time>
+      </div>
+      <p class="muted">
+        {{ t('Your original request. Later changes remain in the conversation below.') }}
+      </p>
+      <details v-if="view.initialRequest.text.length > 800">
+        <summary>{{ t('Show original request') }}</summary><p class="master-text">
+          {{ view.initialRequest.text }}
+        </p>
+      </details>
+      <p v-else class="master-text">
+        {{ view.initialRequest.text }}
+      </p>
+    </article>
     <div class="master-history" role="log" :aria-label="t('Pod conversation')" aria-live="polite">
-      <article v-for="message in view?.messages" :key="message.id" class="master-message" :class="message.role">
+      <article v-for="message in view?.messages.filter(item => item.id !== view?.initialRequest?.id)" :key="message.id" class="master-message" :class="message.role">
         <div class="card-heading">
           <strong>{{ message.role === 'user' ? t("You") : message.role === 'tool' ? t("Pod action") : t("Pod assistant") }}</strong><span class="badge">{{ label(message.state) }}</span>
         </div>
