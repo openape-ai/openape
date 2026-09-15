@@ -29,18 +29,18 @@ export class RunStore {
       if (count >= maximum) throw new Error('All run slots are occupied')
       const pod = this.store.getPod(podId)
       if (pod.lifecycle === 'archived' || pod.activeScript !== scriptHash) throw new Error('Script is no longer active')
-      const validation = this.store.db.prepare('SELECT evidence FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, scriptHash, pod.revision, epoch)
-      if (!validation) throw new Error('Script needs validation for the current assignment and resources')
+      const validation = this.store.db.prepare('SELECT evidence FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, scriptHash, pod.bindingRevision, epoch)
+      if (!validation) throw new Error('Script needs validation for the current script and resources')
       const id = randomUUID(); const now = Date.now()
       const checkpoint = this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(podId)!.revision as number
-      this.store.db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, podId, scriptHash, 'running', now, null, '', null, checkpoint, pod.revision)
+      this.store.db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, podId, scriptHash, 'running', now, null, '', null, checkpoint, pod.bindingRevision)
       this.store.db.prepare('INSERT INTO run_inputs VALUES(?,?,?)').run(id, trigger.reason, JSON.stringify(trigger.eventIds))
       for (const eventId of trigger.eventIds) {
         const claimed = this.store.db.prepare('UPDATE accepted_events SET state=\'claimed\',run_id=? WHERE id=? AND pod_id=? AND state=\'pending\'').run(id, eventId, podId)
         if (claimed.changes !== 1) throw new Error('Event is no longer available for this run')
       }
       this.store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,?)').run(podId, id, this.bootId, now, null)
-      this.append(id, 'started', { scriptHash, assignmentRevision: pod.revision, resourceEpoch: epoch })
+      this.append(id, 'started', { scriptHash, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch })
       return { run: this.get(id), existing: false }
     })
   }

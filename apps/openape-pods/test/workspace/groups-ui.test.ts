@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest'
 import PodNavigation from '../../src/renderer/PodNavigation.vue'
 import type { StoredPod } from '../../src/contracts/control'
 
-const pod: StoredPod = { id: '00000000-0000-4000-8000-000000000001', name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: null }
+const pod: StoredPod = { id: '00000000-0000-4000-8000-000000000001', name: 'Orders', revision: 1, lifecycle: 'paused', activeScript: null }
 const group = { id: '00000000-0000-4000-8000-000000000002', name: '<script>Work</script>', collapsed: false, podIds: [pod.id] }
 const props = { pods: [pod], podId: pod.id, organization: { revision: 3, groups: [group] }, available: true, highlight: true }
 it('shows grouped pods as literal labels, selects pods, collapses groups and moves using the picker', async () => {

@@ -11,7 +11,7 @@ import { fixtureDirectory } from '../src/main/fixture'
 it('script-editor: edits exact source, preserves navigation, validates and runs the visible script in the packaged app', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-script-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root)
-  const pod = store.createPod({ name: 'Order review', assignment: 'Review assigned order information, keep supported findings and record questions that need an answer.' })
+  const pod = store.createPod({ name: 'Order review' })
   const resources = new ResourceRegistry(store, () => {})
   const reference = join(root, 'order-notes.txt'); await writeFile(reference, 'Synthetic reference: inspect delivery confirmations and keep sources.')
   resources.assignReference(pod.id, 'Order notes', reference)

@@ -7,7 +7,7 @@ import type { ScriptView } from '../../src/contracts/scripts'
 
 function fixture() {
   const hash = 'a'.repeat(64)
-  const view: ScriptView = { resourceEpoch: 0, credentialAliases: [], pod: { id: randomUUID(), name: 'Orders', assignment: 'Read', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}', credentialAccessApproved: false } }
+  const view: ScriptView = { resourceEpoch: 0, credentialAliases: [], pod: { id: randomUUID(), name: 'Orders', revision: 1, lifecycle: 'paused', activeScript: hash }, versions: [{ hash, assignmentRevision: 1, validated: true, active: true }], drafts: [], source: { kind: 'version', id: hash, code: '// <img src=x onerror=alert(1)>\nexport async function run() {}', capabilities: [], revision: 0, assignmentRevision: 1, hash, validated: true, evidence: '{}', credentialAccessApproved: false } }
   const scripts = vi.fn().mockResolvedValue(structuredClone(view))
   window.pods = { programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, resources: async () => ({ resources: [], variables: [], epoch: 0 }), scripts } as unknown as typeof window.pods
   return { view, scripts }

@@ -47,12 +47,12 @@ export function parseMasterView(value: unknown): MasterView {
 export type MasterAction =
   | { action: 'list' }
   | { action: 'runtime' }
-  | { action: 'create', name: string, assignment: string }
+  | { action: 'create', name: string }
   | { action: 'inspect' | 'run' | 'pause' | 'resume' | 'installMailRecipe', podId: string, revision: number }
   | { action: 'setVariable', podId: string, revision: number, name: string, value: string, variableRevision: number }
   | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
   | { action: 'setGroup', podId: string, revision: number, name: string | null, organizationRevision: number }
-  | { action: 'revise', podId: string, revision: number, name: string, assignment: string }
+  | { action: 'revise', podId: string, revision: number, name: string }
   | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[] }
   | { action: 'validate' | 'activate', podId: string, revision: number, draftId: string, draftRevision: number }
   | { action: 'rollback', podId: string, revision: number, hash: string, expectedActive: string | null }
@@ -60,13 +60,13 @@ export type MasterAction =
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
-  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setGroup: ['name', 'organizationRevision'], create: ['name', 'assignment'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name', 'assignment'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
+  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
   const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]]
   if (Object.keys(item).some(key => !allowed.includes(key)) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
   if (scoped && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || !Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) throw new Error('Invalid master pod revision')
-  if (allowed.includes('assignment') && (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100 || typeof item.assignment !== 'string' || !item.assignment.trim() || item.assignment.length > 20000)) throw new Error('Invalid pod assignment')
+  if (['create', 'revise'].includes(item.action) && (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100)) throw new Error('Invalid pod name')
   if (allowed.includes('draftId') && ((item.action !== 'draft' || item.draftId !== null) && (typeof item.draftId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.draftId)))) throw new Error('Invalid draft identity')
   if (allowed.includes('draftRevision') && (!Number.isSafeInteger(item.draftRevision) || (item.draftRevision as number) < (item.action === 'draft' && item.draftId === null ? 0 : 1))) throw new Error('Invalid draft revision')
   if (item.action === 'draft' && (typeof item.code !== 'string' || !item.code.trim() || item.code.length > 150000)) throw new Error('Invalid draft contract')
@@ -89,13 +89,13 @@ export function parseMasterAction(value: unknown): MasterAction {
 }
 export const masterTool = {
   type: 'function', name: 'pods_control',
-  description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. A selected pod chat can only manage that pod. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. requestAccess creates an owner-reviewed proposal, never a permission or credential approval. Validate, repair failures and activate only within existing assignments and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
+  description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. A selected pod chat can only manage that pod. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. requestAccess creates an owner-reviewed proposal, never a permission or credential approval. Validate, repair failures and activate only with the current script and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
   inputSchema: {
     type: 'object', required: ['action'], additionalProperties: false,
     properties: {
       action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
-      podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod assignment revision.' },
-      name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' }, assignment: { type: 'string' },
+      podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
+      name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' },
       value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },
       spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' }, scheduleRevision: { type: 'integer', minimum: 0 },
       organizationRevision: { type: 'integer', minimum: 1 },

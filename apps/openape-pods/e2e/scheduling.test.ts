@@ -27,7 +27,7 @@ describe('scheduled native execution', () => {
   it('executes three queued pods through two slots and commits every input', async () => {
     const f = await setup(); const pods: string[] = []
     for (let i = 0; i < 3; i++) {
-      const pod = f.store.createPod({ name: `Pod ${i}`, assignment: 'Synthetic scheduled script' }); pods.push(pod.id)
+      const pod = f.store.createPod({ name: `Pod ${i}` }); pods.push(pod.id)
       f.scheduler.lifecycle(pod.id, 1, 'active'); await f.dispatcher.install(pod.id, 'deterministic')
       f.scheduler.save(pod.id, 0, { kind: 'interval', seconds: 60 }, true)
     }
@@ -40,7 +40,7 @@ describe('scheduled native execution', () => {
     expect(f.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'processed\'').get()!.count).toBe(3)
   })
   it('detects changes across restart, including returning to earlier bytes, with atomic fingerprints', async () => {
-    const f = await setup(); const pod = f.store.createPod({ name: 'References', assignment: 'Read a synthetic reference' })
+    const f = await setup(); const pod = f.store.createPod({ name: 'References' })
     f.scheduler.lifecycle(pod.id, 1, 'active')
     const source = join(root, 'reference.txt'); await writeFile(source, 'A'); f.resources.assignReference(pod.id, 'Reference', source)
     await f.watcher.scan(); await f.watcher.scan()

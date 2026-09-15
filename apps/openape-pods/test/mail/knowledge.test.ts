@@ -19,7 +19,7 @@ function message(id: string, folder: string, text: string, attachment = false, c
 }
 async function setup() {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-knowledge-'))); store = new PodDatabase(root)
-  const pod = store.createPod({ name: 'Synthetic mail knowledge', assignment: 'Track supported delivery commitments and open business questions.' })
+  const pod = store.createPod({ name: 'Synthetic mail knowledge' })
   const messages: Record<string, unknown>[] = []; const attachments: Record<string, unknown>[] = []; const calls: MailRead[] = []
   const read = async (request: MailRead) => {
     calls.push(request)
@@ -129,4 +129,15 @@ it('resumes an interrupted inventory at its durable page and reexamines sources 
   messages.push(message('later', 'rules', 'A later observation'))
   const next = await context(session())
   expect(next.context.messageSources.length).toBeGreaterThan(0)
+})
+
+it('keeps the analysis identity across a rename and excludes historical assignment text', async () => {
+  const { pod, messages, session, context } = await setup()
+  messages.push(message('one', 'rules', 'Delivery is June 8.'))
+  store.db.prepare('UPDATE pods SET assignment=? WHERE id=?').run('Historical instruction canary', pod.id)
+  const first = await context(session())
+  expect(first.context).not.toHaveProperty('assignment')
+  expect(JSON.stringify(first.context)).not.toContain('Historical instruction canary')
+  store.updatePod(pod.id, 1, { name: 'Renamed knowledge', lifecycle: 'paused' })
+  expect((await context(session())).hash).toBe(first.hash)
 })

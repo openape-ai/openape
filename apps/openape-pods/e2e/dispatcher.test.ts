@@ -19,7 +19,7 @@ async function setup(services?: RunServices) {
   store = new PodDatabase(root)
   const resources = new ResourceRegistry(store, id => dispatcher?.cancelPod(id))
   dispatcher = new RunDispatcher(store, resources, { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }, services)
-  return { store, dispatcher, resources, pod: store.createPod({ name: 'Synthetic pod', assignment: 'Run local synthetic scripts only.' }) }
+  return { store, dispatcher, resources, pod: store.createPod({ name: 'Synthetic pod' }) }
 }
 describe('manual dispatch', () => {
   it('pins the version, shares one lease, persists acknowledged progress and replays ordered events', async () => {
@@ -163,4 +163,17 @@ it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and
   await recovery.resolveHttp(f.pod.id, id, 'uncertain', true, 'Synthetic receiver confirmed delivery')
   const resumed = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(resumed).state).toBe('completed')
   expect(sends).toBe(2)
+})
+
+it('finishes a native run across a rename while still rejecting revoked resources', async () => {
+  const { store, dispatcher, resources, pod } = await setup()
+  await dispatcher.install(pod.id, 'deterministic')
+  const id = dispatcher.start(pod.id)
+  store.updatePod(pod.id, pod.revision, { name: 'Renamed during execution', lifecycle: 'paused' })
+  await expect.poll(() => dispatcher.runs.get(id).state).toBe('completed')
+  expect(store.checkpoint(pod.id).body).toEqual({ exampleRuns: 1 })
+  const next = dispatcher.start(pod.id)
+  await expect.poll(() => dispatcher.runs.get(next).state).toBe('completed')
+  resources.assignReference(pod.id, 'New permission', join(root, 'missing.txt'))
+  expect(() => dispatcher.start(pod.id)).toThrow('validation')
 })

@@ -10,7 +10,7 @@ import { fixtureDirectory } from '../src/main/fixture'
 
 it('groups: organizes pods through the packaged sidebar and retains grouping across restart', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-groups-ui-'))); fixtureDirectory(root)
-  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Order review', assignment: 'Review assigned synthetic order evidence.' }); const other = store.createPod({ name: 'Reading notes', assignment: 'Collect synthetic reading notes.' })
+  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Order review' }); const other = store.createPod({ name: 'Reading notes' })
   const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
   installExample(store, new ResourceRegistry(store, () => {}), pod.id, 'deterministic', runtime.dependencyLockHash)
   const original = store.getPod(pod.id); store.close()

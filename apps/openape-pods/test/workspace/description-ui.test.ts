@@ -7,7 +7,7 @@ it('retains the last successful description with a visible retry after a model f
   const description = { text: 'Existing summary', state: 'failed', error: 'Description generation failed', revision: 1, updatedAt: 1 }
   const master = vi.fn().mockResolvedValue({ description })
   window.pods = { master } as unknown as typeof window.pods
-  const wrapper = mount(PodDescription, { props: { podId, assignment: 'Execution assignment' } }); await flushPromises()
+  const wrapper = mount(PodDescription, { props: { podId } }); await flushPromises()
   expect(wrapper.text()).toContain('Existing summary'); expect(wrapper.text()).toContain('Description not updated')
   expect(wrapper.find('textarea').exists()).toBe(false)
   await wrapper.get('button.secondary').trigger('click'); expect(master).toHaveBeenLastCalledWith({ type: 'summarize', podId })
@@ -18,7 +18,15 @@ it('retains the last successful description with a visible retry after a model f
 it('allows a ready description to be refreshed without sending a chat message', async () => {
   const podId = crypto.randomUUID(); const master = vi.fn().mockResolvedValue({ description: { text: 'Existing summary', state: 'ready', error: null, revision: 1, updatedAt: 1 } })
   window.pods = { master } as unknown as typeof window.pods
-  const wrapper = mount(PodDescription, { props: { podId, assignment: 'Keep' } }); await flushPromises()
+  const wrapper = mount(PodDescription, { props: { podId } }); await flushPromises()
   try { await wrapper.findAll('button').find(button => button.text() === 'Refresh description')!.trigger('click'); expect(master).toHaveBeenLastCalledWith({ type: 'summarize', podId }) }
   finally { wrapper.unmount() }
+})
+
+it('asks for a conversation when no description exists instead of presenting a second instruction', async () => {
+  window.pods = { master: vi.fn().mockResolvedValue({}) } as unknown as typeof window.pods
+  const wrapper = mount(PodDescription, { props: { podId: crypto.randomUUID() } }); await flushPromises()
+  expect(wrapper.text()).toContain('Describe this pod in Chat')
+  expect(wrapper.text()).toContain('No conversation description yet')
+  wrapper.unmount()
 })

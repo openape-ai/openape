@@ -30,10 +30,10 @@ const code = 'export async function run(c) { await c.progress.commit({expectedRe
 describe('master actions and actual app-server', () => {
   it('validates and activates a native draft, preserves idempotency and rejects permission or revision escalation', async () => {
     const { control, registry } = await setup(); const signal = new AbortController().signal
-    const created = await control.execute('create', { action: 'create', name: 'Synthetic knowledge', assignment: 'Read assigned evidence' }, signal) as { id: string, revision: number }
-    expect(await control.execute('create', { action: 'create', name: 'Synthetic knowledge', assignment: 'Read assigned evidence' }, signal)).toEqual(created)
+    const created = await control.execute('create', { action: 'create', name: 'Synthetic knowledge' }, signal) as { id: string, revision: number }
+    expect(await control.execute('create', { action: 'create', name: 'Synthetic knowledge' }, signal)).toEqual(created)
     expect(store.listPods()).toHaveLength(1)
-    await expect(control.execute('create', { action: 'create', name: 'Changed', assignment: 'Read assigned evidence' }, signal)).rejects.toThrow('reused')
+    await expect(control.execute('create', { action: 'create', name: 'Changed' }, signal)).rejects.toThrow('reused')
     const scope = { podId: created.id, revision: 1 }
     const draft = await control.execute('draft', { action: 'draft', ...scope, draftId: null, draftRevision: 0, code, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
     const draftScope = { ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision }
@@ -47,20 +47,20 @@ describe('master actions and actual app-server', () => {
     await expect(control.execute('expand', { action: 'grant', ...scope }, signal)).rejects.toThrow('not allowed')
     await control.execute('request', { action: 'requestAccess', ...scope, request: { provider: 'microsoft', account: 'synthetic@example.invalid', folders: ['Inbox'], attachments: false, description: 'Read this synthetic mailbox' } }, signal)
     expect(registry.list(created.id)).toHaveLength(0); expect(master.view().proposals[0]?.state).toBe('pending')
-    await control.execute('revise', { action: 'revise', ...scope, name: 'Revised', assignment: 'A different assignment' }, signal)
-    await expect(control.execute('stale', { action: 'activate', ...draftScope }, signal)).rejects.toThrow('assignment changed')
-    await expect(control.execute('resume', { action: 'resume', podId: created.id, revision: 2 }, signal)).rejects.toThrow('Validate')
+    await control.execute('revise', { action: 'revise', ...scope, name: 'Revised' }, signal)
+    await expect(control.execute('stale', { action: 'activate', ...draftScope }, signal)).rejects.toThrow('settings changed')
+    await expect(control.execute('resume', { action: 'resume', podId: created.id, revision: 2 }, signal)).resolves.toMatchObject({ lifecycle: 'active', activeScript: checked.hash })
   })
   it('rejects a draft that escapes the native filesystem boundary and retains the active version', async () => {
-    const { control } = await setup(); const pod = store.createPod({ name: 'Boundary', assignment: 'Read' }); await dispatcher.install(pod.id, 'deterministic')
+    const { control } = await setup(); const pod = store.createPod({ name: 'Boundary' }); await dispatcher.install(pod.id, 'deterministic')
     const active = store.getPod(pod.id).activeScript; const signal = new AbortController().signal
     const draft = await control.execute('draft', { action: 'draft', podId: pod.id, revision: 1, draftId: null, draftRevision: 0, code: `import {writeFileSync} from 'node:fs'; export async function run(){writeFileSync(${JSON.stringify(join(root, 'outside'))},'bad')}`, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
-    await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, ...draft }, signal)).rejects.toThrow()
+    await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)).rejects.toThrow()
     expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view().drafts[0]?.validation).toBeNull()
   })
   it.each([false, true])('streams a dynamic action through confined app-server and resumes the same thread (packaged=%s)', async (packaged) => {
     let calls = 0; const requests: unknown[] = []
-    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master', assignment: 'Synthetic recorded fixture' }) }) : recordedResponse() }, packaged)
+    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, packaged)
     const command = { type: 'send' as const, id: randomUUID(), text: 'Create a synthetic pod.', podId: null }
     await master.execute(command)
     await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('idle')
@@ -101,7 +101,7 @@ describe('master actions and actual app-server', () => {
 it('keeps model conversation history and continuation threads separate for each pod', async () => {
   const requests: unknown[] = []
   await setup(async (body) => { if (!JSON.stringify(body).includes('previousDescription')) requests.push(body); return recordedResponse() }, true)
-  const one = store.createPod({ name: 'One', assignment: 'First task' }); const two = store.createPod({ name: 'Two', assignment: 'Second task' })
+  const one = store.createPod({ name: 'One' }); const two = store.createPod({ name: 'Two' })
   for (const [podId, text] of [[one.id, 'ONLY_FIRST_POD_CONTEXT'], [two.id, 'ONLY_SECOND_POD_CONTEXT'], [one.id, 'Continue first']]) {
     await master.execute({ type: 'send', podId, text, id: randomUUID() })
     await expect.poll(() => master.view(podId).state, { timeout: 20000 }).toBe('idle')
@@ -124,8 +124,8 @@ it('denies a model-forced read of another pod from a selected pod chat', async (
     requests.push(body)
     return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'cross-pod', call_id: 'cross-pod', name: 'pods_control', arguments: JSON.stringify({ action: 'inspect', podId: target, revision: 1 }) }) : recordedResponse()
   })
-  const selected = store.createPod({ name: 'Selected', assignment: 'Only this task' })
-  target = store.createPod({ name: 'Private other pod', assignment: 'CROSS_POD_PRIVATE_ASSIGNMENT' }).id
+  const selected = store.createPod({ name: 'Selected' })
+  target = store.createPod({ name: 'Private other pod' }).id
   await master.execute({ type: 'send', podId: selected.id, text: 'Inspect my configuration', id: randomUUID() })
   await expect.poll(() => master.view(selected.id).state, { timeout: 20000 }).toBe('idle')
   expect(JSON.stringify(requests[1])).not.toContain('CROSS_POD_PRIVATE_ASSIGNMENT')
@@ -134,7 +134,7 @@ it('denies a model-forced read of another pod from a selected pod chat', async (
 
 it('persists ordinary setup, keeps automation disabled and enforces revisions and scope before replay', async () => {
   const { control, registry, scheduler } = await setup(); const signal = new AbortController().signal
-  const pod = store.createPod({ name: 'Setup', assignment: 'Prepare local work' }); const other = store.createPod({ name: 'Other', assignment: 'Untouched' })
+  const pod = store.createPod({ name: 'Setup' }); const other = store.createPod({ name: 'Other' })
   const scope = { podId: pod.id, revision: pod.revision }; let key = 0
   const action = (value: Record<string, unknown>) => control.execute(`setup-${++key}`, { ...scope, ...value }, signal, pod.id)
   const list = { action: 'list' }
@@ -144,7 +144,7 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
   await control.execute('other-inspection', inspectOther, signal)
   await expect(control.execute('other-inspection', inspectOther, signal, pod.id)).rejects.toThrow('outside the selected pod')
   await expect(action({ action: 'setVariable', podId: other.id, name: 'target', value: 'changed', variableRevision: 0 })).rejects.toThrow('outside the selected pod')
-  await expect(control.execute('scoped-create', { action: 'create', name: 'Wrong', assignment: 'Wrong chat' }, signal, pod.id)).rejects.toThrow('outside the selected pod')
+  await expect(control.execute('scoped-create', { action: 'create', name: 'Wrong' }, signal, pod.id)).rejects.toThrow('outside the selected pod')
   await action({ action: 'setVariable', name: 'greeting', value: 'Hello from chat', variableRevision: 0 })
   await expect(action({ action: 'setVariable', name: 'greeting', value: 'Stale', variableRevision: 0 })).rejects.toThrow('Variable changed')
   scheduler.save(pod.id, 0, { kind: 'interval', seconds: 60 }, true); scheduler.lifecycle(pod.id, 1, 'active')
@@ -179,7 +179,7 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
 it('executes the model-facing runtime example and preserves files and progress across runs', async () => {
   const { control, registry } = await setup(); const signal = new AbortController().signal
   const reference = await control.execute('reference', { action: 'runtime' }, signal) as { example: string }
-  const pod = store.createPod({ name: 'Runtime reference', assignment: 'Write a greeting and count runs' }); const scope = { podId: pod.id, revision: 1 }
+  const pod = store.createPod({ name: 'Runtime reference' }); const scope = { podId: pod.id, revision: 1 }
   await control.execute('variable', { action: 'setVariable', ...scope, name: 'greeting', value: 'Documented runtime works', variableRevision: 0 }, signal)
   const draft = await control.execute('draft', { action: 'draft', ...scope, draftId: null, draftRevision: 0, code: reference.example, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
   const draftScope = { ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision }
@@ -207,11 +207,11 @@ it('adopts a creation turn atomically and scopes later tool calls and replay to 
   const { control } = await setup(); const creationId = randomUUID(); const conversations = new (await import('../src/worker/master/conversations')).MasterConversations(store)
   const scope = conversations.begin(creationId)
   store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('initial', 'user', 'Create a pod', 'sent', 1); conversations.assign('initial', scope)
-  const signal = new AbortController().signal; const action = { action: 'create', name: 'Owned', assignment: 'Prepare' }
+  const signal = new AbortController().signal; const action = { action: 'create', name: 'Owned' }
   const pod = await control.execute('creation', action, signal, null, creationId) as { id: string }
   expect(await control.execute('creation', action, signal, null, creationId)).toEqual(pod)
   await expect(control.execute('second', action, signal, null, creationId)).rejects.toThrow('already')
-  const other = store.createPod({ name: 'Other', assignment: 'Preserve' })
+  const other = store.createPod({ name: 'Other' })
   await expect(control.execute('cross', { action: 'inspect', podId: other.id, revision: 1 }, signal, null, creationId)).rejects.toThrow('outside')
   expect(master.view(pod.id).initialRequest?.text).toBe('Create a pod')
 })
@@ -226,4 +226,15 @@ it('generates a bounded structured description through actual app-server without
   expect(result).toBe('Checks every 30 minutes.')
   expect(JSON.stringify(requests[0].tools ?? [])).not.toContain('pods_control')
   expect(store.listPods()).toHaveLength(0)
+})
+
+it('rejects validation results if the owner archives the pod while validation runs', async () => {
+  const { control } = await setup(); const signal = new AbortController().signal
+  const pod = store.createPod({ name: 'Archival race' })
+  const draft = await control.execute('race-draft', { action: 'draft', podId: pod.id, revision: 1, draftId: null, draftRevision: 0, code, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
+  const validation = control.execute('race-validate', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)
+  const outcome = expect(validation).rejects.toThrow('changed during validation')
+  store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
+  await outcome
+  expect(store.db.prepare('SELECT COUNT(*) AS count FROM validations').get()!.count).toBe(0)
 })

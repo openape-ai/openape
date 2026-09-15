@@ -13,7 +13,7 @@ export class WorkspaceDetails {
         const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, command.hash)
         if (!row) throw new Error('Script version not found')
         const manifest = parseManifest(JSON.parse(row.manifest as string))
-        if (manifest.assignmentRevision !== command.assignmentRevision || !this.validated(pod.id, command.hash, command.assignmentRevision)) throw new Error('Validate this version for the current assignment and permissions')
+        if (manifest.assignmentRevision !== command.assignmentRevision || !this.validated(pod.id, command.hash, command.assignmentRevision)) throw new Error('Validate this version for the current script and permissions')
         new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, command.hash, manifest.capabilities)
         this.store.readBlob(command.hash)
         const changed = this.store.db.prepare('UPDATE pods SET active_script=? WHERE id=? AND revision=? AND active_script IS ? AND lifecycle!=\'archived\'').run(command.hash, pod.id, command.assignmentRevision, command.expectedActive)
@@ -32,7 +32,7 @@ export class WorkspaceDetails {
       source = { citation, content: content.slice(0, 200000), truncated: content.length > 200000, ...(original ? { original } : {}) }
     }
     const active = this.store.getPod(pod.id).activeScript
-    const versions = this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(pod.id).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(pod.id, row.hash as string, pod.revision), active: row.hash === active }))
+    const versions = this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(pod.id).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(pod.id, row.hash as string, pod.bindingRevision), active: row.hash === active }))
     return { claims, counts, total: this.store.db.prepare('SELECT count(*) AS count FROM claims WHERE pod_id=?').get(pod.id)!.count as number, checkpointRevision: this.store.checkpoint(pod.id).revision, versions, source }
   }
 

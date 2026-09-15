@@ -27,27 +27,27 @@ function manifest(artifact: string): ScriptManifest {
 describe('durable pod state', () => {
   it('rolls back nested mutations and their action receipt as one transaction', () => {
     const store = fixture()
-    expect(() => store.transaction(() => { store.createPod({ name: 'Uncommitted', assignment: 'Synthetic' }); throw new Error('Receipt failed') })).toThrow('Receipt failed')
+    expect(() => store.transaction(() => { store.createPod({ name: 'Uncommitted' }); throw new Error('Receipt failed') })).toThrow('Receipt failed')
     expect(store.listPods()).toHaveLength(0)
     store.transaction(() => {
-      store.createPod({ name: 'Kept', assignment: 'Synthetic' })
-      expect(() => store.transaction(() => { store.createPod({ name: 'Rolled back', assignment: 'Synthetic' }); throw new Error('Inner failure') })).toThrow('Inner failure')
+      store.createPod({ name: 'Kept' })
+      expect(() => store.transaction(() => { store.createPod({ name: 'Rolled back' }); throw new Error('Inner failure') })).toThrow('Inner failure')
     })
     expect(store.listPods().map(pod => pod.name)).toEqual(['Kept'])
   })
   it('creates a manual-only pod, persists edits and rejects stale/excess authority', () => {
     let store = fixture()
-    expect(() => store.createPod({ name: 'Mail', assignment: 'Read', token: 'never-store' })).toThrow('schema')
-    const pod = store.createPod({ name: 'Mail', assignment: 'Read assigned mail.' })
+    expect(() => store.createPod({ name: 'Mail', token: 'never-store' })).toThrow('schema')
+    const pod = store.createPod({ name: 'Mail' })
     expect(pod.lifecycle).toBe('paused'); expect(pod.activeScript).toBeNull()
-    store.updatePod(pod.id, 1, { name: 'Knowledge', assignment: 'Read selected folders.', lifecycle: 'paused' })
-    expect(() => store.updatePod(pod.id, 1, { name: 'Stale', assignment: 'Overwrite', lifecycle: 'active' })).toThrow('Stale')
+    store.updatePod(pod.id, 1, { name: 'Knowledge', lifecycle: 'paused' })
+    expect(() => store.updatePod(pod.id, 1, { name: 'Stale', lifecycle: 'active' })).toThrow('Stale')
     store = reopen(store)
-    expect(store.getPod(pod.id)).toMatchObject({ name: 'Knowledge', revision: 2, assignment: 'Read selected folders.' })
-    expect(store.db.prepare('SELECT count(*) AS count FROM assignments').get()?.count).toBe(2)
+    expect(store.getPod(pod.id)).toMatchObject({ name: 'Knowledge', revision: 2 })
+    expect(store.db.prepare('SELECT count(*) AS count FROM assignments').get()?.count).toBe(0)
   })
   it('pins artifact bytes and immutable manifests without activating drafts', () => {
-    const store = fixture(); const pod = store.createPod({ name: 'Pod', assignment: 'Read' })
+    const store = fixture(); const pod = store.createPod({ name: 'Pod' })
     const artifact = 'export async function run() { return { status: "completed" } }'
     const contract = manifest(artifact)
     expect(() => store.storeScript(pod.id, contract, 'tampered')).toThrow('hash mismatch')
@@ -58,7 +58,7 @@ describe('durable pod state', () => {
     expect(store.getPod(pod.id).activeScript).toBeNull()
   })
   it('commits cited knowledge and checkpoint together and retains supersession history', () => {
-    let store = fixture(); const pod = store.createPod({ name: 'Pod', assignment: 'Read' })
+    let store = fixture(); const pod = store.createPod({ name: 'Pod' })
     const unit = progress(pod.id); store.commitProgress(unit)
     expect(() => store.commitProgress(unit)).toThrow('Stale')
     store = reopen(store)
@@ -71,7 +71,7 @@ describe('durable pod state', () => {
     expect(store.knowledge(pod.id)[1]!.supersedes).toBe('claim-1')
   })
   it('rejects unavailable citations and source conflicts without advancing progress', () => {
-    const store = fixture(); const pod = store.createPod({ name: 'Pod', assignment: 'Read' }); const unit = progress(pod.id)
+    const store = fixture(); const pod = store.createPod({ name: 'Pod' }); const unit = progress(pod.id)
     expect(() => store.commitProgress({ ...unit, claims: [{ ...unit.claims[0]!, sourceIds: ['missing'] }] })).toThrow('unavailable')
     expect(store.checkpoint(pod.id).revision).toBe(0)
     expect(store.db.prepare('SELECT count(*) AS count FROM sources').get()?.count).toBe(0)
@@ -80,7 +80,7 @@ describe('durable pod state', () => {
     expect(store.checkpoint(pod.id).revision).toBe(1)
   })
   it.each<CommitPoint>(['staged', 'renamed', 'beforeCommit', 'committed'])('survives actual process death at %s without half a checkpoint', (point) => {
-    let store = fixture(); const pod = store.createPod({ name: 'Pod', assignment: 'Read' }); const unit = progress(pod.id)
+    let store = fixture(); const pod = store.createPod({ name: 'Pod' }); const unit = progress(pod.id)
     const source = resolve('src/worker/storage/database.ts')
     const code = `import { PodDatabase } from ${JSON.stringify(source)}; const store = new PodDatabase(${JSON.stringify(store.root)}); store.commitProgress(${JSON.stringify(unit)}, point => { if (point === ${JSON.stringify(point)}) process.kill(process.pid, 'SIGKILL') });`
     const child = spawnSync(process.execPath, ['--experimental-transform-types', '--input-type=module', '-e', code], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } })
@@ -91,10 +91,10 @@ describe('durable pod state', () => {
     if (point === 'committed') expect(store.readBlob(digest(unit.sources[0]!.content)).toString()).toBe(unit.sources[0]!.content)
   })
   it('backs up and migrates a v1 database with existing pod state', () => {
-    let store = fixture(); const pod = store.createPod({ name: 'Previous', assignment: 'Preserve me' })
-    store.db.exec('DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE deletion_jobs; DROP TABLE data_settings; DROP TABLE connections; DROP TABLE onboarding; DROP TABLE access_proposals; DROP TABLE script_drafts; DROP TABLE master_actions; DROP TABLE master_messages; DROP TABLE master_session; DROP TABLE master_domains; DROP TABLE master_inputs; DROP TABLE mail_inventory; DROP TABLE mail_items; DROP TABLE mail_receipts; DROP TABLE mail_extractions; DROP TABLE mail_contexts; DROP TABLE source_derivations; DROP TABLE effect_ledger; DROP TABLE recovery_reviews; DROP TABLE execution_domains; DROP TABLE reference_observations; DROP TABLE run_inputs; DROP TABLE accepted_events; DROP TABLE schedules; DROP TABLE run_events; DROP TABLE run_leases; DROP TABLE runs; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
+    let store = fixture(); const pod = store.createPod({ name: 'Previous' }); store.db.prepare('UPDATE pods SET assignment=? WHERE id=?').run('Preserve me', pod.id)
+    store.db.exec('ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE deletion_jobs; DROP TABLE data_settings; DROP TABLE connections; DROP TABLE onboarding; DROP TABLE access_proposals; DROP TABLE script_drafts; DROP TABLE master_actions; DROP TABLE master_messages; DROP TABLE master_session; DROP TABLE master_domains; DROP TABLE master_inputs; DROP TABLE mail_inventory; DROP TABLE mail_items; DROP TABLE mail_receipts; DROP TABLE mail_extractions; DROP TABLE mail_contexts; DROP TABLE source_derivations; DROP TABLE effect_ledger; DROP TABLE recovery_reviews; DROP TABLE execution_domains; DROP TABLE reference_observations; DROP TABLE run_inputs; DROP TABLE accepted_events; DROP TABLE schedules; DROP TABLE run_events; DROP TABLE run_leases; DROP TABLE runs; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
     store = reopen(store)
-    expect(store.getPod(pod.id).assignment).toBe('Preserve me')
+    expect(store.db.prepare('SELECT assignment FROM pods WHERE id=?').get(pod.id)?.assignment).toBe('Preserve me')
     expect(store.db.prepare('SELECT concurrency FROM settings').get()?.concurrency).toBe(2)
     const backups = readdirSync(store.root).filter(file => file.startsWith('before-v1-'))
     expect(backups).toHaveLength(1)

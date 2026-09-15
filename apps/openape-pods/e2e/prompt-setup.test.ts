@@ -9,7 +9,7 @@ import { PromptModel, setupAnswer, setupPrompt } from './fixtures/prompt-model'
 
 it('packaged prompt setup repairs a script, configures a pod and runs through the visible chat', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-prompt-setup-')))
-  const store = new PodDatabase(root); const other = store.createPod({ name: 'Unrelated', assignment: 'Preserve this pod' }); store.close()
+  const store = new PodDatabase(root); const other = store.createPod({ name: 'Unrelated' }); store.close()
   const model = new PromptModel(); const failures: string[] = []
   const server = createServer((request, response) => {
     const respond = async () => {
