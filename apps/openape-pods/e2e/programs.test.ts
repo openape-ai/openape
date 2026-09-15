@@ -13,6 +13,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import { expect, it, vi } from 'vitest'
 import { CredentialCache } from '../src/main/connections/cache'
 import { ProgramState } from '../src/main/programs/state'
+import { podWorkspace } from '../src/main/programs/console'
 import { ProgramSession } from '../src/main/programs/session'
 import { invokeProgram } from '../src/main/programs/invoke'
 import { startAgentGateway } from '../src/worker/agent/gateway'
@@ -28,18 +29,27 @@ async function fixture() {
   const privateRoot = join(root, 'authentication'); await mkdir(privateRoot)
   const executable = join(root, 'fixture'); const adapterPath = join(root, 'fixture.toml')
   await writeFile(join(root, 'fixture.c'), `#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 int main(int argc, char **argv) {
+  char statePath[4096]; snprintf(statePath, sizeof(statePath), "%s/state.txt", getenv("HOME"));
   if (argc != 2) return 2;
   if (!strcmp(argv[1], "setup")) {
+    char cwd[4096]; if (!getcwd(cwd,sizeof(cwd))) return 8;
+    printf("CWD %s\\n",cwd);
+    FILE *outside=fopen("${join(root, 'outside.txt')}", "r");
+    if (outside) { fclose(outside); puts("OUTSIDE_READ_ALLOWED"); return 9; }
+    puts("OUTSIDE_READ_DENIED");
+    FILE *note=fopen("terminal-work.txt", "w"); if (!note) return 10;
+    fputs("POD_WORKSPACE_WRITE",note); fclose(note);
     puts("SETUP_READY"); fflush(stdout);
     char line[100]; if (!fgets(line, sizeof(line), stdin)) return 3;
-    FILE *file=fopen("state.txt", "w"); if (!file) return 4;
+    FILE *file=fopen(statePath, "w"); if (!file) return 4;
     fputs(line, file); fclose(file); puts("SETUP_SAVED"); return 0;
   }
   if (!strcmp(argv[1], "read")) {
-    FILE *file=fopen("state.txt", "r"); if (!file) return 5;
+    FILE *file=fopen(statePath, "r"); if (!file) return 5;
     char line[100]; if (!fgets(line, sizeof(line), file)) return 6;
     fclose(file); printf("STATE_MATCH %d\\n", !strcmp(line, "SYNTHETIC_CONFIGURATION\\n")); return 0;
   }
@@ -47,6 +57,7 @@ int main(int argc, char **argv) {
 }`)
   await execute('/usr/bin/xcrun', ['clang', '-Wall', '-Wextra', '-Werror', join(root, 'fixture.c'), '-o', executable])
   await writeFile(adapterPath, `schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\naudience="shapes"\n${['setup', 'read'].map(action => `[[operation]]\nid="state.${action}"\ncommand=["${action}"]\ndisplay="Synthetic ${action}"\naction="${action === 'setup' ? 'write' : 'read'}"\nrisk="low"\nresource_chain=["state:*"]\n`).join('')}`)
+  await writeFile(join(root, 'outside.txt'), 'SYNTHETIC_OUTSIDE')
   const adapter = loadAdapter('fixture', adapterPath)
   const commands = await Promise.all(['setup', 'read'].map(action => resolveCommand(adapter, ['fixture', action])))
   fixtureDirectory(root)
@@ -80,7 +91,8 @@ int main(int argc, char **argv) {
   const assignment: ProgramAssignment = { type: 'program', name: 'Synthetic application', executable, executableHash: sha(await readFile(executable)), adapterPath, adapterHash: sha(await readFile(adapterPath)), cliId: 'fixture', networkHosts: [], entryFiles: [], environment: {}, stateId, capability: `tool.app_${applicationId.replaceAll('-', '')}.invoke`, grants: commands.map((command, index) => ({ permission: command.permission, display: command.detail.display, authority: { identity, ownerConnection: randomUUID(), grantId: index === 0 ? 'setup' : 'read' } })) }
   const resource: PodResource = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: assignment.name, configuration: { ...assignment } }
   const helper = resolve('dist/native/pods-helper'); let releases = 0
-  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ })
+  const workspace = await podWorkspace(root, podId)
+  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace)
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
   const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities })
   return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) } }
@@ -149,27 +161,31 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     console.info('Program UI: worker ready')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
-    await page.getByLabel('Arguments for Synthetic application').fill('setup')
-    await page.getByRole('button', { name: 'Start in terminal', exact: true }).click()
+    await page.getByLabel('Terminal command', { exact: true }).fill('fixture setup')
+    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
     await page.locator('.xterm-helper-textarea').waitFor({ state: 'attached' })
     await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), f.podId)).resources.length).toBe(1)
     await page.locator('.pod-terminal .xterm-screen').waitFor()
     await expect.poll(() => f.state.consumed).toBe(1)
     await page.getByRole('status').filter({ hasText: 'Application running' }).waitFor()
-    console.info('Program UI: terminal opened')
+    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain(`CWD ${join(f.root, 'pods', f.podId, 'workspace')}`)
+    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain('OUTSIDE_READ_DENIED')
+    console.info('Program UI: terminal opened in pod workspace; unrelated file read denied')
     await page.locator('.xterm-helper-textarea').focus()
     await page.keyboard.type('SYNTHETIC_CONFIGURATION'); await page.keyboard.press('Enter')
     await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
+    expect(await readFile(join(f.root, 'pods', f.podId, 'workspace', 'terminal-work.txt'), 'utf8')).toBe('POD_WORKSPACE_WRITE')
+    expect((await readdir(join(f.root, 'pods', f.podId, 'workspace'))).includes('state.txt')).toBe(false)
     expect(await page.getByText('Signed in', { exact: true }).count()).toBe(0)
     await mkdir(resolve('.artifacts'), { recursive: true })
     expect(await page.locator('.xterm-rows').evaluate(element => getComputedStyle(element).color)).toBe('rgb(228, 236, 230)')
     await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-terminal-en.png') })
-    await page.getByRole('button', { name: 'Close terminal', exact: true }).click()
-    await page.getByLabel('Arguments for Synthetic application').fill('read')
-    await page.getByRole('button', { name: 'Start in terminal', exact: true }).click()
+    await page.getByLabel('Terminal command', { exact: true }).fill('fixture read')
+    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
     await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
     await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
-    await page.getByRole('button', { name: 'Close terminal', exact: true }).click()
+    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain('STATE_MATCH 1')
+    await page.locator('.pod-console > header').getByRole('button', { name: 'Close terminal', exact: true }).click()
     const runCode = `export async function run(context) {
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
       if (result.exitCode !== 0) throw new Error('Application read failed')
@@ -187,6 +203,11 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await page.getByRole('button', { name: 'Add application', exact: true }).click()
     await page.getByText('o365-cli', { exact: true }).first().waitFor()
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })
+    await page.locator('.application-card').filter({ hasText: 'o365-cli' }).getByRole('button', { name: 'Open terminal', exact: true }).click()
+    await page.getByLabel('Terminal command', { exact: true }).fill('o365-cli')
+    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
+    await expect.poll(() => page.locator('.pod-console pre').textContent()).toContain('o365-cli pods login --account <account>')
+    await page.locator('.pod-console').screenshot({ path: resolve('.artifacts/pod-console-en.png') })
     await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-en.png') })
     await page.getByRole('button', { name: 'App settings', exact: true }).click()
     await page.getByLabel('Language', { exact: true }).selectOption('de')
@@ -197,6 +218,13 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(560, 800))
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-de-dark.png') })
+    await page.locator('.application-card').filter({ hasText: 'o365-cli' }).getByRole('button', { name: 'Terminal öffnen', exact: true }).click()
+    await page.getByLabel('Terminal-Befehl', { exact: true }).waitFor()
+    await page.locator('.pod-console pre').waitFor()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const geometry = await page.locator('.pod-console').boundingBox()
+    expect(geometry!.height).toBeLessThan(800)
+    await page.locator('.pod-console').screenshot({ path: resolve('.artifacts/pod-console-de-dark.png') })
     await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
   }
   finally { await app.close(); await f.close() }
