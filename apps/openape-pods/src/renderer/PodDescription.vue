@@ -36,8 +36,8 @@ export default defineComponent({
     <p v-if="error || description?.error" role="alert" class="error-message">
       {{ diagnostic(error || description?.error) }}
     </p>
-    <button v-if="description?.state === 'failed' || (!description && initial)" class="secondary" @click="retry">
-      {{ t('Retry description') }}
+    <button v-if="description?.state === 'ready' || description?.state === 'failed' || (!description && initial)" class="secondary" @click="retry">
+      {{ description?.state === 'ready' ? t('Refresh description') : t('Retry description') }}
     </button>
     <button class="text-button" @click="$emit('change')">
       {{ t('Change in chat') }}
