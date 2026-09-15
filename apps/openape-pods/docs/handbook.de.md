@@ -94,7 +94,7 @@ Der JavaScript-Editor bietet Syntaxhervorhebung, Zeilennummern, horizontales Scr
 
 Ungespeicherte Skripte, normale Variablen, Einstellungen und Chat-Texte bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.
 
-Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Benötigte Zugriffe deklariert die vom Skript benötigten Fähigkeiten; eine Deklaration weist noch keinen Zugriff zu und erteilt keine Freigabe.
+Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Verwalte Skript-Geheimnisse unter Variablen und Geheimnisse und Skript-Anwendungen unter Berechtigungen. Die Auswahl erteilt noch keine Ressourcenfreigabe.
 
 1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
 2. Wählen Sie Ausführen oder Speichern und ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
@@ -113,7 +113,7 @@ Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhafte
 
 Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
-await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Deklariere credential.crm durch Auswahl von crm im Editor. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
+await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Wähle crm unter Vom Skript verwendete Geheimnisse im Tab Variablen und Geheimnisse und speichere die Skriptzugriffe. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
 
 Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
 
@@ -122,7 +122,7 @@ Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zuga
 Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
 1. Öffnen Sie Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
-2. Öffnen Sie Skript, klappen Sie Erforderlicher Zugriff auf und wählen Sie die Aliase. Verwenden Sie await context.credentials.get("alias") im Quelltext.
+2. Wähle unter Variablen und Geheimnisse die vom Skript verwendeten Geheimnisse und speichere die Skriptzugriffe. Speichere zuvor offene Code-Änderungen im Skript-Tab. Verwenden Sie await context.credentials.get("alias") im Quelltext.
 3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
 4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung und Freigabe.
 
@@ -166,7 +166,7 @@ Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeic
 
 Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
 
-Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Gib Programmargumente ein, wähle Befehl erlauben, prüfe die genaue Berechtigung und öffne das Terminal. Darin läuft dieses CLI im Kontext der zugewiesenen Pod-Anwendung. Es ist keine uneingeschränkte Shell. Das Programm verwaltet seine Anmeldung selbst; Pods leitet keinen Anmeldestatus ab.
+Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Wähle Terminal öffnen neben dem Anwendungsnamen. Gib Programmargumente ein, wähle Befehl erlauben, prüfe die genaue Berechtigung und wähle Im Terminal starten. Darin läuft dieses CLI im Kontext der zugewiesenen Pod-Anwendung. Es ist keine uneingeschränkte Shell. Das Programm verwaltet seine Anmeldung selbst; Pods leitet keinen Anmeldestatus ab.
 
 Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
 
@@ -218,7 +218,7 @@ Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Wa
 
 context.input enthält eingefrorene Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
-context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ applicationId, argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte behalten ihren bisherigen Lesevertrag.
+context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ application: "o365-cli", argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte behalten ihren bisherigen Lesevertrag.
 
 Das folgende Beispiel ergänzt eine Markierung im Fortschrittsstand und liefert eine sichtbare Zusammenfassung. Es nutzt weder Mail- noch Modelldienste. Bestätige nur Eingabe-IDs von Arbeit, die das Skript tatsächlich abgeschlossen hat. Der Beispielcode ist in beiden Sprachfassungen identisch.
 
@@ -255,7 +255,7 @@ Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex fü
 
 Füge für Mail-Benachrichtigungen o365-cli in Berechtigungen hinzu. Erlaube pods login --account you@example.com und führe den Befehl im Terminal aus, oder importiere eine vorhandene token.json als Anwendungszustand. Erlaube anschließend pods read --account you@example.com --folder inbox --operation messages. Der apes-Grant begrenzt die Ausführung auf den bestätigten Lesebereich; ein weiter reichender Anbieter-Token erlaubt dem Skript keine zusätzlichen Befehle.
 
-Speichere unter Variablen und Geheimnisse mail_account, o365_application_id und telegram_chat_id als Variablen sowie telegram_bot_token als Geheimnis. Die Anwendungskennung ist die Ressourcen-ID der zugewiesenen Anwendung, die dem Pod-Chat zur Verfügung steht. Erlaube in Berechtigungen POST für https://api.telegram.org. Telegram benötigt keine eigene Kontokarte und kein CLI.
+Speichere unter Variablen und Geheimnisse mail_account und telegram_chat_id als Variablen sowie telegram_bot_token als Geheimnis. Das Skript findet die zugewiesene Anwendung anhand ihres Namens; eine interne ID-Variable ist nicht erforderlich. Das Konto bleibt explizit, weil das gebündelte CLI und der Grant diesen Bereich verlangen. Erlaube in Berechtigungen POST für https://api.telegram.org. Telegram benötigt keine eigene Kontokarte und kein CLI.
 
 Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
@@ -268,8 +268,8 @@ const fingerprint = value => createHash('sha256').update(value).digest('hex')
 const maximumMessages = 1000
 
 export async function run(context) {
-  const { mail_account: account, o365_application_id: applicationId, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !applicationId || !chatId) throw new Error('Set mail_account, o365_application_id and telegram_chat_id in Variables and secrets')
+  const { mail_account: account, telegram_chat_id: chatId, language = 'de' } = context.variables
+  if (!account || !chatId) throw new Error('Set mail_account and telegram_chat_id in Settings')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })
@@ -295,7 +295,7 @@ export async function run(context) {
   let cursor
   for (let page = 0; page < 20; page++) {
     const argv = ['pods', 'read', '--account', account, '--folder', 'inbox', '--operation', 'messages', '--since', since, ...(cursor ? ['--cursor', cursor] : [])]
-    const reply = await context.tools.invoke({ applicationId, argv })
+    const reply = await context.tools.invoke({ application: 'o365-cli', argv })
     if (reply.exitCode !== 0) throw new Error('Mail read failed; inspect the assigned application in Permissions')
     const result = JSON.parse(reply.stdout)
     if (result.account !== account || result.operation !== 'messages' || !Array.isArray(result.items)) throw new Error('Mail reply does not match the configured account and operation')
