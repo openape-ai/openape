@@ -45,3 +45,17 @@ it('keeps a revoked but selected alias visible so its declaration can be removed
   await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
   expect(window.pods.scripts).toHaveBeenCalledWith(expect.objectContaining({ type: 'save', capabilities: [] })); wrapper.unmount()
 })
+
+it('lists a required missing secret and prefills its alias without assigning access', async () => {
+  const pod = { id: randomUUID(), name: 'One' }
+  const resources = vi.fn().mockResolvedValue({ resources: [], epoch: 0 })
+  window.pods = { workspace: async () => ({ pods: [pod] }), resources } as unknown as typeof window.pods
+  const wrapper = mount(PodResources, { props: { selectedPodId: pod.id, mode: 'values', requiredAliases: ['notification_token'] } }); await flushPromises()
+  expect(wrapper.get('.resource-row').text()).toContain('notification_token')
+  expect(wrapper.get('.resource-row').text()).toContain('Not set')
+  await wrapper.get('.resource-row button').trigger('click')
+  expect(wrapper.get<HTMLInputElement>('[name="credential-alias"]').element.value).toBe('notification_token')
+  expect(wrapper.get<HTMLInputElement>('[name="credential-value"]').element.value).toBe('')
+  expect(resources).toHaveBeenCalledTimes(1)
+  wrapper.unmount()
+})

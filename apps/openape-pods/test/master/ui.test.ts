@@ -41,15 +41,15 @@ it('preserves text composed while an earlier message is sending', async () => {
   expect(wrapper.get('textarea').element.value).toBe('Next thought'); wrapper.unmount()
 })
 
-it('routes named-secret proposals to Settings without displaying an input for secret values', async () => {
+it('routes named-secret proposals to the values tab without displaying an input for secret values', async () => {
   const podId = crypto.randomUUID()
-  window.pods = { master: vi.fn().mockResolvedValue({ ...empty, proposals: [{ id: crypto.randomUUID(), podId, state: 'pending', body: { provider: 'credential', alias: 'bot_token', description: 'Store your notification token in Settings' } }] }) } as unknown as typeof window.pods
+  window.pods = { master: vi.fn().mockResolvedValue({ ...empty, proposals: [{ id: crypto.randomUUID(), podId, state: 'pending', body: { provider: 'credential', alias: 'bot_token', description: 'Store your notification token in Variables and secrets' } }] }) } as unknown as typeof window.pods
   const wrapper = mount(MasterChat, { props: { podId } }); await flushPromises()
   expect(wrapper.text()).toContain('bot_token'); expect(wrapper.find('input[type="password"]').exists()).toBe(false)
-  await wrapper.findAll('button').find(button => button.text() === 'Open Settings')!.trigger('click')
+  await wrapper.findAll('button').find(button => button.text() === 'Variables and secrets')!.trigger('click')
   expect(wrapper.emitted('settings')).toEqual([[podId]]); expect(wrapper.emitted('resources')).toBeUndefined()
   applyLanguage('de'); await flushPromises()
-  expect(wrapper.text()).toContain('Name des Geheimnisses'); expect(wrapper.text()).toContain('Einstellungen öffnen')
+  expect(wrapper.text()).toContain('Name des Geheimnisses'); expect(wrapper.text()).toContain('Variablen und Geheimnisse')
   applyLanguage('en'); wrapper.unmount()
 })
 

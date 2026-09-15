@@ -3,10 +3,10 @@ export const runtimeReference = {
   workflow: [
     'Read runtime, then list and inspect the target pod. In a selected pod chat, all actions are restricted to that pod. Workspace chat can create pods.',
     'inspect.script is the same saved working source shown by the editor, including a newer saved draft. If kind=draft, use its id and revision as draftId/draftRevision when editing; if kind=version or null, create a new draft. Unsaved editor text is unavailable to this assistant and must be saved first.',
-    'Use current revisions from inspect. Save ordinary variables only; their values are visible to this assistant. For secrets, propose an alias for the owner to fill in Settings. Never accept or echo secret values in chat.',
+    'Use current revisions from inspect. Save ordinary variables only; their values are visible to this assistant. For secrets, propose an alias for the owner to fill in Variables and secrets. Never accept or echo secret values in chat.',
     'Prepare the requested group and schedule. prepareSchedule saves enabled=false and pauses automation; it does not cancel a running manual run. Only the owner enables a schedule in Settings.',
-    'Request missing permissions before validation. The owner grants applications/commands and HTTPS methods in Permissions, configures program authentication in the foreground terminal, and stores named secrets in Settings. Do not infer a login status.',
-    'Save a draft, validate it, inspect the error and repair that same draft with its current revision. Activate only a successful validation; credential-reading scripts additionally require owner approval of that exact code in Settings.',
+    'Request missing permissions before validation. The owner grants applications/commands and HTTPS methods in Permissions, configures program authentication in the foreground terminal, and stores named secrets in Variables and secrets. Do not infer a login status.',
+    'Save a draft, validate it, inspect the error and repair that same draft with its current revision. Activate only a successful validation; credential-reading scripts additionally require owner approval of that exact code from Script → Run.',
     'Start a manual run only when requested, then inspect the result. State precisely what ran and which live-provider checks remain. Never claim that synthetic validation proves every branch or real delivery.',
   ],
   actions: {

@@ -96,7 +96,7 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
     await expect.poll(async () => (await page.evaluate(id => window.pods.runs({ type: 'list', podId: id }), pod.id)).runs[0]?.state).toBe('completed')
     const latest = await page.evaluate(id => window.pods.runs({ type: 'list', podId: id }), pod.id)
     expect(latest.runs[0]?.scriptHash).toBe(active.pod.activeScript); expect(latest.runs[0]?.state).toBe('completed')
-    for (const tab of ['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History']) {
+    for (const tab of ['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History']) {
       await page.getByRole('tab', { name: tab, exact: true }).click()
       if (tab === 'Knowledge') await page.getByText('Delivery is confirmed for Tuesday.', { exact: true }).waitFor()
       if (tab === 'Permissions') await page.getByText('Order notes', { exact: true }).waitFor()
