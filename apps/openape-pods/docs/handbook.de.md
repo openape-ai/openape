@@ -20,7 +20,7 @@ Das Schließen des Fensters lässt die App über die Menüleiste verfügbar. Bee
 
 Öffnen Sie App-Einstellungen in der Seitenleiste und wechseln Sie mit Sprache zwischen Deutsch und English. Die Wahl wird je lokalem Profil gespeichert und gilt für Oberfläche, native Menüs und App-Dialoge. Ungespeicherter Editorinhalt bleibt beim Navigieren erhalten.
 
-Pod- und Gruppennamen, Aufgaben, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.
+Pod- und Gruppennamen, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.
 
 Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit passenden App-Abbildungen vor. Nutze den Link zur anderen Ausgabe in der Handbuchnavigation. Bewahre beide HTML-Dateien zusammen auf, damit diese Links funktionieren. Die Sprache ist eine lokale Anzeigeeinstellung. Ein wiederhergestelltes Profil beginnt mit der Systemvorgabe, bis du erneut eine Sprache wählst.
 
@@ -28,7 +28,7 @@ Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit 
 
 Probiere dies mit einem neuen Pod. Das lokale Beispiel benötigt keine Kontoverbindung und erhöht einen dauerhaft gespeicherten Zähler. Beim Installieren wird das Beispiel zugleich zum aktiven Skript. Verwende deshalb einen neuen Pod, um kein eingerichtetes Arbeitsskript zu ersetzen.
 
-1. Wählen Sie Neuer Pod, öffnen Sie Ohne Chat erstellen, tragen Sie Pod-Name und Aufgabe ein und speichern Sie.
+1. Wählen Sie Neuer Pod, öffnen Sie Ohne Chat erstellen, tragen Sie den Pod-Namen ein und speichern Sie.
 2. Öffnen Sie Skript. Das Startskript liefert bereits ein gültiges lokales Ergebnis; ändern Sie bei Bedarf dessen Zusammenfassung.
 3. Wählen Sie Speichern und ausführen. Nach der Prüfung mit synthetischen Diensten startet der lokale Lauf ohne Kontoverbindung.
 4. Prüfen Sie die Historie und das abgeschlossene Ergebnis. Ein ausgewählter Lauf zeigt seine gespeicherten Ereignisse.
@@ -38,7 +38,7 @@ Probiere dies mit einem neuen Pod. Das lokale Beispiel benötigt keine Kontoverb
 
 Verwende Gruppen in der Seitenleiste, um zusammengehörige Pods zu ordnen. Jeder Pod gehört zu genau einer flachen Gruppe oder zu Nicht gruppiert. Gruppennamen, Zuordnungen und Einklappzustand werden auf diesem Mac gespeichert und in Sicherungen aufgenommen. Gruppen erscheinen in Erstellungsreihenfolge; Pods behalten innerhalb jeder Gruppe ihre ursprüngliche Erstellungsreihenfolge.
 
-Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung.
+Gruppieren teilt keine Ressourcen oder Berechtigungen, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung.
 
 1. Wähle + Gruppe neben DEINE PODS, gib einen Gruppennamen ein und wähle Gruppe erstellen. Namen enthalten 1–100 Zeichen; bis zu fünfzig Gruppen werden unterstützt.
 2. Wählen Sie einen Pod, öffnen Sie Einstellungen und wählen Sie die Gruppe. Sie können den Pod auch auf eine Gruppe in der Seitenleiste ziehen.
@@ -52,7 +52,7 @@ Gruppieren teilt keine Ressourcen oder Berechtigungen, ändert keine Aufgabe, ma
 
 Die Beschreibung fasst die aktuell vereinbarten Anforderungen aus dem Pod-Chat zusammen. Sie wird nach abgeschlossenen Anfragen aktualisiert. Spätere Korrekturen ersetzen frühere Wünsche; der Startauftrag im Chat bleibt unverändert. Mit Im Chat ändern beschreibst du eine Änderung. Beschreibung aktualisieren erstellt den kurzen Übersichtstext aus dem bestehenden Verlauf neu, ohne eine Nachricht zu senden.
 
-Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, aktiviert kein Skript und ändert weder Ausführungsauftrag noch Automatik. Wird aktualisiert und Nicht aktualisiert zeigen ausstehende oder fehlgeschlagene Generierung an. Beschreibung erneut erstellen behält den letzten erfolgreichen Text, bis ein neues Ergebnis vorliegt. Pods ohne Chatverlauf behalten ihre bisherige Auftragsbeschreibung.
+Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, aktiviert kein Skript und ändert weder die Skriptausführung noch die Automatik. Wird aktualisiert und Nicht aktualisiert zeigen ausstehende oder fehlgeschlagene Generierung an. Beschreibung erneut erstellen behält den letzten erfolgreichen Text, bis ein neues Ergebnis vorliegt. Pods ohne Beschreibung zeigen einen Verweis zum Chat, in dem du ihre Aufgabe beschreiben kannst.
 
 1. Öffne einen Pod und lies die Beschreibung.
 2. Verwende Im Chat ändern für eine Korrektur. Der Startauftrag bleibt im Chat verfügbar.
@@ -62,9 +62,9 @@ Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, a
 
 ## Chat und Pod-Erstellung
 
-Jeder Pod besitzt einen Chat-Tab mit eigenem gespeichertem Verlauf und eigener fortsetzbarer Codex-Unterhaltung. Der Assistent hilft bei Aufgabe, Skript und benötigtem Zugriff. Neuer Pod startet den Erstellungs-Chat; Ohne Chat erstellen öffnet das lokale Formular.
+Jeder Pod besitzt einen Chat-Tab mit eigenem gespeichertem Verlauf und eigener fortsetzbarer Codex-Unterhaltung. Der Assistent hilft beim Skript und benötigten Zugriff. Neuer Pod startet den Erstellungs-Chat; Ohne Chat erstellen öffnet das lokale Formular.
 
-Der Assistent kann Skripte innerhalb bestehender Aufgaben und Berechtigungen vorbereiten, prüfen und aktivieren. Erweiterter Zugriff und Freigaben für Geheimnisse bleiben Ihre Entscheidung. Zeitpläne kann er nicht aktivieren. In der gesamten App läuft jeweils eine Assistentenrunde; beenden oder stoppen Sie diese vor einer Unterhaltung mit einem anderen Pod.
+Der Assistent kann Skripte innerhalb bestehender Berechtigungen vorbereiten, prüfen und aktivieren. Erweiterter Zugriff und Freigaben für Geheimnisse bleiben Ihre Entscheidung. Zeitpläne kann er nicht aktivieren. In der gesamten App läuft jeweils eine Assistentenrunde; beenden oder stoppen Sie diese vor einer Unterhaltung mit einem anderen Pod.
 
 Runde abbrechen unterbricht die aktive Unterhaltung; Lenken ergänzt eine Anweisung. Während des Sendens nachgetippter Text bleibt erhalten. Der reguläre Skript-Agent startet mit frischem Kontext und erhält weder diesen Chat noch Variablenwerte oder Geheimnisse automatisch.
 
@@ -125,15 +125,15 @@ Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking
 
 ![Berechtigungen](images/handbook-permissions-de.png)
 
-## Einstellungen und Aufgaben
+## Einstellungen
 
-Einstellungen enthält Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie Weitere Optionen. Die erstellte Beschreibung wird über den Chat aktualisiert. Weitere Optionen → Ausführungsauftrag ändert den Auftrag für die Ausführung ausdrücklich; prüfe das Skript danach erneut.
+Einstellungen enthält Pod-Name, Gruppe, Automatik und Intervall, Variablen und Geheimnisse sowie Weitere Optionen. Die Beschreibung wird über den Chat aktualisiert. Das Skript steuert jeden Lauf und legt die Prompts für seine KI-Aufrufe fest. Einen separaten Ausführungsauftrag gibt es nicht. Das Umbenennen eines Pods erhält laufende Arbeit, Skriptprüfung, Freigaben für Geheimnisse und den Zustand der Automatik.
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
 Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten Pod nach gesonderter nativer Bestätigung löschen. Dabei werden auch seine Variablen und sein Pod-Chat entfernt. Arbeitsbereich-Chat, gemeinsame Konten und ursprüngliche Referenzdateien bleiben erhalten.
 
-![Einstellungen und Aufgaben](images/handbook-settings-de.png)
+![Einstellungen](images/handbook-settings-de.png)
 
 ## Historie und Wiederherstellung
 
@@ -167,7 +167,7 @@ Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhafte
 
 Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
-await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Deklariere credential.crm durch Auswahl von crm im Editor. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, den Auftrags- und Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
+await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Deklariere credential.crm durch Auswahl von crm im Editor. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
 
 Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
 
@@ -178,7 +178,7 @@ Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauer
 1. Öffnen Sie Einstellungen → Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
 2. Öffnen Sie Skript, klappen Sie Erforderlicher Zugriff auf und wählen Sie die Aliase. Verwenden Sie await context.credentials.get("alias") im Quelltext.
 3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
-4. Die Historie zeigt den Lauf. Änderungen an Quelltext, Aufgabe oder Ressourcen erfordern erneute Prüfung und Freigabe.
+4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung und Freigabe.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -214,7 +214,7 @@ export async function run(context) {
 
 Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Warte vor der Rückgabe auf jede asynchrone Operation. Das Ergebnis enthält status, summary, completedInputIds und gapIds. Ein completedWithGaps-Ergebnis benötigt gespeicherte Lückenaussagen.
 
-context.input enthält eingefrorene Aufgaben- und Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
+context.input enthält eingefrorene Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
 context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ applicationId, argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte behalten ihren bisherigen Lesevertrag.
 
@@ -343,7 +343,7 @@ Update prüfen und sichern … prüft eine heruntergeladene signierte App und er
 
 Hintergrundprozess nicht verfügbar oder Prüfung erforderlich: Lies die angezeigte Meldung. Öffne die App nach Behebung der Ursache erneut und prüfe unterbrochene Läufe. Ein nicht unterstütztes Betriebssystem oder eine nicht unterstützte CPU lässt sich nicht durch Skriptbearbeitung beheben.
 
-Diese Version für die aktuelle Aufgabe und Berechtigungen validieren: Öffne den Quelltext erneut, speichere einen Entwurf für die aktuelle Aufgabe, validiere und aktiviere ihn. Widerrufene Ressourcen müssen vor Verwendung ausdrücklich neu zugewiesen werden.
+Diese Skriptversion für die aktuellen Berechtigungen prüfen: Öffne den Quelltext erneut, speichere einen Entwurf, prüfe und aktiviere ihn. Widerrufene Ressourcen müssen vor Verwendung ausdrücklich neu zugewiesen werden.
 
 Syntax- oder Vertragsfehler: Korrigiere das JavaScript und stelle sicher, dass run(context) das erforderliche Ergebnis zurückgibt. Warte auf asynchrone Aufrufe und verknüpfe zurückgegebene Lücken-IDs mit gespeicherten Lücken. Nach einer fehlgeschlagenen Prüfung bleibt das aktive Skript unverändert.
 

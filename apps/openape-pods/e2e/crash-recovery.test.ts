@@ -29,7 +29,7 @@ async function seed() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-crash-'))); roots.push(root); fixtureDirectory(root)
   const store = new PodDatabase(root)
   try {
-    const pod = store.createPod({ name: 'Checkpoint recovery', assignment: 'Commit one synthetic fact, then wait for explicit recovery.' })
+    const pod = store.createPod({ name: 'Checkpoint recovery' })
     const registry = new ResourceRegistry(store, () => {})
     const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
     installExample(store, registry, pod.id, 'deterministic', runtime.dependencyLockHash)

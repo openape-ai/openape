@@ -1,6 +1,6 @@
 # OpenApe Pods
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pod assignments, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT, OpenApe and Microsoft connection flows are implemented; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT, OpenApe and Microsoft connection flows are implemented; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
 ## Run and verify
 
@@ -49,7 +49,7 @@ Storage, resource boundaries, scheduling, recovery, mail knowledge and master ch
 
 The worker owns `control.sqlite`, using the bundled Node SQLite API, WAL,
 foreign keys and full synchronous commits. Settings creates paused local pods
-and edits their versioned assignments. IPC accepts only the typed list/create/
+and edits their names with optimistic metadata revisions. IPC accepts only the typed list/create/
 update operations; it exposes no SQL, filesystem paths or credentials.
 
 Scripts are content addressed with immutable manifests. Registering an artifact
@@ -142,7 +142,7 @@ third-party authentication dependency is introduced.
 
 Runs installs one of two bundled, content-addressed example versions and starts
 it manually. A SQLite transaction reserves one lease per pod, pins the active
-version and records the assignment/resource revisions. The runner freezes its
+version and records the execution binding/resource revisions. The runner freezes its
 input, supplies read-only snapshots and uses a bounded, sequenced JSON protocol
 on a private descriptor. Exit zero is insufficient: a valid terminal result is
 required. Acknowledged knowledge/checkpoint commits and run events are durable.
@@ -215,7 +215,7 @@ starting its executable after the worker has died.
 
 Cancellation waits for actual SDK cleanup before releasing the pod and global
 slot. Runs offers inspection and explicit retry using the latest validated
-assignment and resources. Committed checkpoints and cited facts survive; remaining
+script and resources. Committed checkpoints and cited facts survive; remaining
 inputs are requeued atomically with an idempotent recovery request. Each manual
 request handles up to fifty inputs, with additional backlog visible for another
 manual request. Paused pods stay paused.
@@ -254,7 +254,7 @@ G0 containment gate. No security boundary was relaxed for this UI change.
 Component/SQLite tests cover hostile source text, exact historical citations,
 foreign-source denial, immutable-version activation races and validation invalidation.
 Packaged concept-B tests exercise selected-pod actions, source expansion, history,
-expired/missing resource states, reference revocation, assignment edits, manual
+expired/missing resource states, reference revocation, pod settings edits, manual
 execution, pause/resume and archived inspection. Geometry checks and inspected
 screenshots cover all five views at 1060×850, 760×700 and 560×700 in light/dark,
 including keyboard tabs, horizontal overflow and a reachable fixed footer.
@@ -309,14 +309,14 @@ bounded batch on the next run. Every subsequent run starts a fresh full inventor
 this intentionally favors correctness for moved old messages over an unproven
 short lookback/delta optimization. A failed page retains its cursor. Stable item
 IDs and immutable source snapshots are separate, so folder moves retain both
-versions without a hash conflict. Permission, assignment or recipe changes
+versions without a hash conflict. Permission or recipe changes
 invalidate processing receipts. No owner schedule is enabled by installation.
 
 The recipe uses `mail.next`, the existing SDK `agent.run`, and `mail.commit`.
 Trusted host operations still use the assigned ape-shell authorization boundary.
 Model calls retain the single effectful ape-shell gateway; they receive no new
 filesystem, shell or credential access. Prepared contexts record source IDs,
-parser fingerprints, current claims, omissions and the authoritative assignment.
+parser fingerprints, current claims and omissions.
 Provider conversation IDs group matters; missing IDs produce an association gap.
 No subject-only merge is inferred. Selected sent folders participate in the same
 inventory and can provide evidence that resolves an earlier question.
@@ -623,8 +623,14 @@ See the credential chapter in both handbooks for the workflow and complete examp
 
 A creation conversation has its own persisted identity. Its first successful create action binds it atomically to one Pod, including the initial request, streamed responses and subsequent actions. The UI follows that Pod, and later model actions are confined to it. A new creation session starts a separate conversation. Chat presents the immutable initial request separately from the recent timeline.
 
-Overview's description is derived from completed owner/assistant exchanges by a separate, tool-free Codex app-server request. SQLite stores source boundaries, partial progress and the last successful description. Long histories and oversized messages are processed in ordered, bounded segments; interrupted updates can retry. Stale results cannot replace a newer requested description. Generation failures remain visible and preserve the last successful text. The description does not revise the execution assignment, invalidate scripts, grant access or enable schedules. Explicit assignment editing remains under Settings → More options → Execution assignment.
+Overview's description is derived from completed owner/assistant exchanges by a separate, tool-free Codex app-server request. SQLite stores source boundaries, partial progress and the last successful description. Long histories and oversized messages are processed in ordered, bounded segments; interrupted updates can retry. Stale results cannot replace a newer requested description. Generation failures remain visible and preserve the last successful text. The description does not change script execution, invalidate scripts, grant access or enable schedules. Script execution and AI prompts are defined by the script; there is no separate execution assignment.
 
 Schema 15 preserves existing data and adds creation bindings, original-request provenance, description progress and summary process ownership. Older unlinked creation history has an explicit, fingerprint-checked recovery preview. Recovery verifies the stored create result and rejects mixed-Pod, changed or active history. A recovered original request retains its identity and timestamp. Do not hand-edit the profile database to migrate a conversation.
 
 Verification covers scoped creation/replay, preservation of the original request, stale summaries, long-message continuation, failure/retry, legacy adoption and actual packaged UI/App Server execution with recorded model responses. Real model quality and provider execution remain separately observable acceptance steps.
+
+## Script authority and compatibility
+
+Pod creation requires a name. Chat and the original request guide script creation; the script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work, script validation and credential approval. Overview descriptions remain informational. Pods without a conversation description link to Chat.
+
+Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.

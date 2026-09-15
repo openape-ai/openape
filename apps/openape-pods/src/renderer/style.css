@@ -323,7 +323,7 @@ h2 {
   font-weight:550;
   white-space:nowrap;
 }
-.assignment-text {
+.description-text {
   font-size:21px;
   letter-spacing:-.5px;
   line-height:1.55;
@@ -485,7 +485,7 @@ h2 {
   .card {
     padding:18px;
   }
-  .assignment-text {
+  .description-text {
     font-size:19px;
   }
   .first-run {
@@ -502,8 +502,8 @@ h2 {
 .pod-button>span:last-child { min-width:0; overflow-wrap:anywhere; }
 .pod-icon { flex-shrink:0; }
 .toolbar,.footer { flex-shrink:0; }
-h1,.assignment-text,.card p { overflow-wrap:anywhere; }
-.assignment-text { white-space:pre-wrap; }
+h1,.description-text,.card p { overflow-wrap:anywhere; }
+.description-text { white-space:pre-wrap; }
 .overview-actions { display:flex; flex-wrap:wrap; gap:15px; align-items:center; margin-top:18px; }
 .master-panel>p { margin-bottom:20px; }
 .master-panel .card { margin-top:20px; }

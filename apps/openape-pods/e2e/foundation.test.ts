@@ -37,7 +37,7 @@ describe('foundation', () => {
   })
   it.each([false, true])('resources: reviews, snapshots and revokes a reference through the owner window (packaged=%s)', async (packaged) => {
     const { app, page, root } = await launch(packaged)
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod', assignment: 'Read the assigned synthetic reference only.' }))).pods[0]!
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod' }))).pods[0]!
     const source = join(root, 'synthetic-reference.txt'); await writeFile(source, 'SYNTHETIC_REFERENCE')
     await app.evaluate(({ dialog }, path) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
@@ -64,7 +64,7 @@ describe('foundation', () => {
   })
   it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
     const { page } = await launch(packaged)
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example', assignment: 'Run synthetic examples only.' }))).pods[0]!
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     await page.getByRole('tab', { name: 'History', exact: true }).click()
     await page.getByRole('button', { name: 'Use local example', exact: true }).click()
     await page.getByRole('button', { name: 'Start run', exact: true }).click()
@@ -77,7 +77,7 @@ describe('foundation', () => {
   })
   it('scheduling: persists a disabled daily schedule and an explicit concurrency limit', async () => {
     const { page } = await launch()
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example', assignment: 'Synthetic local scripts only.' }))).pods[0]!
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example' }))).pods[0]!
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
     await page.getByLabel('Repeat', { exact: true }).selectOption('daily')
     await page.getByLabel('Local time', { exact: true }).fill('08:30')
@@ -92,11 +92,10 @@ describe('foundation', () => {
     await page.locator('.schedule-panel').screenshot({ path: join(artifacts, 'schedule-settings.png') })
     expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]!.lifecycle).toBe('paused')
   })
-  it('storage: saves a pod assignment in the worker and reopens it after app restart', async () => {
+  it('storage: saves pod settings in the worker and reopens it after app restart', async () => {
     const { app, page, root, binary } = await launch()
     await page.getByRole('tab', { name: 'Settings', exact: true }).click()
     await page.getByLabel('Pod name').fill('Fixture orders')
-    await page.getByLabel('Assignment', { exact: true }).fill('Read synthetic order evidence only.')
     await page.getByRole('button', { name: 'Save pod', exact: true }).click()
     await expect.poll(async () => (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods.length).toBe(1)
     await mkdir(artifacts, { recursive: true })
@@ -104,7 +103,7 @@ describe('foundation', () => {
     const first = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
     expect(first.pods).toHaveLength(1); expect(first.pods[0]!.activeScript).toBeNull()
     expect(await page.evaluate(async () => {
-      try { await window.pods.workspace({ type: 'create', name: 'bad', assignment: 'bad', credential: 'unassigned' } as never); return 'allowed' }
+      try { await window.pods.workspace({ type: 'create', name: 'bad', credential: 'unassigned' } as never); return 'allowed' }
       catch { return 'denied' }
     })).toBe('denied')
     await app.close()
@@ -113,8 +112,6 @@ describe('foundation', () => {
     const reopened = await next.firstWindow()
     await expect.poll(async () => (await reopened.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await reopened.getByRole('tab', { name: 'Settings', exact: true }).click(); await reopened.getByText('More options', { exact: true }).click(); await reopened.getByText('Execution assignment', { exact: true }).click()
-    expect(await reopened.getByLabel('Assignment', { exact: true }).inputValue()).toBe('Read synthetic order evidence only.')
     expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {

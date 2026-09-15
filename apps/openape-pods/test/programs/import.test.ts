@@ -16,7 +16,7 @@ it('imports a selected application file without changing its source or exposing 
   const root = await mkdtemp(join(tmpdir(), 'pods-program-import-')); const store = new PodDatabase(join(root, 'profile'))
   const resources = new ResourceRegistry(store, () => {}); const control = new ProgramControl(store, resources)
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
-  const pod = store.createPod({ name: 'Import fixture', assignment: 'Synthetic state only' })
+  const pod = store.createPod({ name: 'Import fixture' })
   const manager = new ProgramManager(root, '/unused-helper', credentials, {} as ConnectionManager, async podId => ({ resources: resources.list(podId), epoch: resources.epoch(podId) }), async command => control.execute(command))
   try {
     await manager.add(pod.id, 0, { name: 'Synthetic CLI', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), networkHosts: [], entryFiles: [], environment: {} })

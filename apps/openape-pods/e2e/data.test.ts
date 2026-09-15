@@ -16,7 +16,7 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
   let app: ElectronApplication = await launch()
   try {
     let page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Recovery fixture', assignment: 'Retain synthetic evidence only.' }))).pods[0]
+    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Recovery fixture' }))).pods[0]
     const workspace = join(root, 'pods', pod.id, 'workspace'); await mkdir(workspace, { recursive: true }); await writeFile(join(workspace, 'notes.txt'), 'SYNTHETIC_DURABLE_WORKSPACE')
     await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
     await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
@@ -57,7 +57,7 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
 
 it('data: restores a compatible backup when a newer database blocks normal startup', async () => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'Pods previous version '))); const root = join(base, 'profile'); const exports = join(base, 'exports'); await mkdir(root, { mode: 0o700 }); await mkdir(exports); fixtureDirectory(root)
-  const store = new PodDatabase(root); store.createPod({ name: 'Prior version', assignment: 'Synthetic rollback evidence' }); const backup = await createBackup(store, exports); store.db.exec('PRAGMA user_version=999'); store.close()
+  const store = new PodDatabase(root); store.createPod({ name: 'Prior version' }); const backup = await createBackup(store, exports); store.db.exec('PRAGMA user_version=999'); store.close()
   const app = await electron.launch({ executablePath: executable, args: ['.'], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {
     const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('error')

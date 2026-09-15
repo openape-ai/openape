@@ -11,7 +11,7 @@ import { fixtureDirectory } from '../src/main/fixture'
 it('language: switches every packaged view and native menus, preserves edits and persists across restart', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-language-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root)
-  const pod = store.createPod({ name: 'Order review', assignment: 'Review assigned order information and retain sourced findings.' })
+  const pod = store.createPod({ name: 'Order review' })
   const resources = new ResourceRegistry(store, () => {})
   const reference = join(root, 'order-notes.txt'); await writeFile(reference, 'Synthetic reference: delivery on Tuesday.')
   resources.assignReference(pod.id, 'Order notes', reference)

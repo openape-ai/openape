@@ -9,7 +9,7 @@ import { MasterConversations } from '../../src/worker/master/conversations'
 it('keeps legacy and per-pod history and continuation IDs separate after reopening', () => {
   const root = mkdtempSync(join(tmpdir(), 'pods-conversations-')); let store = new PodDatabase(root)
   try {
-    const first = store.createPod({ name: 'First', assignment: 'Read' }); const second = store.createPod({ name: 'Second', assignment: 'Read' })
+    const first = store.createPod({ name: 'First' }); const second = store.createPod({ name: 'Second' })
     const conversations = new MasterConversations(store)
     for (const [id, scope] of [['one', first.id], ['two', second.id], ['legacy', '']]) {
       store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(id, 'user', id, 'sent', 1)
@@ -35,14 +35,14 @@ it('adopts a creation conversation without losing its first prompt or later stre
     const scope = conversations.begin(id)
     store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('initial', 'user', 'Check every 15 minutes', 'sent', 1)
     conversations.assign('initial', scope)
-    const pod = store.createPod({ name: 'Created', assignment: 'Check' })
+    const pod = store.createPod({ name: 'Created' })
     conversations.bind(id, pod.id)
     store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('response', 'assistant', 'Prepared', 'completed', 2)
     conversations.assign('response', scope)
     expect(conversations.messages(pod.id).map(message => message.text)).toEqual(['Check every 15 minutes', 'Prepared'])
     expect(conversations.initial(pod.id)?.text).toBe('Check every 15 minutes')
     expect(conversations.messages('')).toEqual([])
-    const other = store.createPod({ name: 'Other', assignment: 'Other' })
+    const other = store.createPod({ name: 'Other' })
     expect(() => conversations.bind(id, other.id)).toThrow('already')
   }
   finally { store.close(); rmSync(root, { recursive: true, force: true }) }
