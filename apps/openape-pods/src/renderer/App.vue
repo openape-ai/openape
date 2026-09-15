@@ -142,7 +142,7 @@ export default defineComponent({
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="card master-panel">
-          <MasterChat :key="creating || selected === 'Workspace chat' ? 'workspace' : podId" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Permissions' }" /><details v-if="creating">
+          <MasterChat :key="creating || selected === 'Workspace chat' ? 'workspace' : podId" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); await openValues() }" /><details v-if="creating">
             <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
           </details>
         </section>
