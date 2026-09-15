@@ -140,6 +140,17 @@ export default defineComponent({
   <PodSchedule v-if="selectedPod && !descriptionOnly" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <details v-if="selectedPod && !descriptionOnly" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>
+    <details>
+      <summary>{{ t('Execution assignment') }}</summary>
+      <p class="muted">
+        {{ t('Changing the execution assignment requires script validation again and can stop active work.') }}
+      </p>
+      <form @submit.prevent="save">
+        <label>{{ t('Assignment') }}<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label><button :disabled="busy || !assignment.trim()">
+          {{ t('Save pod') }}
+        </button>
+      </form>
+    </details>
     <h2>{{ t("Pod lifecycle") }}</h2><p class="muted">
       {{ t("Archiving stops intake and preserves knowledge and run history.") }}
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">

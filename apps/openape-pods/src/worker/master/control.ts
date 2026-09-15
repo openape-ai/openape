@@ -1,3 +1,4 @@
+import { MasterConversations } from './conversations'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { parseMasterAction } from '../../contracts/master'
@@ -20,17 +21,21 @@ import { modelResources } from './resources'
 
 export class MasterControl {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime) {}
-  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null): Promise<unknown> {
+  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
     const action = parseMasterAction(value)
-    if (selectedPod && (action.action === 'create' || ('podId' in action && action.podId !== selectedPod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
-    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action }))
+    const conversations = new MasterConversations(this.store)
+    const boundPod = creationId ? conversations.bound(creationId) : null
+    const effectivePod = selectedPod ?? boundPod
+    if (effectivePod && ((action.action === 'create' && !creationId) || ('podId' in action && action.podId !== effectivePod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
+    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}) }))
     const prior = this.store.db.prepare('SELECT * FROM master_actions WHERE id=?').get(key)
     if (prior) {
       if (prior.request_hash !== hash) throw new Error('Master operation identity was reused with different arguments')
       if (prior.state === 'completed') return JSON.parse(prior.result as string) as unknown
       throw new Error(prior.error as string || 'Master action is already running or interrupted; inspect before retrying')
     }
+    if (action.action === 'create' && boundPod) throw new Error('Creation conversation already has a pod')
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
     if (action.action === 'validate') {
@@ -48,7 +53,8 @@ export class MasterControl {
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-      const result = this.apply(action, dependencyLockHash, selectedPod)
+      const result = this.apply(action, dependencyLockHash, effectivePod)
+      if (action.action === 'create' && creationId) conversations.bind(creationId, (result as { id: string }).id)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
     })

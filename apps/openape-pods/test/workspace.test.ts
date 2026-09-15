@@ -34,3 +34,23 @@ describe('pod workspace shell', () => {
     wrapper.unmount()
   })
 })
+
+it('starts a fresh creation chat when New pod is clicked again', async () => {
+  localStorage.removeItem('pods-creation-id')
+  const master = vi.fn().mockResolvedValue({ connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] })
+  window.pods = { master, getStatus: async () => ready, onStatus: () => () => {}, workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }) } as unknown as typeof window.pods
+  const wrapper = mount(App); await flushPromises()
+  try {
+    await wrapper.get('.new-pod').trigger('click'); await flushPromises()
+    await wrapper.get('textarea').setValue('An unfinished first request')
+    await wrapper.get('.new-pod').trigger('click'); await flushPromises()
+    expect(wrapper.get('textarea').element.value).toBe('')
+    const beginnings = master.mock.calls.filter(([command]) => command.type === 'begin')
+    expect(beginnings).toHaveLength(2)
+    expect(beginnings[0][0].id).not.toBe(beginnings[1][0].id)
+    await wrapper.get('textarea').setValue('The second request')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'send', creationId: beginnings[1][0].id, text: 'The second request' }))
+  }
+  finally { wrapper.unmount(); localStorage.removeItem('pods-creation-id') }
+})
