@@ -1275,5 +1275,12 @@
   "Application running": "Anwendung läuft",
   "Use in script": "Im Skript verwenden",
   "HTTP request returned an error response; review delivery before retrying": "Die HTTP-Anfrage lieferte eine Fehlerantwort; prüfe die Zustellung vor einem erneuten Versuch",
-  "Terminal style authorization is unavailable": "Die Stilfreigabe für das Terminal ist nicht verfügbar"
+  "Terminal style authorization is unavailable": "Die Stilfreigabe für das Terminal ist nicht verfügbar",
+  "Secret name": "Name des Geheimnisses",
+  "Open Settings": "Einstellungen öffnen",
+  "Invalid schedule revision": "Ungültige Zeitplanrevision",
+  "Invalid organization revision": "Ungültige Gruppenrevision",
+  "Only credential proposals accept an alias": "Nur Vorschläge für Geheimnisse akzeptieren einen Namen",
+  "Action is outside the selected pod; use its own chat or the workspace chat": "Aktion betrifft einen anderen Pod. Verwende dessen Chat oder den Arbeitsbereich-Chat.",
+  "These values are visible to the pod assistant. Changes apply to future runs. Store sensitive values as secrets below.": "Diese Werte sind für den Pod-Assistenten sichtbar. Änderungen gelten für künftige Läufe. Speichere vertrauliche Werte unten als Geheimnisse."
 }
