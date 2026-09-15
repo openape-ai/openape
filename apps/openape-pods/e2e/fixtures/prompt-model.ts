@@ -41,7 +41,7 @@ export class PromptModel {
       () => ({ action: 'validate', ...scope, draftId: repaired?.draftId, draftRevision: repaired?.draftRevision }),
       () => ({ action: 'activate', ...scope, draftId: repaired?.draftId, draftRevision: repaired?.draftRevision }),
       () => ({ action: 'run', ...scope }),
-      () => ({ action: 'requestAccess', ...scope, request: { provider: 'credential', alias: 'notification_token', description: 'Optional notification secret for later use. Enter its value only in Settings.' } }),
+      () => ({ action: 'requestAccess', ...scope, request: { provider: 'credential', alias: 'notification_token', description: 'Optional notification secret for later use. Enter its value only in Variables and secrets.' } }),
       () => ({ action: 'inspect', ...scope }),
     ]
     const action = actions[index]

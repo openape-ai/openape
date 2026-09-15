@@ -2,15 +2,16 @@
 import ProgramPermissions from './ProgramPermissions.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
+import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
   components: { ProgramPermissions },
-  props: { mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
+  props: { requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: '', credentialValue: '' } },
-  computed: { visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : resource.kind === 'reference') } },
+  computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias)) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : resource.kind === 'reference') } },
   async mounted() {
     try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
@@ -59,6 +60,18 @@ export default defineComponent({
           {{ t("Preview next snapshot") }}
         </button>
       </div>
+      <template v-if="mode === 'values'">
+        <article v-for="alias in missingAliases" :key="alias" class="resource-row">
+          <div>
+            <strong>{{ alias }}</strong><p class="muted">
+              {{ t('Requested secret · Not set') }}
+            </p>
+          </div>
+          <button class="text-button" :disabled="busy" @click="credentialAlias = alias">
+            {{ t('Set secret') }}
+          </button>
+        </article>
+      </template>
       <form v-if="mode === 'values'" class="credential-form" @submit.prevent="saveCredential">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
@@ -70,7 +83,7 @@ export default defineComponent({
           {{ t('Save or replace credential') }}
         </button>
       </form>
-      <p v-if="!visibleResources.length" class="muted">
+      <p v-if="!visibleResources.length && !missingAliases.length" class="muted">
         {{ t(mode === 'values' ? 'No secrets assigned.' : 'Nothing assigned. This pod cannot read reference files.') }}
       </p>
       <article v-for="resource in visibleResources" :key="resource.id" class="resource-row">
@@ -83,6 +96,9 @@ export default defineComponent({
             {{ t("Resolve access in master chat") }}
           </button>
         </div>
+        <button v-if="mode === 'values'" class="text-button" :disabled="busy" @click="credentialAlias = resource.name">
+          {{ t('Replace secret') }}
+        </button>
         <button class="text-button" :disabled="busy || resource.state === 'revoked'" @click="act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })">
           {{ t("Revoke access") }}
         </button>
@@ -107,8 +123,9 @@ label { display: grid; gap: 8px; margin-top: 20px; }
 select, input { min-width:0; padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }
 .credential-form { border-top:1px solid #81908355; padding:16px 0; } .credential-form button { margin-top:16px; }
 .resource-actions { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
-.resource-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid #81908355; padding: 20px 0; }
+.resource-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid #81908355; padding: 20px 0; }
 .resource-row > div { min-width:0; overflow-wrap:anywhere; }
 .resource-path { overflow-wrap: anywhere; font-size: 13px; opacity: .75; }
 .snapshot-result { border-top: 1px solid #81908355; padding-top: 12px; }
+.resource-row>div { flex:1 1 260px; min-width:0; overflow-wrap:anywhere; }
 </style>
