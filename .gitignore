@@ -40,3 +40,6 @@ docs/local-stack/manifest-*.json
 
 # Local check logs and machine-readable results.
 .openape/check-results/
+
+# Restricted issue inventory and disposable rehearsal data.
+.openape/native-issues-m0/
