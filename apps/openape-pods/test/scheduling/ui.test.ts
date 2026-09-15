@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import PodSchedule from '../../src/renderer/PodSchedule.vue'
 
-const pod = { id: '00000000-0000-4000-8000-000000000001', name: 'Synthetic', assignment: 'Read', revision: 1, lifecycle: 'paused' as const, activeScript: null }
+const pod = { id: '00000000-0000-4000-8000-000000000001', name: 'Synthetic', revision: 1, lifecycle: 'paused' as const, activeScript: null }
 const state = { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }
 describe('schedule settings', () => {
   it('defaults to disabled, saves exact scope and requires a separate resume action', async () => {

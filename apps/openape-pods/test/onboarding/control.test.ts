@@ -14,7 +14,7 @@ afterEach(() => { for (const store of stores.splice(0)) store.close(); for (cons
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-setup-')); roots.push(root); const store = new PodDatabase(root); stores.push(store)
   const cancel = vi.fn(); const resources = new ResourceRegistry(store, cancel); const control = new SetupControl(store, resources)
-  const pod = store.createPod({ name: 'Mail knowledge', assignment: 'Read synthetic mail only' })
+  const pod = store.createPod({ name: 'Mail knowledge' })
   const owner = { id: randomUUID(), provider: 'openape' as const, account: 'owner@example.invalid', state: 'ready' as const, error: null }
   const mail = { id: randomUUID(), provider: 'microsoft' as const, account: 'mail@example.invalid', state: 'ready' as const, error: null }
   control.execute({ type: 'save', connection: owner, metadata: { issuer: 'https://id.example.invalid' } }); control.execute({ type: 'save', connection: mail, metadata: {} })

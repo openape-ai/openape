@@ -9,9 +9,9 @@ import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
   components: { PodSchedule, PodValues },
-  props: { showValues: Boolean, descriptionOnly: Boolean, selectedPodId: { type: String, default: '' } },
+  props: { showValues: Boolean, selectedPodId: { type: String, default: '' } },
   emits: ['selected'],
-  data() { return { confirmReload: false, initialized: false, valuesExpanded: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', assignment: '', revision: 0, error: '', message: '', busy: false } },
+  data() { return { confirmReload: false, initialized: false, valuesExpanded: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
   watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
@@ -43,9 +43,9 @@ export default defineComponent({
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not update groups' }
       finally { this.busy = false; (event.target as HTMLSelectElement).value = this.selectedGroup }
     },
-    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '') || this.assignment !== (this.selectedPod?.assignment ?? '')) settingsDrafts.set(this.selectedId, { name: this.name, assignment: this.assignment, revision: this.revision }); else settingsDrafts.delete(this.selectedId) },
-    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(pod.id); this.selectedId = pod.id; this.name = draft?.name ?? pod.name; this.assignment = draft?.assignment ?? pod.assignment; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
-    newPod() { this.selectedId = ''; this.name = ''; this.assignment = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
+    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '')) settingsDrafts.set(this.selectedId, { name: this.name, revision: this.revision }); else settingsDrafts.delete(this.selectedId) },
+    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(pod.id); this.selectedId = pod.id; this.name = draft?.name ?? pod.name; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
+    newPod() { this.selectedId = ''; this.name = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
     async remove() {
       const pod = this.selectedPod; if (!pod || pod.lifecycle !== 'archived') return
       this.busy = true; this.error = ''
@@ -60,19 +60,19 @@ export default defineComponent({
     async archive() {
       const pod = this.selectedPod; if (!pod) return
       this.busy = true; this.error = ''
-      try { this.pods = (await window.pods.workspace({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, assignment: pod.assignment, lifecycle: 'archived' })).pods; this.select(this.pods.find(item => item.id === pod.id)!); this.message = 'Archived. History is retained.' }
+      try { this.pods = (await window.pods.workspace({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, lifecycle: 'archived' })).pods; this.select(this.pods.find(item => item.id === pod.id)!); this.message = 'Archived. History is retained.' }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not archive pod' }
       finally { this.busy = false }
     },
     async save() {
       this.busy = true; this.error = ''; this.message = ''
       try {
-        const command = this.selectedId ? { type: 'update' as const, id: this.selectedId, revision: this.revision, name: this.name, assignment: this.assignment, lifecycle: 'paused' as const } : { type: 'create' as const, name: this.name, assignment: this.assignment }
+        const command = this.selectedId ? { type: 'update' as const, id: this.selectedId, revision: this.revision, name: this.name, lifecycle: this.selectedPod!.lifecycle } : { type: 'create' as const, name: this.name }
         const state = await window.pods.workspace(command)
         this.pods = state.pods
         const saved = this.selectedId ? this.pods.find(pod => pod.id === this.selectedId) : this.pods.at(-1)
         if (!saved) throw new Error('Saved pod is missing from response')
-        settingsDrafts.delete(this.selectedId); this.name = saved.name; this.assignment = saved.assignment; this.select(saved); if (command.type === 'create') settingsDrafts.delete(''); this.message = 'Saved locally. Automatic execution is paused.'
+        settingsDrafts.delete(this.selectedId); this.name = saved.name; this.select(saved); if (command.type === 'create') settingsDrafts.delete(''); this.message = 'Settings saved.'
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not save pod' }
       finally { this.busy = false }
@@ -89,7 +89,7 @@ export default defineComponent({
       </button>
     </div>
     <p class="muted">
-      {{ t("Assignments are saved on this Mac. No accounts or schedules are activated.") }}
+      {{ t("Settings are saved on this Mac.") }}
     </p>
     <div v-if="!selectedPodId" class="saved-pods">
       <button v-for="pod in pods" :key="pod.id" class="secondary" :aria-pressed="selectedId === pod.id" @click="select(pod)">
@@ -97,10 +97,9 @@ export default defineComponent({
       </button>
     </div>
     <form @submit.prevent="save">
-      <label v-if="!descriptionOnly">{{ t("Pod name") }}<input v-model="name" required maxlength="100" :disabled="busy"></label>
-      <label v-if="!selectedPodId || descriptionOnly">{{ t("Assignment") }}<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label>
+      <label>{{ t("Pod name") }}<input v-model="name" required maxlength="100" :disabled="busy"></label>
       <p v-if="!selectedPodId && revision" class="muted">
-        {{ t("Assignment revision {p0} · {p1}", { p0: revision, p1: label(selectedPod?.lifecycle) }) }}
+        {{ t("Settings revision {p0} · {p1}", { p0: revision, p1: label(selectedPod?.lifecycle) }) }}
       </p>
       <p v-if="error" role="alert" class="error-message">
         {{ diagnostic(error) }}
@@ -120,12 +119,12 @@ export default defineComponent({
       <p v-if="message" role="status">
         {{ diagnostic(message) }}
       </p>
-      <button class="primary" type="submit" :disabled="busy || !name.trim() || !assignment.trim()">
+      <button class="primary" type="submit" :disabled="busy || !name.trim()">
         {{ busy ? t("Saving…") : t("Save pod") }}
       </button>
     </form>
   </article>
-  <article v-if="selectedPod && !descriptionOnly" class="card">
+  <article v-if="selectedPod" class="card">
     <label for="pod-group">{{ t('Group') }}</label><select id="pod-group" :value="selectedGroup" :disabled="busy" @change="moveGroup">
       <option value="">
         {{ t('Ungrouped') }}
@@ -134,23 +133,12 @@ export default defineComponent({
       </option>
     </select>
   </article>
-  <details v-if="selectedPod && !descriptionOnly" :open="showValues" class="values-settings" @toggle="valuesExpanded = ($event.target as HTMLDetailsElement).open">
+  <details v-if="selectedPod" :open="showValues" class="values-settings" @toggle="valuesExpanded = ($event.target as HTMLDetailsElement).open">
     <summary>{{ t('Variables and secrets') }}</summary><PodValues v-if="showValues || valuesExpanded" :key="selectedPod.id" :pod-id="selectedPod.id" @vue:mounted="scrollValues" />
   </details>
-  <PodSchedule v-if="selectedPod && !descriptionOnly" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
-  <details v-if="selectedPod && !descriptionOnly" class="card lifecycle-panel">
+  <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
+  <details v-if="selectedPod" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>
-    <details>
-      <summary>{{ t('Execution assignment') }}</summary>
-      <p class="muted">
-        {{ t('Changing the execution assignment requires script validation again and can stop active work.') }}
-      </p>
-      <form @submit.prevent="save">
-        <label>{{ t('Assignment') }}<textarea v-model="assignment" required maxlength="20000" rows="5" :disabled="busy" /></label><button :disabled="busy || !assignment.trim()">
-          {{ t('Save pod') }}
-        </button>
-      </form>
-    </details>
     <h2>{{ t("Pod lifecycle") }}</h2><p class="muted">
       {{ t("Archiving stops intake and preserves knowledge and run history.") }}
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">

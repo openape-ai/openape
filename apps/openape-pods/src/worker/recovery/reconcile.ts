@@ -15,7 +15,7 @@ export class Recovery {
     if (!row) throw new Error('Validated script is missing')
     parseManifest(JSON.parse(row.manifest as string))
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
-    if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, pod.activeScript, pod.revision, this.resources.epoch(podId))) throw new Error('Validate the script for current permissions before retrying')
+    if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, pod.activeScript, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate the script for current permissions before retrying')
   }
 
   async resolveHttp(podId: string, runId: string, key: string, applied: boolean, evidence: string): Promise<void> {

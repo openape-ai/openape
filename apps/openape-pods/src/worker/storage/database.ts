@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 export interface Pod {
   id: string
   name: string
-  assignment: string
+  bindingRevision: number
   revision: number
   lifecycle: 'active' | 'paused' | 'archived'
   activeScript: string | null
@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 15
+export const schemaVersion = 16
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -65,7 +65,7 @@ function syncDirectory(path: string): void {
   finally { closeSync(fd) }
 }
 function podFromRow(row: Record<string, unknown>): Pod {
-  return { id: row.id as string, name: row.name as string, assignment: row.assignment as string, revision: row.revision as number, lifecycle: row.lifecycle as Pod['lifecycle'], activeScript: row.active_script as string | null }
+  return { id: row.id as string, name: row.name as string, bindingRevision: row.revision as number, revision: row.metadata_revision as number, lifecycle: row.lifecycle as Pod['lifecycle'], activeScript: row.active_script as string | null }
 }
 
 export class PodDatabase {
@@ -236,6 +236,7 @@ CREATE TABLE pod_descriptions(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DEL
 CREATE TABLE summary_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
 PRAGMA user_version=15;`)
       }
+      if (version < 16) this.db.exec('ALTER TABLE pods ADD COLUMN metadata_revision INTEGER NOT NULL DEFAULT 1; UPDATE pods SET metadata_revision=revision; PRAGMA user_version=16;')
 
     })
   }
@@ -266,25 +267,23 @@ PRAGMA user_version=15;`)
   }
 
   createPod(input: unknown): Pod {
-    record(input, ['name', 'assignment']); text(input.name, 'name', 100); text(input.assignment, 'assignment')
-    const { name, assignment } = input
+    record(input, ['name']); text(input.name, 'name', 100)
+    const { name } = input
     const id = randomUUID()
     this.transaction(() => {
-      this.db.prepare('INSERT INTO pods(id,name,assignment) VALUES(?,?,?)').run(id, name, assignment)
-      this.db.prepare('INSERT INTO assignments VALUES(?,?,?)').run(id, 1, assignment)
+      this.db.prepare('INSERT INTO pods(id,name,assignment) VALUES(?,?,?)').run(id, name, '')
       this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?)').run(id, 0, '{}')
     })
     return this.getPod(id)
   }
 
   updatePod(id: string, expectedRevision: number, input: unknown): Pod {
-    record(input, ['name', 'assignment', 'lifecycle']); text(input.name, 'name', 100); text(input.assignment, 'assignment'); integer(expectedRevision)
+    record(input, ['name', 'lifecycle']); text(input.name, 'name', 100); integer(expectedRevision)
     if (!['active', 'paused', 'archived'].includes(input.lifecycle as string)) throw new Error('Invalid lifecycle')
-    const { name, assignment, lifecycle } = input
+    const { name, lifecycle } = input
     this.transaction(() => {
-      const update = this.db.prepare('UPDATE pods SET name=?,assignment=?,lifecycle=?,revision=revision+1 WHERE id=? AND revision=?').run(name, assignment, lifecycle as string, id, expectedRevision)
+      const update = this.db.prepare('UPDATE pods SET name=?,lifecycle=?,metadata_revision=metadata_revision+1 WHERE id=? AND metadata_revision=?').run(name, lifecycle as string, id, expectedRevision)
       if (update.changes !== 1) throw new Error('Stale pod revision')
-      this.db.prepare('INSERT INTO assignments VALUES(?,?,?)').run(id, expectedRevision + 1, assignment)
     })
     return this.getPod(id)
   }
@@ -323,7 +322,7 @@ PRAGMA user_version=15;`)
   storeScript(podId: string, input: unknown, artifact: string): ScriptManifest {
     const manifest = parseManifest(input)
     const pod = this.getPod(podId)
-    if (manifest.assignmentRevision !== pod.revision) throw new Error('Stale assignment revision')
+    if (manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Stale script binding')
     if (digest(artifact) !== manifest.contentHash) throw new Error('Artifact hash mismatch')
     const existing = this.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, manifest.contentHash)
     if (existing && existing.manifest !== JSON.stringify(manifest)) throw new Error('Immutable script manifest conflict')

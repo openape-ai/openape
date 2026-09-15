@@ -21,21 +21,21 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const draft = store.db.prepare('SELECT * FROM script_drafts WHERE id=? AND revision=?').get(draftId, revision)
   if (!draft) throw new Error('Draft changed; reload before validation')
   const pod = store.getPod(draft.pod_id as string); const epoch = resources.epoch(pod.id)
-  if (draft.assignment_revision !== pod.revision) throw new Error('Assignment changed; save a new draft revision')
+  if (draft.assignment_revision !== pod.bindingRevision) throw new Error('Script binding changed; save a new draft revision')
   const capabilities = JSON.parse(draft.capabilities as string) as string[]
   new ScriptCredentials(store, resources).required(pod.id, capabilities)
   const assignedTools = resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
   if (capabilities.some(capability => capability.startsWith('tool.') && !assignedTools.includes(capability))) throw new Error('No tool assignments are available for this script')
   if (capabilities.includes('mail.read')) assignedMail(resources.list(pod.id))
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { dependencyLockHash: string }
-  const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.revision}; dependencies ${manifest.dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
+  const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.bindingRevision}; dependencies ${manifest.dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
   const hash = digest(code)
   const root = join(store.root, 'validation', randomUUID())
   await mkdir(root, { recursive: true, mode: 0o700 }); const artifact = join(root, 'run.mjs'); await writeFile(artifact, code, { mode: 0o400, flag: 'wx' })
   const fixture = new PodDatabase(join(root, 'control'))
-  const fixturePod = fixture.createPod({ name: 'Validation fixture', assignment: pod.assignment })
+  const fixturePod = fixture.createPod({ name: 'Validation fixture' })
   try {
-    const input = { variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.revision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
+    const input = { variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
     const result = await executeScript(runtime, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
@@ -69,11 +69,11 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     if (!['completed', 'completedWithGaps'].includes(result.status)) throw new Error('Draft did not complete its synthetic contract check')
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()
-    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', draftRevision: revision, assignmentRevision: pod.revision, resourceEpoch: epoch, dependencyLockHash: manifest.dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
+    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash: manifest.dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
     store.transaction(() => {
-      if (store.getPod(pod.id).revision !== pod.revision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, assignment or permissions changed during validation')
-      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash: manifest.dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.revision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
-      store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.revision, epoch, evidence)
+      if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
+      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash: manifest.dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
+      store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)
     })
     return { hash, evidence }

@@ -20,7 +20,7 @@ Closing the window keeps the app available through its menu-bar presence. Quitti
 
 Open App settings in the sidebar and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.
 
-Pod and group names, assignments, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
+Pod and group names, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
 
 The handbook is available as complete English and German offline editions with matching app screenshots. Use the link to the other edition in the handbook navigation. Keep both HTML files together when using those links. The language preference is local display configuration; a restored profile starts from its system default until you choose again.
 
@@ -28,7 +28,7 @@ The handbook is available as complete English and German offline editions with m
 
 Try this with a new pod. The local example needs no account connection and increments a durable counter. Installing an example also makes that example the active script, so use your new pod rather than replacing a configured business script.
 
-1. Choose New pod, expand Create without chat, enter Pod name and Assignment, and Save pod.
+1. Choose New pod, expand Create without chat, enter Pod name, and Save pod.
 2. Open Script. The starter already returns a valid local result; edit its summary if desired.
 3. Choose Save and run. Validation uses synthetic services; the real local run then starts without any account connection.
 4. Inspect History and the completed result. Select a run to inspect persisted events.
@@ -38,7 +38,7 @@ Try this with a new pod. The local example needs no account connection and incre
 
 Use groups in the sidebar to organize related pods. Every pod belongs to one flat group or Ungrouped. Group names, membership and collapsed state are saved on this Mac and included in backups. Groups appear in creation order; pods keep their original creation order within each group.
 
-Grouping does not share resources or permissions, change an assignment, invalidate a script or alter a running task. New pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
+Grouping does not share resources or permissions, invalidate a script or alter a running task. New pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
 
 1. Choose + Group beside YOUR PODS, enter a Group name and choose Create group. Names contain 1–100 characters; up to fifty groups are supported.
 2. Select a pod, open Settings and choose Group. Dragging a pod onto a sidebar group also works.
@@ -52,7 +52,7 @@ Grouping does not share resources or permissions, change an assignment, invalida
 
 Description summarizes the current agreed requirements from the pod conversation. It refreshes after completed exchanges. Later corrections supersede older wishes; the Start request remains unchanged in Chat. Use Change in chat to describe a change. Refresh description regenerates the short overview text from the existing conversation without sending a new message.
 
-The description is informational. Its wording does not approve access, activate a script, change an execution assignment or enable automation. Updating and Not updated indicate pending or failed generation; Retry description keeps the last successful text until a new result is available. Pods without chat history retain their existing assignment description.
+The description is informational. Its wording does not approve access, activate a script, change script execution or enable automation. Updating and Not updated indicate pending or failed generation; Retry description keeps the last successful text until a new result is available. Pods without a description show a link to Chat, where you can describe their task.
 
 1. Open a pod and read Description.
 2. Use Change in chat for a correction. The Start request remains available in Chat.
@@ -62,9 +62,9 @@ The description is informational. Its wording does not approve access, activate 
 
 ## Chat and pod creation
 
-Every pod has a Chat tab with its own persisted history and Codex continuation thread. Ask the assistant to prepare the assignment, script and required access. New pod starts the creation chat; Create without chat exposes the local form.
+Every pod has a Chat tab with its own persisted history and Codex continuation thread. Ask the assistant to prepare the script and required access. New pod starts the creation chat; Create without chat exposes the local form.
 
-The assistant can prepare, validate and activate scripts within existing assignments and permissions. Additional access and secret approval remain owner decisions. It cannot enable schedules. Only one assistant turn runs across the app at a time; cancel or finish it before starting another pod conversation.
+The assistant can prepare, validate and activate scripts within existing permissions. Additional access and secret approval remain owner decisions. It cannot enable schedules. Only one assistant turn runs across the app at a time; cancel or finish it before starting another pod conversation.
 
 Cancel turn interrupts the active conversation; Steer adds an instruction to that turn. Text typed while a message is sending is retained. The regular script agent uses fresh context and does not automatically receive this chat, variable values or secrets.
 
@@ -125,15 +125,15 @@ The current execution boundary supports foreground native CLIs. Forking, graphic
 
 ![Permissions](images/handbook-permissions.png)
 
-## Settings and assignments
+## Settings
 
-Settings contains the pod name, group, automation and interval, Variables and secrets, and More options. The generated description is updated through Chat. More options → Execution assignment changes the execution contract explicitly; revalidate the script after changing that assignment.
+Settings contains the pod name, group, automation and interval, Variables and secrets, and More options. The generated description is updated through Chat. The script controls each run and supplies the prompts for its AI calls. There is no separate execution-assignment field. Renaming a pod preserves running work, script validation, credential approval and automation state.
 
 Ordinary variables are named strings stored in SQLite for this pod. Use context.variables["name"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.
 
 Expand More options to archive the pod or delete an archived pod through a separate native confirmation. Deletion removes its variables and pod chat as well as local data. Workspace chat, shared accounts and original reference files remain.
 
-![Settings and assignments](images/handbook-settings.png)
+![Settings](images/handbook-settings.png)
 
 ## History and recovery
 
@@ -167,7 +167,7 @@ Each pod owns its script versions, workspace, persistent checkpoint and credenti
 
 Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
-await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, assignment revision, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
+await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm by selecting crm in the editor. The runtime verifies the current run lease, exact script version, execution binding, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
 
 A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.
 
@@ -178,7 +178,7 @@ The example below combines normal Node file IO, durable variables, an explicit c
 1. Open Settings → Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
 2. Open Script, expand Required access and select the required aliases. Use await context.credentials.get("alias") in the source.
 3. Choose Save and run. After synthetic validation, review the source and confirm Review credential access in the native dialog.
-4. History shows the run. Source, assignment or resource changes require renewed validation and secret approval.
+4. History shows the run. Source or resource changes require renewed validation and secret approval.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -214,7 +214,7 @@ export async function run(context) {
 
 A pod script is a JavaScript ES module exporting async run(context). Await every asynchronous operation before returning. The result includes status, summary, completedInputIds and gapIds. A completedWithGaps result needs committed gap claims.
 
-context.input contains the frozen assignment/run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
+context.input contains the frozen run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
 
 context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh context. context.tools.invoke({ applicationId, argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Codex receives ape_shell for assigned reads, but no credential or HTTP tool. Existing context.mail scripts retain their legacy read contract.
 
@@ -343,7 +343,7 @@ Verify update and back up… checks a downloaded signed app and prepares a backu
 
 Worker unavailable or Needs attention: read the displayed error. Reopen the app after resolving the cause, then inspect interrupted runs. An unsupported OS or CPU cannot be fixed by editing a script.
 
-Validate this version for the current assignment and permissions: reopen the source, save a draft for the current assignment, validate and activate it. Revoked resources must be explicitly reassigned before use.
+Validate this version for the current script and permissions: reopen the source, save a draft, validate and activate it. Revoked resources must be explicitly reassigned before use.
 
 Syntax or contract errors: correct the JavaScript and ensure run(context) returns the required result. Await asynchronous calls and keep returned gap IDs tied to committed gaps. The active script remains unchanged after a failed check.
 

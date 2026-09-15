@@ -22,7 +22,7 @@ describe('owned runtime recovery', () => {
       provider: async (_body, signal) => { markRequested(); return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) },
       tool: async () => { throw new Error('No tools assigned') },
     })
-    const pod = store.createPod({ name: 'Recovery fixture', assignment: 'Synthetic provider only' }); await dispatcher.install(pod.id, 'agent')
+    const pod = store.createPod({ name: 'Recovery fixture' }); await dispatcher.install(pod.id, 'agent')
     const id = dispatcher.start(pod.id); await requested
     const row = store.db.prepare('SELECT path FROM execution_domains WHERE run_id=? AND path LIKE \'%/agent-%\'').get(id)!
     const record = (await readFile(row.path as string, 'utf8')).trim().split(' ')

@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
   const adapter = loadAdapter('fixture', adapterPath)
   const commands = await Promise.all(['setup', 'read'].map(action => resolveCommand(adapter, ['fixture', action])))
   fixtureDirectory(root)
-  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Application setup', assignment: 'Synthetic program setup and granted reads' }); store.close()
+  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Application setup' }); store.close()
   const podId = pod.id; const applicationId = randomUUID(); const connectionId = randomUUID()
   const keys = generateKeyPairSync('ed25519'); let origin = ''
   const state = { active: true, consumed: 0, corruptDetail: false, signedCommand: undefined as Awaited<ReturnType<typeof resolveCommand>> | undefined }

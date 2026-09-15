@@ -27,7 +27,7 @@ export class Scheduler {
 
   lifecycle(podId: string, revision: number, lifecycle: 'active' | 'paused'): void {
     if (!['active', 'paused'].includes(lifecycle)) throw new Error('Invalid lifecycle')
-    const result = this.store.db.prepare('UPDATE pods SET lifecycle=? WHERE id=? AND revision=? AND lifecycle!=\'archived\'').run(lifecycle, podId, revision)
+    const result = this.store.db.prepare('UPDATE pods SET lifecycle=? WHERE id=? AND metadata_revision=? AND lifecycle!=\'archived\'').run(lifecycle, podId, revision)
     if (result.changes !== 1) throw new Error('Pod changed or is archived')
   }
 
