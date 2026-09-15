@@ -4,7 +4,7 @@ import { t, diagnostic } from './i18n'
 import type { PodDescription } from '../contracts/description'
 
 export default defineComponent({
-  props: { podId: { type: String, required: true }, assignment: { type: String, required: true } },
+  props: { podId: { type: String, required: true } },
   emits: ['change'],
   data() { return { description: null as PodDescription | null, initial: '', error: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   async mounted() { await this.load() },
@@ -27,11 +27,11 @@ export default defineComponent({
 <template>
   <article class="card">
     <h2>{{ t('Description') }}</h2>
-    <p class="assignment-text">
-      {{ description?.text || initial || assignment }}
+    <p class="description-text">
+      {{ description?.text || initial || t('Describe this pod in Chat to create its description.') }}
     </p>
     <p class="muted" role="status">
-      {{ !description ? (initial ? t('Description pending') : t('Existing assignment description')) : description.state === 'ready' ? t('Generated from this conversation') : description.state === 'failed' ? t('Description not updated') : t('Updating description…') }}
+      {{ !description ? (initial ? t('Description pending') : t('No conversation description yet')) : description.state === 'ready' ? t('Generated from this conversation') : description.state === 'failed' ? t('Description not updated') : t('Updating description…') }}
     </p>
     <p v-if="error || description?.error" role="alert" class="error-message">
       {{ diagnostic(error || description?.error) }}

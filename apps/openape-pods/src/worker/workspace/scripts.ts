@@ -34,7 +34,7 @@ export class ScriptWorkspace {
   private evidence(podId: string, hash: string | null): string | null {
     if (!hash) return null
     const pod = this.store.getPod(podId)
-    const row = this.store.db.prepare('SELECT evidence FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.revision, this.resources.epoch(podId))
+    const row = this.store.db.prepare('SELECT evidence FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.bindingRevision, this.resources.epoch(podId))
     return row ? row.evidence as string : null
   }
 

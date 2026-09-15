@@ -12,7 +12,7 @@ describe('pod resource registry', () => {
   it('starts empty, scopes assignments to one pod and fences affected execution on revocation', () => {
     const root = mkdtempSync(join(tmpdir(), 'pods-resource-db-')); roots.push(root)
     const store = new PodDatabase(root); stores.push(store)
-    const a = store.createPod({ name: 'A', assignment: 'Read A' }); const b = store.createPod({ name: 'B', assignment: 'Read B' })
+    const a = store.createPod({ name: 'A' }); const b = store.createPod({ name: 'B' })
     const stop = vi.fn(); const registry = new ResourceRegistry(store, stop)
     expect(registry.list(a.id)).toEqual([]); expect(registry.epoch(a.id)).toBe(0)
     const resource = registry.assignReference(a.id, 'Reference', '/synthetic/assigned.txt')

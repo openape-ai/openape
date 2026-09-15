@@ -21,7 +21,7 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
       const pod = store.listPods()[0]; const draft = store.db.prepare('SELECT id,revision FROM script_drafts LIMIT 1').get(); store.close()
       const scope = { podId: pod?.id, revision: pod?.revision }
       const actions = [
-        { action: 'create', name: 'Mail knowledge', assignment: 'Keep synthetic sourced mail knowledge current.' },
+        { action: 'create', name: 'Mail knowledge' },
         { action: 'draft', ...scope, draftId: null, draftRevision: 0, code: 'export async function run() { return {status:\'completed\',summary:\'Synthetic manual run\',completedInputIds:[],gapIds:[]} }', capabilities: [] },
         { action: 'validate', ...scope, draftId: draft?.id, draftRevision: draft?.revision },
         { action: 'activate', ...scope, draftId: draft?.id, draftRevision: draft?.revision },

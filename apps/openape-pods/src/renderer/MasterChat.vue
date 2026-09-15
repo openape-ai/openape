@@ -75,7 +75,7 @@ onMounted(async () => {
         </p>
       </article>
       <p v-if="!view?.messages.length" class="muted">
-        {{ t("Describe what your pod should learn or inspect an existing assignment.") }}
+        {{ t("Describe what your pod should do or inspect its current script.") }}
       </p>
     </div>
     <form class="master-compose" @submit.prevent="send">

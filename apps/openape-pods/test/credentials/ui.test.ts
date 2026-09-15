@@ -6,7 +6,7 @@ import PodScript from '../../src/renderer/PodScript.vue'
 import type { ScriptView } from '../../src/contracts/scripts'
 
 it('saves only a masked pod-scoped value and clears it even when saving fails', async () => {
-  const pod = { id: randomUUID(), name: 'One', revision: 1, lifecycle: 'paused', assignment: 'Read', activeScript: null }
+  const pod = { id: randomUUID(), name: 'One', revision: 1, lifecycle: 'paused', activeScript: null }
   const resources = vi.fn().mockResolvedValue({ resources: [], epoch: 4 })
   window.pods = { workspace: async () => ({ pods: [pod] }), resources } as unknown as typeof window.pods
   const wrapper = mount(PodResources, { props: { selectedPodId: pod.id, mode: 'values' } }); await flushPromises()
@@ -21,7 +21,7 @@ it('saves only a masked pod-scoped value and clears it even when saving fails', 
 })
 it('requires owner credential review before Run and preserves declarations when saving', async () => {
   const hash = 'a'.repeat(64)
-  const view: ScriptView = { resourceEpoch: 1, credentialAliases: ['crm'], pod: { id: randomUUID(), name: 'One', revision: 1, assignment: 'Read', lifecycle: 'paused', activeScript: null }, drafts: [], versions: [], source: { kind: 'version', id: hash, hash, assignmentRevision: 1, revision: 0, code: 'export async function run() {}', capabilities: ['credential.crm'], validated: true, evidence: '{}', credentialAccessApproved: false } }
+  const view: ScriptView = { resourceEpoch: 1, credentialAliases: ['crm'], pod: { id: randomUUID(), name: 'One', revision: 1, lifecycle: 'paused', activeScript: null }, drafts: [], versions: [], source: { kind: 'version', id: hash, hash, assignmentRevision: 1, revision: 0, code: 'export async function run() {}', capabilities: ['credential.crm'], validated: true, evidence: '{}', credentialAccessApproved: false } }
   const scripts = vi.fn().mockImplementation(async (command) => { if (command.type === 'approveCredentials') view.source!.credentialAccessApproved = true; if (command.type === 'activate') view.pod.activeScript = hash; return structuredClone(view) }); const runs = vi.fn().mockResolvedValue({ runs: [] })
   window.pods = { scripts, runs, resources: async () => ({ resources: [], epoch: 1 }) } as unknown as typeof window.pods
   const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
@@ -37,7 +37,7 @@ it('requires owner credential review before Run and preserves declarations when 
   expect(scripts.mock.calls.at(-1)![0].capabilities).toEqual([]); wrapper.unmount()
 })
 it('keeps a revoked but selected alias visible so its declaration can be removed', async () => {
-  const view: ScriptView = { resourceEpoch: 2, credentialAliases: [], pod: { id: randomUUID(), name: 'One', revision: 1, assignment: 'Read', lifecycle: 'paused', activeScript: null }, drafts: [], versions: [], source: { kind: 'draft', id: randomUUID(), hash: null, assignmentRevision: 1, revision: 1, code: 'export async function run() {}', capabilities: ['credential.old-secret'], validated: false, evidence: null, credentialAccessApproved: false } }
+  const view: ScriptView = { resourceEpoch: 2, credentialAliases: [], pod: { id: randomUUID(), name: 'One', revision: 1, lifecycle: 'paused', activeScript: null }, drafts: [], versions: [], source: { kind: 'draft', id: randomUUID(), hash: null, assignmentRevision: 1, revision: 1, code: 'export async function run() {}', capabilities: ['credential.old-secret'], validated: false, evidence: null, credentialAccessApproved: false } }
   window.pods = { scripts: vi.fn().mockResolvedValue(view), resources: async () => ({ resources: [], epoch: 2 }) } as unknown as typeof window.pods
   const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
   expect(wrapper.text()).toContain('Not assigned')

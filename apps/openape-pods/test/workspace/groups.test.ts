@@ -14,8 +14,8 @@ afterEach(() => { for (const store of stores) store.close(); stores.length = 0; 
 function fixture() { const root = mkdtempSync(join(tmpdir(), 'pods-groups-')); roots.push(root); const store = new PodDatabase(root); stores.push(store); return store }
 function apply(groups: PodGroups, action: GroupAction) { groups.execute({ type: 'organize', revision: groups.view().revision, ...action }) }
 it('migrates an existing profile without changing pods and persists groups across reopening', () => {
-  let store = fixture(); const pod = store.createPod({ name: 'Orders', assignment: 'Keep evidence' })
-  store.db.exec('DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; PRAGMA user_version=10;')
+  let store = fixture(); const pod = store.createPod({ name: 'Orders' })
+  store.db.exec('ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; PRAGMA user_version=10;')
   store.close(); stores.pop(); store = new PodDatabase(store.root); stores.push(store)
   const groups = new PodGroups(store); expect(groups.view()).toEqual({ revision: 1, groups: [] }); expect(store.getPod(pod.id)).toEqual(pod)
   expect(readdirSync(store.root).some(name => name.startsWith('before-v10-'))).toBe(true)
@@ -26,7 +26,7 @@ it('migrates an existing profile without changing pods and persists groups acros
   expect(parseWorkspace({ pods: store.listPods(), organization: state }).organization.groups[0]).toMatchObject({ name: 'Work', collapsed: true, podIds: [pod.id] })
 })
 it('moves one membership, retains pods on group removal and removes membership on pod deletion', () => {
-  const store = fixture(); const groups = new PodGroups(store); const pod = store.createPod({ name: 'Orders', assignment: 'Keep evidence' })
+  const store = fixture(); const groups = new PodGroups(store); const pod = store.createPod({ name: 'Orders' })
   apply(groups, { action: 'create', name: 'Clients' }); apply(groups, { action: 'create', name: 'Personal' }); const [first, second] = groups.view().groups
   apply(groups, { action: 'move', podId: pod.id, groupId: first!.id }); apply(groups, { action: 'move', podId: pod.id, groupId: second!.id })
   expect(groups.view().groups.map(group => group.podIds)).toEqual([[], [pod.id]])
@@ -41,7 +41,7 @@ it('rejects stale edits, unknown targets, duplicate names and excessive authorit
   expect(() => groups.execute({ type: 'organize', revision: 1, action: 'create', name: 'Stale' })).toThrow('Groups changed')
   expect(() => apply(groups, { action: 'create', name: 'work' })).toThrow('already exists')
   expect(() => apply(groups, { action: 'rename', id: randomUUID(), name: 'Other' })).toThrow('no longer exists')
-  const pod = store.createPod({ name: 'Pod', assignment: 'Read only' })
+  const pod = store.createPod({ name: 'Pod' })
   expect(() => apply(groups, { action: 'move', podId: pod.id, groupId: randomUUID() })).toThrow('no longer exists')
   expect(() => apply(groups, { action: 'move', podId: randomUUID(), groupId: null })).toThrow('Pod not found')
   expect(groups.view()).toEqual(prior)

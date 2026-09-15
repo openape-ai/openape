@@ -10,7 +10,7 @@ import { parseResourceCommand } from '../../src/contracts/resources'
 it('persists pod-scoped plain values, rejects stale changes and preserves captured input', () => {
   const root = mkdtempSync(join(tmpdir(), 'pods-variables-')); let store = new PodDatabase(root)
   try {
-    const first = store.createPod({ name: 'First', assignment: 'Read' }); const second = store.createPod({ name: 'Second', assignment: 'Read' })
+    const first = store.createPod({ name: 'First' }); const second = store.createPod({ name: 'Second' })
     const variables = new PodVariables(store)
     variables.save(first.id, 'topic', 'Orders', 0)
     const captured = variables.values(first.id)

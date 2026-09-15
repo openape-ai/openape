@@ -17,7 +17,7 @@ const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
 function fixture() {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-script-editor-'))); stores.push(store)
-  const pod = store.createPod({ name: 'Script owner', assignment: 'Review synthetic evidence' })
+  const pod = store.createPod({ name: 'Script owner' })
   const resources = new ResourceRegistry(store, () => {})
   const runtime = {} as AgentRuntime
   const dispatcher = new RunDispatcher(store, resources, runtime)
@@ -31,7 +31,7 @@ function fixture() {
 it('reads the exact hashed script, rejects another pod and detects a corrupt blob', async () => {
   const f = fixture(); const view = parseScriptView(await f.execute({ type: 'list', podId: f.pod.id }))
   expect(view.source?.code).toBe(f.store.readBlob(view.pod.activeScript!).toString('utf8'))
-  const other = f.store.createPod({ name: 'Other', assignment: 'Separate scope' })
+  const other = f.store.createPod({ name: 'Other' })
   await expect(f.execute({ type: 'list', podId: other.id, selection: { kind: 'version', id: view.source!.id } })).rejects.toThrow('not assigned')
   writeFileSync(join(f.store.blobs, view.source!.id), 'corrupted')
   await expect(f.execute({ type: 'list', podId: f.pod.id })).rejects.toThrow()
@@ -46,7 +46,7 @@ it('persists literal draft edits, rejects stale revisions and clears validation 
   const changed = await f.execute(command); expect(changed.source?.revision).toBe(2); expect(changed.source?.validated).toBe(false)
   await expect(f.execute(command)).rejects.toThrow('Draft changed')
   expect(f.store.getPod(f.pod.id).activeScript).toBe(original)
-  const other = f.store.createPod({ name: 'Other', assignment: 'Separate scope' })
+  const other = f.store.createPod({ name: 'Other' })
   await expect(f.execute({ ...command, podId: other.id, draftRevision: 2 })).rejects.toThrow('another pod')
 })
 it('requires current active version and permissions for owner activation', async () => {
@@ -62,6 +62,6 @@ it('requires current active version and permissions for owner activation', async
 it('rejects archived edits and unsupported or oversized owner requests', async () => {
   const f = fixture(); const command = { type: 'save' as const, podId: f.pod.id, revision: 1, draftId: null, draftRevision: 0, code: 'export async function run() {}', capabilities: [] }
   for (const extra of [{ capabilities: ['shell.exec'] }, { code: 'a'.repeat(150001) }, { path: '/etc/passwd' }, { type: 'run' }]) expect(() => parseScriptCommand({ ...command, ...extra })).toThrow()
-  f.store.updatePod(f.pod.id, 1, { name: f.pod.name, assignment: f.pod.assignment, lifecycle: 'archived' })
+  f.store.updatePod(f.pod.id, 1, { name: f.pod.name, lifecycle: 'archived' })
   await expect(f.execute({ ...command, revision: 2 })).rejects.toThrow('Archived')
 })

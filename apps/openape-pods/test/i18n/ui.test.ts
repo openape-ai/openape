@@ -11,7 +11,7 @@ it('switches accessible labels and retained user content immediately without rem
   window.pods = { programs: async () => { throw new Error('No program fixture configured') }, language: vi.fn(async (command: LanguageCommand) => command.type === 'set' ? command.language : 'en') } as unknown as typeof window.pods
   const picker = mount(LanguageSwitcher)
   const editor = mount(ScriptCode, { props: { modelValue: 'const label = "Knowledge"; // unchanged' } })
-  const navigation = mount(PodNavigation, { props: { pods: [{ id: 'pod', name: 'Knowledge', assignment: 'English user content', lifecycle: 'paused', revision: 1, activeScript: null }], podId: 'pod', organization: { revision: 1, groups: [] }, available: true, highlight: true } })
+  const navigation = mount(PodNavigation, { props: { pods: [{ id: 'pod', name: 'Knowledge', lifecycle: 'paused', revision: 1, activeScript: null }], podId: 'pod', organization: { revision: 1, groups: [] }, available: true, highlight: true } })
   await picker.get('select').setValue('de'); await flushPromises()
   expect(language.value).toBe('de'); expect(document.documentElement.lang).toBe('de')
   expect(editor.get('textarea').attributes('aria-label')).toBe('Skriptquelltext'); expect((editor.get('textarea').element as HTMLTextAreaElement).value).toContain('"Knowledge"')

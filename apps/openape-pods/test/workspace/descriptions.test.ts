@@ -17,8 +17,8 @@ function message(podId: string, text: string, role = 'user') {
   new MasterConversations(store).assign(id, podId)
 }
 
-it('summarizes corrections without revising the execution assignment and excludes tool payloads', async () => {
-  const pod = store.createPod({ name: 'Example', assignment: 'Approved execution assignment' }); const inputs: string[] = []
+it('summarizes corrections without changing execution state and excludes tool payloads', async () => {
+  const pod = store.createPod({ name: 'Example' }); const inputs: string[] = []
   const descriptions = new PodDescriptions(store, async (input) => { inputs.push(input); return inputs.length === 1 ? 'Checks every 15 minutes.' : 'Checks every 30 minutes.' })
   message(pod.id, 'Check every 15 minutes'); message(pod.id, 'Protected application details', 'tool')
   descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
@@ -30,7 +30,7 @@ it('summarizes corrections without revising the execution assignment and exclude
 })
 
 it('does not publish a stale summary when new conversation arrives during generation', async () => {
-  const pod = store.createPod({ name: 'Concurrent', assignment: 'Keep this' }); let calls = 0
+  const pod = store.createPod({ name: 'Concurrent' }); let calls = 0
   const descriptions = new PodDescriptions(store, async () => {
     calls++
     if (calls === 1) { message(pod.id, 'Use 30 minutes'); descriptions.request(pod.id); return 'Obsolete description' }
@@ -41,7 +41,7 @@ it('does not publish a stale summary when new conversation arrives during genera
 })
 
 it('retains the last description on failure and resumes all messages beyond the visible history window', async () => {
-  const pod = store.createPod({ name: 'Long conversation', assignment: 'Keep' }); let fail = false; let seen = 0
+  const pod = store.createPod({ name: 'Long conversation' }); let fail = false; let seen = 0
   const descriptions = new PodDescriptions(store, async (input) => {
     if (fail) throw new Error('Synthetic model unavailable')
     seen += (JSON.parse(input) as { conversation: unknown[] }).conversation.length
@@ -56,7 +56,7 @@ it('retains the last description on failure and resumes all messages beyond the 
 })
 
 it('segments an oversized message without dropping text and resumes after an interrupted segment', async () => {
-  const pod = store.createPod({ name: 'Large message', assignment: 'Keep' }); const original = `Start ${'Long request 🦍 '.repeat(6000)} End`; let seen = ''; let calls = 0; let fail = true
+  const pod = store.createPod({ name: 'Large message' }); const original = `Start ${'Long request 🦍 '.repeat(6000)} End`; let seen = ''; let calls = 0; let fail = true
   const descriptions = new PodDescriptions(store, async (input) => {
     calls++
     if (fail && calls === 2) throw new Error('Synthetic interruption')
@@ -70,7 +70,7 @@ it('segments an oversized message without dropping text and resumes after an int
 })
 
 it('explicitly regenerates a ready description from its original conversation while retaining the published text', async () => {
-  const pod = store.createPod({ name: 'Refresh', assignment: 'Keep' }); let calls = 0
+  const pod = store.createPod({ name: 'Refresh' }); let calls = 0
   const descriptions = new PodDescriptions(store, async (input) => {
     calls++; expect(input).toContain('Original request')
     if (calls === 2) expect(descriptions.view(pod.id)?.text).toBe('Previous summary')
