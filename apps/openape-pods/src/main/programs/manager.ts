@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { basename, join  } from 'node:path'
+import { dirname, basename, join  } from 'node:path'
 import { constants } from 'node:fs'
 import { open, writeFile } from 'node:fs/promises'
 import { loadAdapter, resolveCommand } from '@openape/apes'
@@ -11,6 +11,7 @@ import type { CredentialCache } from '../connections/cache'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { ProgramSession } from './session'
 import { ProgramState } from './state'
+import { prepareConsole, podWorkspace } from './console'
 
 export class ProgramManager {
   private sessions = new Map<string, ProgramSession>()
@@ -27,6 +28,10 @@ export class ProgramManager {
     const stateId = await new ProgramState(this.credentials).create({ podId, applicationId: id })
     try { await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, grants: [] } }) }
     catch (error) { await this.credentials.erasePodKey(stateId, podId); throw error }
+  }
+
+  async prepare(podId: string, line: string) {
+    return prepareConsole(dirname(this.root), podId, await this.resources(podId), line)
   }
 
   async preview(podId: string, id: string, epoch: number, argv: string[]) {
@@ -59,18 +64,19 @@ export class ProgramManager {
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }
   }
 
-  async terminal(command: Exclude<ProgramCommand, { type: 'add' } | { type: 'importState' }>): Promise<TerminalView> {
+  async terminal(command: Exclude<ProgramCommand, { type: 'add' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
     if (command.type === 'grant') throw new Error('Permission approval requires the owner window')
     if (command.type === 'start') {
       for (const [id, session] of this.sessions) {
         if (session.view().state === 'closed') this.sessions.delete(id)
       }
       if (this.sessions.size >= 4) throw new Error('Close another application terminal first')
+      const workspace = await podWorkspace(dirname(this.root), command.podId)
       const id = randomUUID()
       const resource = await this.dispatch({ type: 'reserve', podId: command.podId, applicationId: command.applicationId, epoch: command.epoch, sessionId: id }) as PodResource
       const check = async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) }
       const release = async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }
-      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release)
+      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace)
       this.sessions.set(id, session); return session.view()
     }
     const session = this.sessions.get(command.sessionId)

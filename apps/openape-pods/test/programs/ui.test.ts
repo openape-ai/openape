@@ -6,24 +6,19 @@ import type { ResourceState } from '../../src/contracts/resources'
 const podId = '00000000-0000-4000-8000-000000000001'
 const id = '00000000-0000-4000-8000-000000000002'
 const state: ResourceState = { epoch: 2, resources: [{ id, podId, kind: 'tool', state: 'ready', name: 'Synthetic CLI', revision: 1, configuration: { type: 'program', executable: '/fixture/cli', grants: [{ permission: 'read', display: 'Read assigned data' }] } }] }
-it('keeps program setup inside permissions, parses arguments and exposes a usable script reference', async () => {
+it('opens the pod console directly without an argument form', async () => {
   const programs = vi.fn().mockResolvedValue(state)
   window.pods = { ...window.pods, programs }
-  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodTerminal: true, ScriptAccess: true } } })
+  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodConsole: true, ScriptAccess: true } } })
   expect(wrapper.text()).toContain('Authentication is managed by the program itself.')
   expect(wrapper.text()).not.toContain('Signed in')
   expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
   await wrapper.findAll('button').find(button => button.text() === 'Open terminal')!.trigger('click')
-  await wrapper.get(`input[aria-label="Arguments for Synthetic CLI"]`).setValue('read --folder "Sent Items"')
-  const buttons = () => wrapper.findAll('button')
-  await buttons().find(button => button.text() === 'Allow command')!.trigger('click'); await flushPromises()
-  expect(programs).toHaveBeenLastCalledWith({ type: 'grant', podId, applicationId: id, epoch: 2, argv: ['read', '--folder', 'Sent Items'] })
-  await buttons().find(button => button.text() === 'Import existing setup')!.trigger('click'); await flushPromises()
-  expect(programs).toHaveBeenLastCalledWith({ type: 'importState', podId, applicationId: id, epoch: 2 })
-  await wrapper.get(`input[aria-label="Arguments for Synthetic CLI"]`).setValue('read; send')
-  await buttons().find(button => button.text() === 'Start in terminal')!.trigger('click'); await flushPromises()
-  expect(wrapper.get('[role="alert"]').text()).toContain('without shell operators')
-  expect(programs).toHaveBeenCalledTimes(2)
+  await flushPromises()
+  expect(wrapper.find('pod-console-stub').exists()).toBe(true)
+  expect(wrapper.find('input[aria-label^="Arguments"]').exists()).toBe(false)
+  expect(wrapper.text()).not.toContain('Start in terminal')
+  expect(programs).not.toHaveBeenCalled()
   wrapper.unmount()
 })
 it('submits the explicit HTTPS origin and methods without account or token fields', async () => {
