@@ -7,6 +7,7 @@ import type { RuntimePolicy } from './sandbox'
 export async function launchTerminal(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string>, register?: (path: string, ownerPid: number) => void | Promise<void>) {
   if (process.platform !== 'darwin') throw new Error('Native pod execution requires macOS')
   const canonical = { ...policy, executable: await realpath(policy.executable), workspace: await realpath(policy.workspace), writeDirectories: await Promise.all((policy.writeDirectories ?? []).map(path => realpath(path))) }
+  if (canonical.workspace !== policy.workspace) throw new Error('Terminal workspace changed before launch')
   const profile = join(privateDirectory, `terminal-${randomUUID()}.sb`)
   await writeFile(profile, `${sandboxPolicy(canonical)}\n(allow file-ioctl (regex #"^/dev/ttys[0-9]+$"))\n`, { flag: 'wx', mode: 0o600 })
   const domain = await superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, { TERM: 'xterm-256color', ...environment }, privateDirectory, register, true)

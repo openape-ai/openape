@@ -5,7 +5,7 @@ import { mailTLSFixture } from './fixtures/mail-tls'
 import { execFile } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { promisify } from 'node:util'
-import { mkdtemp, mkdir, realpath, rm, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, writeFile, readFile, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
@@ -121,4 +121,23 @@ it('terminal: the bundled o365-cli refreshes and reads through its own persisten
     await expect(state.use(id, { ...binding, podId: randomUUID() }, async () => {})).rejects.toThrow('another application or pod')
   }
   finally { await fixture.close(); await rm(root, { recursive: true, force: true }) }
+})
+
+it('terminal boundary: rejects a workspace replaced by a symlink before native launch', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-terminal-swap-')))
+  const workspace = join(root, 'workspace'); const outside = join(root, 'outside')
+  await mkdir(workspace); await mkdir(outside)
+  expect(await realpath(workspace)).toBe(workspace)
+  await rm(workspace, { recursive: true }); await symlink(outside, workspace)
+  let failure: unknown
+  try {
+    try {
+      const domain = await launchTerminal(resolve('dist/native/pods-helper'), root, { executable: '/usr/bin/true', workspace, readFiles: [], runtimeDirectories: [] }, [], {})
+      await domain.processId; await domain.completed
+    }
+    catch (error) { failure = error }
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toBe('Terminal workspace changed before launch')
+  }
+  finally { await rm(root, { recursive: true, force: true }) }
 })

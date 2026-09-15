@@ -183,8 +183,9 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await page.getByLabel('Terminal command', { exact: true }).fill('fixture read')
     await page.getByLabel('Terminal command', { exact: true }).press('Enter')
     await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
-    await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
     await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain('STATE_MATCH 1')
+    await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
+    await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
     await page.locator('.pod-console > header').getByRole('button', { name: 'Close terminal', exact: true }).click()
     const runCode = `export async function run(context) {
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
