@@ -269,7 +269,7 @@ const maximumMessages = 1000
 
 export async function run(context) {
   const { mail_account: account, telegram_chat_id: chatId, language = 'de' } = context.variables
-  if (!account || !chatId) throw new Error('Set mail_account and telegram_chat_id in Settings')
+  if (!account || !chatId) throw new Error('Set mail_account and telegram_chat_id in Variables and secrets')
   let revision = context.input.checkpointRevision
   let state = context.input.checkpoint
   const finish = summary => ({ status: 'completed', summary, completedInputIds: context.input.eventIds, gapIds: [] })

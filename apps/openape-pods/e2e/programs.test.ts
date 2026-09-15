@@ -170,6 +170,20 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
     await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
     await page.getByRole('button', { name: 'Close terminal', exact: true }).click()
+    const runCode = `export async function run(context) {
+      const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
+      if (result.exitCode !== 0) throw new Error('Application read failed')
+      return { status: 'completed', summary: 'Program read: ' + result.stdout.trim(), completedInputIds: context.input.eventIds, gapIds: [] }
+    }`
+    await page.evaluate(async ({ podId, capability, code }) => {
+      const current = await window.pods.scripts({ type: 'list', podId })
+      const saved = await window.pods.scripts({ type: 'save', podId, revision: current.pod.revision, draftId: null, draftRevision: 0, code, capabilities: [capability] })
+      const checked = await window.pods.scripts({ type: 'validate', podId, revision: saved.pod.revision, draftId: saved.source!.id, draftRevision: saved.source!.revision })
+      await window.pods.scripts({ type: 'activate', podId, revision: checked.pod.revision, hash: checked.source!.hash!, expectedActive: null })
+      await window.pods.runs({ type: 'start', podId })
+    }, { podId: f.podId, capability: f.assignment.capability, code: runCode })
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]?.summary).toBe('Program read: STATE_MATCH 1')
+    console.info('Program UI: saved script invoked application by name through worker and main broker')
     await page.getByRole('button', { name: 'Add application', exact: true }).click()
     await page.getByText('o365-cli', { exact: true }).first().waitFor()
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })

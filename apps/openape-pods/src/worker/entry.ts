@@ -56,7 +56,7 @@ const runServices: RunServices = { http: async (body, signal, scope) => parseHtt
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
 }, tool: async (body, signal, scope) => {
-  if (body && typeof body === 'object' && 'applicationId' in body) {
+  if (body && typeof body === 'object' && ('applicationId' in body || 'application' in body)) {
     programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
     return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
   }
