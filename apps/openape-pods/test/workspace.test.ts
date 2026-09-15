@@ -13,7 +13,7 @@ describe('pod workspace shell', () => {
     const wrapper = mount(App)
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Overview', 'Chat', 'Script', 'Permissions', 'Settings', 'History'])
+    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'])
     expect(wrapper.text()).toContain('No pods yet')
     expect(wrapper.findAll('.pod-button')).toHaveLength(0)
     await wrapper.get('#tab-Permissions').trigger('click'); await flushPromises()

@@ -106,7 +106,7 @@ export default defineComponent({
     <PodTerminal v-if="terminal" :key="terminal.sessionId" :initial="terminal" @closed="terminal = null" />
     <h3>{{ t('HTTP destinations') }}</h3>
     <p class="muted">
-      {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Settings → Secrets.') }}
+      {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
     </p>
     <article v-for="destination in destinations" :key="destination.id" class="application-card">
       <header>

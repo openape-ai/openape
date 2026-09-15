@@ -130,7 +130,7 @@ onMounted(async () => {
         </dl><span class="badge">{{ label(proposal.state) }}</span>
         <div v-if="proposal.state === 'pending'" class="overview-actions">
           <button class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId) : emit('resources', proposal.podId)">
-            {{ proposal.body.provider === 'credential' ? t('Open Settings') : t('Review resources') }}
+            {{ proposal.body.provider === 'credential' ? t('Variables and secrets') : t('Review resources') }}
           </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: props.podId })">
             {{ t("Decline") }}
           </button>

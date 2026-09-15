@@ -8,13 +8,19 @@ import PodResources from './PodResources.vue'
 export default defineComponent({
   components: { PodResources },
   props: { podId: { type: String, required: true } },
-  data() { return { variables: [] as PodVariable[], ...(variableDrafts.get(this.podId) ?? { name: '', value: '', revision: 0 }), busy: false, error: '' } },
+  data() { return { variables: [] as PodVariable[], requiredAliases: [] as string[], ...(variableDrafts.get(this.podId) ?? { name: '', value: '', revision: 0 }), busy: false, error: '' } },
   async mounted() { await this.load() },
   beforeUnmount() { variableDrafts.set(this.podId, { name: this.name, value: this.value, revision: this.revision }) },
   methods: {
     t, diagnostic,
     async load() {
-      try { this.variables = (await window.pods.resources({ type: 'list', podId: this.podId })).variables ?? [] }
+      try {
+        const [resources, script, chat] = await Promise.all([window.pods.resources({ type: 'list', podId: this.podId }), window.pods.scripts({ type: 'list', podId: this.podId }), window.pods.master({ type: 'list', podId: this.podId })])
+        this.variables = resources.variables ?? []
+        const scriptAliases = script.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []
+        const chatAliases = chat.proposals.flatMap(proposal => proposal.podId === this.podId && proposal.state === 'pending' && proposal.body.provider === 'credential' && typeof proposal.body.alias === 'string' ? [proposal.body.alias] : [])
+        this.requiredAliases = [...new Set([...scriptAliases, ...chatAliases])]
+      }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load variables' }
     },
     edit(variable: PodVariable) { this.name = variable.name; this.value = variable.value; this.revision = variable.revision },
@@ -42,7 +48,13 @@ export default defineComponent({
         {{ t('These values are visible to the pod assistant. Changes apply to future runs. Store sensitive values as secrets below.') }}
       </p>
       <div v-for="variable in variables" :key="variable.name" class="value-row">
-        <div><strong>{{ variable.name }}</strong><p>{{ variable.value }}</p><code>{{ `context.variables[${JSON.stringify(variable.name)}]` }}</code></div>
+        <div>
+          <strong>{{ variable.name }}</strong><p v-if="variable.value">
+            {{ variable.value }}
+          </p><p v-else class="muted">
+            {{ t('Not set') }}
+          </p><code>{{ `context.variables[${JSON.stringify(variable.name)}]` }}</code>
+        </div>
         <button class="text-button" :disabled="busy" @click="edit(variable)">
           {{ t('Edit') }}
         </button><button class="text-button" :disabled="busy" @click="remove(variable)">
@@ -61,10 +73,10 @@ export default defineComponent({
         {{ diagnostic(error) }}
       </p>
     </article>
-    <PodResources :selected-pod-id="podId" mode="values" />
+    <PodResources :selected-pod-id="podId" mode="values" :required-aliases="requiredAliases" />
   </section>
 </template>
 
 <style scoped>
-section { display:grid; gap:20px; } form,label { display:grid; gap:8px; } form { margin-top:20px; } input { width:100%;min-width:0;padding:10px;font:inherit;color:inherit;background:transparent;border:1px solid var(--border);border-radius:8px; } form button { justify-self:start; }.value-row { display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--border);padding:14px 0; }.value-row>div { flex:1;min-width:0;overflow-wrap:anywhere; }
+section { display:grid; gap:20px; } form,label { display:grid; gap:8px; } form { margin-top:20px; } input { width:100%;min-width:0;padding:10px;font:inherit;color:inherit;background:transparent;border:1px solid var(--border);border-radius:8px; } form button { justify-self:start; }.value-row { display:flex;flex-wrap:wrap;gap:14px;align-items:center;border-bottom:1px solid var(--border);padding:14px 0; }.value-row>div { flex:1 1 260px;min-width:0;overflow-wrap:anywhere; }
 </style>
