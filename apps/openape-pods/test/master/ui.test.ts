@@ -63,3 +63,11 @@ it('shows the immutable start request separately even outside the recent message
   applyLanguage('de'); await flushPromises(); expect(wrapper.get('.start-request').text()).toContain('Startauftrag')
   applyLanguage('en'); wrapper.unmount()
 })
+
+it('keeps unsent drafts separate between creation conversations', async () => {
+  window.pods = { master: vi.fn().mockResolvedValue(empty) } as unknown as typeof window.pods
+  const one = mount(MasterChat, { props: { podId: null, creationId: crypto.randomUUID() } }); await flushPromises()
+  await one.get('textarea').setValue('First creation draft'); one.unmount()
+  const two = mount(MasterChat, { props: { podId: null, creationId: crypto.randomUUID() } }); await flushPromises()
+  expect(two.get('textarea').element.value).toBe(''); two.unmount()
+})
