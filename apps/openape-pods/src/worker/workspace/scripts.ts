@@ -52,7 +52,7 @@ export class ScriptWorkspace {
     return { ...selection, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], revision: row.revision as number, assignmentRevision: row.assignment_revision as number, hash: row.script_hash as string | null, validated: evidence !== null, evidence, credentialAccessApproved: !!row.script_hash && new ScriptCredentials(this.store, this.resources).approved(podId, row.script_hash as string) }
   }
 
-  private view(podId: string, selection?: ScriptSelection): ScriptView {
+  view(podId: string, selection?: ScriptSelection): ScriptView {
     const pod = this.store.getPod(podId)
     const versions = new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId }).versions
     const drafts = this.store.db.prepare('SELECT id,revision,assignment_revision,script_hash FROM script_drafts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(podId).map(row => ({ id: row.id as string, revision: row.revision as number, assignmentRevision: row.assignment_revision as number, validated: this.evidence(podId, row.script_hash as string | null) !== null }))
