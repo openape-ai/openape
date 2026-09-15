@@ -8,6 +8,7 @@ import type { ResourceRegistry } from '../resources/registry'
 import type { RunDispatcher } from '../runs/dispatcher'
 import type { Scheduler } from '../scheduling/scheduler'
 import type { AgentRuntime } from '../agent/executor'
+import { ScriptWorkspace } from '../workspace/scripts'
 import { WorkspaceDetails } from '../workspace/details'
 import { assignedMail } from '../../main/mail/assigned'
 import { installMailRecipe } from '../mail/install'
@@ -78,7 +79,10 @@ export class MasterControl {
       return this.store.createPod({ name: action.name, assignment: action.assignment })
     }
     const pod = this.store.getPod(action.podId)
-    if (action.action === 'inspect') return { pod, resources: modelResources(this.resources.list(pod.id)), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId: pod.id }).versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
+    if (action.action === 'inspect') {
+      const scripts = new ScriptWorkspace(this.store, this.resources, this).view(pod.id)
+      return { pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id)), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
+    }
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
       return { variables: new PodVariables(this.store).list(pod.id) }
