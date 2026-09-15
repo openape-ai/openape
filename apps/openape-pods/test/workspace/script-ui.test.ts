@@ -59,16 +59,25 @@ it('lets keyboard users leave the editor with Escape then Tab', async () => {
   expect(wrapper.emitted('update:modelValue')).toBeUndefined(); wrapper.unmount()
 })
 
-it('declares access through assigned tools without offering a built-in mail permission', async () => {
+it('preserves existing application declarations when saving code without permission controls', async () => {
   const { view, scripts } = fixture()
   view.source!.capabilities = ['tool.orders.read']
   scripts.mockResolvedValue(view)
   window.pods.resources = vi.fn().mockResolvedValue({ resources: [{ id: randomUUID(), podId: view.pod.id, kind: 'tool', state: 'ready', revision: 1, name: 'Orders CLI', configuration: { capability: 'tool.orders.read' } }], variables: [], epoch: 0 })
   const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
   expect(wrapper.text()).not.toContain('Read assigned mail')
-  expect(wrapper.text()).toContain('Orders CLI')
+  expect(wrapper.text()).not.toContain('Orders CLI')
   await wrapper.get('textarea').setValue('export async function run() { return {} }')
   await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
   expect(scripts).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', capabilities: ['tool.orders.read'] }))
+  wrapper.unmount()
+})
+
+it('keeps permission editing out of the script tab', async () => {
+  const { view } = fixture()
+  view.source!.capabilities = ['credential.notification_token']
+  const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
+  expect(wrapper.text()).not.toContain('Required access')
+  expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
   wrapper.unmount()
 })

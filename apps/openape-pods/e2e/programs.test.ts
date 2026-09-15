@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   const helper = resolve('dist/native/pods-helper'); let releases = 0
   const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ })
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
-  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { applicationId, argv }, helper, privateRoot, cache, { ...lease, capabilities })
+  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities })
   return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) } }
 }
 
@@ -148,8 +148,9 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
-    await page.getByLabel('Arguments for Synthetic application').fill('setup')
     await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
+    await page.getByLabel('Arguments for Synthetic application').fill('setup')
+    await page.getByRole('button', { name: 'Start in terminal', exact: true }).click()
     await page.locator('.xterm-helper-textarea').waitFor({ state: 'attached' })
     await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), f.podId)).resources.length).toBe(1)
     await page.locator('.pod-terminal .xterm-screen').waitFor()
@@ -165,7 +166,7 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-terminal-en.png') })
     await page.getByRole('button', { name: 'Close terminal', exact: true }).click()
     await page.getByLabel('Arguments for Synthetic application').fill('read')
-    await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
+    await page.getByRole('button', { name: 'Start in terminal', exact: true }).click()
     await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
     await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
     await page.getByRole('button', { name: 'Close terminal', exact: true }).click()
