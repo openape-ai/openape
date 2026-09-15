@@ -9,7 +9,7 @@ import { PodDatabase } from '../src/worker/storage/database'
 
 it('credentials: packaged owner flow protects exact source, persists encrypted values and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
-  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review', assignment: 'Process local files with explicitly assigned credentials.' }); store.close()
+  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
   const syntheticCipher = process.env.OPENAPE_PODS_TEST_SYNTHETIC_CIPHER === '1'
   const key = randomBytes(32).toString('hex')
   const launch = async () => {
@@ -44,7 +44,7 @@ it('credentials: packaged owner flow protects exact source, persists encrypted v
     expect(JSON.stringify(resources)).not.toContain('SYNTHETIC_SCRIPT_CREDENTIAL')
     const id = resources.resources[0]!.configuration.credentialId as string
     expect((await readFile(join(root, 'credentials', `${id}.encrypted`))).includes('SYNTHETIC_SCRIPT_CREDENTIAL')).toBe(false)
-    const other = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Separate pod', assignment: 'Independent synthetic credential' }))).pods.find(item => item.name === 'Separate pod')!
+    const other = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Separate pod' }))).pods.find(item => item.name === 'Separate pod')!
     const otherResources = await page.evaluate(podId => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'OTHER_SYNTHETIC_VALUE', epoch: 0 }), other.id)
     const otherId = otherResources.resources[0]!.configuration.credentialId as string
     expect(otherId).not.toBe(id)

@@ -67,7 +67,7 @@ export class MasterControl {
 
   private assertPod(id: string, revision: number, inspect = false): void {
     const pod = this.store.getPod(id)
-    if (pod.revision !== revision) throw new Error('Pod assignment changed; reload its current revision')
+    if (pod.revision !== revision) throw new Error('Pod settings changed; reload its current revision')
     if (pod.lifecycle === 'archived' && !inspect) throw new Error('Archived pods are inspectable in the workspace but cannot be changed by the master')
   }
 
@@ -82,7 +82,7 @@ export class MasterControl {
     if (action.action === 'list') return { pods: selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods() }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
-      return this.store.createPod({ name: action.name, assignment: action.assignment })
+      return this.store.createPod({ name: action.name })
     }
     const pod = this.store.getPod(action.podId)
     if (action.action === 'inspect') {
@@ -109,10 +109,10 @@ export class MasterControl {
       groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId: group?.id ?? null, revision: state.revision })
       return this.organization(pod.id)
     }
-    if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, assignment: action.assignment, lifecycle: pod.lifecycle }); this.dispatcher.cancelPod(pod.id, 'Master revised the assignment'); return this.store.getPod(pod.id) }
+    if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, lifecycle: pod.lifecycle }); return this.store.getPod(pod.id) }
     if (action.action === 'run') { this.scheduler.requestManual(pod.id); return { accepted: true, runs: this.dispatcher.view(pod.id).runs } }
     if (action.action === 'resume') {
-      if (!pod.activeScript || !this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(pod.id, pod.activeScript, pod.revision, this.resources.epoch(pod.id))) throw new Error('Validate and activate a script for the current assignment and permissions before resuming')
+      if (!pod.activeScript || !this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(pod.id, pod.activeScript, pod.bindingRevision, this.resources.epoch(pod.id))) throw new Error('Validate and activate a script for the current script and permissions before resuming')
       const version = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, pod.activeScript)
       if (version && (JSON.parse(version.manifest as string) as { capabilities: string[] }).capabilities.includes('mail.read')) assignedMail(this.resources.list(pod.id))
     }
@@ -122,14 +122,14 @@ export class MasterControl {
       if (action.draftId) this.assertDraft(pod.id, action.draftId, action.draftRevision)
       else if (action.draftRevision !== 0) throw new Error('A new draft starts at revision zero')
       const id = action.draftId ?? randomUUID(); const revision = action.draftRevision + 1
-      this.store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,assignment_revision=excluded.assignment_revision,code=excluded.code,capabilities=excluded.capabilities,validation=NULL,script_hash=NULL').run(id, pod.id, revision, pod.revision, action.code, JSON.stringify(action.capabilities))
+      this.store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,assignment_revision=excluded.assignment_revision,code=excluded.code,capabilities=excluded.capabilities,validation=NULL,script_hash=NULL').run(id, pod.id, revision, pod.bindingRevision, action.code, JSON.stringify(action.capabilities))
       return { draftId: id, draftRevision: revision, status: 'draft', capabilities: action.capabilities }
     }
     if (action.action === 'activate' || action.action === 'rollback') {
       const draft = action.action === 'activate' ? this.assertDraft(pod.id, action.draftId, action.draftRevision) : null
-      if (draft && (!draft.script_hash || !draft.validation || draft.assignment_revision !== pod.revision)) throw new Error('Validate this draft for the current assignment first')
+      if (draft && (!draft.script_hash || !draft.validation || draft.assignment_revision !== pod.bindingRevision)) throw new Error('Validate this draft for the current permissions first')
       const hash = action.action === 'rollback' ? action.hash : draft?.script_hash as string
-      new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId: pod.id, hash, expectedActive: action.action === 'rollback' ? action.expectedActive : pod.activeScript, assignmentRevision: pod.revision })
+      new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId: pod.id, hash, expectedActive: action.action === 'rollback' ? action.expectedActive : pod.activeScript, assignmentRevision: pod.bindingRevision })
       return { activeScript: hash, previousScript: pod.activeScript }
     }
     if (action.action === 'requestAccess') {

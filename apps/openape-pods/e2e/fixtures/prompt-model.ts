@@ -27,7 +27,7 @@ export class PromptModel {
     const code = this.results.get(0)?.example as string
     const actions = [
       () => ({ action: 'runtime' }),
-      () => ({ action: 'create', name: 'Greeting', assignment: 'Write the configured greeting to greeting.txt and retain a durable run counter.' }),
+      () => ({ action: 'create', name: 'Greeting' }),
       () => ({ action: 'inspect', ...scope }),
       () => ({ action: 'setVariable', ...scope, name: 'greeting', value: 'Hello from my pod', variableRevision: 0 }),
       () => ({ action: 'prepareSchedule', ...scope, scheduleRevision: 0, spec: { kind: 'interval', seconds: 900 } }),

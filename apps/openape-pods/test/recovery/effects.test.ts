@@ -17,7 +17,7 @@ afterEach(() => { for (const store of stores.splice(0)) store.close(); for (cons
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-effects-')); roots.push(root)
   const store = new PodDatabase(root); stores.push(store); const resources = new ResourceRegistry(store, () => {})
-  const pod = store.createPod({ name: 'Effect fixture', assignment: 'Synthetic reconciliation only' }); installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
+  const pod = store.createPod({ name: 'Effect fixture' }); installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
   const runs = new RunStore(store); const run = runs.reserve(pod.id, store.getPod(pod.id).activeScript!, 0).run
   return { store, resources, pod, run, runs, ledger: new EffectLedger(store) }
 }

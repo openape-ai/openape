@@ -93,7 +93,7 @@ export class RunDispatcher {
 
   private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger): Promise<void> {
     const run = this.runs.get(id); const pod = this.store.getPod(run.podId)
-    const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).revision !== pod.revision) throw new Error('Assignment changed during the run'); signal.throwIfAborted() }
+    const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
     try {
@@ -110,10 +110,10 @@ export class RunDispatcher {
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
       const checkpoint = this.store.checkpoint(pod.id)
-      const input: RunInput = { variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.revision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const input: RunInput = { variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
       const runtime = { ...this.runtime, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
-      const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.revision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
+      const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')

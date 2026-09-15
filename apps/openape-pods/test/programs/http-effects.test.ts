@@ -16,7 +16,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-http-effects-')); roots.push(root)
   const store = new PodDatabase(root); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
-  const pod = store.createPod({ name: 'HTTPS fixture', assignment: 'Synthetic requests only' })
+  const pod = store.createPod({ name: 'HTTPS fixture' })
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
   const run = new RunStore(store).reserve(pod.id, store.getPod(pod.id).activeScript!, 0).run
   return { store, pod, run, ledger: new EffectLedger(store) }
