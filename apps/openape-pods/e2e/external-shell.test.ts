@@ -28,7 +28,7 @@ it('ape-shell: interactive and saved scripts share HOME/workspace and preserve t
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const executable = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture')
-  const runtime = { executable, cli: resolve('dist/vendor/apes/ape-shell.mjs'), client: resolve('dist/runtime/shell-client.mjs') }
+  const runtime = { executable, cli: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/apes/ape-shell.mjs'), client: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist/runtime/shell-client.mjs') }
   try {
     const context = await podEnvironment(root, podId, runtime)
     const auth = join(root, 'auth.json')
