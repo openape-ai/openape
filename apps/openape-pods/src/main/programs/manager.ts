@@ -1,3 +1,5 @@
+import { ExternalShell } from '../shell/session'
+import type { ShellRuntime } from '../../runtime/environment'
 import { randomUUID } from 'node:crypto'
 import { dirname, basename, join  } from 'node:path'
 import { constants } from 'node:fs'
@@ -14,6 +16,7 @@ import { ProgramState } from './state'
 import { prepareConsole, podWorkspace } from './console'
 
 export class ProgramManager {
+  private shells = new Map<string, ExternalShell>()
   private sessions = new Map<string, ProgramSession>()
   constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>) {}
   private async assignment(podId: string, id: string, epoch: number): Promise<ProgramAssignment> {
@@ -64,7 +67,7 @@ export class ProgramManager {
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }
   }
 
-  async terminal(command: Exclude<ProgramCommand, { type: 'add' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
+  async terminal(command: Exclude<ProgramCommand, { type: 'openShell' } | { type: 'add' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
     if (command.type === 'grant') throw new Error('Permission approval requires the owner window')
     if (command.type === 'start') {
       for (const [id, session] of this.sessions) {
@@ -88,14 +91,31 @@ export class ProgramManager {
     return session.view(command.type === 'poll' ? command.after : Number.MAX_SAFE_INTEGER)
   }
 
+  async openShell(podId: string, runtime: ShellRuntime): Promise<string> {
+    const previous = this.shells.get(podId)
+    if (previous) throw new Error(previous.error ?? 'This pod already has an external terminal; close it first')
+    const state = await this.resources(podId)
+    const sessionId = randomUUID()
+    const name = await this.dispatch({ type: 'reserveShell', podId, epoch: state.epoch, sessionId }) as string
+    const shell = new ExternalShell(podId, dirname(this.root), runtime, state, this.credentials, this.connections,
+      async () => { await this.dispatch({ type: 'check', podId, sessionId }) },
+      async () => { await this.dispatch({ type: 'release', podId, sessionId }) }, name)
+    this.shells.set(podId, shell)
+    const observe = async () => { await shell.completed; if (!shell.error || shell.closed) this.shells.delete(podId) }
+    void observe()
+    try { return await shell.ready }
+    catch (error) { await this.dispatch({ type: 'release', podId, sessionId }); this.shells.delete(podId); throw error }
+  }
+
   cancelPod(podId: string): void {
+    this.shells.get(podId)?.close()
     for (const session of this.sessions.values()) {
       if (session.podId === podId) session.close()
     }
   }
 
-  cancelAll(): void { for (const session of this.sessions.values()) session.close() }
+  cancelAll(): void { for (const shell of this.shells.values()) shell.close(); for (const session of this.sessions.values()) session.close() }
 
-  busy(): boolean { return [...this.sessions.values()].some(session => session.view().state !== 'closed') }
-  async stop(): Promise<void> { for (const session of this.sessions.values()) session.close(); await Promise.all(Array.from(this.sessions.values(), session => session.completed)) }
+  busy(): boolean { return this.shells.size > 0 || [...this.sessions.values()].some(session => session.view().state !== 'closed') }
+  async stop(): Promise<void> { for (const shell of this.shells.values()) shell.close(); await Promise.all(Array.from(this.shells.values(), shell => shell.completed)); for (const session of this.sessions.values()) session.close(); await Promise.all(Array.from(this.sessions.values(), session => session.completed)) }
 }
