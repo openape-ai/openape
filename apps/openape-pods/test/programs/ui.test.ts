@@ -6,19 +6,19 @@ import type { ResourceState } from '../../src/contracts/resources'
 const podId = '00000000-0000-4000-8000-000000000001'
 const id = '00000000-0000-4000-8000-000000000002'
 const state: ResourceState = { epoch: 2, resources: [{ id, podId, kind: 'tool', state: 'ready', name: 'Synthetic CLI', revision: 1, configuration: { type: 'program', executable: '/fixture/cli', grants: [{ permission: 'read', display: 'Read assigned data' }] } }] }
-it('opens the pod console directly without an argument form', async () => {
+it('opens one external pod terminal without an embedded console or argument form', async () => {
   const programs = vi.fn().mockResolvedValue(state)
   window.pods = { ...window.pods, programs }
   const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodConsole: true, ScriptAccess: true } } })
-  expect(wrapper.text()).toContain('Authentication is managed by the program itself.')
+  expect(wrapper.text()).toContain('Terminal.app')
   expect(wrapper.text()).not.toContain('Signed in')
   expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
-  await wrapper.findAll('button').find(button => button.text() === 'Open terminal')!.trigger('click')
+  await wrapper.findAll('button').find(button => button.text() === 'Open Terminal.app')!.trigger('click')
   await flushPromises()
-  expect(wrapper.find('pod-console-stub').exists()).toBe(true)
+  expect(wrapper.find('pod-console-stub').exists()).toBe(false)
   expect(wrapper.find('input[aria-label^="Arguments"]').exists()).toBe(false)
   expect(wrapper.text()).not.toContain('Start in terminal')
-  expect(programs).not.toHaveBeenCalled()
+  expect(programs).toHaveBeenCalledWith({ type: 'openShell', podId })
   wrapper.unmount()
 })
 it('submits the explicit HTTPS origin and methods without account or token fields', async () => {

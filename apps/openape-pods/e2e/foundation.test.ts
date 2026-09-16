@@ -8,6 +8,9 @@ import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { fixtureShellIdentity } from './fixtures/shell-identity'
+
+const identities: Awaited<ReturnType<typeof fixtureShellIdentity>>[] = []
 const require = createRequire(import.meta.url)
 const executable: string = require('electron')
 
@@ -26,6 +29,7 @@ async function launch(packaged = false) {
   return { app, page, root, binary }
 }
 afterEach(async () => {
+  for (const identity of identities.splice(0)) await identity.close()
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('foundation', () => {
@@ -63,8 +67,9 @@ describe('foundation', () => {
     expect(after.epoch).toBe(before.epoch + 1)
   })
   it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
-    const { page } = await launch(packaged)
+    const { app, page, root } = await launch(packaged)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
+    const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
     await page.getByRole('tab', { name: 'History', exact: true }).click()
     await page.getByRole('button', { name: 'Use local example', exact: true }).click()
     await page.getByRole('button', { name: 'Start run', exact: true }).click()

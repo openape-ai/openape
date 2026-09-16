@@ -1,3 +1,4 @@
+import { quoteShell } from '../../runtime/environment'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -50,11 +51,16 @@ export interface ProcessDomain {
   completed: Promise<number>
   cancel: () => void
 }
-export async function launchSandbox(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string> = {}, register?: (path: string, ownerPid: number) => void | Promise<void>): Promise<ProcessDomain> {
+export interface ShellLaunch { cli: string, environment: Record<string, string> }
+export async function launchSandbox(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string> = {}, register?: (path: string, ownerPid: number) => void | Promise<void>, shell?: ShellLaunch): Promise<ProcessDomain> {
   if (process.platform !== 'darwin') throw new Error('Native pod execution requires macOS')
   const profile = join(privateDirectory, `policy-${randomUUID()}.sb`)
   const canonical = { ...policy, executable: await realpath(policy.executable), workspace: await realpath(policy.workspace) }
   await writeFile(profile, sandboxPolicy(canonical), { flag: 'wx', mode: 0o600 })
+  if (shell) {
+    const command = ['exec', '/usr/bin/env', '-i', ...Object.entries(environment).map(([key, value]) => `${key}=${value}`), '/usr/bin/sandbox-exec', '-f', profile, canonical.executable, ...args]
+    return superviseProcess(helper, canonical.executable, [shell.cli, '-c', command.map(quoteShell).join(' ')], canonical.workspace, { ...shell.environment, ELECTRON_RUN_AS_NODE: '1', APES_SHELL_MODE: '1', APES_SHELL_CHANNEL_FD: '3', APE_WAIT: '1' }, privateDirectory, register)
+  }
   return superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, environment, privateDirectory, register)
 }
 export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false): Promise<ProcessDomain> {

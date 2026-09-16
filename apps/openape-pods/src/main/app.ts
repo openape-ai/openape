@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
 import { programDefinition } from './programs/definition'
 import { LanguagePreference } from './language'
@@ -138,6 +140,13 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     if (!window) throw new Error('Owner window is unavailable')
     const command = parseProgramCommand(value)
+    if (command.type === 'openShell') {
+      const launcher = await worker.program(command)
+      if (typeof launcher !== 'string') throw new Error('Invalid pod terminal launcher')
+      try { await promisify(execFile)('/usr/bin/open', ['-a', '/System/Applications/Utilities/Terminal.app', launcher]) }
+      catch (error) { worker.cancelProgram(command.podId); throw error }
+      return worker.resources({ type: 'list', podId: command.podId })
+    }
     const unchanged = () => worker.resources({ type: 'list', podId: command.podId })
     if (command.type === 'add') {
       const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')

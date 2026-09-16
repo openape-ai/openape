@@ -25,6 +25,9 @@ export function inventory() {
   }
   const parent = resolve('package.json')
   for (const name of ['vue', '@openai/codex-sdk', '@openai/codex', '@openape/apes', 'pdfjs-dist', 'html-to-text', 'fflate']) visit(name, parent)
+  const apes = packageFile('@openape/apes', parent)
+  const pty = packageFile('@lydell/node-pty', apes)
+  visit(`@lydell/node-pty-${process.platform}-${process.arch}`, pty)
   const electron = dirname(packageFile('electron', parent))
   for (const name of ['LICENSE', 'LICENSES.chromium.html']) notices.push(`\n===== Electron 40.9.3 / ${name} =====\n${readFileSync(join(electron, 'dist', name), 'utf8')}`)
   const o365 = JSON.parse(readFileSync('dist/vendor/o365-manifest.json', 'utf8'))

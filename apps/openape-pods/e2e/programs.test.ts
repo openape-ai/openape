@@ -1,3 +1,4 @@
+import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { executeHttp } from '../src/main/programs/http-service'
 import { _electron as electron } from 'playwright'
 import { fixtureDirectory } from '../src/main/fixture'
@@ -141,8 +142,12 @@ it('program boundary: grant revocation stops a waiting terminal before its lease
   finally { terminal.close(); await terminal.completed; await f.close() }
 })
 
-it('packaged program UI: opens a real pod terminal and persists application setup without an inferred login status', async () => {
+it('packaged program UI: exposes the external terminal and reuses application setup from the saved script', async () => {
   const f = await fixture()
+  const setup = f.terminal()
+  await expect.poll(() => setup.view().output).toContain('SETUP_READY')
+  setup.input('SYNTHETIC_CONFIGURATION\n'); await setup.completed
+  const shellIdentity = await fixtureShellIdentity(f.root)
   const store = new PodDatabase(f.root)
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(f.applicationId, f.podId, f.assignment.name, JSON.stringify(f.assignment))
   store.close()
@@ -155,38 +160,16 @@ it('packaged program UI: opens a real pod terminal and persists application setu
       if (!safeStorage.isEncryptionAvailable()) throw new Error('macOS credential storage unavailable for program UI fixture')
       for (const record of records) writeFileSync(record.path, safeStorage.encryptString(record.value), { mode: 0o600 })
     }, records)
+    await shellIdentity.encrypt(app)
     console.info('Program UI: synthetic records encrypted using macOS safeStorage')
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
-    await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
-    await page.getByLabel('Terminal command', { exact: true }).fill('fixture setup')
-    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
-    await page.locator('.xterm-helper-textarea').waitFor({ state: 'attached' })
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), f.podId)).resources.length).toBe(1)
-    await page.locator('.pod-terminal .xterm-screen').waitFor()
-    await expect.poll(() => f.state.consumed).toBe(1)
-    await page.getByRole('status').filter({ hasText: 'Application running' }).waitFor()
-    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain(`CWD ${join(f.root, 'pods', f.podId, 'workspace')}`)
-    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain('OUTSIDE_READ_DENIED')
-    console.info('Program UI: terminal opened in pod workspace; unrelated file read denied')
-    await page.locator('.xterm-helper-textarea').focus()
-    await page.keyboard.type('SYNTHETIC_CONFIGURATION'); await page.keyboard.press('Enter')
-    await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
-    expect(await readFile(join(f.root, 'pods', f.podId, 'workspace', 'terminal-work.txt'), 'utf8')).toBe('POD_WORKSPACE_WRITE')
-    expect((await readdir(join(f.root, 'pods', f.podId, 'workspace'))).includes('state.txt')).toBe(false)
-    expect(await page.getByText('Signed in', { exact: true }).count()).toBe(0)
+    await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).waitFor()
+    expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
+    expect(await page.locator('.pod-console').count()).toBe(0)
     await mkdir(resolve('.artifacts'), { recursive: true })
-    expect(await page.locator('.xterm-rows').evaluate(element => getComputedStyle(element).color)).toBe('rgb(228, 236, 230)')
-    await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-terminal-en.png') })
-    await page.getByLabel('Terminal command', { exact: true }).fill('fixture read')
-    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
-    await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
-    await expect.poll(async () => page.locator('.xterm-rows').textContent()).toContain('STATE_MATCH 1')
-    await page.getByRole('status').filter({ hasText: 'Program exited with code 0' }).waitFor()
-    await page.locator('.pod-terminal').screenshot({ path: resolve('.artifacts/program-read-en.png') })
-    await page.locator('.pod-console > header').getByRole('button', { name: 'Close terminal', exact: true }).click()
     const runCode = `export async function run(context) {
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
       if (result.exitCode !== 0) throw new Error('Application read failed')
@@ -199,16 +182,12 @@ it('packaged program UI: opens a real pod terminal and persists application setu
       await window.pods.scripts({ type: 'activate', podId, revision: checked.pod.revision, hash: checked.source!.hash!, expectedActive: null })
       await window.pods.runs({ type: 'start', podId })
     }, { podId: f.podId, capability: f.assignment.capability, code: runCode })
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]?.summary).toBe('Program read: STATE_MATCH 1')
+    await expect.poll(async () => { const run = (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]; return run?.error ?? run?.summary }, { timeout: 15000 }).toBe('Program read: STATE_MATCH 1')
     console.info('Program UI: saved script invoked application by name through worker and main broker')
     await page.getByRole('button', { name: 'Add application', exact: true }).click()
     await page.getByText('o365-cli', { exact: true }).first().waitFor()
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })
-    await page.locator('.application-card').filter({ hasText: 'o365-cli' }).getByRole('button', { name: 'Open terminal', exact: true }).click()
-    await page.getByLabel('Terminal command', { exact: true }).fill('o365-cli')
-    await page.getByLabel('Terminal command', { exact: true }).press('Enter')
-    await expect.poll(() => page.locator('.pod-console pre').textContent()).toContain('o365-cli pods login --account <account>')
-    await page.locator('.pod-console').screenshot({ path: resolve('.artifacts/pod-console-en.png') })
+    await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-en.png') })
     await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-en.png') })
     await page.getByRole('button', { name: 'App settings', exact: true }).click()
     await page.getByLabel('Language', { exact: true }).selectOption('de')
@@ -219,16 +198,11 @@ it('packaged program UI: opens a real pod terminal and persists application setu
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(560, 800))
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-de-dark.png') })
-    await page.locator('.application-card').filter({ hasText: 'o365-cli' }).getByRole('button', { name: 'Terminal öffnen', exact: true }).click()
-    await page.getByLabel('Terminal-Befehl', { exact: true }).waitFor()
-    await page.locator('.pod-console pre').waitFor()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    const geometry = await page.locator('.pod-console').boundingBox()
-    expect(geometry!.height).toBeLessThan(800)
-    await page.locator('.pod-console').screenshot({ path: resolve('.artifacts/pod-console-de-dark.png') })
+    expect(await page.getByRole('button', { name: 'Terminal.app öffnen', exact: true }).count()).toBe(1)
+    await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-de-dark.png') })
     await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
   }
-  finally { await app.close(); await f.close() }
+  finally { await app.close(); await shellIdentity.close(); await f.close() }
 })
 
 it('HTTP grant boundary: verifies the signed origin and method before transport and cancels on remote revocation', async () => {

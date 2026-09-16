@@ -96,6 +96,8 @@ Unsaved script, ordinary variable, settings and chat text survive navigation wit
 
 Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their dedicated tab. Manage script secrets in Variables and secrets, and script applications in Permissions. Selecting a capability does not grant resource access.
 
+Saved runs start through the bundled ape-shell as the pod agent. The Node.js run(context) contract remains unchanged; HOME, working directory and SHELL match the setup terminal. Missing grants block execution. context.tools.invoke reuses application setup; secrets do not automatically enter the AI context.
+
 1. Edit the source and choose Save script to persist it without running.
 2. Choose Run or Save and run. The app saves and validates changed source in the existing sandbox with synthetic services. A failed check preserves the source and leaves the previously active script intact.
 3. If secret access is required, review the full source and choose Review credential access. The native confirmation names the pod, exact SHA-256 and requested aliases. Cancelling keeps execution blocked.
@@ -166,15 +168,15 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
 
-Add the bundled o365-cli or choose an installed executable and its apes command descriptor. Open terminal presents a prompt in the pod workspace. Enter a complete command such as o365-cli pods login --account you@example.com and press Enter. Review the native permission dialog if the command needs approval. While the program runs, the terminal accepts its input; the command prompt returns after exit. Enter the application name alone for command forms from its descriptor, help for assigned programs, or pwd for the working directory. Shell composition and arbitrary Mac commands are unavailable. The application manages its own sign-in.
+Add o365-cli or an installed program with its apes command descriptor. Open Terminal.app starts a separate macOS terminal with ape-shell, the pod HOME and workspace. The startup banner identifies these paths and the pod name. Invoke assigned programs directly, for example o365-cli pods login --account you@example.com. Each program manages its own sign-in. ape-shell requests required grants; approve them through your OpenApe account or apes grants approve.
 
 Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
 
 HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
 
-Revoking access changes the resource revision and stops affected work. Validate the script again after permission changes. A running terminal program owns the pod and pauses automation. Verified process exit releases the lease; automation remains paused. An idle command prompt does not hold a run slot. The working directory is the writable pod workspace. HOME, temporary files and the login cache remain in the application’s private encrypted state.
+An open terminal holds the pod and pauses automation, including while its prompt is idle. Leave the shell with exit and wait for the process to finish so application setup is saved. Automation remains paused afterwards. Assigned programs receive their own temporary HOME containing decrypted application state; later script calls reuse that saved state. The shell HOME is pods/<pod-id>/home and its working directory is pods/<pod-id>/workspace inside the app profile. Interrupted sessions are not treated as successful setup.
 
-The current execution boundary supports foreground native CLIs. Forking, graphical applications and arbitrary interpreter dependency trees remain unavailable. Chosen custom CLIs have no network access by default; the bundled o365-cli has explicitly scoped Microsoft endpoints. External directories are currently assigned as individual reference files; the pod workspace provides writable file storage.
+ape-shell mediates command grants; it does not provide a filesystem sandbox. The setup terminal runs granted commands with your Mac user privileges. A broad session grant permits correspondingly broad shell commands. Use foreground programs; reliable termination of detached background processes is not guaranteed. Automated Node.js scripts retain their additional macOS sandbox, and context.tools.invoke still uses the bounded application broker. Graphical programs and arbitrary child-process trees remain unsupported in that script broker.
 
 ![Permissions](images/handbook-permissions.png)
 
@@ -251,7 +253,7 @@ After sleep or downtime, one catch-up processes remaining input from saved progr
 
 ## Connections and the mail notification recipe
 
-Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using their own terminal or an imported application state file.
+Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using the pod’s external Terminal.app window or an imported application state file.
 
 For the mail notification recipe, add o365-cli in Permissions. Enter o365-cli pods login --account you@example.com in its terminal, or import your existing token.json as application state. For a read command, enter o365-cli pods read --account you@example.com --folder inbox --operation messages. The apes grant constrains execution to the approved read scope; a wider provider token does not grant other script commands.
 
@@ -333,7 +335,7 @@ Data & backups shows application data usage, available disk space and pending lo
 
 Clean unused files removes unreferenced local files while retaining knowledge, cited evidence, history and pending inputs. Backups and previously restored profiles remain separate.
 
-Finish the master turn and stop or recover runs before maintenance. Export backup… includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials are excluded, but personal content or secrets you wrote into source or files remain part of that data.
+Finish the master turn and stop or recover runs before maintenance. Export backup… includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials are excluded, but personal content or secrets you wrote into source or files remain part of that data.The shell HOME, its command history and protected application state are excluded from exported backups; keep durable work files in the workspace.
 
 Restore backup and restart… verifies checksums and switches to a new profile while retaining the current profile. Reconnect accounts, review resources, validate scripts and explicitly enable schedules before resuming automated use.
 
