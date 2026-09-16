@@ -2,6 +2,42 @@
 
 OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT, OpenApe and Microsoft connection flows are implemented; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
+
+## External pod terminal
+
+Permissions has one **Open Terminal.app** button per pod. It opens the real macOS
+application with the bundled ape-shell, a pod-specific HOME, the pod workspace
+as cwd, and the pod agent identity. Shell startup does not read the Mac owner's
+profile. Assigned application commands are on PATH; their wrappers reuse the
+existing encrypted per-application state, materialized only during setup.
+Exit the shell cleanly to persist setup for later `context.tools.invoke` calls.
+An open shell reserves the pod and pauses automation; closing it does not resume
+automation. No account status is inferred.
+
+Saved Node.js `run(context)` artifacts also start through the bundled ape-shell,
+using the same HOME/cwd/SHELL and a preserved descriptor-3 result channel. The
+selected source hash is checked before launch. The existing macOS script sandbox
+and assigned-tool broker remain in place behind the shell grant.
+
+The interactive setup shell is a grant-mediated owner shell, not an OS sandbox.
+A granted command has the Mac user's filesystem/process privileges. Broad session
+grants therefore permit broad shell commands; detached/background child lifetime
+is not certified. The previous detached-child G0 is not declared solved. The
+script broker still supports bounded foreground native CLIs.
+
+Pod HOME is `pods/<id>/home` and work files live in `pods/<id>/workspace` under the
+profile. Application setup uses its own protected HOME and the existing macOS
+safeStorage/login-Keychain mechanism. Shell HOME/history and authentication state
+are excluded from exported backups; durable work files belong in the workspace.
+The CLI/native PTY are packaged, so no global Node or ape-shell install is needed.
+
+Harmless acceptance cases: `external-shell.test.ts` verifies shared files, HOME,
+cwd, streaming progress and denied execution; `external-session.test.ts` exercises
+the actual external client through a PTY and encrypted setup persistence.
+`programs.test.ts` covers the packaged button and setup-to-script broker handoff.
+Terminal.app itself is excluded from this session's computer-use tool; no claim
+of a verified native Terminal.app window screenshot is made.
+
 ## Run and verify
 
 From the repository root, activate the pinned toolchain with `. ./scripts/activate-node.sh` and install using `pnpm install --frozen-lockfile`.

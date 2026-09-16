@@ -1,6 +1,7 @@
+import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, mkdir, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { PodDatabase, digest } from '../src/worker/storage/database'
@@ -19,7 +20,8 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
   const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
   installExample(store, resources, pod.id, 'deterministic', runtime.dependencyLockHash)
   const original = store.getPod(pod.id).activeScript!; const originalCode = store.readBlob(original).toString('utf8'); store.close()
-  const launch = () => electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  const shellIdentity = await fixtureShellIdentity(root)
+  const launch = async () => { const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } }); await shellIdentity.encrypt(app, true); return app }
   let app = await launch()
   try {
     let page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
@@ -114,5 +116,5 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
     }
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pod.id)).enabled).toBe(false)
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await shellIdentity.close(); await rm(root, { recursive: true, force: true }) }
 })

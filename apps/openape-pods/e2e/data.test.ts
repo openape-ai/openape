@@ -9,14 +9,18 @@ import { PodDatabase } from '../src/worker/storage/database'
 import { createBackup } from '../src/worker/data/backup'
 import { expect, it } from 'vitest'
 
+import { fixtureShellIdentity } from './fixtures/shell-identity'
+
 const executable: string = createRequire(import.meta.url)('electron')
 it.each([false, true])('data: backs up, confirms deletion, restores into a fresh paused profile and restarts (packaged=%s)', async (packaged) => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'Pods Müller recovery '))); const root = join(base, 'profile'); const exports = join(base, 'exports'); await mkdir(root, { mode: 0o700 }); await mkdir(exports)
   const launch = () => electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : executable, args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  let identity: Awaited<ReturnType<typeof fixtureShellIdentity>> | undefined
   let app: ElectronApplication = await launch()
   try {
     let page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Recovery fixture' }))).pods[0]
+    identity = await fixtureShellIdentity(root); await identity.encrypt(app, true)
     const workspace = join(root, 'pods', pod.id, 'workspace'); await mkdir(workspace, { recursive: true }); await writeFile(join(workspace, 'notes.txt'), 'SYNTHETIC_DURABLE_WORKSPACE')
     await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
     await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
@@ -52,7 +56,7 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
     expect(await readFile(join(root, pointer.profile, 'pods', pod.id, 'workspace/notes.txt'), 'utf8')).toBe('SYNTHETIC_DURABLE_WORKSPACE')
   }
-  finally { await app.close(); await rm(base, { recursive: true, force: true }) }
+  finally { await app.close(); await identity?.close(); await rm(base, { recursive: true, force: true }) }
 })
 
 it('data: restores a compatible backup when a newer database blocks normal startup', async () => {

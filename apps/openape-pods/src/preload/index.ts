@@ -19,7 +19,7 @@ const bridge: PodsBridge = {
     const request = parseProgramCommand(command)
     const response: unknown = await ipcRenderer.invoke(channels.programs, request)
     if (request.type === 'prepare') return parseConsoleView(response)
-    return ['add', 'grant', 'importState'].includes(request.type) ? parseResourceState(response) : parseTerminalView(response)
+    return ['openShell', 'add', 'grant', 'importState'].includes(request.type) ? parseResourceState(response) : parseTerminalView(response)
   },
   async language(command) { return parseLanguage(await ipcRenderer.invoke(channels.language, parseLanguageCommand(command))) },
   async scripts(command) { return parseScriptView(await ipcRenderer.invoke(channels.scripts, parseScriptCommand(command))) },

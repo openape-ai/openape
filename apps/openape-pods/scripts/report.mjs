@@ -6,15 +6,15 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
-  ['program-terminal-en.png', 'Configure an assigned application', 'The packaged pod terminal accepts real keyboard input. This synthetic CLI saves its own protected state and exits.'],
-  ['program-read-en.png', 'Reuse application state', 'A later granted read sees the state established in that application’s terminal. No login status is inferred.'],
-  ['program-permissions-en.png', 'Program permissions and HTTPS destinations', 'Applications receive command grants. Script HTTP access has an explicit origin and method; tokens remain in pod Settings.'],
-  ['program-http-en.png', 'HTTP destination permissions', 'Node.js requests need an explicitly allowed origin and method. Secrets are managed separately in Settings.'],
+  ['external-terminal-en.png', 'Open the pod in Terminal.app', 'One button opens the separate macOS terminal with ape-shell. Assigned programs reuse their encrypted setup. This image proves the Pods control; the real client is verified separately through a PTY.'],
+  ['external-terminal-de-dark.png', 'Externes Terminal im Pod-Kontext', 'The German control remains readable in a narrow dark window. The terminal holds the pod lease until setup ends.'],
+  ['program-permissions-en.png', 'Program permissions and HTTPS destinations', 'Applications receive command grants. Script HTTP access has an explicit origin and method; tokens remain in Variables and secrets.'],
+  ['program-http-en.png', 'HTTP destination permissions', 'Node.js requests need an explicitly allowed origin and method. Secrets are managed in Variables and secrets.'],
   ['program-permissions-de-dark.png', 'Berechtigungen in Deutsch', 'The same application controls remain usable in the narrow dark German view.'],
   ['workspace-1060-light-overview.png', 'A pod with durable knowledge', 'Overview shows the description, last result and Run now. Results and sources opens retained knowledge.'],
   ['handbook-chat-en.png', 'Pod configuration in Chat', 'The conversation belongs to the selected pod. Proposed changes retain explicit review and permission controls.'],
   ['handbook-script-en.png', 'An editable script', 'Script highlights the working source and provides Save and Run. Expandable access references link to variable and secret management.'],
-  ['handbook-settings-en.png', 'Pod settings', 'Settings contains the name, group, variables, secrets and automation controls.'],
+  ['handbook-settings-en.png', 'Pod settings', 'Settings contains the name, group and automation controls. Variables and secrets have their own tab.'],
   ['handbook-history-en.png', 'Execution history', 'History lists persisted runs, their outcome and available recovery actions.'],
   ['handbook-knowledge-en.png', 'Knowledge and exact evidence', 'Current claims remain distinct from history, questions and verification gaps.'],
   ['workspace-source.png', 'A pinned source version', 'The source viewer shows the exact stored content and digest supporting a finding.'],
