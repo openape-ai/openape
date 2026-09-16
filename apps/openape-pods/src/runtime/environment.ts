@@ -27,5 +27,5 @@ export async function podEnvironment(root: string, podId: string, runtime: Shell
   await writeFile(shell, `#!/bin/sh\nexec /usr/bin/env ELECTRON_RUN_AS_NODE=1 APES_SHELL_MODE=1 ${quoteShell(runtime.executable)} ${quoteShell(runtime.cli)} "$@"\n`, { mode: 0o700 })
   await writeFile(join(bin, 'node'), `#!/bin/sh\nexec /usr/bin/env ELECTRON_RUN_AS_NODE=1 ${quoteShell(runtime.executable)} "$@"\n`, { mode: 0o700 })
   await writeFile(join(bin, 'apes'), `#!/bin/sh\nunset APES_SHELL_MODE APES_SHELL_WRAPPER\nexec /usr/bin/env ELECTRON_RUN_AS_NODE=1 ${quoteShell(runtime.executable)} ${quoteShell(runtime.cli)} "$@"\n`, { mode: 0o700 })
-  return { podId, home, workspace, bin, environment: { HOME: home, TMPDIR: temporary, PATH: `${bin}:/usr/bin:/bin`, SHELL: shell, APES_TARGET_HOST: `pods:${podId}`, APES_SHELL_CLEAN_START: '1', APE_WAIT: '1', PODS_POD_ID: podId, LANG: 'en_US.UTF-8', TERM: 'xterm-256color' } }
+  return { podId, home, workspace, bin, environment: { HOME: home, TMPDIR: temporary, PATH: `${bin}:/usr/bin:/bin`, SHELL: shell, APES_TARGET_HOST: `pods:${podId}`, APES_SHELL_CLEAN_START: '1', APES_IGNORE_USER_CONFIG: '1', APE_WAIT: '1', PODS_POD_ID: podId, LANG: 'en_US.UTF-8', TERM: 'xterm-256color' } }
 }
