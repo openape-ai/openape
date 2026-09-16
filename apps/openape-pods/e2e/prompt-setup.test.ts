@@ -1,7 +1,9 @@
+import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { _electron as electron } from 'playwright'
+import type { ElectronApplication } from 'playwright'
 import { createServer } from 'node:http'
 import { mkdtemp, realpath, rm, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { PodDatabase } from '../src/worker/storage/database'
@@ -10,17 +12,20 @@ import { PromptModel, setupAnswer, setupPrompt } from './fixtures/prompt-model'
 it('packaged prompt setup repairs a script, configures a pod and runs through the visible chat', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-prompt-setup-')))
   const store = new PodDatabase(root); const other = store.createPod({ name: 'Unrelated' }); store.close()
+  let shellIdentity: Awaited<ReturnType<typeof fixtureShellIdentity>> | undefined
+  let app: ElectronApplication
   const model = new PromptModel(); const failures: string[] = []
   const server = createServer((request, response) => {
     const respond = async () => {
       let body = ''; for await (const part of request) body += String(part)
+      if (model.calls === 11 && !shellIdentity) { shellIdentity = await fixtureShellIdentity(root); await shellIdentity.encrypt(app, true) }
       const reply = model.reply(JSON.parse(body))
       response.setHeader('Content-Type', 'text/event-stream'); response.end(await reply.text())
     }
     void respond().catch((error: unknown) => { failures.push(String(error)); response.destroy(error instanceof Error ? error : new Error('Synthetic provider failed')) })
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error('Fixture port unavailable')
-  const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_MODEL_PORT: String(address.port), NODE_ENV: 'test' } })
+  app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_MODEL_PORT: String(address.port), NODE_ENV: 'test' } })
   try {
     const page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('button', { name: 'New pod', exact: false }).click()
@@ -93,5 +98,5 @@ it('packaged prompt setup repairs a script, configures a pod and runs through th
     expect(await readFile(join(scriptRoot, 'greeting.txt'), 'utf8')).toBe('Hello from my pod')
     await writeFile(resolve('.artifacts/prompt-setup-evidence.json'), JSON.stringify({ kind: 'synthetic-model-packaged-ui', prompt: setupPrompt, userPrompts: 1, repairAttempts: 1, modelCalls: model.calls, elapsedMs: Date.now() - started, scriptGeneratedByLiveModel: false, ownerProfileUsed: false, enabledSchedule: schedule.enabled, result: run.summary, pendingSecret: chat.proposals[0]?.body.alias }, null, 2))
   }
-  finally { await app.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await shellIdentity?.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
 })

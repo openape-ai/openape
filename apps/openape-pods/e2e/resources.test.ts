@@ -1,3 +1,4 @@
+import { build } from 'tsup'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
@@ -99,7 +100,8 @@ describe('native resource boundary', () => {
   it('kills its owned domain after the actual controlling process crashes', async () => {
     const root = await fixture()
     const file = join(root.broker, 'wait.mjs'); await writeFile(file, 'setInterval(()=>{},1000)')
-    const module = resolve('src/worker/runtime/sandbox.ts')
+    await build({ entry: { supervisor: resolve('src/worker/runtime/sandbox.ts') }, outDir: root.broker, format: ['esm'], platform: 'node', target: 'node24', silent: true, outExtension: () => ({ js: '.mjs' }) })
+    const module = join(root.broker, 'supervisor.mjs')
     const script = `import {launchSandbox} from ${JSON.stringify(module)};
       const domain=await launchSandbox(${JSON.stringify(helper)},${JSON.stringify(root.broker)},${JSON.stringify({ executable: process.execPath, workspace: root.workspace, readFiles: [file], runtimeDirectories: [] })},[${JSON.stringify(file)}]);
       const pid=await domain.processId; console.log(JSON.stringify({pid,guardian:domain.guardian.pid})); await domain.completed;`
@@ -108,7 +110,7 @@ describe('native resource boundary', () => {
     let identifiers: { pid: number, guardian: number } | undefined
     supervisor.stdout.on('data', (bytes) => { identifiers = JSON.parse(bytes.toString()) })
     try {
-      await expect.poll(() => identifiers, { timeout: 5000 }).toBeDefined()
+      await expect.poll(() => { if (supervisor.exitCode !== null) throw new Error(diagnostics || 'Supervisor exited before registration'); return identifiers }, { timeout: 5000 }).toBeDefined()
       if (!identifiers) throw new Error(diagnostics || 'Missing process registration')
       const { pid, guardian } = identifiers
       process.kill(pid, 'SIGSTOP'); supervisor.kill('SIGKILL')

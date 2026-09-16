@@ -71,6 +71,7 @@ export class DataRetention {
   async cleanDeletedFiles(): Promise<void> {
     for (const job of this.jobs()) {
       try {
+        await rm(join(this.store.root, 'shell-launchers', job.podId), { recursive: true, force: true })
         await rm(join(this.store.root, 'pods', job.podId), { recursive: true, force: true })
         await rm(join(this.store.root, 'snapshots', job.podId), { recursive: true, force: true })
         for (const id of job.runIds) await rm(join(this.store.root, 'runs', id), { recursive: true, force: true })

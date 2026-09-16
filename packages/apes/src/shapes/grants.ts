@@ -2,7 +2,7 @@ import type { OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary }
 import { computeCmdHash } from '@openape/core'
 import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
-import { hostname } from 'node:os'
+import { shellTargetHost } from '../shell/context.js'
 import consola from 'consola'
 import { getGenericAuditLogPath } from '../config.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
@@ -91,7 +91,7 @@ export async function createShapesGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: resolved.adapter.cli.audience ?? 'shapes',
       grant_type: params.approval,
       command: resolved.executionContext.argv,
@@ -450,7 +450,7 @@ export async function createCompoundGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: compound.audience,
       grant_type: params.approval,
       command: compound.executionContext.argv,

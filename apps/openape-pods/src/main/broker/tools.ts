@@ -24,6 +24,7 @@ export interface ToolAssignment extends AssignedAuthorization {
   networkPorts: number[]
 }
 export interface BrokerLease {
+  workspace?: string
   registerDomain?: (path: string, ownerPid: number) => void | Promise<void>
   capabilities: string[]
   assertCurrent: () => void
@@ -72,7 +73,7 @@ export class PodToolBroker {
     const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
     const limit = assignment.maxOutputBytes ?? 256 * 1024
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
-    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(workspace), readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, args, { ...assignment.environment, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
+    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), writeDirectories: lease.workspace ? [await realpath(workspace)] : [], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts }, args, { ...assignment.environment, HOME: workspace, TMPDIR: workspace, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined
     let outputBytes = 0
     const outDecoder = new StringDecoder('utf8'); const errDecoder = new StringDecoder('utf8')

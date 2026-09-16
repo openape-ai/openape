@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -12,7 +12,7 @@ async function setup(source: string, timeMs = 5000) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-script-')))
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const artifact = join(root, 'run.mjs'); await writeFile(artifact, source)
-  const input: RunInput = { version: 1, runId: randomUUID(), podId: randomUUID(), scriptHash: '0'.repeat(64), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace, references: [], limits: { timeMs, frameBytes: 256 * 1024 } }
+  const input: RunInput = { version: 1, runId: randomUUID(), podId: randomUUID(), scriptHash: createHash('sha256').update(source).digest('hex'), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace, references: [], limits: { timeMs, frameBytes: 256 * 1024 } }
   const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {} }
   return { input, runtime, artifact, directory: join(root, 'private') }
 }
@@ -45,4 +45,10 @@ describe('native script runtime', () => {
     await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => new Promise(() => {}) })).rejects.toThrow('time limit')
   }, 2000)
 
+})
+
+it('rejects a changed script artifact before starting a process', async () => {
+  const fixture = await setup(`export async function run(){return ${result}}`)
+  await writeFile(fixture.artifact, 'export async function run(){return null}')
+  await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => null })).rejects.toThrow('selected source')
 })
