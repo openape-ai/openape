@@ -37,6 +37,8 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell: { cli: string, environment: Record<string, string> } }>
+  closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
@@ -96,6 +98,7 @@ export class RunDispatcher {
     const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
+    let shellScope: RunServiceScope | undefined
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
@@ -121,6 +124,11 @@ export class RunDispatcher {
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
+      }
+      if (this.services?.shell) {
+        const environment = await this.services.shell(scope, signal)
+        Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
+        shellScope = scope
       }
       let mail: MailRecipeSession | undefined
       const result = await executeScript(runtime, directory, artifact, input, signal, {
@@ -189,6 +197,7 @@ export class RunDispatcher {
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
+      if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
       await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds)
     }
     catch (error) {
@@ -196,7 +205,11 @@ export class RunDispatcher {
       await Promise.allSettled(pendingAgents)
       await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message)
     }
-    finally { this.active.delete(pod.id) }
+    finally {
+      try { if (shellScope) await this.services?.closeShell?.(shellScope) }
+      catch (error) { this.runs.append(id, 'diagnostic', { text: error instanceof Error ? error.message : 'Pod shell cleanup failed' }) }
+      finally { this.active.delete(pod.id) }
+    }
   }
 
   private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = []): Promise<void> {

@@ -1,3 +1,5 @@
+import { loadAdapter, resolveCommand } from '@openape/apes'
+import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
 import { rm, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -19,6 +21,7 @@ export class ConnectionManager {
   private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'] }>()
   private runtimeState = { ready: false, error: null as string | null }
   private assigning = false
+  private identityTurn: Promise<void> = Promise.resolve()
   private providerSession = new AbortController()
   private codex: CodexConnection
   private owner: OwnerConnection
@@ -96,6 +99,54 @@ export class ConnectionManager {
     }
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
+  }
+
+  async podConnection(podId: string) {
+    const previous = this.identityTurn
+    let release!: () => void
+    this.identityTurn = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try {
+      if (this.assigning) throw new Error('Another permission review is in progress')
+      this.assigning = true
+      try { return await this.preparePodConnection(podId) }
+      finally { this.assigning = false }
+    }
+    finally { release() }
+  }
+
+  private async preparePodConnection(podId: string) {
+    const owner = (await this.state()).connections.find(item => item.provider === 'openape' && item.state === 'ready')
+    if (!owner) throw new Error('Connect OpenApe before opening a pod shell')
+    const metadata = await this.metadata(owner.id)
+    if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
+    const identities = new PodIdentityManager(this.credentials)
+    const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, identity?: PodIdentityReference }>
+    let entry = pods[podId]
+    if (!entry) { entry = { connectionId: randomUUID(), prepared: false }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
+    if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, metadata.issuer, owner.account); entry.prepared = true; await this.save(owner, metadata) }
+    if (!entry.identity) {
+      const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, AbortSignal.timeout(120000))
+      entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer); await this.save(owner, metadata)
+    }
+    return { ...identities.connection(entry.identity, `pods:${podId}`), identity: entry.identity, ownerConnection: owner.id }
+  }
+
+  async existingProgramGrant(podId: string, assignment: ProgramAssignment, argv: string[]) {
+    await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
+    const resolved = await resolveCommand(loadAdapter(assignment.cliId, assignment.adapterPath), [assignment.cliId, ...argv])
+    const existing = assignment.grants.find(grant => grant.permission === resolved.permission)
+    if (existing) return existing
+    const connection = await this.podConnection(podId)
+    const response = await fetch(`${connection.issuer}/api/grants?status=approved&requester=${encodeURIComponent(connection.subject)}`, { headers: { Authorization: `Bearer ${await connection.accessToken()}` }, redirect: 'error', signal: AbortSignal.timeout(10000) })
+    if (!response.ok) throw new Error('Could not read pod command grants')
+    const text = await response.text()
+    if (text.length > 1024 * 1024) throw new Error('Pod grant list exceeds its size limit')
+    const value = JSON.parse(text) as { data?: { id: string, status: string, request: { requester: string, audience: string, target_host: string, permissions?: string[] } }[] }
+    if (!Array.isArray(value.data)) throw new Error('Invalid pod grant list')
+    const grant = value.data.find(item => item && typeof item.id === 'string' && /^[a-f0-9-]{36}$/.test(item.id) && item.status === 'approved' && item.request?.requester === connection.subject && item.request.audience === 'shapes' && item.request.target_host === connection.targetHost && Array.isArray(item.request.permissions) && item.request.permissions.includes(resolved.permission))
+    if (!grant) throw new Error('Approve this command for the pod agent with apes, then retry')
+    return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: grant.id } }
   }
 
   async approve(podId: string, adapterPath: string, commands: string[][]): Promise<ProgramAuthority> {

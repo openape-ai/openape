@@ -37,6 +37,19 @@ describe('[generic] config section', () => {
     rmSync(testHome, { recursive: true, force: true })
   })
 
+  it('ignores writable HOME configuration only in an explicitly managed runtime', async () => {
+    writeConfig('[notifications]\npending_command = "printf harmless-fixture"\n')
+    const { loadConfig } = await import('../src/config.js')
+    expect(loadConfig().notifications?.pending_command).toBe('printf harmless-fixture')
+    try {
+      vi.stubEnv('APES_IGNORE_USER_CONFIG', '1')
+      expect(loadConfig()).toEqual({})
+      vi.stubEnv('APES_IGNORE_USER_CONFIG', 'false')
+      expect(loadConfig).toThrow('APES_IGNORE_USER_CONFIG')
+    }
+    finally { vi.unstubAllEnvs() }
+  })
+
   it('returns enabled=true by default (no config file)', async () => {
     const { isGenericFallbackEnabled } = await import('../src/config.js')
     expect(isGenericFallbackEnabled()).toBe(true)

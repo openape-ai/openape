@@ -96,6 +96,8 @@ Ungespeicherte Skripte, normale Variablen, Einstellungen und Chat-Texte bleiben 
 
 Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Verwalte Skript-Geheimnisse unter Variablen und Geheimnisse und Skript-Anwendungen unter Berechtigungen. Die Auswahl erteilt noch keine Ressourcenfreigabe.
 
+Gespeicherte Läufe starten über das mitgelieferte ape-shell mit dem Pod-Agenten. Der Node.js-Vertrag run(context) bleibt erhalten; HOME, Arbeitsverzeichnis und SHELL entsprechen dem Einrichtungsterminal. Eine fehlende Freigabe blockiert die Ausführung. Programmeinstellungen werden über context.tools.invoke wiederverwendet; Geheimnisse werden dadurch nicht automatisch Teil des KI-Kontexts.
+
 1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
 2. Wählen Sie Ausführen oder Speichern und ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
 3. Bei benötigten Geheimnissen prüfen Sie den vollständigen Quelltext und wählen Zugriff auf Zugangsdaten prüfen. Die native Bestätigung nennt Pod, genauen SHA-256 und Aliase. Abbrechen blockiert weiterhin die Ausführung.
@@ -166,15 +168,15 @@ Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeic
 
 Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
 
-Füge das mitgelieferte o365-cli hinzu oder wähle eine installierte ausführbare Datei und ihre apes-Befehlsbeschreibung. Terminal öffnen zeigt direkt die Eingabe im Pod-Arbeitsverzeichnis. Gib einen vollständigen Befehl wie o365-cli pods login --account you@example.com ein und drücke Enter. Falls eine Freigabe fehlt, prüfst und bestätigst du sie im Dialog. Während das Programm läuft, nimmt das Terminal dessen Eingaben entgegen; danach erscheint die Befehlseingabe wieder. o365-cli allein zeigt die erlaubbaren Befehlsformen aus der App-Beschreibung, help die zugewiesenen Programme und pwd das Arbeitsverzeichnis. Shell-Verknüpfungen und beliebige Mac-Befehle sind nicht verfügbar. Die Anwendung verwaltet ihre Anmeldung selbst.
+Füge o365-cli oder ein installiertes Programm mit seinem apes-Befehlsdeskriptor hinzu. Terminal.app öffnen startet ein eigenes macOS-Terminal mit ape-shell, dem HOME des Pods und seinem Arbeitsverzeichnis. Der Starttext zeigt diese Pfade und den Pod-Namen. Rufe zugewiesene Programme direkt auf, beispielsweise o365-cli pods login --account you@example.com. Das Programm verwaltet die Anmeldung selbst. Erforderliche Freigaben werden durch ape-shell angefordert und können im OpenApe-Konto oder mit apes grants approve bestätigt werden.
 
 Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
 
 HTTP-Ziele erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Variablen und Geheimnisse. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
 
-Ein Widerruf ändert den Ressourcenstand und beendet betroffene Arbeit. Prüfe das Skript nach Berechtigungsänderungen erneut. Ein laufendes Terminal-Programm belegt den Pod und pausiert die Automatik. Nach geprüftem Programmende wird diese Belegung freigegeben; die Automatik bleibt pausiert. Die leere Befehlseingabe belegt keinen Lauf. Das Arbeitsverzeichnis ist der beschreibbare Pod-Workspace. HOME, temporäre Dateien und der Anmelde-Cache gehören weiterhin zum verschlüsselten Zustand der jeweiligen Anwendung.
+Das offene Terminal belegt den Pod und pausiert seine Automatik, auch wenn gerade kein Befehl läuft. Beende die Shell mit exit und warte auf das Ende des Prozesses, damit Programmeinstellungen gespeichert werden. Danach bleibt die Automatik pausiert. Zugewiesene Programme erhalten jeweils ihren eigenen temporären HOME mit dem entschlüsselten Anmeldestand; spätere Skriptaufrufe verwenden denselben gespeicherten Stand. Der Shell-HOME liegt unter pods/<pod-id>/home, das Arbeitsverzeichnis unter pods/<pod-id>/workspace im App-Profil. Abbrüche werden nicht als erfolgreiche Einrichtung behandelt.
 
-Die aktuelle Ausführungsgrenze unterstützt native CLIs im Vordergrund. Forking, grafische Anwendungen und beliebige Interpreter-Abhängigkeiten sind noch nicht verfügbar. Selbst gewählte CLIs haben standardmäßig keinen Netzwerkzugriff; das mitgelieferte o365-cli hat ausdrücklich begrenzte Microsoft-Ziele. Externe Verzeichnisse werden derzeit über einzelne Referenzdateien zugewiesen; beschreibbare Dateien liegen im Pod-Arbeitsbereich.
+ape-shell vermittelt Befehlsfreigaben; es stellt keine Dateisystem-Sandbox bereit. Das Einrichtungsterminal führt freigegebene Befehle mit den Rechten deines Mac-Benutzers aus. Eine breite Sitzungsfreigabe erlaubt entsprechend breite Shell-Befehle. Verwende Vordergrundprogramme; die zuverlässige Beendigung abgekoppelter Hintergrundprozesse ist nicht zugesichert. Automatische Node.js-Skripte behalten zusätzlich ihre macOS-Sandbox, und context.tools.invoke nutzt weiterhin den begrenzten Programm-Broker. Grafische Programme und beliebige Kindprozessbäume sind in diesem Skript-Broker weiterhin nicht unterstützt.
 
 ![Berechtigungen](images/handbook-permissions-de.png)
 
@@ -251,7 +253,7 @@ Nach Ruhezustand oder Ausfall verarbeitet ein Nachhollauf verbleibende Eingaben 
 
 ## Verbindungen und Mail-Benachrichtigungen
 
-Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex für KI-Ausführung und OpenApe für Pod-Identitäten und Grants. Weitere Programme werden in Berechtigungen über ihr eigenes Terminal oder eine importierte Zustandsdatei angemeldet.
+Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex für KI-Ausführung und OpenApe für Pod-Identitäten und Grants. Weitere Programme werden in Berechtigungen über das externe Terminal.app-Fenster des Pods oder eine importierte Zustandsdatei angemeldet.
 
 Füge für Mail-Benachrichtigungen o365-cli in Berechtigungen hinzu. Gib o365-cli pods login --account you@example.com und führe den Befehl im Terminal aus, oder importiere eine vorhandene token.json als Anwendungszustand. Für einen Lesebefehl gib o365-cli pods read --account you@example.com --folder inbox --operation messages. Der apes-Grant begrenzt die Ausführung auf den bestätigten Lesebereich; ein weiter reichender Anbieter-Token erlaubt dem Skript keine zusätzlichen Befehle.
 
@@ -333,7 +335,7 @@ Daten & Sicherungen zeigt Anwendungsdatenverbrauch, freien Speicherplatz und aus
 
 Ungenutzte Dateien bereinigen entfernt nicht referenzierte lokale Dateien und bewahrt Wissen, zitierte Belege, Verlauf und ausstehende Eingaben. Sicherungen und früher wiederhergestellte Profile bleiben separat erhalten.
 
-Beende die Master-Anfrage und stoppe oder kläre Läufe vor Wartungsarbeiten. Sicherung exportieren … enthält Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellen und Verlauf. Verwaltete Kontozugangsdaten sind ausgeschlossen. Persönliche Inhalte oder Geheimnisse, die du selbst in Quelltext oder Dateien geschrieben hast, bleiben jedoch Teil dieser Daten.
+Beende die Master-Anfrage und stoppe oder kläre Läufe vor Wartungsarbeiten. Sicherung exportieren … enthält Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellen und Verlauf. Verwaltete Kontozugangsdaten sind ausgeschlossen. Persönliche Inhalte oder Geheimnisse, die du selbst in Quelltext oder Dateien geschrieben hast, bleiben jedoch Teil dieser Daten. Der Shell-HOME, seine Befehlsverläufe und geschützte Programmeinstellungen sind von exportierten Sicherungen ausgeschlossen; bewahre fachliche Dateien im Arbeitsverzeichnis auf.
 
 Sicherung wiederherstellen und neu starten … prüft Prüfsummen und wechselt in ein neues Profil, während das aktuelle erhalten bleibt. Verbinde Konten erneut, prüfe Ressourcen, validiere Skripte und aktiviere Zeitpläne ausdrücklich, bevor du die automatisierte Nutzung fortsetzt.
 

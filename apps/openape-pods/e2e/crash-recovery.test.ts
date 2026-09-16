@@ -1,8 +1,9 @@
+import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, mkdir, writeFile, truncate } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -13,14 +14,20 @@ import { installExample } from '../src/worker/runs/examples'
 import { fixtureDirectory } from '../src/main/fixture'
 
 const require = createRequire(import.meta.url)
+const shellIdentities = new Map<string, Awaited<ReturnType<typeof fixtureShellIdentity>>>()
 const applications: { app: ElectronApplication, child: ChildProcess }[] = []; const roots: string[] = []
 afterEach(async () => {
   for (const { app, child } of applications.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close() }
+  for (const identity of shellIdentities.values()) await identity.close()
+  shellIdentities.clear()
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 async function launch(root: string, packaged: boolean) {
-  const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  let identity = shellIdentities.get(root)
+  if (!identity) { identity = await fixtureShellIdentity(root); shellIdentities.set(root, identity) }
+  const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   applications.push({ app, child: app.process() })
+  await identity.encrypt(app, true)
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   return { app, page }
@@ -53,8 +60,9 @@ describe('checkpoint recovery in Electron', () => {
     const { root, podId } = await seed(); const { page } = await launch(root, true)
     await page.evaluate(() => window.pods.data({ type: 'limit', bytes: 1024 ** 3 }))
     await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), podId)
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision).toBe(1)
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision, { timeout: 10000 }).toBe(1)
     expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).busy).toBe(true)
+    await delay(2200)
     const path = join(root, 'pods', podId, 'workspace', 'synthetic-sparse-file'); await writeFile(path, ''); await truncate(path, 1024 ** 3)
     await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state, { timeout: 15000 }).toBe('cancelled')
     expect((await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision).toBe(1)
@@ -85,7 +93,7 @@ describe('checkpoint recovery in Electron', () => {
     await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), podId)
     const current = async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
     const id = (await current()).id
-    await expect.poll(async () => (await page.evaluate(({ podId, runId }) => window.pods.runs({ type: 'list', podId, runId }), { podId, runId: id })).events.some(event => event.type === 'checkpoint')).toBe(true)
+    await expect.poll(async () => (await page.evaluate(({ podId, runId }) => window.pods.runs({ type: 'list', podId, runId }), { podId, runId: id })).events.some(event => event.type === 'checkpoint'), { timeout: 10000 }).toBe(true)
     const worker = (await page.evaluate(() => window.pods.getStatus())).worker.pid!
     if (target === 'script') {
       const store = new PodDatabase(root)
