@@ -41,7 +41,7 @@ import type { InternalResourceCommand, ResourceState } from '../contracts/resour
 import { randomUUID } from 'node:crypto'
 import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
-import { utilityProcess } from 'electron'
+import { app, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
@@ -146,7 +146,7 @@ export class FixtureWorker {
     if (!this.programs) throw new Error('Program service is not ready')
     if (command.type === 'openShell') {
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-      return this.programs.openShell(command.podId, { executable: process.execPath, cli: join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })
+      return this.programs.openShell(command.podId, { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })
     }
     if (command.type === 'prepare') return this.programs.prepare(command.podId, command.line)
     if (command.type === 'add') {
@@ -251,7 +251,7 @@ export class FixtureWorker {
         await check()
         if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod shell identity is unavailable or already in use')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        const runtime = { executable: process.execPath, cli: join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
+        const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const identity = await shellIdentity(this.root, scope.podId, this.connections)
         try { await check(); controller.signal.throwIfAborted() }

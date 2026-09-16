@@ -22,8 +22,10 @@ const output = distribution ? 'release/distribution' : 'release'
 const productName = distribution ? 'OpenApe Pods' : 'OpenApe Pods Fixture'
 const artifacts = await build({ targets: Platform.MAC.createTarget(distribution ? ['dir', 'dmg'] : ['dir'], Arch.arm64), publish: 'never', config: {
   publish: [], forceCodeSigning: signed, appId: distribution ? 'ai.openape.pods' : 'ai.openape.pods.fixture', productName, electronVersion: '40.9.3', directories: { output },
-  files: ['dist/**/*', 'package.json'], asar: true, asarUnpack: ['dist/worker/**', 'dist/native/**', 'dist/runtime/**', 'dist/vendor/**'], npmRebuild: false,
-  ...(distribution ? { extraResources: [{ from: 'dist/distribution', to: '.' }], artifactName: `OpenApe-Pods-\${version}-\${arch}-${candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
+  files: ['dist/**/*', '!dist/vendor/apes/**/*', 'package.json'], asar: true, asarUnpack: ['dist/worker/**', 'dist/native/**', 'dist/runtime/**', 'dist/vendor/**'], npmRebuild: false,
+  // node-pty rewrites app.asar paths even when already unpacked; keep its helper outside that tree.
+  extraResources: [{ from: 'dist/vendor/apes', to: 'apes' }, ...['node-pty', `node-pty-${process.platform}-${process.arch}`].map(name => ({ from: `dist/vendor/apes/node_modules/@lydell/${name}`, to: `apes/node_modules/@lydell/${name}` })), ...(distribution ? [{ from: 'dist/distribution', to: '.' }] : [])],
+  ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
   mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
   ...(signed
     ? { afterSign: async (context) => {
