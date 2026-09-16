@@ -1,3 +1,4 @@
+import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { randomBytes } from 'node:crypto'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, readdir, mkdir } from 'node:fs/promises'
@@ -10,6 +11,7 @@ import { PodDatabase } from '../src/worker/storage/database'
 it('credentials: packaged owner flow protects exact source, persists encrypted values and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
+  const shellIdentity = await fixtureShellIdentity(root)
   const syntheticCipher = process.env.OPENAPE_PODS_TEST_SYNTHETIC_CIPHER === '1'
   const key = randomBytes(32).toString('hex')
   const launch = async () => {
@@ -24,6 +26,7 @@ it('credentials: packaged owner flow protects exact source, persists encrypted v
         safeStorage.decryptString = (bytes) => { const cipher = createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), bytes.subarray(0, 12)); cipher.setAuthTag(bytes.subarray(-16)); return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]).toString() }
       }, key)
     }
+    await shellIdentity.encrypt(running)
     console.info(`Credential flow: ${syntheticCipher ? 'isolated synthetic cipher; macOS keychain is NOT verified' : 'real macOS safeStorage'}`)
     return running
   }

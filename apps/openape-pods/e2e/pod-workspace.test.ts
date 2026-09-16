@@ -11,8 +11,11 @@ import { ResourceRegistry } from '../src/worker/resources/registry'
 import { installExample } from '../src/worker/runs/examples'
 import { fixtureDirectory } from '../src/main/fixture'
 
+import { fixtureShellIdentity } from './fixtures/shell-identity'
+
+const identities: Awaited<ReturnType<typeof fixtureShellIdentity>>[] = []
 const active: { app: ElectronApplication, child: ChildProcess, root: string }[] = []
-afterEach(async () => { for (const { app, child, root } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) } })
+afterEach(async () => { for (const identity of identities.splice(0)) await identity.close(); for (const { app, child, root } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) } })
 async function launch() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-workspace-'))); fixtureDirectory(root)
   const store = new PodDatabase(root)
@@ -28,7 +31,9 @@ async function launch() {
   installExample(store, registry, pod.id, 'deterministic', runtime.dependencyLockHash)
   for (const [kind, state, name] of [['connection', 'expired', 'Microsoft fixture'], ['tool', 'missing', 'o365-cli fixture']] as const) store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pod.id, kind, state, name, JSON.stringify({ account: 'fixture@example.invalid', scope: 'Read-only selected folders' }))
   store.close()
+  const identity = await fixtureShellIdentity(root); identities.push(identity)
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  await identity.encrypt(app, true)
   active.push({ app, child: app.process(), root }); const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
   return { app, page, pod }
 }

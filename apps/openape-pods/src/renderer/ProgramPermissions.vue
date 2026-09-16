@@ -1,17 +1,15 @@
 <script lang="ts">
-import { defineComponent, defineAsyncComponent } from 'vue'
+import { defineComponent } from 'vue'
 import type { ResourceState, PodResource } from '../contracts/resources'
 import type { ProgramCommand } from '../contracts/programs'
 import { t, diagnostic } from './i18n'
 import ScriptAccess from './ScriptAccess.vue'
 
-const PodConsole = defineAsyncComponent(() => import('./PodConsole.vue'))
-
 export default defineComponent({
-  components: { PodConsole, ScriptAccess },
+  components: { ScriptAccess },
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { terminalId: '', busy: false, error: '', source: 'o365-cli' as 'o365-cli' | 'choose', origin: '', methods: ['GET'] as string[] } },
+  data() { return { busy: false, error: '', source: 'o365-cli' as 'o365-cli' | 'choose', origin: '', methods: ['GET'] as string[] } },
   computed: {
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
@@ -45,15 +43,17 @@ export default defineComponent({
 
 <template>
   <section class="program-permissions">
-    <h3>{{ t('Executable applications') }}</h3>
+    <header>
+      <h3>{{ t('Executable applications') }}</h3><button class="secondary" :disabled="busy" @click="act({ type: 'openShell', podId })">
+        {{ t('Open Terminal.app') }}
+      </button>
+    </header>
     <p class="muted">
-      {{ t('Assign a program and open the pod terminal to configure it. Authentication is managed by the program itself.') }}
+      {{ t('Open Terminal.app to configure assigned programs with ape-shell. The terminal and scripts share the pod workspace and program setup.') }}
     </p>
     <article v-for="application in applications" :key="application.id" class="application-card">
       <header>
-        <strong>{{ application.name }}</strong><button class="secondary" :aria-expanded="terminalId === application.id" :disabled="busy || !!terminalId" @click="terminalId = application.id">
-          {{ t('Open terminal') }}
-        </button><button class="text-button" :disabled="busy || !!terminalId" @click="revoke(application)">
+        <strong>{{ application.name }}</strong><button class="text-button" :disabled="busy" @click="revoke(application)">
           {{ t('Remove application') }}
         </button>
       </header>
@@ -75,20 +75,19 @@ export default defineComponent({
         <summary>{{ t('Use in script') }}</summary>
         <code>{{ `context.tools.invoke({ application: ${JSON.stringify(application.name)}, argv: [...] })` }}</code>
       </details>
-      <button class="text-button" :disabled="busy || !!terminalId" @click="act({ type: 'importState', podId, applicationId: application.id, epoch: state.epoch })">
+      <button class="text-button" :disabled="busy" @click="act({ type: 'importState', podId, applicationId: application.id, epoch: state.epoch })">
         {{ t('Import existing setup') }}
       </button>
-      <PodConsole v-if="terminalId === application.id" :pod-id="podId" :application="String(application.configuration.cliId)" @updated="$emit('updated', $event)" @closed="terminalId = ''" />
     </article>
     <form class="actions" @submit.prevent="act({ type: 'add', podId, epoch: state.epoch, source })">
-      <select v-model="source" :aria-label="t('Application source')" :disabled="busy || !!terminalId">
+      <select v-model="source" :aria-label="t('Application source')" :disabled="busy">
         <option value="o365-cli">
           {{ t('o365-cli') }}
         </option><option value="choose">
           {{ t('Choose installed CLI…') }}
         </option>
       </select>
-      <button :disabled="busy || !!terminalId">
+      <button :disabled="busy">
         {{ t('Add application') }}
       </button>
     </form>
@@ -99,16 +98,16 @@ export default defineComponent({
     </p>
     <article v-for="destination in destinations" :key="destination.id" class="application-card">
       <header>
-        <strong>{{ destination.name }}</strong><button class="text-button" :disabled="busy || !!terminalId" @click="revoke(destination)">
+        <strong>{{ destination.name }}</strong><button class="text-button" :disabled="busy" @click="revoke(destination)">
           {{ t('Revoke access') }}
         </button>
       </header>
       <p>{{ (destination.configuration.methods as string[]).join(', ') }}</p>
     </article>
     <form class="http-form" @submit.prevent="grantHttp">
-      <label>{{ t('HTTPS origin') }}<input v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy || !!terminalId"></label>
-      <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="busy || !!terminalId">{{ method }}</label></fieldset>
-      <button :disabled="busy || !!terminalId || !methods.length">
+      <label>{{ t('HTTPS origin') }}<input v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
+      <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="busy">{{ method }}</label></fieldset>
+      <button :disabled="busy || !methods.length">
         {{ t('Allow HTTP destination') }}
       </button>
     </form>

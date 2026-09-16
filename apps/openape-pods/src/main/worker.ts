@@ -1,4 +1,7 @@
-import { invokeProgram } from './programs/invoke'
+import { shellIdentity } from './shell/identity'
+import { podEnvironment } from '../runtime/environment'
+import { podWorkspace } from './programs/console'
+import { invokeProgram, programRequest } from './programs/invoke'
 import { ProgramManager } from './programs/manager'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
@@ -44,6 +47,7 @@ import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 export class FixtureWorker {
+  private shellIdentities = new Map<string, Awaited<ReturnType<typeof shellIdentity>>>()
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
@@ -95,6 +99,7 @@ export class FixtureWorker {
     })
     child.on('exit', (code) => {
       this.programs?.cancelAll()
+      void this.closeShellIdentities().catch((error: unknown) => { console.error('Pod shell credential cleanup failed', error) })
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
       this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
@@ -129,9 +134,20 @@ export class FixtureWorker {
     return view
   }
 
+  cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
+
+  private async closeShellIdentities(): Promise<void> {
+    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear()
+    await Promise.all(identities.map(identity => identity.close()))
+  }
+
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string) {
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
+    if (command.type === 'openShell') {
+      const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+      return this.programs.openShell(command.podId, { executable: process.execPath, cli: join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })
+    }
     if (command.type === 'prepare') return this.programs.prepare(command.podId, command.line)
     if (command.type === 'add') {
       if (!definition) throw new Error('Choose an application in the owner window')
@@ -223,11 +239,26 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'http') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
     try {
+      if (request.kind === 'shellClose') {
+        await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
+      }
+      if (request.kind === 'shell') {
+        await check()
+        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod shell identity is unavailable or already in use')
+        const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+        const runtime = { executable: process.execPath, cli: join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
+        const environment = await podEnvironment(this.root, scope.podId, runtime)
+        const identity = await shellIdentity(this.root, scope.podId, this.connections)
+        try { await check(); controller.signal.throwIfAborted() }
+        catch (error) { await identity.close(); throw error }
+        this.shellIdentities.set(scope.runId, identity)
+        return { home: environment.home, environment: environment.environment, shell: { cli: runtime.cli, environment: { ...environment.environment, APES_AUTH_FILE: identity.path } } }
+      }
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)
         if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -250,7 +281,11 @@ export class FixtureWorker {
       if (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body)) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
+        const requested = programRequest(state.resources, scope.podId, scope.capabilities, request.body)
+        const grant = await this.connections!.existingProgramGrant(scope.podId, requested.assignment, requested.argv)
+        const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
+        const workspace = await podWorkspace(this.root, scope.podId)
+        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
@@ -273,6 +308,7 @@ export class FixtureWorker {
   async stop(): Promise<void> {
     await this.setupReady
     await this.programs?.stop()
+    await this.closeShellIdentities()
     await this.connections?.stop()
     this.providerAbort.abort()
     await this.providerGateway?.close()
