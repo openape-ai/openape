@@ -2,7 +2,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
 import { rm, readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { ConnectionView, OnboardingCommand, OnboardingView } from '../../contracts/onboarding'
 import type { AgentRuntime } from '../../worker/agent/executor'
 import type { SetupInternal } from '../../worker/onboarding/control'
@@ -38,9 +38,6 @@ export class ConnectionManager {
       const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
       if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
       await verifyExecutable(this.runtime.binary, manifest.binaryHash)
-      const mail = JSON.parse(await readFile(join(dirname(this.runtime.binary), 'o365-manifest.json'), 'utf8')) as { binaryHash: string, platform: string, architecture: string }
-      if (mail.platform !== process.platform || mail.architecture !== process.arch) throw new Error('Bundled mail tool architecture does not match this Mac')
-      await verifyExecutable(join(dirname(this.runtime.binary), 'o365-cli'), mail.binaryHash)
       this.runtimeState = { ready: true, error: null }; await this.availability()
     }
     catch (error) { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Runtime inspection failed' } }

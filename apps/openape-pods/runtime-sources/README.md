@@ -1,17 +1,18 @@
-# Pinned o365 source
+# Runtime sources and test fixtures
 
-This reproducible source archive comes from the exact CLI commit recorded in
-`o365-cli.json`. Changes belong in the separate o365 repository and its PR; refresh
-the archive and hash only after reviewing that source. No local worktree files or
-credentials are included. The archive is retained because the existing forge does
-not expose an anonymous archive download for this revision, and package builds must
-not acquire forge credentials.
+Electron/Node.js, Codex, ape-shell and the native confinement helper are required
+Pod runtime components. Applications such as o365-cli are selected from the Mac;
+they are not built, downloaded or copied into the distributed app.
 
-macOS builds require Go 1.26.0, verify the archive digest, compile with the existing
-locked modules and copy the binary, source provenance, digest and license status outside
-ASAR. No executable is resolved from the user's PATH during pod execution. Linux
-CI checks TypeScript contracts; actual native/runtime acceptance requires macOS.
+The pinned o365 archive and descriptor are legacy protocol test fixtures only.
+Native tests build them into `.artifacts/o365-fixture` with Go 1.26.0, verify the
+archive digest and use synthetic accounts against local TLS services. They never
+enter `dist` or a release package. The archive records the exact upstream revision
+in `o365-cli.json`; update it only after reviewing the upstream change. No local
+worktree or credentials are included. Its missing upstream LICENSE does not
+become a production redistribution dependency because the fixture is not shipped.
 
-The upstream README declares MIT, but the pinned revision has no LICENSE file.
-The package records this explicitly; complete license notices remain a distribution
-gate rather than silently supplying an invented notice.
+Installed executables and their apes descriptors are hash-pinned when assigned.
+Updates require selecting the installed replacement in Permissions. A descriptor
+already installed for ape-shell is detected automatically; otherwise the owner
+selects the descriptor file. Graphical apps get an exact, no-argument launcher.

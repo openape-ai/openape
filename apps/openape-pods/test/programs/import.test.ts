@@ -33,6 +33,14 @@ it('imports a selected application file without changing its source or exposing 
     await symlink(source, join(root, 'linked'))
     await expect(manager.importFile(pod.id, resource.id, 1, join(root, 'linked'))).rejects.toThrow()
     expect(store.db.prepare('SELECT count(*) AS count FROM program_leases').get()?.count).toBe(0)
+    await manager.replace(pod.id, resource.id, resources.epoch(pod.id), { name: 'Installed CLI', executable: '/installed/tool', executableHash: 'c'.repeat(64), cliId: 'tool', adapterPath: '/installed/tool.toml', adapterHash: 'd'.repeat(64), networkHosts: [], entryFiles: [], environment: {} })
+    const replaced = resources.list(pod.id)[0]!
+    expect(replaced.id).toBe(resource.id)
+    expect(replaced.configuration.stateId).toBe(stateId)
+    expect(replaced.configuration.capability).toBe(resource.configuration.capability)
+    expect(replaced.configuration.grants).toEqual([])
+    await new ProgramState(credentials).use(stateId, { podId: pod.id, applicationId: resource.id }, async directory => expect(await readFile(join(directory, 'token.json'), 'utf8')).toBe(value))
+    await expect(manager.replace(pod.id, resource.id, 1, {} as never)).rejects.toThrow('changed')
   }
   finally { store.close(); await rm(root, { recursive: true, force: true }) }
 })

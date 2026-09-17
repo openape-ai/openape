@@ -1,3 +1,4 @@
+import { ApplicationLaunch } from './launch'
 import { ExternalShell } from '../shell/session'
 import type { ShellRuntime } from '../../runtime/environment'
 import { randomUUID } from 'node:crypto'
@@ -16,6 +17,7 @@ import { ProgramState } from './state'
 import { prepareConsole, podWorkspace } from './console'
 
 export class ProgramManager {
+  private launches = new Map<string, ApplicationLaunch>()
   private shells = new Map<string, ExternalShell>()
   private sessions = new Map<string, ProgramSession>()
   constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>) {}
@@ -31,6 +33,11 @@ export class ProgramManager {
     const stateId = await new ProgramState(this.credentials).create({ podId, applicationId: id })
     try { await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, grants: [] } }) }
     catch (error) { await this.credentials.erasePodKey(stateId, podId); throw error }
+  }
+
+  async replace(podId: string, id: string, epoch: number, definition: ProgramDefinition): Promise<void> {
+    const current = await this.assignment(podId, id, epoch)
+    await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId: current.stateId, capability: current.capability, grants: [] } })
   }
 
   async prepare(podId: string, line: string) {
@@ -67,7 +74,7 @@ export class ProgramManager {
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }
   }
 
-  async terminal(command: Exclude<ProgramCommand, { type: 'openShell' } | { type: 'add' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
+  async terminal(command: Exclude<ProgramCommand, { type: 'openShell' } | { type: 'add' } | { type: 'replace' | 'launch' | 'launchStatus' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
     if (command.type === 'grant') throw new Error('Permission approval requires the owner window')
     if (command.type === 'start') {
       for (const [id, session] of this.sessions) {
@@ -82,6 +89,14 @@ export class ProgramManager {
       const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace)
       this.sessions.set(id, session); return session.view()
     }
+    const launch = this.launches.get(command.podId)
+    if (launch?.id === command.sessionId) {
+      if (command.type === 'close') { launch.close(); await launch.completed }
+      else if (command.type !== 'poll') {
+        throw new Error('Graphical application sessions do not accept terminal input')
+      }
+      return launch.view()
+    }
     const session = this.sessions.get(command.sessionId)
     if (!session || session.podId !== command.podId) throw new Error('Terminal does not belong to this pod or has expired')
     if (command.type === 'input' || command.type === 'resize') await this.dispatch({ type: 'check', podId: command.podId, sessionId: command.sessionId })
@@ -89,6 +104,23 @@ export class ProgramManager {
     if (command.type === 'resize') session.resize(command.columns, command.rows)
     if (command.type === 'close') { session.close(); await session.completed }
     return session.view(command.type === 'poll' ? command.after : Number.MAX_SAFE_INTEGER)
+  }
+
+  launchStatus(podId: string): TerminalView | null { return this.launches.get(podId)?.view() ?? null }
+
+  async launch(command: Extract<ProgramCommand, { type: 'launch' }>, runtime: ShellRuntime): Promise<TerminalView> {
+    await this.assignment(command.podId, command.applicationId, command.epoch)
+    if ([...this.launches.values()].filter(item => item.view().state !== 'closed').length >= 4) throw new Error('Close another application first')
+    const state = await this.resources(command.podId); const id = randomUUID()
+    const name = await this.dispatch({ type: 'reserveShell', podId: command.podId, epoch: command.epoch, sessionId: id }) as string
+    const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,
+      async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },
+      async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, name, command.applicationId)
+    const launch = new ApplicationLaunch(id, command.podId, shell)
+    this.launches.set(command.podId, launch)
+    try { await shell.ready }
+    catch (error) { await launch.completed; await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }); throw error }
+    return launch.view()
   }
 
   async openShell(podId: string, runtime: ShellRuntime): Promise<string> {
@@ -108,14 +140,15 @@ export class ProgramManager {
   }
 
   cancelPod(podId: string): void {
+    this.launches.get(podId)?.close()
     this.shells.get(podId)?.close()
     for (const session of this.sessions.values()) {
       if (session.podId === podId) session.close()
     }
   }
 
-  cancelAll(): void { for (const shell of this.shells.values()) shell.close(); for (const session of this.sessions.values()) session.close() }
+  cancelAll(): void { for (const launch of this.launches.values()) launch.close(); for (const shell of this.shells.values()) shell.close(); for (const session of this.sessions.values()) session.close() }
 
-  busy(): boolean { return this.shells.size > 0 || [...this.sessions.values()].some(session => session.view().state !== 'closed') }
-  async stop(): Promise<void> { for (const shell of this.shells.values()) shell.close(); await Promise.all(Array.from(this.shells.values(), shell => shell.completed)); for (const session of this.sessions.values()) session.close(); await Promise.all(Array.from(this.sessions.values(), session => session.completed)) }
+  busy(): boolean { return [...this.launches.values()].some(launch => launch.view().state !== 'closed') || this.shells.size > 0 || [...this.sessions.values()].some(session => session.view().state !== 'closed') }
+  async stop(): Promise<void> { for (const launch of this.launches.values()) launch.close(); await Promise.all(Array.from(this.launches.values(), launch => launch.completed)); for (const shell of this.shells.values()) shell.close(); await Promise.all(Array.from(this.shells.values(), shell => shell.completed)); for (const session of this.sessions.values()) session.close(); await Promise.all(Array.from(this.sessions.values(), session => session.completed)) }
 }

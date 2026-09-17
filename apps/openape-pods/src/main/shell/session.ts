@@ -9,6 +9,7 @@ import type { ProgramAssignment } from '../../contracts/programs'
 import type { ResourceState } from '../../contracts/resources'
 import type { CredentialCache } from '../connections/cache'
 import type { ConnectionManager } from '../connections/manager'
+import { launchDescriptor, verifyApplicationBundle } from '../programs/application'
 import { ProgramState } from '../programs/state'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { podDirectory, podEnvironment, quoteShell } from '../../runtime/environment'
@@ -25,7 +26,7 @@ export class ExternalShell {
   error: string | null = null
   closed = false
 
-  constructor(readonly podId: string, root: string, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, connections: ConnectionManager, check: () => Promise<void>, release: () => Promise<void>, name = podId) {
+  constructor(readonly podId: string, root: string, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, connections: ConnectionManager, check: () => Promise<void>, release: () => Promise<void>, name = podId, private readonly launchApplication?: string) {
     let ready!: (file: string) => void; let failed!: (error: unknown) => void
     this.ready = new Promise((resolve, reject) => { ready = resolve; failed = reject })
     this.completed = this.run(root, runtime, resources, credentials, connections, check, release, ready, name).catch((error: unknown) => { this.error = error instanceof Error ? error.message : 'Pod terminal failed'; failed(error) })
@@ -86,7 +87,9 @@ export class ExternalShell {
       socket.on('close', () => { peers.delete(socket); if (authenticated && !finished) this.finish?.(new Error('Pod terminal disconnected; application setup changes were not saved')) })
     })
     let timer: ReturnType<typeof setInterval> | undefined
-    const applications = resources.resources.filter(item => item.state === 'ready' && item.configuration.type === 'program')
+    const applications = resources.resources.filter(item => item.state === 'ready' && item.configuration.type === 'program' && (!this.launchApplication || item.id === this.launchApplication))
+    const launchCommand = this.launchApplication ? `pod-open-${this.launchApplication.replaceAll('-', '')}-${String(applications[0]?.configuration.executableHash).slice(0, 16)}` : undefined
+    if (this.launchApplication && applications.length !== 1) throw new Error('Application is not assigned to this pod')
     const wrappers: string[] = []
     try {
       await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(endpoint, resolve) }); await chmod(endpoint, 0o600)
@@ -115,6 +118,7 @@ export class ExternalShell {
         if (resource) {
           const assignment = resource.configuration as unknown as ProgramAssignment
           if (!/^[\w-]+$/.test(assignment.cliId) || ['node', 'apes', 'ape-shell'].includes(assignment.cliId)) throw new Error('Application command conflicts with the pod shell')
+          await verifyApplicationBundle(assignment)
           await verifyExecutable(assignment.executable, assignment.executableHash)
           await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
           const destination = join(adapters, `${assignment.cliId}.toml`)
@@ -125,13 +129,18 @@ export class ExternalShell {
             const environment = Object.entries({ ...assignment.environment, HOME: home, TMPDIR: home }).map(([key, value]) => quoteShell(`${key}=${value}`)).join(' ')
             const suffix = assignment.cacheArgument ? ` ${quoteShell(assignment.cacheArgument)} ${quoteShell(home)}` : ''
             const wrapper = join(context.bin, assignment.cliId); wrappers.push(wrapper)
-            await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env ${environment} ${quoteShell(assignment.executable)} "$@"${suffix}\n`, { mode: 0o700 })
+            await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${quoteShell(assignment.executable)} "$@"${suffix}\n`, { mode: 0o700 })
+            if (launchCommand) {
+              const launcher = join(context.bin, launchCommand); wrappers.push(launcher)
+              await writeFile(join(adapters, `${launchCommand}.toml`), launchDescriptor(launchCommand, resource.name), { mode: 0o600 })
+              await writeFile(launcher, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${quoteShell(assignment.executable)}\n`, { mode: 0o700 })
+            }
             await mount(index + 1)
           })
           return
         }
         const config = join(temporary, 'session.json')
-        await writeFile(config, JSON.stringify({ endpoint, token, name, podId: this.podId, workspace: context.workspace, environment: { ...context.environment, APES_AUTH_FILE: identity.path }, executable: runtime.executable, cli: runtime.cli }), { mode: 0o600 })
+        await writeFile(config, JSON.stringify({ endpoint, token, name, command: launchCommand, podId: this.podId, workspace: context.workspace, environment: { ...context.environment, APES_AUTH_FILE: identity.path }, executable: runtime.executable, cli: runtime.cli }), { mode: 0o600 })
         const launcher = join(temporary, 'Open Pod Terminal.command')
         await writeFile(launcher, `#!/bin/sh\nexec /usr/bin/env -i PATH=/usr/bin:/bin ELECTRON_RUN_AS_NODE=1 ${quoteShell(runtime.executable)} ${quoteShell(runtime.client)} ${quoteShell(config)}\n`, { mode: 0o700 })
         ready(launcher)
