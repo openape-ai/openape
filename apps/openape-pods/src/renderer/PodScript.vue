@@ -7,6 +7,7 @@ import type { StoredPod } from '../contracts/control'
 import type { ScriptCommand, ScriptSelection, ScriptView } from '../contracts/scripts'
 import { isDirty, scriptBuffer } from './script-buffer'
 import ScriptCode from './ScriptCode.vue'
+import ScriptPackages from './ScriptPackages.vue'
 
 const starter = `export async function run(context) {
   context.log('Starting pod script')
@@ -19,7 +20,7 @@ const starter = `export async function run(context) {
 }
 `
 export default defineComponent({
-  components: { ScriptCode },
+  components: { ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
   data() { return { awaitingRun: false, available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
@@ -180,12 +181,12 @@ export default defineComponent({
         {{ t('Cancel') }}
       </button>
     </div>
-    <details class="script-packages">
-      <summary>{{ t('Dependencies · package.json') }}</summary>
+    <section class="script-packages">
+      <h3>{{ t('Dependencies') }}</h3>
       <p class="muted">
         {{ t('Optional libraries with exact versions. Prepare once; regular runs use the saved packages without downloading.') }}
       </p>
-      <textarea v-model="buffer.packages" :aria-label="t('Script dependencies')" :readonly="readOnly" :disabled="buffer.busy" spellcheck="false" rows="6" />
+      <ScriptPackages v-model="buffer.packages" :disabled="readOnly || buffer.busy" />
       <div class="script-actions">
         <span>{{ dependenciesReady ? t('Dependencies prepared') : t('Save and prepare changed dependencies') }}</span>
         <button :disabled="readOnly || buffer.busy" @click="prepareDependencies">
@@ -195,7 +196,7 @@ export default defineComponent({
       <p class="muted">
         {{ t('Libraries share the script’s permissions and secret access. Only pure JavaScript packages from the public npm registry; no installation scripts or native addons.') }}
       </p>
-    </details>
+    </section>
     <details class="script-references">
       <summary>{{ t('Available variables and secrets') }}</summary>
       <p><code>{{ 'context.workspace' }}</code> · {{ t('Writable workspace') }}</p><p><code>{{ 'context.references' }}</code> · {{ t('Read-only references') }}</p><p><code>{{ 'context.input' }}</code> · {{ t('Run inputs and progress') }}</p>
@@ -226,7 +227,6 @@ fieldset { min-width:0; }
 .script-hash { font:11px/1.6 ui-monospace, monospace; overflow-wrap:anywhere; color:var(--muted); }
 .discard-prompt { border:1px solid var(--accent); padding:12px; border-radius:8px; } .discard-prompt button { margin-right:8px; }
 .script-packages { margin:20px 0; }
-.script-packages textarea { box-sizing:border-box; width:100%; resize:vertical; font:12px/1.6 ui-monospace,monospace; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; }
 summary { cursor:pointer; font-size:13px; }
 @media (max-width:640px) { .script-tools label { flex-basis:100%; } }
 </style>
