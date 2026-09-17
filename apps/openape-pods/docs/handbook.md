@@ -174,7 +174,7 @@ Open Terminal.app opens a separate macOS window above this list. The banner show
 
 Grants are managed through OpenApe and checked at execution time. Permissions does not display a static command-grant list, script call snippets or a separate application script-access selector. Application assignment does not bypass runtime authorization.
 
-HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
+HTTP destinations appear as a list of addresses and allowed methods. Use + to add a destination; select a row and use − to remove it. The input form opens only when adding a destination. These permissions allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
 
 An open terminal holds the pod and pauses automation, including while its prompt is idle. Leave the shell with exit and wait for the process to finish so application setup is saved. Automation remains paused afterwards. Assigned programs receive their own temporary HOME containing decrypted application state; later script calls reuse that saved state. The shell HOME is pods/<pod-id>/home and its working directory is pods/<pod-id>/workspace inside the app profile. Interrupted sessions are not treated as successful setup.
 
