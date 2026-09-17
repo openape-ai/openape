@@ -81,3 +81,18 @@ it('keeps permission editing out of the script tab', async () => {
   expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
   wrapper.unmount()
 })
+
+it('saves package declarations with the script and preserves invalid or unsaved JSON without downloading', async () => {
+  const { view, scripts } = fixture()
+  const wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
+  await wrapper.get('[aria-label="Script dependencies"]').setValue('{"dependencies":{"dayjs":"1.11.13"}}')
+  expect(wrapper.text()).toContain('Unsaved changes')
+  await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
+  expect(scripts).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', packages: { dependencies: { dayjs: '1.11.13' } } }))
+  const count = scripts.mock.calls.length
+  await wrapper.get('[aria-label="Script dependencies"]').setValue('{invalid')
+  await wrapper.findAll('button').find(button => button.text() === 'Prepare dependencies')!.trigger('click'); await flushPromises()
+  expect(scripts).toHaveBeenCalledTimes(count)
+  expect(wrapper.get('[aria-label="Script dependencies"]').element).toHaveProperty('value', '{invalid')
+  expect(wrapper.find('[role="alert"]').exists()).toBe(true); wrapper.unmount()
+})

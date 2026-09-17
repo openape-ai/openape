@@ -75,7 +75,7 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   previous.exec(`ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
     ALTER TABLE resources RENAME TO newer_resources;
     CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-    INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; PRAGMA user_version=11;`)
+    INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; PRAGMA user_version=11;`)
   previous.close()
   const migrated = new PodDatabase(root); stores.push(migrated); const registry = new ResourceRegistry(migrated, () => {})
   expect(registry.list(f.pod.id)).toEqual([reference]); expect(registry.epoch(f.pod.id)).toBe(1)

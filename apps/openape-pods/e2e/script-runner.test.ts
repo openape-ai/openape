@@ -52,3 +52,13 @@ it('rejects a changed script artifact before starting a process', async () => {
   await writeFile(fixture.artifact, 'export async function run(){return null}')
   await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => null })).rejects.toThrow('selected source')
 })
+
+it('managed dependencies: resolves ESM and CommonJS imports while keeping package files read-only', async () => {
+  const fixture = await setup(`import answer from 'sample-package'; import {createRequire} from 'node:module'; import fs from 'node:fs/promises'; const require=createRequire(import.meta.url); export async function run(context) { if(answer!==42 || require('sample-package')!==42) throw new Error('Import resolution failed'); let denied=false; try { await fs.writeFile(context.variables.packageFile,'must not change') } catch(error) { denied=error.code==='EPERM'||error.code==='EACCES' } if(!denied) throw new Error('Package was writable'); return ${result} }`)
+  const dependencyRoot = join(root, 'dependencies'); const directory = join(dependencyRoot, 'node_modules/sample-package'); await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, 'package.json'), '{"name":"sample-package","version":"1.0.0","main":"index.cjs"}')
+  await writeFile(join(directory, 'index.cjs'), 'module.exports=42')
+  const input = { ...fixture.input, variables: { packageFile: join(directory, 'index.cjs') } }
+  const reply = await executeScript({ ...fixture.runtime, dependencyRoot }, fixture.directory, fixture.artifact, input, new AbortController().signal, { event: () => {}, request: async () => null })
+  expect(reply.status).toBe('completed'); expect(await readFile(join(directory, 'index.cjs'), 'utf8')).toBe('module.exports=42')
+})

@@ -1,3 +1,4 @@
+import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
@@ -82,7 +83,7 @@ const scheduler = new Scheduler(store, dispatcher)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime)
-const scripts = new ScriptWorkspace(store, registry, masterControl)
+const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -90,6 +91,7 @@ const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'nat
 let scanAt = 0
 let storageAt = 0
 let maintenance = false
+let preparing: Promise<unknown> | null = null
 let suspended = false
 let startupReady = false
 let ticking: Promise<void> | null = null
@@ -114,7 +116,7 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -149,6 +151,7 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
+      await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
@@ -164,7 +167,17 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: authorizeRunService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
-      port.postMessage({ id: request.id, state: await scripts.execute(parseScriptCommand(request.command.scripts), scriptController.signal) }); return
+      const command = parseScriptCommand(request.command.scripts)
+      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await scripts.execute(command, scriptController.signal) }); return }
+      maintenance = true
+      try {
+        await ticking
+        await data.retention.view()
+        preparing = scripts.execute(command, scriptController.signal)
+        port.postMessage({ id: request.id, state: await preparing })
+      }
+      finally { preparing = null; maintenance = false }
+      return
     }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return

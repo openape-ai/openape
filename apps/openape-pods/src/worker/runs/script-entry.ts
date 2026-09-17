@@ -1,10 +1,12 @@
 import { readFile } from 'node:fs/promises'
+import { createRequire, isBuiltin, registerHooks } from 'node:module'
+import { join } from 'node:path'
 import { Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import type { RunInput } from '../../contracts/runs'
 
 async function main(): Promise<void> {
-  const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { input: RunInput, entry: string }
+  const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { input: RunInput, entry: string, dependencyRoot?: string }
   const channel = new Socket({ fd: 3, readable: true, writable: true })
   channel.setEncoding('utf8')
   const pending = new Map<string, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
@@ -40,6 +42,16 @@ async function main(): Promise<void> {
     catch (error) { controller.abort(error); channel.destroy(error instanceof Error ? error : new Error('Protocol failed')) }
   })
   channel.on('error', (error) => { controller.abort(error); for (const operation of pending.values()) operation.reject(error); pending.clear(); process.exitCode = 1 })
+  if (config.dependencyRoot) {
+    const entry = pathToFileURL(config.entry).href
+    const parentURL = pathToFileURL(join(config.dependencyRoot, 'entry.mjs')).href
+    registerHooks({ resolve(specifier, context, nextResolve) {
+      const bare = !isBuiltin(specifier) && !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.includes(':') && !specifier.startsWith('#')
+      if (context.parentURL !== entry || !bare) return nextResolve(specifier, context)
+      if (context.conditions.includes('require')) return nextResolve(createRequire(parentURL).resolve(specifier), context)
+      return nextResolve(specifier, { ...context, parentURL })
+    } })
+  }
   const input = freeze(config.input)
   try {
     const script = await import(pathToFileURL(config.entry).href) as { run?: (context: unknown) => Promise<unknown> }

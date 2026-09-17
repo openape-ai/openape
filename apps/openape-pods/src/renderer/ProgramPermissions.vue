@@ -121,7 +121,9 @@ export default defineComponent({
         </button>
       </footer>
     </div>
-    <h3>{{ t('HTTP destinations') }}</h3>
+    <h3 class="http-heading">
+      {{ t('HTTP destinations') }}
+    </h3>
     <p class="muted">
       {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
     </p>
@@ -159,6 +161,7 @@ export default defineComponent({
 </template>
 
 <style scoped>
+.http-heading { margin-top:36px; }
 .program-permissions { margin-top:28px; border-top:1px solid var(--border); padding-top:16px; }
 .application-list { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin:16px 0; overflow:hidden; }
 .application-list .application-card { display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--border); }

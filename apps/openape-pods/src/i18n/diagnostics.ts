@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Dependency preparation failed: {p0}',
   'Invalid {p0}',
   'Identity authorization failed ({p0})',
   'Pod identity connection failed ({p0})',

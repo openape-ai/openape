@@ -6,7 +6,7 @@ import type { RunInput, ScriptResult } from '../../contracts/runs'
 import { launchSandbox } from '../runtime/sandbox'
 import type { RuntimePolicy, ShellLaunch } from '../runtime/sandbox'
 
-export interface ScriptRuntime { shell?: ShellLaunch, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
+export interface ScriptRuntime { dependencyRoot?: string, shell?: ShellLaunch, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
 export interface ScriptServices { request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
@@ -18,10 +18,10 @@ async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal
 export async function executeScript(runtime: ScriptRuntime, directory: string, artifact: string, input: RunInput, signal: AbortSignal, services: ScriptServices): Promise<ScriptResult> {
   await mkdir(directory, { recursive: true, mode: 0o700 }); await mkdir(input.workspace, { recursive: true, mode: 0o700 })
   const config = join(directory, 'input.json')
-  await writeFile(config, JSON.stringify({ entry: artifact, input }), { flag: 'wx', mode: 0o400 })
+  await writeFile(config, JSON.stringify({ entry: artifact, input, dependencyRoot: runtime.dependencyRoot }), { flag: 'wx', mode: 0o400 })
   if (createHash('sha256').update(await readFile(artifact)).digest('hex') !== input.scriptHash) throw new Error('Script artifact does not match the selected source')
   const home = runtime.home ?? input.home ?? input.workspace
-  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: input.directories?.filter(item => item.access === 'read').map(item => item.path), writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
   const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }, runtime.registerDomain, runtime.shell)
   const local = new AbortController()
   const activeSignal = AbortSignal.any([signal, local.signal])

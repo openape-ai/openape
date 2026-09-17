@@ -1,4 +1,5 @@
 <script lang="ts">
+import { emptyPackages, parsePackages } from '../contracts/dependencies'
 import { t, diagnostic, number } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -23,6 +24,7 @@ export default defineComponent({
   emits: ['changed', 'values', 'ran'],
   data() { return { awaitingRun: false, available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
+    dependenciesReady(): boolean { return this.buffer.packages === JSON.stringify(this.buffer.source?.packages ?? emptyPackages(), null, 2) && (this.buffer.source?.dependenciesPrepared ?? true) },
     dirty(): boolean { return isDirty(this.buffer) },
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
@@ -59,7 +61,7 @@ export default defineComponent({
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not start run' }
     },
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
-    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.toolCapabilities = view.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
+    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.packages = JSON.stringify(view.source?.packages ?? emptyPackages(), null, 2); this.buffer.toolCapabilities = view.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
       this.buffer.busy = true; this.buffer.error = ''
       try { this.apply(await window.pods.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
@@ -80,13 +82,23 @@ export default defineComponent({
       if (this.buffer.busy) return
       this.pending = null; this.buffer.message = ''
       if (selection !== 'new') { await this.load(selection === 'current' ? undefined : selection); if (!this.buffer.source && this.buffer.view) await this.open('new'); return }
-      this.buffer.source = null; this.buffer.code = starter; this.buffer.toolCapabilities = []; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
+      this.buffer.source = null; this.buffer.code = starter; this.buffer.packages = JSON.stringify(emptyPackages(), null, 2); this.buffer.toolCapabilities = []; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
     },
     async save(asNew = false) {
       const state = this.buffer
       if (state.busy || !state.editing || !state.code.trim() || this.pod.lifecycle === 'archived') return
       const source = state.source
-      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, capabilities: [...state.toolCapabilities, ...state.credentialAliases.map(alias => `credential.${alias}`)] }, 'Draft saved. Validate it before activation.')
+      let packages
+      try { packages = parsePackages(JSON.parse(state.packages)) }
+      catch (error) { state.error = error instanceof Error ? error.message : 'Invalid package.json'; return }
+      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, packages, capabilities: [...state.toolCapabilities, ...state.credentialAliases.map(alias => `credential.${alias}`)] }, 'Draft saved. Validate it before activation.')
+    },
+    async prepareDependencies() {
+      await this.save(); if (this.buffer.error) return
+      const source = this.buffer.source
+      if (source?.kind !== 'draft') return
+      await this.command({ type: 'prepareDependencies', podId: this.pod.id, revision: this.buffer.view!.pod.revision, draftId: source.id, draftRevision: source.revision }, '')
+      this.$emit('changed')
     },
     async validate() {
       const source = this.buffer.source; if (!this.canValidate || !source) return
@@ -168,6 +180,22 @@ export default defineComponent({
         {{ t('Cancel') }}
       </button>
     </div>
+    <details class="script-packages">
+      <summary>{{ t('Dependencies · package.json') }}</summary>
+      <p class="muted">
+        {{ t('Optional libraries with exact versions. Prepare once; regular runs use the saved packages without downloading.') }}
+      </p>
+      <textarea v-model="buffer.packages" :aria-label="t('Script dependencies')" :readonly="readOnly" :disabled="buffer.busy" spellcheck="false" rows="6" />
+      <div class="script-actions">
+        <span>{{ dependenciesReady ? t('Dependencies prepared') : t('Save and prepare changed dependencies') }}</span>
+        <button :disabled="readOnly || buffer.busy" @click="prepareDependencies">
+          {{ t('Prepare dependencies') }}
+        </button>
+      </div>
+      <p class="muted">
+        {{ t('Libraries share the script’s permissions and secret access. Only pure JavaScript packages from the public npm registry; no installation scripts or native addons.') }}
+      </p>
+    </details>
     <details class="script-references">
       <summary>{{ t('Available variables and secrets') }}</summary>
       <p><code>{{ 'context.workspace' }}</code> · {{ t('Writable workspace') }}</p><p><code>{{ 'context.references' }}</code> · {{ t('Read-only references') }}</p><p><code>{{ 'context.input' }}</code> · {{ t('Run inputs and progress') }}</p>
@@ -197,6 +225,8 @@ fieldset { min-width:0; }
 .source-preview { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.6 ui-monospace, monospace; background:var(--surface); padding:14px; border:1px solid var(--border); border-radius:8px; }
 .script-hash { font:11px/1.6 ui-monospace, monospace; overflow-wrap:anywhere; color:var(--muted); }
 .discard-prompt { border:1px solid var(--accent); padding:12px; border-radius:8px; } .discard-prompt button { margin-right:8px; }
+.script-packages { margin:20px 0; }
+.script-packages textarea { box-sizing:border-box; width:100%; resize:vertical; font:12px/1.6 ui-monospace,monospace; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; }
 summary { cursor:pointer; font-size:13px; }
 @media (max-width:640px) { .script-tools label { flex-basis:100%; } }
 </style>
